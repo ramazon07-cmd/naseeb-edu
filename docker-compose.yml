@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rbis
+      POSTGRES_USER: rbis
+      POSTGRES_PASSWORD: rbis-local-password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rbis -d rbis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: .
+    environment:
+      APP_ENV: development
+      DEBUG: "True"
+      SECRET_KEY: local-docker-secret-change-me
+      ENABLE_DEMO_ACCOUNTS: "True"
+      DEMO_COUNSELOR_PASSWORD: admin12345
+      DEMO_ORGANIZATION_PASSWORD: school12345
+      DEMO_STUDENT_PASSWORD: student12345
+      ALLOWED_HOSTS: localhost,127.0.0.1,backend
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      DATABASE_URL: postgres://rbis:rbis-local-password@db:5432/rbis
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://127.0.0.1:8000/api
+        VITE_SHOW_DEMO_ACCOUNTS: "true"
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

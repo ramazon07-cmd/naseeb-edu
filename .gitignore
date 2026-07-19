@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+!.env.production.example
+!**/.env.example
+!**/.env.production.example
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+
+# Node / frontend
+node_modules/
+dist/
+.next/
+.vercel/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
