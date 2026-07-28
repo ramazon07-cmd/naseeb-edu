@@ -801,6 +801,7 @@ class Research(TimeStampedModel):
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     link = models.URLField(blank=True)
+    google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
 
     class Meta:
@@ -818,6 +819,7 @@ class Project(TimeStampedModel):
     impact = models.CharField(max_length=255, blank=True)
     technologies = models.CharField(max_length=255, blank=True)
     link = models.URLField(blank=True)
+    google_docs_url = models.URLField(blank=True)
     date = models.DateField(null=True, blank=True)
     verified = models.BooleanField(default=False)
 
@@ -837,6 +839,7 @@ class Internship(TimeStampedModel):
     end_date = models.DateField(null=True, blank=True)
     is_current = models.BooleanField(default=False)
     supervisor = models.CharField(max_length=180, blank=True)
+    google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
 
     class Meta:
@@ -866,6 +869,7 @@ class Activity(TimeStampedModel):
     weeks_per_year = models.PositiveSmallIntegerField(null=True, blank=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
+    google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
 
     class Meta:
@@ -889,6 +893,7 @@ class Honor(TimeStampedModel):
     award_date = models.DateField(null=True, blank=True)
     description = models.TextField(blank=True)
     proof_file = models.FileField(upload_to='honor_proofs/', blank=True, null=True)
+    google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
 
     class Meta:
@@ -913,6 +918,7 @@ class RecommendationLetter(TimeStampedModel):
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.REQUESTED)
     deadline = models.DateField(null=True, blank=True)
     file = models.FileField(upload_to='recommendation_letters/', blank=True, null=True)
+    google_docs_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
 
     class Meta:
