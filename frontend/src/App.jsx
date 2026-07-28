@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   Activity, Award, Bell, BookOpen, BriefcaseBusiness, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
-  ContactRound, DollarSign, ExternalLink, Eye, FileText, Filter, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
+  ContactRound, DollarSign, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
   LibraryBig, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
   PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, ShieldAlert, ShieldCheck,
   ShoppingCart, Sparkles, Sun, Target, Trash2, UserRound, Users, UsersRound, X,
@@ -40,6 +40,7 @@ const dateTimeText = (value) => value ? new Intl.DateTimeFormat('en-GB', { day: 
 const isCounselor = (user) => ['admin', 'counselor'].includes(user?.role)
 const isTaskManager = (user) => ['admin', 'counselor', 'teacher'].includes(user?.role)
 const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true'
+const PERSONALITY_QUIZ_URL = (import.meta.env.VITE_PERSONALITY_QUIZ_URL || '').trim()
 const ownStudent = (data) => data.students?.[0]
 const studentName = (data, id) => fullName(data.students?.find((student) => student.id === Number(id))?.user_detail)
 const THEME_KEY = 'naseeb-edu-theme'
@@ -363,18 +364,40 @@ function StudentDashboard({ user, data, setPage }) {
       <div><span className="eyebrow">WELCOME BACK</span><h2>{fullName(user)}</h2><p>Complete today’s priorities and strengthen your application profile.</p><div className="welcome-actions"><button className="button light" onClick={() => setPage('roadmap')}><Compass size={17} /> Open roadmap</button><button className="button ghost-light" onClick={() => setPage('college_search')}><Search size={17} /> Find universities</button></div></div>
       <div className="readiness-ring" style={{ '--progress': `${student?.journey_progress_percent || 0}%` }}><strong>{student?.journey_progress_percent || 0}%</strong><span>Journey progress</span></div>
     </section>
-    <JourneyProgress student={student} />
-    <LevelProgress student={student} />
+    <div className="student-dashboard-overview">
+      <div className="student-dashboard-progress"><JourneyProgress student={student} /><LevelProgress student={student} /></div>
+      <DashboardDiscoveryCards setPage={setPage} />
+    </div>
     <div className="stat-grid"><Stat label="Active tasks" value={pendingTasks.length} note={`${completed} completed`} /><Stat label="Applications" value={data.applications.length} note={`${data.applications.filter((item) => item.status === 'submitted').length} submitted`} /><Stat label="Essays" value={data.essays.length} note={`${data.essays.filter((item) => item.status === 'approved').length} approved`} /><Stat label="Achievements" value={achievementTotal} note="Honors included" /></div>
     <div className="student-dashboard-grid">
-      <Panel title="Next priorities" action={<button className="button quiet small" onClick={() => setPage('roadmap')}>View roadmap <ChevronRight size={14} /></button>}><div className="record-list">{pendingTasks.slice(0, 4).map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} • ${label(task.priority)}`} badge={task.status} />)}{!pendingTasks.length && <Empty text="All tasks are complete." />}</div></Panel>
-      <Panel title="Student Center quick access"><div className="quick-grid">{[
-        ['Profile & academics', 'student_center', BookOpen], ['Essay Lab', 'essay_lab', PenLine], ['Applications', 'applications', Target], ['Resources', 'resource_index', LibraryBig],
-      ].map(([title, page, Icon]) => <button key={page} onClick={() => setPage(page)}><span><Icon size={19} /></span><b>{title}</b><ChevronRight size={15} /></button>)}</div></Panel>
-      <Panel title="Upcoming session" action={<button className="button quiet small" onClick={() => setPage('bookings')}>Bookings</button>}>{nextBooking ? <div className="booking-highlight"><span><CalendarClock size={22} /></span><div><b>{nextBooking.topic}</b><small>{dateTimeText(nextBooking.starts_at)} • {nextBooking.duration_minutes} min</small><p>{nextBooking.counselor_name || 'Assigned counselor'}</p></div><Badge>{nextBooking.status}</Badge></div> : <Empty text="No upcoming sessions." />}</Panel>
-      <Panel title="My Naseeb team" action={<button className="button quiet small" onClick={() => setPage('contacts')}>All contacts</button>}><div className="team-mini-list">{data.team.slice(0, 3).map((member) => <div key={`${member.kind}-${member.id}`}><span className="avatar">{initials(member.name)}</span><div><b>{member.name}</b><small>{member.role}</small></div><button className="icon-button" onClick={() => setPage('messages')} aria-label={`Message ${member.name}`}><MessageCircle size={16} /></button></div>)}{!data.team.length && <Empty text="No team members have been assigned yet." />}</div></Panel>
+      <div className="student-dashboard-column">
+        <Panel title="Next priorities" action={<button className="button quiet small" onClick={() => setPage('roadmap')}>View roadmap <ChevronRight size={14} /></button>}><div className="record-list">{pendingTasks.slice(0, 4).map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} • ${label(task.priority)}`} badge={task.status} />)}{!pendingTasks.length && <Empty text="All tasks are complete." />}</div></Panel>
+        <Panel title="Upcoming session" action={<button className="button quiet small" onClick={() => setPage('bookings')}>Bookings</button>}>{nextBooking ? <div className="booking-highlight"><span><CalendarClock size={22} /></span><div><b>{nextBooking.topic}</b><small>{dateTimeText(nextBooking.starts_at)} • {nextBooking.duration_minutes} min</small><p>{nextBooking.counselor_name || 'Assigned counselor'}</p></div><Badge>{nextBooking.status}</Badge></div> : <Empty text="No upcoming sessions." />}</Panel>
+      </div>
+      <div className="student-dashboard-column">
+        <Panel title="Student Center quick access"><div className="quick-grid">{[
+          ['Profile & academics', 'student_center', BookOpen], ['Essay Lab', 'essay_lab', PenLine], ['Applications', 'applications', Target], ['Resources', 'resource_index', LibraryBig],
+        ].map(([title, page, Icon]) => <button key={page} onClick={() => setPage(page)}><span><Icon size={19} /></span><b>{title}</b><ChevronRight size={15} /></button>)}</div></Panel>
+        <Panel title="My Naseeb team" action={<button className="button quiet small" onClick={() => setPage('contacts')}>All contacts</button>}><div className="team-mini-list">{data.team.slice(0, 3).map((member) => <div key={`${member.kind}-${member.id}`}><span className="avatar">{initials(member.name)}</span><div><b>{member.name}</b><small>{member.role}</small></div><button className="icon-button" onClick={() => setPage('messages')} aria-label={`Message ${member.name}`}><MessageCircle size={16} /></button></div>)}{!data.team.length && <Empty text="No team members have been assigned yet." />}</div></Panel>
+      </div>
     </div>
   </div>
+}
+
+function DashboardDiscoveryCards({ setPage }) {
+  const personalityAction = PERSONALITY_QUIZ_URL
+    ? <a href={PERSONALITY_QUIZ_URL} target="_blank" rel="noreferrer">Start assessment <ExternalLink size={15} /></a>
+    : <button type="button" disabled title="Add VITE_PERSONALITY_QUIZ_URL to enable this assessment">Link coming soon</button>
+  return <section className="dashboard-discovery-rail" aria-label="Student discovery tools">
+    <article className="dashboard-discovery-card personality">
+      <Fingerprint className="discovery-card-art" size={118} strokeWidth={1.35} />
+      <div><span>SELF DISCOVERY</span><h3>Personality & Interests</h3><p>Identify your strengths, interests, and future study direction.</p>{personalityAction}</div>
+    </article>
+    <article className="dashboard-discovery-card university">
+      <GraduationCap className="discovery-card-art" size={122} strokeWidth={1.35} />
+      <div><span>COLLEGE RESEARCH</span><h3>University Match</h3><p>Find universities that match your academic profile and goals.</p><button type="button" onClick={() => setPage('college_search')}>Explore matches <ChevronRight size={16} /></button></div>
+    </article>
+  </section>
 }
 
 function JourneyProgress({ student }) {
