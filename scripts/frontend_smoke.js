@@ -11,7 +11,7 @@ const styles = fs.readFileSync(path.join(root, 'frontend/src/styles.css'), 'utf8
 const requiredViews = [
   'dashboard', 'profile', 'academics', 'portfolio', 'activities', 'recommendations',
   'notifications', 'schools', 'students', 'tasks', 'applications', 'documents',
-  'certificates', 'essays', 'achievements', 'meetings', 'messages',
+  'certificates', 'essays', 'achievements', 'bookings', 'messages',
 ];
 const requiredApiMethods = [
   'login', 'me', 'dashboard', 'list', 'create', 'update', 'remove',
@@ -21,6 +21,7 @@ const requiredApiMethods = [
   'addChannelMember', 'removeChannelMember', 'acceptChannelMessage',
   'reportChannelMessage', 'messageReports', 'reviewMessageReport',
   'dismissMessageReport', 'resolveMessageReport',
+  'bookingParticipants', 'approveBooking', 'rejectBooking', 'completeBooking',
 ];
 
 for (const view of requiredViews) {
@@ -65,6 +66,10 @@ if (!app.includes('function StudentRoadmapPath(') || !app.includes('75 XP') || !
 if (!app.includes('function DashboardDiscoveryCards(') || !app.includes('VITE_PERSONALITY_QUIZ_URL') || !app.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
 if (!app.includes('MISSION {Math.min(completed + 1') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-path-row.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
 if (!app.includes("aria-pressed={post.liked_by_me}") || !app.includes('Each student counts once') || !styles.includes('.community-like-help')) throw new Error('Community like/unlike feedback is missing.');
+if (!app.includes('Meet with') || !app.includes('Pending approval') || !app.includes('Mark completed') || !styles.includes('.booking-actions')) throw new Error('Booking participant and approval UI is missing.');
+if (!app.includes('participant_name') || !app.includes('participant_role')) throw new Error('Booking participant identity is not displayed.');
+if (app.includes("meetings: { label: 'Meetings'") || app.includes("'meetings', 'bookings'")) throw new Error('Legacy meeting notes navigation must be removed.');
+if (!app.includes("bookings: { label: 'Meetings'")) throw new Error('Booking workflow must be presented as Meetings.');
 if (!app.includes('function NotificationCenter(') || !styles.includes('.notification-launcher') || !styles.includes('.notification-drawer')) throw new Error('Corner notification center is missing.');
 for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchrashuv so‘rovi', 'Bu bo‘limda', 'Universitetlarni topish']) {
   if (app.includes(uzbekFragment)) throw new Error(`Non-English UI copy remains: ${uzbekFragment}`)

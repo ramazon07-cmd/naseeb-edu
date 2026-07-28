@@ -646,25 +646,57 @@ class CommunityPostSerializer(serializers.ModelSerializer):
 
 
 class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
-    counselor_name = serializers.SerializerMethodField()
+    participant = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(
+            is_active=True,
+            role__in=[User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION],
+        ),
+        required=True,
+        allow_null=False,
+    )
+    participant_name = serializers.SerializerMethodField()
+    participant_role = serializers.CharField(source='participant.role', read_only=True)
+    participant_detail = UserSerializer(source='participant', read_only=True)
+    student_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = '__all__'
-        read_only_fields = ('student', 'counselor')
+        read_only_fields = ('student', 'status')
 
-    def get_counselor_name(self, obj):
-        if not obj.counselor:
+    def get_participant_name(self, obj):
+        if not obj.participant:
             return None
-        return obj.counselor.get_full_name() or obj.counselor.username
+        return obj.participant.get_full_name() or obj.participant.username
 
-    def validate_status(self, value):
+    def get_student_name(self, obj):
+        return obj.student.user.get_full_name() or obj.student.user.username
+
+    def validate_participant(self, participant):
         request = self.context.get('request')
-        if request and not request.user.is_counselor_like and value not in {
-            Booking.Status.REQUESTED,
-            Booking.Status.CANCELLED,
-        }:
-            raise serializers.ValidationError('Students can request or cancel a booking.')
+        if not request or request.user.role != User.Role.STUDENT or not hasattr(request.user, 'student_profile'):
+            raise serializers.ValidationError('Only students can request meetings.')
+        profile = request.user.student_profile
+        assigned_counselor = participant.id == profile.assigned_counselor_id
+        same_school_staff = bool(
+            profile.school_id
+            and participant.school_id == profile.school_id
+            and participant.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}
+        )
+        if not (assigned_counselor or same_school_staff):
+            raise serializers.ValidationError(
+                'Choose your assigned counselor, teacher, or a representative from your school.'
+            )
+        return participant
+
+    def validate_starts_at(self, value):
+        if value <= timezone.now():
+            raise serializers.ValidationError('Choose a future meeting date and time.')
+        return value
+
+    def validate_duration_minutes(self, value):
+        if value not in {30, 45, 60}:
+            raise serializers.ValidationError('Choose a 30, 45, or 60 minute meeting.')
         return value
 
 
