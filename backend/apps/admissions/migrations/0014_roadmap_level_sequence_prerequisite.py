@@ -12,6 +12,7 @@ def sequence_existing_missions(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('admissions', '0013_activity_google_docs_url_honor_google_docs_url_and_more'),
