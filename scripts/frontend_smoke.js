@@ -37,6 +37,10 @@ if (!app.includes('Initial password') || !app.includes('minLength="12"')) throw 
 if (!app.includes('VITE_SHOW_DEMO_ACCOUNTS') || !app.includes('SHOW_DEMO_ACCOUNTS &&')) throw new Error('Demo credentials must be explicitly enabled in development.');
 if (!app.includes("teacher: 'Teacher'") || !app.includes('isTaskManager')) throw new Error('Teacher-controlled work UI is missing.');
 if (!api.includes('approveRoadmapMission')) throw new Error('Roadmap approval API action is missing.');
+if (!api.includes('extendLevelOneRoadmap') || !app.includes('function LevelOneSetupModal(')) throw new Error('Level 1 roadmap extension is missing.');
+if (app.includes('Progress %') || app.includes('item.progress_percent') || app.includes("values.get('progress_percent')")) throw new Error('Manual roadmap progress controls must not be rendered.');
+if (!app.includes("status: 'submitted', reflection: values.get('reflection')") || !app.includes('Submit mission') || !styles.includes('.mission-submit-status')) throw new Error('Student submit-only roadmap workflow is missing.');
+if (!app.includes('<Sparkles size={12} /> Planned') || !styles.includes('.mission-status-chip')) throw new Error('Planned mission badge is missing.');
 if (!app.includes('function LevelProgress(') || !api.includes('approveStudentLevel')) throw new Error('XP and teacher-approved leveling UI is missing.');
 for (const channelTab of ['Direct', 'Group', 'Community', 'Discussions']) {
   if (!app.includes(`\"${channelTab}\"`)) throw new Error(`Messaging tab missing: ${channelTab}`)
@@ -58,6 +62,8 @@ for (const resource of ['researches', 'projects', 'internships', 'activities', '
 if (!app.includes('Assigned tasks & responses') || !app.includes('function TaskSubmissionModal(') || !app.includes('College list')) throw new Error('Counselor student workspace is incomplete.');
 if (!app.includes('Submission or Google Docs URL') || !app.includes('Google Docs URL')) throw new Error('Task/document Google Docs fields are missing.');
 if (!app.includes('function StudentRoadmapPath(') || !app.includes('75 XP') || !styles.includes('.level-roadmap-path')) throw new Error('Level-linked visual roadmap is missing.');
+if (!app.includes('MISSION {Math.min(completed + 1') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-path-row.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
+if (!app.includes("aria-pressed={post.liked_by_me}") || !app.includes('Each student counts once') || !styles.includes('.community-like-help')) throw new Error('Community like/unlike feedback is missing.');
 if (!app.includes('function NotificationCenter(') || !styles.includes('.notification-launcher') || !styles.includes('.notification-drawer')) throw new Error('Corner notification center is missing.');
 for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchrashuv so‘rovi', 'Bu bo‘limda', 'Universitetlarni topish']) {
   if (app.includes(uzbekFragment)) throw new Error(`Non-English UI copy remains: ${uzbekFragment}`)
