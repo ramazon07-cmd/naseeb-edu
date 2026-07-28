@@ -125,11 +125,11 @@ class StudentProfile(TimeStampedModel):
 
     @property
     def roadmap_progress_percent(self):
-        missions = list(self.roadmap_missions.values_list('status', 'progress_percent'))
-        if not missions:
+        total = self.roadmap_missions.count()
+        if total == 0:
             return 0
-        values = [100 if status == RoadmapMission.Status.COMPLETED else min(progress, 100) for status, progress in missions]
-        return round(sum(values) / len(values))
+        completed = self.roadmap_missions.filter(status=RoadmapMission.Status.COMPLETED).count()
+        return round((completed / total) * 100)
 
     @property
     def journey_progress_percent(self):
@@ -404,13 +404,21 @@ class RoadmapMission(TimeStampedModel):
     title = models.CharField(max_length=220)
     category = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
+    level = models.PositiveSmallIntegerField(default=1)
+    sequence = models.PositiveSmallIntegerField(default=1)
+    prerequisite = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='unlocked_missions',
+    )
     due_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PLANNED)
-    progress_percent = models.PositiveSmallIntegerField(default=0)
     reflection = models.TextField(blank=True)
 
     class Meta:
-        ordering = ['status', 'due_date', '-created_at']
+        ordering = ['level', 'sequence', 'id']
 
     def __str__(self):
         return self.title

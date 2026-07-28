@@ -87,7 +87,12 @@ from .serializers import (
     UniversitySerializer,
     XPTransactionSerializer,
 )
-from .services import ROADMAP_APPROVAL_XP, TASK_XP_BY_PRIORITY, award_approval_xp
+from .services import (
+    ROADMAP_APPROVAL_XP,
+    TASK_XP_BY_PRIORITY,
+    award_approval_xp,
+    extend_level_one_roadmap,
+)
 
 
 class CounselorOrOwnerPermission(permissions.BasePermission):
@@ -887,7 +892,11 @@ class StudentPortalPermission(permissions.BasePermission):
         profile = request.user.student_profile
         owner = getattr(obj, 'student', None)
         if isinstance(obj, CommunityPost):
-            return request.method in permissions.SAFE_METHODS or obj.author_id == profile.id
+            return (
+                request.method in permissions.SAFE_METHODS
+                or view.action == 'like'
+                or obj.author_id == profile.id
+            )
         if owner is not None:
             return getattr(owner, 'id', None) == profile.id
         return request.method in permissions.SAFE_METHODS
@@ -945,6 +954,35 @@ class RoadmapMissionViewSet(StaffControlledWorkMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(assigned_by=self.request.user)
 
+    @action(detail=False, methods=['post'], url_path='extend-level-one')
+    def extend_level_one(self, request):
+        if not request.user.is_task_manager:
+            return Response({'detail': 'Only a teacher or counselor can extend Level 1.'}, status=403)
+        student_id = request.data.get('student')
+        if not student_id:
+            return Response({'student': ['Select a student.']}, status=400)
+
+        students = StudentProfile.objects.select_related('user', 'assigned_counselor')
+        if request.user.role == User.Role.COUNSELOR:
+            students = students.filter(assigned_counselor=request.user)
+        elif request.user.role == User.Role.TEACHER:
+            students = students.filter(school_id=request.user.school_id)
+        student = students.filter(pk=student_id).first()
+        if not student:
+            return Response({'student': ['Student is outside your assigned scope.']}, status=403)
+
+        missions, created_count = extend_level_one_roadmap(
+            student=student,
+            assigned_by=request.user,
+        )
+        return Response({
+            'student': student.id,
+            'level': 1,
+            'created_count': created_count,
+            'total_count': len(missions),
+            'missions': RoadmapMissionSerializer(missions, many=True, context={'request': request}).data,
+        })
+
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         if not request.user.is_task_manager:
@@ -955,8 +993,7 @@ class RoadmapMissionViewSet(StaffControlledWorkMixin, viewsets.ModelViewSet):
             if mission.status not in {RoadmapMission.Status.SUBMITTED, RoadmapMission.Status.COMPLETED}:
                 return Response({'detail': 'The student must submit the mission before approval.'}, status=400)
             mission.status = RoadmapMission.Status.COMPLETED
-            mission.progress_percent = 100
-            mission.save(update_fields=['status', 'progress_percent', 'updated_at'])
+            mission.save(update_fields=['status', 'updated_at'])
             _, xp_created = award_approval_xp(
                 student=mission.student,
                 source_type=XPTransaction.Source.ROADMAP,
