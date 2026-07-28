@@ -47,6 +47,14 @@ if (!app.includes('Assigned students') || !app.includes('School students') || !a
 if (!app.includes('function ReportMessageModal(') || !app.includes('function ModerationQueueModal(')) throw new Error('Anonymous report and moderation interfaces are missing.');
 if (!app.includes('Your report is confidential') || !app.includes('Mute 24h') || !app.includes('Remove content')) throw new Error('Moderation privacy notice or actions are missing.');
 if (!app.includes('function EssayDetailModal(') || !app.includes('function GoogleDocsPreview(')) throw new Error('Google Docs essay detail preview is missing.');
+if (!app.includes('function GoogleDocsActions(') || !app.includes('function GoogleDocsRecordModal(')) throw new Error('Shared Google Docs record controls are missing.');
+for (const resource of ['researches', 'projects', 'internships', 'activities', 'honors', 'recommendations']) {
+  const resourceStart = app.indexOf(`${resource}: [`)
+  const resourceEnd = app.indexOf('\n  ],', resourceStart)
+  if (resourceStart < 0 || !app.slice(resourceStart, resourceEnd).includes("'google_docs_url'")) {
+    throw new Error(`Google Docs field missing from ${resource}.`)
+  }
+}
 if (!app.includes('Assigned tasks & responses') || !app.includes('function TaskSubmissionModal(') || !app.includes('College list')) throw new Error('Counselor student workspace is incomplete.');
 if (!app.includes('Submission or Google Docs URL') || !app.includes('Google Docs URL')) throw new Error('Task/document Google Docs fields are missing.');
 if (!app.includes('function StudentRoadmapPath(') || !app.includes('75 XP') || !styles.includes('.level-roadmap-path')) throw new Error('Level-linked visual roadmap is missing.');
