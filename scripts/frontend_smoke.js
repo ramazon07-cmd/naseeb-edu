@@ -62,6 +62,7 @@ for (const resource of ['researches', 'projects', 'internships', 'activities', '
 if (!app.includes('Assigned tasks & responses') || !app.includes('function TaskSubmissionModal(') || !app.includes('College list')) throw new Error('Counselor student workspace is incomplete.');
 if (!app.includes('Submission or Google Docs URL') || !app.includes('Google Docs URL')) throw new Error('Task/document Google Docs fields are missing.');
 if (!app.includes('function StudentRoadmapPath(') || !app.includes('75 XP') || !styles.includes('.level-roadmap-path')) throw new Error('Level-linked visual roadmap is missing.');
+if (!app.includes('function DashboardDiscoveryCards(') || !app.includes('VITE_PERSONALITY_QUIZ_URL') || !app.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
 if (!app.includes('MISSION {Math.min(completed + 1') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-path-row.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
 if (!app.includes("aria-pressed={post.liked_by_me}") || !app.includes('Each student counts once') || !styles.includes('.community-like-help')) throw new Error('Community like/unlike feedback is missing.');
 if (!app.includes('function NotificationCenter(') || !styles.includes('.notification-launcher') || !styles.includes('.notification-drawer')) throw new Error('Corner notification center is missing.');
