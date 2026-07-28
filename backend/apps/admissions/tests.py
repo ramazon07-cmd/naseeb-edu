@@ -914,21 +914,29 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(unliked.data['likes_count'], 0)
         self.assertEqual(CommunityPost.objects.get(pk=created.data['id']).liked_by.count(), 0)
 
-    def test_student_booking_and_message_use_assigned_counselor(self):
+    def test_student_booking_participant_approval_and_notification(self):
         self.client.force_authenticate(self.student_a_user)
+        participants = self.client.get('/api/bookings/participants/')
+        self.assertEqual(participants.status_code, status.HTTP_200_OK)
+        participant_ids = {item['id'] for item in participants.data}
+        self.assertTrue({self.counselor.id, self.teacher.id, self.organization.id}.issubset(participant_ids))
+        self.assertNotIn(self.student_b_user.id, participant_ids)
+
         booking = self.client.post(
             '/api/bookings/',
             {
+                'participant': self.counselor.id,
                 'topic': 'Essay review',
                 'starts_at': '2027-11-20T09:00:00Z',
                 'duration_minutes': 45,
-                'status': Booking.Status.REQUESTED,
             },
             format='json',
         )
         self.assertEqual(booking.status_code, status.HTTP_201_CREATED)
         self.assertEqual(booking.data['student'], self.student_a.id)
-        self.assertEqual(booking.data['counselor'], self.counselor.id)
+        self.assertEqual(booking.data['participant'], self.counselor.id)
+        self.assertEqual(booking.data['participant_role'], User.Role.COUNSELOR)
+        self.assertEqual(booking.data['status'], Booking.Status.PENDING)
 
         message = self.client.post('/api/student-messages/', {'body': 'Could you review my outline?'}, format='json')
         self.assertEqual(message.status_code, status.HTTP_201_CREATED)
@@ -949,12 +957,66 @@ class RoleIsolationTests(APITestCase):
 
         counselor_bookings = self.results(self.client.get('/api/bookings/'))
         self.assertEqual([item['id'] for item in counselor_bookings], [booking.data['id']])
-        confirmed = self.client.patch(
-            f"/api/bookings/{booking.data['id']}/",
-            {'status': Booking.Status.CONFIRMED},
+        approved = self.client.post(
+            f"/api/bookings/{booking.data['id']}/approve/",
+            {},
             format='json',
         )
-        self.assertEqual(confirmed.status_code, status.HTTP_200_OK)
+        self.assertEqual(approved.status_code, status.HTTP_200_OK)
+        self.assertEqual(approved.data['status'], Booking.Status.APPROVED)
+        notification = Notification.objects.get(student=self.student_a, title='Meeting approved')
+        self.assertIn('Essay review', booking.data['topic'])
+        self.assertIn('approved', notification.message)
+
+        completed = self.client.post(f"/api/bookings/{booking.data['id']}/complete/", {}, format='json')
+        self.assertEqual(completed.status_code, status.HTTP_200_OK)
+        self.assertEqual(completed.data['status'], Booking.Status.COMPLETED)
+        self.assertTrue(Notification.objects.filter(student=self.student_a, title='Meeting completed').exists())
+
+    def test_booking_is_limited_to_related_staff_and_target_participant(self):
+        other_school_staff = User.objects.create_user(
+            username='organization-b-booking',
+            email='organization-b-booking@example.com',
+            password='StrongPass123!',
+            role=User.Role.ORGANIZATION,
+            school=self.school_b,
+        )
+        self.client.force_authenticate(self.student_a_user)
+        blocked = self.client.post(
+            '/api/bookings/',
+            {
+                'participant': other_school_staff.id,
+                'topic': 'Wrong school meeting',
+                'starts_at': '2027-11-20T09:00:00Z',
+                'duration_minutes': 45,
+            },
+            format='json',
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+
+        teacher_booking = self.client.post(
+            '/api/bookings/',
+            {
+                'participant': self.teacher.id,
+                'topic': 'Academic planning',
+                'starts_at': '2027-11-21T09:00:00Z',
+                'duration_minutes': 30,
+            },
+            format='json',
+        )
+        self.assertEqual(teacher_booking.status_code, status.HTTP_201_CREATED)
+
+        self.client.force_authenticate(self.organization)
+        self.assertEqual(self.results(self.client.get('/api/bookings/')), [])
+        forbidden = self.client.post(f"/api/bookings/{teacher_booking.data['id']}/approve/", {}, format='json')
+        self.assertEqual(forbidden.status_code, status.HTTP_404_NOT_FOUND)
+
+        self.client.force_authenticate(self.teacher)
+        visible = self.results(self.client.get('/api/bookings/'))
+        self.assertEqual([item['id'] for item in visible], [teacher_booking.data['id']])
+        rejected = self.client.post(f"/api/bookings/{teacher_booking.data['id']}/reject/", {}, format='json')
+        self.assertEqual(rejected.status_code, status.HTTP_200_OK)
+        self.assertEqual(rejected.data['status'], Booking.Status.REJECTED)
 
     def test_direct_channel_is_unique_and_private_to_its_members(self):
         self.client.force_authenticate(self.student_a_user)
@@ -985,6 +1047,37 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(listed, [])
         messages = self.results(self.client.get(f'/api/channel-messages/?channel={channel.id}'))
         self.assertEqual(messages, [])
+
+    def test_student_can_message_only_own_school_staff_when_user_school_is_empty(self):
+        other_school_staff = User.objects.create_user(
+            username='organization-b-messaging',
+            email='organization-b-messaging@example.com',
+            password='StrongPass123!',
+            role=User.Role.ORGANIZATION,
+            school=self.school_b,
+        )
+        self.student_a_user.school = None
+        self.student_a_user.save(update_fields=['school'])
+
+        self.client.force_authenticate(self.student_a_user)
+        contacts = self.client.get('/api/message-channels/contacts/')
+        self.assertEqual(contacts.status_code, status.HTTP_200_OK)
+        contact_ids = {item['id'] for item in contacts.data}
+        self.assertTrue({self.counselor.id, self.teacher.id, self.organization.id}.issubset(contact_ids))
+        self.assertNotIn(self.student_b_user.id, contact_ids)
+        self.assertNotIn(other_school_staff.id, contact_ids)
+
+        first = self.client.post('/api/message-channels/direct/', {'user': self.organization.id}, format='json')
+        second = self.client.post('/api/message-channels/direct/', {'user': self.organization.id}, format='json')
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(first.data['id'], second.data['id'])
+        channel = MessageChannel.objects.get(id=first.data['id'])
+        self.assertEqual(channel.school, self.school_a)
+        self.assertEqual(channel.memberships.count(), 2)
+
+        blocked = self.client.post('/api/message-channels/direct/', {'user': other_school_staff.id}, format='json')
+        self.assertEqual(blocked.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_counselor_messaging_contacts_are_limited_to_assigned_students_and_school_staff(self):
         outsider = User.objects.create_user(
@@ -1329,9 +1422,8 @@ class RoleIsolationTests(APITestCase):
                     self.assertEqual(self.client.get(f'/api/{path}/').status_code, status.HTTP_403_FORBIDDEN)
 
         self.client.force_authenticate(self.organization)
-        for path in ('bookings', 'student-messages'):
-            with self.subTest(role=self.organization.role, path=path):
-                self.assertEqual(self.client.get(f'/api/{path}/').status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get('/api/bookings/').status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get('/api/student-messages/').status_code, status.HTTP_403_FORBIDDEN)
 
     def test_student_can_shortlist_own_university_but_not_record_decision(self):
         university = University.objects.create(name='Student Choice University', country='Testland')

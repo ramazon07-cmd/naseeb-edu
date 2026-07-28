@@ -460,10 +460,10 @@ class Command(BaseCommand):
                 student=student,
                 topic='Application strategy check-in',
                 defaults={
-                    'counselor': counselor,
+                    'participant': counselor,
                     'starts_at': timezone.now() + timedelta(days=idx + 2),
                     'duration_minutes': 45,
-                    'status': Booking.Status.CONFIRMED,
+                    'status': Booking.Status.APPROVED,
                     'notes': 'Review university list and next deadlines.',
                 },
             )

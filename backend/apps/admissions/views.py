@@ -903,7 +903,7 @@ class StudentPortalPermission(permissions.BasePermission):
 
 
 class StudentCollaborationPermission(permissions.BasePermission):
-    """Allow students and their assigned counselors to share bookings and direct messages."""
+    """Allow students and their assigned counselors to share legacy direct messages."""
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
@@ -928,6 +928,33 @@ class StudentCollaborationPermission(permissions.BasePermission):
                 return user.id in {obj.sender_id, obj.recipient_id}
             return False
         return getattr(obj, 'student_id', None) == user.student_profile.id
+
+
+class BookingPermission(permissions.BasePermission):
+    """Keep meeting requests scoped to the student and the selected staff participant."""
+
+    STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants'}
+    STAFF_ACTIONS = {'list', 'retrieve', 'approve', 'reject', 'complete'}
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return True
+        if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
+            return view.action in self.STUDENT_ACTIONS
+        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+            return view.action in self.STAFF_ACTIONS
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return True
+        if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
+            return obj.student_id == user.student_profile.id and view.action in {'retrieve'}
+        return obj.participant_id == user.id and view.action in {'retrieve', 'approve', 'reject', 'complete'}
 
 
 class StudentPortalOwnedViewSet(viewsets.ModelViewSet):
@@ -1033,22 +1060,82 @@ class CommunityPostViewSet(viewsets.ModelViewSet):
         return Response(CommunityPostSerializer(post, context={'request': request}).data)
 
 
+def booking_participants_for(profile):
+    if not profile:
+        return User.objects.none()
+    allowed = Q(id=profile.assigned_counselor_id)
+    if profile.school_id:
+        allowed |= Q(
+            school_id=profile.school_id,
+            role__in=[User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION],
+        )
+    return User.objects.filter(
+        allowed,
+        is_active=True,
+    ).exclude(role=User.Role.STUDENT).distinct().order_by('role', 'first_name', 'last_name', 'username')
+
+
 class BookingViewSet(viewsets.ModelViewSet):
     serializer_class = BookingSerializer
-    permission_classes = [StudentCollaborationPermission]
-    queryset = Booking.objects.select_related('student__user', 'counselor').all()
+    permission_classes = [BookingPermission]
+    queryset = Booking.objects.select_related('student__user', 'participant', 'participant__school').all()
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff or user.role == User.Role.ADMIN:
+        if user.is_superuser or user.role == User.Role.ADMIN:
             return self.queryset
-        if user.role == User.Role.COUNSELOR:
-            return self.queryset.filter(counselor=user)
-        return self.queryset.filter(student=user.student_profile)
+        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+            return self.queryset.filter(participant=user)
+        if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
+            return self.queryset.filter(student=user.student_profile)
+        return self.queryset.none()
 
     def perform_create(self, serializer):
         profile = self.request.user.student_profile
-        serializer.save(student=profile, counselor=profile.assigned_counselor)
+        serializer.save(student=profile, status=Booking.Status.PENDING)
+
+    @action(detail=False, methods=['get'])
+    def participants(self, request):
+        profile = request.user.student_profile
+        return Response(UserSerializer(
+            booking_participants_for(profile),
+            many=True,
+            context={'request': request},
+        ).data)
+
+    def _transition(self, booking, target_status, allowed_from):
+        if booking.status == target_status:
+            return Response(self.get_serializer(booking).data)
+        if booking.status not in allowed_from:
+            return Response(
+                {'detail': f'A {booking.get_status_display().lower()} meeting cannot be changed to {target_status}.'},
+                status=400,
+            )
+        booking.status = target_status
+        booking.save(update_fields=['status', 'updated_at'])
+        participant_name = (
+            booking.participant.get_full_name() or booking.participant.username
+            if booking.participant else 'your meeting participant'
+        )
+        meeting_time = timezone.localtime(booking.starts_at).strftime('%d %b %Y, %H:%M')
+        Notification.objects.create(
+            student=booking.student,
+            title=f'Meeting {booking.get_status_display().lower()}',
+            message=f'Your meeting with {participant_name} on {meeting_time} is now {booking.get_status_display().lower()}.',
+        )
+        return Response(self.get_serializer(booking).data)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        return self._transition(self.get_object(), Booking.Status.APPROVED, {Booking.Status.PENDING})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        return self._transition(self.get_object(), Booking.Status.REJECTED, {Booking.Status.PENDING})
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        return self._transition(self.get_object(), Booking.Status.COMPLETED, {Booking.Status.APPROVED})
 
 
 class StudentMessageViewSet(viewsets.ModelViewSet):
@@ -1102,8 +1189,10 @@ def messaging_contacts_for(user):
             role__in=[User.Role.ORGANIZATION, User.Role.TEACHER, User.Role.COUNSELOR],
         )
         return queryset.filter(assigned_students | school_staff).distinct().order_by('first_name', 'last_name', 'username')
-    if user.school_id:
-        same_school = Q(school_id=user.school_id)
+    profile = user.student_profile if user.role == User.Role.STUDENT and hasattr(user, 'student_profile') else None
+    effective_school_id = profile.school_id if profile and profile.school_id else user.school_id
+    if effective_school_id:
+        same_school = Q(school_id=effective_school_id)
     else:
         same_school = Q(pk__in=[])
     if user.role in {User.Role.ORGANIZATION, User.Role.TEACHER} and user.school_id:
@@ -1112,9 +1201,12 @@ def messaging_contacts_for(user):
             assigned_counselor__isnull=False,
         ).values_list('assigned_counselor_id', flat=True)
         return queryset.filter(same_school | Q(id__in=counselor_ids)).distinct().order_by('first_name', 'last_name', 'username')
-    if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
-        counselor_id = user.student_profile.assigned_counselor_id
-        return queryset.filter(same_school | Q(id=counselor_id)).distinct().order_by('first_name', 'last_name', 'username')
+    if profile:
+        counselor_id = profile.assigned_counselor_id
+        own_school_staff = same_school & Q(
+            role__in=[User.Role.ORGANIZATION, User.Role.TEACHER, User.Role.COUNSELOR],
+        )
+        return queryset.filter(own_school_staff | Q(id=counselor_id)).distinct().order_by('first_name', 'last_name', 'username')
     return queryset.filter(same_school).order_by('first_name', 'last_name', 'username')
 
 
@@ -1281,10 +1373,16 @@ class MessageChannelViewSet(viewsets.ModelViewSet):
                 },
             )
             if created:
-                ChannelMembership.objects.bulk_create([
-                    ChannelMembership(channel=channel, user=request.user, role=ChannelMembership.Role.OWNER),
-                    ChannelMembership(channel=channel, user=target, role=ChannelMembership.Role.MEMBER),
-                ])
+                channel.school = (
+                    request.user.student_profile.school
+                    if request.user.role == User.Role.STUDENT and hasattr(request.user, 'student_profile')
+                    else request.user.school or target.school
+                )
+                channel.save(update_fields=['school', 'updated_at'])
+            ChannelMembership.objects.bulk_create([
+                ChannelMembership(channel=channel, user=request.user, role=ChannelMembership.Role.OWNER),
+                ChannelMembership(channel=channel, user=target, role=ChannelMembership.Role.MEMBER),
+            ], ignore_conflicts=True)
         return Response(MessageChannelSerializer(channel, context={'request': request}).data, status=201 if created else 200)
 
     @action(detail=True, methods=['post'])

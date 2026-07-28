@@ -151,6 +151,10 @@ export const api = {
   approveRoadmapMission: (id) => request(`/roadmap-missions/${id}/approve/`, { method: 'POST' }),
   approveStudentLevel: (id) => request(`/students/${id}/approve-level/`, { method: 'POST' }),
   studentXpHistory: (id) => request(`/students/${id}/xp-history/`),
+  bookingParticipants: () => request('/bookings/participants/'),
+  approveBooking: (id) => request(`/bookings/${id}/approve/`, { method: 'POST' }),
+  rejectBooking: (id) => request(`/bookings/${id}/reject/`, { method: 'POST' }),
+  completeBooking: (id) => request(`/bookings/${id}/complete/`, { method: 'POST' }),
   messageChannels: (kind = '', search = '') => {
     const query = new URLSearchParams()
     if (kind) query.set('kind', kind)
