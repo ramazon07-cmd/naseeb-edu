@@ -750,43 +750,69 @@ function StudentCenterPage({ user, data, query, reload, notify }) {
 function MissionForm({ mission, user, data, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false)
   const manager = isTaskManager(user)
+  const studentSubmitted = !manager && mission?.status === 'submitted'
   async function submit(event) {
     event.preventDefault(); setSaving(true); const values = new FormData(event.currentTarget)
     const payload = manager
-      ? { title: values.get('title'), category: values.get('category'), description: values.get('description'), due_date: values.get('due_date') || null, status: values.get('status'), progress_percent: Number(values.get('progress_percent') || 0) }
-      : { status: values.get('status'), progress_percent: Number(values.get('progress_percent') || 0), reflection: values.get('reflection') }
+      ? { title: values.get('title'), category: values.get('category'), description: values.get('description'), due_date: values.get('due_date') || null, status: values.get('status') }
+      : { status: 'submitted', reflection: values.get('reflection') }
     if (manager && !mission) payload.student = Number(values.get('student'))
-    try { mission ? await api.update('roadmap-missions', mission.id, payload) : await api.create('roadmap-missions', payload); notify(mission ? 'Mission updated.' : 'Mission created.'); onSaved() } catch (err) { notify(err.message, 'error') } finally { setSaving(false) }
+    try { mission ? await api.update('roadmap-missions', mission.id, payload) : await api.create('roadmap-missions', payload); notify(manager ? (mission ? 'Mission updated.' : 'Mission created.') : 'Mission submitted for approval.'); onSaved() } catch (err) { notify(err.message, 'error') } finally { setSaving(false) }
   }
   const statuses = ['planned', 'in_progress', 'submitted']
-  return <Modal title={manager ? (mission ? 'Edit roadmap mission' : 'Assign roadmap mission') : 'Update progress & reflection'} onClose={onClose}><form className="form-grid" onSubmit={submit}>{manager && !mission && <Field label="Student"><select name="student" required>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}{manager && <><Field label="Mission title"><input name="title" defaultValue={mission?.title || ''} required /></Field><Field label="Category"><input name="category" defaultValue={mission?.category || ''} placeholder="Applications, Essays..." /></Field><Field label="Due date"><input name="due_date" type="date" defaultValue={mission?.due_date || ''} /></Field></>}<Field label="Status"><select name="status" defaultValue={mission?.status || 'planned'}>{statuses.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field><Field label="Progress %"><input name="progress_percent" type="number" min="0" max="100" defaultValue={mission?.progress_percent || 0} /></Field>{manager ? <Field label="Description"><textarea name="description" defaultValue={mission?.description || ''} /></Field> : <Field label="Reflection"><textarea name="reflection" defaultValue={mission?.reflection || ''} placeholder="What did you learn or what is blocking progress?" /></Field>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>Cancel</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? 'Saving…' : 'Save'}</button></div></form></Modal>
+  return <Modal title={manager ? (mission ? 'Edit roadmap mission' : 'Assign roadmap mission') : (studentSubmitted ? 'Mission submitted' : 'Submit roadmap mission')} onClose={onClose}><form className="form-grid" onSubmit={submit}>{manager && !mission && <Field label="Student"><select name="student" required>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}{manager && <><Field label="Mission title"><input name="title" defaultValue={mission?.title || ''} required /></Field><Field label="Category"><input name="category" defaultValue={mission?.category || ''} placeholder="Applications, Essays..." /></Field><Field label="Due date"><input name="due_date" type="date" defaultValue={mission?.due_date || ''} /></Field><Field label="Status"><select name="status" defaultValue={mission?.status || 'planned'}>{statuses.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field></>}{!manager && <div className={`form-wide mission-submit-status ${studentSubmitted ? 'submitted' : 'planned'}`}>{studentSubmitted ? <Clock3 size={21} /> : <Sparkles size={21} />}<div><b>{studentSubmitted ? 'Submitted' : 'Planned mission'}</b><p>{studentSubmitted ? 'Your work is awaiting teacher or counselor approval.' : 'Complete the mission, write your reflection, then submit it for approval.'}</p></div></div>}{manager ? <Field label="Description"><textarea name="description" defaultValue={mission?.description || ''} /></Field> : <Field label="Reflection"><textarea name="reflection" defaultValue={mission?.reflection || ''} placeholder="What did you learn while completing this mission?" required readOnly={studentSubmitted} /></Field>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{studentSubmitted ? 'Close' : 'Cancel'}</button>{!studentSubmitted && <button className="button primary" disabled={saving} aria-busy={saving}>{saving ? (manager ? 'Saving…' : 'Submitting…') : (manager ? 'Save' : 'Submit mission')}</button>}</div></form></Modal>
+}
+
+function LevelOneSetupModal({ data, onClose, onSaved, notify }) {
+  const [saving, setSaving] = useState(false)
+  async function submit(event) {
+    event.preventDefault()
+    setSaving(true)
+    const values = new FormData(event.currentTarget)
+    try {
+      const result = await api.extendLevelOneRoadmap(Number(values.get('student')))
+      notify(result.created_count ? `${result.created_count} Level 1 missions added.` : 'Level 1 is already up to date.')
+      onSaved()
+    } catch (err) {
+      notify(err.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return <Modal title="Extend Level 1 roadmap" onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label="Student"><select name="student" required>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field><div className="form-wide roadmap-setup-note"><Sparkles size={19} /><div><b>8-step Level 1 path</b><p>Missing missions will be added in the correct order. Existing statuses, reflections and approvals stay unchanged.</p></div></div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>Cancel</button><button className="button primary" disabled={saving || !data.students.length} aria-busy={saving}>{saving ? 'Extending…' : 'Extend Level 1'}</button></div></form></Modal>
 }
 
 function StudentRoadmapPath({ student, missions, onOpen }) {
-  const completed = missions.filter((item) => item.status === 'completed').length
-  const activeIndex = missions.findIndex((item) => item.status !== 'completed')
-  const currentIndex = activeIndex === -1 ? Math.max(0, missions.length - 1) : activeIndex
   const level = student?.level || 1
+  const levelMissions = missions
+    .filter((item) => (item.level || 1) === level)
+    .sort((a, b) => (a.sequence || 1) - (b.sequence || 1))
+  const missionById = new Map(levelMissions.map((item) => [item.id, item]))
+  const completed = levelMissions.filter((item) => item.status === 'completed').length
+  const activeIndex = levelMissions.findIndex((item) => item.status !== 'completed')
+  const currentIndex = activeIndex === -1 ? Math.max(0, levelMissions.length - 1) : activeIndex
   const nextLevel = student?.level_up_pending ? student.eligible_level : Math.min(50, level + 1)
+  const isLocked = (item) => item.prerequisite && missionById.get(item.prerequisite)?.status !== 'completed'
   function missionState(item, index) {
     if (item.status === 'completed') return 'complete'
     if (item.status === 'submitted') return 'approval'
+    if (isLocked(item)) return 'locked'
     if (item.status === 'in_progress' || index === currentIndex) return 'current'
     return 'upcoming'
   }
   return <section className="level-roadmap-shell">
     <header className="level-roadmap-summary">
-      <div><span className="eyebrow">LEVEL {level} · MISSION {Math.min(completed + 1, Math.max(1, missions.length))}</span><h2>{missions[currentIndex]?.title || 'Your next milestone'}</h2><p>{student?.level_up_pending ? `You have earned enough XP for Level ${student.eligible_level}. Teacher or counselor approval is pending.` : 'Complete missions, submit your reflection, and earn XP after staff approval.'}</p></div>
+      <div><span className="eyebrow">LEVEL {level} · MISSION {Math.min(completed + 1, Math.max(1, levelMissions.length))} OF {Math.max(1, levelMissions.length)}</span><h2>{levelMissions[currentIndex]?.title || 'Your next milestone'}</h2><p>{student?.level_up_pending ? `You have earned enough XP for Level ${student.eligible_level}. Teacher or counselor approval is pending.` : 'Complete each mission in order, submit your reflection, and earn XP after staff approval.'}</p></div>
       <div className="roadmap-level-score"><span><Award size={18} /> Level {level}</span><strong>{student?.xp_total || 0} XP</strong><small>{student?.level_up_pending ? 'Level approval pending' : `${Math.max(0, (student?.next_level_xp || 0) - (student?.xp_total || 0))} XP to next level`}</small></div>
     </header>
     <div className="roadmap-path-stats"><span><CheckCircle2 size={17} /><b>{completed}</b> approved missions</span><span><Sparkles size={17} /><b>75 XP</b> per approved mission</span><span><Target size={17} /><b>Level {nextLevel}</b> next checkpoint</span></div>
     <div className="roadmap-xp-track"><span style={{ width: `${student?.xp_progress_percent || 0}%` }} /><b>{student?.xp_progress_percent || 0}%</b></div>
-    {missions.length ? <div className="level-roadmap-path">{missions.map((item, index) => {
+    {levelMissions.length ? <div className="level-roadmap-path">{levelMissions.map((item, index) => {
       const state = missionState(item, index)
-      const NodeIcon = state === 'complete' ? Check : state === 'approval' ? Clock3 : state === 'current' ? BookOpen : Sparkles
+      const NodeIcon = state === 'complete' ? Check : state === 'approval' ? Clock3 : item.status === 'planned' ? Sparkles : state === 'current' ? BookOpen : state === 'locked' ? ShieldCheck : Sparkles
       return <article className={`roadmap-path-row ${state}`} style={{ '--path-offset': `${[0, -78, 0, 78][index % 4]}px` }} key={item.id}>
-        <button type="button" className="roadmap-node" onClick={() => onOpen(item)} disabled={state === 'complete'} aria-label={`${item.title}, ${label(item.status)}`}><NodeIcon size={30} strokeWidth={2.7} /></button>
-        <div className="roadmap-node-card"><span>{item.category || `Mission ${index + 1}`}</span><h3>{item.title}</h3><p>{state === 'complete' ? 'Approved · XP awarded' : state === 'approval' ? 'Submitted · awaiting staff approval' : state === 'current' ? `${item.progress_percent || 0}% complete · continue mission` : `Upcoming · due ${dateText(item.due_date)}`}</p></div>
+        <button type="button" className="roadmap-node" onClick={() => onOpen(item)} disabled={state === 'complete' || state === 'locked'} aria-label={`${item.title}, ${state === 'locked' ? 'locked' : label(item.status)}`}><NodeIcon size={30} strokeWidth={2.7} /></button>
+        <div className="roadmap-node-card"><span>Step {item.sequence || index + 1} · {item.category || 'Roadmap'}</span>{item.status === 'planned' && <div className="mission-status-chip"><Sparkles size={12} /> Planned</div>}<h3>{item.title}</h3><p>{state === 'complete' ? 'Approved · XP awarded' : state === 'approval' ? 'Submitted · awaiting staff approval' : state === 'locked' ? 'Locked · complete the previous mission first' : item.status === 'planned' ? 'Complete the task and submit when ready' : state === 'current' ? 'Continue the mission and submit when ready' : `Upcoming · due ${dateText(item.due_date)}`}</p></div>
       </article>
     })}<div className="roadmap-checkpoint"><span><Award size={26} /></span><div><small>NEXT CHECKPOINT</small><h3>Level {nextLevel}</h3><p>{student?.level_up_pending ? 'Ready for staff approval' : `${student?.next_level_xp || 0} total XP required`}</p></div></div></div> : <Empty text="Your counselor has not assigned any roadmap missions yet." />}
   </section>
@@ -797,6 +823,7 @@ function RoadmapPage({ user, data, query, reload, notify }) {
   const [tab, setTab] = useState(manager ? 'missions' : 'path')
   const [editing, setEditing] = useState(null)
   const [open, setOpen] = useState(false)
+  const [setupOpen, setSetupOpen] = useState(false)
   const student = ownStudent(data)
   async function remove(item) { if (!window.confirm('Delete this mission?')) return; try { await api.remove('roadmap-missions', item.id); notify('Mission deleted.'); reload() } catch (err) { notify(err.message, 'error') } }
   async function approve(item) { try { const result = await api.approveRoadmapMission(item.id); notify(`Roadmap mission approved. +${result.xp_awarded || 0} XP`); reload() } catch (err) { notify(err.message, 'error') } }
@@ -805,14 +832,15 @@ function RoadmapPage({ user, data, query, reload, notify }) {
     ...data.roadmapMissions.map((item) => ({ id: `mission-${item.id}`, title: item.title, date: item.due_date, status: item.status, kind: 'Mission' })),
   ].filter((item) => item.date).sort((a, b) => new Date(a.date) - new Date(b.date))
   return <div className="section-stack student-portal">
-    <section className="portal-hero roadmap-hero"><div><span className="eyebrow">YOUR APPLICATION PLAN</span><h2>Roadmap</h2><p>{manager ? 'Assign missions, review student submissions, and approve the work that earns XP.' : 'Follow your visual learning path, submit reflections, and level up after teacher or counselor approval.'}</p></div>{manager && <button className="button light" onClick={() => { setEditing(null); setOpen(true) }}><Plus size={17} /> Assign mission</button>}</section>
+    <section className="portal-hero roadmap-hero"><div><span className="eyebrow">YOUR APPLICATION PLAN</span><h2>Roadmap</h2><p>{manager ? 'Assign missions, review student submissions, and approve the work that earns XP.' : 'Follow your visual learning path, submit reflections, and level up after teacher or counselor approval.'}</p></div>{manager && <div className="roadmap-hero-actions"><button className="button light" onClick={() => setSetupOpen(true)}><Sparkles size={17} /> Extend Level 1</button><button className="button light" onClick={() => { setEditing(null); setOpen(true) }}><Plus size={17} /> Assign mission</button></div>}</section>
     <PortalTabs active={tab} onChange={setTab} items={manager ? [["missions", "Mission list"], ["tasks", "Task list"], ["timeline", "Timeline view"], ["reflections", "Reflection view"]] : [["path", "Level path"], ["tasks", "Task list"], ["missions", "Mission list"], ["reflections", "Reflections"]]} />
     {tab === 'path' && !manager && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => { setEditing(item); setOpen(true) }} />}
     {tab === 'tasks' && <ResourceSection title="My tasks" resource="tasks" {...{ user, data, query, reload, notify }} />}
-    {tab === 'missions' && <div className="mission-grid">{data.roadmapMissions.map((item) => <article className="mission-card" key={item.id}><div className="mission-top"><span>{item.category || 'Roadmap'}</span><Badge>{item.status}</Badge></div><h3>{item.title}</h3><p>{item.description || 'No description provided.'}</p>{manager && <small>{item.student_name} • Assigned by {item.assigned_by_name || 'staff'}</small>}<div className="mission-progress"><div><span style={{ width: `${item.progress_percent}%` }} /></div><b>{item.progress_percent}%</b></div><footer><small><CalendarDays size={14} /> {dateText(item.due_date)}</small><div>{manager && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> Approve</button>}{item.status !== 'completed' && <button className="icon-button" onClick={() => { setEditing(item); setOpen(true) }} aria-label={`Edit ${item.title}`}><Pencil size={15} /></button>}{manager && <button className="icon-button danger" onClick={() => remove(item)} aria-label={`Delete ${item.title}`}><Trash2 size={15} /></button>}</div></footer></article>)}{!data.roadmapMissions.length && <Empty text="No missions have been assigned yet." />}</div>}
+    {tab === 'missions' && <div className="mission-grid">{data.roadmapMissions.map((item) => <article className="mission-card" key={item.id}><div className="mission-top"><span>Level {item.level || 1} · Step {item.sequence || 1} · {item.category || 'Roadmap'}</span>{item.status === 'planned' ? <div className="mission-status-chip"><Sparkles size={12} /> Planned</div> : <Badge>{item.status}</Badge>}</div><h3>{item.title}</h3><p>{item.description || 'No description provided.'}</p>{manager && <small>{item.student_name} • Assigned by {item.assigned_by_name || 'staff'}</small>}<footer><small><CalendarDays size={14} /> {dateText(item.due_date)}</small><div>{manager && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> Approve</button>}{item.status !== 'completed' && <button className="icon-button" onClick={() => { setEditing(item); setOpen(true) }} aria-label={`${!manager && item.status === 'submitted' ? 'View' : 'Edit'} ${item.title}`}>{!manager && item.status === 'submitted' ? <Eye size={15} /> : <Pencil size={15} />}</button>}{manager && <button className="icon-button danger" onClick={() => remove(item)} aria-label={`Delete ${item.title}`}><Trash2 size={15} /></button>}</div></footer></article>)}{!data.roadmapMissions.length && <Empty text="No missions have been assigned yet." />}</div>}
     {tab === 'timeline' && <Panel title="Application timeline"><div className="timeline-list">{timeline.map((item) => <div key={item.id}><span className="timeline-dot" /><time>{dateText(item.date)}</time><div><b>{item.title}</b><small>{item.kind}</small></div><Badge>{item.status}</Badge></div>)}{!timeline.length && <Empty />}</div></Panel>}
-    {tab === 'reflections' && <div className="reflection-grid">{data.roadmapMissions.map((item) => <article key={item.id}><Sparkles size={20} /><div><span>{item.category || 'Mission'}</span><h3>{item.title}</h3><p>{item.reflection || 'No reflection has been written for this mission yet.'}</p></div>{!manager && item.status !== 'completed' && <button className="button quiet small" onClick={() => { setEditing(item); setOpen(true) }}>Write reflection</button>}</article>)}{!data.roadmapMissions.length && <Empty />}</div>}
+    {tab === 'reflections' && <div className="reflection-grid">{data.roadmapMissions.map((item) => <article key={item.id}><Sparkles size={20} /><div><span>{item.category || 'Mission'}</span><h3>{item.title}</h3><p>{item.reflection || 'No reflection has been written for this mission yet.'}</p></div>{!manager && item.status !== 'completed' && <button className="button quiet small" onClick={() => { setEditing(item); setOpen(true) }}>{item.status === 'submitted' ? 'View submission' : 'Write reflection'}</button>}</article>)}{!data.roadmapMissions.length && <Empty />}</div>}
     {open && <MissionForm mission={editing} user={user} data={data} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}
+    {setupOpen && <LevelOneSetupModal data={data} onClose={() => setSetupOpen(false)} onSaved={() => { setSetupOpen(false); reload() }} notify={notify} />}
   </div>
 }
 
@@ -825,9 +853,26 @@ function CommunityPostForm({ onClose, onSaved, notify }) {
 function CommunityPage({ data, reload, notify }) {
   const [filter, setFilter] = useState('all')
   const [open, setOpen] = useState(false)
-  const posts = data.communityPosts.filter((item) => filter === 'all' || item.post_type === filter)
-  async function like(item) { try { await api.likeCommunityPost(item.id); reload() } catch (err) { notify(err.message, 'error') } }
-  return <div className="section-stack student-portal"><section className="portal-hero community-hero"><div><span className="eyebrow">NASEEB COMMUNITY</span><h2>Learn together. Grow together.</h2><p>Ask questions, share useful resources, and learn from the application experience of other students.</p></div><button className="button light" onClick={() => setOpen(true)}><Plus size={17} /> Create a post</button></section><div className="community-layout"><div><PortalTabs active={filter} onChange={setFilter} items={[["all", "All posts"], ["discussion", "Discussion"], ["question", "Q&A"], ["update", "Updates"]]} /><div className="community-feed">{posts.map((post) => <article className="community-card" key={post.id}><header><span className="avatar">{post.author_initials}</span><div><b>{post.author_name || 'Student'}</b><small>{dateTimeText(post.created_at)} • {label(post.post_type)}</small></div></header><h3>{post.title}</h3><p>{post.body}</p><footer><button className={post.liked_by_me ? 'liked' : ''} onClick={() => like(post)}><Heart size={17} fill={post.liked_by_me ? 'currentColor' : 'none'} /> {post.likes_count}</button></footer></article>)}{!posts.length && <Empty text="No posts in this section yet." />}</div></div><aside><Panel title="Community guidelines"><ul className="guide-list"><li>Keep every conversation useful and respectful.</li><li>Do not share passwords or confidential documents.</li><li>Check your sources and ask clear questions.</li></ul></Panel></aside></div>{open && <CommunityPostForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}</div>
+  const [communityPosts, setCommunityPosts] = useState(data.communityPosts)
+  const [likingIds, setLikingIds] = useState([])
+  useEffect(() => setCommunityPosts(data.communityPosts), [data.communityPosts])
+  const posts = communityPosts.filter((item) => filter === 'all' || item.post_type === filter)
+  async function like(item) {
+    if (likingIds.includes(item.id)) return
+    const optimistic = { ...item, liked_by_me: !item.liked_by_me, likes_count: Math.max(0, item.likes_count + (item.liked_by_me ? -1 : 1)) }
+    setLikingIds((ids) => [...ids, item.id])
+    setCommunityPosts((items) => items.map((post) => post.id === item.id ? optimistic : post))
+    try {
+      const saved = await api.likeCommunityPost(item.id)
+      setCommunityPosts((items) => items.map((post) => post.id === item.id ? saved : post))
+    } catch (err) {
+      setCommunityPosts((items) => items.map((post) => post.id === item.id ? item : post))
+      notify(err.message, 'error')
+    } finally {
+      setLikingIds((ids) => ids.filter((id) => id !== item.id))
+    }
+  }
+  return <div className="section-stack student-portal"><section className="portal-hero community-hero"><div><span className="eyebrow">NASEEB COMMUNITY</span><h2>Learn together. Grow together.</h2><p>Ask questions, share useful resources, and learn from the application experience of other students.</p></div><button className="button light" onClick={() => setOpen(true)}><Plus size={17} /> Create a post</button></section><div className="community-layout"><div><PortalTabs active={filter} onChange={setFilter} items={[["all", "All posts"], ["discussion", "Discussion"], ["question", "Q&A"], ["update", "Updates"]]} /><div className="community-feed">{posts.map((post) => { const liking = likingIds.includes(post.id); return <article className="community-card" key={post.id}><header><span className="avatar">{post.author_initials}</span><div><b>{post.author_name || 'Student'}</b><small>{dateTimeText(post.created_at)} • {label(post.post_type)}</small></div></header><h3>{post.title}</h3><p>{post.body}</p><footer><button className={post.liked_by_me ? 'liked' : ''} onClick={() => like(post)} disabled={liking} aria-pressed={post.liked_by_me} aria-label={`${post.liked_by_me ? 'Unlike' : 'Like'} ${post.title}`} title={post.liked_by_me ? 'Remove your like' : 'Like this post'}><Heart size={17} fill={post.liked_by_me ? 'currentColor' : 'none'} /><span>{post.liked_by_me ? 'Liked' : 'Like'}</span><b>{post.likes_count}</b></button></footer></article> })}{!posts.length && <Empty text="No posts in this section yet." />}</div></div><aside><Panel title="How likes work"><p className="community-like-help"><Heart size={16} /> Tap Like to support a useful post. Tap it again to remove your like. Each student counts once.</p></Panel><Panel title="Community guidelines"><ul className="guide-list"><li>Keep every conversation useful and respectful.</li><li>Do not share passwords or confidential documents.</li><li>Check your sources and ask clear questions.</li></ul></Panel></aside></div>{open && <CommunityPostForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}</div>
 }
 
 function BookingForm({ onClose, onSaved, notify }) {

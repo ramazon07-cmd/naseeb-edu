@@ -10,6 +10,7 @@ from apps.admissions.models import (
     RecommendationLetter, Research, ResourceLibraryItem, RoadmapMission, School,
     Scholarship, StoreItem, StudentMessage, StudentProfile, Task, University,
 )
+from apps.admissions.services import extend_level_one_roadmap
 
 
 class Command(BaseCommand):
@@ -417,8 +418,7 @@ class Command(BaseCommand):
                     'category': 'Applications',
                     'description': 'Compare reach, target and safety options with scholarship deadlines.',
                     'due_date': today + timedelta(days=14),
-                    'status': RoadmapMission.Status.IN_PROGRESS,
-                    'progress_percent': 55,
+                    'status': RoadmapMission.Status.PLANNED,
                 },
             )
             RoadmapMission.objects.get_or_create(
@@ -430,9 +430,9 @@ class Command(BaseCommand):
                     'description': 'Finish the main essay and prepare the first supplement outline.',
                     'due_date': today + timedelta(days=28),
                     'status': RoadmapMission.Status.PLANNED,
-                    'progress_percent': 20,
                 },
             )
+            extend_level_one_roadmap(student=student, assigned_by=counselor, start_date=today)
 
             ProgramService.objects.get_or_create(
                 student=student,

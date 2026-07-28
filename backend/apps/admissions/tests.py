@@ -629,7 +629,7 @@ class RoleIsolationTests(APITestCase):
         notification.refresh_from_db()
         self.assertTrue(notification.is_read)
 
-    def test_student_can_report_roadmap_progress_but_cannot_control_mission(self):
+    def test_student_can_only_submit_roadmap_mission_with_reflection(self):
         other = RoadmapMission.objects.create(student=self.student_b, title='Private mission')
         own = RoadmapMission.objects.create(
             student=self.student_a,
@@ -643,21 +643,55 @@ class RoleIsolationTests(APITestCase):
                 'title': 'My application mission',
                 'category': 'Applications',
                 'status': RoadmapMission.Status.IN_PROGRESS,
-                'progress_percent': 40,
             },
             format='json',
         )
         self.assertEqual(created.status_code, status.HTTP_403_FORBIDDEN)
-        progressed = self.client.patch(
+        selected_status = self.client.patch(
+            f'/api/roadmap-missions/{own.id}/',
+            {
+                'status': RoadmapMission.Status.IN_PROGRESS,
+                'reflection': 'I started the assigned milestones.',
+            },
+            format='json',
+        )
+        self.assertEqual(selected_status.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Students cannot choose a mission status', str(selected_status.data))
+        missing_reflection = self.client.patch(
+            f'/api/roadmap-missions/{own.id}/',
+            {'status': RoadmapMission.Status.SUBMITTED},
+            format='json',
+        )
+        self.assertEqual(missing_reflection.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Add a reflection', str(missing_reflection.data))
+        submitted = self.client.patch(
             f'/api/roadmap-missions/{own.id}/',
             {
                 'status': RoadmapMission.Status.SUBMITTED,
-                'progress_percent': 90,
                 'reflection': 'I completed the assigned milestones.',
             },
             format='json',
         )
-        self.assertEqual(progressed.status_code, status.HTTP_200_OK)
+        self.assertEqual(submitted.status_code, status.HTTP_200_OK)
+        own.refresh_from_db()
+        self.assertEqual(own.status, RoadmapMission.Status.SUBMITTED)
+        manual_progress = self.client.patch(
+            f'/api/roadmap-missions/{own.id}/',
+            {'progress_percent': 50},
+            format='json',
+        )
+        self.assertEqual(manual_progress.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Manual mission progress has been removed', str(manual_progress.data))
+        resubmitted = self.client.patch(
+            f'/api/roadmap-missions/{own.id}/',
+            {
+                'status': RoadmapMission.Status.SUBMITTED,
+                'reflection': 'Changed after submission.',
+            },
+            format='json',
+        )
+        self.assertEqual(resubmitted.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already submitted', str(resubmitted.data))
         tampered = self.client.patch(
             f'/api/roadmap-missions/{own.id}/',
             {'title': 'Student changed title'},
@@ -704,7 +738,6 @@ class RoleIsolationTests(APITestCase):
                 'student': self.student_a.id,
                 'title': 'Teacher roadmap mission',
                 'status': RoadmapMission.Status.PLANNED,
-                'progress_percent': 0,
             },
             format='json',
         )
@@ -728,6 +761,62 @@ class RoleIsolationTests(APITestCase):
         )
         self.assertEqual(cross_school_mission.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_staff_can_extend_level_one_without_duplicates_and_students_follow_order(self):
+        self.client.force_authenticate(self.teacher)
+        extended = self.client.post(
+            '/api/roadmap-missions/extend-level-one/',
+            {'student': self.student_a.id},
+            format='json',
+        )
+        self.assertEqual(extended.status_code, status.HTTP_200_OK)
+        self.assertEqual(extended.data['created_count'], 8)
+        self.assertEqual(extended.data['total_count'], 8)
+        self.assertEqual(
+            [item['sequence'] for item in extended.data['missions']],
+            list(range(1, 9)),
+        )
+        self.assertIsNone(extended.data['missions'][0]['prerequisite'])
+        self.assertEqual(
+            extended.data['missions'][1]['prerequisite'],
+            extended.data['missions'][0]['id'],
+        )
+
+        repeated = self.client.post(
+            '/api/roadmap-missions/extend-level-one/',
+            {'student': self.student_a.id},
+            format='json',
+        )
+        self.assertEqual(repeated.status_code, status.HTTP_200_OK)
+        self.assertEqual(repeated.data['created_count'], 0)
+        self.assertEqual(RoadmapMission.objects.filter(student=self.student_a, level=1).count(), 8)
+
+        outside_scope = self.client.post(
+            '/api/roadmap-missions/extend-level-one/',
+            {'student': self.student_b.id},
+            format='json',
+        )
+        self.assertEqual(outside_scope.status_code, status.HTTP_403_FORBIDDEN)
+
+        first, second = RoadmapMission.objects.filter(student=self.student_a).order_by('sequence')[:2]
+        self.client.force_authenticate(self.student_a_user)
+        locked = self.client.patch(
+            f'/api/roadmap-missions/{second.id}/',
+            {
+                'status': RoadmapMission.Status.SUBMITTED,
+                'reflection': 'I completed the second mission.',
+            },
+            format='json',
+        )
+        self.assertEqual(locked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('previous Level 1 mission', str(locked.data))
+
+        student_extend = self.client.post(
+            '/api/roadmap-missions/extend-level-one/',
+            {'student': self.student_a.id},
+            format='json',
+        )
+        self.assertEqual(student_extend.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_teacher_or_counselor_approval_is_required_for_submitted_work(self):
         task = Task.objects.create(
             student=self.student_a,
@@ -741,7 +830,6 @@ class RoleIsolationTests(APITestCase):
             assigned_by=self.teacher,
             title='Submitted mission',
             status=RoadmapMission.Status.SUBMITTED,
-            progress_percent=85,
         )
         self.client.force_authenticate(self.teacher)
         approved_task = self.client.post(f'/api/tasks/{task.id}/approve/', {}, format='json')
@@ -750,7 +838,7 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(approved_task.data['status'], Task.Status.APPROVED)
         self.assertEqual(approved_mission.status_code, status.HTTP_200_OK)
         self.assertEqual(approved_mission.data['status'], RoadmapMission.Status.COMPLETED)
-        self.assertEqual(approved_mission.data['progress_percent'], 100)
+        self.assertNotIn('progress_percent', approved_mission.data)
         self.student_a.refresh_from_db()
         self.assertEqual(self.student_a.xp_total, 125)
         self.assertEqual(self.student_a.level, 1)
@@ -815,10 +903,16 @@ class RoleIsolationTests(APITestCase):
             format='json',
         )
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.client.force_authenticate(self.student_b_user)
         liked = self.client.post(f"/api/community-posts/{created.data['id']}/like/", {}, format='json')
         self.assertEqual(liked.status_code, status.HTTP_200_OK)
         self.assertTrue(liked.data['liked_by_me'])
         self.assertEqual(liked.data['likes_count'], 1)
+        unliked = self.client.post(f"/api/community-posts/{created.data['id']}/like/", {}, format='json')
+        self.assertEqual(unliked.status_code, status.HTTP_200_OK)
+        self.assertFalse(unliked.data['liked_by_me'])
+        self.assertEqual(unliked.data['likes_count'], 0)
+        self.assertEqual(CommunityPost.objects.get(pk=created.data['id']).liked_by.count(), 0)
 
     def test_student_booking_and_message_use_assigned_counselor(self):
         self.client.force_authenticate(self.student_a_user)
@@ -1360,22 +1454,22 @@ class RoleIsolationTests(APITestCase):
     def test_task_roadmap_and_journey_progress_are_computed(self):
         Task.objects.create(student=self.student_a, title='Working task', due_date=date(2027, 12, 1), status=Task.Status.IN_PROGRESS)
         Task.objects.create(student=self.student_a, title='Approved task', due_date=date(2027, 12, 1), status=Task.Status.APPROVED)
-        RoadmapMission.objects.create(student=self.student_a, title='Planned mission', status=RoadmapMission.Status.PLANNED, progress_percent=20)
-        RoadmapMission.objects.create(student=self.student_a, title='Done mission', status=RoadmapMission.Status.COMPLETED, progress_percent=40)
+        RoadmapMission.objects.create(student=self.student_a, title='Planned mission', status=RoadmapMission.Status.PLANNED)
+        RoadmapMission.objects.create(student=self.student_a, title='Done mission', status=RoadmapMission.Status.COMPLETED)
         self.assertEqual(self.student_a.task_progress_percent, 70)
-        self.assertEqual(self.student_a.roadmap_progress_percent, 60)
-        self.assertEqual(self.student_a.journey_progress_percent, 65)
+        self.assertEqual(self.student_a.roadmap_progress_percent, 50)
+        self.assertEqual(self.student_a.journey_progress_percent, 60)
         self.client.force_authenticate(self.student_a_user)
         profile = self.results(self.client.get('/api/students/'))[0]
         self.assertEqual(profile['task_progress_percent'], 70)
-        self.assertEqual(profile['roadmap_progress_percent'], 60)
-        self.assertEqual(profile['journey_progress_percent'], 65)
+        self.assertEqual(profile['roadmap_progress_percent'], 50)
+        self.assertEqual(profile['journey_progress_percent'], 60)
         self.assertEqual(profile['task_status_counts']['approved'], 1)
         self.assertEqual(profile['roadmap_status_counts']['completed'], 1)
 
     def test_dashboard_exposes_progress_and_risk_summary(self):
         Task.objects.create(student=self.student_a, title='Late task', due_date=date(2025, 1, 1), status=Task.Status.LATE)
-        RoadmapMission.objects.create(student=self.student_a, title='Current mission', status=RoadmapMission.Status.IN_PROGRESS, progress_percent=50)
+        RoadmapMission.objects.create(student=self.student_a, title='Current mission', status=RoadmapMission.Status.IN_PROGRESS)
         self.client.force_authenticate(self.counselor)
         response = self.client.get('/api/dashboard/stats/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)

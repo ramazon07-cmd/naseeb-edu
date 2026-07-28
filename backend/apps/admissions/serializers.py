@@ -536,27 +536,55 @@ class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSe
         current = getattr(self.instance, 'status', None)
         if request and request.user.is_task_manager and value == RoadmapMission.Status.COMPLETED and current != RoadmapMission.Status.COMPLETED:
             raise serializers.ValidationError('Use the approve action so XP is recorded.')
-        if request and not request.user.is_task_manager and value not in {
-            RoadmapMission.Status.PLANNED,
-            RoadmapMission.Status.IN_PROGRESS,
-            RoadmapMission.Status.SUBMITTED,
-        }:
-            raise serializers.ValidationError('Only a teacher or counselor can complete a roadmap mission.')
-        return value
-
-    def validate_progress_percent(self, value):
-        if value > 100:
-            raise serializers.ValidationError('Progress cannot be greater than 100%.')
+        if request and not request.user.is_task_manager and value != RoadmapMission.Status.SUBMITTED:
+            raise serializers.ValidationError(
+                'Students cannot choose a mission status. Use Submit mission when the work is ready.'
+            )
         return value
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
         request = self.context.get('request')
+        if 'progress_percent' in self.initial_data:
+            raise serializers.ValidationError({
+                'progress_percent': 'Manual mission progress has been removed. Progress is calculated from approved missions.'
+            })
+        student = attrs.get('student', getattr(self.instance, 'student', None))
+        prerequisite = attrs.get('prerequisite', getattr(self.instance, 'prerequisite', None))
+        if prerequisite and student and prerequisite.student_id != student.id:
+            raise serializers.ValidationError({
+                'prerequisite': 'The prerequisite must belong to the same student.'
+            })
+        if prerequisite and self.instance and prerequisite.id == self.instance.id:
+            raise serializers.ValidationError({
+                'prerequisite': 'A mission cannot be its own prerequisite.'
+            })
         if request and request.user.role == request.user.Role.STUDENT and self.instance:
-            forbidden = set(attrs) - {'status', 'progress_percent', 'reflection'}
+            forbidden = set(attrs) - {'status', 'reflection'}
             if forbidden:
                 raise serializers.ValidationError({
                     field: 'Only a teacher or counselor can change this field.' for field in sorted(forbidden)
+                })
+            if self.instance.status == RoadmapMission.Status.SUBMITTED:
+                raise serializers.ValidationError({
+                    'status': 'This mission is already submitted and awaiting staff approval.'
+                })
+            if self.instance.status == RoadmapMission.Status.COMPLETED:
+                raise serializers.ValidationError({
+                    'status': 'An approved mission cannot be changed by a student.'
+                })
+            if attrs.get('status') != RoadmapMission.Status.SUBMITTED:
+                raise serializers.ValidationError({
+                    'status': 'Use Submit mission when the work is ready.'
+                })
+            reflection = attrs.get('reflection', self.instance.reflection)
+            if not reflection or not reflection.strip():
+                raise serializers.ValidationError({
+                    'reflection': 'Add a reflection before submitting the mission.'
+                })
+            if prerequisite and prerequisite.status != RoadmapMission.Status.COMPLETED:
+                raise serializers.ValidationError({
+                    'status': 'Complete the previous Level 1 mission before submitting this one.'
                 })
         return attrs
 

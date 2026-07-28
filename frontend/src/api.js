@@ -192,6 +192,10 @@ export const api = {
     body: JSON.stringify(payload),
   }),
   markNotificationRead: (id) => request(`/notifications/${id}/read/`, { method: 'POST' }),
+  extendLevelOneRoadmap: (student) => request('/roadmap-missions/extend-level-one/', {
+    method: 'POST',
+    body: JSON.stringify({ student }),
+  }),
   likeCommunityPost: (id) => request(`/community-posts/${id}/like/`, { method: 'POST' }),
   markStudentMessageRead: (id) => request(`/student-messages/${id}/read/`, { method: 'POST' }),
 }
