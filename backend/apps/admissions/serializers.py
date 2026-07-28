@@ -202,6 +202,18 @@ class VerifiedStudentRecordMixin(StudentRecordSerializerMixin):
         return value
 
 
+class GoogleDocsModelSerializer(serializers.ModelSerializer):
+    """Expose one validated Google Docs link and its embeddable preview URL."""
+
+    google_docs_preview_url = serializers.SerializerMethodField()
+
+    def validate_google_docs_url(self, value):
+        return validate_google_docs_url(value)
+
+    def get_google_docs_preview_url(self, obj):
+        return google_docs_preview_url(obj.google_docs_url)
+
+
 class UniversitySerializer(serializers.ModelSerializer):
     class Meta:
         model = University
@@ -325,9 +337,8 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
         return obj.assigned_by.get_full_name() or obj.assigned_by.username
 
 
-class DocumentSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
+class DocumentSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
-    google_docs_preview_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -338,12 +349,6 @@ class DocumentSerializer(StudentRecordSerializerMixin, serializers.ModelSerializ
         if request and not request.user.is_counselor_like and value in {Document.Status.APPROVED, Document.Status.REJECTED}:
             raise serializers.ValidationError('Only a counselor can approve or reject documents.')
         return value
-
-    def validate_google_docs_url(self, value):
-        return validate_google_docs_url(value)
-
-    def get_google_docs_preview_url(self, obj):
-        return google_docs_preview_url(obj.google_docs_url)
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
@@ -360,7 +365,7 @@ class AchievementSerializer(VerifiedStudentRecordMixin, serializers.ModelSeriali
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
-class ResearchSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer):
+class ResearchSerializer(VerifiedStudentRecordMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -371,7 +376,7 @@ class ResearchSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
-class ProjectSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer):
+class ProjectSerializer(VerifiedStudentRecordMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -382,7 +387,7 @@ class ProjectSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer)
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
-class InternshipSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer):
+class InternshipSerializer(VerifiedStudentRecordMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -393,7 +398,7 @@ class InternshipSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializ
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
-class ActivitySerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer):
+class ActivitySerializer(VerifiedStudentRecordMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -404,7 +409,7 @@ class ActivitySerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
-class HonorSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer):
+class HonorSerializer(VerifiedStudentRecordMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -415,7 +420,7 @@ class HonorSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer):
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
-class RecommendationLetterSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
+class RecommendationLetterSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -440,11 +445,10 @@ class EssayRevisionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class EssaySerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
+class EssaySerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
     university_name = serializers.SerializerMethodField()
     revisions = EssayRevisionSerializer(many=True, read_only=True)
-    google_docs_preview_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Essay
@@ -455,12 +459,6 @@ class EssaySerializer(StudentRecordSerializerMixin, serializers.ModelSerializer)
         if request and not request.user.is_counselor_like and value == Essay.Status.APPROVED:
             raise serializers.ValidationError('Only a counselor can approve essays.')
         return value
-
-    def validate_google_docs_url(self, value):
-        return validate_google_docs_url(value)
-
-    def get_google_docs_preview_url(self, obj):
-        return google_docs_preview_url(obj.google_docs_url)
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username

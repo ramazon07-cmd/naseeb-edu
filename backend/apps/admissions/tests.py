@@ -7,10 +7,10 @@ from rest_framework.test import APITestCase
 
 from apps.users.models import User
 from .models import (
-    Achievement, Application, Booking, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, MeetingNote,
-    LevelApproval, Notification, OpportunityProgram, ProgramService, Project, ResourceLibraryItem,
-    MessageChannel, MessageReport, RoadmapMission, School, Scholarship, StoreItem, StudentMessage, StudentProfile, Task, University,
-    XPTransaction,
+    Achievement, Activity, Application, Booking, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, Honor,
+    Internship, MeetingNote, LevelApproval, Notification, OpportunityProgram, ProgramService, Project, RecommendationLetter,
+    Research, ResourceLibraryItem, MessageChannel, MessageReport, RoadmapMission, School, Scholarship, StoreItem,
+    StudentMessage, StudentProfile, Task, University, XPTransaction,
 )
 
 
@@ -397,6 +397,76 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(counselor_task.data['student_response'], 'I completed the outline and explained my structure.')
         self.assertEqual(self.client.get(f"/api/documents/{document.data['id']}/").status_code, status.HTTP_200_OK)
         self.assertEqual(self.client.get(f"/api/essays/{essay.data['id']}/").status_code, status.HTTP_200_OK)
+
+    def test_shared_google_docs_support_for_student_records(self):
+        google_docs_url = 'https://docs.google.com/document/d/shared-record-document/edit'
+        expected_preview = 'https://docs.google.com/document/d/shared-record-document/preview'
+        resources = {
+            'researches': {
+                'title': 'AI education research',
+                'summary': 'Research summary.',
+            },
+            'projects': {
+                'title': 'Admissions dashboard',
+                'description': 'Project description.',
+            },
+            'internships': {
+                'organization': 'Naseeb Edu',
+                'position': 'Student intern',
+            },
+            'activities': {
+                'name': 'University club',
+                'activity_type': Activity.Type.CLUB,
+            },
+            'honors': {
+                'title': 'Academic honor',
+                'level': Honor.Level.SCHOOL,
+            },
+            'recommendations': {
+                'recommender_name': 'Teacher Name',
+                'status': RecommendationLetter.Status.REQUESTED,
+            },
+        }
+
+        self.client.force_authenticate(self.student_a_user)
+        created = {}
+        for resource, payload in resources.items():
+            with self.subTest(resource=resource):
+                response = self.client.post(
+                    f'/api/{resource}/',
+                    {
+                        **payload,
+                        'student': self.student_a.id,
+                        'google_docs_url': google_docs_url,
+                    },
+                    format='json',
+                )
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                self.assertEqual(response.data['google_docs_url'], google_docs_url)
+                self.assertEqual(response.data['google_docs_preview_url'], expected_preview)
+                created[resource] = response.data['id']
+
+        invalid = self.client.patch(
+            f"/api/researches/{created['researches']}/",
+            {'google_docs_url': 'https://example.com/not-google-docs'},
+            format='json',
+        )
+        self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.client.force_authenticate(self.student_b_user)
+        blocked = self.client.patch(
+            f"/api/projects/{created['projects']}/",
+            {'google_docs_url': google_docs_url},
+            format='json',
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_404_NOT_FOUND)
+
+        self.client.force_authenticate(self.counselor)
+        for resource, record_id in created.items():
+            with self.subTest(counselor_resource=resource):
+                response = self.client.get(f'/api/{resource}/{record_id}/')
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.data['google_docs_preview_url'], expected_preview)
 
     def test_student_can_create_own_project_but_not_verify_it(self):
         self.client.force_authenticate(self.student_a_user)

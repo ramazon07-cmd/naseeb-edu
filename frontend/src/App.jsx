@@ -112,25 +112,27 @@ const RESOURCE_FIELDS = {
   researches: [
     ['title', 'Research title', 'text', true], ['field', 'Field'], ['role', 'Role'],
     ['summary', 'Summary', 'textarea', true], ['outcome', 'Outcome'], ['start_date', 'Start date', 'date'],
-    ['end_date', 'End date', 'date'], ['link', 'Link', 'url'],
+    ['end_date', 'End date', 'date'], ['link', 'Link', 'url'], ['google_docs_url', 'Google Docs URL', 'url'],
   ],
   projects: [
     ['title', 'Project title', 'text', true], ['role', 'Role'], ['technologies', 'Technologies'],
     ['description', 'Description', 'textarea', true], ['impact', 'Measurable impact'], ['date', 'Date', 'date'], ['link', 'Link', 'url'],
+    ['google_docs_url', 'Google Docs URL', 'url'],
   ],
   internships: [
     ['organization', 'Organization', 'text', true], ['position', 'Position', 'text', true], ['supervisor', 'Supervisor'],
     ['description', 'Responsibilities and results', 'textarea'], ['start_date', 'Start date', 'date'], ['end_date', 'End date', 'date'],
-    ['is_current', 'Current internship', 'checkbox'],
+    ['is_current', 'Current internship', 'checkbox'], ['google_docs_url', 'Google Docs URL', 'url'],
   ],
   activities: [
     ['name', 'Activity name', 'text', true], ['activity_type', 'Type', 'select', true, ['extracurricular', 'volunteering', 'leadership', 'club', 'competition', 'community', 'other']],
     ['role', 'Role'], ['description', 'Description', 'textarea'], ['impact', 'Impact'],
     ['hours_per_week', 'Hours per week', 'number'], ['weeks_per_year', 'Weeks per year', 'number'],
+    ['google_docs_url', 'Google Docs URL', 'url'],
   ],
   honors: [
     ['title', 'Honor title', 'text', true], ['issuer', 'Issuer'], ['level', 'Level', 'select', true, ['school', 'regional', 'national', 'international']],
-    ['award_date', 'Award date', 'date'], ['description', 'Description', 'textarea'],
+    ['award_date', 'Award date', 'date'], ['description', 'Description', 'textarea'], ['google_docs_url', 'Google Docs URL', 'url'],
   ],
   achievements: [
     ['title', 'Achievement title', 'text', true], ['category', 'Category', 'select', true, ['project', 'startup', 'olympiad', 'volunteering', 'leadership', 'research', 'sport', 'art', 'other']],
@@ -139,7 +141,7 @@ const RESOURCE_FIELDS = {
   recommendations: [
     ['recommender_name', 'Recommender name', 'text', true], ['recommender_title', 'Position'], ['recommender_email', 'Email', 'email'],
     ['relationship', 'Relationship'], ['status', 'Status', 'select', true, ['requested', 'drafting', 'submitted', 'approved']],
-    ['deadline', 'Deadline', 'date'], ['notes', 'Notes', 'textarea'],
+    ['deadline', 'Deadline', 'date'], ['notes', 'Notes', 'textarea'], ['google_docs_url', 'Google Docs URL', 'url'],
   ],
   tasks: [
     ['title', 'Task title', 'text', true], ['description', 'Description', 'textarea'], ['due_date', 'Due date', 'date', true],
@@ -406,8 +408,25 @@ function GoogleDocsPreview({ previewUrl, title }) {
   return <div className="google-doc-preview"><div><FileText size={18} /><span><b>Google Docs preview</b><small>The document must allow Viewer access or “Anyone with the link” for the preview to load.</small></span></div><iframe src={previewUrl} title={`${title} Google Docs preview`} loading="lazy" referrerPolicy="no-referrer" /></div>
 }
 
+function googleDocsTitle(item) {
+  return item.title || item.name || item.organization || item.recommender_name || 'Google Docs record'
+}
+
+function GoogleDocsActions({ item, onPreview }) {
+  if (!item?.google_docs_url) return null
+  return <>
+    {item.google_docs_preview_url && onPreview && <button type="button" className="button quiet small" onClick={onPreview}><Eye size={14} /> Preview</button>}
+    <a className="button quiet small" href={item.google_docs_url} target="_blank" rel="noreferrer">Open in Google Docs <ExternalLink size={14} /></a>
+  </>
+}
+
+function GoogleDocsRecordModal({ item, onClose }) {
+  const title = googleDocsTitle(item)
+  return <Modal title={title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><span>Google Docs attachment</span><GoogleDocsActions item={item} /></div><GoogleDocsPreview previewUrl={item.google_docs_preview_url} title={title} /></div></Modal>
+}
+
 function EssayDetailModal({ essay, onClose }) {
-  return <Modal title={essay.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{essay.status}</Badge><span>Version {essay.version} · {essay.university_name || 'General essay'}</span></div>{essay.google_docs_url && <a className="button primary" href={essay.google_docs_url} target="_blank" rel="noreferrer">Open in Google Docs <ExternalLink size={15} /></a>}</div><section><span className="detail-label">Essay prompt</span><p>{essay.prompt}</p></section>{essay.google_docs_preview_url ? <GoogleDocsPreview previewUrl={essay.google_docs_preview_url} title={essay.title} /> : <section><span className="detail-label">Current draft</span><div className="essay-content-preview">{essay.content || 'No draft content has been added yet.'}</div></section>}{essay.counselor_comment && <section className="counselor-feedback"><span className="detail-label">Counselor feedback</span><p>{essay.counselor_comment}</p></section>}{essay.revisions?.length > 0 && <section><span className="detail-label">Revision history</span><div className="revision-chips">{essay.revisions.map((revision) => <span key={revision.id}>v{revision.version} · {label(revision.status)} · {dateText(revision.created_at)}</span>)}</div></section>}</div></Modal>
+  return <Modal title={essay.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{essay.status}</Badge><span>Version {essay.version} · {essay.university_name || 'General essay'}</span></div><GoogleDocsActions item={essay} /></div><section><span className="detail-label">Essay prompt</span><p>{essay.prompt}</p></section>{essay.google_docs_preview_url ? <GoogleDocsPreview previewUrl={essay.google_docs_preview_url} title={essay.title} /> : <section><span className="detail-label">Current draft</span><div className="essay-content-preview">{essay.content || 'No draft content has been added yet.'}</div></section>}{essay.counselor_comment && <section className="counselor-feedback"><span className="detail-label">Counselor feedback</span><p>{essay.counselor_comment}</p></section>}{essay.revisions?.length > 0 && <section><span className="detail-label">Revision history</span><div className="revision-chips">{essay.revisions.map((revision) => <span key={revision.id}>v{revision.version} · {label(revision.status)} · {dateText(revision.created_at)}</span>)}</div></section>}</div></Modal>
 }
 
 function TaskSubmissionModal({ task, onClose }) {
@@ -415,7 +434,7 @@ function TaskSubmissionModal({ task, onClose }) {
 }
 
 function DocumentPreviewModal({ document: doc, onClose }) {
-  return <Modal title={doc.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{doc.status}</Badge><span>{label(doc.document_type)}</span></div><div className="detail-actions">{doc.file && <a className="button quiet" href={doc.file} target="_blank" rel="noreferrer">Open file <ExternalLink size={15} /></a>}{doc.google_docs_url && <a className="button primary" href={doc.google_docs_url} target="_blank" rel="noreferrer">Open in Google Docs <ExternalLink size={15} /></a>}</div></div>{doc.counselor_comment && <section><span className="detail-label">Counselor comment</span><p>{doc.counselor_comment}</p></section>}{doc.google_docs_preview_url ? <GoogleDocsPreview previewUrl={doc.google_docs_preview_url} title={doc.title} /> : !doc.file && <Empty text="No file or Google Docs link has been added for preview." />}</div></Modal>
+  return <Modal title={doc.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{doc.status}</Badge><span>{label(doc.document_type)}</span></div><div className="detail-actions">{doc.file && <a className="button quiet" href={doc.file} target="_blank" rel="noreferrer">Open file <ExternalLink size={15} /></a>}<GoogleDocsActions item={doc} /></div></div>{doc.counselor_comment && <section><span className="detail-label">Counselor comment</span><p>{doc.counselor_comment}</p></section>}{doc.google_docs_preview_url ? <GoogleDocsPreview previewUrl={doc.google_docs_preview_url} title={doc.title} /> : !doc.file && <Empty text="No file or Google Docs link has been added for preview." />}</div></Modal>
 }
 
 function ProfileCard({ student }) {
@@ -445,7 +464,8 @@ function studentItems(data, resource, studentId) {
 }
 
 function StudentOverviewList({ title, resource, items, data }) {
-  return <Panel title={title}><div className="record-list">{items.map((item) => <RecordRow key={item.id} resource={resource} item={item} data={data} />)}{!items.length && <Empty />}</div></Panel>
+  const [viewingGoogleDoc, setViewingGoogleDoc] = useState(null)
+  return <><Panel title={title}><div className="record-list">{items.map((item) => <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />} />)}{!items.length && <Empty />}</div></Panel>{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>
 }
 
 function StudentTaskList({ items, onView }) {
@@ -457,11 +477,11 @@ function StudentCollegeList({ items }) {
 }
 
 function StudentEssayList({ items, onView }) {
-  return <Panel title="Essays & Google Docs"><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={`Version ${essay.version} · ${essay.university_name || 'General essay'}`} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> Essay details</button>{essay.google_docs_url && <a className="button quiet small" href={essay.google_docs_url} target="_blank" rel="noreferrer">Google Docs <ExternalLink size={14} /></a>}</>} />)}{!items.length && <Empty text="No essays found." />}</div></Panel>
+  return <Panel title="Essays & Google Docs"><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={`Version ${essay.version} · ${essay.university_name || 'General essay'}`} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> Essay details</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text="No essays found." />}</div></Panel>
 }
 
 function StudentDocumentList({ title, items, onPreview }) {
-  return <Panel title={title}><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={label(doc.document_type)} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.file) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> Preview</button>}{doc.file && <a className="button quiet small" href={doc.file} target="_blank" rel="noreferrer">Open file</a>}{doc.google_docs_url && <a className="button quiet small" href={doc.google_docs_url} target="_blank" rel="noreferrer">Google Docs <ExternalLink size={14} /></a>}</>} />)}{!items.length && <Empty />}</div></Panel>
+  return <Panel title={title}><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={label(doc.document_type)} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.file) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> Preview</button>}{doc.file && <a className="button quiet small" href={doc.file} target="_blank" rel="noreferrer">Open file</a>}<GoogleDocsActions item={doc} /></>} />)}{!items.length && <Empty />}</div></Panel>
 }
 
 function StudentOverview({ student, data, onBack }) {
@@ -588,6 +608,7 @@ function ResourceSection({ title, resource, data, user, query, reload, notify, c
   const [editing, setEditing] = useState(null)
   const [viewingEssay, setViewingEssay] = useState(null)
   const [viewingTask, setViewingTask] = useState(null)
+  const [viewingGoogleDoc, setViewingGoogleDoc] = useState(null)
   const records = data[resource] || []
   const filtered = records.filter((item) => JSON.stringify(item).toLowerCase().includes(query.toLowerCase()))
   const counselorOnly = ['meetings'].includes(resource)
@@ -605,8 +626,8 @@ function ResourceSection({ title, resource, data, user, query, reload, notify, c
   }
   return <><Panel title={title} action={allowCreate && <button className="button quiet" onClick={() => { setEditing(null); setOpen(true) }}><Plus size={16} /> Add</button>}><div className="record-list">{filtered.map((item) => {
     const lockedAfterApproval = item.status === 'approved'
-    return <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> Response</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> Details</button>}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> Approve</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => { setEditing(item); setOpen(true) }} aria-label={`Edit ${title}`}><Pencil size={15} /></button>}{allowCreate && <button className="icon-button danger" onClick={() => remove(item)} aria-label={`Delete ${title}`}><Trash2 size={15} /></button>}</>} />
-  })}{!filtered.length && <Empty />}</div></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} />}</>
+    return <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> Response</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> Details</button>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> Approve</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => { setEditing(item); setOpen(true) }} aria-label={`Edit ${title}`}><Pencil size={15} /></button>}{allowCreate && <button className="icon-button danger" onClick={() => remove(item)} aria-label={`Delete ${title}`}><Trash2 size={15} /></button>}</>} />
+  })}{!filtered.length && <Empty />}</div></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} />}{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>
 }
 
 function RecordRow({ resource, item, data, actions }) {
@@ -662,6 +683,7 @@ function ResourceForm({ resource, item, data, user, onClose, onSaved, notify }) 
   return <Modal title={`${item ? 'Edit' : 'Add'} ${resource}`} onClose={onClose}><form className="form-grid" onSubmit={submit}>
     {!item && isTaskManager(user) && <Field label="Student"><select name="student" required>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}
     {fields.map(([name, title, type = 'text', required = false, choices = []]) => <DynamicField key={name} name={name} labelText={title} type={type} required={required} choices={choices} value={item?.[name]} data={data} user={user} />)}
+    {fields.some(([name]) => name === 'google_docs_url') && <div className="form-wide google-doc-sharing-hint"><ShieldCheck size={16} /><span>Set Google Docs sharing to Viewer or “Anyone with the link” to enable the preview.</span></div>}
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>Cancel</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? 'Saving…' : 'Save'}</button></div>
   </form></Modal>
 }
@@ -682,7 +704,7 @@ function DocumentsPage({ user, data, query, reload, notify, typeFilter = '', tit
   const [previewing, setPreviewing] = useState(null)
   const docs = data.documents.filter((item) => (!typeFilter || item.document_type === typeFilter) && JSON.stringify(item).toLowerCase().includes(query.toLowerCase()))
   async function approve(doc) { try { await api.update('documents', doc.id, { status: 'approved' }); notify('Document approved.'); reload() } catch (err) { notify(err.message, 'error') } }
-  return <><Panel title={title} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? 'Upload certificate' : 'Upload document'}</button>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${studentName(data, doc.student)} • ${label(doc.document_type)}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.file) && <button className="button quiet small" onClick={() => setPreviewing(doc)}><Eye size={14} /> Preview</button>}{doc.file && <a className="button quiet small" href={doc.file} target="_blank" rel="noreferrer">Open file</a>}{doc.google_docs_url && <a className="button quiet small" href={doc.google_docs_url} target="_blank" rel="noreferrer">Google Docs <ExternalLink size={14} /></a>}{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> Approve</button>}</>} />)}{!docs.length && <Empty />}</div></Panel>{open && <DocumentForm user={user} data={data} defaultType={typeFilter} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} />}</>
+  return <><Panel title={title} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? 'Upload certificate' : 'Upload document'}</button>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${studentName(data, doc.student)} • ${label(doc.document_type)}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.file) && <button className="button quiet small" onClick={() => setPreviewing(doc)}><Eye size={14} /> Preview</button>}{doc.file && <a className="button quiet small" href={doc.file} target="_blank" rel="noreferrer">Open file</a>}<GoogleDocsActions item={doc} />{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> Approve</button>}</>} />)}{!docs.length && <Empty />}</div></Panel>{open && <DocumentForm user={user} data={data} defaultType={typeFilter} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} />}</>
 }
 
 function DocumentForm({ user, data, defaultType = '', onClose, onSaved, notify }) {
