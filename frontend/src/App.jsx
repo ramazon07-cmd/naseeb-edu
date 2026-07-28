@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
-  Activity, Award, Bell, BookOpen, BriefcaseBusiness, Building2, CheckCircle2,
+  Activity, Award, Bell, BookOpen, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
   ContactRound, DollarSign, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
   LibraryBig, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
@@ -79,12 +79,11 @@ const PAGE_META = {
   documents: { label: 'Documents', icon: FileText, description: 'Documents, uploads, and review' },
   certificates: { label: 'Certificates', icon: Award, description: 'Certificates and supporting files' },
   essays: { label: 'Essays', icon: GraduationCap, description: 'Essay drafts and revision history' },
-  meetings: { label: 'Meetings', icon: BriefcaseBusiness, description: 'Counselor meeting notes' },
   notifications: { label: 'Notifications', icon: Bell, description: 'Deadline and document alerts' },
   student_center: { label: 'Student Center', icon: UsersRound, description: 'Academic profile, portfolio, activities, and documents' },
   roadmap: { label: 'Roadmap', icon: Compass, description: 'Level-linked missions, milestones, and reflections' },
   community: { label: 'Community', icon: Users, description: 'Student discussions, questions, and shared experience' },
-  bookings: { label: 'Bookings', icon: CalendarClock, description: 'Schedule meetings with your counselor' },
+  bookings: { label: 'Meetings', icon: CalendarClock, description: 'Schedule and manage meetings' },
   messages: { label: 'Messages', icon: MessageCircle, description: 'Direct, Group, Community, and Discussion messages' },
   program_usage: { label: 'Program Usage', icon: ListChecks, description: 'Services, mentors, and usage balance' },
   programs: { label: 'Programs', icon: Globe2, description: 'National and international opportunity catalog' },
@@ -96,16 +95,16 @@ const PAGE_META = {
 }
 
 function navigationFor(user) {
-  if (isCounselor(user)) return ['dashboard', 'schools', 'students', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays', 'meetings', 'messages']
-  if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'messages']
-  if (user?.role === 'organization') return ['dashboard', 'students', 'messages']
+  if (isCounselor(user)) return ['dashboard', 'schools', 'students', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages']
+  if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages']
+  if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages']
   return ['dashboard', 'student_center', 'roadmap', 'community', 'bookings', 'messages', 'program_usage', 'programs', 'resource_index', 'essay_lab', 'applications', 'college_search', 'store', 'contacts']
 }
 
 const EMPTY_DATA = {
   schools: [], students: [], universities: [], tasks: [], applications: [], documents: [], essays: [],
   achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
-  recommendations: [], meetings: [], notifications: [], roadmapMissions: [], communityPosts: [],
+  recommendations: [], notifications: [], roadmapMissions: [], communityPosts: [],
   bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], resourceLibrary: [], storeItems: [], team: [],
 }
 
@@ -161,10 +160,6 @@ const RESOURCE_FIELDS = {
     ['application', 'Application', 'application'], ['title', 'Essay title', 'text', true], ['prompt', 'Prompt', 'textarea', true],
     ['content', 'Draft content', 'textarea'], ['status', 'Status', 'select', true, ['draft', 'reviewing', 'needs_revision', 'approved']],
     ['google_docs_url', 'Google Docs URL', 'url'], ['counselor_comment', 'Counselor comment', 'textarea'],
-  ],
-  meetings: [
-    ['title', 'Meeting title', 'text', true], ['meeting_date', 'Meeting date', 'date', true],
-    ['summary', 'Summary', 'textarea', true], ['next_steps', 'Next steps', 'textarea'],
   ],
 }
 
@@ -356,7 +351,7 @@ function Dashboard({ user, data, stats, setPage }) {
 function StudentDashboard({ user, data, setPage }) {
   const student = ownStudent(data)
   const pendingTasks = data.tasks.filter((item) => item.status !== 'approved')
-  const nextBooking = [...data.bookings].filter((item) => new Date(item.starts_at) >= new Date() && item.status !== 'cancelled').sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0]
+  const nextBooking = [...data.bookings].filter((item) => new Date(item.starts_at) >= new Date() && !['rejected', 'completed'].includes(item.status)).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0]
   const completed = data.tasks.filter((item) => item.status === 'approved').length
   const achievementTotal = data.achievements.length + data.honors.length
   return <div className="section-stack student-portal">
@@ -372,7 +367,7 @@ function StudentDashboard({ user, data, setPage }) {
     <div className="student-dashboard-grid">
       <div className="student-dashboard-column">
         <Panel title="Next priorities" action={<button className="button quiet small" onClick={() => setPage('roadmap')}>View roadmap <ChevronRight size={14} /></button>}><div className="record-list">{pendingTasks.slice(0, 4).map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} • ${label(task.priority)}`} badge={task.status} />)}{!pendingTasks.length && <Empty text="All tasks are complete." />}</div></Panel>
-        <Panel title="Upcoming session" action={<button className="button quiet small" onClick={() => setPage('bookings')}>Bookings</button>}>{nextBooking ? <div className="booking-highlight"><span><CalendarClock size={22} /></span><div><b>{nextBooking.topic}</b><small>{dateTimeText(nextBooking.starts_at)} • {nextBooking.duration_minutes} min</small><p>{nextBooking.counselor_name || 'Assigned counselor'}</p></div><Badge>{nextBooking.status}</Badge></div> : <Empty text="No upcoming sessions." />}</Panel>
+        <Panel title="Upcoming session" action={<button className="button quiet small" onClick={() => setPage('bookings')}>Meetings</button>}>{nextBooking ? <div className="booking-highlight"><span><CalendarClock size={22} /></span><div><b>{nextBooking.topic}</b><small>{dateTimeText(nextBooking.starts_at)} • {nextBooking.duration_minutes} min</small><p>{nextBooking.participant_name || 'Meeting participant'} · {label(nextBooking.participant_role)}</p></div><Badge>{nextBooking.status}</Badge></div> : <Empty text="No upcoming sessions." />}</Panel>
       </div>
       <div className="student-dashboard-column">
         <Panel title="Student Center quick access"><div className="quick-grid">{[
@@ -479,7 +474,7 @@ function StudentTable({ data, onView, onEdit, onDelete, onApproveLevel, readOnly
 const STUDENT_RESOURCE_GROUPS = [
   ['Research', 'researches'], ['Projects', 'projects'], ['Internships', 'internships'],
   ['Activities', 'activities'], ['Honors', 'honors'], ['Achievements', 'achievements'],
-  ['Recommendation letters', 'recommendations'], ['Counselor meetings', 'meetings'],
+  ['Recommendation letters', 'recommendations'], ['Meetings', 'bookings'],
 ]
 
 function studentItems(data, resource, studentId) {
@@ -634,9 +629,8 @@ function ResourceSection({ title, resource, data, user, query, reload, notify, c
   const [viewingGoogleDoc, setViewingGoogleDoc] = useState(null)
   const records = data[resource] || []
   const filtered = records.filter((item) => JSON.stringify(item).toLowerCase().includes(query.toLowerCase()))
-  const counselorOnly = ['meetings'].includes(resource)
   const staffControlled = resource === 'tasks'
-  const allowCreate = canCreate && (staffControlled ? isTaskManager(user) : (isCounselor(user) || (!counselorOnly && user.role === 'student')))
+  const allowCreate = canCreate && (staffControlled ? isTaskManager(user) : (isCounselor(user) || user.role === 'student'))
   const allowEdit = staffControlled ? isTaskManager(user) || user.role === 'student' : allowCreate
 
   async function approve(item) {
@@ -666,7 +660,7 @@ function RecordRow({ resource, item, data, actions }) {
     tasks: [item.title, `${student} • ${dateText(item.due_date)} • ${label(item.priority)}${item.submitted_at ? ` • Submitted ${dateText(item.submitted_at)}` : ''}`, item.student_response || item.description, item.status],
     applications: [item.university_detail?.name || 'University', `${student} • ${item.program} • ${label(item.tier)}`, `Deadline: ${dateText(item.deadline)}`, item.status],
     essays: [item.title, `${student} • Version ${item.version} • ${item.university_name || 'General'}`, item.counselor_comment || item.prompt, item.status],
-    meetings: [item.title, `${student} • ${dateText(item.meeting_date)}`, item.next_steps || item.summary, null],
+    bookings: [item.topic, `${student} • ${dateTimeText(item.starts_at)} • ${item.participant_name || 'Meeting participant'}`, item.notes, item.status],
   }
   const [title, meta, description, badge] = map[resource] || ['Record', student, '', null]
   return <Record title={title} meta={meta} description={description} badge={badge} actions={actions} />
@@ -899,16 +893,69 @@ function CommunityPage({ data, reload, notify }) {
 }
 
 function BookingForm({ onClose, onSaved, notify }) {
+  const [participants, setParticipants] = useState([])
+  const [loadingParticipants, setLoadingParticipants] = useState(true)
   const [saving, setSaving] = useState(false)
-  async function submit(event) { event.preventDefault(); setSaving(true); const values = new FormData(event.currentTarget); try { await api.create('bookings', { topic: values.get('topic'), starts_at: new Date(values.get('starts_at')).toISOString(), duration_minutes: Number(values.get('duration_minutes')), notes: values.get('notes'), status: 'requested' }); notify('Session request sent.'); onSaved() } catch (err) { notify(err.message, 'error') } finally { setSaving(false) } }
-  return <Modal title="Request a counseling session" onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label="Topic"><input name="topic" required placeholder="Essay review, university list..." /></Field><Field label="Date & time"><input name="starts_at" type="datetime-local" required /></Field><Field label="Duration"><select name="duration_minutes" defaultValue="45"><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></Field><Field label="Notes"><textarea name="notes" /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>Cancel</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? 'Requesting…' : 'Request session'}</button></div></form></Modal>
+  useEffect(() => {
+    let active = true
+    api.bookingParticipants()
+      .then((items) => active && setParticipants(items || []))
+      .catch((err) => notify(err.message, 'error'))
+      .finally(() => active && setLoadingParticipants(false))
+    return () => { active = false }
+  }, [notify])
+  async function submit(event) {
+    event.preventDefault()
+    setSaving(true)
+    const values = new FormData(event.currentTarget)
+    try {
+      await api.create('bookings', {
+        participant: Number(values.get('participant')),
+        topic: values.get('topic'),
+        starts_at: new Date(values.get('starts_at')).toISOString(),
+        duration_minutes: Number(values.get('duration_minutes')),
+        notes: values.get('notes'),
+      })
+      notify('Meeting request sent for approval.')
+      onSaved()
+    } catch (err) {
+      notify(err.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return <Modal title="Request a meeting" onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label="Meet with"><select name="participant" required defaultValue="" disabled={loadingParticipants}><option value="" disabled>{loadingParticipants ? 'Loading available staff…' : 'Select counselor, teacher, or school representative'}</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{fullName(participant)} · {label(participant.role)}{participant.position ? ` · ${participant.position}` : ''}</option>)}</select></Field><Field label="Topic"><input name="topic" required placeholder="Essay review, university list..." /></Field><Field label="Date & time"><input name="starts_at" type="datetime-local" required /></Field><Field label="Duration"><select name="duration_minutes" defaultValue="45"><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></Field><Field label="Notes"><textarea name="notes" /></Field>{!loadingParticipants && !participants.length && <div className="form-wide booking-participant-warning"><ShieldAlert size={18} /><span>No counselor, teacher, or school representative is available for your account.</span></div>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>Cancel</button><button className="button primary" disabled={saving || loadingParticipants || !participants.length} aria-busy={saving}>{saving ? 'Requesting…' : 'Request meeting'}</button></div></form></Modal>
 }
 
-function BookingsPage({ data, reload, notify }) {
-  const [tab, setTab] = useState('upcoming'); const [open, setOpen] = useState(false); const now = new Date()
-  const items = data.bookings.filter((item) => tab === 'upcoming' ? new Date(item.starts_at) >= now && item.status !== 'cancelled' : new Date(item.starts_at) < now || item.status === 'cancelled')
-  async function cancel(item) { try { await api.update('bookings', item.id, { status: 'cancelled' }); notify('Booking cancelled.'); reload() } catch (err) { notify(err.message, 'error') } }
-  return <div className="section-stack student-portal"><div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={[["upcoming", "Upcoming"], ["past", "Past & cancelled"]]} /><button className="button primary" onClick={() => setOpen(true)}><Plus size={17} /> Create a session</button></div><div className="booking-grid">{items.map((item) => <article className="booking-card" key={item.id}><div className="booking-date"><strong>{new Date(item.starts_at).getDate()}</strong><span>{new Intl.DateTimeFormat('en', { month: 'short' }).format(new Date(item.starts_at))}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {dateTimeText(item.starts_at)} • {item.duration_minutes} min</p><small>{item.counselor_name || 'Assigned counselor'}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{item.status}</Badge>{tab === 'upcoming' && <button className="button quiet small" onClick={() => cancel(item)}>Cancel</button>}</div></article>)}{!items.length && <Empty text={tab === 'upcoming' ? 'No upcoming sessions.' : 'No previous sessions.'} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}</div>
+function BookingsPage({ user, data, reload, notify }) {
+  const staff = user.role !== 'student'
+  const [tab, setTab] = useState(staff ? 'pending' : 'upcoming')
+  const [open, setOpen] = useState(false)
+  const [savingId, setSavingId] = useState(null)
+  const now = new Date()
+  const tabs = staff
+    ? [['pending', 'Pending approval'], ['upcoming', 'Approved'], ['history', 'History']]
+    : [['upcoming', 'Upcoming'], ['history', 'History']]
+  const items = data.bookings.filter((item) => {
+    const future = new Date(item.starts_at) >= now
+    if (tab === 'pending') return item.status === 'pending'
+    if (tab === 'upcoming') return future && (staff ? item.status === 'approved' : ['pending', 'approved'].includes(item.status))
+    return !future || ['rejected', 'completed'].includes(item.status)
+  })
+  async function transition(item, action) {
+    setSavingId(item.id)
+    try {
+      const methods = { approve: api.approveBooking, reject: api.rejectBooking, complete: api.completeBooking }
+      await methods[action](item.id)
+      notify(`Meeting ${action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'completed'}.`)
+      reload()
+    } catch (err) {
+      notify(err.message, 'error')
+    } finally {
+      setSavingId(null)
+    }
+  }
+  return <div className="section-stack student-portal"><div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} />{!staff && <button className="button primary" onClick={() => setOpen(true)}><Plus size={17} /> Request meeting</button>}</div><div className="booking-grid">{items.map((item) => <article className="booking-card" key={item.id}><div className="booking-date"><strong>{new Date(item.starts_at).getDate()}</strong><span>{new Intl.DateTimeFormat('en', { month: 'short' }).format(new Date(item.starts_at))}</span></div><div><h3>{item.topic}</h3>{staff && <span className="booking-student"><UserRound size={14} /> {item.student_name}</span>}<p><Clock3 size={15} /> {dateTimeText(item.starts_at)} • {item.duration_minutes} min</p><small>With {item.participant_name || 'Meeting participant'} · {label(item.participant_role)}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{item.status}</Badge>{staff && item.status === 'pending' && <div className="booking-actions"><button className="button primary small" disabled={savingId === item.id} onClick={() => transition(item, 'approve')}><Check size={14} /> Approve</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'reject')}><X size={14} /> Reject</button></div>}{staff && item.status === 'approved' && <button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'complete')}><CheckCircle2 size={14} /> Mark completed</button>}</div></article>)}{!items.length && <Empty text={tab === 'pending' ? 'No meetings need approval.' : tab === 'upcoming' ? 'No upcoming meetings.' : 'No meeting history yet.'} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => { setOpen(false); reload() }} notify={notify} />}</div>
 }
 
 function MessageChannelForm({ kind, user, onClose, onSaved, notify }) {
@@ -1416,7 +1463,7 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />
   if (user.role === 'student' && page === 'community') return <CommunityPage {...{ data, reload, notify }} />
-  if (user.role === 'student' && page === 'bookings') return <BookingsPage {...{ data, reload, notify }} />
+  if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />
   if (page === 'messages') return <MessagesPage {...{ user, data, notify }} />
   if (user.role === 'student' && page === 'program_usage') return <ProgramUsagePage data={data} />
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query }} />
@@ -1436,7 +1483,7 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (page === 'documents') return <DocumentsPage {...{ user, data, query, reload, notify }} />
   if (page === 'certificates') return <DocumentsPage typeFilter="certificate" title="Certificates" {...{ user, data, query, reload, notify }} />
   if (page === 'notifications') return <NotificationsPage {...{ data, reload, notify }} />
-  const titleMap = { tasks: 'Tasks', applications: 'University applications', essays: 'Essays', meetings: 'Meeting notes' }
+  const titleMap = { tasks: 'Tasks', applications: 'University applications', essays: 'Essays' }
   return <ResourceSection title={titleMap[page] || label(page)} resource={page} {...{ user, data, query, reload, notify }} />
 }
 
@@ -1478,7 +1525,7 @@ export default function App() {
     if (!activeUser) return
     setLoading(true); setError('')
     try {
-      const studentResources = ['students', 'tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations', 'meetings', 'notifications'].map((key) => [key, key])
+      const studentResources = ['students', 'tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations', 'notifications'].map((key) => [key, key])
       const portalResources = [
         ['roadmapMissions', 'roadmap-missions'], ['communityPosts', 'community-posts'], ['bookings', 'bookings'],
         ['messageChannels', 'message-channels'], ['programServices', 'program-services'],
@@ -1486,10 +1533,10 @@ export default function App() {
         ['resourceLibrary', 'resource-library'], ['storeItems', 'store-items'], ['team', 'student-team'],
       ]
       const resources = activeUser.role === 'organization'
-        ? [...studentResources, ['messageChannels', 'message-channels']]
+        ? [...studentResources, ['bookings', 'bookings'], ['messageChannels', 'message-channels']]
         : activeUser.role === 'teacher'
-          ? [['students', 'students'], ['tasks', 'tasks'], ['roadmapMissions', 'roadmap-missions'], ['messageChannels', 'message-channels']]
-          : [...studentResources, ['universities', 'universities'], ...(isCounselor(activeUser) ? [['schools', 'schools'], ['roadmapMissions', 'roadmap-missions'], ['messageChannels', 'message-channels']] : portalResources)]
+          ? [['students', 'students'], ['tasks', 'tasks'], ['roadmapMissions', 'roadmap-missions'], ['bookings', 'bookings'], ['messageChannels', 'message-channels']]
+          : [...studentResources, ['universities', 'universities'], ...(isCounselor(activeUser) ? [['schools', 'schools'], ['roadmapMissions', 'roadmap-missions'], ['bookings', 'bookings'], ['messageChannels', 'message-channels']] : portalResources)]
       const [dashboardStats, ...payloads] = await Promise.all([api.dashboard(), ...resources.map(([, endpoint]) => api.list(endpoint))])
       const nextData = { ...EMPTY_DATA }
       resources.forEach(([key], index) => { nextData[key] = payloads[index] || [] })

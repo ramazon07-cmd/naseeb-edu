@@ -492,23 +492,23 @@ class CommunityPost(TimeStampedModel):
 
 class Booking(TimeStampedModel):
     class Status(models.TextChoices):
-        REQUESTED = 'requested', 'Requested'
-        CONFIRMED = 'confirmed', 'Confirmed'
+        PENDING = 'pending', 'Pending'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
         COMPLETED = 'completed', 'Completed'
-        CANCELLED = 'cancelled', 'Cancelled'
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='bookings')
-    counselor = models.ForeignKey(
+    participant = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='student_bookings',
+        related_name='meeting_bookings',
     )
     topic = models.CharField(max_length=220)
     starts_at = models.DateTimeField()
     duration_minutes = models.PositiveSmallIntegerField(default=45)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.REQUESTED)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     notes = models.TextField(blank=True)
 
     class Meta:
