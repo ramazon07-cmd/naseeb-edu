@@ -289,8 +289,9 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 .sidebar nav button:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
 .sidebar nav button.active { background: var(--nav-active-bg); color: var(--nav-active-text); }
 .sidebar-profile { margin-top: auto; padding: 14px 8px 4px; border-top: 1px solid var(--sidebar-divider); display: grid; grid-template-columns: 36px 1fr 34px; gap: 10px; align-items: center; }
+.sidebar-profile > div { min-width: 0; }
 .sidebar-profile b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.sidebar-profile small { color: var(--sidebar-muted); font-size: 10px; }
+.sidebar-profile small { display: block; overflow: hidden; color: var(--sidebar-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-profile .icon-button { color: var(--sidebar-muted); border-color: var(--sidebar-divider); }
 
 .workspace { min-width: 0; padding: 0 clamp(20px, 3vw, 46px) 50px; }
@@ -504,8 +505,9 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .student-welcome::before, .portal-hero::before, .college-banner::before, .store-hero::before { content: ''; position: absolute; width: 440px; height: 440px; right: -120px; bottom: -330px; background: radial-gradient(circle, var(--student-hero-decoration), transparent 64%); border-radius: 50%; pointer-events: none; }
 .student-welcome::after, .portal-hero::after, .college-banner::after, .store-hero::after { content: ''; position: absolute; width: 320px; height: 320px; right: -80px; top: -150px; border: 1px solid var(--student-hero-line); border-radius: 45% 55% 62% 38%; transform: rotate(25deg); pointer-events: none; }
 .student-welcome > *, .portal-hero > *, .college-banner > *, .store-hero > * { position: relative; z-index: 1; }
+.student-welcome > div:first-child { min-width: 0; flex: 1; }
 .student-welcome .eyebrow, .portal-hero .eyebrow, .college-banner .eyebrow, .store-hero .eyebrow { color: var(--student-hero-eyebrow); }
-.student-welcome h2, .portal-hero h2, .college-banner h2, .store-hero h2 { margin: 9px 0 12px; color: var(--student-hero-text); font-size: clamp(31px, 4vw, 50px); }
+.student-welcome h2, .portal-hero h2, .college-banner h2, .store-hero h2 { margin: 9px 0 12px; color: var(--student-hero-text); font-size: clamp(28px, 3.4vw, 50px); overflow-wrap: anywhere; line-height: 1.08; }
 .student-welcome p, .portal-hero p, .college-banner p, .store-hero p { max-width: 650px; margin: 0; color: var(--student-hero-muted); line-height: 1.65; }
 .welcome-actions { display: flex; gap: 10px; margin-top: 24px; }
 .student-portal .button.light { background: var(--student-hero-button-bg); color: var(--student-hero-button-text); border-color: var(--student-hero-button-bg); box-shadow: var(--student-hero-button-shadow); }
