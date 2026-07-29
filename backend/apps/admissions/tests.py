@@ -1413,6 +1413,29 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(team.status_code, status.HTTP_200_OK)
         self.assertEqual(team.data[0]['id'], self.counselor.id)
 
+    def test_unassigned_new_student_can_load_every_dashboard_resource(self):
+        new_user = User.objects.create_user(
+            username='new-admin-student',
+            email='new-admin-student@example.com',
+            password='StrongPass123!',
+            role=User.Role.STUDENT,
+        )
+        StudentProfile.objects.create(user=new_user, level=0, xp_total=0)
+        self.client.force_authenticate(new_user)
+
+        paths = (
+            'dashboard/stats', 'students', 'tasks', 'applications', 'documents', 'essays',
+            'achievements', 'researches', 'projects', 'internships', 'activities', 'honors',
+            'recommendations', 'notifications', 'universities', 'roadmap-missions',
+            'community-posts', 'bookings', 'message-channels', 'program-services',
+            'scholarships', 'opportunity-programs', 'resource-library', 'store-items',
+            'student-team',
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                response = self.client.get(f'/api/{path}/')
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
     def test_non_student_roles_cannot_open_student_only_portal_endpoints(self):
         for account in (self.counselor, self.organization):
             self.client.force_authenticate(account)
