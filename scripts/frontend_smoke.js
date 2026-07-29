@@ -71,6 +71,8 @@ if (!app.includes('participant_name') || !app.includes('participant_role')) thro
 if (app.includes("meetings: { label: 'Meetings'") || app.includes("'meetings', 'bookings'")) throw new Error('Legacy meeting notes navigation must be removed.');
 if (!app.includes("bookings: { label: 'Meetings'")) throw new Error('Booking workflow must be presented as Meetings.');
 if (!app.includes('function NotificationCenter(') || !styles.includes('.notification-launcher') || !styles.includes('.notification-drawer')) throw new Error('Corner notification center is missing.');
+if (!app.includes('student.level ?? 1') || !app.includes('student.xp_total ?? 0')) throw new Error('Zero-valued student level and XP must remain visible.');
+if (!styles.includes('.sidebar-profile > div { min-width: 0; }') || !styles.includes('overflow-wrap: anywhere')) throw new Error('Long student names are not constrained.');
 for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchrashuv so‘rovi', 'Bu bo‘limda', 'Universitetlarni topish']) {
   if (app.includes(uzbekFragment)) throw new Error(`Non-English UI copy remains: ${uzbekFragment}`)
 }
