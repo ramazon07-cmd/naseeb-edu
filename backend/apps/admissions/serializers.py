@@ -134,6 +134,14 @@ class SchoolSerializer(serializers.ModelSerializer):
         credential = self._organization_credential(obj)
         return credential.expires_at if credential else None
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            data.pop('organization_credential_status', None)
+            data.pop('organization_credential_expires_at', None)
+        return data
+
 
 class OrganizationAccountSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
@@ -210,6 +218,13 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             counts[row['status']] = row['total']
         return counts
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            data.pop('notes', None)
+        return data
+
     def validate(self, attrs):
         request = self.context.get('request')
         user = attrs.get('user', getattr(self.instance, 'user', None))
@@ -235,6 +250,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
                 current = getattr(self.instance, 'assigned_counselor', None)
                 if attrs['assigned_counselor'] != current:
                     raise serializers.ValidationError({'assigned_counselor': 'Only a counselor can change this assignment.'})
+            if 'notes' in attrs and attrs['notes'] != getattr(self.instance, 'notes', ''):
+                raise serializers.ValidationError({'notes': 'Internal counselor notes are not available to school accounts.'})
         if request and request.user.role == request.user.Role.STUDENT:
             forbidden = set(attrs) - self.STUDENT_EDITABLE_FIELDS
             if forbidden:
@@ -339,6 +356,15 @@ class ApplicationStatusHistorySerializer(serializers.ModelSerializer):
         model = ApplicationStatusHistory
         fields = '__all__'
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            data.pop('note', None)
+            data.pop('changed_by', None)
+            data.pop('changed_by_name', None)
+        return data
+
 
 class ApplicationSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     university_detail = UniversitySerializer(source='university', read_only=True)
@@ -351,6 +377,14 @@ class ApplicationSerializer(StudentRecordSerializerMixin, serializers.ModelSeria
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            for field in ('application_portal_url', 'portal_username', 'notes'):
+                data.pop(field, None)
+        return data
 
     def validate_status(self, value):
         request = self.context.get('request')
@@ -417,6 +451,14 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
 
     def get_submission_preview_url(self, obj):
         return google_docs_preview_url(obj.submission_url)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            for field in ('student_response', 'submission_url', 'submission_file', 'submission_preview_url'):
+                data.pop(field, None)
+        return data
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
@@ -561,6 +603,14 @@ class DocumentSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            data.pop('counselor_comment', None)
+            data.pop('uploaded_by', None)
+        return data
+
     def get_has_file(self, obj):
         return bool(obj.file)
 
@@ -661,6 +711,14 @@ class RecommendationLetterSerializer(StudentRecordSerializerMixin, GoogleDocsMod
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            for field in ('recommender_email', 'file', 'google_docs_url', 'google_docs_preview_url', 'notes'):
+                data.pop(field, None)
+        return data
+
     def validate_status(self, value):
         request = self.context.get('request')
         if request and not request.user.is_counselor_like and value == RecommendationLetter.Status.APPROVED:
@@ -697,6 +755,14 @@ class EssaySerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
     def get_university_name(self, obj) -> str | None:
         return obj.application.university.name if obj.application else None
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            for field in ('prompt', 'content', 'counselor_comment', 'google_docs_url', 'google_docs_preview_url', 'revisions'):
+                data.pop(field, None)
+        return data
+
 
 class MeetingNoteSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     counselor_name = serializers.SerializerMethodField()
@@ -713,6 +779,196 @@ class MeetingNoteSerializer(StudentRecordSerializerMixin, serializers.ModelSeria
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            for field in ('summary', 'next_steps'):
+                data.pop(field, None)
+        return data
+
+
+class SchoolVisibilityUserSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'phone', 'is_active')
+
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+
+class SchoolVisibilityStudentSerializer(serializers.ModelSerializer):
+    user = SchoolVisibilityUserSerializer(read_only=True)
+    counselor_name = serializers.SerializerMethodField()
+    progress_percent = serializers.IntegerField(read_only=True)
+    task_progress_percent = serializers.IntegerField(read_only=True)
+    roadmap_progress_percent = serializers.IntegerField(read_only=True)
+    journey_progress_percent = serializers.IntegerField(read_only=True)
+    eligible_level = serializers.IntegerField(read_only=True)
+    xp_progress_percent = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = StudentProfile
+        fields = (
+            'id', 'user', 'grade', 'school', 'school_name', 'gpa', 'ielts_score', 'sat_score',
+            'target_major', 'target_countries', 'budget_usd', 'scholarship_needed', 'parent_contact',
+            'xp_total', 'level', 'eligible_level', 'xp_progress_percent', 'progress_percent',
+            'task_progress_percent', 'roadmap_progress_percent', 'journey_progress_percent',
+            'counselor_name', 'created_at', 'updated_at',
+        )
+
+    def get_counselor_name(self, obj):
+        return obj.assigned_counselor.get_full_name() or obj.assigned_counselor.username if obj.assigned_counselor else None
+
+
+class SchoolVisibilityTaskSerializer(serializers.ModelSerializer):
+    assigned_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Task
+        fields = (
+            'id', 'title', 'description', 'due_date', 'priority', 'status', 'is_self_assigned',
+            'assigned_by_name', 'submitted_at', 'created_at', 'updated_at',
+        )
+
+    def get_assigned_by_name(self, obj):
+        return obj.assigned_by.get_full_name() or obj.assigned_by.username if obj.assigned_by else None
+
+
+class SchoolVisibilityRoadmapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoadmapMission
+        fields = ('id', 'title', 'category', 'description', 'level', 'sequence', 'due_date', 'status', 'created_at', 'updated_at')
+
+
+class SchoolVisibilityApplicationSerializer(serializers.ModelSerializer):
+    university_name = serializers.CharField(source='university.name', read_only=True)
+    university_country = serializers.CharField(source='university.country', read_only=True)
+
+    class Meta:
+        model = Application
+        fields = (
+            'id', 'university', 'university_name', 'university_country', 'program', 'tier', 'status',
+            'deadline', 'scholarship_deadline', 'created_at', 'updated_at',
+        )
+
+
+class SchoolVisibilityDocumentSerializer(serializers.ModelSerializer):
+    has_file = serializers.SerializerMethodField()
+    file_name = serializers.CharField(source='original_file_name', read_only=True)
+    file_preview_url = serializers.SerializerMethodField()
+    file_download_url = serializers.SerializerMethodField()
+    google_docs_preview_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Document
+        fields = (
+            'id', 'title', 'document_type', 'status', 'has_file', 'file_name', 'file_content_type',
+            'file_size', 'file_preview_url', 'file_download_url', 'google_docs_preview_url',
+            'created_at', 'updated_at',
+        )
+
+    def get_has_file(self, obj):
+        return bool(obj.file)
+
+    def get_file_preview_url(self, obj):
+        request = self.context.get('request')
+        return request.build_absolute_uri(reverse('documents-file', args=[obj.pk])) if request and obj.file else None
+
+    def get_file_download_url(self, obj):
+        request = self.context.get('request')
+        return request.build_absolute_uri(f"{reverse('documents-file', args=[obj.pk])}?download=1") if request and obj.file else None
+
+    def get_google_docs_preview_url(self, obj):
+        return google_docs_preview_url(obj.google_docs_url)
+
+
+class SchoolVisibilityEssaySerializer(serializers.ModelSerializer):
+    university_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Essay
+        fields = ('id', 'title', 'status', 'version', 'application', 'university_name', 'created_at', 'updated_at')
+
+    def get_university_name(self, obj):
+        return obj.application.university.name if obj.application else None
+
+
+class SchoolVisibilityRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RecommendationLetter
+        fields = (
+            'id', 'recommender_name', 'recommender_title', 'relationship', 'status', 'deadline',
+            'created_at', 'updated_at',
+        )
+
+
+class SchoolVisibilityBookingSerializer(serializers.ModelSerializer):
+    participant_name = serializers.SerializerMethodField()
+    participant_role = serializers.CharField(source='participant.role', read_only=True)
+
+    class Meta:
+        model = Booking
+        fields = (
+            'id', 'topic', 'starts_at', 'duration_minutes', 'status', 'participant_name',
+            'participant_role', 'created_at', 'updated_at',
+        )
+
+    def get_participant_name(self, obj):
+        return obj.participant.get_full_name() or obj.participant.username if obj.participant else None
+
+
+class SchoolVisibilityProgramServiceSerializer(serializers.ModelSerializer):
+    mentor_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProgramService
+        fields = (
+            'id', 'name', 'category', 'mentor_name', 'total_hours', 'used_hours', 'unlimited',
+            'status', 'created_at', 'updated_at',
+        )
+
+    def get_mentor_name(self, obj):
+        return obj.mentor.get_full_name() or obj.mentor.username if obj.mentor else None
+
+
+class SchoolVisibilityAchievementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Achievement
+        fields = ('id', 'title', 'category', 'description', 'impact', 'date', 'verified', 'created_at', 'updated_at')
+
+
+class SchoolVisibilityResearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Research
+        fields = ('id', 'title', 'field', 'role', 'summary', 'outcome', 'start_date', 'end_date', 'link', 'verified', 'created_at', 'updated_at')
+
+
+class SchoolVisibilityProjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Project
+        fields = ('id', 'title', 'role', 'description', 'impact', 'technologies', 'link', 'date', 'verified', 'created_at', 'updated_at')
+
+
+class SchoolVisibilityInternshipSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Internship
+        fields = ('id', 'organization', 'position', 'description', 'start_date', 'end_date', 'is_current', 'supervisor', 'verified', 'created_at', 'updated_at')
+
+
+class SchoolVisibilityActivitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Activity
+        fields = ('id', 'name', 'activity_type', 'role', 'description', 'impact', 'hours_per_week', 'weeks_per_year', 'start_date', 'end_date', 'verified', 'created_at', 'updated_at')
+
+
+class SchoolVisibilityHonorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Honor
+        fields = ('id', 'title', 'issuer', 'level', 'award_date', 'description', 'verified', 'created_at', 'updated_at')
 
 
 class NotificationSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
@@ -840,6 +1096,13 @@ class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSe
         if obj.status == RoadmapMission.Status.COMPLETED:
             return 'approved'
         return 'not_submitted'
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            data.pop('reflection', None)
+        return data
 
 
 class CounselorRoadmapTemplateMissionSerializer(serializers.ModelSerializer):
@@ -1036,6 +1299,13 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
 
     def get_student_name(self, obj):
         return obj.student.user.get_full_name() or obj.student.user.username
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            data.pop('notes', None)
+        return data
 
     def validate_participant(self, participant):
         request = self.context.get('request')

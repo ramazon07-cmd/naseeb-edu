@@ -45,6 +45,14 @@ class UserSerializer(serializers.ModelSerializer):
         credential = self._credential(obj)
         return credential.expires_at if credential else None
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.is_organization:
+            for field in ('must_change_password', 'password_changed_at', 'credential_status', 'credential_expires_at'):
+                data.pop(field, None)
+        return data
+
     def validate_role(self, value):
         request = self.context.get('request')
         if request and not request.user.is_product_admin:
