@@ -1,0 +1,261 @@
+# NASEEB EDU — PRODUCT & ENGINEERING TODO
+
+Tasnif mezoni:
+- EASY: asosan frontend/CSS yoki mavjud API ustidagi kichik o'zgarish; schema va permission o'zgarmaydi.
+- MEDIUM: bir nechta frontend/backend qatlamiga tegadi yoki mavjud workflow/permissionni kengaytiradi.
+- HARD: yangi domain model, auth/security, tashqi servis, katta migratsiya yoki production infratuzilmasini talab qiladi.
+
+===============================================================================
+EASY
+===============================================================================
+
+[x] E1. Login form layoutidagi ortiqcha bo'sh joyni tuzatish
+    - Login card, form field va responsive breakpointlarni tekshirish.
+    - Kichik ekran, laptop va katta monitorda form vertikal balansini saqlash.
+    - Light/dark rejimlarda bir xil spacing bo'lishini tekshirish.
+
+[x] E2. Light/dark logolarni darhol yuklash
+    - Ikkala logo assetini birinchi renderdan oldin preload qilish.
+    - Logo o'zgarganda layout shift, oq flash yoki qayta network kutish bo'lmasin.
+    - Assetlarga browser cache ishlashini tekshirish; logo internetga bog'liq emas,
+      chunki fayllar frontendning local public/brand katalogida turadi.
+
+[x] E3. Target countries uzun matnining UI overflow xatosini tuzatish
+    - Student Center/Profile/Contact Planning kartalari va jadvallarida uzun ro'yxat wrap bo'lsin.
+    - 255 belgilik backend limitiga yetganda foydalanuvchiga tushunarli validation ko'rsatilsin.
+    - Qizil generic error o'rniga aynan target_countries maydoni xatosi chiqarilsin.
+
+[x] E4. Noto'g'ri yoki buzilgan matn/harflarni tozalash
+    - UI bo'ylab mojibake, tasodifiy "abcds", eski RBIS/AdmitFlow nomlari va noto'g'ri copy qidirilsin.
+    - Qaysi ekranda "abcds" ko'rinishi aniq bo'lmagani uchun avval reproduksiya/screenshot kerak.
+    - Topilgan matnlar kelajakdagi 3 tilli tarjima kalitlariga mos nomlansin.
+
+===============================================================================
+MEDIUM
+===============================================================================
+
+[x] M1. Frontend light/dark mode audit va tuzatish
+    - Login, dashboard, modallar, form control, roadmap, messaging va Student Center tekshirilsin.
+    - Theme tokenlardan tashqaridagi rang, contrast, disabled/hover/focus holatlari tuzatilsin.
+    - OS theme, localStorage persistence va pre-paint theme bir xil ishlasin.
+    - E2 logo preload ishi bilan birga test qilinsin.
+
+[x] M2. Sekin internet uchun loading/skeleton/error/retry holatlari
+    - Hozirgi bitta global loadingdan tashqari sahifa va section darajasida skeleton qo'shilsin.
+    - Login, dashboard bootstrap, barcha ro'yxatlar, College Research, messages va mutatsiyalar qamralsin.
+    - Timeout/offline/retry va stale data holatlari ko'rsatilsin.
+    - Bir endpoint xatosi butun rol kabinetini bloklamaydigan partial loading strategiyasi qilinsin.
+
+[x] M3. Student o'ziga task yaratishi va task berishni kengaytirish
+    - Student faqat o'z StudentProfile'iga self-task yarata olsin.
+    - Self-task staff taskidan is_self_assigned orqali ajratildi va hech qachon XP bermaydi.
+    - Boshqa studentga task berish taqiqlangan holda qolsin.
+    - Counselor faqat assigned studentlariga, teacher esa o'z schooliga bog'langan studentlarga task beradi.
+    - Serializer permission, frontend form va regression testlari yangilandi.
+
+[x] M4. Student mission list va roadmap UXni yaxshilash
+    - Current/locked/submitted/completed/upcoming holatlari alohida rang, badge va izoh bilan ajratildi.
+    - Deadline, prerequisite, reflection, approval holati va 75 XP reward mission kartalarida ko'rsatiladi.
+    - Status filterlari, sequence/deadline/status sort, empty state, mobile layout va next mission CTA qo'shildi.
+    - Counselor/teacher uchun Student Workspace selector qo'shildi; mission list, task list,
+      timeline va reflection view tanlangan student bo'yicha alohida ko'rinadi.
+    - Assign task, assign mission va Extend Level 1 formalarida tanlangan student avtomatik preselect bo'ladi.
+    - Mavjud Level 1 ketma-ketligi va idempotent extend workflow o'zgartirilmadi.
+
+[x] M5. Program Usage qismini kengaytirish
+    - Total/used/remaining hours, unlimited service, mentor va allocation progress vizual ko'rsatiladi.
+    - Category/status filterlari, empty/loading holatlari va responsive service kartalari qo'shildi.
+    - Counselor/admin uchun assign/edit/delete UI qo'shildi; API read-onlydan scoped CRUDga o'tkazildi.
+    - Student Workspace selector orqali har bir studentning service kartalari, total/used/remaining
+      statistikasi va filterlari alohida ko'rinadi; Assign service formida student preselect bo'ladi.
+    - Student faqat o'ziniki, counselor faqat assigned school studentlari, organization esa o'z schoolini read-only ko'radi.
+    - Usage history hozir qo'shilmadi: keyingi talabda immutable transaction/history modeli sifatida alohida qilinadi.
+
+[x] M6. Counselorni schoolga majburiy bog'lash
+    - Counselor uchun school serializer, model validation va database constraint darajasida majburiy qilindi.
+    - School o'chirilganda counselor bog'lanishi uzilib qolmasligi uchun User.school PROTECT qilindi.
+    - Migration school-less counselorni assigned student schooliga, yagona active schoolga yoki inactive legacy workspacega backfill qiladi.
+    - audit_counselor_schools commandi missing va cross-school assignmentlarni aniqlaydi.
+    - Counselor student/user/school/workspace, contact va messaging scope'i o'z schooli + assigned studentlar bilan cheklandi.
+    - Program service, account provisioning va school/contact permission regression testlari qo'shildi.
+
+[x] M7. Individual counselor uchun default school/workspace
+    - Faqat product admin individual counselor yarata oladi; counselor bilan bir transactionda
+      unique nom/code'li shaxsiy default workspace avtomatik yaratiladi va owner biriktiriladi.
+    - Admin Schools sahifasida organization school va individual workspace aniq badge/card bilan ajratildi.
+    - Real schoolga transfer endpointi va admin UI qo'shildi: target faqat active organization school bo'ladi;
+      counselorning biriktirilgan studentlari target schoolga mos bo'lmasa transfer 409 bilan bloklanadi.
+    - Muvaffaqiyatli transferdan keyin eski individual workspace inactive qilinadi; provisioning, permission,
+      transfer guard va workspace lifecycle regression testlari qo'shildi.
+
+[x] M8. Support service MVP
+    - Tanlangan scope: support ticket MVP; FAQ/contact katalogi va live chat hozirgi scopega kirmaydi.
+    - Category, subject, message, status, requester, admin response va response vaqt holatlari qo'shildi.
+    - Student, school va counselor faqat o'z ticketlarini; product admin barcha ticketlarni ko'radi.
+    - Admin javob/statusni boshqaradi; requester ticketni o'zgartira olmaydi va ticket o'chirilmaydi.
+    - Notification replacement: Support navigation badge, ticketdagi "New response" holati va
+      response ochilganda mark-viewed oqimi ishlaydi.
+    - Permission isolation, admin response/unread va teacher access regression testlari qo'shildi.
+
+[x] M9. Screen time funksiyasi
+    - Tracker faqat visible tab va oxirgi 60 soniyadagi pointer/keyboard/scroll/touch interactiondan keyin
+      active sekundlarni sanaydi; background va idle vaqt hisoblanmaydi.
+    - Aggregate user/day/page ko'rinishida 30 soniyada first-party backendga yuboriladi; xom click,
+      yozilgan matn yoki browsing content saqlanmaydi.
+    - Student o'zining daily/page statistikasini ko'radi; counselor faqat assigned same-school studentlarini,
+      teacher/organization own-school studentlarini, product admin barcha student aggregate'ini ko'radi.
+    - Offline qiymatlar local queue'da saqlanib online bo'lganda 7 kun ichida retry qilinadi; storage bloklansa
+      session memory queue ishlaydi. Timezone Asia/Tashkent, default retention 365 kun va purge command qo'shildi.
+    - Screen Time sahifasi, AI yordamchi yonidagi shortcut, responsive light/dark UI hamda permission/aggregate
+      regression testlari qo'shildi.
+
+[ ] M10. Notification badge va notification modulining taqdirini hal qilish
+    - Talab badge-ni olib tashlashmi yoki butun Notification funksiyasini olib tashlashmi aniqlansin.
+    - To'liq olib tashlansa: NotificationCenter, notifications API/model/admin/command va navigation tozalansin.
+    - Booking status notificationlari va deadline generatoriga replacement UX belgilansin.
+    - Faqat badge olib tashlansa, notification drawer/page saqlanib qolishi mumkin.
+
+===============================================================================
+HARD
+===============================================================================
+
+[x] H1. Parent uchun to'liq alohida kabinet
+    - ParentStudentLink modeli qo'shildi: bir parentga bir/necha bola, relationship, pending/active/revoked
+      consent lifecycle va applications/documents/meetings uchun alohida read-only permissionlar.
+    - Admin yoki aynan assigned counselor yangi parent account + pending invite yaratadi; parent kabinetda
+      o'zi accept qilmaguncha child data ochilmaydi. Parent yoki scoped staff accessni revoke qila oladi.
+    - Parent uchun alohida bootstrap/navigation, family dashboard, children switcher, progress, tasks,
+      applications, document checklist va meetings sahifalari responsive light/dark dizayn bilan qurildi.
+    - Parent portal faqat safe metadata beradi: private essay/message, counselor/profile/meeting note,
+      task response/submission, document file/comment, application note/portal credential hech qachon qaytmaydi.
+    - Parent umumiy student/task/message APIlariga qo'shilmadi; boshqa yoki revoked child ko'rinmasligi,
+      multi-child, consent, counselor scope va section permissionlari regression testlar bilan yopildi.
+    - Demo parent account seed_demo'ga qo'shildi va Ramazon Ergashev bilan active link qilindi.
+
+[ ] H2. Counselorning o'z roadmap modeli
+    - Hozir RoadmapMission faqat StudentProfilega tegishli; counselor roadmapi uchun yangi owner modeli kerak.
+    - Counselor professional/onboarding roadmapmi yoki school-management roadmapmi aniqlansin.
+    - Template, mission assignment, completion, approval va progress qoidalari yaratiladi.
+    - Student roadmap XP/level ledgeri bilan aralashmasligi kerak.
+    - Counselor schoolga bog'lash (M6) oldin yakunlansin.
+
+[ ] H3. Maxsus Admin Control Panel va admin provisioning
+    - Admin uchun alohida frontend navigation/dashboard va qat'iy backend permissionlar.
+    - School CRUD, organization account, counselor yaratish/edit/deactivate.
+    - Individual counselor yaratish va default school/workspace biriktirish.
+    - Admin barcha school, counselor va student profillariga Student 360 ko'rinishida kira olsin.
+    - Counselor o'z schooliga student qo'shishi/assignment qilishi mumkin bo'lsin.
+    - Audit log, pagination/search/filter va destructive action confirmation qo'shilsin.
+    - Django is_staff bilan product admin rolini aralashtirmaslik; mavjud privilege riskini yopish.
+
+[ ] H4. Har bir school uchun maksimum 3 counselor qoidasi
+    - Counselor-school relationship va individual counselor istisnosi product darajasida aniqlansin.
+    - Limit faqat frontendda emas, transactional backend service/validationda tekshirilsin.
+    - Parallel request race conditioniga qarshi database lock yoki constraint strategiyasi.
+    - Counselor transfer/deactivate qilish va limit bo'shatish workflowi.
+    - Admin override kerak yoki yo'qligi belgilanadi.
+
+[x] H5. Bir martalik login paroli va majburiy password change
+    - Student quick-create, Django admin va school organization account provisioning vaqtinchalik
+      credential lifecycle bilan ishlaydi; parol faqat Django hashida saqlanadi.
+    - User must_change_password/password_version/password_changed_at hamda credential
+      issued/used/expired/revoked holatlari va metadata-only audit eventlari qo'shildi.
+    - Birinchi login temporary credentialni darhol used qiladi; faqat me va password-change APIlari
+      ochiq qoladi, boshqa APIlar password_change_required bilan bloklanadi.
+    - Expiry, bir martalik ishlatish, admin reissue, assigned counselor va own-school organization
+      scope'i qo'shildi; generatsiya qilingan parol frontendda faqat bir marta ko'rsatiladi.
+    - Login/password-change/reissue rate limitlari va password_version JWT claim orqali eski barcha
+      sessiyalarni revoke qilish qo'shildi; IP raw ko'rinishda emas, salted hash sifatida audit qilinadi.
+    - Majburiy password-change frontend sahifasi, student 360 va admin Schools sahifasidagi Reset login
+      workflowi light/dark hamda responsive holatlar bilan qo'shildi.
+
+[ ] H6. School va admin uchun to'liq data visibility siyosati
+    - "Maktab o'quvchi haqida hamma data" tarkibi aniq ro'yxat qilinsin.
+    - Organizationning hozirgi read-only admissions scope'i saqlanadimi yoki kengayadimi hal qilinsin.
+    - Private messages, counselor notes, moderation reports va credentials hech qachon umumiy
+      "hamma data"ga avtomatik kiritilmasin; maxsus privacy qarori kerak.
+    - Admin global, school faqat own-school scope bo'yicha API va regression testlar yangilansin.
+
+[x] H7. 3 tilli interfeys
+    BAJARILGAN:
+    [x] Tillar Uzbek (uz), Russian (ru), English (en) deb belgilandi.
+    [x] Login, majburiy password-change, navigation, page heading/description, theme/offline holati,
+        umumiy status/role va H5 credential UI matnlari translation keylarga o'tkazildi.
+    [x] Login va kabinet headeriga language selector; localStorage persistence, browser-language
+        defaulti, English fallback va pre-paint html lang qo'shildi.
+    [x] Date/weekday/number/currency formatlari tanlangan locale bilan ishlaydi; barcha frontend API
+        so'rovlari backendga Accept-Language yuboradi.
+    [x] Backend LocaleMiddleware va H5 auth/security errorlari uchun uz/ru/en locale strategiyasi qo'shildi.
+    [x] App.jsx ichidagi barcha feature-page copylari (roadmap, messages, support, AI, program usage,
+        forms, modal, feedback va empty-state matnlari) translation keylarga chiqarildi; avtomatik audit
+        955/955 UI/API kaliti va 0 hardcoded dynamic message natijasini beradi.
+    [x] Raqam, foiz, sana, vaqt davomiyligi, fayl hajmi va valuta formatlari tanlangan locale bilan ishlaydi.
+    [x] Barcha backend DRF error/validation/permission javoblari yagona middleware boundaryda
+        Accept-Language bo'yicha lokalizatsiya qilinadi; field/code strukturasi saqlanadi va fallback ham
+        tanlangan tilda qaytadi.
+    [x] Frontend network/session/timeout xatolari ham translation qatlamiga o'tkazildi.
+    [x] Demo, katalog va user yozgan dynamic content source tilida saqlanishi belgilandi: bu UI tarjimasi
+        emas, keyinchalik alohida localized-content modeli/translation fieldlari talab qiladigan content scope.
+    QOLGAN: yo'q.
+
+[ ] H8. AI Yordamchi / javob beruvchi AI Agent
+    BAJARILGAN:
+    [x] Pastki assistant UI, sahifa-session conversation history, clear/stop va streaming response UX.
+    [x] AI Gateway primary/fallback model oqimi, so'rov limiti, input/output limitlari va local fallback.
+    [x] Student uchun faqat o'z konteksti; counselor uchun shaxssiz aggregate kontekst.
+    [x] PII redaction, credential/data-leak va protected-prompt refusal, metadata-only audit,
+        disclaimer hamda sahifa yopilganda tugaydigan retention.
+    [x] Hozir tool/action yo'q: assistant faqat read-only guidance beradi.
+    [x] API kaliti faqat backend AI_GATEWAY_API_KEY secreti orqali olinadi; VITE_* ishlatilmaydi.
+    QOLGAN:
+    [ ] Production AI_GATEWAY_API_KEY va tanlangan provider/modelni production muhitida aktivatsiya qilish.
+    [ ] Provider moderation, zero-data-retention/retention va PII siyosatini huquqiy/product tasdiqdan o'tkazish.
+    [ ] Doimiy server-side conversation history kerak bo'lsa alohida consent va retention bilan qurish;
+        hozir history faqat ochiq sahifa sessionida saqlanadi.
+    [ ] Task yaratish, roadmap actionlari kabi yozuvchi toollarni explicit confirmation, audit va
+        idempotency bilan alohida bosqichda qo'shish.
+    [ ] Production cost/latency/quality monitoring, eval va prompt-injection red-team tekshiruvlari.
+
+[ ] H9. Roadmap domainini to'liq qayta ko'rib chiqish
+    - Student roadmap, counselor roadmap, template va assignment tushunchalarini ajratish.
+    - Hozirgi Level 1 mission, prerequisite, submission, approval, XP va level qoidalarini saqlash/migratsiya qilish.
+    - School/counselor/student ownership va kim kimga roadmap belgilashi matrixi.
+    - Versioned roadmap templates va eski student progressini yo'qotmaydigan migration.
+    - H2, M4 va task workflow bilan birgalikda product specification yozilgach amalga oshirilsin.
+
+[ ] H10. Productionni Sirdaryo serverlariga ko'chirish
+    - Avval server access, OS, network, domain, TLS, PostgreSQL, backup va storage talablari olinadi.
+    - Staging muhit, production secrets, persistent media/object storage va monitoring tayyorlanadi.
+    - Database backup/restore rehearsal, migration, media copy va rollback plan yoziladi.
+    - DNS cutover, HTTPS, CORS/CSRF/ALLOWED_HOSTS va frontend VITE_API_URL yangilanadi.
+    - Post-deploy smoke/E2E, log/metric/alert va backup restore verifikatsiyasi bajariladi.
+    - Bu kod vazifasidan tashqari infra credential va deployment ruxsatini talab qiladi.
+
+===============================================================================
+RECOMMENDED DELIVERY ORDER
+===============================================================================
+
+1. E1-E4: ko'rinadigan UI nuqsonlari va aniq copy/overflow muammolari.
+2. M1-M2: theme va sekin internet resiliency.
+3. M6-M7: counselor-school ownershipni barqarorlashtirish.
+4. H3-H4-H6: Admin panel, counselor limit va data visibility.
+5. H5: one-time credential va majburiy password change.
+6. M3-M5 va H2-H9: task/roadmap/mission/Program Usage domain ishlari.
+7. H1: Parent relationship va kabinet.
+8. M8-M10: support, screen time va notification product qarori.
+9. H7-H8: i18n va xavfsiz AI assistant.
+10. H10: staging tekshiruvidan keyin Sirdaryo production migration.
+
+BLOCKING PRODUCT QUESTIONS
+===============================================================================
+
+[ ] "Hammaga task berish" — barcha rollar create qila oladimi yoki staff bulk assignmentmi?
+[ ] Self-task XP/levelga ta'sir qiladimi?
+[ ] Counselor roadmapi nimani o'lchaydi va kim tasdiqlaydi?
+[ ] Parent aynan qaysi student ma'lumotlarini ko'ra oladi?
+[ ] School uchun "hamma data" private messages va counselor notesni ham anglatadimi?
+[x] Notification qarori: frontend notification UI olib tashlandi; backend model/API keyingi qarorgacha saqlandi.
+[x] Support service scope: support ticket MVP; live chat va FAQ/contact katalogi keyingi bosqichga qoldi.
+[ ] Uch til qaysilar?
+[ ] "abcds" qaysi sahifa yoki komponentda ko'rinmoqda?
+[ ] Sirdaryo serverining access/deployment tafsilotlari kim tomonidan beriladi?
