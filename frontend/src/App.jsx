@@ -163,12 +163,19 @@ const PAGE_META = {
   parent_tasks: { label: 'Tasks', icon: ClipboardCheck, description: 'Assigned work and upcoming deadlines' },
   parent_applications: { label: 'Applications', icon: Target, description: 'University application status' },
   parent_documents: { label: 'Documents', icon: FileText, description: 'Document checklist and review status' },
-  parent_meetings: { label: 'Meetings', icon: CalendarClock, description: 'Upcoming and completed counselor meetings' }
+  parent_meetings: { label: 'Meetings', icon: CalendarClock, description: 'Upcoming and completed counselor meetings' },
+  admin_dashboard: { label: 'Admin Control', icon: ShieldCheck, description: 'Platform provisioning and operational overview' },
+  admin_schools: { label: 'Schools', icon: Building2, description: 'Create and manage organization workspaces' },
+  admin_counselors: { label: 'Counselors', icon: UserRound, description: 'Provision, transfer, and deactivate counselors' },
+  admin_students: { label: 'Student 360', icon: Users, description: 'Open every permitted student profile' },
+  counselor_roadmap: { label: 'Counselor Roadmap', icon: Compass, description: 'Professional and school-management milestones' },
+  admin_audit: { label: 'Audit Log', icon: ShieldAlert, description: 'Review product administration actions' }
 };
 
 function navigationFor(user) {
   if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings'];
-  if (isCounselor(user)) return ['dashboard', 'schools', 'students', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'program_usage', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages', 'screen_time', 'support'];
+  if (user?.role === 'admin') return ['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'counselor_roadmap', 'admin_audit', 'support'];
+  if (isCounselor(user)) return ['dashboard', 'schools', 'students', 'counselor_roadmap', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'program_usage', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages', 'screen_time', 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages', 'screen_time', 'support'];
   return ['dashboard', 'student_center', 'roadmap', 'community', 'bookings', 'messages', 'program_usage', 'programs', 'resource_index', 'essay_lab', 'applications', 'college_search', 'store', 'contacts', 'screen_time', 'support'];
@@ -179,6 +186,7 @@ const EMPTY_DATA = {
   achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
   recommendations: [], roadmapMissions: [], communityPosts: [],
   bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], resourceLibrary: [], storeItems: [], team: [], supportTickets: [],
+  accounts: [], counselorRoadmapTemplates: [], counselorRoadmaps: [], adminAuditEvents: [],
   parentPortal: { children: [], pending_invitations: [], privacy: { hidden: [], read_only: true } }
 };
 
@@ -188,7 +196,8 @@ const GLOBAL_SEARCH_RESOURCES = {
   activities: 'activities', honors: 'activities', recommendations: 'recommendations', roadmapMissions: 'roadmap',
   communityPosts: 'community', bookings: 'bookings', messageChannels: 'messages', programServices: 'program_usage',
   universities: 'college_search', scholarships: 'college_search', opportunityPrograms: 'programs',
-  resourceLibrary: 'resource_index', storeItems: 'store', team: 'contacts', supportTickets: 'support'
+  resourceLibrary: 'resource_index', storeItems: 'store', team: 'contacts', supportTickets: 'support',
+  accounts: 'admin_counselors', counselorRoadmaps: 'counselor_roadmap', adminAuditEvents: 'admin_audit'
 };
 
 function globalSearchTitle(resource, item) {
@@ -1159,11 +1168,12 @@ function StudentForm({ user, data, student, onClose, onSaved, notify }) {
 
 function SchoolsPage({ user, data, reload, notify }) {
   const [open, setOpen] = useState('');
+  const [editingSchool, setEditingSchool] = useState(null);
   const [transferTarget, setTransferTarget] = useState(null);
   const [credentialTarget, setCredentialTarget] = useState(null);
   async function remove(school) {
-    if (!window.confirm(tx`Delete ${school.name}?`)) return;
-    try {await api.remove('schools', school.id);notify(t("School deleted."));reload();} catch (err) {notify(err.message, 'error');}
+    if (!window.confirm(tx`Deactivate ${school.name}?`)) return;
+    try {await api.remove('schools', school.id);notify(t("School deactivated."));reload();} catch (err) {notify(err.message, 'error');}
   }
   const isAdmin = user.role === 'admin';
   const actions = isAdmin && <div className="panel-actions"><button className="button quiet" onClick={() => setOpen('counselor')}><UserRound size={17} /> {t("Individual counselor")}</button><button className="button primary" onClick={() => setOpen('school')}><Plus size={17} /> {t("Add school")}</button></div>;
@@ -1172,12 +1182,14 @@ function SchoolsPage({ user, data, reload, notify }) {
       <div className="school-number">{school.workspace_type === 'individual' ? <UserRound size={22} /> : String(school.id).padStart(2, '0')}</div>
       <div><div className="school-card-title"><h3>{school.name}</h3><Badge>{school.workspace_type === 'individual' ? t("Individual workspace") : t("School")}</Badge></div><p>{school.workspace_type === 'individual' ? tx`Owner: ${school.owner_counselor_name || t("Not assigned")}` : `${school.contact_email || t("No email")} • ${school.contact_phone || t("No phone")}`}</p><span>{school.students_count || 0} {t("students")}{school.organization_account_username ? ` · ${school.organization_account_username}` : ''}</span></div>
       {isAdmin && <div className="school-card-actions">
+        {school.workspace_type !== 'individual' && <button className="icon-button" onClick={() => setEditingSchool(school)} aria-label={tx`Edit ${school.name}`}><Pencil size={16} /></button>}
         {school.workspace_type === 'individual' && school.owner_counselor && <button className="icon-button" onClick={() => setTransferTarget(school)} aria-label={tx`Transfer ${school.owner_counselor_name}`} title={t("Transfer to school")}><Building2 size={16} /></button>}
         {school.organization_account_id && <button className="icon-button" onClick={() => setCredentialTarget({ id: school.organization_account_id, username: school.organization_account_username, full_name: school.name, role: 'organization' })} aria-label={`${t('Reset login')} · ${school.name}`} title={t('Reset login')}><Fingerprint size={16} /></button>}
-        {school.workspace_type !== 'individual' && <button className="icon-button danger" onClick={() => remove(school)} aria-label={tx`Delete ${school.name}`}><Trash2 size={16} /></button>}
+        {school.workspace_type !== 'individual' && school.is_active && <button className="icon-button danger" onClick={() => remove(school)} aria-label={tx`Deactivate ${school.name}`}><Trash2 size={16} /></button>}
       </div>}
     </article>)}{!data.schools.length && <Empty />}</div></Panel>
     {open === 'school' && <SchoolForm onClose={() => setOpen('')} onSaved={() => {setOpen('');reload();}} notify={notify} />}
+    {editingSchool && <SchoolForm school={editingSchool} onClose={() => setEditingSchool(null)} onSaved={() => {setEditingSchool(null);reload();}} notify={notify} />}
     {open === 'counselor' && <IndividualCounselorForm onClose={() => setOpen('')} onSaved={() => {setOpen('');reload();}} notify={notify} />}
     {transferTarget && <CounselorTransferForm workspace={transferTarget} schools={data.schools.filter((school) => school.workspace_type === 'school' && school.is_active)} onClose={() => setTransferTarget(null)} onSaved={() => {setTransferTarget(null);reload();}} notify={notify} />}
     {credentialTarget && <TemporaryCredentialModal account={credentialTarget} onClose={() => setCredentialTarget(null)} notify={notify} />}
@@ -1214,17 +1226,16 @@ function IndividualCounselorForm({ onClose, onSaved, notify }) {
   return <Modal title={t("Add individual counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("First name")}><input name="first_name" required /></Field><Field label={t("Last name")}><input name="last_name" /></Field><Field label={t("Username")}><input name="username" autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" required /></Field><Field label={t("Phone")}><input name="phone" /></Field><Field label={t("Position")}><input name="position" placeholder={t("Independent counselor")} /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("A clearly labeled private workspace is created automatically. An admin can later transfer this counselor to an organization school after their students are reassigned.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
 }
 
-function SchoolForm({ onClose, onSaved, notify }) {
+function SchoolForm({ school = null, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   async function submit(event) {
     event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);
     try {
-      const school = await api.create('schools', { name: values.get('name'), code: values.get('code'), contact_email: values.get('contact_email'), contact_phone: values.get('contact_phone'), is_active: true });
-      await api.createSchoolAccount(school.id, { username: values.get('username'), email: values.get('account_email'), password: values.get('password'), first_name: values.get('name'), last_name: 'Organization' });
-      notify(t("School and organization account created."));onSaved();
+      const payload = { name: values.get('name'), code: values.get('code'), contact_email: values.get('contact_email'), contact_phone: values.get('contact_phone'), is_active: true };
+      if (school) {await api.update('schools', school.id, payload);notify(t("School updated."));} else {const createdSchool = await api.create('schools', payload);await api.createSchoolAccount(createdSchool.id, { username: values.get('username'), email: values.get('account_email'), password: values.get('password'), first_name: values.get('name'), last_name: 'Organization' });notify(t("School and organization account created."));}onSaved();
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  return <Modal title={t("Add organization school")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("School name")}><input name="name" required /></Field><Field label={t("Unique code")}><input name="code" required /></Field><Field label={t("Contact email")}><input name="contact_email" type="email" /></Field><Field label={t("Contact phone")}><input name="contact_phone" /></Field><Field label={t("Login username")}><input name="username" required /></Field><Field label={t("Login email")}><input name="account_email" type="email" required /></Field><Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input name="password" type="password" minLength="12" autoComplete="new-password" required /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating…") : t("Create school")}</button></div></form></Modal>;
+  return <Modal title={school ? t("Edit school") : t("Add organization school")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("School name")}><input name="name" defaultValue={school?.name || ''} required /></Field><Field label={t("Unique code")}><input name="code" defaultValue={school?.code || ''} required /></Field><Field label={t("Contact email")}><input name="contact_email" type="email" defaultValue={school?.contact_email || ''} /></Field><Field label={t("Contact phone")}><input name="contact_phone" defaultValue={school?.contact_phone || ''} /></Field>{!school && <><Field label={t("Login username")}><input name="username" required /></Field><Field label={t("Login email")}><input name="account_email" type="email" required /></Field><Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input name="password" type="password" minLength="12" autoComplete="new-password" required /></Field></>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : school ? t("Save") : t("Create school")}</button></div></form></Modal>;
 }
 
 function ResourceSection({ title, resource, data, user, query, reload, notify, canCreate = true, defaultStudentId = null }) {
@@ -2460,8 +2471,78 @@ function ContactsPage({ data, setPage }) {
   return <div className="section-stack student-portal"><section className="portal-hero contacts-hero"><div><span className="eyebrow">{t("YOUR SUPPORT NETWORK")}</span><h2>{t("My Naseeb Team")}</h2><p>{t("Quickly connect with your counselor and school coordinator.")}</p></div><ContactRound size={64} /></section><div className="contact-grid">{data.team.map((member) => <article key={`${member.kind}-${member.id}`}><span className="avatar large">{initials(member.name)}</span><div><span>{member.kind === 'counselor' ? t("Primary counselor") : t("School coordinator")}</span><h3>{member.name}</h3><p>{member.role}</p><small>{member.email || t("Email not provided")}</small><small>{member.phone || t("Phone not provided")}</small></div><footer><button className="button primary" onClick={() => setPage('messages')}><MessageCircle size={16} /> {t("Message")}</button>{member.kind === 'counselor' && <button className="button quiet" onClick={() => setPage('bookings')}><CalendarClock size={16} /> {t("Book")}</button>}</footer></article>)}{!data.team.length && <Empty text={t("No team members have been assigned yet.")} />}</div></div>;
 }
 
+function AdminControlDashboard({ data, setPage }) {
+  const counselors = data.accounts.filter((account) => account.role === 'counselor');
+  const activeCounselors = counselors.filter((account) => account.is_active);
+  const pendingReviews = data.counselorRoadmaps.flatMap((roadmap) => roadmap.missions || []).filter((mission) => mission.status === 'submitted').length;
+  return <div className="section-stack"><div className="stat-grid"><Stat label={t("Schools")} value={data.schools.filter((school) => school.workspace_type === 'school' && school.is_active).length} note={t("Active organization workspaces")} /><Stat label={t("Counselors")} value={activeCounselors.length} note={tx`${counselors.length - activeCounselors.length} inactive`} /><Stat label={t("Students")} value={data.students.length} note={t("Available in Student 360")} /><Stat label={t("Roadmap reviews")} value={pendingReviews} note={t("Submitted counselor missions")} /></div><Panel title={t("Platform administration")}><div className="quick-grid"><button onClick={() => setPage('admin_schools')}><Building2 /><span><b>{t("Manage schools")}</b><small>{t("Provision organization accounts")}</small></span></button><button onClick={() => setPage('admin_counselors')}><UserRound /><span><b>{t("Manage counselors")}</b><small>{t("Create, transfer, or deactivate")}</small></span></button><button onClick={() => setPage('counselor_roadmap')}><Compass /><span><b>{t("Review roadmaps")}</b><small>{t("Approve submitted milestones")}</small></span></button><button onClick={() => setPage('admin_audit')}><ShieldAlert /><span><b>{t("Open audit log")}</b><small>{t("Trace administration actions")}</small></span></button></div></Panel></div>;
+}
+
+function AdminCounselorsPage({ data, query, reload, notify }) {
+  const [open, setOpen] = useState(false);
+  const [transfer, setTransfer] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const counselors = data.accounts.filter((account) => account.role === 'counselor' && JSON.stringify(account).toLowerCase().includes(query.toLowerCase()));
+  async function deactivate(account) {
+    if (!window.confirm(tx`Deactivate ${fullName(account)}? Their login will stop immediately.`)) return;
+    try {await api.deactivateAccount(account.id);notify(t("Counselor deactivated."));reload();} catch (error) {notify(error.message, 'error');}
+  }
+  return <><Panel title={t("Counselor provisioning")} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {t("Add counselor")}</button>}><div className="record-list">{counselors.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{account.email} · {account.school_name || t("No school")}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.school_workspace_type === 'individual' ? t("Individual workspace") : t("Organization school")}</span></div></div><div className="record-actions"><button className="icon-button" onClick={() => setEditing(account)} title={t("Edit counselor")}><Pencil size={16} /></button>{account.is_active && account.school_workspace_type !== 'individual' && <button className="button quiet" onClick={() => setTransfer(account)}><Building2 size={15} /> {t("Transfer")}</button>}{account.is_active && <button className="icon-button danger" onClick={() => deactivate(account)} title={t("Deactivate counselor")}><Trash2 size={16} /></button>}</div></article>)}{!counselors.length && <Empty text={t("No counselors found.")} />}</div></Panel>{open && <CounselorProvisionForm schools={data.schools} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{editing && <CounselorEditForm account={editing} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}{transfer && <AccountTransferForm account={transfer} schools={data.schools} onClose={() => setTransfer(null)} onSaved={() => {setTransfer(null);reload();}} notify={notify} />}</>;
+}
+
+function CounselorEditForm({ account, onClose, onSaved, notify }) {
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);try {await api.update('users/accounts', account.id, { first_name: values.get('first_name'), last_name: values.get('last_name'), email: values.get('email'), phone: values.get('phone'), position: values.get('position'), is_active: values.get('is_active') === 'true' });notify(t("Counselor updated."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
+  return <Modal title={t("Edit counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("First name")}><input name="first_name" defaultValue={account.first_name} required /></Field><Field label={t("Last name")}><input name="last_name" defaultValue={account.last_name} /></Field><Field label={t("Email")}><input name="email" type="email" defaultValue={account.email} required /></Field><Field label={t("Phone")}><input name="phone" defaultValue={account.phone} /></Field><Field label={t("Position")}><input name="position" defaultValue={account.position} /></Field><Field label={t("Status")}><select name="is_active" defaultValue={String(account.is_active)}><option value="true">{t("Active")}</option><option value="false">{t("Inactive")}</option></select></Field><p className="form-note form-wide">{t("Reactivation is blocked when the destination school already has three active counselors.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Saving…") : t("Save")}</button></div></form></Modal>;
+}
+
+function CounselorProvisionForm({ schools, onClose, onSaved, notify }) {
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {event.preventDefault();setSaving(true);try {const payload = Object.fromEntries(new FormData(event.currentTarget).entries());payload.school = Number(payload.school);await api.createCounselor(payload);notify(t("Counselor account created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
+  const organizationSchools = schools.filter((school) => school.workspace_type === 'school' && school.is_active);
+  return <Modal title={t("Add school counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit} autoComplete="off"><Field label={t("First name")}><input name="first_name" required /></Field><Field label={t("Last name")}><input name="last_name" /></Field><Field label={t("Username")}><input name="username" autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" autoComplete="off" required /></Field><Field label={t("Organization school")}><select name="school" required><option value="">{t("Select a school")}</option>{organizationSchools.map((school) => <option value={school.id} key={school.id}>{school.name}</option>)}</select></Field><Field label={t("Position")}><input name="position" /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="12" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("Each organization school can have at most three active counselors.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
+}
+
+function AccountTransferForm({ account, schools, onClose, onSaved, notify }) {
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {event.preventDefault();if (!window.confirm(t("Confirm counselor transfer?"))) return;setSaving(true);try {await api.transferCounselor(account.id, Number(new FormData(event.currentTarget).get('school')));notify(t("Counselor transferred."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
+  return <Modal title={t("Transfer counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Organization school")}><select name="school" required defaultValue=""><option value="" disabled>{t("Select a school")}</option>{schools.filter((school) => school.workspace_type === 'school' && school.is_active && school.id !== account.school).map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></Field><p className="form-note form-wide">{t("Transfer is blocked until assigned students belong to the destination school and a counselor slot is available.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{t("Transfer")}</button></div></form></Modal>;
+}
+
+function CounselorRoadmapPage({ user, data, reload, notify }) {
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  async function submitMission(roadmap, mission) {const note = window.prompt(t("Add a completion note"), mission.counselor_note || '');if (!note?.trim()) return;try {await api.submitCounselorMission(roadmap.id, mission.id, note);notify(t("Mission submitted for review."));reload();} catch (error) {notify(error.message, 'error');}}
+  async function review(roadmap, mission, decision) {let feedback = '';if (decision === 'request_changes') {feedback = window.prompt(t("Explain the requested changes"), '') || '';if (!feedback.trim()) return;}if (!window.confirm(decision === 'approve' ? t("Approve this mission?") : t("Request changes for this mission?"))) return;try {await api.reviewCounselorMission(roadmap.id, mission.id, decision, feedback);notify(decision === 'approve' ? t("Mission approved.") : t("Changes requested."));reload();} catch (error) {notify(error.message, 'error');}}
+  const actions = user.role === 'admin' && <div className="panel-actions"><button className="button quiet" onClick={() => setTemplateOpen(true)}><Plus size={16} /> {t("New template")}</button><button className="button primary" onClick={() => setAssignOpen(true)}><Compass size={16} /> {t("Assign roadmap")}</button></div>;
+  return <><Panel title={user.role === 'admin' ? t("Counselor roadmap control") : t("My professional roadmap")} action={actions}><div className="record-list">{data.counselorRoadmaps.map((roadmap) => <article className="roadmap-admin-card" key={roadmap.id}><header><div><span className="eyebrow">{label(roadmap.kind)}</span><h3>{roadmap.title}</h3><p>{roadmap.counselor_name} · {roadmap.school_name}</p></div><div className="roadmap-progress"><b>{formatPercentLocale(roadmap.progress_percent)}</b><Badge tone={roadmap.status === 'completed' ? 'success' : ''}>{label(roadmap.status)}</Badge></div></header><div className="roadmap-admin-missions">{roadmap.missions.map((mission) => <div key={mission.id}><span className={`status-dot ${mission.status}`} /><div><b>{mission.sequence}. {mission.title}</b><small>{label(mission.status)} · {dateText(mission.due_date)}</small>{mission.counselor_note && <p>{mission.counselor_note}</p>}{mission.admin_feedback && <p className="form-note">{mission.admin_feedback}</p>}</div><div>{user.role === 'counselor' && mission.status !== 'approved' && <button className="button quiet" onClick={() => submitMission(roadmap, mission)}>{t("Submit")}</button>}{user.role === 'admin' && mission.status === 'submitted' && <><button className="button quiet" onClick={() => review(roadmap, mission, 'request_changes')}>{t("Request changes")}</button><button className="button primary" onClick={() => review(roadmap, mission, 'approve')}>{t("Approve")}</button></>}</div></div>)}</div></article>)}{!data.counselorRoadmaps.length && <Empty text={t("No counselor roadmaps assigned yet.")} />}</div></Panel>{templateOpen && <RoadmapTemplateForm onClose={() => setTemplateOpen(false)} onSaved={() => {setTemplateOpen(false);reload();}} notify={notify} />}{assignOpen && <RoadmapAssignForm data={data} onClose={() => setAssignOpen(false)} onSaved={() => {setAssignOpen(false);reload();}} notify={notify} />}</>;
+}
+
+function RoadmapTemplateForm({ onClose, onSaved, notify }) {
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);const missions = String(values.get('missions')).split('\n').map((title) => title.trim()).filter(Boolean).map((title, index) => ({ title, description: '', sequence: index + 1, due_days: (index + 1) * 7, is_required: true }));try {await api.create('counselor-roadmap-templates', { name: values.get('name'), description: values.get('description'), kind: values.get('kind'), is_active: true, missions });notify(t("Roadmap template created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
+  return <Modal title={t("New counselor roadmap template")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Template name")}><input name="name" required /></Field><Field label={t("Roadmap type")}><select name="kind"><option value="professional_onboarding">{t("Professional onboarding")}</option><option value="school_management">{t("School management")}</option></select></Field><Field className="form-wide" label={t("Description")}><textarea name="description" /></Field><Field className="form-wide" label={t("Missions, one per line")}><textarea name="missions" required rows="6" /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{t("Create template")}</button></div></form></Modal>;
+}
+
+function RoadmapAssignForm({ data, onClose, onSaved, notify }) {
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);try {await api.create('counselor-roadmaps', { counselor: Number(values.get('counselor')), template: Number(values.get('template')), title: values.get('title') });notify(t("Roadmap assigned."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
+  return <Modal title={t("Assign counselor roadmap")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Counselor")}><select name="counselor" required><option value="">{t("Select a counselor")}</option>{data.accounts.filter((account) => account.role === 'counselor' && account.is_active).map((account) => <option key={account.id} value={account.id}>{fullName(account)} · {account.school_name}</option>)}</select></Field><Field label={t("Template")}><select name="template" required><option value="">{t("Select a template")}</option>{data.counselorRoadmapTemplates.filter((template) => template.is_active).map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></Field><Field className="form-wide" label={t("Custom title (optional)")}><input name="title" /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{t("Assign roadmap")}</button></div></form></Modal>;
+}
+
+function AdminAuditPage({ data, query }) {
+  const events = data.adminAuditEvents.filter((event) => JSON.stringify(event).toLowerCase().includes(query.toLowerCase()));
+  return <Panel title={t("Product administration audit")}><div className="record-list audit-list">{events.map((event) => <article className="record" key={event.id}><ShieldCheck size={20} /><div className="record-main"><h3>{event.action}</h3><p>{event.target_label || event.target_type}</p><div className="record-meta"><span>{event.actor_name || t("System")}</span><span>{dateTimeText(event.created_at)}</span></div></div></article>)}{!events.length && <Empty text={t("No audit events found.")} />}</div></Panel>;
+}
+
 function PageRouter({ page, user, data, stats, query, reload, notify, setPage }) {
   if (user.role === 'parent') return <ParentPortalPage {...{ page, data, reload, notify }} />;
+  if (user.role === 'admin' && page === 'admin_dashboard') return <AdminControlDashboard data={data} setPage={setPage} />;
+  if (user.role === 'admin' && page === 'admin_schools') return <SchoolsPage user={user} data={data} reload={reload} notify={notify} />;
+  if (user.role === 'admin' && page === 'admin_counselors') return <AdminCounselorsPage data={data} query={query} reload={reload} notify={notify} />;
+  if (user.role === 'admin' && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
+  if (['admin', 'counselor'].includes(user.role) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
+  if (user.role === 'admin' && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
   if (page === 'dashboard') return <Dashboard user={user} data={data} stats={stats} setPage={setPage} />;
   if (user.role === 'student' && page === 'student_center') return <StudentCenterPage {...{ user, data, query, reload, notify }} />;
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
@@ -2561,7 +2642,7 @@ export default function App() {
       [...studentResources, ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']] :
       activeUser.role === 'teacher' ?
       [['students', 'students'], ['tasks', 'tasks'], ['roadmapMissions', 'roadmap-missions'], ['bookings', 'bookings'], ['messageChannels', 'message-channels']] :
-      [...studentResources, ['universities', 'universities'], ...(isCounselor(activeUser) ? [['schools', 'schools'], ['roadmapMissions', 'roadmap-missions'], ['programServices', 'program-services'], ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']] : portalResources)];
+      [...studentResources, ['universities', 'universities'], ...(activeUser.role === 'admin' ? [['schools', 'schools'], ['accounts', 'users/accounts'], ['counselorRoadmapTemplates', 'counselor-roadmap-templates'], ['counselorRoadmaps', 'counselor-roadmaps'], ['adminAuditEvents', 'users/audit-events'], ['supportTickets', 'support-tickets']] : isCounselor(activeUser) ? [['schools', 'schools'], ['roadmapMissions', 'roadmap-missions'], ['counselorRoadmaps', 'counselor-roadmaps'], ['programServices', 'program-services'], ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']] : portalResources)];
       const requested = requestedKeys ? new Set(requestedKeys) : null;
       const requests = [
       ...(activeUser.role === 'parent' ? [] : [['dashboard', () => api.dashboard()]]),
@@ -2632,7 +2713,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user && !navigationFor(user).includes(page)) setPage('dashboard');
+    if (user && !navigationFor(user).includes(page)) setPage(user.role === 'admin' ? 'admin_dashboard' : 'dashboard');
   }, [user, page]);
 
   async function afterLogin() {
