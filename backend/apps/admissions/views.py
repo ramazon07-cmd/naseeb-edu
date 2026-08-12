@@ -1,11 +1,15 @@
-from datetime import timedelta
+from datetime import date, timedelta
+from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.http import FileResponse, Http404
 from django.utils.text import slugify
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
-from rest_framework import permissions, viewsets
+from pathlib import Path
+import mimetypes
+from rest_framework import mixins, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -14,6 +18,7 @@ from rest_framework import serializers as drf_serializers
 from drf_spectacular.utils import extend_schema, inline_serializer
 
 from apps.users.models import User
+from apps.users.credentials import issue_temporary_credential
 from apps.users.serializers import UserSerializer
 from .models import (
     Achievement,
@@ -36,6 +41,7 @@ from .models import (
     MessageReport,
     Notification,
     OpportunityProgram,
+    ParentStudentLink,
     ProgramService,
     Project,
     RecommendationLetter,
@@ -43,8 +49,10 @@ from .models import (
     ResourceLibraryItem,
     RoadmapMission,
     School,
+    ScreenTimeDaily,
     Scholarship,
     StoreItem,
+    SupportTicket,
     StudentProfile,
     StudentMessage,
     Task,
@@ -72,6 +80,8 @@ from .serializers import (
     NotificationSerializer,
     OpportunityProgramSerializer,
     OrganizationAccountSerializer,
+    ParentInviteSerializer,
+    ParentStudentLinkSerializer,
     ProgramServiceSerializer,
     ProjectSerializer,
     RecommendationLetterSerializer,
@@ -79,8 +89,10 @@ from .serializers import (
     ResourceLibraryItemSerializer,
     RoadmapMissionSerializer,
     SchoolSerializer,
+    ScreenTimeDailySerializer,
     ScholarshipSerializer,
     StoreItemSerializer,
+    SupportTicketSerializer,
     StudentProfileSerializer,
     StudentMessageSerializer,
     TaskSerializer,
@@ -172,6 +184,34 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         return False
 
 
+class SupportTicketPermission(permissions.BasePermission):
+    allowed_roles = {
+        User.Role.ADMIN,
+        User.Role.COUNSELOR,
+        User.Role.ORGANIZATION,
+        User.Role.STUDENT,
+    }
+
+    @staticmethod
+    def is_product_admin(user):
+        return bool(user.is_superuser or user.role == User.Role.ADMIN)
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated or user.role not in self.allowed_roles:
+            return False
+        if view.action in {'update', 'partial_update'}:
+            return self.is_product_admin(user)
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        if self.is_product_admin(request.user):
+            return True
+        if obj.requester_id != request.user.id:
+            return False
+        return request.method in permissions.SAFE_METHODS or view.action == 'mark_viewed'
+
+
 class ScopedQuerysetMixin:
     permission_classes = [CounselorOrOwnerPermission]
 
@@ -180,10 +220,15 @@ class ScopedQuerysetMixin:
         if user.is_superuser or user.role == User.Role.ADMIN:
             return queryset
         if user.role == User.Role.COUNSELOR:
+            if not user.school_id:
+                return queryset.none()
             if queryset.model == StudentProfile:
-                return queryset.filter(assigned_counselor=user)
+                return queryset.filter(assigned_counselor=user, school_id=user.school_id)
             if hasattr(queryset.model, 'student'):
-                return queryset.filter(student__assigned_counselor=user)
+                return queryset.filter(
+                    student__assigned_counselor=user,
+                    student__school_id=user.school_id,
+                )
             return queryset
         if user.is_staff:
             return queryset
@@ -283,6 +328,15 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
         except DjangoValidationError as exc:
             return Response({'password': list(exc.messages)}, status=400)
 
+        target_countries = str(
+            request.data.get('countries') or request.data.get('target_countries') or ''
+        ).strip()
+        target_countries_max_length = StudentProfile._meta.get_field('target_countries').max_length
+        if len(target_countries) > target_countries_max_length:
+            return Response({
+                'target_countries': [f'Use {target_countries_max_length} characters or fewer.'],
+            }, status=400)
+
         parts = full_name.split()
         first_name = parts[0]
         last_name = ' '.join(parts[1:])
@@ -299,6 +353,13 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             school = request.user.school
             if not school:
                 return Response({'school': ['Your organization account is not connected to a school.']}, status=400)
+        elif request.user.role == User.Role.COUNSELOR:
+            school = request.user.school
+            if not school or not school.is_active:
+                return Response({'school': ['Your counselor account is not connected to an active school.']}, status=400)
+            supplied_school = request.data.get('school')
+            if supplied_school and str(supplied_school) != str(school.id):
+                return Response({'school': ['Counselors can only add students to their own school.']}, status=400)
         else:
             school_id = request.data.get('school')
             if not school_id:
@@ -311,16 +372,24 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             user = User.objects.create_user(
                 username=username,
                 email=email,
-                password=password,
+                password=None,
                 first_name=first_name,
                 last_name=last_name,
                 role=User.Role.STUDENT,
                 phone=request.data.get('phone', ''),
                 school=school,
             )
+            user, _, _, _ = issue_temporary_credential(
+                user=user,
+                issued_by=request.user,
+                raw_password=password,
+                request=request,
+            )
             student = StudentProfile.objects.create(
                 user=user,
-                assigned_counselor=request.user if request.user.is_counselor_like else None,
+                assigned_counselor=(
+                    request.user if request.user.role == User.Role.COUNSELOR else None
+                ),
                 school=school,
                 school_name=school.name if school else request.data.get('school_name', 'Naseeb Edu'),
                 grade=str(request.data.get('grade') or StudentProfile.Grade.GRADE_11).replace('-sinf', ''),
@@ -328,7 +397,7 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
                 ielts_score=request.data.get('ielts') or request.data.get('ielts_score') or None,
                 sat_score=request.data.get('sat') or request.data.get('sat_score') or None,
                 target_major=request.data.get('major') or request.data.get('target_major') or '',
-                target_countries=request.data.get('countries') or request.data.get('target_countries') or '',
+                target_countries=target_countries,
                 budget_usd=request.data.get('budget_usd') or None,
                 scholarship_needed=str(request.data.get('scholarship_needed', 'true')).lower() not in {'false', '0', 'no'},
                 parent_contact=request.data.get('parent_contact', ''),
@@ -345,8 +414,10 @@ class SchoolViewSet(viewsets.ModelViewSet):
     queryset = School.objects.annotate(students_count=Count('students')).order_by('name')
 
     def get_queryset(self):
-        if self.request.user.is_counselor_like:
+        if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN:
             return self.queryset
+        if self.request.user.role == User.Role.COUNSELOR and self.request.user.school_id:
+            return self.queryset.filter(id=self.request.user.school_id)
         if self.request.user.is_organization and self.request.user.school_id:
             return self.queryset.filter(id=self.request.user.school_id)
         return self.queryset.none()
@@ -356,7 +427,10 @@ class SchoolViewSet(viewsets.ModelViewSet):
         if not request.user.is_counselor_like:
             return Response({'detail': 'Only counselors can create organization accounts.'}, status=403)
         school = self.get_object()
-        serializer = OrganizationAccountSerializer(data=request.data, context={'school': school})
+        serializer = OrganizationAccountSerializer(
+            data=request.data,
+            context={'school': school, 'request': request},
+        )
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         return Response({
@@ -609,7 +683,7 @@ class ApplicationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
 
 
 class StaffControlledWorkPermission(permissions.BasePermission):
-    """Teachers/counselors control structure; students only report their progress."""
+    """Managers assign scoped work; students may create personal zero-XP tasks."""
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
@@ -622,6 +696,8 @@ class StaffControlledWorkPermission(permissions.BasePermission):
         if user.role == User.Role.STUDENT:
             if request.method in permissions.SAFE_METHODS:
                 return True
+            if view.action in {'create', 'destroy'}:
+                return view.basename == 'tasks'
             return view.action in {'update', 'partial_update'}
         return False
 
@@ -638,10 +714,11 @@ class StaffControlledWorkPermission(permissions.BasePermission):
                 and user.school_id
                 and student.school_id == user.school_id
             )
-        return bool(
-            student.user_id == user.id
-            and (request.method in permissions.SAFE_METHODS or view.action in {'update', 'partial_update'})
-        )
+        if student.user_id != user.id:
+            return False
+        if request.method in permissions.SAFE_METHODS or view.action in {'update', 'partial_update'}:
+            return True
+        return view.action == 'destroy' and obj.is_self_assigned
 
 
 class StaffControlledWorkMixin:
@@ -682,7 +759,12 @@ class TaskViewSet(StaffControlledWorkMixin, viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(assigned_by=self.request.user)
+        user = self.request.user
+        serializer.save(
+            assigned_by=user,
+            is_self_assigned=user.role == User.Role.STUDENT,
+            status=Task.Status.TODO if user.role == User.Role.STUDENT else serializer.validated_data.get('status', Task.Status.TODO),
+        )
 
     def perform_update(self, serializer):
         target_status = serializer.validated_data.get('status', serializer.instance.status)
@@ -706,19 +788,25 @@ class TaskViewSet(StaffControlledWorkMixin, viewsets.ModelViewSet):
                 return Response({'detail': 'The student must submit the task before approval.'}, status=400)
             task.status = Task.Status.APPROVED
             task.save(update_fields=['status', 'updated_at'])
-            xp_amount = TASK_XP_BY_PRIORITY[task.priority]
-            _, xp_created = award_approval_xp(
-                student=task.student,
-                source_type=XPTransaction.Source.TASK,
-                source_id=task.id,
-                amount=xp_amount,
-                reason=f'Task approved: {task.title}',
-                awarded_by=request.user,
-            )
+            xp_amount = 0 if task.is_self_assigned else TASK_XP_BY_PRIORITY[task.priority]
+            xp_created = False
+            if xp_amount:
+                _, xp_created = award_approval_xp(
+                    student=task.student,
+                    source_type=XPTransaction.Source.TASK,
+                    source_id=task.id,
+                    amount=xp_amount,
+                    reason=f'Task approved: {task.title}',
+                    awarded_by=request.user,
+                )
             ActivityLog.objects.get_or_create(
                 actor=request.user,
                 student=task.student,
-                action=f'Task approved: {task.title} (+{xp_amount} XP)',
+                action=(
+                    f'Task approved: {task.title} (+{xp_amount} XP)'
+                    if xp_amount
+                    else f'Self-task approved: {task.title} (no XP)'
+                ),
             )
         task.student.refresh_from_db()
         data = TaskSerializer(task, context={'request': request}).data
@@ -740,6 +828,38 @@ class DocumentViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
         if student:
             queryset = queryset.filter(student_id=student)
         return queryset
+
+    @action(detail=True, methods=['get'], url_path='file')
+    def file(self, request, pk=None):
+        document = self.get_object()
+        if not document.file:
+            raise Http404('This document has no uploaded file.')
+        try:
+            stream = document.file.open('rb')
+        except (FileNotFoundError, OSError):
+            raise Http404('The uploaded file is unavailable. Contact support.')
+
+        file_name = document.original_file_name or Path(document.file.name).name
+        extension = Path(file_name).suffix.lower()
+        inline_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt', '.csv'}
+        force_download = request.query_params.get('download') == '1' or extension not in inline_extensions
+        content_type = document.file_content_type or mimetypes.guess_type(file_name)[0] or 'application/octet-stream'
+        response = FileResponse(
+            stream,
+            as_attachment=force_download,
+            filename=file_name,
+            content_type=content_type,
+        )
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+    def perform_destroy(self, instance):
+        file_name = instance.file.name if instance.file else ''
+        storage = instance.file.storage if file_name else None
+        super().perform_destroy(instance)
+        if file_name:
+            transaction.on_commit(lambda: storage.delete(file_name))
 
 
 class AchievementViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -867,6 +987,55 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
         notification.is_read = True
         notification.save(update_fields=['is_read', 'updated_at'])
         return Response(NotificationSerializer(notification, context={'request': request}).data)
+
+
+class SupportTicketViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = SupportTicketSerializer
+    permission_classes = [SupportTicketPermission]
+    queryset = SupportTicket.objects.select_related('requester', 'responded_by').all()
+
+    def get_queryset(self):
+        user = self.request.user
+        if SupportTicketPermission.is_product_admin(user):
+            return self.queryset
+        return self.queryset.filter(requester=user)
+
+    def perform_create(self, serializer):
+        serializer.save(
+            requester=self.request.user,
+            status=SupportTicket.Status.OPEN,
+            admin_response='',
+        )
+
+    def perform_update(self, serializer):
+        previous_response = serializer.instance.admin_response
+        ticket = serializer.save()
+        if ticket.admin_response and ticket.admin_response != previous_response:
+            ticket.responded_by = self.request.user
+            ticket.responded_at = timezone.now()
+            ticket.requester_viewed_at = None
+            ticket.save(update_fields=[
+                'responded_by', 'responded_at', 'requester_viewed_at', 'updated_at',
+            ])
+
+    @action(detail=True, methods=['post'], url_path='mark-viewed')
+    def mark_viewed(self, request, pk=None):
+        ticket = self.get_object()
+        if ticket.requester_id != request.user.id:
+            return Response(
+                {'detail': 'Only the ticket requester can mark a response as viewed.'},
+                status=403,
+            )
+        if ticket.responded_at:
+            ticket.requester_viewed_at = timezone.now()
+            ticket.save(update_fields=['requester_viewed_at', 'updated_at'])
+        return Response(self.get_serializer(ticket).data)
 
 
 class ActivityLogViewSet(ScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
@@ -1690,13 +1859,442 @@ class MessageReportViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(self.get_serializer(report).data)
 
 
-class ProgramServiceViewSet(viewsets.ReadOnlyModelViewSet):
+class ProgramServicePermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return user.role in {
+                User.Role.ADMIN, User.Role.COUNSELOR, User.Role.ORGANIZATION, User.Role.STUDENT,
+            } or user.is_superuser
+        return user.is_superuser or user.role in {User.Role.ADMIN, User.Role.COUNSELOR}
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return True
+        if user.role == User.Role.COUNSELOR:
+            return bool(
+                user.school_id
+                and obj.student.school_id == user.school_id
+                and obj.student.assigned_counselor_id == user.id
+            )
+        if user.role == User.Role.ORGANIZATION:
+            return request.method in permissions.SAFE_METHODS and obj.student.school_id == user.school_id
+        return request.method in permissions.SAFE_METHODS and obj.student.user_id == user.id
+
+
+class ProgramServiceViewSet(viewsets.ModelViewSet):
     serializer_class = ProgramServiceSerializer
-    permission_classes = [StudentPortalPermission]
-    queryset = ProgramService.objects.select_related('student__user', 'mentor').all()
+    permission_classes = [ProgramServicePermission]
+    queryset = ProgramService.objects.select_related('student__user', 'student__school', 'mentor').all()
 
     def get_queryset(self):
-        return self.queryset.filter(student=self.request.user.student_profile)
+        user = self.request.user
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return self.queryset
+        if user.role == User.Role.COUNSELOR:
+            if not user.school_id:
+                return self.queryset.none()
+            return self.queryset.filter(
+                student__assigned_counselor=user,
+                student__school_id=user.school_id,
+            )
+        if user.role == User.Role.ORGANIZATION:
+            if not user.school_id:
+                return self.queryset.none()
+            return self.queryset.filter(student__school_id=user.school_id)
+        if user.role == User.Role.STUDENT:
+            return self.queryset.filter(student__user=user)
+        return self.queryset.none()
+
+
+class ScreenTimeViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ScreenTimeDailySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = ScreenTimeDaily.objects.select_related('user').all()
+    http_method_names = ['get', 'post', 'head', 'options']
+
+    def student_profiles_for_scope(self):
+        user = self.request.user
+        profiles = StudentProfile.objects.select_related('user', 'school')
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return profiles
+        if user.role == User.Role.COUNSELOR:
+            if not user.school_id:
+                return profiles.none()
+            return profiles.filter(assigned_counselor=user, school_id=user.school_id)
+        if user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
+            if not user.school_id:
+                return profiles.none()
+            return profiles.filter(school_id=user.school_id)
+        return profiles.none()
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = self.queryset
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return queryset
+        if user.role == User.Role.COUNSELOR:
+            student_user_ids = self.student_profiles_for_scope().values_list('user_id', flat=True)
+            return queryset.filter(Q(user=user) | Q(user_id__in=student_user_ids))
+        if user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
+            student_user_ids = self.student_profiles_for_scope().values_list('user_id', flat=True)
+            return queryset.filter(Q(user=user) | Q(user_id__in=student_user_ids))
+        return queryset.filter(user=user)
+
+    @staticmethod
+    def parse_entries(raw_entries):
+        if not isinstance(raw_entries, list) or not raw_entries or len(raw_entries) > 50:
+            raise drf_serializers.ValidationError({'entries': 'Send between 1 and 50 screen-time entries.'})
+        today = timezone.localdate()
+        oldest_allowed = today - timedelta(days=7)
+        aggregated = {}
+        for entry in raw_entries:
+            if not isinstance(entry, dict):
+                raise drf_serializers.ValidationError({'entries': 'Every entry must be an object.'})
+            page = str(entry.get('page') or '').strip().lower()
+            if not page or len(page) > 80 or not all(character.isalnum() or character in {'_', '-'} for character in page):
+                raise drf_serializers.ValidationError({'page': 'Use a valid application page key.'})
+            try:
+                seconds = int(entry.get('seconds'))
+            except (TypeError, ValueError):
+                raise drf_serializers.ValidationError({'seconds': 'Active seconds must be an integer.'})
+            if seconds < 1 or seconds > 300:
+                raise drf_serializers.ValidationError({'seconds': 'Each entry must contain 1–300 active seconds.'})
+            try:
+                tracked_date = date.fromisoformat(str(entry.get('date') or today.isoformat()))
+            except ValueError:
+                raise drf_serializers.ValidationError({'date': 'Use YYYY-MM-DD.'})
+            if tracked_date > today or tracked_date < oldest_allowed:
+                raise drf_serializers.ValidationError({'date': 'Offline screen time can only be submitted within 7 days.'})
+            key = (tracked_date, page)
+            aggregated[key] = aggregated.get(key, 0) + seconds
+        if any(seconds > 600 for seconds in aggregated.values()):
+            raise drf_serializers.ValidationError({'seconds': 'A single batch cannot exceed 10 minutes per page.'})
+        return aggregated
+
+    @action(detail=False, methods=['post'])
+    def track(self, request):
+        entries = self.parse_entries(request.data.get('entries'))
+        tracked_seconds = 0
+        with transaction.atomic():
+            for (tracked_date, page), seconds in entries.items():
+                record, created = ScreenTimeDaily.objects.get_or_create(
+                    user=request.user,
+                    date=tracked_date,
+                    page=page,
+                    defaults={'active_seconds': seconds, 'sessions': 1},
+                )
+                if not created:
+                    ScreenTimeDaily.objects.filter(pk=record.pk).update(
+                        active_seconds=F('active_seconds') + seconds,
+                        sessions=F('sessions') + 1,
+                        last_seen_at=timezone.now(),
+                    )
+                tracked_seconds += seconds
+        return Response({'tracked_seconds': tracked_seconds, 'entries': len(entries)})
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        try:
+            days = min(31, max(1, int(request.query_params.get('days', 7))))
+        except (TypeError, ValueError):
+            days = 7
+        today = timezone.localdate()
+        start_date = today - timedelta(days=days - 1)
+        own = ScreenTimeDaily.objects.filter(user=request.user, date__gte=start_date)
+        daily_rows = list(
+            own.values('date').annotate(seconds=Sum('active_seconds')).order_by('date')
+        )
+        page_rows = list(
+            own.values('page').annotate(seconds=Sum('active_seconds')).order_by('-seconds', 'page')
+        )
+        profiles = list(self.student_profiles_for_scope())
+        user_ids = [profile.user_id for profile in profiles]
+        period_totals = {
+            row['user_id']: row['seconds'] or 0
+            for row in ScreenTimeDaily.objects.filter(
+                user_id__in=user_ids, date__gte=start_date
+            ).values('user_id').annotate(seconds=Sum('active_seconds'))
+        }
+        today_totals = {
+            row['user_id']: row['seconds'] or 0
+            for row in ScreenTimeDaily.objects.filter(
+                user_id__in=user_ids, date=today
+            ).values('user_id').annotate(seconds=Sum('active_seconds'))
+        }
+        team = [
+            {
+                'student': profile.id,
+                'user': profile.user_id,
+                'name': profile.user.get_full_name() or profile.user.username,
+                'school': profile.school.name if profile.school else profile.school_name,
+                'today_seconds': today_totals.get(profile.user_id, 0),
+                'period_seconds': period_totals.get(profile.user_id, 0),
+            }
+            for profile in profiles
+        ]
+        team.sort(key=lambda item: (-item['today_seconds'], item['name']))
+        return Response({
+            'timezone': settings.TIME_ZONE,
+            'retention_days': getattr(settings, 'SCREEN_TIME_RETENTION_DAYS', 365),
+            'period_days': days,
+            'today': today,
+            'own': {
+                'today_seconds': own.filter(date=today).aggregate(total=Sum('active_seconds'))['total'] or 0,
+                'period_seconds': own.aggregate(total=Sum('active_seconds'))['total'] or 0,
+                'daily': daily_rows,
+                'pages': page_rows,
+            },
+            'team': team,
+            'privacy': 'Only aggregate active seconds by user, day, and application page are stored.',
+        })
+
+
+class ParentLinkPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return True
+        if user.role == User.Role.COUNSELOR:
+            return view.action in {'list', 'retrieve', 'invite', 'revoke'}
+        if user.role == User.Role.PARENT:
+            return view.action in {'list', 'retrieve', 'accept', 'revoke'}
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return True
+        if user.role == User.Role.COUNSELOR:
+            return bool(
+                user.school_id
+                and obj.student.school_id == user.school_id
+                and obj.student.assigned_counselor_id == user.id
+            )
+        return user.role == User.Role.PARENT and obj.parent_id == user.id
+
+
+class ParentStudentLinkViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ParentStudentLinkSerializer
+    permission_classes = [ParentLinkPermission]
+    queryset = ParentStudentLink.objects.select_related(
+        'parent', 'student__user', 'student__school', 'student__assigned_counselor', 'invited_by'
+    ).all()
+    http_method_names = ['get', 'post', 'head', 'options']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser or user.role == User.Role.ADMIN:
+            return self.queryset
+        if user.role == User.Role.COUNSELOR:
+            if not user.school_id:
+                return self.queryset.none()
+            return self.queryset.filter(
+                student__assigned_counselor=user,
+                student__school_id=user.school_id,
+            )
+        if user.role == User.Role.PARENT:
+            return self.queryset.filter(parent=user)
+        return self.queryset.none()
+
+    @staticmethod
+    def unique_parent_username(email):
+        base = slugify(email.split('@')[0])[:130] or 'parent'
+        username = base
+        suffix = 1
+        while User.objects.filter(username=username).exists():
+            suffix += 1
+            username = f'{base[:145 - len(str(suffix))]}-{suffix}'
+        return username
+
+    @action(detail=False, methods=['post'])
+    def invite(self, request):
+        if not (
+            request.user.is_superuser
+            or request.user.role in {User.Role.ADMIN, User.Role.COUNSELOR}
+        ):
+            return Response({'detail': 'Only an admin or assigned counselor can invite a parent.'}, status=403)
+        serializer = ParentInviteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        student = values['student']
+        if request.user.role == User.Role.COUNSELOR and not (
+            request.user.school_id
+            and student.school_id == request.user.school_id
+            and student.assigned_counselor_id == request.user.id
+        ):
+            return Response({'student': ['Select one of your assigned students.']}, status=403)
+
+        email = values['email'].lower()
+        with transaction.atomic():
+            parent = User.objects.filter(email__iexact=email).first()
+            created_account = False
+            if parent and parent.role != User.Role.PARENT:
+                return Response({'email': ['This email belongs to a non-parent account.']}, status=400)
+            if not parent:
+                password = values.get('password')
+                if not password:
+                    return Response({'password': ['Set a temporary password for the new parent account.']}, status=400)
+                parent = User.objects.create_user(
+                    username=self.unique_parent_username(email),
+                    email=email,
+                    password=password,
+                    first_name=values.get('first_name', ''),
+                    last_name=values.get('last_name', ''),
+                    role=User.Role.PARENT,
+                    school=student.school,
+                )
+                created_account = True
+            link, created_link = ParentStudentLink.objects.get_or_create(
+                parent=parent,
+                student=student,
+                defaults={
+                    'relationship': values['relationship'],
+                    'can_view_applications': values['can_view_applications'],
+                    'can_view_documents': values['can_view_documents'],
+                    'can_view_meetings': values['can_view_meetings'],
+                    'invited_by': request.user,
+                },
+            )
+            if not created_link and link.status == ParentStudentLink.Status.ACTIVE:
+                return Response({'detail': 'This parent is already connected to the student.'}, status=409)
+            if not created_link:
+                link.relationship = values['relationship']
+                link.status = ParentStudentLink.Status.PENDING
+                link.can_view_applications = values['can_view_applications']
+                link.can_view_documents = values['can_view_documents']
+                link.can_view_meetings = values['can_view_meetings']
+                link.invited_by = request.user
+                link.consented_at = None
+                link.revoked_at = None
+                link.save()
+        return Response({
+            'created_account': created_account,
+            'username': parent.username,
+            'link': ParentStudentLinkSerializer(link, context={'request': request}).data,
+        }, status=201 if created_link else 200)
+
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        link = self.get_object()
+        if request.user.role != User.Role.PARENT or link.parent_id != request.user.id:
+            return Response({'detail': 'Only the invited parent can accept this link.'}, status=403)
+        if link.status != ParentStudentLink.Status.PENDING:
+            return Response({'detail': 'Only a pending invitation can be accepted.'}, status=409)
+        link.status = ParentStudentLink.Status.ACTIVE
+        link.consented_at = timezone.now()
+        link.revoked_at = None
+        link.save(update_fields=['status', 'consented_at', 'revoked_at', 'updated_at'])
+        return Response(self.get_serializer(link).data)
+
+    @action(detail=True, methods=['post'])
+    def revoke(self, request, pk=None):
+        link = self.get_object()
+        link.status = ParentStudentLink.Status.REVOKED
+        link.revoked_at = timezone.now()
+        link.save(update_fields=['status', 'revoked_at', 'updated_at'])
+        return Response(self.get_serializer(link).data)
+
+
+class ParentPortalView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != User.Role.PARENT:
+            return Response({'detail': 'This workspace is only available to parent accounts.'}, status=403)
+        links = ParentStudentLink.objects.filter(parent=request.user).select_related(
+            'student__user', 'student__school', 'student__assigned_counselor', 'invited_by'
+        )
+        pending = links.filter(status=ParentStudentLink.Status.PENDING)
+        children = []
+        for link in links.filter(status=ParentStudentLink.Status.ACTIVE):
+            student = link.student
+            tasks = student.tasks.all()
+            applications = student.applications.select_related('university').all() if link.can_view_applications else []
+            documents = student.documents.all() if link.can_view_documents else []
+            meetings = student.bookings.select_related('participant').all() if link.can_view_meetings else []
+            children.append({
+                'link_id': link.id,
+                'relationship': link.relationship,
+                'permissions': {
+                    'applications': link.can_view_applications,
+                    'documents': link.can_view_documents,
+                    'meetings': link.can_view_meetings,
+                },
+                'profile': {
+                    'id': student.id,
+                    'name': student.user.get_full_name() or student.user.username,
+                    'school': student.school.name if student.school else student.school_name,
+                    'grade': student.grade,
+                    'counselor_name': (
+                        student.assigned_counselor.get_full_name() or student.assigned_counselor.username
+                        if student.assigned_counselor else None
+                    ),
+                    'level': student.level,
+                    'xp_total': student.xp_total,
+                    'next_level_xp': student.next_level_xp,
+                    'gpa': student.gpa,
+                    'ielts_score': student.ielts_score,
+                    'sat_score': student.sat_score,
+                    'target_major': student.target_major,
+                    'target_countries': student.target_countries,
+                    'task_progress_percent': student.task_progress_percent,
+                    'roadmap_progress_percent': student.roadmap_progress_percent,
+                    'journey_progress_percent': student.journey_progress_percent,
+                    'is_at_risk': student.is_at_risk,
+                },
+                'tasks': [{
+                    'id': item.id,
+                    'title': item.title,
+                    'due_date': item.due_date,
+                    'priority': item.priority,
+                    'status': item.status,
+                    'is_overdue': item.is_overdue,
+                    'is_self_assigned': item.is_self_assigned,
+                } for item in tasks],
+                'applications': [{
+                    'id': item.id,
+                    'university': item.university.name,
+                    'country': item.university.country,
+                    'program': item.program,
+                    'tier': item.tier,
+                    'status': item.status,
+                    'deadline': item.deadline,
+                    'scholarship_deadline': item.scholarship_deadline,
+                } for item in applications],
+                'documents': [{
+                    'id': item.id,
+                    'title': item.title,
+                    'document_type': item.document_type,
+                    'status': item.status,
+                    'updated_at': item.updated_at,
+                } for item in documents],
+                'meetings': [{
+                    'id': item.id,
+                    'topic': item.topic,
+                    'starts_at': item.starts_at,
+                    'duration_minutes': item.duration_minutes,
+                    'status': item.status,
+                    'participant_name': (
+                        item.participant.get_full_name() or item.participant.username
+                        if item.participant else None
+                    ),
+                    'participant_role': item.participant.role if item.participant else None,
+                } for item in meetings],
+            })
+        return Response({
+            'children': children,
+            'pending_invitations': ParentStudentLinkSerializer(pending, many=True).data,
+            'privacy': {
+                'hidden': ['private essays', 'messages', 'counselor notes', 'task responses', 'document files'],
+                'read_only': True,
+            },
+        })
 
 
 class ResourceLibraryItemViewSet(viewsets.ReadOnlyModelViewSet):

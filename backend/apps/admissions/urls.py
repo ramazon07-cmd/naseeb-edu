@@ -1,5 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+from .assistant import AssistantChatView
 from .views import (
     AchievementViewSet,
     ActivityViewSet,
@@ -19,6 +20,8 @@ from .views import (
     MessageReportViewSet,
     NotificationViewSet,
     OpportunityProgramViewSet,
+    ParentPortalView,
+    ParentStudentLinkViewSet,
     ProgramServiceViewSet,
     ProjectViewSet,
     RecommendationLetterViewSet,
@@ -26,11 +29,13 @@ from .views import (
     ResourceLibraryItemViewSet,
     RoadmapMissionViewSet,
     SchoolViewSet,
+    ScreenTimeViewSet,
     ScholarshipViewSet,
     StudentProfileViewSet,
     StudentMessageViewSet,
     StudentTeamView,
     StoreItemViewSet,
+    SupportTicketViewSet,
     TaskViewSet,
     UniversityViewSet,
 )
@@ -65,10 +70,15 @@ router.register('message-reports', MessageReportViewSet, basename='message-repor
 router.register('program-services', ProgramServiceViewSet, basename='program-services')
 router.register('resource-library', ResourceLibraryItemViewSet, basename='resource-library')
 router.register('store-items', StoreItemViewSet, basename='store-items')
+router.register('support-tickets', SupportTicketViewSet, basename='support-tickets')
+router.register('screen-time', ScreenTimeViewSet, basename='screen-time')
+router.register('parent-links', ParentStudentLinkViewSet, basename='parent-links')
 
 urlpatterns = [
+    path('assistant/chat/', AssistantChatView.as_view(), name='assistant-chat'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('college-research/', CollegeResearchView.as_view(), name='college-research'),
     path('student-team/', StudentTeamView.as_view(), name='student-team'),
+    path('parent-portal/', ParentPortalView.as_view(), name='parent-portal'),
     path('', include(router.urls)),
 ]

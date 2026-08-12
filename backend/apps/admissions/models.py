@@ -1,6 +1,11 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.files.storage import FileSystemStorage
 from django.db import models
 from django.utils import timezone
+from pathlib import Path
+from uuid import uuid4
+import os
 
 
 class TimeStampedModel(models.Model):
@@ -12,11 +17,23 @@ class TimeStampedModel(models.Model):
 
 
 class School(TimeStampedModel):
+    class WorkspaceType(models.TextChoices):
+        SCHOOL = 'school', 'Organization school'
+        INDIVIDUAL = 'individual', 'Individual counselor workspace'
+
     name = models.CharField(max_length=180, unique=True)
     code = models.SlugField(max_length=80, unique=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=32, blank=True)
     is_active = models.BooleanField(default=True)
+    workspace_type = models.CharField(max_length=20, choices=WorkspaceType.choices, default=WorkspaceType.SCHOOL)
+    owner_counselor = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='owned_counselor_workspace',
+    )
 
     class Meta:
         ordering = ['name']
@@ -151,6 +168,63 @@ class StudentProfile(TimeStampedModel):
         ).exclude(status=Task.Status.APPROVED).exists() or self.roadmap_missions.filter(
             due_date__lt=today,
         ).exclude(status=RoadmapMission.Status.COMPLETED).exists()
+
+
+class ParentStudentLink(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Awaiting parent consent'
+        ACTIVE = 'active', 'Active'
+        REVOKED = 'revoked', 'Revoked'
+
+    class Relationship(models.TextChoices):
+        MOTHER = 'mother', 'Mother'
+        FATHER = 'father', 'Father'
+        GUARDIAN = 'guardian', 'Guardian'
+        OTHER = 'other', 'Other'
+
+    parent = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='student_links',
+    )
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name='parent_links',
+    )
+    relationship = models.CharField(max_length=20, choices=Relationship.choices, default=Relationship.GUARDIAN)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    can_view_applications = models.BooleanField(default=True)
+    can_view_documents = models.BooleanField(default=True)
+    can_view_meetings = models.BooleanField(default=True)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='parent_links_invited',
+    )
+    invited_at = models.DateTimeField(auto_now_add=True)
+    consented_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['student__user__first_name', 'student__user__last_name', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['parent', 'student'], name='unique_parent_student_link'),
+        ]
+        indexes = [
+            models.Index(fields=['parent', 'status'], name='parent_link_parent_status_idx'),
+            models.Index(fields=['student', 'status'], name='parent_link_student_status_idx'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.parent_id and self.parent.role != self.parent.Role.PARENT:
+            raise ValidationError({'parent': 'The linked account must have the parent role.'})
+
+    def __str__(self):
+        return f'{self.parent} → {self.student} ({self.status})'
 
 
 class University(TimeStampedModel):
@@ -365,6 +439,10 @@ class Task(TimeStampedModel):
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='tasks')
     assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_tasks')
+    is_self_assigned = models.BooleanField(
+        default=False,
+        help_text='Student-created personal task. Self-assigned tasks never award XP.',
+    )
     title = models.CharField(max_length=220)
     description = models.TextField(blank=True)
     due_date = models.DateField()
@@ -705,6 +783,27 @@ class ProgramService(TimeStampedModel):
         return f'{self.student} — {self.name}'
 
 
+class ScreenTimeDaily(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='screen_time_days')
+    date = models.DateField()
+    page = models.CharField(max_length=80)
+    active_seconds = models.PositiveIntegerField(default=0)
+    sessions = models.PositiveIntegerField(default=0)
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-active_seconds', 'page']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'date', 'page'], name='unique_screen_time_user_day_page'),
+        ]
+        indexes = [
+            models.Index(fields=['date', 'user'], name='screen_time_date_user_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.user} — {self.date} — {self.page}'
+
+
 class ResourceLibraryItem(TimeStampedModel):
     title = models.CharField(max_length=220)
     category = models.CharField(max_length=120)
@@ -737,6 +836,87 @@ class StoreItem(TimeStampedModel):
         return self.title
 
 
+class SupportTicket(TimeStampedModel):
+    class Category(models.TextChoices):
+        TECHNICAL = 'technical', 'Technical issue'
+        ACCOUNT = 'account', 'Account and access'
+        ACADEMIC = 'academic', 'Academic guidance'
+        APPLICATION = 'application', 'Application support'
+        BILLING = 'billing', 'Billing and services'
+        OTHER = 'other', 'Other'
+
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Open'
+        IN_PROGRESS = 'in_progress', 'In progress'
+        RESOLVED = 'resolved', 'Resolved'
+        CLOSED = 'closed', 'Closed'
+
+    requester = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='support_tickets',
+    )
+    category = models.CharField(max_length=24, choices=Category.choices)
+    subject = models.CharField(max_length=180)
+    message = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    admin_response = models.TextField(blank=True)
+    responded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='support_ticket_responses',
+    )
+    responded_at = models.DateTimeField(null=True, blank=True)
+    requester_viewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-id']
+        indexes = [
+            models.Index(fields=['requester', '-updated_at'], name='support_requester_updated_idx'),
+            models.Index(fields=['status', '-updated_at'], name='support_status_updated_idx'),
+        ]
+
+    @property
+    def has_unread_response(self):
+        return bool(
+            self.responded_at
+            and (
+                not self.requester_viewed_at
+                or self.requester_viewed_at < self.responded_at
+            )
+        )
+
+    def __str__(self):
+        return f'#{self.pk} {self.subject}'
+
+
+def student_document_upload_path(instance, filename):
+    """Keep private uploads collision-free and grouped by student."""
+    suffix = Path(filename or '').suffix.lower()[:12]
+    return f'student_documents/{instance.student_id}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
+
+
+class PrivateDocumentStorage(FileSystemStorage):
+    """A filesystem location that is never exposed by Django's public media route."""
+
+    @property
+    def base_location(self):
+        return settings.DOCUMENT_STORAGE_ROOT
+
+    @property
+    def location(self):
+        return os.path.abspath(self.base_location)
+
+    @property
+    def base_url(self):
+        return None
+
+
+private_document_storage = PrivateDocumentStorage()
+
+
 class Document(TimeStampedModel):
     class Type(models.TextChoices):
         PASSPORT = 'passport', 'Passport'
@@ -759,7 +939,22 @@ class Document(TimeStampedModel):
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='documents')
     title = models.CharField(max_length=220)
     document_type = models.CharField(max_length=40, choices=Type.choices, default=Type.OTHER)
-    file = models.FileField(upload_to='student_documents/', blank=True, null=True)
+    file = models.FileField(
+        upload_to=student_document_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    original_file_name = models.CharField(max_length=255, blank=True)
+    file_content_type = models.CharField(max_length=120, blank=True)
+    file_size = models.PositiveBigIntegerField(default=0)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='uploaded_student_documents',
+    )
     google_docs_url = models.URLField(blank=True)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.REQUIRED)
     counselor_comment = models.TextField(blank=True)
