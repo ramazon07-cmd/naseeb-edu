@@ -132,28 +132,36 @@ HARD
       multi-child, consent, counselor scope va section permissionlari regression testlar bilan yopildi.
     - Demo parent account seed_demo'ga qo'shildi va Ramazon Ergashev bilan active link qilindi.
 
-[ ] H2. Counselorning o'z roadmap modeli
-    - Hozir RoadmapMission faqat StudentProfilega tegishli; counselor roadmapi uchun yangi owner modeli kerak.
-    - Counselor professional/onboarding roadmapmi yoki school-management roadmapmi aniqlansin.
-    - Template, mission assignment, completion, approval va progress qoidalari yaratiladi.
-    - Student roadmap XP/level ledgeri bilan aralashmasligi kerak.
-    - Counselor schoolga bog'lash (M6) oldin yakunlansin.
+[x] H2. Counselorning o'z roadmap modeli
+    - Counselor uchun student roadmapdan alohida CounselorRoadmap owner modeli yaratildi;
+      professional onboarding va school-management turlari aniq ajratildi.
+    - Product admin nested missionli template yaratadi va uni active counselorga biriktiradi;
+      due date template due_days qoidasi bo'yicha avtomatik hisoblanadi.
+    - Counselor missionni completion note bilan submit qiladi; product admin approve yoki feedback bilan
+      changes requested qiladi. Barcha required missionlar approved bo'lsa roadmap avtomatik completed bo'ladi.
+    - Progress faqat required counselor mission approvalidan hisoblanadi; modelda XP/level maydoni yo'q va
+      student XPTransaction ledgeriga hech qanday yozuv yaratilmasligi regression test bilan tekshirildi.
+    - Counselor faqat o'z roadmapini ko'radi; admin barcha roadmaplarni counselor/school/status bo'yicha filterlaydi.
 
-[ ] H3. Maxsus Admin Control Panel va admin provisioning
-    - Admin uchun alohida frontend navigation/dashboard va qat'iy backend permissionlar.
-    - School CRUD, organization account, counselor yaratish/edit/deactivate.
-    - Individual counselor yaratish va default school/workspace biriktirish.
-    - Admin barcha school, counselor va student profillariga Student 360 ko'rinishida kira olsin.
-    - Counselor o'z schooliga student qo'shishi/assignment qilishi mumkin bo'lsin.
-    - Audit log, pagination/search/filter va destructive action confirmation qo'shilsin.
-    - Django is_staff bilan product admin rolini aralashtirmaslik; mavjud privilege riskini yopish.
+[x] H3. Maxsus Admin Control Panel va admin provisioning
+    - Admin uchun alohida navigation va operational dashboard: Schools, Counselors, Student 360,
+      Counselor Roadmap, Audit Log va Support bo'limlari yaratildi.
+    - School create/edit/soft-deactivate, organization account, school counselor va individual counselor
+      provisioning, counselor transfer/deactivate API va frontend workflowlari qo'shildi.
+    - Admin barcha school/account/studentlarni pagination, search va filter bilan ko'radi; Student 360 retrieve,
+      provisioning, transfer, deactivate, school va roadmap amallari immutable product audit logga yoziladi.
+    - Destructive deactivate/transfer/review harakatlari frontend confirmation bilan himoyalangan.
+    - Product admin faqat role=admin yoki superuser; oddiy Django is_staff endi product API privilege bermaydi
+      va bu privilege regression testi bilan yopildi.
+    - Counselorning existing own-school student create/assignment scope'i saqlandi; boshqa school datasi yopiq.
 
-[ ] H4. Har bir school uchun maksimum 3 counselor qoidasi
-    - Counselor-school relationship va individual counselor istisnosi product darajasida aniqlansin.
-    - Limit faqat frontendda emas, transactional backend service/validationda tekshirilsin.
-    - Parallel request race conditioniga qarshi database lock yoki constraint strategiyasi.
-    - Counselor transfer/deactivate qilish va limit bo'shatish workflowi.
-    - Admin override kerak yoki yo'qligi belgilanadi.
+[x] H4. Har bir school uchun maksimum 3 counselor qoidasi
+    - Active organization school uchun maksimal 3 active counselor; individual counselor workspace limitdan mustasno.
+    - Create, reactivate va transfer backend transaction ichida School row select_for_update lock bilan tekshiriladi;
+      parallel provisioning requestlari bir school bo'yicha serialize qilinadi.
+    - Limit frontend hint emas: service/serializer darajasida 400/409 bilan qat'iy bloklanadi.
+    - Deactivate active slotni bo'shatadi; transfer destination capacity va assigned-student school mosligini tekshiradi.
+    - Admin override ataylab qo'shilmadi: limit barcha product adminlar uchun ham qat'iy.
 
 [x] H5. Bir martalik login paroli va majburiy password change
     - Student quick-create, Django admin va school organization account provisioning vaqtinchalik
