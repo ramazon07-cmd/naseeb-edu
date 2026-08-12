@@ -1,8 +1,10 @@
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
-from .models import User
+from .models import ProductAuditEvent, User
+from .services import audit_product_action, validate_counselor_capacity
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -17,6 +19,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
             'role', 'phone', 'position', 'avatar', 'school', 'school_name', 'school_workspace_type',
+            'is_active',
             'must_change_password', 'password_changed_at', 'credential_status', 'credential_expires_at',
         )
         read_only_fields = (
@@ -44,15 +47,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     def validate_role(self, value):
         request = self.context.get('request')
-        if request and not request.user.is_counselor_like:
+        if request and not request.user.is_product_admin:
             current_role = getattr(self.instance, 'role', User.Role.STUDENT)
             if value != current_role:
-                raise serializers.ValidationError('Only a counselor can change user roles.')
+                raise serializers.ValidationError('Only a product admin can change user roles.')
         return value
 
     def validate_school(self, value):
         request = self.context.get('request')
-        if request and not request.user.is_counselor_like:
+        if request and not request.user.is_product_admin:
             current_school = getattr(self.instance, 'school', request.user.school)
             if value != current_school:
                 raise serializers.ValidationError('Only a counselor can change school membership.')
@@ -71,6 +74,84 @@ class UserSerializer(serializers.ModelSerializer):
             if school and school.id != request.user.school_id:
                 raise serializers.ValidationError({'school': 'Counselors can only manage users in their own school.'})
         return attrs
+
+    def _save_with_capacity(self, save):
+        role = self.validated_data.get('role', getattr(self.instance, 'role', User.Role.STUDENT))
+        school = self.validated_data.get('school', getattr(self.instance, 'school', None))
+        active = self.validated_data.get('is_active', getattr(self.instance, 'is_active', True))
+        try:
+            with transaction.atomic():
+                if role == User.Role.COUNSELOR and school and active:
+                    validate_counselor_capacity(school=school, exclude_user_id=getattr(self.instance, 'pk', None))
+                return save()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+
+    def create(self, validated_data):
+        return self._save_with_capacity(lambda: super(UserSerializer, self).create(validated_data))
+
+    def update(self, instance, validated_data):
+        return self._save_with_capacity(lambda: super(UserSerializer, self).update(instance, validated_data))
+
+
+class CounselorProvisionSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    position = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    school = serializers.IntegerField(min_value=1)
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError('This username is already in use.')
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('This email is already in use.')
+        return value.lower()
+
+    def create(self, validated_data):
+        from apps.admissions.models import School
+
+        request = self.context['request']
+        school_id = validated_data.pop('school')
+        password = validated_data.pop('password')
+        try:
+            with transaction.atomic():
+                school = School.objects.filter(
+                    pk=school_id,
+                    is_active=True,
+                    workspace_type=School.WorkspaceType.SCHOOL,
+                ).first()
+                if not school:
+                    raise serializers.ValidationError({'school': 'Select an active organization school.'})
+                validate_counselor_capacity(school=school)
+                counselor = User.objects.create_user(
+                    **validated_data,
+                    password=password,
+                    role=User.Role.COUNSELOR,
+                    school=school,
+                )
+                audit_product_action(actor=request.user, action='counselor.created', target=counselor, metadata={'school': school.pk})
+                return counselor
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+
+
+class ProductAuditEventSerializer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductAuditEvent
+        fields = '__all__'
+        read_only_fields = fields
+
+    def get_actor_name(self, obj):
+        return obj.actor.get_full_name() or obj.actor.username if obj.actor else None
 
 
 class IndividualCounselorCreateSerializer(serializers.Serializer):

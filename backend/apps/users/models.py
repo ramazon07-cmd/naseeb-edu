@@ -47,8 +47,13 @@ class User(AbstractUser):
         return f'{self.get_full_name() or self.username} ({self.role})'
 
     @property
+    def is_product_admin(self):
+        """Product authorization is independent from Django admin-site access."""
+        return self.is_superuser or self.role == self.Role.ADMIN
+
+    @property
     def is_counselor_like(self):
-        return self.is_staff or self.role in {self.Role.ADMIN, self.Role.COUNSELOR}
+        return self.is_product_admin or self.role == self.Role.COUNSELOR
 
     @property
     def is_task_manager(self):
@@ -126,3 +131,27 @@ class CredentialAuditEvent(models.Model):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [models.Index(fields=['target_user', '-created_at'], name='cred_audit_user_created_idx')]
+
+
+class ProductAuditEvent(models.Model):
+    """Immutable product-level audit trail; Django's admin log is intentionally separate."""
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='product_audit_events',
+    )
+    action = models.CharField(max_length=80, db_index=True)
+    target_type = models.CharField(max_length=80, db_index=True)
+    target_id = models.CharField(max_length=80, blank=True)
+    target_label = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f'{self.action}: {self.target_type} {self.target_id}'

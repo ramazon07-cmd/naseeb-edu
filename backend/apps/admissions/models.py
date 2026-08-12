@@ -836,6 +836,129 @@ class StoreItem(TimeStampedModel):
         return self.title
 
 
+class CounselorRoadmapTemplate(TimeStampedModel):
+    class Kind(models.TextChoices):
+        PROFESSIONAL_ONBOARDING = 'professional_onboarding', 'Professional onboarding'
+        SCHOOL_MANAGEMENT = 'school_management', 'School management'
+
+    name = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    kind = models.CharField(max_length=40, choices=Kind.choices)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_counselor_roadmap_templates',
+    )
+
+    class Meta:
+        ordering = ['kind', 'name', 'id']
+
+    def __str__(self):
+        return self.name
+
+
+class CounselorRoadmapTemplateMission(TimeStampedModel):
+    template = models.ForeignKey(CounselorRoadmapTemplate, on_delete=models.CASCADE, related_name='missions')
+    title = models.CharField(max_length=220)
+    description = models.TextField(blank=True)
+    sequence = models.PositiveSmallIntegerField(default=1)
+    due_days = models.PositiveSmallIntegerField(default=7)
+    is_required = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['sequence', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['template', 'sequence'], name='unique_counselor_template_sequence'),
+        ]
+
+
+class CounselorRoadmap(TimeStampedModel):
+    class Status(models.TextChoices):
+        ACTIVE = 'active', 'Active'
+        COMPLETED = 'completed', 'Completed'
+        CANCELLED = 'cancelled', 'Cancelled'
+
+    counselor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='counselor_roadmaps',
+    )
+    school = models.ForeignKey(School, on_delete=models.PROTECT, related_name='counselor_roadmaps')
+    template = models.ForeignKey(
+        CounselorRoadmapTemplate,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='assignments',
+    )
+    title = models.CharField(max_length=180)
+    kind = models.CharField(max_length=40, choices=CounselorRoadmapTemplate.Kind.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='assigned_counselor_roadmaps',
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['status', '-created_at', '-id']
+
+    @property
+    def progress_percent(self):
+        required = self.missions.filter(is_required=True)
+        total = required.count()
+        if not total:
+            return 100
+        return round(required.filter(status=CounselorRoadmapMission.Status.APPROVED).count() / total * 100)
+
+    def __str__(self):
+        return f'{self.counselor}: {self.title}'
+
+
+class CounselorRoadmapMission(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        IN_PROGRESS = 'in_progress', 'In progress'
+        SUBMITTED = 'submitted', 'Submitted'
+        APPROVED = 'approved', 'Approved'
+        CHANGES_REQUESTED = 'changes_requested', 'Changes requested'
+
+    roadmap = models.ForeignKey(CounselorRoadmap, on_delete=models.CASCADE, related_name='missions')
+    source_template_mission = models.ForeignKey(
+        CounselorRoadmapTemplateMission,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_missions',
+    )
+    title = models.CharField(max_length=220)
+    description = models.TextField(blank=True)
+    sequence = models.PositiveSmallIntegerField(default=1)
+    due_date = models.DateField(null=True, blank=True)
+    is_required = models.BooleanField(default=True)
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING)
+    counselor_note = models.TextField(blank=True)
+    admin_feedback = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_counselor_roadmap_missions',
+    )
+
+    class Meta:
+        ordering = ['sequence', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['roadmap', 'sequence'], name='unique_counselor_roadmap_sequence'),
+        ]
+
+
 class SupportTicket(TimeStampedModel):
     class Category(models.TextChoices):
         TECHNICAL = 'technical', 'Technical issue'

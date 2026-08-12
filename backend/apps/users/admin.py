@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.apps import apps
 from django.contrib.auth.admin import UserAdmin
-from .models import CredentialAuditEvent, TemporaryCredential, User
+from .models import CredentialAuditEvent, ProductAuditEvent, TemporaryCredential, User
 from .credentials import issue_temporary_credential
 
 
@@ -62,6 +62,20 @@ class CredentialAuditEventAdmin(admin.ModelAdmin):
     list_filter = ('event', 'created_at')
     search_fields = ('target_user__username', 'target_user__email', 'actor__username')
     readonly_fields = ('target_user', 'actor', 'event', 'credential', 'metadata', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ProductAuditEvent)
+class ProductAuditEventAdmin(admin.ModelAdmin):
+    list_display = ('action', 'target_type', 'target_label', 'actor', 'created_at')
+    list_filter = ('action', 'target_type', 'created_at')
+    search_fields = ('target_label', 'target_id', 'actor__username')
+    readonly_fields = ('actor', 'action', 'target_type', 'target_id', 'target_label', 'metadata', 'created_at')
 
     def has_add_permission(self, request):
         return False
