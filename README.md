@@ -139,13 +139,16 @@ CORS_ALLOWED_ORIGINS=https://app.example.com
 CSRF_TRUSTED_ORIGINS=https://app.example.com
 DATABASE_URL=postgresql://user:password@host:5432/database
 ENABLE_DEMO_ACCOUNTS=False
+MEDIA_ROOT=/app/backend/media
+DOCUMENT_STORAGE_ROOT=/app/backend/private_documents
+DOCUMENT_MAX_UPLOAD_SIZE=26214400
 ```
 
 Start from `backend/.env.production.example` and `frontend/.env.production.example`. Store the real values in the deployment provider's secret manager; do not upload or commit a real `.env` file.
 
 Production startup fails early when `DEBUG=True`, the secret key is missing/weak, `DATABASE_URL` is missing or points to SQLite, or demo accounts are enabled. The `seed_demo` and `reset_demo` commands are also blocked when demo accounts are disabled. Local `.env`, SQLite files, media, virtual environments, build output and dependencies are excluded from Git, Docker build context and release ZIP files.
 
-Production deployment must use PostgreSQL and persistent media storage. The included `Procfile`, `build.sh`, `Dockerfile`, healthcheck and Gunicorn configuration support common container or PaaS deployments.
+Production deployment must use PostgreSQL and persistent media storage. Mount `MEDIA_ROOT` and `DOCUMENT_STORAGE_ROOT` on durable volumes and include both locations in backups. `DOCUMENT_STORAGE_ROOT` is private: never expose it through Nginx, a public `/media/` route, CDN, or object-storage public ACL. Student documents are streamed only through the authenticated `/api/documents/{id}/file/` endpoint. The included Docker Compose configuration mounts separate `media_data` and `private_document_data` volumes; use equivalent persistent disks on the production server. The included `Procfile`, `build.sh`, `Dockerfile`, healthcheck and Gunicorn configuration support common container or PaaS deployments.
 
 Create a clean handoff ZIP without `.env`, SQLite, uploaded media, virtual environments, dependencies or compiled output:
 
