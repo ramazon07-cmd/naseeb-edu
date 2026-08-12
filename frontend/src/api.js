@@ -1,5 +1,8 @@
+import { getLanguage, t } from './i18n'
+
 const DEFAULT_API_URL = 'http://127.0.0.1:8000/api'
 const API_URL = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '')
+const REQUEST_TIMEOUT_MS = 15_000
 
 const TOKEN_KEYS = {
   access: 'admitflow-access-token',
@@ -24,6 +27,63 @@ function saveTokens(tokens) {
   if (tokens.refresh) localStorage.setItem(TOKEN_KEYS.refresh, tokens.refresh)
 }
 
+async function fetchWithTimeout(url, options = {}) {
+  const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options
+  const controller = new AbortController()
+  const callerSignal = fetchOptions.signal
+  let timedOut = false
+  const abortFromCaller = () => controller.abort()
+  if (callerSignal?.aborted) controller.abort()
+  else callerSignal?.addEventListener('abort', abortFromCaller, { once: true })
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+  try {
+    const headers = new Headers(fetchOptions.headers || {})
+    headers.set('Accept-Language', getLanguage())
+    return await fetch(url, { ...fetchOptions, headers, signal: controller.signal })
+  } catch (error) {
+    if (timedOut) throw new ApiError(t('The server is taking too long to respond. Check your connection and retry.'), 408, null)
+    if (typeof navigator !== 'undefined' && !navigator.onLine) throw new ApiError(t('You appear to be offline. Reconnect and retry.'), 0, null)
+    if (error?.name === 'AbortError') throw error
+    throw new ApiError(t('Unable to connect to the server. Check your connection and retry.'), 0, null)
+  } finally {
+    window.clearTimeout(timeoutId)
+    callerSignal?.removeEventListener('abort', abortFromCaller)
+  }
+}
+
+function responseFileName(response, fallback = 'document') {
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  try { return decodeURIComponent(encoded || plain || fallback) } catch { return plain || fallback }
+}
+
+async function documentFileRequest(id, download = false, retry = true) {
+  const headers = new Headers()
+  const access = getToken('access')
+  if (access) headers.set('Authorization', `Bearer ${access}`)
+  const response = await fetchWithTimeout(
+    `${API_URL}/documents/${id}/file/${download ? '?download=1' : ''}`,
+    { headers, timeoutMs: 120_000 },
+  )
+  if (response.status === 401 && retry && getToken('refresh')) {
+    await refreshAccessToken()
+    return documentFileRequest(id, download, false)
+  }
+  if (!response.ok) {
+    const payload = await parseResponse(response)
+    throw new ApiError(errorMessage(payload), response.status, payload)
+  }
+  return {
+    blob: await response.blob(),
+    contentType: response.headers.get('Content-Type') || 'application/octet-stream',
+    fileName: responseFileName(response),
+  }
+}
+
 export function clearTokens() {
   localStorage.removeItem(TOKEN_KEYS.access)
   localStorage.removeItem(TOKEN_KEYS.refresh)
@@ -40,7 +100,7 @@ async function parseResponse(response) {
 }
 
 function errorMessage(payload) {
-  if (!payload) return 'Server bilan aloqa xatosi.'
+  if (!payload) return t('Unable to connect to the server.')
   if (typeof payload === 'string') return payload
   if (payload.detail) return payload.detail
   return Object.entries(payload)
@@ -50,8 +110,8 @@ function errorMessage(payload) {
 
 async function refreshAccessToken() {
   const refresh = getToken('refresh')
-  if (!refresh) throw new ApiError('Sessiya tugagan.', 401)
-  const response = await fetch(`${API_URL}/auth/token/refresh/`, {
+  if (!refresh) throw new ApiError(t('Your session has expired.'), 401)
+  const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh }),
@@ -59,7 +119,7 @@ async function refreshAccessToken() {
   const payload = await parseResponse(response)
   if (!response.ok) {
     clearTokens()
-    throw new ApiError('Sessiya tugagan. Qayta kiring.', response.status, payload)
+    throw new ApiError(t('Your session has expired. Sign in again.'), response.status, payload)
   }
   saveTokens(payload)
   return payload.access
@@ -72,7 +132,7 @@ export async function request(path, options = {}, retry = true, unwrapPagination
   const access = getToken('access')
   if (access) headers.set('Authorization', `Bearer ${access}`)
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers })
+  const response = await fetchWithTimeout(`${API_URL}${path}`, { ...options, headers })
   if (response.status === 401 && retry && getToken('refresh')) {
     await refreshAccessToken()
     return request(path, options, false, unwrapPagination)
@@ -80,6 +140,27 @@ export async function request(path, options = {}, retry = true, unwrapPagination
   const payload = await parseResponse(response)
   if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
   return unwrapPagination ? payload?.results ?? payload : payload
+}
+
+async function streamRequest(path, payload, signal, retry = true) {
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  const access = getToken('access')
+  if (access) headers.set('Authorization', `Bearer ${access}`)
+  const response = await fetchWithTimeout(`${API_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    signal,
+  })
+  if (response.status === 401 && retry && getToken('refresh')) {
+    await refreshAccessToken()
+    return streamRequest(path, payload, signal, false)
+  }
+  if (!response.ok) {
+    const errorPayload = await parseResponse(response)
+    throw new ApiError(errorMessage(errorPayload), response.status, errorPayload)
+  }
+  return response
 }
 
 function nextApiPath(url) {
@@ -101,7 +182,7 @@ async function listAll(resource, query = '') {
     items.push(...payload.results)
     path = nextApiPath(payload.next)
     pages += 1
-    if (pages >= 100) throw new ApiError('Too many paginated API results.', 500, null)
+    if (pages >= 100) throw new ApiError(t('Too many paginated API results.'), 500, null)
   }
   return items
 }
@@ -110,7 +191,7 @@ export const api = {
   baseUrl: API_URL,
   hasSession: () => Boolean(getToken('access') || getToken('refresh')),
   login: async (username, password) => {
-    const response = await fetch(`${API_URL}/auth/token/`, {
+    const response = await fetchWithTimeout(`${API_URL}/auth/token/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
@@ -121,6 +202,18 @@ export const api = {
     return payload
   },
   logout: clearTokens,
+  changePassword: async (newPassword, confirmPassword) => {
+    const payload = await request('/users/accounts/change-password/', {
+      method: 'POST',
+      body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
+    })
+    saveTokens(payload)
+    return payload
+  },
+  issueTemporaryCredential: (userId, password = '') => request(`/users/accounts/${userId}/temporary-credential/`, {
+    method: 'POST',
+    body: JSON.stringify(password ? { password } : {}),
+  }),
   me: () => request('/users/accounts/me/'),
   health: () => request('/health/'),
   dashboard: () => request('/dashboard/stats/'),
@@ -147,6 +240,33 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  uploadDocument: (payload) => request('/documents/', {
+    method: 'POST',
+    body: payload,
+    timeoutMs: 120_000,
+  }),
+  documentFile: (id) => documentFileRequest(id),
+  downloadDocument: (id) => documentFileRequest(id, true),
+  createIndividualCounselor: (payload) => request('/users/accounts/create-individual-counselor/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  transferCounselor: (id, school) => request(`/users/accounts/${id}/transfer-school/`, {
+    method: 'POST',
+    body: JSON.stringify({ school }),
+  }),
+  trackScreenTime: (entries) => request('/screen-time/track/', {
+    method: 'POST',
+    body: JSON.stringify({ entries }),
+  }),
+  screenTimeSummary: (days = 7) => request(`/screen-time/summary/?days=${encodeURIComponent(days)}`),
+  parentPortal: () => request('/parent-portal/'),
+  inviteParent: (payload) => request('/parent-links/invite/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  acceptParentInvite: (id) => request(`/parent-links/${id}/accept/`, { method: 'POST' }),
+  revokeParentLink: (id) => request(`/parent-links/${id}/revoke/`, { method: 'POST' }),
   approveTask: (id) => request(`/tasks/${id}/approve/`, { method: 'POST' }),
   approveRoadmapMission: (id) => request(`/roadmap-missions/${id}/approve/`, { method: 'POST' }),
   approveStudentLevel: (id) => request(`/students/${id}/approve-level/`, { method: 'POST' }),
@@ -195,7 +315,8 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  markNotificationRead: (id) => request(`/notifications/${id}/read/`, { method: 'POST' }),
+  streamAssistant: (messages, signal) => streamRequest('/assistant/chat/', { messages }, signal),
+  markSupportViewed: (id) => request(`/support-tickets/${id}/mark-viewed/`, { method: 'POST' }),
   extendLevelOneRoadmap: (student) => request('/roadmap-missions/extend-level-one/', {
     method: 'POST',
     body: JSON.stringify({ student }),
