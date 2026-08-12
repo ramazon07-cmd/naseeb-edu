@@ -177,12 +177,21 @@ HARD
     - Majburiy password-change frontend sahifasi, student 360 va admin Schools sahifasidagi Reset login
       workflowi light/dark hamda responsive holatlar bilan qo'shildi.
 
-[ ] H6. School va admin uchun to'liq data visibility siyosati
-    - "Maktab o'quvchi haqida hamma data" tarkibi aniq ro'yxat qilinsin.
-    - Organizationning hozirgi read-only admissions scope'i saqlanadimi yoki kengayadimi hal qilinsin.
-    - Private messages, counselor notes, moderation reports va credentials hech qachon umumiy
-      "hamma data"ga avtomatik kiritilmasin; maxsus privacy qarori kerak.
-    - Admin global, school faqat own-school scope bo'yicha API va regression testlar yangilansin.
+[x] H6. School va admin uchun to'liq data visibility siyosati
+    - Maxsus privacy-safe Student 360 endpoint va frontend yaratildi: product admin barcha studentlarni,
+      organization esa faqat o'z maktabidagi studentlarni ko'radi; har bir ko'rish audit logga yoziladi.
+    - Ko'rinadi: identity/contact, academics/planning, progress/XP, task/roadmap/application metadata va
+      statuslari, himoyalangan document metadata/fayli, essay/recommendation metadata va statuslari,
+      portfolio/activities, meeting jadvali/statusi hamda Program Usage.
+    - Umumiy Student 360ga kirmaydi: private messages, moderation reports, credentials/password state,
+      counselor/profile internal notes, meeting notes, application portal credentials/notes, essay draft va
+      feedback, recommendation fayli/private notes, task submission content, roadmap reflection,
+      screen-time detail va support ticketlar.
+    - Organizationning admissions scope'i read-only saqlandi; roadmap metadata/statusiga read-only access
+      qo'shildi. Student account/profilini provisioning qilish workflowi alohida, internal notes esa yopiq.
+    - Direct admissions serializerlarida ham organization uchun maxfiy maydonlar redaction qilindi.
+      Moderation school rolidan avtomatik berilmaydi: faqat staffning explicit owner/moderator membershipi.
+    - Own-school/global isolation, redaction, read-only guard, audit va moderation regressiya testlari qo'shildi.
 
 [x] H7. 3 tilli interfeys
     BAJARILGAN:
@@ -261,7 +270,8 @@ BLOCKING PRODUCT QUESTIONS
 [ ] Self-task XP/levelga ta'sir qiladimi?
 [ ] Counselor roadmapi nimani o'lchaydi va kim tasdiqlaydi?
 [ ] Parent aynan qaysi student ma'lumotlarini ko'ra oladi?
-[ ] School uchun "hamma data" private messages va counselor notesni ham anglatadimi?
+[x] School uchun "hamma data" privacy qarori: private messages, counselor/internal notes, moderation reports
+    va credentials umumiy Student 360ga kirmaydi; faqat alohida ruxsatli workflow orqali ochilishi mumkin.
 [x] Notification qarori: frontend notification UI olib tashlandi; backend model/API keyingi qarorgacha saqlandi.
 [x] Support service scope: support ticket MVP; live chat va FAQ/contact katalogi keyingi bosqichga qoldi.
 [ ] Uch til qaysilar?
