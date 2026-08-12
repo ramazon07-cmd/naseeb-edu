@@ -409,6 +409,22 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 .split-grid.wide-left { grid-template-columns: minmax(0, 1.6fr) minmax(300px, .7fr); }
 .section-stack { display: grid; gap: 20px; }
 .card-grid, .record-list { display: grid; gap: 10px; }
+.roadmap-admin-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.roadmap-admin-card > header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; padding: 22px; border-bottom: 1px solid var(--border); }
+.roadmap-admin-card h3 { margin: 5px 0; font-family: 'Cinzel', Georgia, serif; }
+.roadmap-admin-card p { margin: 0; color: var(--muted); }
+.roadmap-progress { display: grid; justify-items: end; gap: 7px; }
+.roadmap-progress b { font-size: 24px; }
+.roadmap-admin-missions { padding: 6px 22px; }
+.roadmap-admin-missions > div { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.roadmap-admin-missions > div:last-child { border-bottom: 0; }
+.roadmap-admin-missions small { display: block; margin-top: 4px; color: var(--muted); }
+.roadmap-admin-missions > div > div:last-child { display: flex; gap: 8px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status-dot.submitted { background: var(--warning); }
+.status-dot.approved { background: var(--success); }
+.status-dot.changes_requested { background: var(--danger); }
+.audit-list .record > svg { color: var(--accent); }
 
 .record { padding: 14px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 12px; }
 .record-main { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }

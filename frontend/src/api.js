@@ -255,6 +255,10 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ school }),
   }),
+  createCounselor: (payload) => request('/users/accounts/create-counselor/', { method: 'POST', body: JSON.stringify(payload) }),
+  deactivateAccount: (id) => request(`/users/accounts/${id}/deactivate/`, { method: 'POST' }),
+  submitCounselorMission: (roadmapId, mission, counselorNote) => request(`/counselor-roadmaps/${roadmapId}/submit-mission/`, { method: 'POST', body: JSON.stringify({ mission, counselor_note: counselorNote }) }),
+  reviewCounselorMission: (roadmapId, mission, decision, adminFeedback = '') => request(`/counselor-roadmaps/${roadmapId}/review-mission/`, { method: 'POST', body: JSON.stringify({ mission, decision, admin_feedback: adminFeedback }) }),
   trackScreenTime: (entries) => request('/screen-time/track/', {
     method: 'POST',
     body: JSON.stringify({ entries }),
