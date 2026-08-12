@@ -95,6 +95,21 @@ from .serializers import (
     CounselorRoadmapTemplateSerializer,
     SchoolSerializer,
     ScreenTimeDailySerializer,
+    SchoolVisibilityAchievementSerializer,
+    SchoolVisibilityActivitySerializer,
+    SchoolVisibilityApplicationSerializer,
+    SchoolVisibilityBookingSerializer,
+    SchoolVisibilityDocumentSerializer,
+    SchoolVisibilityEssaySerializer,
+    SchoolVisibilityHonorSerializer,
+    SchoolVisibilityInternshipSerializer,
+    SchoolVisibilityProgramServiceSerializer,
+    SchoolVisibilityProjectSerializer,
+    SchoolVisibilityRecommendationSerializer,
+    SchoolVisibilityResearchSerializer,
+    SchoolVisibilityRoadmapSerializer,
+    SchoolVisibilityStudentSerializer,
+    SchoolVisibilityTaskSerializer,
     ScholarshipSerializer,
     StoreItemSerializer,
     SupportTicketSerializer,
@@ -116,8 +131,8 @@ from apps.users.services import audit_product_action
 class CounselorOrOwnerPermission(permissions.BasePermission):
     organization_read_resources = {
         'tasks', 'applications', 'documents', 'essays', 'achievements',
-        'meetings', 'researches', 'projects', 'internships', 'activities',
-        'honors', 'recommendations', 'notifications', 'activity-logs',
+        'researches', 'projects', 'internships', 'activities',
+        'honors', 'recommendations',
     }
 
     def has_permission(self, request, view):
@@ -269,6 +284,54 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
         if request.user.is_product_admin:
             audit_product_action(actor=request.user, action='student_360.viewed', target=student)
         return Response(self.get_serializer(student).data)
+
+    @action(detail=True, methods=['get'], url_path='data-visibility')
+    def data_visibility(self, request, pk=None):
+        if not (request.user.is_product_admin or request.user.is_organization):
+            return Response({'detail': 'This view is available only to product admins and school accounts.'}, status=403)
+        student = self.get_object()
+        access_scope = 'global' if request.user.is_product_admin else 'own_school'
+        audit_product_action(
+            actor=request.user,
+            action='student_visibility.viewed',
+            target=student,
+            metadata={'access_scope': access_scope, 'school': student.school_id},
+        )
+        context = {'request': request}
+        return Response({
+            'policy': {
+                'version': 'school-student-visibility-v1',
+                'access_scope': access_scope,
+                'access_mode': 'read_only',
+                'included': [
+                    'identity_and_contact', 'academic_profile', 'progress_and_xp', 'task_metadata_and_status',
+                    'roadmap_metadata_and_status', 'application_metadata_and_status', 'document_metadata_and_secure_file',
+                    'essay_metadata_and_status', 'recommendation_metadata_and_status', 'portfolio_and_activities',
+                    'meeting_schedule_and_status', 'program_usage',
+                ],
+                'excluded': [
+                    'private_messages', 'message_moderation_reports', 'credentials_and_password_state',
+                    'internal_counselor_notes', 'meeting_notes', 'application_portal_credentials',
+                    'essay_draft_content_and_feedback', 'recommendation_files_and_private_notes',
+                    'task_submission_content', 'roadmap_reflections', 'screen_time_detail', 'support_tickets',
+                ],
+            },
+            'student': SchoolVisibilityStudentSerializer(student, context=context).data,
+            'tasks': SchoolVisibilityTaskSerializer(student.tasks.select_related('assigned_by').all(), many=True, context=context).data,
+            'roadmap': SchoolVisibilityRoadmapSerializer(student.roadmap_missions.all(), many=True, context=context).data,
+            'applications': SchoolVisibilityApplicationSerializer(student.applications.select_related('university').all(), many=True, context=context).data,
+            'documents': SchoolVisibilityDocumentSerializer(student.documents.all(), many=True, context=context).data,
+            'essays': SchoolVisibilityEssaySerializer(student.essays.select_related('application__university').all(), many=True, context=context).data,
+            'recommendations': SchoolVisibilityRecommendationSerializer(student.recommendations.all(), many=True, context=context).data,
+            'achievements': SchoolVisibilityAchievementSerializer(student.achievements.all(), many=True, context=context).data,
+            'researches': SchoolVisibilityResearchSerializer(student.researches.all(), many=True, context=context).data,
+            'projects': SchoolVisibilityProjectSerializer(student.projects.all(), many=True, context=context).data,
+            'internships': SchoolVisibilityInternshipSerializer(student.internships.all(), many=True, context=context).data,
+            'activities': SchoolVisibilityActivitySerializer(student.activities.all(), many=True, context=context).data,
+            'honors': SchoolVisibilityHonorSerializer(student.honors.all(), many=True, context=context).data,
+            'meetings': SchoolVisibilityBookingSerializer(student.bookings.select_related('participant').all(), many=True, context=context).data,
+            'program_usage': SchoolVisibilityProgramServiceSerializer(student.program_services.select_related('mentor').all(), many=True, context=context).data,
+        })
 
     def perform_destroy(self, instance):
         student_user = instance.user
@@ -745,7 +808,7 @@ class StaffControlledWorkPermission(permissions.BasePermission):
         if user.is_task_manager:
             return user.role != User.Role.TEACHER or bool(user.school_id)
         if user.is_organization:
-            return view.basename == 'tasks' and request.method in permissions.SAFE_METHODS
+            return view.basename in {'tasks', 'roadmap-missions'} and request.method in permissions.SAFE_METHODS
         if user.role == User.Role.STUDENT:
             if request.method in permissions.SAFE_METHODS:
                 return True
@@ -1593,20 +1656,13 @@ def moderatable_channels_for(user):
     queryset = MessageChannel.objects.select_related('school', 'created_by')
     if user.is_superuser or user.role == User.Role.ADMIN:
         return queryset
+    if user.role not in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        return queryset.none()
     moderator_memberships = Q(
         memberships__user=user,
         memberships__role__in=[ChannelMembership.Role.OWNER, ChannelMembership.Role.MODERATOR],
     )
-    if user.role == User.Role.COUNSELOR:
-        school_ids = StudentProfile.objects.filter(
-            assigned_counselor=user,
-            school__isnull=False,
-        ).values_list('school_id', flat=True)
-        return queryset.filter(moderator_memberships | Q(school_id__in=school_ids)).distinct()
-    if user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
-        school_scope = Q(school_id=user.school_id) if user.school_id else Q(pk__in=[])
-        return queryset.filter(moderator_memberships | school_scope).distinct()
-    return queryset.none()
+    return queryset.filter(moderator_memberships).distinct()
 
 
 def channel_membership_role(channel, user):
@@ -1935,11 +1991,16 @@ class ChannelMessageViewSet(viewsets.ModelViewSet):
 
 class MessageReportPermission(permissions.BasePermission):
     def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and (request.user.is_task_manager or request.user.is_organization)
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_product_admin:
+            return True
+        if request.user.role not in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+            return False
+        return MessageChannel.objects.filter(
+            memberships__user=request.user,
+            memberships__role__in=[ChannelMembership.Role.OWNER, ChannelMembership.Role.MODERATOR],
+        ).exists()
 
 
 class MessageReportViewSet(viewsets.ReadOnlyModelViewSet):

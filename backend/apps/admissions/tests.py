@@ -427,7 +427,7 @@ class RoleIsolationTests(APITestCase):
         )
         self.client.force_authenticate(self.organization)
         for path in (
-            'tasks', 'applications', 'documents', 'essays', 'achievements', 'meetings',
+            'tasks', 'applications', 'documents', 'essays', 'achievements',
             'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations',
         ):
             with self.subTest(path=path):
@@ -435,6 +435,10 @@ class RoleIsolationTests(APITestCase):
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
         tasks = self.results(self.client.get('/api/tasks/'))
         self.assertEqual([item['id'] for item in tasks], [own_task.id])
+        self.assertEqual(
+            self.client.get('/api/meetings/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
 
     def test_organization_cannot_write_student_admissions_records(self):
         self.client.force_authenticate(self.organization)
@@ -1552,8 +1556,13 @@ class RoleIsolationTests(APITestCase):
             school=self.school_b,
         )
         self.client.force_authenticate(unrelated_school)
-        self.assertEqual(self.results(self.client.get('/api/message-reports/?status=pending')), [])
+        self.assertEqual(self.client.get('/api/message-reports/?status=pending').status_code, status.HTTP_403_FORBIDDEN)
 
+        ChannelMembership.objects.create(
+            channel_id=channel_id,
+            user=self.organization,
+            role=ChannelMembership.Role.MODERATOR,
+        )
         self.client.force_authenticate(self.organization)
         feed_message = next(
             item for item in self.results(self.client.get(f'/api/channel-messages/?channel={channel_id}'))
@@ -1754,12 +1763,17 @@ class RoleIsolationTests(APITestCase):
     def test_non_student_roles_cannot_open_student_only_portal_endpoints(self):
         for account in (self.counselor, self.organization):
             self.client.force_authenticate(account)
-            paths = ('community-posts',) if account == self.counselor else ('roadmap-missions', 'community-posts')
+            paths = ('community-posts',)
             for path in paths:
                 with self.subTest(role=account.role, path=path):
                     self.assertEqual(self.client.get(f'/api/{path}/').status_code, status.HTTP_403_FORBIDDEN)
 
         self.client.force_authenticate(self.organization)
+        self.assertEqual(self.client.get('/api/roadmap-missions/').status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self.client.post('/api/roadmap-missions/', {}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
         self.assertEqual(self.client.get('/api/bookings/').status_code, status.HTTP_200_OK)
         self.assertEqual(self.client.get('/api/student-messages/').status_code, status.HTTP_403_FORBIDDEN)
 
