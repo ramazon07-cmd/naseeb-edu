@@ -1,9 +1,18 @@
 from rest_framework import serializers
+from django.conf import settings
+from django.db import transaction
+from django.urls import reverse
+from pathlib import Path
 from urllib.parse import urlparse
+import mimetypes
+import zipfile
+import codecs
+from PIL import Image, UnidentifiedImageError
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Count
 from django.utils import timezone
 from apps.users.models import User
+from apps.users.credentials import issue_temporary_credential
 from apps.users.serializers import UserSerializer
 from .models import (
     Achievement,
@@ -26,6 +35,7 @@ from .models import (
     MessageReport,
     Notification,
     OpportunityProgram,
+    ParentStudentLink,
     ProgramService,
     Project,
     RecommendationLetter,
@@ -33,8 +43,10 @@ from .models import (
     ResourceLibraryItem,
     RoadmapMission,
     School,
+    ScreenTimeDaily,
     Scholarship,
     StoreItem,
+    SupportTicket,
     StudentProfile,
     StudentMessage,
     Task,
@@ -71,10 +83,51 @@ def google_docs_preview_url(value):
 
 class SchoolSerializer(serializers.ModelSerializer):
     students_count = serializers.IntegerField(read_only=True)
+    owner_counselor_name = serializers.SerializerMethodField()
+    organization_account_id = serializers.SerializerMethodField()
+    organization_account_username = serializers.SerializerMethodField()
+    organization_credential_status = serializers.SerializerMethodField()
+    organization_credential_expires_at = serializers.SerializerMethodField()
 
     class Meta:
         model = School
         fields = '__all__'
+
+    def get_owner_counselor_name(self, obj):
+        if not obj.owner_counselor:
+            return None
+        return obj.owner_counselor.get_full_name() or obj.owner_counselor.username
+
+    def _organization_account(self, obj):
+        if not hasattr(obj, '_organization_account'):
+            obj._organization_account = obj.users.filter(role=User.Role.ORGANIZATION).first()
+        return obj._organization_account
+
+    def _organization_credential(self, obj):
+        account = self._organization_account(obj)
+        if not account:
+            return None
+        if not hasattr(obj, '_organization_credential'):
+            obj._organization_credential = account.temporary_credentials.order_by('-issued_at', '-id').first()
+        return obj._organization_credential
+
+    def get_organization_account_id(self, obj):
+        account = self._organization_account(obj)
+        return account.id if account else None
+
+    def get_organization_account_username(self, obj):
+        account = self._organization_account(obj)
+        return account.username if account else None
+
+    def get_organization_credential_status(self, obj):
+        credential = self._organization_credential(obj)
+        if not credential:
+            return 'none'
+        return 'expired' if credential.is_expired else credential.status
+
+    def get_organization_credential_expires_at(self, obj):
+        credential = self._organization_credential(obj)
+        return credential.expires_at if credential else None
 
 
 class OrganizationAccountSerializer(serializers.Serializer):
@@ -95,11 +148,20 @@ class OrganizationAccountSerializer(serializers.Serializer):
         return value.lower()
 
     def create(self, validated_data):
-        return User.objects.create_user(
+        password = validated_data.pop('password')
+        user = User.objects.create_user(
             **validated_data,
+            password=None,
             role=User.Role.ORGANIZATION,
             school=self.context['school'],
         )
+        user, _, _, _ = issue_temporary_credential(
+            user=user,
+            issued_by=self.context['request'].user,
+            raw_password=password,
+            request=self.context['request'],
+        )
+        return user
 
 
 class StudentProfileSerializer(serializers.ModelSerializer):
@@ -147,8 +209,18 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         user = attrs.get('user', getattr(self.instance, 'user', None))
         school = attrs.get('school', getattr(self.instance, 'school', None))
+        assigned_counselor = attrs.get(
+            'assigned_counselor', getattr(self.instance, 'assigned_counselor', None)
+        )
         if user and user.role != user.Role.STUDENT:
             raise serializers.ValidationError({'user': 'Student profile requires a student user.'})
+        if assigned_counselor:
+            if assigned_counselor.role != User.Role.COUNSELOR:
+                raise serializers.ValidationError({'assigned_counselor': 'Select a counselor account.'})
+            if not school or assigned_counselor.school_id != school.id:
+                raise serializers.ValidationError({
+                    'assigned_counselor': 'The counselor and student must belong to the same school.'
+                })
         if request and request.user.is_organization:
             if not request.user.school_id or not school or school.id != request.user.school_id:
                 raise serializers.ValidationError({'school': 'Organization users can only manage their own school.'})
@@ -178,9 +250,13 @@ class StudentRecordSerializerMixin:
         if user.is_superuser or user.role == User.Role.ADMIN:
             return student
         if user.role == User.Role.COUNSELOR:
-            if student.assigned_counselor_id == user.id:
+            if (
+                user.school_id
+                and student.school_id == user.school_id
+                and student.assigned_counselor_id == user.id
+            ):
                 return student
-            raise serializers.ValidationError('You can only manage students assigned to you.')
+            raise serializers.ValidationError('You can only manage assigned students in your school.')
         if user.is_staff:
             return student
         if user.is_organization:
@@ -283,6 +359,8 @@ class ApplicationSerializer(StudentRecordSerializerMixin, serializers.ModelSeria
 
 
 class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
+    STUDENT_PROGRESS_FIELDS = {'status', 'student_response', 'submission_url', 'submission_file'}
+    STUDENT_SELF_TASK_FIELDS = STUDENT_PROGRESS_FIELDS | {'title', 'description', 'due_date', 'priority'}
     student_name = serializers.SerializerMethodField()
     assigned_by_name = serializers.SerializerMethodField()
     is_overdue = serializers.BooleanField(read_only=True)
@@ -291,7 +369,7 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = '__all__'
-        read_only_fields = ('assigned_by', 'submitted_at')
+        read_only_fields = ('assigned_by', 'submitted_at', 'is_self_assigned')
 
     def validate_student(self, student):
         request = self.context.get('request')
@@ -317,8 +395,15 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         request = self.context.get('request')
-        if request and request.user.role == request.user.Role.STUDENT and self.instance:
-            forbidden = set(attrs) - {'status', 'student_response', 'submission_url', 'submission_file'}
+        if request and request.user.role == request.user.Role.STUDENT:
+            if not self.instance and attrs.get('status', Task.Status.TODO) != Task.Status.TODO:
+                raise serializers.ValidationError({'status': 'A self-task must start in To Do status.'})
+            editable_fields = (
+                self.STUDENT_SELF_TASK_FIELDS
+                if not self.instance or self.instance.is_self_assigned
+                else self.STUDENT_PROGRESS_FIELDS
+            )
+            forbidden = set(attrs) - editable_fields - {'student'}
             if forbidden:
                 raise serializers.ValidationError({
                     field: 'Only a teacher or counselor can change this field.' for field in sorted(forbidden)
@@ -338,20 +423,161 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
 
 
 class DocumentSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
+    file = serializers.FileField(write_only=True, required=False, allow_null=True)
+    has_file = serializers.SerializerMethodField()
+    file_name = serializers.CharField(source='original_file_name', read_only=True)
+    file_previewable = serializers.SerializerMethodField()
+    file_preview_url = serializers.SerializerMethodField()
+    file_download_url = serializers.SerializerMethodField()
     student_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
         fields = '__all__'
+        read_only_fields = (
+            'original_file_name', 'file_content_type', 'file_size', 'uploaded_by',
+        )
+
+    @staticmethod
+    def _extension(upload):
+        return Path(upload.name or '').suffix.lower()
+
+    def validate_file(self, upload):
+        extension = self._extension(upload)
+        allowed = set(settings.DOCUMENT_ALLOWED_EXTENSIONS)
+        if extension not in allowed:
+            raise serializers.ValidationError(
+                f'Unsupported file type. Allowed: {", ".join(sorted(allowed))}.'
+            )
+        if upload.size > settings.DOCUMENT_MAX_UPLOAD_SIZE:
+            limit_mb = settings.DOCUMENT_MAX_UPLOAD_SIZE // (1024 * 1024)
+            raise serializers.ValidationError(f'File is larger than the {limit_mb} MB limit.')
+        if upload.size == 0:
+            raise serializers.ValidationError('The selected file is empty.')
+
+        try:
+            head = upload.read(min(upload.size, 4096))
+            upload.seek(0)
+            if extension == '.pdf' and not head.startswith(b'%PDF-'):
+                raise serializers.ValidationError('This file is not a valid PDF.')
+            if extension in {'.png', '.jpg', '.jpeg', '.webp'}:
+                try:
+                    Image.open(upload).verify()
+                except (UnidentifiedImageError, OSError, SyntaxError):
+                    raise serializers.ValidationError('This file is not a valid image.')
+                finally:
+                    upload.seek(0)
+            if extension == '.heic' and b'ftyp' not in head[:32]:
+                raise serializers.ValidationError('This file is not a valid HEIC image.')
+            if extension in {'.doc', '.xls', '.ppt'} and not head.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
+                raise serializers.ValidationError('This legacy Office file is invalid.')
+            if extension == '.rtf' and not head.lstrip().startswith(b'{\\rtf'):
+                raise serializers.ValidationError('This file is not a valid RTF document.')
+            if extension in {'.txt', '.csv'}:
+                if b'\x00' in head:
+                    raise serializers.ValidationError('Text documents cannot contain binary data.')
+                codecs.getincrementaldecoder('utf-8-sig')().decode(head, final=False)
+            if extension in {'.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp'}:
+                with zipfile.ZipFile(upload) as archive:
+                    names = archive.namelist()
+                    required_prefix = {
+                        '.docx': 'word/', '.xlsx': 'xl/', '.pptx': 'ppt/',
+                        '.odt': 'content.xml', '.ods': 'content.xml', '.odp': 'content.xml',
+                    }[extension]
+                    if not any(name == required_prefix or name.startswith(required_prefix) for name in names):
+                        raise serializers.ValidationError('The Office document structure is invalid.')
+                upload.seek(0)
+        except UnicodeDecodeError:
+            upload.seek(0)
+            raise serializers.ValidationError('Text documents must use UTF-8 encoding.')
+        except zipfile.BadZipFile:
+            upload.seek(0)
+            raise serializers.ValidationError('The Office document is damaged or invalid.')
+        return upload
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        request = self.context.get('request')
+        user = request.user if request else None
+        file_value = attrs.get('file', getattr(self.instance, 'file', None))
+        docs_value = attrs.get('google_docs_url', getattr(self.instance, 'google_docs_url', ''))
+        status_value = attrs.get('status', getattr(self.instance, 'status', Document.Status.REQUIRED))
+
+        if user and user.role == User.Role.STUDENT:
+            if 'counselor_comment' in attrs:
+                raise serializers.ValidationError({
+                    'counselor_comment': 'Only a counselor can write document review comments.'
+                })
+            if 'file' in attrs or 'google_docs_url' in attrs or not self.instance:
+                attrs['status'] = Document.Status.UPLOADED
+                status_value = Document.Status.UPLOADED
+        if status_value != Document.Status.REQUIRED and not file_value and not docs_value:
+            raise serializers.ValidationError({
+                'file': 'Upload a file or add a Google Docs link before marking this document as uploaded.'
+            })
+        return attrs
+
+    @staticmethod
+    def _file_metadata(upload):
+        content_type = mimetypes.guess_type(upload.name or '')[0] or 'application/octet-stream'
+        return {
+            'original_file_name': Path(upload.name or 'document').name[:255],
+            'file_content_type': content_type[:120],
+            'file_size': upload.size,
+        }
+
+    def create(self, validated_data):
+        upload = validated_data.get('file')
+        if upload:
+            validated_data.update(self._file_metadata(upload))
+            validated_data['uploaded_by'] = self.context['request'].user
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        upload = validated_data.get('file')
+        old_name = instance.file.name if upload and instance.file else ''
+        old_storage = instance.file.storage if old_name else None
+        if upload:
+            validated_data.update(self._file_metadata(upload))
+            validated_data['uploaded_by'] = self.context['request'].user
+        updated = super().update(instance, validated_data)
+        if old_name and old_name != updated.file.name:
+            transaction.on_commit(lambda: old_storage.delete(old_name))
+        return updated
 
     def validate_status(self, value):
         request = self.context.get('request')
+        if request and request.user.role == User.Role.STUDENT and value != Document.Status.UPLOADED:
+            raise serializers.ValidationError('Students can only submit documents for counselor review.')
         if request and not request.user.is_counselor_like and value in {Document.Status.APPROVED, Document.Status.REJECTED}:
             raise serializers.ValidationError('Only a counselor can approve or reject documents.')
         return value
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
+
+    def get_has_file(self, obj):
+        return bool(obj.file)
+
+    def get_file_previewable(self, obj):
+        return Path(obj.original_file_name or obj.file.name if obj.file else '').suffix.lower() in {
+            '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt', '.csv',
+        }
+
+    def _file_url(self, obj, download=False):
+        if not obj.file:
+            return None
+        request = self.context.get('request')
+        path = reverse('documents-file', kwargs={'pk': obj.pk})
+        if download:
+            path += '?download=1'
+        return request.build_absolute_uri(path) if request else path
+
+    def get_file_preview_url(self, obj):
+        return self._file_url(obj)
+
+    def get_file_download_url(self, obj):
+        return self._file_url(obj, download=True)
 
 
 class AchievementSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer):
@@ -517,6 +743,10 @@ class ActivityLogSerializer(serializers.ModelSerializer):
 class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     student_name = serializers.SerializerMethodField()
     assigned_by_name = serializers.SerializerMethodField()
+    prerequisite_title = serializers.CharField(source='prerequisite.title', read_only=True)
+    prerequisite_sequence = serializers.IntegerField(source='prerequisite.sequence', read_only=True)
+    xp_reward = serializers.SerializerMethodField()
+    approval_status = serializers.SerializerMethodField()
 
     class Meta:
         model = RoadmapMission
@@ -595,6 +825,16 @@ class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSe
         if not obj.assigned_by:
             return None
         return obj.assigned_by.get_full_name() or obj.assigned_by.username
+
+    def get_xp_reward(self, obj):
+        return 75
+
+    def get_approval_status(self, obj):
+        if obj.status == RoadmapMission.Status.SUBMITTED:
+            return 'awaiting_approval'
+        if obj.status == RoadmapMission.Status.COMPLETED:
+            return 'approved'
+        return 'not_submitted'
 
 
 class XPTransactionSerializer(serializers.ModelSerializer):
@@ -929,8 +1169,10 @@ class MessageReportSerializer(serializers.ModelSerializer):
         return obj.reviewed_by.get_full_name() or obj.reviewed_by.username
 
 
-class ProgramServiceSerializer(serializers.ModelSerializer):
+class ProgramServiceSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     mentor_name = serializers.SerializerMethodField()
+    mentor_role = serializers.CharField(source='mentor.role', read_only=True)
+    student_name = serializers.SerializerMethodField()
     remaining_hours = serializers.SerializerMethodField()
 
     class Meta:
@@ -942,10 +1184,79 @@ class ProgramServiceSerializer(serializers.ModelSerializer):
             return None
         return obj.mentor.get_full_name() or obj.mentor.username
 
+    def get_student_name(self, obj):
+        return obj.student.user.get_full_name() or obj.student.user.username
+
     def get_remaining_hours(self, obj):
         if obj.unlimited or obj.total_hours is None:
             return None
         return max(obj.total_hours - obj.used_hours, 0)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        student = attrs.get('student', getattr(self.instance, 'student', None))
+        mentor = attrs.get('mentor', getattr(self.instance, 'mentor', None))
+        unlimited = attrs.get('unlimited', getattr(self.instance, 'unlimited', False))
+        total_hours = attrs.get('total_hours', getattr(self.instance, 'total_hours', None))
+        used_hours = attrs.get('used_hours', getattr(self.instance, 'used_hours', 0))
+        if not unlimited and (total_hours is None or total_hours <= 0):
+            raise serializers.ValidationError({'total_hours': 'Set allocated hours or mark the service unlimited.'})
+        if not unlimited and used_hours > total_hours:
+            raise serializers.ValidationError({'used_hours': 'Used hours cannot exceed allocated hours.'})
+        if mentor:
+            if mentor.role not in {User.Role.COUNSELOR, User.Role.TEACHER}:
+                raise serializers.ValidationError({'mentor': 'Mentor must be a counselor or teacher.'})
+            if student and (not mentor.school_id or mentor.school_id != student.school_id):
+                raise serializers.ValidationError({'mentor': 'Mentor and student must belong to the same school.'})
+        return attrs
+
+
+class ScreenTimeDailySerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ScreenTimeDaily
+        fields = ('id', 'user', 'user_name', 'date', 'page', 'active_seconds', 'sessions', 'last_seen_at')
+        read_only_fields = fields
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
+class ParentStudentLinkSerializer(serializers.ModelSerializer):
+    parent_name = serializers.SerializerMethodField()
+    parent_email = serializers.EmailField(source='parent.email', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    relationship_display = serializers.CharField(source='get_relationship_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = ParentStudentLink
+        fields = (
+            'id', 'parent', 'parent_name', 'parent_email', 'student', 'student_name',
+            'relationship', 'relationship_display', 'status', 'status_display',
+            'can_view_applications', 'can_view_documents', 'can_view_meetings',
+            'invited_by', 'invited_at', 'consented_at', 'revoked_at', 'created_at', 'updated_at',
+        )
+        read_only_fields = fields
+
+    def get_parent_name(self, obj):
+        return obj.parent.get_full_name() or obj.parent.username
+
+    def get_student_name(self, obj):
+        return obj.student.user.get_full_name() or obj.student.user.username
+
+
+class ParentInviteSerializer(serializers.Serializer):
+    student = serializers.PrimaryKeyRelatedField(queryset=StudentProfile.objects.select_related('user', 'school'))
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=False, validators=[validate_password])
+    relationship = serializers.ChoiceField(choices=ParentStudentLink.Relationship.choices)
+    can_view_applications = serializers.BooleanField(default=True)
+    can_view_documents = serializers.BooleanField(default=True)
+    can_view_meetings = serializers.BooleanField(default=True)
 
 
 class ResourceLibraryItemSerializer(serializers.ModelSerializer):
@@ -958,3 +1269,43 @@ class StoreItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreItem
         fields = '__all__'
+
+
+class SupportTicketSerializer(serializers.ModelSerializer):
+    requester_name = serializers.SerializerMethodField()
+    requester_role = serializers.CharField(source='requester.role', read_only=True)
+    responded_by_name = serializers.SerializerMethodField()
+    has_unread_response = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = SupportTicket
+        fields = (
+            'id', 'requester', 'requester_name', 'requester_role', 'category',
+            'subject', 'message', 'status', 'admin_response', 'responded_by',
+            'responded_by_name', 'responded_at', 'requester_viewed_at',
+            'has_unread_response', 'created_at', 'updated_at',
+        )
+        read_only_fields = (
+            'requester', 'responded_by', 'responded_by_name', 'responded_at',
+            'requester_viewed_at', 'has_unread_response', 'created_at', 'updated_at',
+        )
+
+    def get_requester_name(self, obj):
+        return obj.requester.get_full_name() or obj.requester.username
+
+    def get_responded_by_name(self, obj):
+        if not obj.responded_by:
+            return None
+        return obj.responded_by.get_full_name() or obj.responded_by.username
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        is_product_admin = bool(
+            user
+            and user.is_authenticated
+            and (user.is_superuser or user.role == User.Role.ADMIN)
+        )
+        if not is_product_admin and {'status', 'admin_response'}.intersection(self.initial_data):
+            raise serializers.ValidationError('Only an admin can set ticket status or support response.')
+        return attrs

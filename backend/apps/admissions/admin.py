@@ -20,6 +20,7 @@ from .models import (
     MessageReport,
     Notification,
     OpportunityProgram,
+    ParentStudentLink,
     ProgramService,
     Project,
     RecommendationLetter,
@@ -27,10 +28,12 @@ from .models import (
     ResourceLibraryItem,
     RoadmapMission,
     School,
+    ScreenTimeDaily,
     Scholarship,
     StudentProfile,
     StudentMessage,
     StoreItem,
+    SupportTicket,
     Task,
     University,
     XPTransaction,
@@ -39,9 +42,9 @@ from .models import (
 
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'contact_email', 'contact_phone', 'is_active')
+    list_display = ('name', 'code', 'workspace_type', 'owner_counselor', 'contact_email', 'is_active')
     search_fields = ('name', 'code', 'contact_email')
-    list_filter = ('is_active',)
+    list_filter = ('workspace_type', 'is_active')
 
 
 @admin.register(StudentProfile)
@@ -164,3 +167,26 @@ admin.site.register(MessageChannel)
 admin.site.register(ChannelMembership)
 admin.site.register(ChannelMessage)
 admin.site.register(MessageReport)
+
+
+@admin.register(SupportTicket)
+class SupportTicketAdmin(admin.ModelAdmin):
+    list_display = ('id', 'subject', 'category', 'requester', 'status', 'responded_by', 'updated_at')
+    search_fields = ('subject', 'message', 'requester__username', 'requester__email')
+    list_filter = ('status', 'category', 'created_at')
+    readonly_fields = ('requester', 'created_at', 'updated_at', 'responded_at', 'requester_viewed_at')
+
+
+@admin.register(ScreenTimeDaily)
+class ScreenTimeDailyAdmin(admin.ModelAdmin):
+    list_display = ('user', 'date', 'page', 'active_seconds', 'sessions', 'last_seen_at')
+    search_fields = ('user__username', 'user__email', 'page')
+    list_filter = ('date', 'page')
+    readonly_fields = ('user', 'date', 'page', 'active_seconds', 'sessions', 'last_seen_at')
+
+
+@admin.register(ParentStudentLink)
+class ParentStudentLinkAdmin(admin.ModelAdmin):
+    list_display = ('parent', 'student', 'relationship', 'status', 'can_view_applications', 'can_view_documents', 'can_view_meetings')
+    search_fields = ('parent__username', 'parent__email', 'student__user__username', 'student__user__email')
+    list_filter = ('status', 'relationship', 'can_view_applications', 'can_view_documents', 'can_view_meetings')

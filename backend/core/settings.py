@@ -15,7 +15,25 @@ DEMO_ACCOUNTS_ENABLED = config('ENABLE_DEMO_ACCOUNTS', default=not IS_PRODUCTION
 DEMO_COUNSELOR_PASSWORD = config('DEMO_COUNSELOR_PASSWORD', default='admin12345')
 DEMO_ORGANIZATION_PASSWORD = config('DEMO_ORGANIZATION_PASSWORD', default='school12345')
 DEMO_STUDENT_PASSWORD = config('DEMO_STUDENT_PASSWORD', default='student12345')
+DEMO_PARENT_PASSWORD = config('DEMO_PARENT_PASSWORD', default='parent12345')
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+
+# H8 assistant configuration. Provider credentials are backend-only secrets and
+# must never be mirrored into a VITE_* build variable.
+AI_ASSISTANT_ENABLED = config('AI_ASSISTANT_ENABLED', default=True, cast=bool)
+AI_GATEWAY_API_KEY = config('AI_GATEWAY_API_KEY', default='').strip()
+AI_GATEWAY_URL = config(
+    'AI_GATEWAY_URL',
+    default='https://ai-gateway.vercel.sh/v1/chat/completions',
+).strip()
+AI_ASSISTANT_MODEL = config('AI_ASSISTANT_MODEL', default='openai/gpt-5.4-mini').strip()
+AI_ASSISTANT_FALLBACK_MODEL = config('AI_ASSISTANT_FALLBACK_MODEL', default='openai/gpt-5.4-nano').strip()
+AI_ASSISTANT_MAX_MESSAGES = config('AI_ASSISTANT_MAX_MESSAGES', default=12, cast=int)
+AI_ASSISTANT_MAX_INPUT_CHARS = config('AI_ASSISTANT_MAX_INPUT_CHARS', default=6000, cast=int)
+AI_ASSISTANT_MAX_OUTPUT_TOKENS = config('AI_ASSISTANT_MAX_OUTPUT_TOKENS', default=450, cast=int)
+AI_ASSISTANT_TIMEOUT_SECONDS = config('AI_ASSISTANT_TIMEOUT_SECONDS', default=35, cast=int)
+SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)
+TEMPORARY_CREDENTIAL_TTL_HOURS = config('TEMPORARY_CREDENTIAL_TTL_HOURS', default=72, cast=int)
 
 environment_errors = validate_runtime_environment(
     app_env=APP_ENV,
@@ -37,6 +55,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
     'apps.users',
     'apps.admissions',
@@ -47,6 +66,8 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
+    'apps.users.middleware.ApiErrorLocalizationMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -95,6 +116,11 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'uz'
+LANGUAGES = [
+    ('uz', 'O‘zbekcha'),
+    ('ru', 'Русский'),
+    ('en', 'English'),
+]
 TIME_ZONE = 'Asia/Tashkent'
 USE_I18N = True
 USE_TZ = True
@@ -106,8 +132,21 @@ STORAGES = {
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
 }
 
-MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+MEDIA_ROOT_VALUE = config('MEDIA_ROOT', default='').strip()
+MEDIA_ROOT = Path(MEDIA_ROOT_VALUE).expanduser() if MEDIA_ROOT_VALUE else BASE_DIR / 'media'
+DOCUMENT_STORAGE_ROOT_VALUE = config('DOCUMENT_STORAGE_ROOT', default='').strip()
+DOCUMENT_STORAGE_ROOT = (
+    Path(DOCUMENT_STORAGE_ROOT_VALUE).expanduser()
+    if DOCUMENT_STORAGE_ROOT_VALUE
+    else BASE_DIR / 'private_documents'
+)
+DOCUMENT_MAX_UPLOAD_SIZE = config('DOCUMENT_MAX_UPLOAD_SIZE', default=25 * 1024 * 1024, cast=int)
+DOCUMENT_ALLOWED_EXTENSIONS = tuple(config(
+    'DOCUMENT_ALLOWED_EXTENSIONS',
+    default='.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.png,.jpg,.jpeg,.webp,.heic',
+    cast=Csv(),
+))
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -121,7 +160,7 @@ CSRF_TRUSTED_ORIGINS = [origin for origin in config('CSRF_TRUSTED_ORIGINS', defa
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.users.authentication.VersionedJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -136,6 +175,10 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': config('API_ANON_RATE', default='60/hour'),
         'user': config('API_USER_RATE', default='1200/hour'),
+        'assistant': config('AI_ASSISTANT_RATE', default='20/hour'),
+        'login': config('AUTH_LOGIN_RATE', default='10/minute'),
+        'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
+        'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
     },
 }
 
@@ -143,6 +186,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 SPECTACULAR_SETTINGS = {

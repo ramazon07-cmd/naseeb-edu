@@ -6,7 +6,7 @@ from apps.users.models import User
 from apps.admissions.models import (
     Achievement, Activity, Application, Booking, CommunityPost, Document, Essay,
     ChannelMembership, ChannelMessage, Honor, Internship, MeetingNote, MessageChannel,
-    Notification, OpportunityProgram, ProgramService, Project,
+    Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project,
     RecommendationLetter, Research, ResourceLibraryItem, RoadmapMission, School,
     Scholarship, StoreItem, StudentMessage, StudentProfile, Task, University,
 )
@@ -36,10 +36,13 @@ class Command(BaseCommand):
                 'last_name': 'Counselor',
                 'role': User.Role.COUNSELOR,
                 'is_staff': True,
+                'school': school,
             },
         )
+        counselor.role = User.Role.COUNSELOR
+        counselor.school = school
         counselor.set_password(settings.DEMO_COUNSELOR_PASSWORD)
-        counselor.save()
+        counselor.save(update_fields=['role', 'school', 'password'])
 
         organization, _ = User.objects.get_or_create(
             username='schooladmin',
@@ -606,6 +609,36 @@ class Command(BaseCommand):
             )
             direct_channel.last_message_at = direct_message.created_at
             direct_channel.save(update_fields=['last_message_at', 'updated_at'])
+
+        parent, _ = User.objects.get_or_create(
+            username='parent',
+            defaults={
+                'email': 'parent@naseeb.local',
+                'first_name': 'Dilnoza',
+                'last_name': 'Ergasheva',
+                'role': User.Role.PARENT,
+                'school': school,
+            },
+        )
+        parent.role = User.Role.PARENT
+        parent.school = school
+        parent.set_password(settings.DEMO_PARENT_PASSWORD)
+        parent.save()
+        ramazon_profile = StudentProfile.objects.get(user__username='ramazon')
+        ParentStudentLink.objects.update_or_create(
+            parent=parent,
+            student=ramazon_profile,
+            defaults={
+                'relationship': ParentStudentLink.Relationship.MOTHER,
+                'status': ParentStudentLink.Status.ACTIVE,
+                'can_view_applications': True,
+                'can_view_documents': True,
+                'can_view_meetings': True,
+                'invited_by': counselor,
+                'consented_at': timezone.now(),
+                'revoked_at': None,
+            },
+        )
 
         self.stdout.write(self.style.SUCCESS(
             'Demo data created. Credentials are configured through local DEMO_*_PASSWORD variables.'
