@@ -1082,10 +1082,60 @@ function StudentOverview({ student, data, onBack, user, notify }) {
   </div>;
 }
 
+function visibilityItemTitle(item) {
+  return item.title || item.name || item.organization || item.university_name || item.recommender_name || item.topic || t("Record");
+}
+
+const VISIBILITY_POLICY_LABELS = {
+  identity_and_contact: 'Identity & contact', academic_profile: 'Academic profile', progress_and_xp: 'Progress & XP',
+  task_metadata_and_status: 'Task metadata & status', roadmap_metadata_and_status: 'Roadmap metadata & status',
+  application_metadata_and_status: 'Application metadata & status', document_metadata_and_secure_file: 'Document metadata & secure file',
+  essay_metadata_and_status: 'Essay metadata & status', recommendation_metadata_and_status: 'Recommendation metadata & status',
+  portfolio_and_activities: 'Portfolio & activities', meeting_schedule_and_status: 'Meeting schedule & status', program_usage: 'Program usage',
+  private_messages: 'Private messages', message_moderation_reports: 'Moderation reports', credentials_and_password_state: 'Credentials & password state',
+  internal_counselor_notes: 'Internal counselor notes', meeting_notes: 'Meeting notes', application_portal_credentials: 'Application portal credentials',
+  essay_draft_content_and_feedback: 'Essay draft content & feedback', recommendation_files_and_private_notes: 'Recommendation files & private notes',
+  task_submission_content: 'Task submission content', roadmap_reflections: 'Roadmap reflections', screen_time_detail: 'Screen time detail', support_tickets: 'Support tickets',
+};
+
+function visibilityPolicyLabel(item) {
+  return t(VISIBILITY_POLICY_LABELS[item] || item.replaceAll('_', ' '));
+}
+
+function VisibilitySection({ title, items = [], onDocument }) {
+  return <Panel title={title}><div className="visibility-records">{items.slice(0, 8).map((item) => <article key={item.id}><div><b>{visibilityItemTitle(item)}</b><small>{label(item.status || item.category || item.document_type || item.activity_type || item.level || '')}</small></div>{onDocument && (item.has_file || item.google_docs_preview_url) && <button className="button quiet" onClick={() => onDocument(item)}><Eye size={15} /> {t("Preview")}</button>}</article>)}{!items.length && <Empty />}</div></Panel>;
+}
+
+function SchoolStudent360({ visibility, student, loading, error, onBack, user, notify }) {
+  const [credentialOpen, setCredentialOpen] = useState(false);
+  const [document, setDocument] = useState(null);
+  if (loading) return <PageSkeleton />;
+  if (error) return <div className="section-stack"><button className="button quiet back-button" onClick={onBack}>{t("← Students")}</button><div className="alert error">{error}</div></div>;
+  if (!visibility) return <Empty text={t("Student visibility data is unavailable.")} />;
+  const profile = visibility.student;
+  const identity = profile.user || student.user_detail;
+  const included = visibility.policy?.included || [];
+  const excluded = visibility.policy?.excluded || [];
+  const portfolio = [...visibility.achievements, ...visibility.researches, ...visibility.projects, ...visibility.internships, ...visibility.activities, ...visibility.honors];
+  return <div className="section-stack school-student-360"><section className="student-overview-hero"><div className="student-overview-title"><button className="button quiet" onClick={onBack}>{t("← Students")}</button><div className="profile-identity"><span className="avatar large">{initials(fullName(identity))}</span><div><span className="eyebrow">{t("PRIVACY-SAFE STUDENT 360")}</span><h2>{fullName(identity)}</h2><p>{identity.email} • {profile.school_name}</p></div></div><button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t("Reset login")}</button></div><div className="overview-progress"><strong>{formatPercentLocale(profile.journey_progress_percent || 0)}</strong><span>{t("Application journey")}</span><div className="progress wide"><span style={{ width: `${profile.journey_progress_percent || 0}%` }} /></div></div></section><section className="visibility-policy"><div><ShieldCheck size={22} /><div><span className="eyebrow">{t("DATA VISIBILITY POLICY")}</span><h3>{visibility.policy.access_scope === 'global' ? t("Global admin scope") : t("Own-school scope")}</h3><p>{t("Admissions data is read-only here. Sensitive communication, credentials, and internal notes require a separate authorized workflow.")}</p></div></div><Badge tone="success">{t("Read only")}</Badge><details><summary>{t("What is visible")}</summary><div className="visibility-tags included">{included.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details><details><summary>{t("What is protected")}</summary><div className="visibility-tags protected">{excluded.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details></section><div className="stat-grid"><Stat label={t("Level")} value={profile.level} note={tx`${profile.xp_total} XP`} /><Stat label={t("Tasks")} value={visibility.tasks.length} note={formatPercentLocale(profile.task_progress_percent || 0)} /><Stat label={t("Roadmap")} value={visibility.roadmap.length} note={formatPercentLocale(profile.roadmap_progress_percent || 0)} /><Stat label={t("Applications")} value={visibility.applications.length} note={t("Metadata and status")}/></div><div className="split-grid"><Panel title={t("Academic & planning")}><div className="detail-grid"><Detail label={t("Grade")} value={profile.grade} /><Detail label={t("GPA")} value={profile.gpa} /><Detail label={t("IELTS")} value={profile.ielts_score} /><Detail label={t("SAT")} value={profile.sat_score} /><Detail label={t("Target major")} value={profile.target_major} /><Detail label={t("Target countries")} value={profile.target_countries} /><Detail label={t("Parent contact")} value={profile.parent_contact} /><Detail label={t("Counselor")} value={profile.counselor_name} /></div></Panel><VisibilitySection title={t("Meetings")} items={visibility.meetings} /></div><div className="overview-grid"><VisibilitySection title={t("Tasks")} items={visibility.tasks} /><VisibilitySection title={t("Roadmap")} items={visibility.roadmap} /><VisibilitySection title={t("Applications")} items={visibility.applications} /><VisibilitySection title={t("Documents")} items={visibility.documents} onDocument={setDocument} /><VisibilitySection title={t("Essays")} items={visibility.essays} /><VisibilitySection title={t("Recommendations")} items={visibility.recommendations} /><VisibilitySection title={t("Portfolio & activities")} items={portfolio} /><VisibilitySection title={t("Program Usage")} items={visibility.program_usage} /></div>{credentialOpen && <TemporaryCredentialModal account={{ ...identity, role: 'student' }} onClose={() => setCredentialOpen(false)} notify={notify} />}{document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}</div>;
+}
+
 function StudentsPage({ user, data, query, reload, notify }) {
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [visibility, setVisibility] = useState(null);
+  const [visibilityLoading, setVisibilityLoading] = useState(false);
+  const [visibilityError, setVisibilityError] = useState('');
+
+  async function openStudent(student) {
+    setSelected(student);
+    setVisibility(null);
+    setVisibilityError('');
+    if (!['admin', 'organization'].includes(user.role)) return;
+    setVisibilityLoading(true);
+    try {setVisibility(await api.studentDataVisibility(student.id));} catch (error) {setVisibilityError(error.message);} finally {setVisibilityLoading(false);}
+  }
 
   async function remove(student) {
     if (!window.confirm(tx`Delete ${fullName(student.user_detail)}’s profile?`)) return;
@@ -1100,10 +1150,11 @@ function StudentsPage({ user, data, query, reload, notify }) {
     } catch (err) {notify(err.message, 'error');}
   }
 
+  if (selected && ['admin', 'organization'].includes(user.role)) return <SchoolStudent360 visibility={visibility} student={selected} loading={visibilityLoading} error={visibilityError} onBack={() => setSelected(null)} user={user} notify={notify} />;
   if (selected) return <StudentOverview student={data.students.find((item) => item.id === selected.id) || selected} data={data} onBack={() => setSelected(null)} user={user} notify={notify} />;
 
   return <>
-    <Panel title={t("Students")} action={user.role !== 'teacher' && <button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button>}><StudentTable data={data} query={query} onView={setSelected} onApproveLevel={isTaskManager(user) ? approveLevel : undefined} onEdit={user.role !== 'teacher' ? (student) => {setEditing(student);setOpen(true);} : undefined} onDelete={user.role !== 'teacher' ? remove : undefined} /></Panel>
+    <Panel title={t("Students")} action={user.role !== 'teacher' && <button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button>}><StudentTable data={data} query={query} onView={openStudent} onApproveLevel={isTaskManager(user) ? approveLevel : undefined} onEdit={user.role !== 'teacher' ? (student) => {setEditing(student);setOpen(true);} : undefined} onDelete={user.role !== 'teacher' ? remove : undefined} /></Panel>
     {open && <StudentForm user={user} data={data} student={editing} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
   </>;
 }
@@ -1138,8 +1189,14 @@ function StudentForm({ user, data, student, onClose, onSaved, notify }) {
     setFieldErrors({});
     setSaving(true);
     try {
-      if (student) await api.update('students', student.id, { grade: form.grade, target_major: form.target_major, target_countries: targetCountries, gpa: form.gpa || null, ielts_score: form.ielts_score || null, sat_score: form.sat_score || null, budget_usd: form.budget_usd || null, parent_contact: form.parent_contact, notes: form.notes, scholarship_needed: form.scholarship_needed, school: Number(form.school) });else
-      await api.quickCreateStudent({ name: form.name, email: form.email, password: form.password, grade: form.grade, major: form.target_major, countries: targetCountries, gpa: form.gpa, ielts: form.ielts_score, sat: form.sat_score, budget_usd: form.budget_usd, parent_contact: form.parent_contact, notes: form.notes, scholarship_needed: form.scholarship_needed, school: form.school });
+      const profilePayload = { grade: form.grade, target_major: form.target_major, target_countries: targetCountries, gpa: form.gpa || null, ielts_score: form.ielts_score || null, sat_score: form.sat_score || null, budget_usd: form.budget_usd || null, parent_contact: form.parent_contact, scholarship_needed: form.scholarship_needed, school: Number(form.school) };
+      const createPayload = { name: form.name, email: form.email, password: form.password, grade: form.grade, major: form.target_major, countries: targetCountries, gpa: form.gpa, ielts: form.ielts_score, sat: form.sat_score, budget_usd: form.budget_usd, parent_contact: form.parent_contact, scholarship_needed: form.scholarship_needed, school: form.school };
+      if (user.role !== 'organization') {
+        profilePayload.notes = form.notes;
+        createPayload.notes = form.notes;
+      }
+      if (student) await api.update('students', student.id, profilePayload);else
+      await api.quickCreateStudent(createPayload);
       notify(student ? t("Student updated.") : t("Student created."));onSaved();
     } catch (err) {
       const countryErrors = err.details?.target_countries || err.details?.countries;
@@ -1160,7 +1217,7 @@ function StudentForm({ user, data, student, onClose, onSaved, notify }) {
     <Field label={t("SAT")}><input type="number" value={form.sat_score} onChange={(e) => update('sat_score', e.target.value)} /></Field>
     <Field label={t("Annual budget USD")}><input type="number" value={form.budget_usd} onChange={(e) => update('budget_usd', e.target.value)} /></Field>
     <Field label={t("Parent contact")}><input value={form.parent_contact} onChange={(e) => update('parent_contact', e.target.value)} /></Field>
-    <Field label={t("Notes")}><textarea value={form.notes} onChange={(e) => update('notes', e.target.value)} /></Field>
+    {user.role !== 'organization' && <Field label={t("Notes")}><textarea value={form.notes} onChange={(e) => update('notes', e.target.value)} /></Field>}
     <CheckboxControl className="form-wide" checked={form.scholarship_needed} onChange={(e) => update('scholarship_needed', e.target.checked)}>{t("Scholarship needed")}</CheckboxControl>
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save student")}</button></div>
   </form></Modal>;

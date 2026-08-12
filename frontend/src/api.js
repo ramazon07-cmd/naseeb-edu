@@ -275,6 +275,7 @@ export const api = {
   approveRoadmapMission: (id) => request(`/roadmap-missions/${id}/approve/`, { method: 'POST' }),
   approveStudentLevel: (id) => request(`/students/${id}/approve-level/`, { method: 'POST' }),
   studentXpHistory: (id) => request(`/students/${id}/xp-history/`),
+  studentDataVisibility: (id) => request(`/students/${id}/data-visibility/`),
   bookingParticipants: () => request('/bookings/participants/'),
   approveBooking: (id) => request(`/bookings/${id}/approve/`, { method: 'POST' }),
   rejectBooking: (id) => request(`/bookings/${id}/reject/`, { method: 'POST' }),
