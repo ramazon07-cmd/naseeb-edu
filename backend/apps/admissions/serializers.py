@@ -11,6 +11,7 @@ from PIL import Image, UnidentifiedImageError
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Count
 from django.utils import timezone
+from datetime import timedelta
 from apps.users.models import User
 from apps.users.credentials import issue_temporary_credential
 from apps.users.serializers import UserSerializer
@@ -42,6 +43,10 @@ from .models import (
     Research,
     ResourceLibraryItem,
     RoadmapMission,
+    CounselorRoadmap,
+    CounselorRoadmapMission,
+    CounselorRoadmapTemplate,
+    CounselorRoadmapTemplateMission,
     School,
     ScreenTimeDaily,
     Scholarship,
@@ -257,7 +262,7 @@ class StudentRecordSerializerMixin:
             ):
                 return student
             raise serializers.ValidationError('You can only manage assigned students in your school.')
-        if user.is_staff:
+        if user.is_product_admin:
             return student
         if user.is_organization:
             if user.school_id and student.school_id == user.school_id:
@@ -835,6 +840,126 @@ class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSe
         if obj.status == RoadmapMission.Status.COMPLETED:
             return 'approved'
         return 'not_submitted'
+
+
+class CounselorRoadmapTemplateMissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CounselorRoadmapTemplateMission
+        fields = ('id', 'title', 'description', 'sequence', 'due_days', 'is_required')
+        read_only_fields = ('id',)
+
+
+class CounselorRoadmapTemplateSerializer(serializers.ModelSerializer):
+    missions = CounselorRoadmapTemplateMissionSerializer(many=True)
+
+    class Meta:
+        model = CounselorRoadmapTemplate
+        fields = ('id', 'name', 'description', 'kind', 'is_active', 'missions', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+    def validate_missions(self, missions):
+        if not missions:
+            raise serializers.ValidationError('Add at least one mission.')
+        sequences = [mission['sequence'] for mission in missions]
+        if len(sequences) != len(set(sequences)):
+            raise serializers.ValidationError('Mission sequence numbers must be unique.')
+        return missions
+
+    @transaction.atomic
+    def create(self, validated_data):
+        missions = validated_data.pop('missions')
+        template = CounselorRoadmapTemplate.objects.create(
+            **validated_data,
+            created_by=self.context['request'].user,
+        )
+        CounselorRoadmapTemplateMission.objects.bulk_create([
+            CounselorRoadmapTemplateMission(template=template, **mission) for mission in missions
+        ])
+        return template
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        missions = validated_data.pop('missions', None)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        if missions is not None:
+            instance.missions.all().delete()
+            CounselorRoadmapTemplateMission.objects.bulk_create([
+                CounselorRoadmapTemplateMission(template=instance, **mission) for mission in missions
+            ])
+        return instance
+
+
+class CounselorRoadmapMissionSerializer(serializers.ModelSerializer):
+    approved_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CounselorRoadmapMission
+        fields = '__all__'
+        read_only_fields = (
+            'roadmap', 'source_template_mission', 'title', 'description', 'sequence', 'due_date',
+            'is_required', 'status', 'admin_feedback', 'submitted_at', 'approved_at', 'approved_by',
+        )
+
+    def get_approved_by_name(self, obj):
+        return obj.approved_by.get_full_name() or obj.approved_by.username if obj.approved_by else None
+
+
+class CounselorRoadmapSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(required=False, allow_blank=True)
+    missions = CounselorRoadmapMissionSerializer(many=True, read_only=True)
+    counselor_name = serializers.SerializerMethodField()
+    school_name = serializers.CharField(source='school.name', read_only=True)
+    progress_percent = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = CounselorRoadmap
+        fields = '__all__'
+        read_only_fields = ('school', 'kind', 'status', 'assigned_by', 'completed_at')
+
+    def get_counselor_name(self, obj):
+        return obj.counselor.get_full_name() or obj.counselor.username
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        counselor = attrs.get('counselor')
+        template = attrs.get('template')
+        if self.instance and ({'counselor', 'template'} & set(attrs)):
+            raise serializers.ValidationError('An assigned roadmap cannot change counselor or template. Cancel and reassign it.')
+        if counselor and counselor.role != User.Role.COUNSELOR:
+            raise serializers.ValidationError({'counselor': 'Select a counselor account.'})
+        if counselor and not counselor.is_active:
+            raise serializers.ValidationError({'counselor': 'Select an active counselor.'})
+        if template and not template.is_active:
+            raise serializers.ValidationError({'template': 'Select an active template.'})
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        counselor = validated_data['counselor']
+        template = validated_data['template']
+        validated_data['title'] = validated_data.get('title') or template.name
+        roadmap = CounselorRoadmap.objects.create(
+            **validated_data,
+            school=counselor.school,
+            kind=template.kind,
+            assigned_by=self.context['request'].user,
+        )
+        today = timezone.localdate()
+        CounselorRoadmapMission.objects.bulk_create([
+            CounselorRoadmapMission(
+                roadmap=roadmap,
+                source_template_mission=mission,
+                title=mission.title,
+                description=mission.description,
+                sequence=mission.sequence,
+                due_date=today + timedelta(days=mission.due_days),
+                is_required=mission.is_required,
+            )
+            for mission in template.missions.all()
+        ])
+        return roadmap
 
 
 class XPTransactionSerializer(serializers.ModelSerializer):

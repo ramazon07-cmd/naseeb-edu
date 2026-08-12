@@ -1,34 +1,44 @@
-from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
-from .models import User
+from .models import ProductAuditEvent, User
 from .auth_views import token_pair_for_user
 from .credentials import complete_password_change, issue_temporary_credential
 from .serializers import (
     CounselorTransferSerializer,
+    CounselorProvisionSerializer,
     IndividualCounselorCreateSerializer,
     PasswordChangeSerializer,
+    ProductAuditEventSerializer,
     RegisterSerializer,
     TemporaryCredentialIssueSerializer,
     UserSerializer,
 )
+from .services import audit_product_action, transfer_counselor
 
 
 class IsRoleScopedUserAccess(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        if request.user.is_counselor_like:
+        if request.user.is_product_admin or request.user.role == User.Role.COUNSELOR:
             return True
         if view.action == 'create':
             return False
         return True
 
     def has_object_permission(self, request, view, obj):
-        if request.user.is_counselor_like:
+        if request.user.is_product_admin:
             return True
+        if request.user.role == User.Role.COUNSELOR:
+            return obj == request.user or (
+                obj.role == User.Role.STUDENT
+                and request.user.school_id is not None
+                and obj.school_id == request.user.school_id
+            )
         if request.user.is_organization:
             return (
                 request.user.school_id is not None
@@ -36,6 +46,11 @@ class IsRoleScopedUserAccess(permissions.BasePermission):
                 and obj.school_id == request.user.school_id
             )
         return obj == request.user
+
+
+class IsProductAdmin(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_product_admin)
 
 
 class RegisterView(generics.CreateAPIView):
@@ -52,8 +67,24 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff or user.role == User.Role.ADMIN:
-            return User.objects.all().order_by('first_name', 'last_name')
+        if user.is_product_admin:
+            queryset = User.objects.select_related('school').all()
+            role = self.request.query_params.get('role')
+            school = self.request.query_params.get('school')
+            active = self.request.query_params.get('is_active')
+            search = self.request.query_params.get('search', '').strip()
+            if role:
+                queryset = queryset.filter(role=role)
+            if school:
+                queryset = queryset.filter(school_id=school)
+            if active in {'true', 'false'}:
+                queryset = queryset.filter(is_active=active == 'true')
+            if search:
+                queryset = queryset.filter(
+                    Q(username__icontains=search) | Q(email__icontains=search)
+                    | Q(first_name__icontains=search) | Q(last_name__icontains=search)
+                )
+            return queryset.order_by('first_name', 'last_name', 'id')
         if user.role == User.Role.COUNSELOR:
             if not user.school_id:
                 return User.objects.none()
@@ -65,7 +96,16 @@ class UserViewSet(viewsets.ModelViewSet):
             if not user.school_id:
                 return User.objects.none()
             return User.objects.filter(role=User.Role.STUDENT, school=user.school).order_by('first_name', 'last_name')
-        return User.objects.filter(id=user.id)
+        return User.objects.filter(id=user.id).order_by('id')
+
+    def perform_update(self, serializer):
+        account = serializer.save()
+        if self.request.user.is_product_admin:
+            audit_product_action(
+                actor=self.request.user,
+                action='counselor.updated' if account.role == User.Role.COUNSELOR else 'account.updated',
+                target=account,
+            )
 
     @action(detail=False, methods=['get'])
     def me(self, request):
@@ -146,7 +186,16 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def is_product_admin(user):
-        return bool(user.is_superuser or user.role == User.Role.ADMIN)
+        return user.is_product_admin
+
+    @action(detail=False, methods=['post'], url_path='create-counselor')
+    def create_counselor(self, request):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can create counselors.'}, status=403)
+        serializer = CounselorProvisionSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        counselor = serializer.save()
+        return Response(UserSerializer(counselor, context={'request': request}).data, status=201)
 
     @action(detail=False, methods=['post'], url_path='create-individual-counselor')
     def create_individual_counselor(self, request):
@@ -155,6 +204,12 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = IndividualCounselorCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         counselor = serializer.save()
+        audit_product_action(
+            actor=request.user,
+            action='counselor.created_individual',
+            target=counselor,
+            metadata={'school': counselor.school_id},
+        )
         return Response(
             UserSerializer(counselor, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
@@ -183,15 +238,46 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({
                 'detail': 'Reassign or move the counselor’s students before transferring the counselor.'
             }, status=409)
-        previous_workspace = counselor.school
-        with transaction.atomic():
-            counselor.school = target
-            counselor.save(update_fields=['school'])
-            if (
-                previous_workspace
-                and previous_workspace.workspace_type == School.WorkspaceType.INDIVIDUAL
-                and previous_workspace.owner_counselor_id == counselor.id
-            ):
-                previous_workspace.is_active = False
-                previous_workspace.save(update_fields=['is_active', 'updated_at'])
+        try:
+            counselor, _ = transfer_counselor(
+                counselor=counselor,
+                school=target,
+                actor=request.user,
+            )
+        except DjangoValidationError as exc:
+            return Response(exc.message_dict, status=409)
         return Response(UserSerializer(counselor, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can deactivate accounts.'}, status=403)
+        account = self.get_object()
+        if account == request.user:
+            return Response({'detail': 'You cannot deactivate your own account.'}, status=400)
+        account.is_active = False
+        account.save(update_fields=['is_active'])
+        audit_product_action(actor=request.user, action='account.deactivated', target=account)
+        return Response(UserSerializer(account, context={'request': request}).data)
+
+
+class ProductAuditEventViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ProductAuditEventSerializer
+    permission_classes = [IsProductAdmin]
+
+    def get_queryset(self):
+        queryset = ProductAuditEvent.objects.select_related('actor').all()
+        action_value = self.request.query_params.get('action')
+        target_type = self.request.query_params.get('target_type')
+        search = self.request.query_params.get('search', '').strip()
+        if action_value:
+            queryset = queryset.filter(action=action_value)
+        if target_type:
+            queryset = queryset.filter(target_type=target_type)
+        if search:
+            queryset = queryset.filter(
+                Q(target_label__icontains=search) | Q(action__icontains=search)
+                | Q(actor__username__icontains=search)
+            )
+        return queryset
+    ProductAuditEventSerializer,

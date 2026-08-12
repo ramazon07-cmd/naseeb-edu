@@ -48,6 +48,9 @@ from .models import (
     Research,
     ResourceLibraryItem,
     RoadmapMission,
+    CounselorRoadmap,
+    CounselorRoadmapMission,
+    CounselorRoadmapTemplate,
     School,
     ScreenTimeDaily,
     Scholarship,
@@ -88,6 +91,8 @@ from .serializers import (
     ResearchSerializer,
     ResourceLibraryItemSerializer,
     RoadmapMissionSerializer,
+    CounselorRoadmapSerializer,
+    CounselorRoadmapTemplateSerializer,
     SchoolSerializer,
     ScreenTimeDailySerializer,
     ScholarshipSerializer,
@@ -105,6 +110,7 @@ from .services import (
     award_approval_xp,
     extend_level_one_roadmap,
 )
+from apps.users.services import audit_product_action
 
 
 class CounselorOrOwnerPermission(permissions.BasePermission):
@@ -230,7 +236,7 @@ class ScopedQuerysetMixin:
                     student__school_id=user.school_id,
                 )
             return queryset
-        if user.is_staff:
+        if user.is_product_admin:
             return queryset
         if user.is_organization:
             if not user.school_id:
@@ -257,6 +263,12 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
                 return self.queryset.none()
             return self.queryset.filter(school_id=self.request.user.school_id)
         return self.filter_for_user(self.queryset)
+
+    def retrieve(self, request, *args, **kwargs):
+        student = self.get_object()
+        if request.user.is_product_admin:
+            audit_product_action(actor=request.user, action='student_360.viewed', target=student)
+        return Response(self.get_serializer(student).data)
 
     def perform_destroy(self, instance):
         student_user = instance.user
@@ -414,25 +426,66 @@ class SchoolViewSet(viewsets.ModelViewSet):
     queryset = School.objects.annotate(students_count=Count('students')).order_by('name')
 
     def get_queryset(self):
-        if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN:
-            return self.queryset
+        if self.request.user.is_product_admin:
+            queryset = self.queryset
+            search = self.request.query_params.get('search', '').strip()
+            workspace_type = self.request.query_params.get('workspace_type')
+            active = self.request.query_params.get('is_active')
+            if search:
+                queryset = queryset.filter(
+                    Q(name__icontains=search) | Q(code__icontains=search)
+                    | Q(contact_email__icontains=search)
+                )
+            if workspace_type:
+                queryset = queryset.filter(workspace_type=workspace_type)
+            if active in {'true', 'false'}:
+                queryset = queryset.filter(is_active=active == 'true')
+            return queryset
         if self.request.user.role == User.Role.COUNSELOR and self.request.user.school_id:
             return self.queryset.filter(id=self.request.user.school_id)
         if self.request.user.is_organization and self.request.user.school_id:
             return self.queryset.filter(id=self.request.user.school_id)
         return self.queryset.none()
 
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can create schools.'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        school = serializer.save()
+        audit_product_action(actor=self.request.user, action='school.created', target=school)
+
+    def update(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can edit schools.'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def perform_update(self, serializer):
+        school = serializer.save()
+        audit_product_action(actor=self.request.user, action='school.updated', target=school)
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can deactivate schools.'}, status=403)
+        school = self.get_object()
+        school.is_active = False
+        school.save(update_fields=['is_active', 'updated_at'])
+        audit_product_action(actor=request.user, action='school.deactivated', target=school)
+        return Response(status=204)
+
     @action(detail=True, methods=['post'], url_path='create-account')
     def create_account(self, request, pk=None):
-        if not request.user.is_counselor_like:
-            return Response({'detail': 'Only counselors can create organization accounts.'}, status=403)
         school = self.get_object()
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can create organization accounts.'}, status=403)
         serializer = OrganizationAccountSerializer(
             data=request.data,
             context={'school': school, 'request': request},
         )
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        audit_product_action(actor=request.user, action='organization_account.created', target=user, metadata={'school': school.pk})
         return Response({
             'id': user.id,
             'username': user.username,
@@ -730,7 +783,7 @@ class StaffControlledWorkMixin:
             return queryset
         if user.role == User.Role.COUNSELOR:
             return queryset.filter(student__assigned_counselor=user)
-        if user.is_staff:
+        if user.is_product_admin:
             return queryset
         if user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
             if not user.school_id:
@@ -868,7 +921,6 @@ class AchievementViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.filter_for_user(self.queryset)
-
 
 class ResearchViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = ResearchSerializer
@@ -1088,7 +1140,7 @@ class StudentCollaborationPermission(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         user = request.user
-        if user.is_staff or user.role == User.Role.ADMIN:
+        if user.is_product_admin:
             return True
         if user.role == User.Role.COUNSELOR:
             if isinstance(obj, Booking):
@@ -1210,6 +1262,150 @@ class RoadmapMissionViewSet(StaffControlledWorkMixin, viewsets.ModelViewSet):
         return Response(data)
 
 
+class ProductAdminPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_product_admin)
+
+
+class CounselorRoadmapTemplateViewSet(viewsets.ModelViewSet):
+    serializer_class = CounselorRoadmapTemplateSerializer
+    permission_classes = [ProductAdminPermission]
+    queryset = CounselorRoadmapTemplate.objects.prefetch_related('missions').all()
+
+    def get_queryset(self):
+        queryset = self.queryset
+        kind = self.request.query_params.get('kind')
+        active = self.request.query_params.get('is_active')
+        search = self.request.query_params.get('search', '').strip()
+        if kind:
+            queryset = queryset.filter(kind=kind)
+        if active in {'true', 'false'}:
+            queryset = queryset.filter(is_active=active == 'true')
+        if search:
+            queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
+        return queryset
+
+    def perform_create(self, serializer):
+        template = serializer.save()
+        audit_product_action(actor=self.request.user, action='counselor_roadmap_template.created', target=template)
+
+    def perform_update(self, serializer):
+        template = serializer.save()
+        audit_product_action(actor=self.request.user, action='counselor_roadmap_template.updated', target=template)
+
+
+class CounselorRoadmapViewSet(viewsets.ModelViewSet):
+    serializer_class = CounselorRoadmapSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = CounselorRoadmap.objects.select_related(
+        'counselor', 'school', 'template', 'assigned_by'
+    ).prefetch_related('missions__approved_by').all()
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_product_admin:
+            queryset = self.queryset
+            counselor = self.request.query_params.get('counselor')
+            school = self.request.query_params.get('school')
+            status_value = self.request.query_params.get('status')
+            if counselor:
+                queryset = queryset.filter(counselor_id=counselor)
+            if school:
+                queryset = queryset.filter(school_id=school)
+            if status_value:
+                queryset = queryset.filter(status=status_value)
+            return queryset
+        if user.role == User.Role.COUNSELOR:
+            return self.queryset.filter(counselor=user)
+        return self.queryset.none()
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can assign counselor roadmaps.'}, status=403)
+        response = super().create(request, *args, **kwargs)
+        roadmap = CounselorRoadmap.objects.get(pk=response.data['id'])
+        audit_product_action(actor=request.user, action='counselor_roadmap.assigned', target=roadmap)
+        return response
+
+    def update(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can edit counselor roadmaps.'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can cancel counselor roadmaps.'}, status=403)
+        roadmap = self.get_object()
+        roadmap.status = CounselorRoadmap.Status.CANCELLED
+        roadmap.save(update_fields=['status', 'updated_at'])
+        audit_product_action(actor=request.user, action='counselor_roadmap.cancelled', target=roadmap)
+        return Response(status=204)
+
+    @action(detail=True, methods=['post'], url_path='submit-mission')
+    def submit_mission(self, request, pk=None):
+        roadmap = self.get_object()
+        if request.user.role != User.Role.COUNSELOR or roadmap.counselor_id != request.user.id:
+            return Response({'detail': 'Only the assigned counselor can submit this mission.'}, status=403)
+        mission_id = request.data.get('mission')
+        note = str(request.data.get('counselor_note', '')).strip()
+        if not note:
+            return Response({'counselor_note': ['Add a completion note before submitting.']}, status=400)
+        with transaction.atomic():
+            mission = CounselorRoadmapMission.objects.select_for_update().filter(
+                pk=mission_id,
+                roadmap=roadmap,
+            ).first()
+            if not mission:
+                return Response({'mission': ['Mission does not belong to this roadmap.']}, status=400)
+            if mission.status == CounselorRoadmapMission.Status.APPROVED:
+                return Response({'detail': 'An approved mission cannot be resubmitted.'}, status=409)
+            mission.status = CounselorRoadmapMission.Status.SUBMITTED
+            mission.counselor_note = note
+            mission.submitted_at = timezone.now()
+            mission.admin_feedback = ''
+            mission.save(update_fields=['status', 'counselor_note', 'submitted_at', 'admin_feedback', 'updated_at'])
+        return Response(self.get_serializer(roadmap).data)
+
+    @action(detail=True, methods=['post'], url_path='review-mission')
+    def review_mission(self, request, pk=None):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can review counselor missions.'}, status=403)
+        roadmap = self.get_object()
+        decision = request.data.get('decision')
+        if decision not in {'approve', 'request_changes'}:
+            return Response({'decision': ['Choose approve or request_changes.']}, status=400)
+        with transaction.atomic():
+            mission = CounselorRoadmapMission.objects.select_for_update().filter(
+                pk=request.data.get('mission'), roadmap=roadmap
+            ).first()
+            if not mission or mission.status != CounselorRoadmapMission.Status.SUBMITTED:
+                return Response({'mission': ['Select a submitted mission from this roadmap.']}, status=400)
+            mission.admin_feedback = str(request.data.get('admin_feedback', '')).strip()
+            if decision == 'approve':
+                mission.status = CounselorRoadmapMission.Status.APPROVED
+                mission.approved_at = timezone.now()
+                mission.approved_by = request.user
+            else:
+                if not mission.admin_feedback:
+                    return Response({'admin_feedback': ['Explain the requested changes.']}, status=400)
+                mission.status = CounselorRoadmapMission.Status.CHANGES_REQUESTED
+                mission.approved_at = None
+                mission.approved_by = None
+            mission.save()
+            required = roadmap.missions.filter(is_required=True)
+            if required.exists() and not required.exclude(status=CounselorRoadmapMission.Status.APPROVED).exists():
+                roadmap.status = CounselorRoadmap.Status.COMPLETED
+                roadmap.completed_at = timezone.now()
+                roadmap.save(update_fields=['status', 'completed_at', 'updated_at'])
+        audit_product_action(
+            actor=request.user,
+            action=f'counselor_roadmap_mission.{decision}',
+            target=mission,
+            metadata={'roadmap': roadmap.pk},
+        )
+        return Response(self.get_serializer(roadmap).data)
+
+
 class CommunityPostViewSet(viewsets.ModelViewSet):
     serializer_class = CommunityPostSerializer
     permission_classes = [StudentPortalPermission]
@@ -1314,7 +1510,7 @@ class StudentMessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff or user.role == User.Role.ADMIN:
+        if user.is_product_admin:
             return self.queryset
         if user.role == User.Role.COUNSELOR:
             return self.queryset.filter(Q(sender=user) | Q(recipient=user))
@@ -1383,7 +1579,7 @@ def discoverable_channels_for(user):
     queryset = MessageChannel.objects.select_related('school', 'created_by').prefetch_related(
         'memberships__user',
     )
-    if user.is_staff or user.role == User.Role.ADMIN:
+    if user.is_product_admin:
         return queryset
     public_scope = Q(is_public=True, school__isnull=True)
     if user.school_id:
@@ -1424,7 +1620,7 @@ class MessageChannelPermission(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         user = request.user
-        if user.is_staff or user.role == User.Role.ADMIN:
+        if user.is_product_admin:
             return True
         role = channel_membership_role(obj, user)
         if request.method in permissions.SAFE_METHODS:
@@ -1641,7 +1837,7 @@ class ChannelMessagePermission(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         user = request.user
-        if user.is_staff or user.role == User.Role.ADMIN:
+        if user.is_product_admin:
             return True
         role = channel_membership_role(obj.channel, user)
         if request.method in permissions.SAFE_METHODS:
