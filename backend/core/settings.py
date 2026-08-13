@@ -12,6 +12,7 @@ SECRET_KEY = config('SECRET_KEY', default='dev-only-naseeb-secret-key-change-in-
 DEBUG = config('DEBUG', default=not IS_PRODUCTION, cast=bool)
 DATABASE_URL = config('DATABASE_URL', default='').strip()
 DEMO_ACCOUNTS_ENABLED = config('ENABLE_DEMO_ACCOUNTS', default=not IS_PRODUCTION, cast=bool)
+HOSTED_RUNTIME = config('RENDER', default=False, cast=bool)
 DEMO_COUNSELOR_PASSWORD = config('DEMO_COUNSELOR_PASSWORD', default='admin12345')
 DEMO_ORGANIZATION_PASSWORD = config('DEMO_ORGANIZATION_PASSWORD', default='school12345')
 DEMO_STUDENT_PASSWORD = config('DEMO_STUDENT_PASSWORD', default='student12345')
@@ -45,6 +46,7 @@ environment_errors = validate_runtime_environment(
     demo_accounts_enabled=DEMO_ACCOUNTS_ENABLED,
     media_root=MEDIA_ROOT_VALUE,
     document_storage_root=DOCUMENT_STORAGE_ROOT_VALUE,
+    hosted=HOSTED_RUNTIME,
 )
 if environment_errors:
     raise RuntimeError('Invalid runtime environment: ' + ' '.join(environment_errors))
