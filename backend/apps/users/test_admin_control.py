@@ -124,6 +124,8 @@ class AdminControlTests(APITestCase):
             'mission': mission_id, 'counselor_note': 'Safeguarding workflow reviewed.',
         }, format='json')
         self.assertEqual(submitted.status_code, status.HTTP_200_OK)
+        self.assertEqual(submitted.data['missions'][0]['status'], CounselorRoadmapMission.Status.SUBMITTED)
+        self.assertEqual(submitted.data['missions'][0]['counselor_note'], 'Safeguarding workflow reviewed.')
 
         self.client.force_authenticate(self.admin)
         approved = self.client.post(f'/api/counselor-roadmaps/{roadmap_id}/review-mission/', {
@@ -132,8 +134,69 @@ class AdminControlTests(APITestCase):
         self.assertEqual(approved.status_code, status.HTTP_200_OK)
         self.assertEqual(approved.data['status'], CounselorRoadmap.Status.COMPLETED)
         self.assertEqual(approved.data['progress_percent'], 100)
+        self.assertEqual(approved.data['missions'][0]['status'], CounselorRoadmapMission.Status.APPROVED)
+        self.assertEqual(
+            approved.data['missions'][0]['approved_by_name'],
+            self.admin.get_full_name() or self.admin.username,
+        )
         self.assertEqual(XPTransaction.objects.count(), 0)
         self.assertEqual(CounselorRoadmapMission.objects.get(pk=mission_id).status, CounselorRoadmapMission.Status.APPROVED)
+
+    def test_counselor_can_select_an_active_template_and_start_own_roadmap(self):
+        counselor = self.create_counselor(1)
+        other_counselor = self.create_counselor(2)
+        self.client.force_authenticate(self.admin)
+        template_response = self.client.post('/api/counselor-roadmap-templates/', {
+            'name': 'Professional foundations',
+            'description': 'Counselor onboarding milestones',
+            'kind': 'professional_onboarding',
+            'missions': [
+                {'title': 'Set advising standards', 'sequence': 1, 'due_days': 7, 'is_required': True},
+            ],
+        }, format='json')
+        self.assertEqual(template_response.status_code, status.HTTP_201_CREATED)
+
+        self.client.force_authenticate(counselor)
+        templates = self.client.get('/api/counselor-roadmap-templates/')
+        self.assertEqual(templates.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['id'] for item in templates.data['results']], [template_response.data['id']])
+
+        started = self.client.post('/api/counselor-roadmaps/', {
+            'counselor': other_counselor.id,
+            'template': template_response.data['id'],
+            'title': 'My professional plan',
+        }, format='json')
+        self.assertEqual(started.status_code, status.HTTP_201_CREATED)
+        roadmap = CounselorRoadmap.objects.get(pk=started.data['id'])
+        self.assertEqual(roadmap.counselor, counselor)
+        self.assertEqual(roadmap.school, counselor.school)
+        self.assertEqual(roadmap.assigned_by, counselor)
+
+        duplicate = self.client.post('/api/counselor-roadmaps/', {
+            'template': template_response.data['id'],
+        }, format='json')
+        self.assertEqual(duplicate.status_code, status.HTTP_409_CONFLICT)
+
+        custom = self.client.post('/api/counselor-roadmaps/', {
+            'title': 'My school management plan',
+            'kind': 'school_management',
+            'missions': [
+                {'title': 'Audit the school onboarding flow'},
+                {'title': 'Publish the monthly counselor report'},
+            ],
+        }, format='json')
+        self.assertEqual(custom.status_code, status.HTTP_201_CREATED)
+        custom_roadmap = CounselorRoadmap.objects.get(pk=custom.data['id'])
+        self.assertIsNone(custom_roadmap.template)
+        self.assertEqual(custom_roadmap.counselor, counselor)
+        self.assertEqual(list(custom_roadmap.missions.values_list('sequence', flat=True)), [1, 2])
+
+        denied_template_create = self.client.post('/api/counselor-roadmap-templates/', {
+            'name': 'Unauthorized template',
+            'kind': 'school_management',
+            'missions': [{'title': 'Not allowed', 'sequence': 1, 'due_days': 1}],
+        }, format='json')
+        self.assertEqual(denied_template_create.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_student_360_access_is_audited(self):
         student_user = User.objects.create_user(

@@ -1507,11 +1507,16 @@ class ProductAdminPermission(permissions.BasePermission):
 
 class CounselorRoadmapTemplateViewSet(viewsets.ModelViewSet):
     serializer_class = CounselorRoadmapTemplateSerializer
-    permission_classes = [ProductAdminPermission]
+    permission_classes = [permissions.IsAuthenticated]
     queryset = CounselorRoadmapTemplate.objects.prefetch_related('missions').all()
 
     def get_queryset(self):
+        user = self.request.user
+        if not (user.is_product_admin or user.role == User.Role.COUNSELOR):
+            return self.queryset.none()
         queryset = self.queryset
+        if user.role == User.Role.COUNSELOR:
+            queryset = queryset.filter(is_active=True)
         kind = self.request.query_params.get('kind')
         active = self.request.query_params.get('is_active')
         search = self.request.query_params.get('search', '').strip()
@@ -1522,6 +1527,21 @@ class CounselorRoadmapTemplateViewSet(viewsets.ModelViewSet):
         if search:
             queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
         return queryset
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can create roadmap templates.'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can edit roadmap templates.'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can delete roadmap templates.'}, status=403)
+        return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         template = serializer.save()
@@ -1558,12 +1578,80 @@ class CounselorRoadmapViewSet(viewsets.ModelViewSet):
         return self.queryset.none()
 
     def create(self, request, *args, **kwargs):
-        if not request.user.is_product_admin:
-            return Response({'detail': 'Only a product admin can assign counselor roadmaps.'}, status=403)
-        response = super().create(request, *args, **kwargs)
-        roadmap = CounselorRoadmap.objects.get(pk=response.data['id'])
-        audit_product_action(actor=request.user, action='counselor_roadmap.assigned', target=roadmap)
-        return response
+        if request.user.is_product_admin:
+            response = super().create(request, *args, **kwargs)
+            roadmap = CounselorRoadmap.objects.get(pk=response.data['id'])
+            audit_product_action(actor=request.user, action='counselor_roadmap.assigned', target=roadmap)
+            return response
+        if request.user.role != User.Role.COUNSELOR:
+            return Response({'detail': 'Only a counselor or product admin can start a counselor roadmap.'}, status=403)
+
+        template_id = request.data.get('template')
+        template = None
+        if template_id:
+            template = CounselorRoadmapTemplate.objects.filter(pk=template_id, is_active=True).first()
+            if not template:
+                return Response({'template': ['Select an active roadmap template.']}, status=400)
+            roadmap_kind = template.kind
+        else:
+            roadmap_kind = str(request.data.get('kind') or '').strip()
+            if roadmap_kind not in CounselorRoadmapTemplate.Kind.values:
+                return Response({'kind': ['Select a roadmap type.']}, status=400)
+            title = str(request.data.get('title') or '').strip()
+            if not title:
+                return Response({'title': ['Add a title for your roadmap.']}, status=400)
+            if len(title) > CounselorRoadmap._meta.get_field('title').max_length:
+                return Response({'title': ['Roadmap title is too long.']}, status=400)
+            raw_missions = request.data.get('missions')
+            if not isinstance(raw_missions, list) or not raw_missions:
+                return Response({'missions': ['Add at least one roadmap mission.']}, status=400)
+            if len(raw_missions) > 30:
+                return Response({'missions': ['Use 30 missions or fewer.']}, status=400)
+            mission_titles = []
+            for item in raw_missions:
+                mission_title = str(item.get('title') if isinstance(item, dict) else item).strip()
+                if not mission_title:
+                    return Response({'missions': ['Mission titles cannot be empty.']}, status=400)
+                if len(mission_title) > CounselorRoadmapMission._meta.get_field('title').max_length:
+                    return Response({'missions': ['A mission title is too long.']}, status=400)
+                mission_titles.append(mission_title)
+
+        if CounselorRoadmap.objects.filter(
+            counselor=request.user,
+            kind=roadmap_kind,
+            status=CounselorRoadmap.Status.ACTIVE,
+        ).exists():
+            return Response({'detail': 'You already have an active roadmap of this type.'}, status=409)
+
+        if template:
+            payload = request.data.copy()
+            payload['counselor'] = request.user.pk
+            serializer = self.get_serializer(data=payload)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            return Response(serializer.data, status=201, headers=self.get_success_headers(serializer.data))
+
+        with transaction.atomic():
+            roadmap = CounselorRoadmap.objects.create(
+                counselor=request.user,
+                school=request.user.school,
+                template=None,
+                title=title,
+                kind=roadmap_kind,
+                assigned_by=request.user,
+            )
+            today = timezone.localdate()
+            CounselorRoadmapMission.objects.bulk_create([
+                CounselorRoadmapMission(
+                    roadmap=roadmap,
+                    title=mission_title,
+                    sequence=index,
+                    due_date=today + timedelta(days=index * 7),
+                    is_required=True,
+                )
+                for index, mission_title in enumerate(mission_titles, start=1)
+            ])
+        return Response(self.get_serializer(roadmap).data, status=201)
 
     def update(self, request, *args, **kwargs):
         if not request.user.is_product_admin:
@@ -1602,6 +1690,7 @@ class CounselorRoadmapViewSet(viewsets.ModelViewSet):
             mission.submitted_at = timezone.now()
             mission.admin_feedback = ''
             mission.save(update_fields=['status', 'counselor_note', 'submitted_at', 'admin_feedback', 'updated_at'])
+        roadmap = self.queryset.get(pk=roadmap.pk)
         return Response(self.get_serializer(roadmap).data)
 
     @action(detail=True, methods=['post'], url_path='review-mission')
@@ -1641,6 +1730,7 @@ class CounselorRoadmapViewSet(viewsets.ModelViewSet):
             target=mission,
             metadata={'roadmap': roadmap.pk},
         )
+        roadmap = self.queryset.get(pk=roadmap.pk)
         return Response(self.get_serializer(roadmap).data)
 
 
