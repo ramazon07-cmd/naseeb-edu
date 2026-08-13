@@ -3,8 +3,8 @@ from django.conf import settings
 from django.db import OperationalError, ProgrammingError
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.throttling import ScopedRateThrottle
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .credentials import mark_temporary_credential_used
 from .localization import localized_message
 
@@ -93,3 +93,20 @@ class DemoAwareTokenObtainPairView(TokenObtainPairView):
     serializer_class = EmailOrUsernameTokenSerializer
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'login'
+
+
+class SafeTokenRefreshSerializer(TokenRefreshSerializer):
+    """Return a normal auth failure when a refresh token's user was deleted."""
+
+    def validate(self, attrs):
+        try:
+            return super().validate(attrs)
+        except get_user_model().DoesNotExist as exc:
+            raise AuthenticationFailed({
+                'detail': self.error_messages['no_active_account'],
+                'code': 'no_active_account',
+            }) from exc
+
+
+class SafeTokenRefreshView(TokenRefreshView):
+    serializer_class = SafeTokenRefreshSerializer
