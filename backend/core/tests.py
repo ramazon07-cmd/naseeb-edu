@@ -69,9 +69,10 @@ class ProductionEnvironmentTests(SimpleTestCase):
         self.assertTrue(any('APP_ENV=production' in error for error in errors))
 
     @override_settings(DEMO_ACCOUNTS_ENABLED=False)
-    def test_demo_seed_is_blocked_when_disabled(self):
-        with self.assertRaisesMessage(CommandError, 'Demo accounts are disabled'):
-            call_command('seed_demo', stdout=StringIO())
+    def test_demo_seed_is_safely_skipped_when_disabled(self):
+        output = StringIO()
+        call_command('seed_demo', stdout=output)
+        self.assertIn('skipping seed_demo', output.getvalue())
 
     @override_settings(DEMO_ACCOUNTS_ENABLED=False)
     def test_demo_reset_is_blocked_before_database_flush(self):
