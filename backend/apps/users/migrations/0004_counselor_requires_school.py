@@ -45,6 +45,11 @@ def backfill_counselor_schools(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
+    # PostgreSQL defers the FK trigger events produced by the data backfill until
+    # transaction commit. The following ALTER TABLE / constraint operations must
+    # therefore run after that commit instead of inside one migration transaction.
+    atomic = False
+
     dependencies = [
         ('admissions', '0019_supportticket'),
         ('users', '0003_user_teacher_role'),
