@@ -1,6 +1,6 @@
 from datetime import timedelta
 from django.conf import settings
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.utils import timezone
 from apps.users.models import User
 from apps.admissions.models import (
@@ -18,7 +18,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if not settings.DEMO_ACCOUNTS_ENABLED:
-            raise CommandError('Demo accounts are disabled in this environment.')
+            self.stdout.write(self.style.WARNING('Demo accounts are disabled; skipping seed_demo.'))
+            return
 
         school, _ = School.objects.get_or_create(
             code='naseeb-edu-demo',
