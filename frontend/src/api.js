@@ -107,7 +107,10 @@ async function parseResponse(response) {
 
 function errorMessage(payload) {
   if (!payload) return t('Unable to connect to the server.')
-  if (typeof payload === 'string') return payload
+  if (typeof payload === 'string') {
+    const isHtmlErrorPage = /<!doctype html>|<html[\s>]|<title>server error/i.test(payload)
+    return isHtmlErrorPage ? t('The server could not complete this request. Please retry.') : payload
+  }
   if (payload.detail) return payload.detail
   return Object.entries(payload)
     .map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(', ') : value}`)

@@ -418,8 +418,13 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
 
         with transaction.atomic():
             students = list(
+                # Only the student row needs a write lock. Joining nullable
+                # school/counselor relations here makes PostgreSQL reject the
+                # SELECT FOR UPDATE (it cannot lock the nullable side of an
+                # outer join). user is non-null and user.school_id is already
+                # available without joining the school table.
                 StudentProfile.objects.select_for_update()
-                .select_related('user', 'school', 'assigned_counselor')
+                .select_related('user')
                 .filter(pk__in=student_ids)
             )
             if len(students) != len(student_ids):

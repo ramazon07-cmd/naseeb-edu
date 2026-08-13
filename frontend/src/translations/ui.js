@@ -1,4 +1,5 @@
 export const UI_TRANSLATIONS = {
+  'The server could not complete this request. Please retry.': ['Server so‘rovni bajara olmadi. Qayta urinib ko‘ring.', 'Сервер не смог выполнить запрос. Попробуйте ещё раз.'],
   '30 min': ['30 daqiqa', '30 мин'],
   '45 min': ['45 daqiqa', '45 мин'],
   '60 min': ['60 daqiqa', '60 мин'],

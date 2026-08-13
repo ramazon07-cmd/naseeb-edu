@@ -4,9 +4,11 @@ import tempfile
 import zipfile
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.urls import reverse
 from django.utils import timezone
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -596,13 +598,21 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual({item['id'] for item in candidates.data}, {unassigned.id})
         self.assertNotIn('notes', candidates.data[0])
 
-        connected = self.client.post(
-            '/api/students/assign-counselor/',
-            {'students': [unassigned.id]},
-            format='json',
-        )
+        with CaptureQueriesContext(connection) as captured_queries:
+            connected = self.client.post(
+                '/api/students/assign-counselor/',
+                {'students': [unassigned.id]},
+                format='json',
+            )
         self.assertEqual(connected.status_code, status.HTTP_200_OK)
         self.assertEqual(connected.data['assigned_count'], 1)
+        assignment_reads = [
+            query['sql'] for query in captured_queries.captured_queries
+            if 'FROM "admissions_studentprofile"' in query['sql']
+            and 'assigned_counselor_id' in query['sql']
+        ]
+        self.assertTrue(assignment_reads)
+        self.assertNotIn('LEFT OUTER JOIN', assignment_reads[0])
         unassigned.refresh_from_db()
         self.assertEqual(unassigned.assigned_counselor, self.counselor)
 
