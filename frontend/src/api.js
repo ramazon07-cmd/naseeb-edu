@@ -242,6 +242,13 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  studentAssignmentCandidates: (counselor = null) => request(
+    `/students/assignment-candidates/${counselor ? `?counselor=${encodeURIComponent(counselor)}` : ''}`,
+  ),
+  assignCounselorStudents: (payload) => request('/students/assign-counselor/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
   createSchoolAccount: (schoolId, payload) => request(`/schools/${schoolId}/create-account/`, {
     method: 'POST',
     body: JSON.stringify(payload),

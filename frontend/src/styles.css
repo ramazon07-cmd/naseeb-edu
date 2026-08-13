@@ -447,6 +447,19 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 .panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .form-note { margin: 0; padding: 12px; display: flex; align-items: flex-start; gap: 8px; color: var(--muted); background: var(--surface-soft); border: 1px solid var(--border); border-radius: 10px; font-size: 11px; line-height: 1.5; }
 .form-note svg { flex: 0 0 auto; color: var(--success); }
+.student-assignment-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.assignment-target { min-height: 62px; padding: 11px 12px; display: grid; grid-template-columns: 36px minmax(0,1fr) auto; align-items: center; gap: 10px; background: var(--selected-bg); border: 1px solid var(--selected-border); border-radius: 12px; }
+.assignment-target b, .assignment-target small { display: block; }
+.assignment-target small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.assignment-picker > .assignment-tools { max-height: none; overflow: visible; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 9px; }
+.assignment-picker .member-search { margin: 0; }
+.assignment-picker .audience-shortcuts { margin: 0; }
+.assignment-picker > .assignment-candidate-list { max-height: 280px; overflow-y: auto; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+.assignment-candidate-list .checkbox-card > span:last-child { min-width: 0; flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.assignment-candidate-copy { min-width: 0; }
+.assignment-candidate-copy b, .assignment-candidate-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assignment-candidate-copy b { font-size: 10px; }
+.assignment-candidate-copy small { margin-top: 3px; color: var(--muted); font-size: 8px; font-weight: 500; }
 
 .badge { display: inline-flex; align-items: center; min-height: 24px; padding: 3px 8px; white-space: nowrap; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--badge-bg); color: var(--text); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .badge.approved, .badge.accepted, .badge.submitted, .badge.read { background: var(--success-bg); color: var(--success); border-color: var(--success-border); }
@@ -1258,6 +1271,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .password-change-page { padding: 0; }
   .password-change-card { min-height: 100dvh; border-radius: 0; }
   .credential-secret { grid-template-columns: 1fr; }
+  .student-assignment-form { grid-template-columns: 1fr; }
+  .assignment-picker > .assignment-tools, .assignment-picker > .assignment-candidate-list { grid-template-columns: 1fr; }
+  .assignment-picker .audience-shortcuts { justify-content: flex-start; }
   .credential-secret > span { grid-column: auto; }
   .credential-secret .button { width: 100%; }
   .stat-grid, .stat-grid.two { grid-template-columns: 1fr; }

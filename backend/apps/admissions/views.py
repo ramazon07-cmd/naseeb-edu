@@ -333,6 +333,138 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             'program_usage': SchoolVisibilityProgramServiceSerializer(student.program_services.select_related('mentor').all(), many=True, context=context).data,
         })
 
+    @action(detail=False, methods=['get'], url_path='assignment-candidates')
+    def assignment_candidates(self, request):
+        """Expose only the minimum student identity needed for a safe assignment picker."""
+        user = request.user
+        if user.role == User.Role.COUNSELOR:
+            if not user.school_id:
+                return Response({'detail': 'Your counselor account is not connected to a school.'}, status=400)
+            candidates = self.queryset.filter(
+                school_id=user.school_id,
+                user__school_id=user.school_id,
+                assigned_counselor__isnull=True,
+            )
+        elif user.is_product_admin:
+            counselor_id = request.query_params.get('counselor')
+            counselor = User.objects.filter(
+                pk=counselor_id,
+                role=User.Role.COUNSELOR,
+                is_active=True,
+                school__isnull=False,
+            ).first()
+            if not counselor:
+                return Response({'counselor': ['Select an active counselor.']}, status=400)
+            candidates = self.queryset.filter(
+                school_id=counselor.school_id,
+                user__school_id=counselor.school_id,
+            ).exclude(
+                assigned_counselor=counselor,
+            )
+        else:
+            return Response({'detail': 'Only counselors and product admins can assign students.'}, status=403)
+
+        return Response([
+            {
+                'id': student.id,
+                'user_detail': {
+                    'id': student.user_id,
+                    'full_name': student.user.get_full_name() or student.user.username,
+                    'email': student.user.email,
+                },
+                'grade': student.grade,
+                'school': student.school_id,
+                'school_name': student.school_name,
+                'assigned_counselor': student.assigned_counselor_id,
+                'counselor_name': (
+                    student.assigned_counselor.get_full_name() or student.assigned_counselor.username
+                    if student.assigned_counselor else None
+                ),
+            }
+            for student in candidates
+        ])
+
+    @action(detail=False, methods=['post'], url_path='assign-counselor')
+    def assign_counselor(self, request):
+        user = request.user
+        if not (user.role == User.Role.COUNSELOR or user.is_product_admin):
+            return Response({'detail': 'Only counselors and product admins can assign students.'}, status=403)
+
+        raw_student_ids = request.data.get('students')
+        if not isinstance(raw_student_ids, list) or not raw_student_ids:
+            return Response({'students': ['Select at least one student.']}, status=400)
+        try:
+            student_ids = list(dict.fromkeys(int(student_id) for student_id in raw_student_ids))
+        except (TypeError, ValueError):
+            return Response({'students': ['Student IDs must be integers.']}, status=400)
+
+        if user.role == User.Role.COUNSELOR:
+            counselor = user
+            supplied_counselor = request.data.get('counselor')
+            if supplied_counselor and str(supplied_counselor) != str(user.id):
+                return Response({'counselor': ['Counselors can only connect students to themselves.']}, status=403)
+        else:
+            counselor = User.objects.filter(
+                pk=request.data.get('counselor'),
+                role=User.Role.COUNSELOR,
+                is_active=True,
+                school__isnull=False,
+            ).first()
+            if not counselor:
+                return Response({'counselor': ['Select an active counselor.']}, status=400)
+
+        if not counselor.school_id:
+            return Response({'counselor': ['The counselor is not connected to a school.']}, status=400)
+
+        with transaction.atomic():
+            students = list(
+                StudentProfile.objects.select_for_update()
+                .select_related('user', 'school', 'assigned_counselor')
+                .filter(pk__in=student_ids)
+            )
+            if len(students) != len(student_ids):
+                return Response({'students': ['One or more students do not exist.']}, status=400)
+            if any(
+                student.school_id != counselor.school_id or student.user.school_id != counselor.school_id
+                for student in students
+            ):
+                return Response({
+                    'students': ['The counselor and every selected student must belong to the same school.']
+                }, status=400)
+            if user.role == User.Role.COUNSELOR and any(
+                student.assigned_counselor_id is not None for student in students
+            ):
+                return Response({
+                    'students': ['Counselors can connect only unassigned students from their own school.']
+                }, status=409)
+
+            reassigned_count = 0
+            for student in students:
+                if student.assigned_counselor_id and student.assigned_counselor_id != counselor.id:
+                    reassigned_count += 1
+                student.assigned_counselor = counselor
+                student.save(update_fields=['assigned_counselor', 'updated_at'])
+                ActivityLog.objects.create(
+                    actor=user,
+                    student=student,
+                    action=f'Student assigned to counselor: {counselor.get_full_name() or counselor.username}',
+                    metadata={'counselor': counselor.id, 'school': counselor.school_id},
+                )
+                if user.is_product_admin:
+                    audit_product_action(
+                        actor=user,
+                        action='student.counselor_assigned',
+                        target=student,
+                        metadata={'counselor': counselor.id, 'school': counselor.school_id},
+                    )
+
+        return Response({
+            'assigned_count': len(students),
+            'reassigned_count': reassigned_count,
+            'counselor': counselor.id,
+            'school': counselor.school_id,
+        })
+
     def perform_destroy(self, instance):
         student_user = instance.user
         ActivityLog.objects.create(
