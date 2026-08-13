@@ -1021,6 +1021,13 @@ def student_document_upload_path(instance, filename):
     return f'student_documents/{instance.student_id}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
 
 
+def student_evidence_upload_path(instance, filename):
+    """Keep honor and achievement evidence private, grouped, and collision-free."""
+    suffix = Path(filename or '').suffix.lower()[:12]
+    resource = instance._meta.model_name
+    return f'student_evidence/{instance.student_id}/{resource}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
+
+
 class PrivateDocumentStorage(FileSystemStorage):
     """A filesystem location that is never exposed by Django's public media route."""
 
@@ -1107,7 +1114,15 @@ class Achievement(TimeStampedModel):
     description = models.TextField()
     impact = models.CharField(max_length=255, blank=True)
     date = models.DateField(null=True, blank=True)
-    proof_file = models.FileField(upload_to='achievement_proofs/', blank=True, null=True)
+    proof_file = models.FileField(
+        upload_to=student_evidence_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    proof_file_name = models.CharField(max_length=255, blank=True)
+    proof_file_content_type = models.CharField(max_length=120, blank=True)
+    proof_file_size = models.PositiveBigIntegerField(default=0)
     verified = models.BooleanField(default=False)
 
     class Meta:
@@ -1218,7 +1233,15 @@ class Honor(TimeStampedModel):
     level = models.CharField(max_length=30, choices=Level.choices, default=Level.SCHOOL)
     award_date = models.DateField(null=True, blank=True)
     description = models.TextField(blank=True)
-    proof_file = models.FileField(upload_to='honor_proofs/', blank=True, null=True)
+    proof_file = models.FileField(
+        upload_to=student_evidence_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    proof_file_name = models.CharField(max_length=255, blank=True)
+    proof_file_content_type = models.CharField(max_length=120, blank=True)
+    proof_file_size = models.PositiveBigIntegerField(default=0)
     google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
 

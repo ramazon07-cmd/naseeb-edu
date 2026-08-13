@@ -61,17 +61,17 @@ function responseFileName(response, fallback = 'document') {
   try { return decodeURIComponent(encoded || plain || fallback) } catch { return plain || fallback }
 }
 
-async function documentFileRequest(id, download = false, retry = true) {
+async function protectedFileRequest(path, download = false, retry = true) {
   const headers = new Headers()
   const access = getToken('access')
   if (access) headers.set('Authorization', `Bearer ${access}`)
   const response = await fetchWithTimeout(
-    `${API_URL}/documents/${id}/file/${download ? '?download=1' : ''}`,
+    `${API_URL}${path}${download ? '?download=1' : ''}`,
     { headers, timeoutMs: 120_000 },
   )
   if (response.status === 401 && retry && getToken('refresh')) {
     await refreshAccessToken()
-    return documentFileRequest(id, download, false)
+    return protectedFileRequest(path, download, false)
   }
   if (!response.ok) {
     const payload = await parseResponse(response)
@@ -83,6 +83,12 @@ async function documentFileRequest(id, download = false, retry = true) {
     fileName: responseFileName(response),
   }
 }
+
+const documentFileRequest = (id, download = false) =>
+  protectedFileRequest(`/documents/${id}/file/`, download)
+
+const evidenceFileRequest = (resource, id, download = false) =>
+  protectedFileRequest(`/${resource}/${id}/proof-file/`, download)
 
 export function clearTokens() {
   localStorage.removeItem(TOKEN_KEYS.access)
@@ -247,6 +253,8 @@ export const api = {
   }),
   documentFile: (id) => documentFileRequest(id),
   downloadDocument: (id) => documentFileRequest(id, true),
+  evidenceFile: (resource, id) => evidenceFileRequest(resource, id),
+  downloadEvidence: (resource, id) => evidenceFileRequest(resource, id, true),
   createIndividualCounselor: (payload) => request('/users/accounts/create-individual-counselor/', {
     method: 'POST',
     body: JSON.stringify(payload),
