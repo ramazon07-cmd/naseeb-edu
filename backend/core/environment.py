@@ -17,6 +17,7 @@ def validate_runtime_environment(
     demo_accounts_enabled,
     media_root='',
     document_storage_root='',
+    hosted=False,
 ):
     """Return configuration errors that must stop a production deployment."""
     errors = []
@@ -24,6 +25,8 @@ def validate_runtime_environment(
         errors.append(f'APP_ENV must be one of: {", ".join(sorted(VALID_APP_ENVIRONMENTS))}.')
         return errors
 
+    if hosted and app_env != 'production':
+        errors.append('Hosted deployments must set APP_ENV=production; ephemeral SQLite data is not allowed.')
     if app_env != 'production':
         return errors
 

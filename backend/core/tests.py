@@ -50,6 +50,18 @@ class ProductionEnvironmentTests(SimpleTestCase):
 
         self.assertTrue(any('SQLite' in error for error in errors))
 
+    def test_hosted_runtime_rejects_development_sqlite_fallback(self):
+        errors = validate_runtime_environment(
+            app_env='development',
+            debug=True,
+            secret_key='dev-only-naseeb-secret-key-change-in-production',
+            database_url='',
+            demo_accounts_enabled=True,
+            hosted=True,
+        )
+
+        self.assertTrue(any('APP_ENV=production' in error for error in errors))
+
     @override_settings(DEMO_ACCOUNTS_ENABLED=False)
     def test_demo_seed_is_blocked_when_disabled(self):
         with self.assertRaisesMessage(CommandError, 'Demo accounts are disabled'):

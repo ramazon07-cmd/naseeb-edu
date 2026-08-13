@@ -150,6 +150,8 @@ Production startup fails early when `DEBUG=True`, the secret key is missing/weak
 
 Production deployment must use PostgreSQL and persistent media storage. Mount `MEDIA_ROOT` and `DOCUMENT_STORAGE_ROOT` on durable volumes and include both locations in backups; production startup rejects missing values. `DOCUMENT_STORAGE_ROOT` is private: never expose it through Nginx, a public `/media/` route, CDN, or object-storage public ACL. Student documents and honor/achievement evidence are streamed only through their authenticated API file endpoints. The included Docker Compose configuration mounts separate `media_data` and `private_document_data` volumes; use equivalent persistent disks on the production server. The included `Procfile`, `build.sh`, `Dockerfile`, healthcheck and Gunicorn configuration support common container or PaaS deployments.
 
+For Render, connect `DATABASE_URL` to one persistent Render PostgreSQL database and keep that same database attached across deploys. Set `APP_ENV=production`, `DEBUG=False`, and `ENABLE_DEMO_ACCOUNTS=False`; Render's hosted-runtime guard refuses to boot with the ephemeral development SQLite fallback. Use `./build.sh` as the build command and the `Procfile` web command (or its equivalent) as the start command. Never use `reset_and_start_backend.sh`, `reset_demo`, or `flush` in a Render build, pre-deploy, or start command. The Render persistent disk stores uploaded files only; it does not replace PostgreSQL. Take a PostgreSQL backup before changing `DATABASE_URL` or deleting/recreating the database service.
+
 Create a clean handoff ZIP without `.env`, SQLite, uploaded media, virtual environments, dependencies or compiled output:
 
 ```bash
