@@ -1145,9 +1145,69 @@ function SchoolStudent360({ visibility, student, loading, error, onBack, user, n
   return <div className="section-stack school-student-360"><section className="student-overview-hero"><div className="student-overview-title"><button className="button quiet" onClick={onBack}>{t("← Students")}</button><div className="profile-identity"><span className="avatar large">{initials(fullName(identity))}</span><div><span className="eyebrow">{t("PRIVACY-SAFE STUDENT 360")}</span><h2>{fullName(identity)}</h2><p>{identity.email} • {profile.school_name}</p></div></div><button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t("Reset login")}</button></div><div className="overview-progress"><strong>{formatPercentLocale(profile.journey_progress_percent || 0)}</strong><span>{t("Application journey")}</span><div className="progress wide"><span style={{ width: `${profile.journey_progress_percent || 0}%` }} /></div></div></section><section className="visibility-policy"><div><ShieldCheck size={22} /><div><span className="eyebrow">{t("DATA VISIBILITY POLICY")}</span><h3>{visibility.policy.access_scope === 'global' ? t("Global admin scope") : t("Own-school scope")}</h3><p>{t("Admissions data is read-only here. Sensitive communication, credentials, and internal notes require a separate authorized workflow.")}</p></div></div><Badge tone="success">{t("Read only")}</Badge><details><summary>{t("What is visible")}</summary><div className="visibility-tags included">{included.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details><details><summary>{t("What is protected")}</summary><div className="visibility-tags protected">{excluded.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details></section><div className="stat-grid"><Stat label={t("Level")} value={profile.level} note={tx`${profile.xp_total} XP`} /><Stat label={t("Tasks")} value={visibility.tasks.length} note={formatPercentLocale(profile.task_progress_percent || 0)} /><Stat label={t("Roadmap")} value={visibility.roadmap.length} note={formatPercentLocale(profile.roadmap_progress_percent || 0)} /><Stat label={t("Applications")} value={visibility.applications.length} note={t("Metadata and status")}/></div><div className="split-grid"><Panel title={t("Academic & planning")}><div className="detail-grid"><Detail label={t("Grade")} value={profile.grade} /><Detail label={t("GPA")} value={profile.gpa} /><Detail label={t("IELTS")} value={profile.ielts_score} /><Detail label={t("SAT")} value={profile.sat_score} /><Detail label={t("Target major")} value={profile.target_major} /><Detail label={t("Target countries")} value={profile.target_countries} /><Detail label={t("Parent contact")} value={profile.parent_contact} /><Detail label={t("Counselor")} value={profile.counselor_name} /></div></Panel><VisibilitySection title={t("Meetings")} items={visibility.meetings} /></div><div className="overview-grid"><VisibilitySection title={t("Tasks")} items={visibility.tasks} /><VisibilitySection title={t("Roadmap")} items={visibility.roadmap} /><VisibilitySection title={t("Applications")} items={visibility.applications} /><VisibilitySection title={t("Documents")} items={visibility.documents} onDocument={setDocument} /><VisibilitySection title={t("Essays")} items={visibility.essays} /><VisibilitySection title={t("Recommendations")} items={visibility.recommendations} /><VisibilitySection title={t("Portfolio & activities")} items={portfolio} onEvidence={setEvidence} /><VisibilitySection title={t("Program Usage")} items={visibility.program_usage} /></div>{credentialOpen && <TemporaryCredentialModal account={{ ...identity, role: 'student' }} onClose={() => setCredentialOpen(false)} notify={notify} />}{document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}{evidence && <EvidencePreviewModal item={evidence} onClose={() => setEvidence(null)} notify={notify} />}</div>;
 }
 
+function StudentAssignmentModal({ user, data, onClose, onSaved, notify }) {
+  const admin = user.role === 'admin';
+  const counselors = (data.accounts || []).filter((account) => account.role === 'counselor' && account.is_active && account.school);
+  const [counselorId, setCounselorId] = useState(admin ? '' : String(user.id));
+  const [candidates, setCandidates] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(!admin);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (admin && !counselorId) {
+      setCandidates([]);
+      setSelected([]);
+      setLoading(false);
+      return () => {cancelled = true;};
+    }
+    setLoading(true);
+    setError('');
+    setSelected([]);
+    api.studentAssignmentCandidates(admin ? counselorId : null).
+    then((items) => {if (!cancelled) setCandidates(items || []);}).
+    catch((requestError) => {if (!cancelled) setError(requestError.message);}).
+    finally(() => {if (!cancelled) setLoading(false);});
+    return () => {cancelled = true;};
+  }, [admin, counselorId]);
+
+  const visible = candidates.filter((student) => {
+    const haystack = `${fullName(student.user_detail)} ${student.user_detail?.email || ''}`.toLowerCase();
+    return haystack.includes(search.trim().toLowerCase());
+  });
+  const target = admin ? counselors.find((account) => String(account.id) === String(counselorId)) : user;
+  const targetRoleLabel = label(target?.role || user.role);
+  const toggle = (studentId) => setSelected((current) => current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]);
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!selected.length) {setError(t("Select at least one student."));return;}
+    setSaving(true);
+    setError('');
+    try {
+      await api.assignCounselorStudents({ counselor: Number(counselorId), students: selected });
+      notify(t("Students connected."));
+      onSaved();
+    } catch (requestError) {setError(requestError.message);} finally {setSaving(false);}
+  }
+
+  return <Modal title={admin ? t("Assign counselor") : t("Connect students")} onClose={onClose}><form className="student-assignment-form" onSubmit={submit}>
+    {admin && <Field label={t("Counselor")}><select value={counselorId} onChange={(event) => setCounselorId(event.target.value)} required><option value="">{t("Select a counselor")}</option>{counselors.map((account) => <option key={account.id} value={account.id}>{fullName(account)} · {account.school_name}</option>)}</select></Field>}
+    <p className="form-note form-wide"><ShieldCheck size={16} />{admin ? t("Admins can reassign students only to an active counselor from the same school.") : t("You can connect only unassigned students from your own school.")}</p>
+    {target && <div className="assignment-target form-wide"><span className="avatar">{initials(fullName(target))}</span><div><b>{fullName(target)}</b><small>{target.school_name || targetRoleLabel}</small></div><Badge>{`${formatNumberLocale(candidates.length)} ${t("available")}`}</Badge></div>}
+    {(counselorId || !admin) && <fieldset className="member-picker assignment-picker form-wide"><legend>{formatNumberLocale(selected.length)} {t("selected")}</legend><div className="assignment-tools"><label className="member-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search students")} /></label><div className="audience-shortcuts"><button type="button" onClick={() => setSelected(visible.map((student) => student.id))}>{t("Select all")}</button><button type="button" onClick={() => setSelected([])}>{t("Clear")}</button></div></div><div className="assignment-candidate-list">{visible.map((student) => <CheckboxControl key={student.id} checked={selected.includes(student.id)} onChange={() => toggle(student.id)}><span className="assignment-candidate-copy"><b>{fullName(student.user_detail)}</b><small>{student.user_detail?.email || '—'} · {t("Grade")} {student.grade}</small></span><Badge>{student.counselor_name ? t("Reassign") : t("Unassigned")}</Badge></CheckboxControl>)}</div>{loading && <small>{t("Loading students…")}</small>}{!loading && !visible.length && <small>{admin && !counselorId ? t("Select a counselor first.") : t("No students are available for assignment in this school.")}</small>}</fieldset>}
+    {error && <div className="alert error form-wide">{error}</div>}
+    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || loading || !selected.length} aria-busy={saving}>{saving ? t("Connecting…") : t("Connect selected students")}</button></div>
+  </form></Modal>;
+}
+
 function StudentsPage({ user, data, query, reload, notify }) {
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [visibility, setVisibility] = useState(null);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
@@ -1178,9 +1238,11 @@ function StudentsPage({ user, data, query, reload, notify }) {
   if (selected && ['admin', 'organization'].includes(user.role)) return <SchoolStudent360 visibility={visibility} student={selected} loading={visibilityLoading} error={visibilityError} onBack={() => setSelected(null)} user={user} notify={notify} />;
   if (selected) return <StudentOverview student={data.students.find((item) => item.id === selected.id) || selected} data={data} onBack={() => setSelected(null)} user={user} notify={notify} />;
 
+  const actions = user.role !== 'teacher' && <div className="panel-actions">{['admin', 'counselor'].includes(user.role) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {user.role === 'admin' ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
   return <>
-    <Panel title={t("Students")} action={user.role !== 'teacher' && <button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button>}><StudentTable data={data} query={query} onView={openStudent} onApproveLevel={isTaskManager(user) ? approveLevel : undefined} onEdit={user.role !== 'teacher' ? (student) => {setEditing(student);setOpen(true);} : undefined} onDelete={user.role !== 'teacher' ? remove : undefined} /></Panel>
+    <Panel title={t("Students")} action={actions}><StudentTable data={data} query={query} onView={openStudent} onApproveLevel={isTaskManager(user) ? approveLevel : undefined} onEdit={user.role !== 'teacher' ? (student) => {setEditing(student);setOpen(true);} : undefined} onDelete={user.role !== 'teacher' ? remove : undefined} /></Panel>
     {open && <StudentForm user={user} data={data} student={editing} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
+    {assignmentOpen && <StudentAssignmentModal user={user} data={data} onClose={() => setAssignmentOpen(false)} onSaved={() => {setAssignmentOpen(false);reload();}} notify={notify} />}
   </>;
 }
 

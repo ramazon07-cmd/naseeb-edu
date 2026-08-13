@@ -556,6 +556,132 @@ class RoleIsolationTests(APITestCase):
         )
         self.assertEqual(blocked_assignment.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_counselor_can_connect_only_unassigned_students_from_own_school(self):
+        unassigned_user = User.objects.create_user(
+            username='unassigned-school-a',
+            email='unassigned-school-a@example.com',
+            password='StrongPass123!',
+            role=User.Role.STUDENT,
+            school=self.school_a,
+        )
+        unassigned = StudentProfile.objects.create(
+            user=unassigned_user,
+            school=self.school_a,
+            school_name=self.school_a.name,
+        )
+        other_counselor = User.objects.create_user(
+            username='other-counselor-school-a',
+            email='other-counselor-school-a@example.com',
+            password='StrongPass123!',
+            role=User.Role.COUNSELOR,
+            school=self.school_a,
+        )
+        assigned_user = User.objects.create_user(
+            username='assigned-school-a',
+            email='assigned-school-a@example.com',
+            password='StrongPass123!',
+            role=User.Role.STUDENT,
+            school=self.school_a,
+        )
+        assigned_elsewhere = StudentProfile.objects.create(
+            user=assigned_user,
+            school=self.school_a,
+            school_name=self.school_a.name,
+            assigned_counselor=other_counselor,
+        )
+
+        self.client.force_authenticate(self.counselor)
+        candidates = self.client.get('/api/students/assignment-candidates/')
+        self.assertEqual(candidates.status_code, status.HTTP_200_OK)
+        self.assertEqual({item['id'] for item in candidates.data}, {unassigned.id})
+        self.assertNotIn('notes', candidates.data[0])
+
+        connected = self.client.post(
+            '/api/students/assign-counselor/',
+            {'students': [unassigned.id]},
+            format='json',
+        )
+        self.assertEqual(connected.status_code, status.HTTP_200_OK)
+        self.assertEqual(connected.data['assigned_count'], 1)
+        unassigned.refresh_from_db()
+        self.assertEqual(unassigned.assigned_counselor, self.counselor)
+
+        blocked = self.client.post(
+            '/api/students/assign-counselor/',
+            {'students': [assigned_elsewhere.id]},
+            format='json',
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_409_CONFLICT)
+        assigned_elsewhere.refresh_from_db()
+        self.assertEqual(assigned_elsewhere.assigned_counselor, other_counselor)
+
+    def test_counselor_cannot_connect_cross_school_or_patch_assignment(self):
+        same_school_counselor = User.objects.create_user(
+            username='same-school-counselor',
+            email='same-school-counselor@example.com',
+            password='StrongPass123!',
+            role=User.Role.COUNSELOR,
+            school=self.school_a,
+        )
+        self.client.force_authenticate(self.counselor)
+        cross_school = self.client.post(
+            '/api/students/assign-counselor/',
+            {'students': [self.student_b.id]},
+            format='json',
+        )
+        self.assertEqual(cross_school.status_code, status.HTTP_400_BAD_REQUEST)
+        direct_patch = self.client.patch(
+            f'/api/students/{self.student_a.id}/',
+            {'assigned_counselor': same_school_counselor.id},
+            format='json',
+        )
+        self.assertEqual(direct_patch.status_code, status.HTTP_400_BAD_REQUEST)
+        self.student_a.refresh_from_db()
+        self.assertEqual(self.student_a.assigned_counselor, self.counselor)
+
+    def test_admin_can_reassign_same_school_students_and_cross_school_is_blocked(self):
+        admin = User.objects.create_user(
+            username='product-admin-assignment',
+            email='product-admin-assignment@example.com',
+            password='StrongPass123!',
+            role=User.Role.ADMIN,
+        )
+        replacement = User.objects.create_user(
+            username='replacement-counselor',
+            email='replacement-counselor@example.com',
+            password='StrongPass123!',
+            role=User.Role.COUNSELOR,
+            school=self.school_a,
+        )
+        self.client.force_authenticate(admin)
+        reassigned = self.client.post(
+            '/api/students/assign-counselor/',
+            {'counselor': replacement.id, 'students': [self.student_a.id]},
+            format='json',
+        )
+        self.assertEqual(reassigned.status_code, status.HTTP_200_OK)
+        self.assertEqual(reassigned.data['reassigned_count'], 1)
+        self.student_a.refresh_from_db()
+        self.assertEqual(self.student_a.assigned_counselor, replacement)
+
+        blocked = self.client.post(
+            '/api/students/assign-counselor/',
+            {'counselor': replacement.id, 'students': [self.student_b.id]},
+            format='json',
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.student_b.refresh_from_db()
+        self.assertEqual(self.student_b.assigned_counselor, self.counselor_b)
+
+    def test_organization_cannot_assign_students_to_counselors(self):
+        self.client.force_authenticate(self.organization)
+        response = self.client.post(
+            '/api/students/assign-counselor/',
+            {'counselor': self.counselor.id, 'students': [self.student_a.id]},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_student_task_response_and_google_docs_previews_are_visible_to_counselor(self):
         task = Task.objects.create(
             student=self.student_a,
