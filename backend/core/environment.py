@@ -8,7 +8,16 @@ INSECURE_SECRET_KEYS = {
 }
 
 
-def validate_runtime_environment(*, app_env, debug, secret_key, database_url, demo_accounts_enabled):
+def validate_runtime_environment(
+    *,
+    app_env,
+    debug,
+    secret_key,
+    database_url,
+    demo_accounts_enabled,
+    media_root='',
+    document_storage_root='',
+):
     """Return configuration errors that must stop a production deployment."""
     errors = []
     if app_env not in VALID_APP_ENVIRONMENTS:
@@ -28,4 +37,10 @@ def validate_runtime_environment(*, app_env, debug, secret_key, database_url, de
         errors.append('SQLite is not allowed in production; configure PostgreSQL DATABASE_URL.')
     if demo_accounts_enabled:
         errors.append('ENABLE_DEMO_ACCOUNTS must be False in production.')
+    if not media_root:
+        errors.append('MEDIA_ROOT is required in production and must point to persistent storage.')
+    if not document_storage_root:
+        errors.append(
+            'DOCUMENT_STORAGE_ROOT is required in production and must point to private persistent storage.'
+        )
     return errors

@@ -17,6 +17,8 @@ DEMO_ORGANIZATION_PASSWORD = config('DEMO_ORGANIZATION_PASSWORD', default='schoo
 DEMO_STUDENT_PASSWORD = config('DEMO_STUDENT_PASSWORD', default='student12345')
 DEMO_PARENT_PASSWORD = config('DEMO_PARENT_PASSWORD', default='parent12345')
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+MEDIA_ROOT_VALUE = config('MEDIA_ROOT', default='').strip()
+DOCUMENT_STORAGE_ROOT_VALUE = config('DOCUMENT_STORAGE_ROOT', default='').strip()
 
 # H8 assistant configuration. Provider credentials are backend-only secrets and
 # must never be mirrored into a VITE_* build variable.
@@ -41,6 +43,8 @@ environment_errors = validate_runtime_environment(
     secret_key=SECRET_KEY,
     database_url=DATABASE_URL,
     demo_accounts_enabled=DEMO_ACCOUNTS_ENABLED,
+    media_root=MEDIA_ROOT_VALUE,
+    document_storage_root=DOCUMENT_STORAGE_ROOT_VALUE,
 )
 if environment_errors:
     raise RuntimeError('Invalid runtime environment: ' + ' '.join(environment_errors))
@@ -133,9 +137,7 @@ STORAGES = {
 }
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT_VALUE = config('MEDIA_ROOT', default='').strip()
 MEDIA_ROOT = Path(MEDIA_ROOT_VALUE).expanduser() if MEDIA_ROOT_VALUE else BASE_DIR / 'media'
-DOCUMENT_STORAGE_ROOT_VALUE = config('DOCUMENT_STORAGE_ROOT', default='').strip()
 DOCUMENT_STORAGE_ROOT = (
     Path(DOCUMENT_STORAGE_ROOT_VALUE).expanduser()
     if DOCUMENT_STORAGE_ROOT_VALUE

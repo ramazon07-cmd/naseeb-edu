@@ -15,12 +15,16 @@ class ProductionEnvironmentTests(SimpleTestCase):
             secret_key='change-me-to-a-long-random-secret',
             database_url='',
             demo_accounts_enabled=True,
+            media_root='',
+            document_storage_root='',
         )
 
         self.assertTrue(any('DEBUG' in error for error in errors))
         self.assertTrue(any('SECRET_KEY' in error for error in errors))
         self.assertTrue(any('DATABASE_URL' in error for error in errors))
         self.assertTrue(any('ENABLE_DEMO_ACCOUNTS' in error for error in errors))
+        self.assertTrue(any('MEDIA_ROOT' in error for error in errors))
+        self.assertTrue(any('DOCUMENT_STORAGE_ROOT' in error for error in errors))
 
     def test_secure_production_configuration_is_accepted(self):
         errors = validate_runtime_environment(
@@ -29,6 +33,8 @@ class ProductionEnvironmentTests(SimpleTestCase):
             secret_key='a-unique-production-secret-with-more-than-32-characters',
             database_url='postgresql://user:password@db.example.com:5432/naseeb',
             demo_accounts_enabled=False,
+            media_root='/mnt/naseeb/media',
+            document_storage_root='/mnt/naseeb/private-documents',
         )
 
         self.assertEqual(errors, [])

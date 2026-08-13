@@ -156,6 +156,16 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         replay = self.client.post('/api/auth/token/refresh/', {'refresh': refresh}, format='json')
         self.assertEqual(replay.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_refresh_token_for_deleted_user_returns_401_not_500(self):
+        login = self.login()
+        refresh = login.data['refresh']
+        self.student.delete()
+
+        response = self.client.post('/api/auth/token/refresh/', {'refresh': refresh}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data['code'], 'no_active_account')
+
     def test_expired_temporary_password_is_rejected_with_requested_locale(self):
         self.credential.expires_at = timezone.now()
         self.credential.save(update_fields=['expires_at'])

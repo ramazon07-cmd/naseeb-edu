@@ -156,7 +156,10 @@ class ProductAuditEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductAuditEvent
         fields = '__all__'
-        read_only_fields = fields
+        read_only_fields = (
+            'id', 'actor', 'action', 'target_type', 'target_id', 'target_label',
+            'metadata', 'created_at',
+        )
 
     def get_actor_name(self, obj):
         return obj.actor.get_full_name() or obj.actor.username if obj.actor else None
