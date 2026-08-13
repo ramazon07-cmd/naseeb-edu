@@ -4,10 +4,16 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, override_settings
 
-from core.environment import validate_runtime_environment
+from core.environment import resolve_app_environment, validate_runtime_environment
 
 
 class ProductionEnvironmentTests(SimpleTestCase):
+    def test_render_defaults_to_production_when_app_env_is_missing(self):
+        self.assertEqual(resolve_app_environment('', hosted=True), 'production')
+        self.assertEqual(resolve_app_environment(None, hosted=True), 'production')
+        self.assertEqual(resolve_app_environment('', hosted=False), 'development')
+        self.assertEqual(resolve_app_environment('development', hosted=True), 'development')
+
     def test_production_requires_secure_external_configuration(self):
         errors = validate_runtime_environment(
             app_env='production',

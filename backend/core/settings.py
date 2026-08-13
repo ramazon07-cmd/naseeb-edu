@@ -2,17 +2,17 @@ from datetime import timedelta
 from pathlib import Path
 from decouple import config, Csv
 import dj_database_url
-from core.environment import validate_runtime_environment
+from core.environment import resolve_app_environment, validate_runtime_environment
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APP_ENV = config('APP_ENV', default='development').strip().lower()
+HOSTED_RUNTIME = config('RENDER', default=False, cast=bool)
+APP_ENV = resolve_app_environment(config('APP_ENV', default=''), hosted=HOSTED_RUNTIME)
 IS_PRODUCTION = APP_ENV == 'production'
 SECRET_KEY = config('SECRET_KEY', default='dev-only-naseeb-secret-key-change-in-production')
 DEBUG = config('DEBUG', default=not IS_PRODUCTION, cast=bool)
 DATABASE_URL = config('DATABASE_URL', default='').strip()
 DEMO_ACCOUNTS_ENABLED = config('ENABLE_DEMO_ACCOUNTS', default=not IS_PRODUCTION, cast=bool)
-HOSTED_RUNTIME = config('RENDER', default=False, cast=bool)
 DEMO_COUNSELOR_PASSWORD = config('DEMO_COUNSELOR_PASSWORD', default='admin12345')
 DEMO_ORGANIZATION_PASSWORD = config('DEMO_ORGANIZATION_PASSWORD', default='school12345')
 DEMO_STUDENT_PASSWORD = config('DEMO_STUDENT_PASSWORD', default='student12345')
