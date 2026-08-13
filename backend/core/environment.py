@@ -8,6 +8,12 @@ INSECURE_SECRET_KEYS = {
 }
 
 
+def resolve_app_environment(value, *, hosted=False):
+    """Default hosted runtimes to production without weakening explicit overrides."""
+    normalized = str(value or '').strip().lower()
+    return normalized or ('production' if hosted else 'development')
+
+
 def validate_runtime_environment(
     *,
     app_env,
