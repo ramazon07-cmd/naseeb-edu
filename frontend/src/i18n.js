@@ -85,7 +85,7 @@ export const TRANSLATIONS = {
   },
   ru: {
     ...uiMessages('ru'),
-    'Education Counseling Platform': 'Платформа образовательного консультирования',
+    'Education Counseling Platform': 'Консультации по образованию',
     'Dashboard': 'Главная', 'Schools': 'Школы', 'Students': 'Ученики', 'My profile': 'Мой профиль', 'Academics': 'Учёба',
     'Portfolio': 'Портфолио', 'Activities': 'Активности', 'Recommendations': 'Рекомендации', 'Tasks': 'Задания',
     'Applications': 'Заявки', 'Documents': 'Документы', 'Certificates': 'Сертификаты', 'Essays': 'Эссе',
