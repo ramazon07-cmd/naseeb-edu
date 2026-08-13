@@ -264,15 +264,18 @@ const RESOURCE_FIELDS = {
   ['name', 'Activity name', 'text', true], ['activity_type', 'Type', 'select', true, ['extracurricular', 'volunteering', 'leadership', 'club', 'competition', 'community', 'other']],
   ['role', 'Role'], ['description', 'Description', 'textarea'], ['impact', 'Impact'],
   ['hours_per_week', 'Hours per week', 'number'], ['weeks_per_year', 'Weeks per year', 'number'],
+  ['start_date', 'Start date', 'date'], ['end_date', 'End date', 'date'],
   ['google_docs_url', 'Google Docs URL', 'url']],
 
   honors: [
   ['title', 'Honor title', 'text', true], ['issuer', 'Issuer'], ['level', 'Level', 'select', true, ['school', 'regional', 'national', 'international']],
-  ['award_date', 'Award date', 'date'], ['description', 'Description', 'textarea'], ['google_docs_url', 'Google Docs URL', 'url']],
+  ['award_date', 'Award date', 'date'], ['description', 'Description', 'textarea'], ['proof_file', 'Proof file', 'file'],
+  ['google_docs_url', 'Google Docs URL', 'url']],
 
   achievements: [
   ['title', 'Achievement title', 'text', true], ['category', 'Category', 'select', true, ['project', 'startup', 'olympiad', 'volunteering', 'leadership', 'research', 'sport', 'art', 'other']],
-  ['date', 'Date', 'date'], ['impact', 'Impact'], ['description', 'Description', 'textarea', true]],
+  ['date', 'Date', 'date'], ['impact', 'Impact'], ['description', 'Description', 'textarea', true],
+  ['proof_file', 'Proof file', 'file']],
 
   recommendations: [
   ['recommender_name', 'Recommender name', 'text', true], ['recommender_title', 'Position'], ['recommender_email', 'Email', 'email'],
@@ -903,14 +906,31 @@ async function downloadDocumentFile(doc, notify) {
   }
 }
 
-function DocumentFilePreview({ doc }) {
+async function downloadEvidenceFile(item, notify) {
+  try {
+    const result = await api.downloadEvidence(item.proof_resource, item.id);
+    const url = URL.createObjectURL(result.blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = item.proof_file_name || result.fileName || 'evidence';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  } catch (error) {
+    notify?.(error.message, 'error');
+  }
+}
+
+function DocumentFilePreview({ doc, evidenceResource = '' }) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState({ loading: true, url: '', contentType: '', error: '' });
   useEffect(() => {
     let active = true;
     let objectUrl = '';
     setState({ loading: true, url: '', contentType: '', error: '' });
-    api.documentFile(doc.id).then((result) => {
+    const request = evidenceResource ? api.evidenceFile(evidenceResource, doc.id) : api.documentFile(doc.id);
+    request.then((result) => {
       if (!active) return;
       objectUrl = URL.createObjectURL(result.blob);
       setState({ loading: false, url: objectUrl, contentType: result.contentType, error: '' });
@@ -921,12 +941,16 @@ function DocumentFilePreview({ doc }) {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [doc.id, attempt]);
+  }, [doc.id, evidenceResource, attempt]);
 
   if (state.loading) return <div className="secure-document-state" role="status"><div className="document-skeleton"><span /><span /><span /><span /></div><p>{t("Secure preview is loading…")}</p></div>;
   if (state.error) return <div className="secure-document-state error" role="alert"><ShieldAlert size={24} /><b>{t("Preview could not be loaded")}</b><p>{state.error}</p><button className="button quiet small" onClick={() => setAttempt((value) => value + 1)}><RefreshCw size={14} /> {t("Retry")}</button></div>;
   if (state.contentType.startsWith('image/')) return <div className="secure-document-preview image"><img src={state.url} alt={doc.title} /></div>;
   return <div className="secure-document-preview"><iframe src={state.url} title={tx`${doc.title} preview`} /></div>;
+}
+
+function EvidencePreviewModal({ item, onClose, notify }) {
+  return <Modal title={tx`Evidence · ${visibilityItemTitle(item)}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><ShieldCheck size={16} /><span>{item.proof_file_name} · {formatFileSize(item.proof_file_size)}</span></div><button className="button quiet" onClick={() => downloadEvidenceFile(item, notify)}><Download size={15} /> {t("Download")}</button></div>{item.proof_file_previewable ? <DocumentFilePreview doc={{ ...item, title: visibilityItemTitle(item) }} evidenceResource={item.proof_resource} /> : <Empty text={t("This evidence file is stored securely. Download it to open it in the appropriate application.")} />}</div></Modal>;
 }
 
 function DocumentPreviewModal({ document: doc, onClose, notify }) {
@@ -1102,13 +1126,14 @@ function visibilityPolicyLabel(item) {
   return t(VISIBILITY_POLICY_LABELS[item] || item.replaceAll('_', ' '));
 }
 
-function VisibilitySection({ title, items = [], onDocument }) {
-  return <Panel title={title}><div className="visibility-records">{items.slice(0, 8).map((item) => <article key={item.id}><div><b>{visibilityItemTitle(item)}</b><small>{label(item.status || item.category || item.document_type || item.activity_type || item.level || '')}</small></div>{onDocument && (item.has_file || item.google_docs_preview_url) && <button className="button quiet" onClick={() => onDocument(item)}><Eye size={15} /> {t("Preview")}</button>}</article>)}{!items.length && <Empty />}</div></Panel>;
+function VisibilitySection({ title, items = [], onDocument, onEvidence }) {
+  return <Panel title={title}><div className="visibility-records">{items.slice(0, 8).map((item) => <article key={`${item.proof_resource || 'record'}-${item.id}`}><div><b>{visibilityItemTitle(item)}</b><small>{label(item.status || item.category || item.document_type || item.activity_type || item.level || '')}</small></div><div className="panel-actions">{onDocument && (item.has_file || item.google_docs_preview_url) && <button className="button quiet" onClick={() => onDocument(item)}><Eye size={15} /> {t("Preview")}</button>}{onEvidence && item.has_proof_file && <button className="button quiet" onClick={() => onEvidence(item)}><ShieldCheck size={15} /> {t("Evidence")}</button>}</div></article>)}{!items.length && <Empty />}</div></Panel>;
 }
 
 function SchoolStudent360({ visibility, student, loading, error, onBack, user, notify }) {
   const [credentialOpen, setCredentialOpen] = useState(false);
   const [document, setDocument] = useState(null);
+  const [evidence, setEvidence] = useState(null);
   if (loading) return <PageSkeleton />;
   if (error) return <div className="section-stack"><button className="button quiet back-button" onClick={onBack}>{t("← Students")}</button><div className="alert error">{error}</div></div>;
   if (!visibility) return <Empty text={t("Student visibility data is unavailable.")} />;
@@ -1117,7 +1142,7 @@ function SchoolStudent360({ visibility, student, loading, error, onBack, user, n
   const included = visibility.policy?.included || [];
   const excluded = visibility.policy?.excluded || [];
   const portfolio = [...visibility.achievements, ...visibility.researches, ...visibility.projects, ...visibility.internships, ...visibility.activities, ...visibility.honors];
-  return <div className="section-stack school-student-360"><section className="student-overview-hero"><div className="student-overview-title"><button className="button quiet" onClick={onBack}>{t("← Students")}</button><div className="profile-identity"><span className="avatar large">{initials(fullName(identity))}</span><div><span className="eyebrow">{t("PRIVACY-SAFE STUDENT 360")}</span><h2>{fullName(identity)}</h2><p>{identity.email} • {profile.school_name}</p></div></div><button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t("Reset login")}</button></div><div className="overview-progress"><strong>{formatPercentLocale(profile.journey_progress_percent || 0)}</strong><span>{t("Application journey")}</span><div className="progress wide"><span style={{ width: `${profile.journey_progress_percent || 0}%` }} /></div></div></section><section className="visibility-policy"><div><ShieldCheck size={22} /><div><span className="eyebrow">{t("DATA VISIBILITY POLICY")}</span><h3>{visibility.policy.access_scope === 'global' ? t("Global admin scope") : t("Own-school scope")}</h3><p>{t("Admissions data is read-only here. Sensitive communication, credentials, and internal notes require a separate authorized workflow.")}</p></div></div><Badge tone="success">{t("Read only")}</Badge><details><summary>{t("What is visible")}</summary><div className="visibility-tags included">{included.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details><details><summary>{t("What is protected")}</summary><div className="visibility-tags protected">{excluded.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details></section><div className="stat-grid"><Stat label={t("Level")} value={profile.level} note={tx`${profile.xp_total} XP`} /><Stat label={t("Tasks")} value={visibility.tasks.length} note={formatPercentLocale(profile.task_progress_percent || 0)} /><Stat label={t("Roadmap")} value={visibility.roadmap.length} note={formatPercentLocale(profile.roadmap_progress_percent || 0)} /><Stat label={t("Applications")} value={visibility.applications.length} note={t("Metadata and status")}/></div><div className="split-grid"><Panel title={t("Academic & planning")}><div className="detail-grid"><Detail label={t("Grade")} value={profile.grade} /><Detail label={t("GPA")} value={profile.gpa} /><Detail label={t("IELTS")} value={profile.ielts_score} /><Detail label={t("SAT")} value={profile.sat_score} /><Detail label={t("Target major")} value={profile.target_major} /><Detail label={t("Target countries")} value={profile.target_countries} /><Detail label={t("Parent contact")} value={profile.parent_contact} /><Detail label={t("Counselor")} value={profile.counselor_name} /></div></Panel><VisibilitySection title={t("Meetings")} items={visibility.meetings} /></div><div className="overview-grid"><VisibilitySection title={t("Tasks")} items={visibility.tasks} /><VisibilitySection title={t("Roadmap")} items={visibility.roadmap} /><VisibilitySection title={t("Applications")} items={visibility.applications} /><VisibilitySection title={t("Documents")} items={visibility.documents} onDocument={setDocument} /><VisibilitySection title={t("Essays")} items={visibility.essays} /><VisibilitySection title={t("Recommendations")} items={visibility.recommendations} /><VisibilitySection title={t("Portfolio & activities")} items={portfolio} /><VisibilitySection title={t("Program Usage")} items={visibility.program_usage} /></div>{credentialOpen && <TemporaryCredentialModal account={{ ...identity, role: 'student' }} onClose={() => setCredentialOpen(false)} notify={notify} />}{document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}</div>;
+  return <div className="section-stack school-student-360"><section className="student-overview-hero"><div className="student-overview-title"><button className="button quiet" onClick={onBack}>{t("← Students")}</button><div className="profile-identity"><span className="avatar large">{initials(fullName(identity))}</span><div><span className="eyebrow">{t("PRIVACY-SAFE STUDENT 360")}</span><h2>{fullName(identity)}</h2><p>{identity.email} • {profile.school_name}</p></div></div><button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t("Reset login")}</button></div><div className="overview-progress"><strong>{formatPercentLocale(profile.journey_progress_percent || 0)}</strong><span>{t("Application journey")}</span><div className="progress wide"><span style={{ width: `${profile.journey_progress_percent || 0}%` }} /></div></div></section><section className="visibility-policy"><div><ShieldCheck size={22} /><div><span className="eyebrow">{t("DATA VISIBILITY POLICY")}</span><h3>{visibility.policy.access_scope === 'global' ? t("Global admin scope") : t("Own-school scope")}</h3><p>{t("Admissions data is read-only here. Sensitive communication, credentials, and internal notes require a separate authorized workflow.")}</p></div></div><Badge tone="success">{t("Read only")}</Badge><details><summary>{t("What is visible")}</summary><div className="visibility-tags included">{included.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details><details><summary>{t("What is protected")}</summary><div className="visibility-tags protected">{excluded.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details></section><div className="stat-grid"><Stat label={t("Level")} value={profile.level} note={tx`${profile.xp_total} XP`} /><Stat label={t("Tasks")} value={visibility.tasks.length} note={formatPercentLocale(profile.task_progress_percent || 0)} /><Stat label={t("Roadmap")} value={visibility.roadmap.length} note={formatPercentLocale(profile.roadmap_progress_percent || 0)} /><Stat label={t("Applications")} value={visibility.applications.length} note={t("Metadata and status")}/></div><div className="split-grid"><Panel title={t("Academic & planning")}><div className="detail-grid"><Detail label={t("Grade")} value={profile.grade} /><Detail label={t("GPA")} value={profile.gpa} /><Detail label={t("IELTS")} value={profile.ielts_score} /><Detail label={t("SAT")} value={profile.sat_score} /><Detail label={t("Target major")} value={profile.target_major} /><Detail label={t("Target countries")} value={profile.target_countries} /><Detail label={t("Parent contact")} value={profile.parent_contact} /><Detail label={t("Counselor")} value={profile.counselor_name} /></div></Panel><VisibilitySection title={t("Meetings")} items={visibility.meetings} /></div><div className="overview-grid"><VisibilitySection title={t("Tasks")} items={visibility.tasks} /><VisibilitySection title={t("Roadmap")} items={visibility.roadmap} /><VisibilitySection title={t("Applications")} items={visibility.applications} /><VisibilitySection title={t("Documents")} items={visibility.documents} onDocument={setDocument} /><VisibilitySection title={t("Essays")} items={visibility.essays} /><VisibilitySection title={t("Recommendations")} items={visibility.recommendations} /><VisibilitySection title={t("Portfolio & activities")} items={portfolio} onEvidence={setEvidence} /><VisibilitySection title={t("Program Usage")} items={visibility.program_usage} /></div>{credentialOpen && <TemporaryCredentialModal account={{ ...identity, role: 'student' }} onClose={() => setCredentialOpen(false)} notify={notify} />}{document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}{evidence && <EvidencePreviewModal item={evidence} onClose={() => setEvidence(null)} notify={notify} />}</div>;
 }
 
 function StudentsPage({ user, data, query, reload, notify }) {
@@ -1301,6 +1326,7 @@ function ResourceSection({ title, resource, data, user, query, reload, notify, c
   const [viewingEssay, setViewingEssay] = useState(null);
   const [viewingTask, setViewingTask] = useState(null);
   const [viewingGoogleDoc, setViewingGoogleDoc] = useState(null);
+  const [viewingEvidence, setViewingEvidence] = useState(null);
   const records = data[resource] || [];
   const filtered = records.filter((item) => JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
   const staffControlled = resource === 'tasks';
@@ -1322,8 +1348,8 @@ function ResourceSection({ title, resource, data, user, query, reload, notify, c
   return <><Panel title={title} action={allowCreate && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}><div className="record-list">{filtered.map((item) => {
           const lockedAfterApproval = item.status === 'approved';
           const allowDelete = !staffControlled ? allowCreate : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
-          return <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
-        })}{!filtered.length && <Empty />}</div></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} defaultStudentId={defaultStudentId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} />}{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>;
+          return <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{item.has_proof_file && <><button className="button quiet small" onClick={() => setViewingEvidence(item)}><Eye size={14} /> {t("Evidence")}</button><button className="button quiet small" onClick={() => downloadEvidenceFile(item, notify)}><Download size={14} /> {t("Download")}</button></>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
+        })}{!filtered.length && <Empty />}</div></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} defaultStudentId={defaultStudentId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} />}{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}{viewingEvidence && <EvidencePreviewModal item={viewingEvidence} onClose={() => setViewingEvidence(null)} notify={notify} />}</>;
 }
 
 function RecordRow({ resource, item, data, actions }) {

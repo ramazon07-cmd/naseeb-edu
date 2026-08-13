@@ -978,7 +978,45 @@ class DocumentViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             transaction.on_commit(lambda: storage.delete(file_name))
 
 
-class AchievementViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+class PrivateEvidenceViewSetMixin:
+    @action(detail=True, methods=['get'], url_path='proof-file')
+    def proof_file(self, request, pk=None):
+        record = self.get_object()
+        if not record.proof_file:
+            raise Http404('This record has no proof file.')
+        try:
+            stream = record.proof_file.open('rb')
+        except (FileNotFoundError, OSError):
+            raise Http404('The proof file is unavailable. Contact support.')
+
+        file_name = record.proof_file_name or Path(record.proof_file.name).name
+        extension = Path(file_name).suffix.lower()
+        inline_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt', '.csv'}
+        force_download = request.query_params.get('download') == '1' or extension not in inline_extensions
+        content_type = (
+            record.proof_file_content_type
+            or mimetypes.guess_type(file_name)[0]
+            or 'application/octet-stream'
+        )
+        response = FileResponse(
+            stream,
+            as_attachment=force_download,
+            filename=file_name,
+            content_type=content_type,
+        )
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+    def perform_destroy(self, instance):
+        file_name = instance.proof_file.name if instance.proof_file else ''
+        storage = instance.proof_file.storage if file_name else None
+        super().perform_destroy(instance)
+        if file_name:
+            transaction.on_commit(lambda: storage.delete(file_name))
+
+
+class AchievementViewSet(PrivateEvidenceViewSetMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = AchievementSerializer
     queryset = Achievement.objects.select_related('student__user', 'student__assigned_counselor').all()
 
@@ -1017,7 +1055,7 @@ class ActivityViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
         return self.filter_for_user(self.queryset)
 
 
-class HonorViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
+class HonorViewSet(PrivateEvidenceViewSetMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = HonorSerializer
     queryset = Honor.objects.select_related('student__user', 'student__school').all()
 

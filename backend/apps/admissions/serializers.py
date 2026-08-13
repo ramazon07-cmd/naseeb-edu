@@ -86,6 +86,61 @@ def google_docs_preview_url(value):
     return f'https://docs.google.com/document/d/{document_id}/preview' if document_id else None
 
 
+def validate_private_upload(upload):
+    """Validate private documents and evidence using one production-safe policy."""
+    extension = Path(upload.name or '').suffix.lower()
+    allowed = set(settings.DOCUMENT_ALLOWED_EXTENSIONS)
+    if extension not in allowed:
+        raise serializers.ValidationError(
+            f'Unsupported file type. Allowed: {", ".join(sorted(allowed))}.'
+        )
+    if upload.size > settings.DOCUMENT_MAX_UPLOAD_SIZE:
+        limit_mb = settings.DOCUMENT_MAX_UPLOAD_SIZE // (1024 * 1024)
+        raise serializers.ValidationError(f'File is larger than the {limit_mb} MB limit.')
+    if upload.size == 0:
+        raise serializers.ValidationError('The selected file is empty.')
+
+    try:
+        head = upload.read(min(upload.size, 4096))
+        upload.seek(0)
+        if extension == '.pdf' and not head.startswith(b'%PDF-'):
+            raise serializers.ValidationError('This file is not a valid PDF.')
+        if extension in {'.png', '.jpg', '.jpeg', '.webp'}:
+            try:
+                Image.open(upload).verify()
+            except (UnidentifiedImageError, OSError, SyntaxError):
+                raise serializers.ValidationError('This file is not a valid image.')
+            finally:
+                upload.seek(0)
+        if extension == '.heic' and b'ftyp' not in head[:32]:
+            raise serializers.ValidationError('This file is not a valid HEIC image.')
+        if extension in {'.doc', '.xls', '.ppt'} and not head.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
+            raise serializers.ValidationError('This legacy Office file is invalid.')
+        if extension == '.rtf' and not head.lstrip().startswith(b'{\\rtf'):
+            raise serializers.ValidationError('This file is not a valid RTF document.')
+        if extension in {'.txt', '.csv'}:
+            if b'\x00' in head:
+                raise serializers.ValidationError('Text documents cannot contain binary data.')
+            codecs.getincrementaldecoder('utf-8-sig')().decode(head, final=False)
+        if extension in {'.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp'}:
+            with zipfile.ZipFile(upload) as archive:
+                names = archive.namelist()
+                required_prefix = {
+                    '.docx': 'word/', '.xlsx': 'xl/', '.pptx': 'ppt/',
+                    '.odt': 'content.xml', '.ods': 'content.xml', '.odp': 'content.xml',
+                }[extension]
+                if not any(name == required_prefix or name.startswith(required_prefix) for name in names):
+                    raise serializers.ValidationError('The Office document structure is invalid.')
+            upload.seek(0)
+    except UnicodeDecodeError:
+        upload.seek(0)
+        raise serializers.ValidationError('Text documents must use UTF-8 encoding.')
+    except zipfile.BadZipFile:
+        upload.seek(0)
+        raise serializers.ValidationError('The Office document is damaged or invalid.')
+    return upload
+
+
 class SchoolSerializer(serializers.ModelSerializer):
     students_count = serializers.IntegerField(read_only=True)
     owner_counselor_name = serializers.SerializerMethodField()
@@ -490,57 +545,7 @@ class DocumentSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer
         return Path(upload.name or '').suffix.lower()
 
     def validate_file(self, upload):
-        extension = self._extension(upload)
-        allowed = set(settings.DOCUMENT_ALLOWED_EXTENSIONS)
-        if extension not in allowed:
-            raise serializers.ValidationError(
-                f'Unsupported file type. Allowed: {", ".join(sorted(allowed))}.'
-            )
-        if upload.size > settings.DOCUMENT_MAX_UPLOAD_SIZE:
-            limit_mb = settings.DOCUMENT_MAX_UPLOAD_SIZE // (1024 * 1024)
-            raise serializers.ValidationError(f'File is larger than the {limit_mb} MB limit.')
-        if upload.size == 0:
-            raise serializers.ValidationError('The selected file is empty.')
-
-        try:
-            head = upload.read(min(upload.size, 4096))
-            upload.seek(0)
-            if extension == '.pdf' and not head.startswith(b'%PDF-'):
-                raise serializers.ValidationError('This file is not a valid PDF.')
-            if extension in {'.png', '.jpg', '.jpeg', '.webp'}:
-                try:
-                    Image.open(upload).verify()
-                except (UnidentifiedImageError, OSError, SyntaxError):
-                    raise serializers.ValidationError('This file is not a valid image.')
-                finally:
-                    upload.seek(0)
-            if extension == '.heic' and b'ftyp' not in head[:32]:
-                raise serializers.ValidationError('This file is not a valid HEIC image.')
-            if extension in {'.doc', '.xls', '.ppt'} and not head.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
-                raise serializers.ValidationError('This legacy Office file is invalid.')
-            if extension == '.rtf' and not head.lstrip().startswith(b'{\\rtf'):
-                raise serializers.ValidationError('This file is not a valid RTF document.')
-            if extension in {'.txt', '.csv'}:
-                if b'\x00' in head:
-                    raise serializers.ValidationError('Text documents cannot contain binary data.')
-                codecs.getincrementaldecoder('utf-8-sig')().decode(head, final=False)
-            if extension in {'.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp'}:
-                with zipfile.ZipFile(upload) as archive:
-                    names = archive.namelist()
-                    required_prefix = {
-                        '.docx': 'word/', '.xlsx': 'xl/', '.pptx': 'ppt/',
-                        '.odt': 'content.xml', '.ods': 'content.xml', '.odp': 'content.xml',
-                    }[extension]
-                    if not any(name == required_prefix or name.startswith(required_prefix) for name in names):
-                        raise serializers.ValidationError('The Office document structure is invalid.')
-                upload.seek(0)
-        except UnicodeDecodeError:
-            upload.seek(0)
-            raise serializers.ValidationError('Text documents must use UTF-8 encoding.')
-        except zipfile.BadZipFile:
-            upload.seek(0)
-            raise serializers.ValidationError('The Office document is damaged or invalid.')
-        return upload
+        return validate_private_upload(upload)
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -635,12 +640,88 @@ class DocumentSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer
         return self._file_url(obj, download=True)
 
 
-class AchievementSerializer(VerifiedStudentRecordMixin, serializers.ModelSerializer):
+class PrivateEvidenceSerializerMixin:
+    evidence_resource = ''
+
+    def validate_proof_file(self, upload):
+        if upload is None:
+            return None
+        return validate_private_upload(upload)
+
+    def get_has_proof_file(self, obj) -> bool:
+        return bool(obj.proof_file)
+
+    def get_proof_file_previewable(self, obj) -> bool:
+        return Path(obj.proof_file_name or obj.proof_file.name if obj.proof_file else '').suffix.lower() in {
+            '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt', '.csv',
+        }
+
+    def _proof_file_url(self, obj, download=False):
+        if not obj.proof_file:
+            return None
+        request = self.context.get('request')
+        path = reverse(f'{self.evidence_resource}-proof-file', kwargs={'pk': obj.pk})
+        if download:
+            path += '?download=1'
+        return request.build_absolute_uri(path) if request else path
+
+    def get_proof_file_preview_url(self, obj) -> str | None:
+        return self._proof_file_url(obj) if self.get_proof_file_previewable(obj) else None
+
+    def get_proof_file_download_url(self, obj) -> str | None:
+        return self._proof_file_url(obj, download=True)
+
+    def get_proof_resource(self, obj) -> str:
+        return self.evidence_resource
+
+    @staticmethod
+    def _proof_metadata(upload):
+        return {
+            'proof_file_name': Path(upload.name or 'evidence').name[:255],
+            'proof_file_content_type': (mimetypes.guess_type(upload.name or '')[0] or 'application/octet-stream')[:120],
+            'proof_file_size': upload.size,
+        }
+
+    def create(self, validated_data):
+        upload = validated_data.get('proof_file')
+        if upload:
+            validated_data.update(self._proof_metadata(upload))
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        proof_supplied = 'proof_file' in validated_data
+        upload = validated_data.get('proof_file')
+        old_name = instance.proof_file.name if proof_supplied and instance.proof_file else ''
+        old_storage = instance.proof_file.storage if old_name else None
+        if upload:
+            validated_data.update(self._proof_metadata(upload))
+        elif proof_supplied:
+            validated_data.update({
+                'proof_file_name': '',
+                'proof_file_content_type': '',
+                'proof_file_size': 0,
+            })
+        updated = super().update(instance, validated_data)
+        updated_name = updated.proof_file.name if updated.proof_file else ''
+        if old_name and old_name != updated_name:
+            transaction.on_commit(lambda: old_storage.delete(old_name))
+        return updated
+
+
+class AchievementSerializer(PrivateEvidenceSerializerMixin, VerifiedStudentRecordMixin, serializers.ModelSerializer):
+    evidence_resource = 'achievements'
+    proof_file = serializers.FileField(write_only=True, required=False, allow_null=True)
+    has_proof_file = serializers.SerializerMethodField()
+    proof_file_previewable = serializers.SerializerMethodField()
+    proof_file_preview_url = serializers.SerializerMethodField()
+    proof_file_download_url = serializers.SerializerMethodField()
+    proof_resource = serializers.SerializerMethodField()
     student_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Achievement
         fields = '__all__'
+        read_only_fields = ('proof_file_name', 'proof_file_content_type', 'proof_file_size')
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
@@ -690,12 +771,20 @@ class ActivitySerializer(VerifiedStudentRecordMixin, GoogleDocsModelSerializer):
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
-class HonorSerializer(VerifiedStudentRecordMixin, GoogleDocsModelSerializer):
+class HonorSerializer(PrivateEvidenceSerializerMixin, VerifiedStudentRecordMixin, GoogleDocsModelSerializer):
+    evidence_resource = 'honors'
+    proof_file = serializers.FileField(write_only=True, required=False, allow_null=True)
+    has_proof_file = serializers.SerializerMethodField()
+    proof_file_previewable = serializers.SerializerMethodField()
+    proof_file_preview_url = serializers.SerializerMethodField()
+    proof_file_download_url = serializers.SerializerMethodField()
+    proof_resource = serializers.SerializerMethodField()
     student_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Honor
         fields = '__all__'
+        read_only_fields = ('proof_file_name', 'proof_file_content_type', 'proof_file_size')
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
@@ -935,10 +1024,22 @@ class SchoolVisibilityProgramServiceSerializer(serializers.ModelSerializer):
         return obj.mentor.get_full_name() or obj.mentor.username if obj.mentor else None
 
 
-class SchoolVisibilityAchievementSerializer(serializers.ModelSerializer):
+class SchoolVisibilityAchievementSerializer(PrivateEvidenceSerializerMixin, serializers.ModelSerializer):
+    evidence_resource = 'achievements'
+    has_proof_file = serializers.SerializerMethodField()
+    proof_file_previewable = serializers.SerializerMethodField()
+    proof_file_preview_url = serializers.SerializerMethodField()
+    proof_file_download_url = serializers.SerializerMethodField()
+    proof_resource = serializers.SerializerMethodField()
+
     class Meta:
         model = Achievement
-        fields = ('id', 'title', 'category', 'description', 'impact', 'date', 'verified', 'created_at', 'updated_at')
+        fields = (
+            'id', 'title', 'category', 'description', 'impact', 'date', 'verified',
+            'has_proof_file', 'proof_file_name', 'proof_file_content_type', 'proof_file_size',
+            'proof_file_previewable', 'proof_file_preview_url', 'proof_file_download_url',
+            'proof_resource', 'created_at', 'updated_at',
+        )
 
 
 class SchoolVisibilityResearchSerializer(serializers.ModelSerializer):
@@ -965,10 +1066,22 @@ class SchoolVisibilityActivitySerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'activity_type', 'role', 'description', 'impact', 'hours_per_week', 'weeks_per_year', 'start_date', 'end_date', 'verified', 'created_at', 'updated_at')
 
 
-class SchoolVisibilityHonorSerializer(serializers.ModelSerializer):
+class SchoolVisibilityHonorSerializer(PrivateEvidenceSerializerMixin, serializers.ModelSerializer):
+    evidence_resource = 'honors'
+    has_proof_file = serializers.SerializerMethodField()
+    proof_file_previewable = serializers.SerializerMethodField()
+    proof_file_preview_url = serializers.SerializerMethodField()
+    proof_file_download_url = serializers.SerializerMethodField()
+    proof_resource = serializers.SerializerMethodField()
+
     class Meta:
         model = Honor
-        fields = ('id', 'title', 'issuer', 'level', 'award_date', 'description', 'verified', 'created_at', 'updated_at')
+        fields = (
+            'id', 'title', 'issuer', 'level', 'award_date', 'description', 'verified',
+            'has_proof_file', 'proof_file_name', 'proof_file_content_type', 'proof_file_size',
+            'proof_file_previewable', 'proof_file_preview_url', 'proof_file_download_url',
+            'proof_resource', 'created_at', 'updated_at',
+        )
 
 
 class NotificationSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
