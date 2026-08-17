@@ -1,14 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="uz">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta id="theme-color" name="theme-color" content="#F5F0E6" />
-    <meta name="description" content="Naseeb Edu education counseling platform" />
+    <meta name="description" content="Naseeb Edu o‘quvchilar, oilalar va maktablar uchun universitetga ariza jarayonini boshqaradigan ta’lim maslahat platformasi." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Naseeb Edu - Global ta’lim uchun aniq yo‘l" />
+    <meta property="og:description" content="Roadmap, universitet qidiruvi, esse, hujjatlar va counselor hamkorligi bitta ishonchli platformada." />
+    <meta property="og:image" content="/landing/naseeb-counseling-hero.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="preload" as="image" href="/brand/naseeb-light-256.jpg" fetchpriority="high" />
     <link rel="preload" as="image" href="/brand/naseeb-dark-256.png" fetchpriority="high" />
+    <link rel="preload" as="image" href="/landing/naseeb-counseling-hero.jpg" fetchpriority="high" />
     <link rel="icon" data-theme-icon href="/brand/naseeb-light-256.jpg" />
-    <title>Naseeb Edu — Education Counseling Platform</title>
+    <title>Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi</title>
     <style>
       html { background: #F5F0E6; color-scheme: light; }
       html[data-theme='dark'] { background: #121015; color-scheme: dark; }
@@ -61,7 +67,18 @@
     </script>
   </head>
   <body>
-    <div id="root"><div class="app-boot" role="status" aria-label="Loading Naseeb Edu"><div class="app-boot-card"><div class="app-boot-mark" aria-hidden="true">N</div><div class="app-boot-copy"><b>Naseeb Edu</b><span>Preparing your workspace…</span></div><div class="app-boot-line" aria-hidden="true"></div></div></div></div>
+    <div id="root"><div class="app-boot" role="status" aria-label="Naseeb Edu"><div class="app-boot-card"><div class="app-boot-mark" aria-hidden="true">N</div><div class="app-boot-copy"><b>Naseeb Edu</b><span data-boot-message>Preparing your workspace…</span></div><div class="app-boot-line" aria-hidden="true"></div></div></div></div>
+    <script>
+      (() => {
+        const copy = {
+          uz: 'Ish maydoningiz tayyorlanmoqda…',
+          ru: 'Готовим ваше рабочее пространство…',
+          en: 'Preparing your workspace…',
+        }
+        const node = document.querySelector('[data-boot-message]')
+        if (node) node.textContent = copy[document.documentElement.lang] || copy.en
+      })()
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
