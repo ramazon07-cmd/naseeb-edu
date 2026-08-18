@@ -869,19 +869,19 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 }
 .landing-footer-mark:hover { transform: translateY(-2px); }
 .landing-footer .brand-lockup > div { display: none; }
-.landing-footer .brand-logo { width: 56px; height: 56px; flex-basis: 56px; }
-/* Preferences, not navigation: the sections are already in the sticky bar. */
-.landing-footer-controls { justify-self: end; display: flex; align-items: center; gap: var(--lp-2); }
-.landing-footer-controls :is(.language-selector, .icon-button) {
-  min-height: 44px; color: inherit; background: transparent;
-  border-color: color-mix(in srgb, currentColor 34%, transparent);
+.landing-footer .brand-logo { width: 76px; height: 76px; flex-basis: 76px; }
+/* Plain links, not controls: language and theme stay in the sticky bar, where
+   they are reachable from anywhere on the page. */
+.landing-footer-links {
+  justify-self: end; display: flex; align-items: center; flex-wrap: wrap;
+  justify-content: flex-end; gap: var(--lp-2) var(--lp-5);
 }
-.landing-footer-contact {
-  min-height: 44px; display: inline-flex; align-items: center; padding-inline: var(--lp-3);
+.landing-footer-links a {
+  min-height: 44px; display: inline-flex; align-items: center;
   color: var(--lp-ink-muted); font-size: var(--lp-t-small);
   transition: color var(--lp-fast) ease;
 }
-.landing-footer-contact:hover { color: var(--lp-ink-fg); }
+.landing-footer-links a:hover { color: var(--lp-ink-fg); }
 
 /* Section reveal: grouped per block, two variants, small distances. Nothing is
    hidden unless JS has confirmed motion is allowed — see the guard in App.jsx. */
@@ -1055,7 +1055,8 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   .landing-trust h2 { max-width: none; }
   .landing-ai-asks { grid-template-columns: 1fr; row-gap: var(--lp-5); }
   .landing-footer > .lp-shell { grid-template-columns: 1fr; justify-items: center; row-gap: var(--lp-4); text-align: center; }
-  .landing-footer-controls { justify-self: center; }
+  .landing-footer-links { justify-self: center; justify-content: center; }
+  .landing-footer .brand-logo { width: 64px; height: 64px; flex-basis: 64px; }
   .login-page { grid-template-columns: 1fr; }
   .login-copy { min-height: 42dvh; padding: 30px 28px 42px; }
   .login-copy h1 { font-size: 46px; }
