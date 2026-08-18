@@ -552,24 +552,14 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
 
     <footer className="landing-footer">
       <div className="lp-shell">
-        <div className="landing-footer-lead">
-          <BrandLockup theme={theme} />
-          <h2>{t('Accounts are created by your school.')}</h2>
-          <p>{t('Ask your school or counselor for a temporary login, then set your own password on first sign-in.')}</p>
-          <button type="button" className="landing-primary-cta" onClick={onLogin}>{t('Sign in')} <ChevronRight size={17} /></button>
-        </div>
-        <nav className="landing-footer-nav" aria-label={t('Footer navigation')}>
-          <div>
-            <h3>{t('Sections')}</h3>
-            <a href="#journey">{t('Journey')}</a>
-            <a href="#platform">{t('Platform')}</a>
-            <a href="#trust">{t('Trust')}</a>
-            {SCHOOL_CONTACT_URL && <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
-          </div>
+        <small>© {new Date().getFullYear()} Naseeb Edu</small>
+        <BrandLockup theme={theme} />
+        <nav aria-label={t('Footer navigation')}>
+          <a href="#journey">{t('Journey')}</a>
+          <a href="#platform">{t('Platform')}</a>
+          <a href="#trust">{t('Trust')}</a>
+          {SCHOOL_CONTACT_URL && <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
         </nav>
-        <div className="landing-footer-base">
-          <small>© {new Date().getFullYear()} Naseeb Edu</small>
-        </div>
       </div>
     </footer>
   </div>;
