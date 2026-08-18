@@ -317,7 +317,7 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
      These are the only fluid gaps the landing bands are allowed to use. */
   --lp-fluid-sm: clamp(20px, 3vw, 32px);
   --lp-fluid-md: clamp(28px, 4vw, 52px);
-  --lp-fluid-lg: var(--lp-fluid-lg);
+  --lp-fluid-lg: clamp(32px, 5vw, 72px);
   --lp-fluid-xl: clamp(36px, 6vw, 92px);
   --lp-gutter: clamp(20px, 5vw, 72px);
   --lp-container: 1280px;
@@ -344,11 +344,8 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   --lp-cta-fg: var(--canvas);
   --lp-rule: var(--border);
   --lp-rule-strong: var(--border-strong);
-  --lp-nav-link: var(--muted);
   --lp-signal: var(--purple);
   --lp-signal-wash: color-mix(in srgb, var(--purple) 8%, transparent);
-  --lp-photo-filter: saturate(.84) contrast(1.03);
-  --lp-photo-wash: var(--accent);
 
   /* Ink surfaces — the hero, the trust band and the closing ask.
      Warm ink in light, brand purple-black in dark: the same structural role
@@ -367,11 +364,8 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 
 :root[data-theme='dark'] .landing-page,
 :root[data-theme='dark'] .login-page {
-  --lp-nav-link: var(--accent-muted);
   --lp-signal: var(--accent-deep);
   --lp-signal-wash: color-mix(in srgb, var(--accent-deep) 12%, transparent);
-  --lp-photo-filter: saturate(.72) contrast(1.06) brightness(.86);
-  --lp-photo-wash: var(--accent-deep);
   --lp-ink-solid: var(--purple-deep);
   --lp-ink: radial-gradient(128% 116% at 74% 6%,
     var(--purple) 0%,
@@ -952,28 +946,24 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 @media (max-width: 820px) {
   .landing-nav > .lp-shell { grid-template-columns: 1fr auto; }
   .landing-nav nav { display: none; }
-  /* Mobile hero is recomposed, not stacked: the crop becomes a full-bleed
-     field and the type sits over its darkened lower half. */
+  /* Mobile hero is recomposed, not stacked. The crop leaves the background
+     and becomes a full-bleed plate *under* the copy: the claim is read first
+     and the lede sits on ink instead of washing out over the photograph. */
   .landing-hero-grid { padding-block: var(--lp-6) var(--lp-7); grid-template-columns: 1fr; }
-  .landing-hero-copy { grid-column: 1; grid-row: 2; }
+  .landing-hero-copy { grid-column: 1; grid-row: 1; }
   .landing-hero-media {
-    grid-column: 1; grid-row: 1;
-    margin-inline: calc(var(--lp-gutter) * -1);
-    margin-bottom: var(--lp-6);
+    position: static;
+    grid-column: 1; grid-row: 2;
+    max-width: none; aspect-ratio: 3 / 2;
+    margin: var(--lp-6) calc(var(--lp-gutter) * -1) 0;
+    border-radius: 0;
   }
-  .landing-hero-media img {
-    min-height: 0; aspect-ratio: 3 / 2;
-    -webkit-mask-image: linear-gradient(180deg, black 52%, transparent 99%);
-    mask-image: linear-gradient(180deg, black 52%, transparent 99%);
-  }
+  .landing-hero-media img { height: 100%; object-position: 48% 50%; }
   .landing-hero h1 { margin-top: var(--lp-4); font-size: clamp(42px, 10.5vw, 62px); }
   .landing-rail > .lp-shell { grid-template-columns: 1fr; }
   .landing-rail article { padding-block: var(--lp-4); }
   .landing-rail article + article { padding-left: 0; border-left: 0; border-top: 1px solid var(--lp-ink-rule); }
-  .landing-platform { background: var(--surface-soft); border-block: 1px solid var(--lp-rule); }
-/* The panel is lighter than the canvas, so --muted drops under AA on it. */
-.landing-platform :is(.landing-capability p, .landing-capability-note, .landing-section-head p) { color: var(--accent-muted); }
-.landing-platform .landing-section-head { grid-template-columns: 1fr; row-gap: var(--lp-4); margin-bottom: var(--lp-7); }
+  .landing-platform .landing-section-head { grid-template-columns: 1fr; row-gap: var(--lp-4); margin-bottom: var(--lp-7); }
   .landing-platform .landing-section-head h2 { max-width: 16ch; }
   .landing-register { grid-template-columns: 1fr; }
   .landing-register > .landing-capability:nth-last-child(-n+2) { border-bottom: 0; }
@@ -995,9 +985,15 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 
 @media (max-width: 560px) {
   .landing-page { --lp-section: 64px; }
+  /* The bar keeps all three controls. The brand yields the shared track
+     instead of the actions, which used to overflow left onto the wordmark. */
+  .landing-nav > .lp-shell { gap: var(--lp-3); }
+  .landing-brand { min-width: 0; overflow: hidden; }
   .landing-brand .brand-lockup b { font-size: 15px; }
-  .landing-nav-actions { gap: var(--lp-1); }
-  .landing-nav-actions .theme-toggle { display: none; }
+  .landing-nav-actions { min-width: max-content; gap: var(--lp-1); }
+  .landing-nav-actions .language-selector { gap: var(--lp-1); padding: 0 var(--lp-1); }
+  .landing-nav-actions .language-selector select { min-width: 32px; padding-right: 15px; }
+  .landing-nav-actions .landing-login-button { padding: var(--lp-2) var(--lp-3); }
   .landing-hero h1 { font-size: clamp(38px, 11.5vw, 54px); letter-spacing: -.032em; }
   :lang(ru) .landing-hero h1, :lang(uz) .landing-hero h1 { font-size: clamp(32px, 9vw, 42px); }
   .landing-hero-actions { width: 100%; }
@@ -1022,8 +1018,15 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 }
 
 @media (max-width: 380px) {
-  .landing-hero-actions { flex-direction: column; align-items: stretch; }
-  .landing-text-cta { justify-content: center; }
+  /* Stacked, but the rule under the text CTA must stay the width of its label:
+     stretched, the border-bottom reads as a stray divider across the column. */
+  .landing-hero-actions, .landing-accent-actions { flex-direction: column; align-items: flex-start; }
+  :is(.landing-hero-actions, .landing-accent-actions) .landing-primary-cta { width: 100%; }
+  :is(.landing-hero-actions, .landing-accent-actions) .landing-text-cta {
+    align-self: flex-start; width: max-content; max-width: 100%; justify-content: flex-start;
+  }
+  /* 34px mark carries the link; the anchor keeps its aria-label. */
+  .landing-brand .brand-lockup b { display: none; }
 }
 
 .login-preferences, .password-change-preferences { display: flex; align-items: center; gap: 8px; }
