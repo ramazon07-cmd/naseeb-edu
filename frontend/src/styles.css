@@ -860,17 +860,28 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
    ground rather than sit on it. */
 .landing-page .brand-logo { box-shadow: none; }
 .landing-footer small { color: var(--lp-ink-muted); font-size: var(--lp-t-caption); }
-/* Mark only — the wordmark and descriptor belong to the header. */
-.landing-footer .brand-lockup { justify-self: center; }
+/* The mark is the sign-off and the way back up; the wordmark and descriptor
+   belong to the header, so only the seal shows here. */
+.landing-footer-mark {
+  justify-self: center; display: inline-flex; color: inherit;
+  border-radius: var(--lp-r-pill);
+  transition: transform var(--lp-dur-short) var(--lp-ease-io);
+}
+.landing-footer-mark:hover { transform: translateY(-2px); }
 .landing-footer .brand-lockup > div { display: none; }
-.landing-footer .brand-logo { width: 34px; height: 34px; flex-basis: 34px; }
-.landing-footer nav { justify-self: end; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--lp-2) var(--lp-5); }
-.landing-footer nav a {
-  min-height: 44px; display: inline-flex; align-items: center;
+.landing-footer .brand-logo { width: 56px; height: 56px; flex-basis: 56px; }
+/* Preferences, not navigation: the sections are already in the sticky bar. */
+.landing-footer-controls { justify-self: end; display: flex; align-items: center; gap: var(--lp-2); }
+.landing-footer-controls :is(.language-selector, .icon-button) {
+  min-height: 44px; color: inherit; background: transparent;
+  border-color: color-mix(in srgb, currentColor 34%, transparent);
+}
+.landing-footer-contact {
+  min-height: 44px; display: inline-flex; align-items: center; padding-inline: var(--lp-3);
   color: var(--lp-ink-muted); font-size: var(--lp-t-small);
   transition: color var(--lp-fast) ease;
 }
-.landing-footer nav a:hover { color: var(--lp-ink-fg); }
+.landing-footer-contact:hover { color: var(--lp-ink-fg); }
 
 /* Section reveal: grouped per block, two variants, small distances. Nothing is
    hidden unless JS has confirmed motion is allowed — see the guard in App.jsx. */
@@ -1044,7 +1055,7 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   .landing-trust h2 { max-width: none; }
   .landing-ai-asks { grid-template-columns: 1fr; row-gap: var(--lp-5); }
   .landing-footer > .lp-shell { grid-template-columns: 1fr; justify-items: center; row-gap: var(--lp-4); text-align: center; }
-  .landing-footer nav { justify-self: center; justify-content: center; }
+  .landing-footer-controls { justify-self: center; }
   .login-page { grid-template-columns: 1fr; }
   .login-copy { min-height: 42dvh; padding: 30px 28px 42px; }
   .login-copy h1 { font-size: 46px; }
