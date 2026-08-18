@@ -556,11 +556,12 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
         <a className="landing-footer-mark" href="#landing-top" aria-label={t('Back to top')} title={t('Back to top')}>
           <BrandLockup theme={theme} />
         </a>
-        <div className="landing-footer-controls">
-          <LanguageSelector language={language} onChange={changeLanguage} />
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          {SCHOOL_CONTACT_URL && <a className="landing-footer-contact" href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
-        </div>
+        <nav className="landing-footer-links" aria-label={t('Footer navigation')}>
+          <a href="#journey">{t('Journey')}</a>
+          <a href="#platform">{t('Platform')}</a>
+          <a href="#trust">{t('Trust')}</a>
+          {SCHOOL_CONTACT_URL && <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
+        </nav>
       </div>
     </footer>
   </div>;
