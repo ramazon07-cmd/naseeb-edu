@@ -598,7 +598,7 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   align-items: center;
   column-gap: var(--lp-5);
 }
-.landing-hero-copy { grid-column: 1 / 10; grid-row: 1; position: relative; z-index: 2; min-width: 0; }
+.landing-hero-copy { grid-column: 1 / 8; grid-row: 1; position: relative; z-index: 2; min-width: 0; }
 .landing-hero-grid { position: relative; z-index: 2; min-height: min(74vh, 660px); }
 .landing-hero .lp-eyebrow { color: var(--lp-ink-accent); }
 .landing-hero h1 {
@@ -649,6 +649,32 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   font-size: var(--lp-t-caption); line-height: 1.6;
 }
 .landing-access-note svg { flex: 0 0 auto; margin-top: 2px; }
+
+/* A plate, not a backdrop: hard-cropped, held to the right columns so the copy
+   always sits on ink. Capped at 470px so the 1600x853 source is used at ~1:1 on
+   a 2x display instead of being upscaled. */
+.landing-hero-media {
+  grid-column: 8 / 13; grid-row: 1; align-self: end;
+  position: relative; z-index: 2;
+  margin: 0; width: 100%; max-width: 470px; justify-self: end;
+  aspect-ratio: 11 / 10; overflow: clip;
+  background: var(--lp-ink-solid);
+  border-radius: var(--lp-r-sm);
+}
+.landing-hero-media img {
+  width: 100%; height: 100%;
+  display: block; object-fit: cover; object-position: 65% 50%;
+  filter: var(--lp-ink-photo);
+}
+/* One soft edge, facing the headline; three hard ones. */
+.landing-hero-media::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(97deg,
+    var(--lp-ink-solid) 0 4%,
+    color-mix(in srgb, var(--lp-ink-solid) 62%, transparent) 18%,
+    color-mix(in srgb, var(--lp-ink-solid) 16%, transparent) 38%,
+    transparent 60%);
+}
 
 /* --- Proof rail: real platform facts, inside the first viewport ---------- */
 
@@ -998,6 +1024,15 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   /* Single column; the copy is the hero. */
   .landing-hero-grid { padding-block: var(--lp-6) var(--lp-7); grid-template-columns: 1fr; }
   .landing-hero-copy { grid-column: 1; grid-row: 1; }
+  .landing-hero-media {
+    grid-column: 1; grid-row: 2; align-self: auto; justify-self: stretch;
+    /* width must be auto for stretch + the negative gutter margins to bleed. */
+    width: auto; max-width: none; aspect-ratio: 3 / 2;
+    margin: var(--lp-6) calc(var(--lp-gutter) * -1) 0;
+    border-radius: 0;
+  }
+  .landing-hero-media img { object-position: 48% 50%; }
+  .landing-hero-media::after { display: none; }
   .landing-hero h1 { margin-top: var(--lp-4); font-size: clamp(42px, 10.5vw, 62px); }
   .landing-rail > .lp-shell { grid-template-columns: 1fr; }
   .landing-rail article { padding-block: var(--lp-4); }

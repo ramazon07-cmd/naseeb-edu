@@ -461,6 +461,9 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
             </div>
             <p className="landing-access-note"><Fingerprint size={15} /> {t('Students receive a temporary login from their school or counselor. There is no public sign-up.')}</p>
           </div>
+          <figure className="landing-hero-media">
+            <img src="/landing/naseeb-counseling-hero.jpg" alt={t('A student and counselor planning a university application together.')} width="1600" height="853" decoding="async" />
+          </figure>
         </div>
         <div className="landing-rail">
           <div className="lp-shell">
