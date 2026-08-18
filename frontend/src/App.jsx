@@ -381,28 +381,18 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
     const paths = [...page.querySelectorAll('.landing-path-list')];
     const steps = [...page.querySelectorAll('.landing-path-list li')];
     const groups = reduced ? [] : [...page.querySelectorAll('[data-reveal]')];
-    const media = page.querySelector('.landing-hero-media');
-    const hero = page.querySelector('.landing-hero');
     if (!reduced) page.classList.add('is-animated');
     let frame = 0;
 
     // One rAF-throttled pass for every scroll-linked behaviour on the page:
-    // nav state, hero parallax, section reveals and step emphasis. Adding a
-    // listener per effect is what makes pages like this feel expensive.
+    // nav state, section reveals and step emphasis. Adding a listener per
+    // effect is what makes pages like this feel expensive.
     const update = () => {
       frame = 0;
       const y = window.scrollY;
       const viewport = window.innerHeight;
       page.classList.toggle('is-scrolled', y > 8);
       page.classList.toggle('is-compact', y > viewport * 0.6);
-
-      if (media && hero && !reduced) {
-        // Subtle tier: the crop drifts a fraction of the scroll distance and
-        // stops once the hero is gone, so nothing animates off-screen.
-        const progress = Math.min(1, Math.max(0, y / Math.max(1, hero.offsetHeight)));
-        media.style.setProperty('--lp-hero-shift', `${(-progress * 7).toFixed(2)}%`);
-        media.style.willChange = progress > 0 && progress < 1 ? 'transform' : 'auto';
-      }
 
       for (let index = groups.length - 1; index >= 0; index -= 1) {
         if (groups[index].getBoundingClientRect().top >= viewport * 0.88) continue;
@@ -471,9 +461,6 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
             </div>
             <p className="landing-access-note"><Fingerprint size={15} /> {t('Students receive a temporary login from their school or counselor. There is no public sign-up.')}</p>
           </div>
-          <figure className="landing-hero-media">
-            <img src="/landing/naseeb-counseling-hero.jpg" alt={t('A student and counselor planning a university application together.')} width="1600" height="853" fetchPriority="high" decoding="async" />
-          </figure>
         </div>
         <div className="landing-rail">
           <div className="lp-shell">
