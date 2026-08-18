@@ -564,10 +564,6 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
             <a href="#journey">{t('Journey')}</a>
             <a href="#platform">{t('Platform')}</a>
             <a href="#trust">{t('Trust')}</a>
-          </div>
-          <div>
-            <h3>{t('Account')}</h3>
-            <button type="button" onClick={onLogin}>{t('Sign in')}</button>
             {SCHOOL_CONTACT_URL && <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
           </div>
         </nav>
