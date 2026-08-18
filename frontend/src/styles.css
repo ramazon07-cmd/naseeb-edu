@@ -454,7 +454,7 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 .landing-page ::selection { color: var(--canvas); background: var(--accent-deep); }
 .landing-page :is(a, button, [tabindex]):focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--lp-r-sm); }
 /* The global focus colour measures 1.1:1 on ink. Rebind it where the ground is dark. */
-.landing-nav, .landing-hero, .landing-invert, .landing-accent { --focus-color: var(--lp-ink-accent); }
+.landing-nav, .landing-hero, .landing-invert, .landing-footer { --focus-color: var(--lp-ink-accent); }
 
 /* One container, used by every band, so nothing drifts off the grid. */
 .lp-shell { width: min(var(--lp-container), 100%); margin-inline: auto; padding-inline: var(--lp-gutter); }
@@ -842,38 +842,45 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 }
 .landing-ai-limit svg { flex: 0 0 auto; margin-top: 2px; color: var(--lp-signal); }
 
-/* --- Closing: the accent band ------------------------------------------- */
-
-.landing-accent { color: var(--lp-ink-fg); background: var(--lp-ink); }
-.landing-accent > .lp-shell {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: start; column-gap: var(--lp-fluid-xl); row-gap: var(--lp-5);
-}
-.landing-accent h2 {
-  grid-column: 1; grid-row: 1 / span 2;
-  max-width: 15ch; margin: 0;
-  font-size: var(--lp-t-h2); line-height: 1.08; letter-spacing: -.008em;
-}
-.landing-accent p { grid-column: 2; grid-row: 1; max-width: 44ch; margin: 0; color: var(--lp-ink-muted); }
-.landing-accent-actions { grid-column: 2; grid-row: 2; display: flex; align-items: center; flex-wrap: wrap; gap: var(--lp-4) var(--lp-5); }
-.landing-footer nav { grid-column: 1; grid-row: 2; justify-self: start; display: flex; flex-wrap: wrap; gap: var(--lp-3) var(--lp-5); }
-.landing-footer nav a { color: var(--text-subtle); font-size: var(--lp-t-caption); }
-.landing-footer nav a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
-.landing-accent ::selection { color: var(--lp-ink-solid); background: var(--lp-ink-fg); }
-
 /* --- Footer -------------------------------------------------------------- */
 
-.landing-footer { padding-block: var(--lp-7) var(--lp-8); border-top: 1px solid var(--lp-rule); }
-.landing-footer > .lp-shell {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end; column-gap: var(--lp-5); row-gap: var(--lp-6);
+/* The page closes on ink. This carries the final ask that used to sit in a
+   near-empty band of its own. */
+.landing-footer {
+  padding-block: var(--lp-9) var(--lp-6);
+  color: var(--lp-ink-fg); background: var(--lp-ink);
+  border-top: 0;
 }
-.landing-footer .brand-lockup { grid-column: 1; grid-row: 1; }
+.landing-footer > .lp-shell {
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  column-gap: var(--lp-fluid-xl); row-gap: var(--lp-8); align-items: start;
+}
+.landing-footer-lead { display: grid; justify-items: start; gap: var(--lp-4); max-width: 36ch; }
+.landing-footer-lead h2 { margin: 0; font-size: var(--lp-t-h2); line-height: 1.08; letter-spacing: -.008em; }
+.landing-footer-lead p { margin: 0; color: var(--lp-ink-muted); font-size: var(--lp-t-small); }
+.landing-footer-lead .landing-primary-cta { margin-top: var(--lp-2); }
 .landing-footer .brand-lockup small { display: none; }
-.landing-footer .brand-lockup b { color: var(--text); font-size: 15px; }
-.landing-footer .brand-logo { width: 30px; height: 30px; flex-basis: 30px; }
-.landing-footer p, .landing-footer small { margin: 0; color: var(--text-subtle); font-size: var(--lp-t-caption); }
-.landing-footer small { grid-column: 2; grid-row: 2; justify-self: end; }
+.landing-footer .brand-lockup b { color: var(--lp-ink-fg); font-size: 17px; }
+.landing-footer .brand-logo { width: 34px; height: 34px; flex-basis: 34px; }
+.landing-footer-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--lp-5); }
+.landing-footer-nav > div { display: grid; justify-items: start; align-content: start; gap: var(--lp-3); }
+.landing-footer-nav h3 {
+  margin: 0; color: var(--lp-ink-accent);
+  font-family: var(--lp-body); font-size: var(--lp-t-eyebrow); font-weight: 600;
+  letter-spacing: .19em; text-transform: uppercase;
+}
+.landing-footer-nav :is(a, button) {
+  padding: 0; color: var(--lp-ink-muted); background: transparent; border: 0;
+  font: inherit; font-size: var(--lp-t-small); text-align: left; cursor: pointer;
+  transition: color var(--lp-fast) ease;
+}
+.landing-footer-nav :is(a, button):hover { color: var(--lp-ink-fg); }
+.landing-footer-base {
+  grid-column: 1 / -1; padding-top: var(--lp-5);
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--lp-4);
+  border-top: 1px solid var(--lp-ink-rule);
+}
+.landing-footer-base small { color: var(--lp-ink-muted); font-size: var(--lp-t-caption); }
 
 /* Section reveal: grouped per block, two variants, small distances. Nothing is
    hidden unless JS has confirmed motion is allowed — see the guard in App.jsx. */
@@ -1046,15 +1053,7 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   .landing-ledger > div { padding-block: var(--lp-5); }
   .landing-trust h2 { max-width: none; }
   .landing-ai-asks { grid-template-columns: 1fr; row-gap: var(--lp-5); }
-  /* The closing band's two columns are a desktop composition; below this they
-     would each be half a phone wide. */
-  .landing-accent > .lp-shell { grid-template-columns: 1fr; row-gap: var(--lp-4); }
-  .landing-accent :is(h2, p, .landing-accent-actions) { grid-column: 1; grid-row: auto; }
-  .landing-accent h2 { max-width: 18ch; }
-  .landing-footer > .lp-shell { grid-template-columns: 1fr; justify-items: start; gap: var(--lp-4); }
-  /* Explicit desktop placement would otherwise open an implicit 2nd column. */
-  .landing-footer :is(.brand-lockup, nav, small) { grid-column: 1; grid-row: auto; justify-self: start; }
-  .landing-accent-actions { width: 100%; }
+  .landing-footer > .lp-shell { grid-template-columns: 1fr; row-gap: var(--lp-7); }
   .login-page { grid-template-columns: 1fr; }
   .login-copy { min-height: 42dvh; padding: 30px 28px 42px; }
   .login-copy h1 { font-size: 46px; }
@@ -1085,7 +1084,6 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   .landing-capability h3 { grid-column: 2; }
   .landing-capability-note { grid-row: auto; grid-column: 2; justify-self: start; }
   .landing-ledger > div { grid-template-columns: 1fr; gap: var(--lp-2); }
-  .landing-accent .landing-primary-cta { width: 100%; }
   .login-copy { min-height: auto; padding: 24px 22px 34px; }
   .login-copy h1 { margin: 22px 0 16px; font-size: 38px; }
   :lang(ru) .login-copy h1 { font-size: clamp(30px, 8vw, 38px); }
@@ -1100,9 +1098,9 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 @media (max-width: 380px) {
   /* Stacked, but the rule under the text CTA must stay the width of its label:
      stretched, the border-bottom reads as a stray divider across the column. */
-  .landing-hero-actions, .landing-accent-actions { flex-direction: column; align-items: flex-start; }
-  :is(.landing-hero-actions, .landing-accent-actions) .landing-primary-cta { width: 100%; }
-  :is(.landing-hero-actions, .landing-accent-actions) .landing-text-cta {
+  .landing-hero-actions { flex-direction: column; align-items: flex-start; }
+  .landing-hero-actions .landing-primary-cta { width: 100%; }
+  .landing-hero-actions .landing-text-cta {
     align-self: flex-start; width: max-content; max-width: 100%; justify-content: flex-start;
   }
   /* 34px mark carries the link; the anchor keeps its aria-label. */
