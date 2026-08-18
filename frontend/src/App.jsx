@@ -394,16 +394,9 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
       page.classList.toggle('is-scrolled', y > 8);
       page.classList.toggle('is-compact', y > viewport * 0.6);
 
-      for (let index = groups.length - 1; index >= 0; index -= 1) {
-        if (groups[index].getBoundingClientRect().top >= viewport * 0.88) continue;
-        groups[index].classList.add('is-in');
-        groups.splice(index, 1);
-      }
-      for (let index = paths.length - 1; index >= 0; index -= 1) {
-        if (paths[index].getBoundingClientRect().top >= viewport * 0.92) continue;
-        paths[index].classList.add('is-in');
-        paths.splice(index, 1);
-      }
+      // Reveals run both ways: returning to the top replays them.
+      for (const group of groups) group.classList.toggle('is-in', group.getBoundingClientRect().top < viewport * 0.88);
+      for (const path of paths) path.classList.toggle('is-in', path.getBoundingClientRect().top < viewport * 0.92);
       // Emphasise the step nearest the reading line rather than all of them.
       if (steps.length) {
         let nearest = 0;
@@ -555,29 +548,32 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
           <p className="landing-ai-limit"><ShieldCheck size={15} /> {t('It reads only what your role already permits, and it never rewrites your work or acts for you.')}</p>
         </div>
       </section>
-
-      <section className="landing-band landing-accent">
-        <div className="lp-shell">
-          <h2>{t('Accounts are created by your school.')}</h2>
-          <p>{t('Ask your school or counselor for a temporary login, then set your own password on first sign-in.')}</p>
-          <div className="landing-accent-actions">
-            <button type="button" className="landing-primary-cta" onClick={onLogin}>{t('Sign in')} <ChevronRight size={17} /></button>
-            {SCHOOL_CONTACT_URL && <a className="landing-text-cta" href={SCHOOL_CONTACT_URL}>{t('Bring Naseeb Edu to your school')} <ChevronRight size={15} /></a>}
-          </div>
-        </div>
-      </section>
     </main>
 
     <footer className="landing-footer">
       <div className="lp-shell">
-        <BrandLockup theme={theme} />
-        <nav aria-label={t('Footer navigation')}>
-          <a href="#journey">{t('Journey')}</a>
-          <a href="#platform">{t('Platform')}</a>
-          <a href="#trust">{t('Trust')}</a>
-          {SCHOOL_CONTACT_URL && <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
+        <div className="landing-footer-lead">
+          <BrandLockup theme={theme} />
+          <h2>{t('Accounts are created by your school.')}</h2>
+          <p>{t('Ask your school or counselor for a temporary login, then set your own password on first sign-in.')}</p>
+          <button type="button" className="landing-primary-cta" onClick={onLogin}>{t('Sign in')} <ChevronRight size={17} /></button>
+        </div>
+        <nav className="landing-footer-nav" aria-label={t('Footer navigation')}>
+          <div>
+            <h3>{t('Sections')}</h3>
+            <a href="#journey">{t('Journey')}</a>
+            <a href="#platform">{t('Platform')}</a>
+            <a href="#trust">{t('Trust')}</a>
+          </div>
+          <div>
+            <h3>{t('Account')}</h3>
+            <button type="button" onClick={onLogin}>{t('Sign in')}</button>
+            {SCHOOL_CONTACT_URL && <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
+          </div>
         </nav>
-        <small>© {new Date().getFullYear()} Naseeb Edu</small>
+        <div className="landing-footer-base">
+          <small>© {new Date().getFullYear()} Naseeb Edu</small>
+        </div>
       </div>
     </footer>
   </div>;
