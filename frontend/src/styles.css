@@ -855,26 +855,36 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   column-gap: var(--lp-fluid-xl); row-gap: var(--lp-8); align-items: start;
 }
-.landing-footer-lead { display: grid; justify-items: start; gap: var(--lp-4); max-width: 36ch; }
-.landing-footer-lead h2 { margin: 0; font-size: var(--lp-t-h2); line-height: 1.08; letter-spacing: -.008em; }
-.landing-footer-lead p { margin: 0; color: var(--lp-ink-muted); font-size: var(--lp-t-small); }
+/* The mark's shadow and border are light-surface values; on ink they lift the
+   ground rather than sit on it. */
+.landing-page .brand-logo { box-shadow: none; }
+.landing-footer-lead { display: grid; justify-items: start; gap: var(--lp-4); }
+/* A sign-off, not a second hero. --lp-t-h2 rendered this at 82% of the hero
+   headline in four lines; ch is capped on the heading itself so it resolves in
+   the display face rather than the body face. */
+.landing-footer-lead h2 { max-width: 20ch; margin: 0; font-size: var(--lp-t-h3); line-height: 1.2; letter-spacing: -.015em; }
+.landing-footer-lead p { max-width: 42ch; margin: 0; color: var(--lp-ink-muted); font-size: var(--lp-t-small); }
 .landing-footer-lead .landing-primary-cta { margin-top: var(--lp-2); }
-.landing-footer .brand-lockup small { display: none; }
-.landing-footer .brand-lockup b { color: var(--lp-ink-fg); font-size: 17px; }
-.landing-footer .brand-logo { width: 34px; height: 34px; flex-basis: 34px; }
-.landing-footer-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--lp-5); }
-.landing-footer-nav > div { display: grid; justify-items: start; align-content: start; gap: var(--lp-3); }
+.landing-footer .brand-lockup small { display: block; color: var(--lp-ink-muted); font-size: var(--lp-t-caption); }
+.landing-footer .brand-lockup b { color: var(--lp-ink-fg); font-size: 20px; }
+.landing-footer .brand-logo { width: 44px; height: 44px; flex-basis: 44px; }
+.landing-footer-nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--lp-5); }
+.landing-footer-nav > div { display: grid; justify-items: start; align-content: start; }
 .landing-footer-nav h3 {
-  margin: 0; color: var(--lp-ink-accent);
+  margin: 0 0 var(--lp-2); color: var(--lp-ink-accent);
   font-family: var(--lp-body); font-size: var(--lp-t-eyebrow); font-weight: 600;
   letter-spacing: .19em; text-transform: uppercase;
 }
 .landing-footer-nav :is(a, button) {
-  padding: 0; color: var(--lp-ink-muted); background: transparent; border: 0;
+  min-height: 44px; padding: 0;
+  display: inline-flex; align-items: center;
+  color: var(--lp-ink-muted); background: transparent; border: 0;
   font: inherit; font-size: var(--lp-t-small); text-align: left; cursor: pointer;
-  transition: color var(--lp-fast) ease;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  transition: color var(--lp-fast) ease, text-decoration-color var(--lp-fast) ease;
 }
-.landing-footer-nav :is(a, button):hover { color: var(--lp-ink-fg); }
+.landing-footer-nav :is(a, button):hover { color: var(--lp-ink-fg); text-decoration-color: currentColor; }
 .landing-footer-base {
   grid-column: 1 / -1; padding-top: var(--lp-5);
   display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--lp-4);
