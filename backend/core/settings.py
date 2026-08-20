@@ -31,11 +31,19 @@ AI_GATEWAY_URL = config(
 ).strip()
 AI_ASSISTANT_MODEL = config('AI_ASSISTANT_MODEL', default='openai/gpt-5.4-mini').strip()
 AI_ASSISTANT_FALLBACK_MODEL = config('AI_ASSISTANT_FALLBACK_MODEL', default='openai/gpt-5.4-nano').strip()
+AI_COLLEGE_MODEL = config('AI_COLLEGE_MODEL', default='openai/gpt-5.4-nano').strip()
+AI_COLLEGE_MAX_OUTPUT_TOKENS = config('AI_COLLEGE_MAX_OUTPUT_TOKENS', default=260, cast=int)
 AI_ASSISTANT_MAX_MESSAGES = config('AI_ASSISTANT_MAX_MESSAGES', default=12, cast=int)
 AI_ASSISTANT_MAX_INPUT_CHARS = config('AI_ASSISTANT_MAX_INPUT_CHARS', default=6000, cast=int)
 AI_ASSISTANT_MAX_OUTPUT_TOKENS = config('AI_ASSISTANT_MAX_OUTPUT_TOKENS', default=450, cast=int)
 AI_ASSISTANT_TIMEOUT_SECONDS = config('AI_ASSISTANT_TIMEOUT_SECONDS', default=35, cast=int)
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)
+# Small-cell suppression for the public /api/public/reach/ aggregate. 0 (default)
+# publishes exact per-region student counts, which is the product owner's choice.
+# Raising it above 0 makes any region below the threshold report students=0 while
+# still being flagged active=true, so coverage stays visible without publishing a
+# potentially identifying figure. No code change needed to switch it on.
+PUBLIC_REACH_MIN_CELL = config('PUBLIC_REACH_MIN_CELL', default=0, cast=int)
 TEMPORARY_CREDENTIAL_TTL_HOURS = config('TEMPORARY_CREDENTIAL_TTL_HOURS', default=72, cast=int)
 
 environment_errors = validate_runtime_environment(
@@ -183,6 +191,12 @@ REST_FRAMEWORK = {
         'login': config('AUTH_LOGIN_RATE', default='10/minute'),
         'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
         'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
+        # Unauthenticated landing-page aggregate. Throttled per client IP; the
+        # response is cached so the cost is a cache read, but the scope keeps a
+        # single IP from hammering it. Deliberately looser than the 60/hour
+        # global `anon` scope because Uzbek ISPs put many real visitors behind
+        # one NAT address.
+        'public_reach': config('PUBLIC_REACH_RATE', default='60/minute'),
     },
 }
 
@@ -218,6 +232,16 @@ SPECTACULAR_SETTINGS = {
         'RecommendationStatusEnum': [
             ('requested', 'Requested'), ('drafting', 'Drafting'),
             ('submitted', 'Submitted'), ('approved', 'Approved'),
+        ],
+        # Mirrors admissions.School.Region; asserted equal in
+        # apps.admissions.tests.PublicReachTests.test_region_choice_values_are_stable.
+        'SchoolRegionEnum': [
+            ('karakalpakstan', 'Republic of Karakalpakstan'), ('andijan', 'Andijan'),
+            ('bukhara', 'Bukhara'), ('fergana', 'Fergana'), ('jizzakh', 'Jizzakh'),
+            ('kashkadarya', 'Kashkadarya'), ('khorezm', 'Khorezm'), ('namangan', 'Namangan'),
+            ('navoiy', 'Navoiy'), ('samarkand', 'Samarkand'), ('sirdaryo', 'Sirdaryo'),
+            ('surkhandarya', 'Surkhandarya'), ('tashkent_region', 'Tashkent Region'),
+            ('tashkent_city', 'Tashkent City'),
         ],
     },
 }

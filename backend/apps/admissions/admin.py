@@ -11,6 +11,7 @@ from .models import (
     CommunityPost,
     Document,
     Essay,
+    EssayAIReview,
     EssayRevision,
     Honor,
     Internship,
@@ -21,6 +22,7 @@ from .models import (
     Notification,
     OpportunityProgram,
     ParentStudentLink,
+    PersonalityAssessment,
     ProgramService,
     Project,
     RecommendationLetter,
@@ -42,9 +44,9 @@ from .models import (
 
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'workspace_type', 'owner_counselor', 'contact_email', 'is_active')
+    list_display = ('name', 'code', 'region', 'workspace_type', 'owner_counselor', 'contact_email', 'is_active')
     search_fields = ('name', 'code', 'contact_email')
-    list_filter = ('workspace_type', 'is_active')
+    list_filter = ('workspace_type', 'region', 'is_active')
 
 
 @admin.register(StudentProfile)
@@ -154,6 +156,8 @@ admin.site.register(Notification)
 admin.site.register(ActivityLog)
 admin.site.register(ApplicationStatusHistory)
 admin.site.register(EssayRevision)
+admin.site.register(EssayAIReview)
+admin.site.register(PersonalityAssessment)
 admin.site.register(RoadmapMission)
 admin.site.register(CommunityPost)
 admin.site.register(Booking)

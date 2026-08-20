@@ -842,6 +842,47 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
 }
 .landing-ai-limit svg { flex: 0 0 auto; margin-top: 2px; color: var(--lp-signal); }
 
+/* --- Reach: coverage across Uzbekistan ----------------------------------- */
+
+.landing-reach { background: var(--surface-soft); }
+.landing-reach-grid {
+  display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  column-gap: var(--lp-fluid-xl); row-gap: var(--lp-6); align-items: start;
+}
+.landing-reach-figure { display: grid; justify-items: start; gap: var(--lp-2); }
+.landing-reach-figure b {
+  font-family: var(--lp-display); font-size: var(--lp-t-figure); font-weight: 500;
+  font-variant-numeric: tabular-nums lining-nums; line-height: 1;
+}
+.landing-reach-figure span { color: var(--text-subtle); font-size: var(--lp-t-small); }
+/* No placeholder digits while loading — a bar, then the real number. */
+.landing-reach-skeleton {
+  width: 7ch; height: var(--lp-t-figure); border-radius: var(--lp-r-sm);
+  background: color-mix(in srgb, var(--lp-rule) 70%, transparent);
+}
+.landing-reach-map { display: grid; gap: var(--lp-4); min-width: 0; }
+.landing-reach-canvas { width: 100%; aspect-ratio: 8 / 5; min-height: 0; }
+.landing-reach-list {
+  margin: 0; padding: 0; list-style: none;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0;
+}
+.landing-reach-list button {
+  width: 100%; min-height: 44px; padding: 0 var(--lp-2);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--lp-3);
+  color: inherit; background: transparent; border: 0;
+  border-bottom: 1px solid var(--lp-rule);
+  font: inherit; font-size: var(--lp-t-small); text-align: left; cursor: pointer;
+  transition: background-color var(--lp-fast) ease, color var(--lp-fast) ease;
+}
+.landing-reach-list button b { font-variant-numeric: tabular-nums lining-nums; font-weight: 500; }
+.landing-reach-list button:hover,
+.landing-reach-list li.is-active button { background: var(--lp-signal-wash); color: var(--lp-signal); }
+.landing-reach-readout { margin: 0; color: var(--text-subtle); font-size: var(--lp-t-small); }
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-reach-list button { transition: none; }
+}
+
 /* --- Footer -------------------------------------------------------------- */
 
 /* A utility sign-off, not a section: one row — copyright, mark, links. */
@@ -1050,6 +1091,7 @@ h1, h2, h3, .brand-lockup b { font-family: 'Cinzel', Georgia, serif; }
   .landing-register { grid-template-columns: 1fr; }
   .landing-register > .landing-capability:nth-last-child(-n+2) { border-bottom: 0; }
   .landing-register > .landing-capability:last-child { border-bottom: 1px solid var(--lp-rule); }
+  .landing-reach-grid { grid-template-columns: 1fr; }
   .landing-ledger { grid-template-columns: 1fr; }
   .landing-ledger > div { padding-block: var(--lp-5); }
   .landing-trust h2 { max-width: none; }

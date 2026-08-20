@@ -135,14 +135,17 @@ async function refreshAccessToken() {
 }
 
 export async function request(path, options = {}, retry = true, unwrapPagination = true) {
-  const headers = new Headers(options.headers || {})
-  const isFormData = options.body instanceof FormData
-  if (!isFormData && options.body !== undefined) headers.set('Content-Type', 'application/json')
-  const access = getToken('access')
+  // `auth: false` is for the one public endpoint: it must not send a stale
+  // token, and a 401 there must not kick off a refresh for a signed-out visitor.
+  const { auth = true, ...fetchOptions } = options
+  const headers = new Headers(fetchOptions.headers || {})
+  const isFormData = fetchOptions.body instanceof FormData
+  if (!isFormData && fetchOptions.body !== undefined) headers.set('Content-Type', 'application/json')
+  const access = auth ? getToken('access') : null
   if (access) headers.set('Authorization', `Bearer ${access}`)
 
-  const response = await fetchWithTimeout(`${API_URL}${path}`, { ...options, headers })
-  if (response.status === 401 && retry && getToken('refresh')) {
+  const response = await fetchWithTimeout(`${API_URL}${path}`, { ...fetchOptions, headers })
+  if (auth && response.status === 401 && retry && getToken('refresh')) {
     await refreshAccessToken()
     return request(path, options, false, unwrapPagination)
   }
@@ -230,6 +233,19 @@ export const api = {
   updateCollegeResearchProfile: (payload) => request('/college-research/', {
     method: 'POST',
     body: JSON.stringify(payload),
+  }),
+  collegeAIAdvice: (question) => request('/college-research/ai/', {
+    method: 'POST',
+    body: JSON.stringify({ question }),
+  }),
+  publicReach: () => request('/public/reach/', { auth: false }),
+  personalityAssessment: () => request('/personality-assessment/'),
+  submitPersonalityAssessment: (answers) => request('/personality-assessment/', {
+    method: 'POST',
+    body: JSON.stringify({ answers }),
+  }),
+  essayAIReview: (essayId, create = false) => request(`/essays/${essayId}/ai-review/`, {
+    method: create ? 'POST' : 'GET',
   }),
   list: listAll,
   create: (resource, payload) => request(`/${resource}/`, {

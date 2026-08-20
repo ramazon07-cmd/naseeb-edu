@@ -2,17 +2,20 @@ from datetime import date, timedelta
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.cache import cache
 from django.db import transaction
 from django.http import FileResponse, Http404
 from django.utils.text import slugify
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 from pathlib import Path
+import hashlib
 import mimetypes
-from rest_framework import mixins, permissions, viewsets
+from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -32,6 +35,7 @@ from .models import (
     CommunityPost,
     Document,
     Essay,
+    EssayAIReview,
     EssayRevision,
     Honor,
     Internship,
@@ -42,6 +46,7 @@ from .models import (
     Notification,
     OpportunityProgram,
     ParentStudentLink,
+    PersonalityAssessment,
     ProgramService,
     Project,
     RecommendationLetter,
@@ -71,9 +76,11 @@ from .serializers import (
     ChannelMembershipSerializer,
     ChannelMessageSerializer,
     CommunityPostSerializer,
+    CollegeAIQuestionSerializer,
     CollegeResearchProfileSerializer,
     DocumentSerializer,
     EssaySerializer,
+    EssayAIReviewSerializer,
     HonorSerializer,
     InternshipSerializer,
     LevelApprovalSerializer,
@@ -85,6 +92,7 @@ from .serializers import (
     OrganizationAccountSerializer,
     ParentInviteSerializer,
     ParentStudentLinkSerializer,
+    PersonalityAssessmentSubmissionSerializer,
     ProgramServiceSerializer,
     ProjectSerializer,
     RecommendationLetterSerializer,
@@ -126,6 +134,15 @@ from .services import (
     extend_level_one_roadmap,
 )
 from apps.users.services import audit_product_action
+from .ai_services import (
+    college_ai_advice,
+    normalized_language,
+    personality_response,
+    personality_university_fit,
+    review_essay,
+    score_personality_answers,
+)
+from .assistant import AssistantRateThrottle, redact_pii
 
 
 class CounselorOrOwnerPermission(permissions.BasePermission):
@@ -715,9 +732,12 @@ COLLEGE_RESEARCH_QUESTIONS = {
 }
 
 
-def build_college_research(profile):
+def build_college_research(profile, language='en'):
+    language = normalized_language(language)
     required_fields = tuple(COLLEGE_RESEARCH_QUESTIONS)
     missing_fields = [field for field in required_fields if getattr(profile, field) in (None, '')]
+    assessment = getattr(profile, 'personality_assessment', None)
+    personality_info = personality_response(assessment, language, include_questions=not bool(assessment))
     profile_counts = {
         'achievements': profile.achievements.count(),
         'honors': profile.honors.count(),
@@ -735,6 +755,12 @@ def build_college_research(profile):
         'budget_usd': profile.budget_usd,
         'scholarship_needed': profile.scholarship_needed,
         'evidence': profile_counts,
+        'personality': {
+            'framework': personality_info['framework'],
+            'scores': personality_info['scores'],
+            'top_traits': personality_info['top_traits'],
+            'trait_labels': personality_info['trait_labels'],
+        },
     }
     if missing_fields:
         return {
@@ -743,6 +769,16 @@ def build_college_research(profile):
             'questions': [dict(field=field, **COLLEGE_RESEARCH_QUESTIONS[field]) for field in missing_fields],
             'profile_snapshot': snapshot,
             'recommendations': [],
+            'personality': personality_info,
+        }
+    if not assessment:
+        return {
+            'ready': False,
+            'missing_fields': [],
+            'questions': [],
+            'profile_snapshot': snapshot,
+            'recommendations': [],
+            'personality': personality_info,
         }
 
     sat = int(profile.sat_score)
@@ -828,7 +864,15 @@ def build_college_research(profile):
         else:
             financial_score += 8
 
-        total_score = min(100, academic_score + preference_score + financial_score + profile_strength_score)
+        personality_score, aligned_traits = personality_university_fit(assessment, university)
+        base_score = academic_score + preference_score + financial_score + profile_strength_score
+        total_score = min(100, round(base_score * .9 + personality_score))
+        trait_labels = personality_info['trait_labels']
+        if aligned_traits:
+            reasons.append(
+                {'en': 'Personality fit: ', 'uz': 'Shaxsiy moslik: ', 'ru': 'Личностное соответствие: '}[language]
+                + ', '.join(trait_labels.get(trait, trait) for trait in aligned_traits)
+            )
         acceptance_rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
         if (acceptance_rate is not None and acceptance_rate < 15) or (university.sat_min and sat < university.sat_min):
             admission_band = 'reach'
@@ -847,6 +891,7 @@ def build_college_research(profile):
                 'preferences': preference_score,
                 'financial': financial_score,
                 'profile_strength': profile_strength_score,
+                'personality': personality_score,
             },
             'reasons': reasons[:5],
             'gaps': gaps[:4],
@@ -859,7 +904,12 @@ def build_college_research(profile):
         'questions': [],
         'profile_snapshot': snapshot,
         'recommendations': recommendations,
-        'methodology': 'Academic fit, preferences, affordability, aid and verified profile evidence.',
+        'personality': personality_info,
+        'methodology': {
+            'en': 'Academic fit, RIASEC interests, preferences, affordability, aid and verified profile evidence.',
+            'uz': 'Akademik moslik, RIASEC qiziqishlari, tanlovlar, byudjet, moliyaviy yordam va tasdiqlangan profil dalillari.',
+            'ru': 'Академическое соответствие, интересы RIASEC, предпочтения, бюджет, финансовая помощь и подтверждённые данные профиля.',
+        }[language],
         'generated_at': timezone.now(),
     }
 
@@ -876,7 +926,7 @@ class CollegeResearchView(APIView):
         profile = self.get_profile(request)
         if not profile:
             return Response({'detail': 'College research is available to student accounts only.'}, status=403)
-        return Response(build_college_research(profile))
+        return Response(build_college_research(profile, request.headers.get('Accept-Language', 'en')))
 
     def post(self, request):
         profile = self.get_profile(request)
@@ -885,7 +935,77 @@ class CollegeResearchView(APIView):
         serializer = CollegeResearchProfileSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.update_profile(profile)
-        return Response(build_college_research(profile))
+        return Response(build_college_research(profile, request.headers.get('Accept-Language', 'en')))
+
+
+class CollegeResearchAIView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CollegeAIQuestionSerializer
+    throttle_classes = [AssistantRateThrottle]
+
+    def post(self, request):
+        if not settings.AI_ASSISTANT_ENABLED:
+            return Response({'detail': 'Naseeb AI is currently disabled.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if request.user.role != User.Role.STUDENT or not hasattr(request.user, 'student_profile'):
+            return Response(
+                {'detail': 'Naseeb AI university advice is available to student accounts only.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        language = request.headers.get('Accept-Language', 'en')
+        research = build_college_research(request.user.student_profile, language)
+        if not research.get('ready'):
+            return Response(
+                {'detail': 'Complete your academic and personality profile before asking Naseeb AI.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        question = redact_pii(serializer.validated_data['question'])
+        result, mode, model = college_ai_advice(question, research, language)
+        return Response({
+            'question': question,
+            'result': result,
+            'mode': mode,
+            'model': model,
+            'context_universities': min(5, len(research.get('recommendations', []))),
+        })
+
+
+class PersonalityAssessmentView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PersonalityAssessmentSubmissionSerializer
+
+    def get_profile(self, request):
+        if request.user.role != User.Role.STUDENT or not hasattr(request.user, 'student_profile'):
+            return None
+        return request.user.student_profile
+
+    def get(self, request):
+        profile = self.get_profile(request)
+        if not profile:
+            return Response({'detail': 'Personality assessment is available to student accounts only.'}, status=403)
+        assessment = getattr(profile, 'personality_assessment', None)
+        return Response(personality_response(assessment, request.headers.get('Accept-Language', 'en')))
+
+    def post(self, request):
+        profile = self.get_profile(request)
+        if not profile:
+            return Response({'detail': 'Personality assessment is available to student accounts only.'}, status=403)
+        serializer = PersonalityAssessmentSubmissionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        answers = serializer.validated_data['answers']
+        scores, top_traits = score_personality_answers(answers)
+        assessment, _ = PersonalityAssessment.objects.update_or_create(
+            student=profile,
+            defaults={
+                'framework': 'riasec-v1',
+                'answers': answers,
+                'scores': scores,
+                'top_traits': top_traits,
+                'completed_at': timezone.now(),
+            },
+        )
+        return Response(personality_response(assessment, request.headers.get('Accept-Language', 'en')))
 
 
 class ScholarshipViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1247,6 +1367,51 @@ class EssayViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             )
         else:
             serializer.save()
+
+    @action(
+        detail=True,
+        methods=['get', 'post'],
+        url_path='ai-review',
+        throttle_classes=[AssistantRateThrottle],
+    )
+    def ai_review(self, request, pk=None):
+        if request.user.role not in {User.Role.STUDENT, User.Role.COUNSELOR}:
+            return Response({'detail': 'AI essay review is available to students and assigned counselors only.'}, status=403)
+        essay = self.get_object()
+        latest = essay.ai_reviews.select_related('requested_by').first()
+        if request.method == 'GET':
+            return Response(
+                EssayAIReviewSerializer(latest).data if latest else {'detail': 'No AI review has been created yet.'},
+                status=200 if latest else 404,
+            )
+
+        content = (essay.content or '').strip()
+        if len(content) < 80:
+            return Response({'detail': 'Add at least 80 characters to the essay draft before requesting AI review.'}, status=400)
+        if len(content) > 25000:
+            return Response({'detail': 'The essay draft is too long for AI review. Keep it under 25,000 characters.'}, status=400)
+
+        language = request.headers.get('Accept-Language', 'en')
+        safe_prompt = redact_pii(essay.prompt)
+        safe_content = redact_pii(content)
+        input_hash = hashlib.sha256(
+            f'{essay.version}\0{language}\0{safe_prompt}\0{safe_content}'.encode('utf-8')
+        ).hexdigest()
+        cached = essay.ai_reviews.filter(input_hash=input_hash).first()
+        if cached:
+            return Response(EssayAIReviewSerializer(cached).data)
+
+        result, mode, model = review_essay(safe_prompt, safe_content, language)
+        review = EssayAIReview.objects.create(
+            essay=essay,
+            requested_by=request.user,
+            essay_version=essay.version,
+            input_hash=input_hash,
+            model=model,
+            mode=mode,
+            result=result,
+        )
+        return Response(EssayAIReviewSerializer(review).data, status=201)
 
 
 class MeetingNoteViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -2859,6 +3024,90 @@ class StudentTeamView(APIView):
                     'kind': 'school',
                 })
         return Response(team)
+
+
+PUBLIC_REACH_CACHE_KEY = 'public-reach:v1'
+PUBLIC_REACH_CACHE_SECONDS = 300
+
+
+def _public_reach_counts():
+    """Aggregate student counts per school region.
+
+    Two queries, no row data. Students whose school has no region set - and
+    students with no school at all - are deliberately excluded from the
+    per-region breakdown but still counted in ``total``, so the published total
+    stays the true student count while the map only claims regions we can
+    actually attribute.
+    """
+    per_region = dict(
+        StudentProfile.objects
+        .filter(school__region__in=School.Region.values)
+        .values_list('school__region')
+        .order_by()
+        .annotate(students=Count('id'))
+    )
+    return {'total': StudentProfile.objects.count(), 'per_region': per_region}
+
+
+def _public_reach_payload(counts):
+    """Shape the cached aggregate for publication.
+
+    Small-cell suppression is applied here rather than before caching so that
+    changing PUBLIC_REACH_MIN_CELL takes effect immediately instead of after the
+    cache expires. All 14 regions are always present so a client never has to
+    infer absence from a missing key.
+    """
+    min_cell = max(int(getattr(settings, 'PUBLIC_REACH_MIN_CELL', 0) or 0), 0)
+    regions = []
+    for value, label in School.Region.choices:
+        students = counts['per_region'].get(value, 0)
+        suppressed = bool(min_cell) and students < min_cell
+        regions.append({
+            'region': value,
+            'label': label,
+            'students': 0 if suppressed else students,
+            'active': students > 0,
+        })
+    return {'total': counts['total'], 'regions': regions}
+
+
+class PublicReachView(APIView):
+    """Unauthenticated aggregate of Naseeb Edu's coverage across Uzbekistan.
+
+    This is the only endpoint in the product that serves anonymous requests, so
+    treat it as a security surface: counts only. No student, school, user or
+    counselor id, name, contact or any other field may ever enter this payload.
+    """
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'public_reach'
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='PublicReach',
+            fields={
+                'total': drf_serializers.IntegerField(),
+                'regions': inline_serializer(
+                    name='PublicReachRegion',
+                    fields={
+                        'region': drf_serializers.ChoiceField(choices=School.Region.choices),
+                        'label': drf_serializers.CharField(),
+                        'students': drf_serializers.IntegerField(),
+                        'active': drf_serializers.BooleanField(),
+                    },
+                    many=True,
+                ),
+            },
+        )
+    )
+    def get(self, request):
+        counts = cache.get(PUBLIC_REACH_CACHE_KEY)
+        if counts is None:
+            counts = _public_reach_counts()
+            cache.set(PUBLIC_REACH_CACHE_KEY, counts, PUBLIC_REACH_CACHE_SECONDS)
+        return Response(_public_reach_payload(counts))
 
 
 class DashboardStatsView(APIView):
