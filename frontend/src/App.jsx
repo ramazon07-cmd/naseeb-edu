@@ -112,9 +112,6 @@ function writePublicLocation(publicPage, replace = false) {
   window.history[replace ? 'replaceState' : 'pushState']({ publicPage }, '', url);
 }
 
-function brandLogoFor(theme) {
-  return BRAND_LOGOS[theme] || BRAND_LOGOS.light;
-}
 
 function normalizeCountries(value) {
   const seen = new Set();
@@ -429,6 +426,7 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
         <nav aria-label={t('Landing navigation')}>
           <a href="#journey">{t('Journey')}</a>
           <a href="#platform">{t('Platform')}</a>
+          <a href="#reach">{t('Reach')}</a>
           <a href="#trust">{t('Trust')}</a>
         </nav>
         <div className="landing-nav-actions">
@@ -514,6 +512,8 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
         </div>
       </section>
 
+      <LandingReach theme={theme} />
+
       <section className="landing-band landing-invert landing-trust" id="trust">
         <div className="lp-shell">
           <div className="landing-trust-head" data-reveal>
@@ -559,12 +559,204 @@ function Landing({ onLogin, theme, toggleTheme, language, changeLanguage }) {
         <nav className="landing-footer-links" aria-label={t('Footer navigation')}>
           <a href="#journey">{t('Journey')}</a>
           <a href="#platform">{t('Platform')}</a>
+          <a href="#reach">{t('Reach')}</a>
           <a href="#trust">{t('Trust')}</a>
           {SCHOOL_CONTACT_URL && <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
         </nav>
       </div>
     </footer>
   </div>;
+}
+
+// Reach: coverage drawn from real School.region values via the one public
+// endpoint. Nothing here is hardcoded — if the API is unreachable the section
+// renders the map neutral and says so rather than showing a number.
+function useReachData(active) {
+  const [state, setState] = useState({ data: null, error: '', loading: false });
+  const load = useCallback(() => {
+    setState((prev) => ({ ...prev, loading: true, error: '' }));
+    api.publicReach()
+      .then((data) => setState({ data, error: '', loading: false }))
+      .catch(() => setState({ data: null, error: t('Coverage data is unavailable right now.'), loading: false }));
+  }, []);
+  useEffect(() => { if (active && !state.data && !state.loading && !state.error) load(); }, [active, state, load]);
+  return { ...state, reload: load };
+}
+
+// three.js and the 17kB geometry are fetched only when the section is close to
+// the viewport, so a visitor who never scrolls this far pays nothing for them.
+function ReachMap({ regions, selected, onSelect, theme }) {
+  const hostRef = useRef(null);
+  const [supported, setSupported] = useState(null);
+
+  useEffect(() => {
+    const probe = document.createElement('canvas');
+    const gl = probe.getContext('webgl2') || probe.getContext('webgl');
+    const lowPower = (navigator.hardwareConcurrency || 8) <= 4 || window.matchMedia('(max-width: 560px)').matches;
+    setSupported(Boolean(gl) && !lowPower);
+  }, []);
+
+  useEffect(() => {
+    if (supported !== true || !hostRef.current || !regions.length) return undefined;
+    const host = hostRef.current;
+    let disposed = false;
+    let cleanup = () => {};
+
+    (async () => {
+      const [THREE, shapes] = await Promise.all([
+        import('three'),
+        fetch('/geo/uzbekistan-regions.json').then((r) => r.json()),
+      ]);
+      if (disposed) return;
+
+      const token = (name) => getComputedStyle(document.querySelector('.landing-page')).getPropertyValue(name).trim();
+      const scene = new THREE.Scene();
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      host.appendChild(renderer.domElement);
+
+      const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 1000);
+      scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+      const key = new THREE.DirectionalLight(0xffffff, 1.1);
+      key.position.set(-4, 9, 6);
+      scene.add(key);
+
+      const all = Object.values(shapes).flat().flat();
+      const lngs = all.map((p) => p[0]); const lats = all.map((p) => p[1]);
+      const cx = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+      const cy = (Math.min(...lats) + Math.max(...lats)) / 2;
+      const scale = 14 / (Math.max(...lngs) - Math.min(...lngs));
+      const byRegion = new Map(regions.map((r) => [r.region, r]));
+      const maxStudents = Math.max(1, ...regions.map((r) => r.students));
+      const meshes = [];
+
+      Object.entries(shapes).forEach(([regionKey, rings]) => {
+        const info = byRegion.get(regionKey);
+        const share = info ? info.students / maxStudents : 0;
+        rings.forEach((ring) => {
+          const shape = new THREE.Shape();
+          ring.forEach(([lng, lat], i) => {
+            const x = (lng - cx) * scale; const y = (lat - cy) * scale;
+            if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+          });
+          // Every region keeps a visible floor so zero-count regions still read.
+          const geom = new THREE.ExtrudeGeometry(shape, { depth: 0.28 + share * 1.15, bevelEnabled: false });
+          const mat = new THREE.MeshLambertMaterial({ transparent: true });
+          const mesh = new THREE.Mesh(geom, mat);
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.userData.region = regionKey;
+          scene.add(mesh);
+          meshes.push(mesh);
+        });
+      });
+
+      const selectedRef = { current: selected };
+      const paint = () => {
+        const base = new THREE.Color(token('--lp-ink-rule') || '#888');
+        const hot = new THREE.Color(token('--lp-signal') || '#fff');
+        const lift = new THREE.Color(token('--lp-ink-accent') || '#fff');
+        meshes.forEach((m) => {
+          const info = byRegion.get(m.userData.region);
+          const share = info ? info.students / maxStudents : 0;
+          const isSel = selectedRef.current === m.userData.region;
+          m.material.color.copy(isSel ? lift : base.clone().lerp(hot, 0.25 + share * 0.6));
+          m.material.opacity = info && info.active ? 1 : 0.55;
+        });
+      };
+
+      const resize = () => {
+        const w = host.clientWidth; const h = host.clientHeight || Math.round(w * 0.62);
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h; camera.updateProjectionMatrix();
+        camera.position.set(0, 12.5, 11); camera.lookAt(0, 0, 0.4);
+        paint(); renderer.render(scene, camera);
+      };
+
+      const ray = new THREE.Raycaster(); const pointer = new THREE.Vector2();
+      const pick = (event) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        ray.setFromCamera(pointer, camera);
+        const hit = ray.intersectObjects(meshes)[0];
+        onSelect(hit ? hit.object.userData.region : null);
+      };
+      renderer.domElement.addEventListener('pointermove', pick);
+      renderer.domElement.addEventListener('pointerdown', pick);
+      const observer = new ResizeObserver(resize);
+      observer.observe(host);
+      resize();
+
+      cleanup = () => {
+        observer.disconnect();
+        renderer.domElement.removeEventListener('pointermove', pick);
+        renderer.domElement.removeEventListener('pointerdown', pick);
+        meshes.forEach((m) => { m.geometry.dispose(); m.material.dispose(); });
+        renderer.dispose();
+        if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
+      };
+      host.__repaint = (next) => { selectedRef.current = next; paint(); renderer.render(scene, camera); };
+    })();
+
+    return () => { disposed = true; cleanup(); };
+  }, [supported, regions, theme]);
+
+  useEffect(() => { hostRef.current?.__repaint?.(selected); }, [selected]);
+
+  if (supported === false) return null;
+  return <div className="landing-reach-canvas" ref={hostRef} aria-hidden="true" />;
+}
+
+function LandingReach({ theme }) {
+  const [near, setNear] = useState(false);
+  const sectionRef = useRef(null);
+  const [selected, setSelected] = useState(null);
+  const { data, error, loading, reload } = useReachData(near);
+
+  useEffect(() => {
+    const node = sectionRef.current;
+    if (!node) return undefined;
+    const check = () => { if (node.getBoundingClientRect().top < window.innerHeight * 2) setNear(true); };
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    return () => window.removeEventListener('scroll', check);
+  }, []);
+
+  const regions = data?.regions ?? [];
+  const current = regions.find((r) => r.region === selected) || null;
+
+  return <section className="landing-band landing-reach" id="reach" ref={sectionRef}>
+    <div className="lp-shell">
+      <div className="landing-section-head" data-reveal>
+        <h2>{t('Where Naseeb Edu is working.')}</h2>
+        <p>{t('Coverage is drawn from the schools using the platform, and updates as new ones join.')}</p>
+      </div>
+      <div className="landing-reach-grid">
+        <div className="landing-reach-figure">
+          {loading && !data && <span className="landing-reach-skeleton" aria-hidden="true" />}
+          {data && data.total > 0 && <b>{formatNumberLocale(data.total)}</b>}
+          <span>{t('Students on the platform')}</span>
+          {error && <InlineLoadError message={error} onRetry={reload} />}
+        </div>
+        <div className="landing-reach-map">
+          <ReachMap regions={regions} selected={selected} onSelect={setSelected} theme={theme} />
+          <ul className="landing-reach-list">
+            {regions.map((r) =>
+              <li key={r.region} className={r.region === selected ? 'is-active' : ''}>
+                <button type="button" onMouseEnter={() => setSelected(r.region)} onFocus={() => setSelected(r.region)} onClick={() => setSelected(r.region)}>
+                  <span>{t(r.label)}</span>
+                  <b>{formatNumberLocale(r.students)}</b>
+                </button>
+              </li>
+            )}
+          </ul>
+          <p className="landing-reach-readout" role="status">
+            {current ? tx`${t(current.label)} — ${formatNumberLocale(current.students)}` : t('Select a region to see its number.')}
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>;
 }
 
 function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }) {
@@ -3236,8 +3428,8 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     try {window.localStorage.setItem(THEME_KEY, theme);} catch {/* Keep the active theme for this session. */}
-    const favicon = document.querySelector('link[data-theme-icon]');
-    if (favicon) favicon.href = brandLogoFor(theme);
+    // The favicon deliberately tracks the browser theme (see index.html), not the
+    // site theme, so it is not reassigned here.
     const themeColor = document.getElementById('theme-color');
     if (themeColor) themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
   }, [theme]);

@@ -9,6 +9,7 @@ from .views import (
     BookingViewSet,
     ChannelMessageViewSet,
     CommunityPostViewSet,
+    CollegeResearchAIView,
     CollegeResearchView,
     DashboardStatsView,
     DocumentViewSet,
@@ -21,9 +22,11 @@ from .views import (
     NotificationViewSet,
     OpportunityProgramViewSet,
     ParentPortalView,
+    PersonalityAssessmentView,
     ParentStudentLinkViewSet,
     ProgramServiceViewSet,
     ProjectViewSet,
+    PublicReachView,
     RecommendationLetterViewSet,
     ResearchViewSet,
     ResourceLibraryItemViewSet,
@@ -80,8 +83,12 @@ router.register('parent-links', ParentStudentLinkViewSet, basename='parent-links
 
 urlpatterns = [
     path('assistant/chat/', AssistantChatView.as_view(), name='assistant-chat'),
+    # The only unauthenticated endpoint in the product. Counts only.
+    path('public/reach/', PublicReachView.as_view(), name='public-reach'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('college-research/', CollegeResearchView.as_view(), name='college-research'),
+    path('college-research/ai/', CollegeResearchAIView.as_view(), name='college-research-ai'),
+    path('personality-assessment/', PersonalityAssessmentView.as_view(), name='personality-assessment'),
     path('student-team/', StudentTeamView.as_view(), name='student-team'),
     path('parent-portal/', ParentPortalView.as_view(), name='parent-portal'),
     path('', include(router.urls)),
