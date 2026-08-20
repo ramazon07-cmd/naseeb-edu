@@ -7,7 +7,8 @@
     <meta name="description" content="Naseeb Edu education counseling platform" />
     <link rel="preload" as="image" href="/brand/naseeb-light-256.jpg" fetchpriority="high" />
     <link rel="preload" as="image" href="/brand/naseeb-dark-256.png" fetchpriority="high" />
-    <link rel="icon" data-theme-icon href="/brand/naseeb-light-256.jpg" />
+    <!-- Use distinct URLs so Chrome refreshes the tab icon when the app theme changes. -->
+    <link rel="icon" type="image/png" sizes="128x128" data-theme-icon href="/brand/icon-light.png" />
     <title>Naseeb Edu — Education Counseling Platform</title>
     <style>
       html { background: #F5F0E6; color-scheme: light; }
@@ -50,9 +51,8 @@
           document.documentElement.dataset.theme = theme
           document.documentElement.style.colorScheme = theme
           document.getElementById('theme-color').content = theme === 'dark' ? '#121015' : '#F5F0E6'
-          document.querySelector('link[data-theme-icon]').href = theme === 'dark'
-            ? '/brand/naseeb-dark-256.png'
-            : '/brand/naseeb-light-256.jpg'
+          const icon = document.querySelector('link[data-theme-icon]')
+          if (icon) icon.href = theme === 'dark' ? '/brand/icon-dark-transparent.png' : '/brand/icon-light.png'
         } catch {
           document.documentElement.dataset.theme = 'light'
           document.documentElement.style.colorScheme = 'light'

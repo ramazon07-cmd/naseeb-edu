@@ -77,9 +77,17 @@ const BRAND_LOGOS = {
   light: '/brand/naseeb-light-256.jpg',
   dark: '/brand/naseeb-dark-256.png'
 };
+const THEME_ICONS = {
+  light: '/brand/icon-light.png',
+  dark: '/brand/icon-dark-transparent.png'
+};
 
 function brandLogoFor(theme) {
   return BRAND_LOGOS[theme] || BRAND_LOGOS.light;
+}
+
+function themeIconFor(theme) {
+  return THEME_ICONS[theme] || THEME_ICONS.light;
 }
 
 function normalizeCountries(value) {
@@ -2777,7 +2785,7 @@ export default function App() {
     document.documentElement.style.colorScheme = theme;
     try {window.localStorage.setItem(THEME_KEY, theme);} catch {/* Keep the active theme for this session. */}
     const favicon = document.querySelector('link[data-theme-icon]');
-    if (favicon) favicon.href = brandLogoFor(theme);
+    if (favicon) favicon.href = themeIconFor(theme);
     const themeColor = document.getElementById('theme-color');
     if (themeColor) themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
   }, [theme]);
