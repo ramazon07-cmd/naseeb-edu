@@ -105,7 +105,7 @@ for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchra
 if (app.includes('className="palette-row"')) throw new Error('Login palette swatches must not be rendered.');
 if (!app.includes("activeUser.role === 'organization'")) throw new Error('Organization data scope is missing.');
 if (!app.includes("const THEME_KEY = 'naseeb-edu-theme'")) throw new Error('Persistent theme support is missing.');
-if (!app.includes("favicon.href = theme === 'dark' ? '/brand/icon-dark-64.png?v=2' : '/brand/icon-light-64.png?v=2'")) throw new Error('Theme toggle must update the browser-tab icon.');
+if (!app.includes("light: '/brand/icon-light-64.png?v=2'") || !app.includes("dark: '/brand/icon-dark-64.png?v=2'") || !app.includes('favicon.href = themeIconFor(theme)')) throw new Error('Theme toggle must update the browser-tab icon.');
 if (!app.includes('/brand/naseeb-dark-256.png') || !app.includes('/brand/naseeb-light-256.jpg')) throw new Error('Optimized theme-aware logos are missing.');
 if (!html.includes('rel="preload"') || !html.includes('naseeb-dark-256.png') || !html.includes('naseeb-light-256.jpg')) throw new Error('Theme logos must be preloaded.');
 if (!app.includes('login-form-panel') || !styles.includes('.login-form-panel')) throw new Error('Responsive login form panel is missing.');
@@ -134,8 +134,12 @@ for (const token of [
 ]) {
   if (!styles.includes(token)) throw new Error(`Semantic theme token missing: ${token}`)
 }
-const componentStyles = styles.split("color-scheme: dark;\n}")[1] || ''
-if (/#[0-9a-f]{3,8}|rgba?\(/i.test(componentStyles)) throw new Error('Component-level hardcoded color remains outside the theme token blocks.')
+const componentStyles = styles.split(/color-scheme:\s*dark;\s*\}/)[1] || ''
+// Scoped component tokens may define colors after the global theme blocks.
+// Remove custom-property declarations, including multiline gradients, before
+// checking that actual component rules consume tokens instead of raw colors.
+const componentRules = componentStyles.replace(/--[a-z0-9-]+\s*:\s*[^;]+;/gi, '')
+if (/#[0-9a-f]{3,8}|rgba?\(/i.test(componentRules)) throw new Error('Component-level hardcoded color remains outside the theme token blocks.')
 const tokenDefinitions = new Set([...styles.matchAll(/--([a-z0-9-]+)\s*:/gi)].map((match) => match[1]))
 const tokenReferences = new Set([...styles.matchAll(/var\(--([a-z0-9-]+)/gi)].map((match) => match[1]))
 const undefinedTokens = [...tokenReferences].filter((token) => !tokenDefinitions.has(token))

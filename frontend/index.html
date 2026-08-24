@@ -59,7 +59,7 @@
           document.documentElement.dataset.theme = theme
           document.documentElement.style.colorScheme = theme
           document.getElementById('theme-color').content = theme === 'dark' ? '#121015' : '#F5F0E6'
-          var icon = document.querySelector('link[data-theme-icon]')
+          const icon = document.querySelector('link[data-theme-icon]')
           if (icon) icon.href = theme === 'dark' ? '/brand/icon-dark-64.png?v=2' : '/brand/icon-light-64.png?v=2'
         } catch {
           document.documentElement.dataset.theme = 'light'

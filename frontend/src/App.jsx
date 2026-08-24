@@ -83,6 +83,10 @@ const BRAND_LOGOS = {
   light: '/brand/naseeb-light-256.jpg',
   dark: '/brand/naseeb-dark-256.png'
 };
+const THEME_ICONS = {
+  light: '/brand/icon-light-64.png?v=2',
+  dark: '/brand/icon-dark-64.png?v=2'
+};
 
 const PageTitleContext = createContext('');
 
@@ -112,6 +116,9 @@ function writePublicLocation(publicPage, replace = false) {
   window.history[replace ? 'replaceState' : 'pushState']({ publicPage }, '', url);
 }
 
+function themeIconFor(theme) {
+  return THEME_ICONS[theme] || THEME_ICONS.light;
+}
 
 function normalizeCountries(value) {
   const seen = new Set();
@@ -3534,7 +3541,7 @@ export default function App() {
     document.documentElement.style.colorScheme = theme;
     try {window.localStorage.setItem(THEME_KEY, theme);} catch {/* Keep the active theme for this session. */}
     const favicon = document.querySelector('link[data-theme-icon]');
-    if (favicon) favicon.href = theme === 'dark' ? '/brand/icon-dark-64.png?v=2' : '/brand/icon-light-64.png?v=2';
+    if (favicon) favicon.href = themeIconFor(theme);
     const themeColor = document.getElementById('theme-color');
     if (themeColor) themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
   }, [theme]);
