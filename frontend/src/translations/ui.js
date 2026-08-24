@@ -1,4 +1,12 @@
 export const UI_TRANSLATIONS = {
+  'Reach': ['Qamrov', 'Охват'],
+  'Coverage data is unavailable right now.': ['Qamrov ma’lumotlari hozircha mavjud emas.', 'Данные об охвате сейчас недоступны.'],
+  'Where Naseeb Edu is working.': ['Naseeb Edu qayerlarda ishlamoqda.', 'Где работает Naseeb Edu.'],
+  'Coverage is drawn from the schools using the platform, and updates as new ones join.': ['Qamrov platformadan foydalanayotgan maktablar asosida ko‘rsatiladi va yangi maktablar qo‘shilganda yangilanadi.', 'Охват формируется по школам, использующим платформу, и обновляется по мере подключения новых школ.'],
+  'Students on the platform': ['Platformadagi o‘quvchilar', 'Учеников на платформе'],
+  'Select a region to see its number.': ['O‘quvchilar sonini ko‘rish uchun hududni tanlang.', 'Выберите регион, чтобы увидеть число учеников.'],
+  'Drag to rotate': ['Aylantirish uchun torting', 'Перетащите, чтобы вращать'],
+  'Interactive map of Uzbekistan. Drag to rotate or use the arrow keys.': ['O‘zbekistonning interaktiv xaritasi. Aylantirish uchun torting yoki strelka tugmalaridan foydalaning.', 'Интерактивная карта Узбекистана. Перетащите или используйте клавиши со стрелками, чтобы вращать.'],
   'All': ['Barchasi', 'Все'],
   'Choose a roadmap': ['Roadmapni tanlang', 'Выберите план'],
   'Choose an active template and start your professional roadmap.': ['Faol shablonni tanlab, professional roadmapingizni boshlang.', 'Выберите активный шаблон и начните свой профессиональный план.'],
