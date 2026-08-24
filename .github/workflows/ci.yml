@@ -15,8 +15,12 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r backend/requirements.txt
-      - run: python backend/manage.py makemigrations --check --dry-run
-      - run: python backend/manage.py test -v 2
+      - run: python manage.py makemigrations --check --dry-run
+        working-directory: backend
+      - run: python manage.py spectacular --validate --fail-on-warn --file /tmp/naseeb-schema.yaml
+        working-directory: backend
+      - run: python manage.py test -v 2
+        working-directory: backend
         env:
           SECRET_KEY: ci-only-secret
           DEBUG: "True"
@@ -31,3 +35,4 @@ jobs:
       - run: npm run build
         working-directory: frontend
       - run: node scripts/frontend_smoke.js
+      - run: node scripts/i18n_audit.mjs

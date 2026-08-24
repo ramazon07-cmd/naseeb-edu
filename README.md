@@ -50,7 +50,7 @@ Public registration is disabled. Students are created by a counselor or their sc
 - National and International opportunity-program catalogs with category, delivery and scholarship filters
 - Separate task, roadmap and overall journey progress with at-risk deadline indicators for students, counselors and organizations
 - Role-specific dashboards, navigation and data isolation
-- English-only user-facing interface and demo content
+- Uzbek, Russian and English user-facing interface and localized demo content
 - Django Admin and OpenAPI/Swagger documentation
 
 ## Local demo accounts

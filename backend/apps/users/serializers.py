@@ -2,6 +2,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils.text import slugify
+from datetime import datetime
 from rest_framework import serializers
 from .models import ProductAuditEvent, User
 from .services import audit_product_action, validate_counselor_capacity
@@ -35,13 +36,13 @@ class UserSerializer(serializers.ModelSerializer):
             obj._latest_temporary_credential = obj.temporary_credentials.order_by('-issued_at', '-id').first()
         return obj._latest_temporary_credential
 
-    def get_credential_status(self, obj):
+    def get_credential_status(self, obj) -> str:
         credential = self._credential(obj)
         if not credential:
             return 'none'
         return 'expired' if credential.is_expired else credential.status
 
-    def get_credential_expires_at(self, obj):
+    def get_credential_expires_at(self, obj) -> datetime | None:
         credential = self._credential(obj)
         return credential.expires_at if credential else None
 
@@ -161,7 +162,7 @@ class ProductAuditEventSerializer(serializers.ModelSerializer):
             'metadata', 'created_at',
         )
 
-    def get_actor_name(self, obj):
+    def get_actor_name(self, obj) -> str | None:
         return obj.actor.get_full_name() or obj.actor.username if obj.actor else None
 
 

@@ -14,7 +14,9 @@
     <link rel="preload" as="image" href="/landing/naseeb-counseling-hero.jpg" />
     <link rel="preload" as="image" href="/brand/naseeb-light-256.jpg" fetchpriority="high" />
     <link rel="preload" as="image" href="/brand/naseeb-dark-256.png" fetchpriority="high" />
-    <link rel="icon" data-theme-icon href="/brand/naseeb-light-256.jpg" />
+    <!-- Keep the tab icon aligned with the website's active theme. The same
+         choice is repeated by React whenever the visitor toggles the theme. -->
+    <link rel="icon" type="image/png" sizes="64x64" data-theme-icon href="/brand/icon-light-64.png?v=2" />
     <title>Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi</title>
     <style>
       html { background: #F5F0E6; color-scheme: light; }
@@ -57,9 +59,8 @@
           document.documentElement.dataset.theme = theme
           document.documentElement.style.colorScheme = theme
           document.getElementById('theme-color').content = theme === 'dark' ? '#121015' : '#F5F0E6'
-          document.querySelector('link[data-theme-icon]').href = theme === 'dark'
-            ? '/brand/naseeb-dark-256.png'
-            : '/brand/naseeb-light-256.jpg'
+          var icon = document.querySelector('link[data-theme-icon]')
+          if (icon) icon.href = theme === 'dark' ? '/brand/icon-dark-64.png?v=2' : '/brand/icon-light-64.png?v=2'
         } catch {
           document.documentElement.dataset.theme = 'light'
           document.documentElement.style.colorScheme = 'light'
