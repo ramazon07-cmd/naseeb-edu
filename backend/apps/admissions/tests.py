@@ -2,24 +2,70 @@ from datetime import date, timedelta
 import io
 import tempfile
 import zipfile
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.urls import reverse
 from django.utils import timezone
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.users.models import User
 from .assistant import build_role_context, redact_pii
+from .ai_services import college_ai_advice, review_essay
 from .models import (
-    Achievement, Activity, Application, Booking, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, Honor,
+    Achievement, Activity, Application, Booking, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, EssayAIReview, Honor,
     Internship, MeetingNote, LevelApproval, Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project, RecommendationLetter,
-    Research, ResourceLibraryItem, MessageChannel, MessageReport, RoadmapMission, School, Scholarship, ScreenTimeDaily, StoreItem,
+    Research, ResourceLibraryItem, MessageChannel, MessageReport, PersonalityAssessment, RoadmapMission, School, Scholarship, ScreenTimeDaily, StoreItem,
     StudentMessage, StudentProfile, SupportTicket, Task, University, XPTransaction,
 )
+
+
+class AIGatewayFallbackTests(SimpleTestCase):
+    @override_settings(AI_GATEWAY_API_KEY='configured-for-test')
+    @patch('apps.admissions.ai_services._gateway_json', side_effect=AttributeError('malformed provider payload'))
+    def test_essay_review_uses_local_fallback_for_malformed_provider_payload(self, gateway):
+        result, mode, model = review_essay(
+            'Describe a learning experience.',
+            'I organized three tests, recorded the results, and reflected on what changed.',
+            'en',
+        )
+
+        gateway.assert_called_once()
+        self.assertEqual(mode, 'local-fallback')
+        self.assertEqual(model, '')
+        self.assertIn('overall_score', result)
+
+    @override_settings(AI_GATEWAY_API_KEY='configured-for-test')
+    @patch('apps.admissions.ai_services._gateway_json', side_effect=IndexError('missing provider choice'))
+    def test_college_advice_uses_local_fallback_for_malformed_provider_payload(self, gateway):
+        research = {
+            'profile_snapshot': {},
+            'recommendations': [{
+                'university': {
+                    'name': 'Fallback University',
+                    'country': 'Uzbekistan',
+                    'net_price_usd': 12000,
+                    'offers_international_aid': True,
+                    'offers_merit_aid': False,
+                    'offers_need_based_aid': False,
+                },
+                'match_score': 74,
+                'admission_band': 'target',
+                'reasons': ['Academic fit'],
+                'gaps': [],
+            }],
+        }
+
+        result, mode, model = college_ai_advice('Which option fits?', research, 'en')
+
+        gateway.assert_called_once()
+        self.assertEqual(mode, 'local-fallback')
+        self.assertEqual(model, '')
+        self.assertEqual(result['universities'][0]['name'], 'Fallback University')
 
 
 class RoleIsolationTests(APITestCase):
@@ -2001,6 +2047,16 @@ class RoleIsolationTests(APITestCase):
             popular_majors='Computer Science, Data Science',
         )
         self.client.force_authenticate(self.student_a_user)
+        personality = self.client.post(
+            '/api/personality-assessment/',
+            {'answers': {
+                'r1': 3, 'r2': 4, 'i1': 5, 'i2': 5, 'a1': 3, 'a2': 3,
+                's1': 4, 's2': 3, 'e1': 4, 'e2': 4, 'c1': 4, 'c2': 5,
+            }},
+            format='json',
+        )
+        self.assertEqual(personality.status_code, status.HTTP_200_OK)
+        self.assertTrue(personality.data['ready'])
 
         response = self.client.post(
             '/api/college-research/',
@@ -2022,9 +2078,106 @@ class RoleIsolationTests(APITestCase):
         self.assertGreaterEqual(response.data['recommendations'][0]['match_score'], 65)
         self.assertIn(response.data['recommendations'][0]['admission_band'], {'reach', 'target', 'strong_option'})
         self.assertIn('academic', response.data['recommendations'][0]['score_breakdown'])
+        self.assertIn('personality', response.data['recommendations'][0]['score_breakdown'])
+        self.assertTrue(response.data['personality']['ready'])
         self.student_a.refresh_from_db()
         self.assertEqual(self.student_a.sat_score, 1450)
         self.assertEqual(self.student_a.target_major, 'Computer Science')
+
+    def test_personality_assessment_requires_all_questions_and_is_private_to_student(self):
+        self.client.force_authenticate(self.student_a_user)
+        invalid = self.client.post('/api/personality-assessment/', {'answers': {'r1': 5}}, format='json')
+        self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+
+        answers = {
+            'r1': 2, 'r2': 3, 'i1': 5, 'i2': 5, 'a1': 4, 'a2': 4,
+            's1': 3, 's2': 3, 'e1': 4, 'e2': 4, 'c1': 5, 'c2': 5,
+        }
+        created = self.client.post('/api/personality-assessment/', {'answers': answers}, format='json')
+        self.assertEqual(created.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(created.data['scores']), 6)
+        self.assertEqual(len(created.data['top_traits']), 2)
+        self.assertTrue(PersonalityAssessment.objects.filter(student=self.student_a).exists())
+
+        self.client.force_authenticate(self.counselor)
+        forbidden = self.client.get('/api/personality-assessment/')
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(AI_GATEWAY_API_KEY='', AI_ASSISTANT_ENABLED=True)
+    def test_student_can_ask_compact_college_ai_advisor(self):
+        University.objects.create(
+            name='Compact Context University', country='Canada', city='Toronto', ranking=44,
+            acceptance_rate='42.00', sat_min=1250, sat_max=1450, net_price_usd=16000,
+            offers_merit_aid=True, offers_international_aid=True,
+            popular_majors='Computer Science, Data Science',
+        )
+        self.student_a.gpa = '4.60'
+        self.student_a.sat_score = 1370
+        self.student_a.ielts_score = '7.0'
+        self.student_a.target_major = 'Computer Science'
+        self.student_a.target_countries = 'Canada'
+        self.student_a.budget_usd = 18000
+        self.student_a.scholarship_needed = True
+        self.student_a.save()
+        PersonalityAssessment.objects.create(
+            student=self.student_a,
+            answers={item: 4 for item in ('r1', 'r2', 'i1', 'i2', 'a1', 'a2', 's1', 's2', 'e1', 'e2', 'c1', 'c2')},
+            scores={trait: 75 for trait in ('R', 'I', 'A', 'S', 'E', 'C')},
+            top_traits=['I', 'C'],
+        )
+        self.student_a.refresh_from_db()
+        self.client.force_authenticate(self.student_a_user)
+        response = self.client.post(
+            '/api/college-research/ai/',
+            {'question': 'Byudjetimga mos universitetlarni qisqa aytib ber.'},
+            format='json',
+            HTTP_ACCEPT_LANGUAGE='uz',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mode'], 'local-fallback')
+        self.assertEqual(response.data['context_universities'], 1)
+        self.assertLessEqual(len(response.data['result']['universities']), 3)
+        self.assertIn('profilingiz', response.data['result']['answer'])
+        self.assertEqual(response.data['result']['universities'][0]['name'], 'Compact Context University')
+
+        self.client.force_authenticate(self.counselor)
+        forbidden = self.client.post(
+            '/api/college-research/ai/', {'question': 'Which university?'}, format='json'
+        )
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(AI_GATEWAY_API_KEY='')
+    def test_student_can_request_cached_ai_essay_review_without_overwriting_draft(self):
+        essay = Essay.objects.create(
+            student=self.student_a,
+            title='AI review essay',
+            prompt='Describe an experience that changed how you approach learning.',
+            content=(
+                'When our robotics prototype failed during the school showcase, I rebuilt the testing plan. '
+                'I organized three trials, recorded each result, and asked younger teammates to challenge my assumptions. '
+                'I learned that leadership means making uncertainty visible, not pretending to have every answer.'
+            ),
+        )
+        original_content = essay.content
+        self.client.force_authenticate(self.student_a_user)
+
+        created = self.client.post(
+            f'/api/essays/{essay.id}/ai-review/', {}, format='json', HTTP_ACCEPT_LANGUAGE='uz'
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['mode'], 'local-fallback')
+        self.assertIn('overall_score', created.data['result'])
+        self.assertEqual(len(created.data['result']['rubric']), 6)
+        self.assertIn('Dastlabki tuzilmaviy tahlil', created.data['result']['summary'])
+
+        cached = self.client.post(
+            f'/api/essays/{essay.id}/ai-review/', {}, format='json', HTTP_ACCEPT_LANGUAGE='uz'
+        )
+        self.assertEqual(cached.status_code, status.HTTP_200_OK)
+        self.assertEqual(cached.data['id'], created.data['id'])
+        self.assertEqual(EssayAIReview.objects.filter(essay=essay).count(), 1)
+        essay.refresh_from_db()
+        self.assertEqual(essay.content, original_content)
 
     def test_non_student_cannot_use_college_research(self):
         self.client.force_authenticate(self.counselor)

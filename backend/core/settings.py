@@ -31,6 +31,8 @@ AI_GATEWAY_URL = config(
 ).strip()
 AI_ASSISTANT_MODEL = config('AI_ASSISTANT_MODEL', default='openai/gpt-5.4-mini').strip()
 AI_ASSISTANT_FALLBACK_MODEL = config('AI_ASSISTANT_FALLBACK_MODEL', default='openai/gpt-5.4-nano').strip()
+AI_COLLEGE_MODEL = config('AI_COLLEGE_MODEL', default='openai/gpt-5.4-nano').strip()
+AI_COLLEGE_MAX_OUTPUT_TOKENS = config('AI_COLLEGE_MAX_OUTPUT_TOKENS', default=260, cast=int)
 AI_ASSISTANT_MAX_MESSAGES = config('AI_ASSISTANT_MAX_MESSAGES', default=12, cast=int)
 AI_ASSISTANT_MAX_INPUT_CHARS = config('AI_ASSISTANT_MAX_INPUT_CHARS', default=6000, cast=int)
 AI_ASSISTANT_MAX_OUTPUT_TOKENS = config('AI_ASSISTANT_MAX_OUTPUT_TOKENS', default=450, cast=int)

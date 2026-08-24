@@ -27,6 +27,7 @@ from .models import (
     CommunityPost,
     Document,
     Essay,
+    EssayAIReview,
     EssayRevision,
     Honor,
     Internship,
@@ -395,6 +396,33 @@ class CollegeResearchProfileSerializer(serializers.Serializer):
         if self.validated_data:
             profile.save(update_fields=[*self.validated_data.keys(), 'updated_at'])
         return profile
+
+
+class CollegeAIQuestionSerializer(serializers.Serializer):
+    question = serializers.CharField(min_length=3, max_length=400, trim_whitespace=True)
+
+
+class PersonalityAssessmentSubmissionSerializer(serializers.Serializer):
+    answers = serializers.DictField(
+        child=serializers.IntegerField(min_value=1, max_value=5),
+        allow_empty=False,
+    )
+
+    def validate_answers(self, value):
+        from .ai_services import RIASEC_QUESTIONS
+
+        expected = {item[0] for item in RIASEC_QUESTIONS}
+        provided = set(value)
+        if provided != expected:
+            missing = sorted(expected - provided)
+            extra = sorted(provided - expected)
+            detail = []
+            if missing:
+                detail.append(f'Missing answers: {", ".join(missing)}.')
+            if extra:
+                detail.append(f'Unknown answers: {", ".join(extra)}.')
+            raise serializers.ValidationError(' '.join(detail))
+        return value
 
 
 class ScholarshipSerializer(serializers.ModelSerializer):
@@ -828,6 +856,18 @@ class EssayRevisionSerializer(serializers.ModelSerializer):
     class Meta:
         model = EssayRevision
         fields = '__all__'
+
+
+class EssayAIReviewSerializer(serializers.ModelSerializer):
+    requested_by_name = serializers.CharField(source='requested_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = EssayAIReview
+        fields = (
+            'id', 'essay', 'essay_version', 'model', 'mode', 'result',
+            'requested_by_name', 'created_at',
+        )
+        read_only_fields = fields
 
 
 class EssaySerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):

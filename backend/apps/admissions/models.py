@@ -170,6 +170,27 @@ class StudentProfile(TimeStampedModel):
         ).exclude(status=RoadmapMission.Status.COMPLETED).exists()
 
 
+class PersonalityAssessment(TimeStampedModel):
+    """A student-controlled, education-only RIASEC interest snapshot."""
+
+    student = models.OneToOneField(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name='personality_assessment',
+    )
+    framework = models.CharField(max_length=40, default='riasec-v1')
+    answers = models.JSONField(default=dict)
+    scores = models.JSONField(default=dict)
+    top_traits = models.JSONField(default=list)
+    completed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['student__user__first_name', 'student__user__last_name']
+
+    def __str__(self):
+        return f'{self.student} — {self.framework}'
+
+
 class ParentStudentLink(TimeStampedModel):
     class Status(models.TextChoices):
         PENDING = 'pending', 'Awaiting parent consent'
@@ -277,6 +298,11 @@ class University(TimeStampedModel):
     aid_application_notes = models.TextField(blank=True)
     financial_aid_url = models.URLField(blank=True)
     popular_majors = models.CharField(max_length=300, blank=True, help_text='Comma-separated majors')
+    personality_tags = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text='Comma-separated RIASEC codes (R,I,A,S,E,C) used for explainable profile matching',
+    )
     application_deadline = models.DateField(null=True, blank=True)
     scholarship_deadline = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
@@ -1317,6 +1343,34 @@ class EssayRevision(models.Model):
 
     def __str__(self):
         return f'{self.essay.title} v{self.version}'
+
+
+class EssayAIReview(models.Model):
+    """Immutable AI feedback for one exact essay draft; it never overwrites the draft."""
+
+    essay = models.ForeignKey(Essay, on_delete=models.CASCADE, related_name='ai_reviews')
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='requested_essay_ai_reviews',
+    )
+    essay_version = models.PositiveIntegerField()
+    input_hash = models.CharField(max_length=64)
+    model = models.CharField(max_length=120, blank=True)
+    mode = models.CharField(max_length=30, default='local-fallback')
+    result = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['essay', 'input_hash'], name='unique_essay_ai_review_input'),
+        ]
+
+    def __str__(self):
+        return f'{self.essay} — AI review v{self.essay_version}'
 
 
 class MeetingNote(TimeStampedModel):

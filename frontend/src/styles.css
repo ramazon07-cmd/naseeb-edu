@@ -1361,3 +1361,104 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .student-workspace-metrics > span { min-width: 0; flex: 1; padding-inline: 10px; }
   .student-workspace-metrics small { white-space: normal; }
 }
+
+/* Naseeb AI: essay review and explainable personality matching. */
+.essay-ai-review { padding: 20px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 15px; }
+.essay-ai-review > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.essay-ai-review h3 { margin: 5px 0 7px; font-family: 'Montserrat',system-ui,sans-serif; font-size: 17px; font-weight: 800; }
+.essay-ai-review header p { max-width: 58ch; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+.essay-ai-notice { margin-top: 15px; padding: 11px 12px; display: flex; align-items: flex-start; gap: 8px; color: var(--warning); background: var(--warning-bg); border: 1px solid var(--warning-border); border-radius: 10px; font-size: 9px; line-height: 1.5; }
+.essay-ai-notice.error { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-border); }
+.essay-ai-notice svg { flex: 0 0 auto; }
+.essay-ai-loading { margin-top: 18px; display: grid; gap: 8px; }
+.essay-ai-loading span { height: 14px; background: linear-gradient(90deg,var(--surface-inset) 25%,var(--surface-soft) 50%,var(--surface-inset) 75%); background-size: 240% 100%; border-radius: 7px; animation: skeleton-shimmer 1.2s ease-in-out infinite; }
+.essay-ai-loading span:nth-child(2) { width: 84%; }.essay-ai-loading span:nth-child(3) { width: 64%; }
+.essay-ai-result { margin-top: 18px; display: grid; grid-template-columns: 110px minmax(0,1fr); gap: 16px; }
+.essay-ai-score { min-height: 110px; padding: 17px; display: grid; align-content: center; justify-items: center; background: var(--student-hero-start-token); color: var(--student-hero-text-token); border-radius: 12px; }
+.essay-ai-score strong { font: 600 36px/1 'Cinzel',Georgia,serif; }.essay-ai-score span { color: var(--student-hero-muted-token); font-size: 10px; }.essay-ai-score small { margin-top: 8px; color: var(--student-hero-muted-token); font-size: 8px; }
+.essay-ai-summary { align-self: center; }.essay-ai-summary p { margin: 0 0 9px; font-size: 12px; line-height: 1.65; }.essay-ai-summary small { color: var(--muted); font-size: 8px; line-height: 1.5; }
+.essay-ai-rubric { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+.essay-ai-rubric article { padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.essay-ai-rubric article > div:first-child { display: flex; justify-content: space-between; gap: 10px; font-size: 9px; }.essay-ai-rubric article > div:first-child span { color: var(--muted); }
+.essay-ai-rubric .progress { height: 5px; margin: 9px 0; background: var(--progress-track); }.essay-ai-rubric .progress i { height: 100%; display: block; background: var(--accent); border-radius: inherit; }
+.essay-ai-rubric p { margin: 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.essay-ai-list, .essay-ai-issues { grid-column: 1 / -1; padding-top: 5px; }.essay-ai-list h4, .essay-ai-issues h4 { margin: 0 0 9px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.essay-ai-list :is(ul,ol) { margin: 0; padding-left: 19px; display: grid; gap: 7px; }.essay-ai-list li { color: var(--muted); font-size: 9px; line-height: 1.5; }.essay-ai-list.strengths ul { padding: 0; list-style: none; }.essay-ai-list.strengths li { display: flex; gap: 7px; }.essay-ai-list.strengths svg { flex: 0 0 auto; color: var(--success); }
+.essay-ai-issues { display: grid; gap: 8px; }.essay-ai-issues h4 { margin-bottom: 1px; }.essay-ai-issues article { padding: 12px; background: var(--surface); border-left: 3px solid var(--warning); border-radius: 8px; }.essay-ai-issues blockquote { margin: 0 0 8px; color: var(--muted); font: italic 10px/1.5 Georgia,serif; }.essay-ai-issues b { font-size: 9px; }.essay-ai-issues p { margin: 5px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.essay-ai-meta { grid-column: 1 / -1; color: var(--text-subtle); font-size: 8px; }
+
+.personality-assessment { padding: clamp(22px,4vw,38px); background: var(--surface); border: 1px solid var(--student-border); border-radius: 18px; box-shadow: var(--shadow-card); }
+.personality-assessment > header { display: grid; grid-template-columns: 48px minmax(0,1fr); gap: 16px; }
+.personality-mark { width: 48px; height: 48px; display: grid; place-items: center; color: var(--student-accent); background: var(--student-accent-wash); border: 1px solid var(--student-border); border-radius: 12px; }
+.personality-assessment h2 { margin: 6px 0 9px; font-size: clamp(24px,3vw,38px); }.personality-assessment header p { max-width: 70ch; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.personality-assessment form { margin-top: 25px; }.personality-scale-key { padding: 10px 0; display: flex; justify-content: space-between; gap: 15px; color: var(--muted); border-top: 1px solid var(--student-border); border-bottom: 1px solid var(--student-border); font-size: 8px; font-weight: 700; }
+.personality-questions { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }.personality-questions fieldset { min-width: 0; margin: 0; padding: 17px 0; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 14px; border: 0; border-bottom: 1px solid var(--student-border); }.personality-questions legend { min-width: 0; padding: 0; display: flex; align-items: flex-start; gap: 9px; font-size: 10px; font-weight: 700; line-height: 1.5; }.personality-questions legend > span { min-width: 22px; color: var(--muted); font-size: 8px; }
+.personality-questions fieldset > div { display: flex; gap: 4px; }.personality-questions label { position: relative; cursor: pointer; }.personality-questions input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }.personality-questions label > span { width: 30px; height: 30px; display: grid; place-items: center; color: var(--muted); background: var(--control-bg); border: 1px solid var(--border); border-radius: 8px; font-size: 9px; font-weight: 800; transition: .18s ease; }.personality-questions label:hover > span { border-color: var(--border-interactive); transform: translateY(-1px); }.personality-questions label.selected > span { color: var(--student-accent-text); background: var(--student-accent); border-color: var(--student-accent); }.personality-questions input:focus-visible + span { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.personality-assessment footer { padding-top: 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }.personality-assessment footer small { color: var(--muted); font-size: 9px; }
+.personality-assessment-actions, .research-overview-actions { display: flex; align-items: center; gap: 7px; }
+.research-overview-actions { flex-direction: column; align-items: stretch; }
+.research-profile-chips span:last-child { max-width: 240px; }
+.research-breakdown { grid-template-columns: repeat(5,minmax(0,1fr)); }
+
+.college-ai-advisor { padding: 22px; display: grid; gap: 15px; background: var(--surface); border: 1px solid var(--student-border); border-radius: 16px; box-shadow: var(--student-card-shadow); }
+.college-ai-advisor > header { display: grid; grid-template-columns: 46px minmax(0,1fr); align-items: center; gap: 13px; }
+.college-ai-advisor > header > span { width: 46px; height: 46px; display: grid; place-items: center; color: var(--student-accent); background: var(--student-accent-wash); border: 1px solid var(--student-border); border-radius: 12px; }
+.college-ai-advisor h3 { margin: 0 0 6px; font-family: 'Montserrat',system-ui,sans-serif; font-size: 18px; font-weight: 800; line-height: 1.3; }
+.college-ai-advisor > header p { max-width: 72ch; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.college-ai-suggestions { display: flex; flex-wrap: wrap; gap: 7px; }
+.college-ai-suggestions button { padding: 9px 12px; color: var(--text); background: var(--surface-soft); border: 1px solid var(--student-border); border-radius: 9px; font-size: 12px; font-weight: 700; line-height: 1.35; cursor: pointer; transition: transform .18s ease,border-color .18s ease,background .18s ease; }
+.college-ai-suggestions button:hover { background: var(--surface-hover); border-color: var(--border-interactive); transform: translateY(-1px); }
+.college-ai-suggestions button:active { transform: translateY(1px); }
+.college-ai-suggestions button:disabled { opacity: .55; cursor: wait; transform: none; }
+.college-ai-advisor form { display: grid; gap: 7px; }
+.college-ai-advisor form > label { color: var(--text); font-size: 12px; font-weight: 800; }
+.college-ai-advisor form > div { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: stretch; gap: 8px; }
+.college-ai-advisor textarea { min-height: 66px; padding: 13px 14px; resize: vertical; color: var(--text); background: var(--control-bg); border: 1px solid var(--border); border-radius: 10px; font: 500 14px/1.5 'Montserrat',system-ui,sans-serif; }
+.college-ai-advisor textarea::placeholder { color: var(--text-subtle); }
+.college-ai-advisor textarea:focus { outline: 3px solid var(--focus-ring); outline-offset: 1px; border-color: var(--border-interactive); }
+.college-ai-advisor form .button { min-width: 126px; white-space: nowrap; }
+.college-ai-advisor form > small { color: var(--text-subtle); font-size: 11px; line-height: 1.45; }
+.college-ai-error { padding: 10px 11px; display: flex; align-items: flex-start; gap: 8px; color: var(--danger); background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: 9px; font-size: 12px; line-height: 1.45; }
+.college-ai-answer { padding: 16px; display: grid; gap: 13px; background: var(--surface-soft); border: 1px solid var(--student-border); border-radius: 12px; }
+.college-ai-answer-copy { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: 8px; }
+.college-ai-answer-copy svg { color: var(--student-accent); }
+.college-ai-answer-copy p { margin: 0; color: var(--text); font-size: 14px; font-weight: 650; line-height: 1.6; }
+.college-ai-options { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.college-ai-options article { min-width: 0; padding: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; }
+.college-ai-options article header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.college-ai-options article b { font-size: 12px; line-height: 1.4; }
+.college-ai-options article header span { flex: 0 0 auto; color: var(--student-accent); font-size: 12px; font-weight: 900; }
+.college-ai-options article p { margin: 9px 0 7px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.college-ai-options article small { color: var(--text-subtle); font-size: 11px; line-height: 1.55; }
+.college-ai-answer > footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; color: var(--text-subtle); font-size: 10.5px; line-height: 1.5; }
+.college-ai-answer > footer span { flex: 0 0 auto; color: var(--student-accent); font-weight: 800; }
+.college-ai-answer.loading span { height: 12px; background: linear-gradient(100deg,var(--surface-inset) 20%,var(--surface-hover) 38%,var(--surface-inset) 56%); background-size: 240% 100%; border-radius: 6px; animation: skeleton-shimmer 1.25s ease-in-out infinite; }
+.college-ai-answer.loading span:nth-child(2) { width: 82%; }.college-ai-answer.loading span:nth-child(3) { width: 58%; }
+
+@media (max-width: 820px) {
+  .personality-questions { grid-template-columns: 1fr; }
+  .essay-ai-review > header { align-items: stretch; flex-direction: column; }
+  .essay-ai-review > header .button { width: 100%; }
+  .research-overview-actions { flex-direction: row; }
+  .college-ai-options { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .personality-assessment { padding: 19px 16px; }
+  .personality-assessment > header { grid-template-columns: 1fr; }
+  .personality-assessment footer, .personality-assessment-actions { align-items: stretch; flex-direction: column; }
+  .personality-questions fieldset { grid-template-columns: 1fr; }
+  .personality-questions fieldset > div { justify-content: space-between; }
+  .personality-questions label > span { width: 36px; height: 34px; }
+  .personality-assessment footer { align-items: stretch; flex-direction: column; }
+  .personality-assessment footer .button { width: 100%; }
+  .essay-ai-result { grid-template-columns: 1fr; }
+  .essay-ai-rubric { grid-template-columns: 1fr; }
+  .essay-ai-score { min-height: 96px; }
+  .research-breakdown { grid-template-columns: 1fr; }
+  .college-ai-advisor { padding: 17px 15px; }
+  .college-ai-advisor > header { grid-template-columns: 1fr; }
+  .college-ai-advisor form > div { grid-template-columns: 1fr; }
+  .college-ai-advisor form .button { width: 100%; }
+  .college-ai-answer > footer { flex-direction: column; }
+}

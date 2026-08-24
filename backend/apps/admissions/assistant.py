@@ -15,6 +15,9 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
+from rest_framework import serializers as drf_serializers
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 
 from apps.users.models import User
 from .models import Application, RoadmapMission, StudentProfile, Task
@@ -62,6 +65,7 @@ def build_role_context(user):
         tasks = Task.objects.filter(student=student)
         roadmap = RoadmapMission.objects.filter(student=student)
         applications = Application.objects.filter(student=student)
+        assessment = getattr(student, 'personality_assessment', None)
         upcoming_tasks = list(
             tasks.exclude(status=Task.Status.APPROVED)
             .order_by('due_date')
@@ -79,7 +83,14 @@ def build_role_context(user):
             'school': student.school.name if student.school else student.school_name,
             'target_major': student.target_major,
             'target_countries': student.target_countries,
+            'gpa': student.gpa,
+            'sat_score': student.sat_score,
+            'ielts_score': student.ielts_score,
+            'budget_usd': student.budget_usd,
             'scholarship_needed': student.scholarship_needed,
+            'personality_framework': assessment.framework if assessment else None,
+            'personality_scores': assessment.scores if assessment else {},
+            'personality_top_traits': assessment.top_traits if assessment else [],
             'level': student.level,
             'xp_total': student.xp_total,
             'journey_progress_percent': student.journey_progress_percent,
@@ -240,6 +251,27 @@ class AssistantChatView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [AssistantRateThrottle]
 
+    @extend_schema(
+        request=inline_serializer(
+            name='AssistantChatRequest',
+            fields={
+                'messages': inline_serializer(
+                    name='AssistantChatMessage',
+                    fields={
+                        'role': drf_serializers.CharField(help_text='Either user or assistant.'),
+                        'content': drf_serializers.CharField(),
+                    },
+                    many=True,
+                ),
+            },
+        ),
+        responses={
+            200: OpenApiResponse(response=OpenApiTypes.STR, description='Plain-text streaming assistant response.'),
+            400: OpenApiResponse(description='The message payload is invalid.'),
+            403: OpenApiResponse(description='The authenticated role cannot use the assistant.'),
+            503: OpenApiResponse(description='The assistant is disabled.'),
+        },
+    )
     def post(self, request):
         user = request.user
         if not settings.AI_ASSISTANT_ENABLED:

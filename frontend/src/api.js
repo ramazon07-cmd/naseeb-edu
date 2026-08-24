@@ -231,6 +231,18 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  collegeAIAdvice: (question) => request('/college-research/ai/', {
+    method: 'POST',
+    body: JSON.stringify({ question }),
+  }),
+  personalityAssessment: () => request('/personality-assessment/'),
+  submitPersonalityAssessment: (answers) => request('/personality-assessment/', {
+    method: 'POST',
+    body: JSON.stringify({ answers }),
+  }),
+  essayAIReview: (essayId, create = false) => request(`/essays/${essayId}/ai-review/`, {
+    method: create ? 'POST' : 'GET',
+  }),
   list: listAll,
   create: (resource, payload) => request(`/${resource}/`, {
     method: 'POST',
