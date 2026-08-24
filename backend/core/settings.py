@@ -243,6 +243,24 @@ SPECTACULAR_SETTINGS = {
             ('surkhandarya', 'Surkhandarya'), ('tashkent_region', 'Tashkent Region'),
             ('tashkent_city', 'Tashkent City'),
         ],
+        'UserRoleEnum': [
+            ('admin', 'Admin'), ('counselor', 'Counselor'), ('teacher', 'Teacher'),
+            ('organization', 'Organization School'), ('student', 'Student'), ('parent', 'Parent'),
+        ],
+        'ChannelMembershipRoleEnum': [
+            ('owner', 'Owner'), ('moderator', 'Moderator'), ('member', 'Member'),
+        ],
+        'MessageChannelKindEnum': [
+            ('direct', 'Direct'), ('group', 'Group'), ('community', 'Community'),
+            ('discussion', 'Discussion'),
+        ],
+        'CounselorRoadmapKindEnum': [
+            ('professional_onboarding', 'Professional onboarding'),
+            ('school_management', 'School management'),
+        ],
+        'NationalInternationalScopeEnum': [
+            ('national', 'National'), ('international', 'International'),
+        ],
     },
 }
 

@@ -1,6 +1,7 @@
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 from .localization import localized_message
 
@@ -27,3 +28,17 @@ class VersionedJWTAuthentication(JWTAuthentication):
                 'code': 'password_change_required',
             })
         return user, token
+
+
+class VersionedJWTAuthenticationScheme(OpenApiAuthenticationExtension):
+    """Describe the custom, password-version-aware JWT authenticator in OpenAPI."""
+
+    target_class = 'apps.users.authentication.VersionedJWTAuthentication'
+    name = 'jwtAuth'
+
+    def get_security_definition(self, auto_schema):
+        return {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT',
+        }

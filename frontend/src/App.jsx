@@ -592,8 +592,7 @@ function ReachMap({ regions, selected, onSelect, theme }) {
   useEffect(() => {
     const probe = document.createElement('canvas');
     const gl = probe.getContext('webgl2') || probe.getContext('webgl');
-    const lowPower = (navigator.hardwareConcurrency || 8) <= 4 || window.matchMedia('(max-width: 560px)').matches;
-    setSupported(Boolean(gl) && !lowPower);
+    setSupported(Boolean(gl));
   }, []);
 
   useEffect(() => {
@@ -603,9 +602,13 @@ function ReachMap({ regions, selected, onSelect, theme }) {
     let cleanup = () => {};
 
     (async () => {
-      const [THREE, shapes] = await Promise.all([
+      const [THREE, { OrbitControls }, shapes] = await Promise.all([
         import('three'),
-        fetch('/geo/uzbekistan-regions.json').then((r) => r.json()),
+        import('three/examples/jsm/controls/OrbitControls.js'),
+        fetch('/geo/uzbekistan-regions.json').then((response) => {
+          if (!response.ok) throw new Error(`Map geometry request failed with ${response.status}`);
+          return response.json();
+        }),
       ]);
       if (disposed) return;
 
@@ -616,6 +619,8 @@ function ReachMap({ regions, selected, onSelect, theme }) {
       host.appendChild(renderer.domElement);
 
       const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 1000);
+      camera.position.set(0, 12.5, 11);
+      camera.lookAt(0, 0, 0.4);
       scene.add(new THREE.AmbientLight(0xffffff, 1.5));
       const key = new THREE.DirectionalLight(0xffffff, 1.1);
       key.position.set(-4, 9, 6);
@@ -651,52 +656,150 @@ function ReachMap({ regions, selected, onSelect, theme }) {
       });
 
       const selectedRef = { current: selected };
+      const hoveredRef = { current: null };
       const paint = () => {
-        const base = new THREE.Color(token('--lp-ink-rule') || '#888');
+        // Use the theme's existing medium neutral so the map keeps enough
+        // contrast on the ivory canvas without introducing a new color.
+        const base = new THREE.Color(token('--text-subtle') || '#888');
         const hot = new THREE.Color(token('--lp-signal') || '#fff');
         const lift = new THREE.Color(token('--lp-ink-accent') || '#fff');
         meshes.forEach((m) => {
           const info = byRegion.get(m.userData.region);
           const share = info ? info.students / maxStudents : 0;
           const isSel = selectedRef.current === m.userData.region;
-          m.material.color.copy(isSel ? lift : base.clone().lerp(hot, 0.25 + share * 0.6));
-          m.material.opacity = info && info.active ? 1 : 0.55;
+          const isHovered = hoveredRef.current === m.userData.region;
+          m.material.color.copy(isSel || isHovered ? lift : base.clone().lerp(hot, 0.25 + share * 0.6));
+          m.material.opacity = isSel || isHovered || (info && info.active) ? 1 : 0.68;
         });
       };
 
       const resize = () => {
         const w = host.clientWidth; const h = host.clientHeight || Math.round(w * 0.62);
-        renderer.setSize(w, h, false);
+        // Keep the drawing buffer sharp without letting its device-pixel size
+        // become the canvas' CSS size. The latter pushed the map far outside
+        // its grid column on Retina displays.
+        renderer.setSize(w, h, true);
+        camera.fov = 34;
         camera.aspect = w / h; camera.updateProjectionMatrix();
-        camera.position.set(0, 12.5, 11); camera.lookAt(0, 0, 0.4);
         paint(); renderer.render(scene, camera);
       };
 
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0, 0.4);
+      controls.enablePan = false;
+      controls.enableZoom = false;
+      controls.rotateSpeed = 0.72;
+      controls.minPolarAngle = Math.PI * 0.14;
+      controls.maxPolarAngle = Math.PI * 0.42;
+      controls.update();
+      const renderView = () => renderer.render(scene, camera);
+      const setHoveredRegion = (regionKey) => {
+        if (hoveredRef.current === regionKey) return;
+        hoveredRef.current = regionKey;
+        paint();
+        renderView();
+      };
+      const rotateWithKeyboard = (event) => {
+        const turns = {
+          ArrowLeft: { theta: -0.12, phi: 0 },
+          ArrowRight: { theta: 0.12, phi: 0 },
+          ArrowUp: { theta: 0, phi: -0.08 },
+          ArrowDown: { theta: 0, phi: 0.08 },
+        };
+        const turn = turns[event.key];
+        if (!turn) return;
+        event.preventDefault();
+        const offset = camera.position.clone().sub(controls.target);
+        const spherical = new THREE.Spherical().setFromVector3(offset);
+        spherical.theta += turn.theta;
+        spherical.phi = THREE.MathUtils.clamp(
+          spherical.phi + turn.phi,
+          controls.minPolarAngle,
+          controls.maxPolarAngle,
+        );
+        camera.position.copy(controls.target).add(offset.setFromSpherical(spherical));
+        camera.lookAt(controls.target);
+        controls.update();
+        renderView();
+      };
+      const showGrab = () => host.classList.add('is-rotating');
+      const hideGrab = () => host.classList.remove('is-rotating');
+      host.addEventListener('keydown', rotateWithKeyboard);
+      controls.addEventListener('change', renderView);
+      controls.addEventListener('start', showGrab);
+      controls.addEventListener('end', hideGrab);
+
       const ray = new THREE.Raycaster(); const pointer = new THREE.Vector2();
-      const pick = (event) => {
+      const regionAtPointer = (event) => {
         const rect = renderer.domElement.getBoundingClientRect();
         pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         ray.setFromCamera(pointer, camera);
         const hit = ray.intersectObjects(meshes)[0];
-        onSelect(hit ? hit.object.userData.region : null);
+        return hit ? hit.object.userData.region : null;
       };
-      renderer.domElement.addEventListener('pointermove', pick);
-      renderer.domElement.addEventListener('pointerdown', pick);
+      let gestureStart = null;
+      let dragged = false;
+      const startGesture = (event) => {
+        gestureStart = { x: event.clientX, y: event.clientY };
+        dragged = false;
+        setHoveredRegion(null);
+      };
+      const trackGesture = (event) => {
+        if (!gestureStart) {
+          if (event.pointerType === 'mouse') setHoveredRegion(regionAtPointer(event));
+          return;
+        }
+        if (Math.hypot(event.clientX - gestureStart.x, event.clientY - gestureStart.y) > 5) dragged = true;
+      };
+      const endGesture = (event) => {
+        const regionKey = regionAtPointer(event);
+        if (gestureStart && !dragged) {
+          onSelect(regionKey);
+        }
+        gestureStart = null;
+        dragged = false;
+        setHoveredRegion(event.pointerType === 'mouse' ? regionKey : null);
+      };
+      const cancelGesture = () => {
+        gestureStart = null;
+        dragged = false;
+        setHoveredRegion(null);
+      };
+      const leaveMap = () => { if (!gestureStart) setHoveredRegion(null); };
+      renderer.domElement.addEventListener('pointerdown', startGesture);
+      renderer.domElement.addEventListener('pointermove', trackGesture);
+      renderer.domElement.addEventListener('pointerup', endGesture);
+      renderer.domElement.addEventListener('pointercancel', cancelGesture);
+      renderer.domElement.addEventListener('pointerleave', leaveMap);
       const observer = new ResizeObserver(resize);
       observer.observe(host);
       resize();
 
       cleanup = () => {
         observer.disconnect();
-        renderer.domElement.removeEventListener('pointermove', pick);
-        renderer.domElement.removeEventListener('pointerdown', pick);
+        host.removeEventListener('keydown', rotateWithKeyboard);
+        controls.removeEventListener('change', renderView);
+        controls.removeEventListener('start', showGrab);
+        controls.removeEventListener('end', hideGrab);
+        controls.dispose();
+        renderer.domElement.removeEventListener('pointerdown', startGesture);
+        renderer.domElement.removeEventListener('pointermove', trackGesture);
+        renderer.domElement.removeEventListener('pointerup', endGesture);
+        renderer.domElement.removeEventListener('pointercancel', cancelGesture);
+        renderer.domElement.removeEventListener('pointerleave', leaveMap);
         meshes.forEach((m) => { m.geometry.dispose(); m.material.dispose(); });
         renderer.dispose();
+        delete host.__repaint;
         if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
       };
       host.__repaint = (next) => { selectedRef.current = next; paint(); renderer.render(scene, camera); };
-    })();
+    })().catch(() => {
+      // Keep the regional list usable when WebGL, the lazy bundle, or the
+      // geometry asset is unavailable, without leaving an empty application
+      // landmark or an unhandled promise rejection behind.
+      if (!disposed) setSupported(false);
+    });
 
     return () => { disposed = true; cleanup(); };
   }, [supported, regions, theme]);
@@ -704,7 +807,9 @@ function ReachMap({ regions, selected, onSelect, theme }) {
   useEffect(() => { hostRef.current?.__repaint?.(selected); }, [selected]);
 
   if (supported === false) return null;
-  return <div className="landing-reach-canvas" ref={hostRef} aria-hidden="true" />;
+  return <div className="landing-reach-canvas" ref={hostRef} role="application" tabIndex="0" aria-label={t('Interactive map of Uzbekistan. Drag to rotate or use the arrow keys.')}>
+    <span className="landing-reach-hint" aria-hidden="true">{t('Drag to rotate')}</span>
+  </div>;
 }
 
 function LandingReach({ theme }) {
@@ -3428,8 +3533,8 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     try {window.localStorage.setItem(THEME_KEY, theme);} catch {/* Keep the active theme for this session. */}
-    // The favicon deliberately tracks the browser theme (see index.html), not the
-    // site theme, so it is not reassigned here.
+    const favicon = document.querySelector('link[data-theme-icon]');
+    if (favicon) favicon.href = theme === 'dark' ? '/brand/icon-dark-64.png?v=2' : '/brand/icon-light-64.png?v=2';
     const themeColor = document.getElementById('theme-color');
     if (themeColor) themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
   }, [theme]);

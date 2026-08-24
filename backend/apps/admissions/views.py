@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, inline_serializer
 
 from apps.users.models import User
@@ -922,12 +923,14 @@ class CollegeResearchView(APIView):
             return None
         return request.user.student_profile
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request):
         profile = self.get_profile(request)
         if not profile:
             return Response({'detail': 'College research is available to student accounts only.'}, status=403)
         return Response(build_college_research(profile, request.headers.get('Accept-Language', 'en')))
 
+    @extend_schema(request=CollegeResearchProfileSerializer, responses={200: OpenApiTypes.OBJECT})
     def post(self, request):
         profile = self.get_profile(request)
         if not profile:
@@ -2891,6 +2894,7 @@ class ParentStudentLinkViewSet(viewsets.ReadOnlyModelViewSet):
 class ParentPortalView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request):
         if request.user.role != User.Role.PARENT:
             return Response({'detail': 'This workspace is only available to parent accounts.'}, status=403)
@@ -2999,6 +3003,20 @@ class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):
 class StudentTeamView(APIView):
     permission_classes = [StudentPortalPermission]
 
+    @extend_schema(
+        responses=inline_serializer(
+            name='StudentTeamMember',
+            fields={
+                'id': drf_serializers.IntegerField(),
+                'name': drf_serializers.CharField(),
+                'role': drf_serializers.CharField(),
+                'email': drf_serializers.EmailField(allow_blank=True),
+                'phone': drf_serializers.CharField(allow_blank=True),
+                'kind': drf_serializers.CharField(help_text='Either counselor or school.'),
+            },
+            many=True,
+        )
+    )
     def get(self, request):
         profile = request.user.student_profile
         team = []

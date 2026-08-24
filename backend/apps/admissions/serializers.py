@@ -11,7 +11,8 @@ from PIL import Image, UnidentifiedImageError
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Count
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, timedelta
+from decimal import Decimal
 from apps.users.models import User
 from apps.users.credentials import issue_temporary_credential
 from apps.users.serializers import UserSerializer
@@ -27,6 +28,7 @@ from .models import (
     CommunityPost,
     Document,
     Essay,
+    EssayAIReview,
     EssayRevision,
     Honor,
     Internship,
@@ -153,7 +155,7 @@ class SchoolSerializer(serializers.ModelSerializer):
         model = School
         fields = '__all__'
 
-    def get_owner_counselor_name(self, obj):
+    def get_owner_counselor_name(self, obj) -> str | None:
         if not obj.owner_counselor:
             return None
         return obj.owner_counselor.get_full_name() or obj.owner_counselor.username
@@ -171,21 +173,21 @@ class SchoolSerializer(serializers.ModelSerializer):
             obj._organization_credential = account.temporary_credentials.order_by('-issued_at', '-id').first()
         return obj._organization_credential
 
-    def get_organization_account_id(self, obj):
+    def get_organization_account_id(self, obj) -> int | None:
         account = self._organization_account(obj)
         return account.id if account else None
 
-    def get_organization_account_username(self, obj):
+    def get_organization_account_username(self, obj) -> str | None:
         account = self._organization_account(obj)
         return account.username if account else None
 
-    def get_organization_credential_status(self, obj):
+    def get_organization_credential_status(self, obj) -> str:
         credential = self._organization_credential(obj)
         if not credential:
             return 'none'
         return 'expired' if credential.is_expired else credential.status
 
-    def get_organization_credential_expires_at(self, obj):
+    def get_organization_credential_expires_at(self, obj) -> datetime | None:
         credential = self._organization_credential(obj)
         return credential.expires_at if credential else None
 
@@ -261,13 +263,13 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             return None
         return obj.assigned_counselor.get_full_name() or obj.assigned_counselor.username
 
-    def get_task_status_counts(self, obj):
+    def get_task_status_counts(self, obj) -> dict[str, int]:
         counts = {choice: 0 for choice, _ in Task.Status.choices}
         for row in obj.tasks.values('status').annotate(total=Count('id')):
             counts[row['status']] = row['total']
         return counts
 
-    def get_roadmap_status_counts(self, obj):
+    def get_roadmap_status_counts(self, obj) -> dict[str, int]:
         counts = {choice: 0 for choice, _ in RoadmapMission.Status.choices}
         for row in obj.roadmap_missions.values('status').annotate(total=Count('id')):
             counts[row['status']] = row['total']
@@ -370,7 +372,7 @@ class GoogleDocsModelSerializer(serializers.ModelSerializer):
     def validate_google_docs_url(self, value):
         return validate_google_docs_url(value)
 
-    def get_google_docs_preview_url(self, obj):
+    def get_google_docs_preview_url(self, obj) -> str | None:
         return google_docs_preview_url(obj.google_docs_url)
 
 
@@ -395,6 +397,33 @@ class CollegeResearchProfileSerializer(serializers.Serializer):
         if self.validated_data:
             profile.save(update_fields=[*self.validated_data.keys(), 'updated_at'])
         return profile
+
+
+class CollegeAIQuestionSerializer(serializers.Serializer):
+    question = serializers.CharField(min_length=3, max_length=400, trim_whitespace=True)
+
+
+class PersonalityAssessmentSubmissionSerializer(serializers.Serializer):
+    answers = serializers.DictField(
+        child=serializers.IntegerField(min_value=1, max_value=5),
+        allow_empty=False,
+    )
+
+    def validate_answers(self, value):
+        from .ai_services import RIASEC_QUESTIONS
+
+        expected = {item[0] for item in RIASEC_QUESTIONS}
+        provided = set(value)
+        if provided != expected:
+            missing = sorted(expected - provided)
+            extra = sorted(provided - expected)
+            detail = []
+            if missing:
+                detail.append(f'Missing answers: {", ".join(missing)}.')
+            if extra:
+                detail.append(f'Unknown answers: {", ".join(extra)}.')
+            raise serializers.ValidationError(' '.join(detail))
+        return value
 
 
 class ScholarshipSerializer(serializers.ModelSerializer):
@@ -511,7 +540,7 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
                 })
         return attrs
 
-    def get_submission_preview_url(self, obj):
+    def get_submission_preview_url(self, obj) -> str | None:
         return google_docs_preview_url(obj.submission_url)
 
     def to_representation(self, instance):
@@ -623,10 +652,10 @@ class DocumentSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer
             data.pop('uploaded_by', None)
         return data
 
-    def get_has_file(self, obj):
+    def get_has_file(self, obj) -> bool:
         return bool(obj.file)
 
-    def get_file_previewable(self, obj):
+    def get_file_previewable(self, obj) -> bool:
         return Path(obj.original_file_name or obj.file.name if obj.file else '').suffix.lower() in {
             '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt', '.csv',
         }
@@ -640,10 +669,10 @@ class DocumentSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer
             path += '?download=1'
         return request.build_absolute_uri(path) if request else path
 
-    def get_file_preview_url(self, obj):
+    def get_file_preview_url(self, obj) -> str | None:
         return self._file_url(obj)
 
-    def get_file_download_url(self, obj):
+    def get_file_download_url(self, obj) -> str | None:
         return self._file_url(obj, download=True)
 
 
@@ -830,6 +859,18 @@ class EssayRevisionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class EssayAIReviewSerializer(serializers.ModelSerializer):
+    requested_by_name = serializers.CharField(source='requested_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = EssayAIReview
+        fields = (
+            'id', 'essay', 'essay_version', 'model', 'mode', 'result',
+            'requested_by_name', 'created_at',
+        )
+        read_only_fields = fields
+
+
 class EssaySerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
     university_name = serializers.SerializerMethodField()
@@ -892,7 +933,7 @@ class SchoolVisibilityUserSerializer(serializers.ModelSerializer):
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'phone', 'is_active')
 
-    def get_full_name(self, obj):
+    def get_full_name(self, obj) -> str:
         return obj.get_full_name() or obj.username
 
 
@@ -916,7 +957,7 @@ class SchoolVisibilityStudentSerializer(serializers.ModelSerializer):
             'counselor_name', 'created_at', 'updated_at',
         )
 
-    def get_counselor_name(self, obj):
+    def get_counselor_name(self, obj) -> str | None:
         return obj.assigned_counselor.get_full_name() or obj.assigned_counselor.username if obj.assigned_counselor else None
 
 
@@ -930,7 +971,7 @@ class SchoolVisibilityTaskSerializer(serializers.ModelSerializer):
             'assigned_by_name', 'submitted_at', 'created_at', 'updated_at',
         )
 
-    def get_assigned_by_name(self, obj):
+    def get_assigned_by_name(self, obj) -> str | None:
         return obj.assigned_by.get_full_name() or obj.assigned_by.username if obj.assigned_by else None
 
 
@@ -967,18 +1008,18 @@ class SchoolVisibilityDocumentSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         )
 
-    def get_has_file(self, obj):
+    def get_has_file(self, obj) -> bool:
         return bool(obj.file)
 
-    def get_file_preview_url(self, obj):
+    def get_file_preview_url(self, obj) -> str | None:
         request = self.context.get('request')
         return request.build_absolute_uri(reverse('documents-file', args=[obj.pk])) if request and obj.file else None
 
-    def get_file_download_url(self, obj):
+    def get_file_download_url(self, obj) -> str | None:
         request = self.context.get('request')
         return request.build_absolute_uri(f"{reverse('documents-file', args=[obj.pk])}?download=1") if request and obj.file else None
 
-    def get_google_docs_preview_url(self, obj):
+    def get_google_docs_preview_url(self, obj) -> str | None:
         return google_docs_preview_url(obj.google_docs_url)
 
 
@@ -989,7 +1030,7 @@ class SchoolVisibilityEssaySerializer(serializers.ModelSerializer):
         model = Essay
         fields = ('id', 'title', 'status', 'version', 'application', 'university_name', 'created_at', 'updated_at')
 
-    def get_university_name(self, obj):
+    def get_university_name(self, obj) -> str | None:
         return obj.application.university.name if obj.application else None
 
 
@@ -1013,7 +1054,7 @@ class SchoolVisibilityBookingSerializer(serializers.ModelSerializer):
             'participant_role', 'created_at', 'updated_at',
         )
 
-    def get_participant_name(self, obj):
+    def get_participant_name(self, obj) -> str | None:
         return obj.participant.get_full_name() or obj.participant.username if obj.participant else None
 
 
@@ -1027,7 +1068,7 @@ class SchoolVisibilityProgramServiceSerializer(serializers.ModelSerializer):
             'status', 'created_at', 'updated_at',
         )
 
-    def get_mentor_name(self, obj):
+    def get_mentor_name(self, obj) -> str | None:
         return obj.mentor.get_full_name() or obj.mentor.username if obj.mentor else None
 
 
@@ -1207,10 +1248,10 @@ class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSe
             return None
         return obj.assigned_by.get_full_name() or obj.assigned_by.username
 
-    def get_xp_reward(self, obj):
+    def get_xp_reward(self, obj) -> int:
         return 75
 
-    def get_approval_status(self, obj):
+    def get_approval_status(self, obj) -> str:
         if obj.status == RoadmapMission.Status.SUBMITTED:
             return 'awaiting_approval'
         if obj.status == RoadmapMission.Status.COMPLETED:
@@ -1285,7 +1326,7 @@ class CounselorRoadmapMissionSerializer(serializers.ModelSerializer):
             'is_required', 'status', 'admin_feedback', 'submitted_at', 'approved_at', 'approved_by',
         )
 
-    def get_approved_by_name(self, obj):
+    def get_approved_by_name(self, obj) -> str | None:
         return obj.approved_by.get_full_name() or obj.approved_by.username if obj.approved_by else None
 
 
@@ -1301,7 +1342,7 @@ class CounselorRoadmapSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('school', 'kind', 'status', 'assigned_by', 'completed_at')
 
-    def get_counselor_name(self, obj):
+    def get_counselor_name(self, obj) -> str:
         return obj.counselor.get_full_name() or obj.counselor.username
 
     def validate(self, attrs):
@@ -1382,11 +1423,11 @@ class CommunityPostSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('author', 'liked_by')
 
-    def get_author_initials(self, obj):
+    def get_author_initials(self, obj) -> str:
         name = obj.author.user.get_full_name() or obj.author.user.username
         return ''.join(part[0] for part in name.split()[:2]).upper()
 
-    def get_liked_by_me(self, obj):
+    def get_liked_by_me(self, obj) -> bool:
         request = self.context.get('request')
         if not request or not hasattr(request.user, 'student_profile'):
             return False
@@ -1412,12 +1453,12 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
         fields = '__all__'
         read_only_fields = ('student', 'status')
 
-    def get_participant_name(self, obj):
+    def get_participant_name(self, obj) -> str | None:
         if not obj.participant:
             return None
         return obj.participant.get_full_name() or obj.participant.username
 
-    def get_student_name(self, obj):
+    def get_student_name(self, obj) -> str:
         return obj.student.user.get_full_name() or obj.student.user.username
 
     def to_representation(self, instance):
@@ -1504,7 +1545,7 @@ class MessageChannelSerializer(serializers.ModelSerializer):
             return next((membership for membership in prefetched if membership.user_id == request.user.id), None)
         return obj.memberships.filter(user=request.user).first()
 
-    def get_display_name(self, obj):
+    def get_display_name(self, obj) -> str:
         request = self.context.get('request')
         if obj.kind == MessageChannel.Kind.DIRECT and request and request.user.is_authenticated:
             prefetched = getattr(obj, '_prefetched_objects_cache', {}).get('memberships')
@@ -1526,14 +1567,14 @@ class MessageChannelSerializer(serializers.ModelSerializer):
                 })
         return attrs
 
-    def get_is_member(self, obj):
+    def get_is_member(self, obj) -> bool:
         return self._membership(obj) is not None
 
-    def get_my_role(self, obj):
+    def get_my_role(self, obj) -> str | None:
         membership = self._membership(obj)
         return membership.role if membership else None
 
-    def get_unread_count(self, obj):
+    def get_unread_count(self, obj) -> int:
         request = self.context.get('request')
         membership = self._membership(obj)
         if not request or not membership:
@@ -1543,7 +1584,7 @@ class MessageChannelSerializer(serializers.ModelSerializer):
             messages = messages.filter(created_at__gt=membership.last_read_at)
         return messages.count()
 
-    def get_last_message(self, obj):
+    def get_last_message(self, obj) -> dict | None:
         request = self.context.get('request')
         message = obj.messages.select_related('sender').order_by('-created_at', '-id').first()
         if not message:
@@ -1586,24 +1627,24 @@ class ChannelMessageSerializer(serializers.ModelSerializer):
             return False
         return obj.sender_id == request.user.id
 
-    def get_sender_id(self, obj):
+    def get_sender_id(self, obj) -> int | None:
         if obj.is_anonymous and not self._can_reveal_sender(obj):
             return None
         return obj.sender_id
 
-    def get_sender_name(self, obj):
+    def get_sender_name(self, obj) -> str:
         if obj.is_anonymous and not self._can_reveal_sender(obj):
             return 'Anonymous'
         if not obj.sender:
             return 'Deleted user'
         return obj.sender.get_full_name() or obj.sender.username
 
-    def get_parent_preview(self, obj):
+    def get_parent_preview(self, obj) -> dict | None:
         if not obj.parent:
             return None
         return {'id': obj.parent_id, 'body': obj.parent.body[:120]}
 
-    def get_is_reported_by_me(self, obj):
+    def get_is_reported_by_me(self, obj) -> bool:
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
@@ -1663,22 +1704,22 @@ class MessageReportSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    def get_channel_name(self, obj):
+    def get_channel_name(self, obj) -> str:
         return obj.message.channel.name or obj.message.channel.get_kind_display()
 
-    def get_message_body(self, obj):
+    def get_message_body(self, obj) -> str:
         return 'Message deleted' if obj.message.deleted_at else obj.message.body
 
-    def get_sender_name(self, obj):
+    def get_sender_name(self, obj) -> str:
         sender = obj.message.sender
         if not sender:
             return 'Deleted user'
         return sender.get_full_name() or sender.username
 
-    def get_reporter_name(self, obj):
+    def get_reporter_name(self, obj) -> str:
         return obj.reporter.get_full_name() or obj.reporter.username
 
-    def get_reviewed_by_name(self, obj):
+    def get_reviewed_by_name(self, obj) -> str | None:
         if not obj.reviewed_by:
             return None
         return obj.reviewed_by.get_full_name() or obj.reviewed_by.username
@@ -1694,15 +1735,15 @@ class ProgramServiceSerializer(StudentRecordSerializerMixin, serializers.ModelSe
         model = ProgramService
         fields = '__all__'
 
-    def get_mentor_name(self, obj):
+    def get_mentor_name(self, obj) -> str | None:
         if not obj.mentor:
             return None
         return obj.mentor.get_full_name() or obj.mentor.username
 
-    def get_student_name(self, obj):
+    def get_student_name(self, obj) -> str:
         return obj.student.user.get_full_name() or obj.student.user.username
 
-    def get_remaining_hours(self, obj):
+    def get_remaining_hours(self, obj) -> Decimal | None:
         if obj.unlimited or obj.total_hours is None:
             return None
         return max(obj.total_hours - obj.used_hours, 0)
@@ -1734,7 +1775,7 @@ class ScreenTimeDailySerializer(serializers.ModelSerializer):
         fields = ('id', 'user', 'user_name', 'date', 'page', 'active_seconds', 'sessions', 'last_seen_at')
         read_only_fields = fields
 
-    def get_user_name(self, obj):
+    def get_user_name(self, obj) -> str:
         return obj.user.get_full_name() or obj.user.username
 
 
@@ -1755,10 +1796,10 @@ class ParentStudentLinkSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    def get_parent_name(self, obj):
+    def get_parent_name(self, obj) -> str:
         return obj.parent.get_full_name() or obj.parent.username
 
-    def get_student_name(self, obj):
+    def get_student_name(self, obj) -> str:
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
@@ -1805,10 +1846,10 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             'requester_viewed_at', 'has_unread_response', 'created_at', 'updated_at',
         )
 
-    def get_requester_name(self, obj):
+    def get_requester_name(self, obj) -> str:
         return obj.requester.get_full_name() or obj.requester.username
 
-    def get_responded_by_name(self, obj):
+    def get_responded_by_name(self, obj) -> str | None:
         if not obj.responded_by:
             return None
         return obj.responded_by.get_full_name() or obj.responded_by.username

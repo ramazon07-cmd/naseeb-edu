@@ -3,6 +3,7 @@ import io
 import json
 import tempfile
 import zipfile
+from unittest.mock import patch
 
 from django.conf import settings
 from django.core.cache import cache
@@ -10,19 +11,64 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.urls import reverse
 from django.utils import timezone
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.users.models import User
 from .assistant import build_role_context, redact_pii
+from .ai_services import college_ai_advice, review_essay
 from .models import (
     Achievement, Activity, Application, Booking, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, EssayAIReview, Honor,
     Internship, MeetingNote, LevelApproval, Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project, RecommendationLetter,
     Research, ResourceLibraryItem, MessageChannel, MessageReport, PersonalityAssessment, RoadmapMission, School, Scholarship, ScreenTimeDaily, StoreItem,
     StudentMessage, StudentProfile, SupportTicket, Task, University, XPTransaction,
 )
+
+
+class AIGatewayFallbackTests(SimpleTestCase):
+    @override_settings(AI_GATEWAY_API_KEY='configured-for-test')
+    @patch('apps.admissions.ai_services._gateway_json', side_effect=AttributeError('malformed provider payload'))
+    def test_essay_review_uses_local_fallback_for_malformed_provider_payload(self, gateway):
+        result, mode, model = review_essay(
+            'Describe a learning experience.',
+            'I organized three tests, recorded the results, and reflected on what changed.',
+            'en',
+        )
+
+        gateway.assert_called_once()
+        self.assertEqual(mode, 'local-fallback')
+        self.assertEqual(model, '')
+        self.assertIn('overall_score', result)
+
+    @override_settings(AI_GATEWAY_API_KEY='configured-for-test')
+    @patch('apps.admissions.ai_services._gateway_json', side_effect=IndexError('missing provider choice'))
+    def test_college_advice_uses_local_fallback_for_malformed_provider_payload(self, gateway):
+        research = {
+            'profile_snapshot': {},
+            'recommendations': [{
+                'university': {
+                    'name': 'Fallback University',
+                    'country': 'Uzbekistan',
+                    'net_price_usd': 12000,
+                    'offers_international_aid': True,
+                    'offers_merit_aid': False,
+                    'offers_need_based_aid': False,
+                },
+                'match_score': 74,
+                'admission_band': 'target',
+                'reasons': ['Academic fit'],
+                'gaps': [],
+            }],
+        }
+
+        result, mode, model = college_ai_advice('Which option fits?', research, 'en')
+
+        gateway.assert_called_once()
+        self.assertEqual(mode, 'local-fallback')
+        self.assertEqual(model, '')
+        self.assertEqual(result['universities'][0]['name'], 'Fallback University')
 
 
 class RoleIsolationTests(APITestCase):
