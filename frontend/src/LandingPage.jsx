@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { LANGUAGE_OPTIONS, formatNumberLocale, t, tx } from './i18n'
+import HeroParticleNetwork from './HeroParticleNetwork'
 import './landing.css'
 
 const SCHOOL_CONTACT_URL = (import.meta.env.VITE_SCHOOL_CONTACT_URL || '').trim()
@@ -154,6 +155,7 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
 
       <main id="landing-main">
         <section className="landing-hero">
+          <HeroParticleNetwork theme={theme} />
           <div className="lp-shell landing-hero-grid">
             <div className="landing-hero-copy">
               <p className="lp-eyebrow">{t('For schools, counselors and students in Uzbekistan')}</p>
