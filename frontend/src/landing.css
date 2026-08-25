@@ -88,6 +88,8 @@
   --lp-ink-accent: #8A6B42;
   --lp-ink-rule: rgba(74, 64, 54, .15);
   --lp-ink-photo: saturate(.72) contrast(1.03) brightness(1.02);
+  --lp-particle-dot: #6F6255;
+  --lp-particle-line: #8A6B42;
 }
 
 :root[data-theme='dark'] .landing-page,
@@ -106,6 +108,8 @@
   --lp-ink-accent: var(--accent-deep);
   --lp-ink-rule: color-mix(in srgb, var(--light-grey) 20%, transparent);
   --lp-ink-photo: saturate(.62) contrast(1.14) brightness(.72);
+  --lp-particle-dot: #F2F2F5;
+  --lp-particle-line: #D7A8EE;
 }
 
 .landing-page {
@@ -258,7 +262,7 @@
    mode and the dark brand field does the same job in dark mode. */
 .landing-hero::after {
   content: '';
-  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
   background:
     linear-gradient(97deg,
       var(--lp-ink-solid) 0 33%,
@@ -269,6 +273,14 @@
       transparent 34%,
       color-mix(in srgb, var(--lp-ink-solid) 58%, transparent) 100%);
 }
+.landing-particle-field {
+  position: absolute; inset: 0; z-index: 3;
+  pointer-events: none;
+  opacity: .78;
+  mask-image: linear-gradient(to bottom, #000 0 74%, transparent 96%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0 74%, transparent 96%);
+}
+.landing-particle-field canvas { width: 100%; height: 100%; display: block; }
 .landing-hero-grid {
   --lp-hero-pt: clamp(32px, 3.6vw, 56px);
   --lp-hero-pb: clamp(36px, 4vw, 64px);
@@ -278,7 +290,7 @@
   align-items: center;
   column-gap: var(--lp-5);
 }
-.landing-hero-copy { grid-column: 1 / 8; grid-row: 1; position: relative; z-index: 2; min-width: 0; }
+.landing-hero-copy { grid-column: 1 / 8; grid-row: 1; position: relative; z-index: 4; min-width: 0; }
 .landing-hero-grid { position: relative; z-index: 2; min-height: min(74vh, 660px); }
 .landing-hero .lp-eyebrow { color: var(--lp-ink-accent); }
 .landing-hero h1 {
@@ -358,7 +370,7 @@
 
 /* --- Proof rail: real platform facts, inside the first viewport ---------- */
 
-.landing-rail { position: relative; z-index: 2; border-top: 1px solid var(--lp-ink-rule); }
+.landing-rail { position: relative; z-index: 4; border-top: 1px solid var(--lp-ink-rule); }
 .landing-rail > .lp-shell { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .landing-rail article {
   min-width: 0; padding: var(--lp-4) 0;
@@ -604,6 +616,7 @@
   .landing-page.is-animated .landing-path-list li::before { opacity: 1; transform: none; transition: none; }
   .landing-path-list::before, .landing-nav nav a::after,
   .landing-login-button, .landing-primary-cta, .landing-text-cta { transition: none; }
+  .landing-particle-field { opacity: .52; }
 }
 
 /* --- Login (shares the public-page scale) -------------------------------- */
@@ -702,6 +715,7 @@
   }
   .landing-hero-media img { object-position: 48% 50%; }
   .landing-hero-media::after { display: none; }
+  .landing-particle-field { opacity: .58; }
   .landing-hero h1 { margin-top: var(--lp-4); font-size: clamp(42px, 10.5vw, 62px); }
   .landing-rail > .lp-shell { grid-template-columns: 1fr; }
   .landing-rail article { padding-block: var(--lp-4); }
