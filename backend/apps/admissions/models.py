@@ -21,8 +21,30 @@ class School(TimeStampedModel):
         SCHOOL = 'school', 'Organization school'
         INDIVIDUAL = 'individual', 'Individual counselor workspace'
 
+    class Region(models.TextChoices):
+        """Uzbekistan's first-level administrative divisions.
+
+        These values are a public API contract for the regional reach map.
+        """
+
+        KARAKALPAKSTAN = 'karakalpakstan', 'Republic of Karakalpakstan'
+        ANDIJAN = 'andijan', 'Andijan'
+        BUKHARA = 'bukhara', 'Bukhara'
+        FERGANA = 'fergana', 'Fergana'
+        JIZZAKH = 'jizzakh', 'Jizzakh'
+        KASHKADARYA = 'kashkadarya', 'Kashkadarya'
+        KHOREZM = 'khorezm', 'Khorezm'
+        NAMANGAN = 'namangan', 'Namangan'
+        NAVOIY = 'navoiy', 'Navoiy'
+        SAMARKAND = 'samarkand', 'Samarkand'
+        SIRDARYO = 'sirdaryo', 'Sirdaryo'
+        SURKHANDARYA = 'surkhandarya', 'Surkhandarya'
+        TASHKENT_REGION = 'tashkent_region', 'Tashkent Region'
+        TASHKENT_CITY = 'tashkent_city', 'Tashkent City'
+
     name = models.CharField(max_length=180, unique=True)
     code = models.SlugField(max_length=80, unique=True)
+    region = models.CharField(max_length=32, choices=Region.choices, blank=True, db_index=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=32, blank=True)
     is_active = models.BooleanField(default=True)

@@ -42,9 +42,9 @@ from .models import (
 
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'workspace_type', 'owner_counselor', 'contact_email', 'is_active')
+    list_display = ('name', 'code', 'region', 'workspace_type', 'owner_counselor', 'contact_email', 'is_active')
     search_fields = ('name', 'code', 'contact_email')
-    list_filter = ('workspace_type', 'is_active')
+    list_filter = ('workspace_type', 'region', 'is_active')
 
 
 @admin.register(StudentProfile)

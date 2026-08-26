@@ -1,4 +1,12 @@
 export const UI_TRANSLATIONS = {
+  'Reach': ['Qamrov', 'Охват'],
+  'Coverage data is unavailable right now.': ['Qamrov ma’lumotlari hozircha mavjud emas.', 'Данные об охвате сейчас недоступны.'],
+  'Where Naseeb Edu is working.': ['Naseeb Edu qayerlarda ishlamoqda.', 'Где работает Naseeb Edu.'],
+  'Coverage is drawn from the schools using the platform, and updates as new ones join.': ['Qamrov platformadan foydalanayotgan maktablar asosida ko‘rsatiladi va yangi maktablar qo‘shilganda yangilanadi.', 'Охват формируется по школам, использующим платформу, и обновляется по мере подключения новых школ.'],
+  'Students on the platform': ['Platformadagi o‘quvchilar', 'Учеников на платформе'],
+  'Select a region to see its number.': ['O‘quvchilar sonini ko‘rish uchun hududni tanlang.', 'Выберите регион, чтобы увидеть число учеников.'],
+  'Drag to rotate': ['Aylantirish uchun torting', 'Перетащите, чтобы вращать'],
+  'Interactive map of Uzbekistan. Drag to rotate or use the arrow keys.': ['O‘zbekistonning interaktiv xaritasi. Aylantirish uchun torting yoki strelka tugmalaridan foydalaning.', 'Интерактивная карта Узбекистана. Перетащите или используйте клавиши со стрелками, чтобы вращать.'],
   "+{0} XP": ["+{0} XP", "+{0} XP"],
   "A counselor sees the students assigned to them, a school sees its own, and a parent sees only the sections consent allows.": ["Maslahatchi faqat o‘ziga biriktirilgan o‘quvchilarni, maktab o‘zinikini, ota-ona esa faqat rozilik bergan bo‘limlarni ko‘radi.", "Консультант видит закреплённых за ним учеников, школа — своих, а родитель — только те разделы, которые разрешает согласие."],
   "A record here means something because the platform decides who may write it, who must approve it, and who is allowed to read it.": ["Bu yerdagi yozuv mazmunga ega, chunki platforma kim yozishini, kim tasdiqlashini va kim o‘qiy olishini belgilaydi.", "Запись здесь что-то значит, потому что платформа определяет, кто её создаёт, кто согласует и кому разрешено её читать."],
