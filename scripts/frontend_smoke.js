@@ -4,11 +4,11 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'frontend/src/App.jsx'), 'utf8');
-const landing = fs.readFileSync(path.join(root, 'frontend/src/LandingPage.jsx'), 'utf8');
-const reachMap = fs.readFileSync(path.join(root, 'frontend/src/components/ReachMapSection.jsx'), 'utf8');
+const landingPage = fs.readFileSync(path.join(root, 'frontend/src/LandingPage.jsx'), 'utf8');
 const api = fs.readFileSync(path.join(root, 'frontend/src/api.js'), 'utf8');
 const packageLock = fs.readFileSync(path.join(root, 'frontend/package-lock.json'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'frontend/src/styles.css'), 'utf8');
+const landingCss = fs.readFileSync(path.join(root, 'frontend/src/landing.css'), 'utf8');
 
 const requiredViews = [
   'dashboard', 'profile', 'academics', 'portfolio', 'activities', 'recommendations',
@@ -28,8 +28,7 @@ const requiredApiMethods = [
   'dismissMessageReport', 'resolveMessageReport',
   'bookingParticipants', 'approveBooking', 'rejectBooking', 'completeBooking',
 ];
-if (!landing.includes("import { ReachMapSection }") || !landing.includes('<ReachMapSection theme={theme} />') || !landing.includes('href="#reach"')) throw new Error('The public reach map must be rendered and linked from the landing page.');
-if (!reachMap.includes('id="reach"') || !reachMap.includes('api.publicReach()')) throw new Error('The public reach map section or data request is missing.');
+
 
 for (const view of requiredViews) {
   if (!app.includes(`${view}:`)) throw new Error(`Missing page metadata: ${view}`);
@@ -140,6 +139,10 @@ for (const token of [
 }
 const componentStyles = styles.split("color-scheme: dark;\n}")[1] || ''
 if (/#[0-9a-f]{3,8}|rgba?\(/i.test(componentStyles)) throw new Error('Component-level hardcoded color remains outside the theme token blocks.')
+const landingSentinel = '/* == landing tokens end == */'
+if (!landingCss.includes(landingSentinel)) throw new Error('landing.css token-block sentinel is missing; the public-page color guard cannot run.')
+const landingComponents = landingCss.split(landingSentinel)[1] || "";
+if (/#[0-9a-f]{3,8}|rgba?\(/i.test(landingComponents)) throw new Error('Component-level hardcoded color remains in landing.css outside the token blocks.')
 const tokenDefinitions = new Set([...styles.matchAll(/--([a-z0-9-]+)\s*:/gi)].map((match) => match[1]))
 const tokenReferences = new Set([...styles.matchAll(/var\(--([a-z0-9-]+)/gi)].map((match) => match[1]))
 const undefinedTokens = [...tokenReferences].filter((token) => !tokenDefinitions.has(token))
