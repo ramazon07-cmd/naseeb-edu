@@ -744,7 +744,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
     <main className="workspace">
       <header className="top-header">
         <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label={t("Open navigation")}><Menu /></button>
-        <div className="page-heading"><span className="eyebrow">07 / {t(meta.label).toUpperCase()}</span><h1>{t(meta.label)}</h1><p>{t(meta.description)}</p></div>
+        <div className="page-heading"><span className="eyebrow">{t(meta.label).toUpperCase()}</span><h1>{t(meta.label)}</h1><p>{t(meta.description)}</p></div>
         <div className="header-actions">
           <div className="global-search" ref={searchRef}>
             <div className={`search ${searchOpen && query.trim() ? 'is-open' : ''}`}><Search size={17} /><input role="combobox" aria-autocomplete="list" aria-controls="global-search-results" aria-expanded={searchOpen && Boolean(query.trim())} aria-activedescendant={searchResults[activeSearchIndex]?.id} aria-label={t("Search pages and records")} placeholder={t("Search pages and records…")} value={query} onFocus={() => setSearchOpen(true)} onChange={(event) => {setQuery(event.target.value);setSearchOpen(true);}} onKeyDown={handleSearchKeyDown} />{query && <button type="button" className="search-clear" onClick={() => {setQuery('');setSearchOpen(false);}} aria-label={t("Clear search")}><X size={14} /></button>}</div>

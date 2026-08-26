@@ -18,7 +18,7 @@
 .reach-section-header h2 {
   max-width: 19ch;
   margin: 0;
-  font: 500 clamp(2.4rem, 5vw, 5.4rem) / 0.98 'Cinzel', Georgia, serif;
+  font: 600 clamp(2.4rem, 5vw, 5.4rem) / 0.98 'Montserrat', system-ui, sans-serif;
 }
 
 .reach-section-header p {
@@ -46,7 +46,7 @@
 }
 
 .reach-section-total strong {
-  font: 500 clamp(3.5rem, 7vw, 7rem) / 1 'Cinzel', Georgia, serif;
+  font: 600 clamp(3.5rem, 7vw, 7rem) / 1 'Montserrat', system-ui, sans-serif;
   font-variant-numeric: tabular-nums lining-nums;
 }
 
