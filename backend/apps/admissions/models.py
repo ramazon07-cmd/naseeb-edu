@@ -1364,3 +1364,37 @@ class ActivityLog(TimeStampedModel):
 
     def __str__(self):
         return self.action
+
+
+class ChallengeAttempt(TimeStampedModel):
+    """One completed Find Your Personality challenge, kept for good.
+
+    Rows are never overwritten. A student who retakes the personality challenge
+    in grade 10 gets a SECOND row, because the whole point of the journey is
+    setting who they were beside who they are -- an update-in-place would throw
+    away the only thing a four-year record can offer.
+
+    `instrument_version` is not decoration. The moment anyone rewords an item,
+    earlier results stop being comparable to later ones, and a comparison across
+    years is the product. Items get a new version; they are never edited in
+    place, and a comparison across two versions must be refused or marked.
+
+    `answers` is the source of truth; `scores` is a cache of what the client
+    computed from it, stored so a counselor's list does not have to rescore
+    every attempt. Scoring deliberately lives in one place (challenges.js) --
+    a second implementation here is a second thing that can disagree.
+    """
+
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='challenge_attempts')
+    challenge = models.CharField(max_length=40)
+    instrument_version = models.CharField(max_length=20, default='1')
+    answers = models.JSONField(default=dict)
+    scores = models.JSONField(default=dict, blank=True)
+    completed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-completed_at', '-id']
+        indexes = [models.Index(fields=['student', 'challenge', '-completed_at'])]
+
+    def __str__(self):
+        return f'{self.student}: {self.challenge} ({self.completed_at:%Y-%m-%d})'
