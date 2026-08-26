@@ -117,6 +117,11 @@ if (!api.includes('fetchWithTimeout') || !api.includes('REQUEST_TIMEOUT_MS')) th
 if (!app.includes('Promise.allSettled') || !app.includes('function PageDataBoundary(') || !styles.includes('.page-skeleton')) throw new Error('Partial loading, retry, or skeleton states are missing.');
 if (!html.includes('class="app-boot"') || !app.includes('function AppBootLoader(') || !app.includes('bootstrapping')) throw new Error('First-paint and authenticated bootstrap loading states are missing.');
 if (styles.includes('fonts.googleapis.com') || styles.includes('@import url(')) throw new Error('Frontend fonts must not depend on a render-blocking remote import.');
+if (!styles.includes("font-family: 'Montserrat'") || !html.includes('/fonts/montserrat-latin.woff2')) throw new Error('Self-hosted Montserrat typography is missing.');
+if (styles.includes('Cinzel') || styles.includes('EB Garamond')) throw new Error('Legacy mixed heading typography must not be reintroduced.');
+for (const asset of ['montserrat-latin.woff2', 'montserrat-cyrillic.woff2']) {
+  if (!fs.existsSync(path.join(root, 'frontend/public/fonts', asset))) throw new Error(`Font asset missing: ${asset}`);
+}
 if (!styles.includes('.brand-logo::after') || !styles.includes('.brand-logo::before')) throw new Error('Brand logo needs an instant text fallback while its image loads.');
 if (!styles.includes('flex: 0 0 112px !important') || !styles.includes('aspect-ratio: 1')) throw new Error('Login emblem must preserve its circular dimensions.');
 if (!app.includes('function ChannelListSkeleton(') || !app.includes('function MessageListSkeleton(') || !app.includes('function StaffStatsSkeleton(')) throw new Error('Messaging shaped skeleton states are missing.');
