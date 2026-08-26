@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, Award, BookOpen, Bot, Building2, CheckCircle2,
+  Activity, ArrowLeft, Award, BookOpen, Bot, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
   ContactRound, DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
   LibraryBig, LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
@@ -8,6 +8,7 @@ import {
   ShoppingCart, Sparkles, Square, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X } from
 'lucide-react';
 import { api } from './api';
+import LandingPage from './LandingPage';
 import {
   LANGUAGE_OPTIONS,
   formatCurrencyLocale,
@@ -78,8 +79,8 @@ const BRAND_LOGOS = {
   dark: '/brand/naseeb-dark-256.png'
 };
 const THEME_ICONS = {
-  light: '/brand/icon-light.png',
-  dark: '/brand/icon-dark-transparent.png'
+  light: '/brand/icon-light-64.png?v=2',
+  dark: '/brand/icon-dark-64.png?v=2'
 };
 
 function brandLogoFor(theme) {
@@ -310,7 +311,7 @@ const RESOURCE_FIELDS = {
 
 };
 
-function Login({ onLogin, theme, toggleTheme, language, changeLanguage }) {
+function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }) {
   const [form, setForm] = useState(SHOW_DEMO_ACCOUNTS ?
   { username: 'counselor', password: 'admin12345' } :
   { username: '', password: '' });
@@ -333,11 +334,14 @@ function Login({ onLogin, theme, toggleTheme, language, changeLanguage }) {
 
   return <main className="login-page">
     <section className="login-copy">
-      <BrandLogo theme={theme} className="login-emblem" />
-      <span className="eyebrow">{t("NASEEB EDU / EDUCATION PLATFORM")}</span>
-      <h1>{t('Every opportunity.')}<br />{t('One trusted path.')}</h1>
-      <p>{t('A professional counseling platform connecting students in Uzbekistan with global education opportunities.')}</p>
-      <span className="brand-tagline">{t('Bridging Uzbekistan to the World Through Education')}</span>
+      <button type="button" className="login-return" onClick={onBack}><ArrowLeft size={17} /> {t('Home')}</button>
+      <div className="login-copy-content">
+        <BrandLogo theme={theme} className="login-emblem" />
+        <span className="eyebrow">{t("NASEEB EDU / EDUCATION PLATFORM")}</span>
+        <h1>{t('Every opportunity.')}<br />{t('One trusted path.')}</h1>
+        <p>{t('A professional counseling platform connecting students in Uzbekistan with global education opportunities.')}</p>
+        <span className="brand-tagline">{t('Bridging Uzbekistan to the World Through Education')}</span>
+      </div>
     </section>
     <section className="login-form-panel" aria-label={t('Sign in')}>
       <form className="login-card" onSubmit={submit}>
@@ -2761,6 +2765,7 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
 export default function App() {
   const [theme, setTheme] = useState(initialTheme);
   const [language, setLanguageState] = useState(getLanguage);
+  const [publicPage, setPublicPage] = useState(() => window.location.hash === '#/login' ? 'login' : 'landing');
   const [user, setUser] = useState(null);
   const [data, setData] = useState(EMPTY_DATA);
   const [stats, setStats] = useState(null);
@@ -2792,6 +2797,20 @@ export default function App() {
 
   const toggleTheme = useCallback(() => setTheme((current) => current === 'dark' ? 'light' : 'dark'), []);
   const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
+
+  const showPublicPage = useCallback((nextPage, replace = false) => {
+    const url = new URL(window.location.href);
+    url.hash = nextPage === 'login' ? '/login' : '';
+    window.history[replace ? 'replaceState' : 'pushState']({ publicPage: nextPage }, '', url);
+    setPublicPage(nextPage);
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, []);
+
+  useEffect(() => {
+    const handlePublicNavigation = () => setPublicPage(window.location.hash === '#/login' ? 'login' : 'landing');
+    window.addEventListener('popstate', handlePublicNavigation);
+    return () => window.removeEventListener('popstate', handlePublicNavigation);
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -2909,12 +2928,14 @@ export default function App() {
     setUser(current);
     await loadData(current);
   }
-  function logout() {api.logout();setUser(null);setData(EMPTY_DATA);setStats(null);setResourceStatus({});setBootstrapError('');setPage('dashboard');}
+  function logout() {api.logout();setUser(null);setData(EMPTY_DATA);setStats(null);setResourceStatus({});setBootstrapError('');setPage('dashboard');showPublicPage('landing', true);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
 
   if (bootstrapping) return <AppBootLoader message="Checking your secure session…" />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={bootstrapSession} onSignOut={logout} />;
-  if (!user) return <Login onLogin={afterLogin} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
+  if (!user) return publicPage === 'login' ?
+  <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> :
+  <LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   return <>
     <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
