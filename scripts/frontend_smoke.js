@@ -8,6 +8,9 @@ const landingPage = fs.readFileSync(path.join(root, 'frontend/src/LandingPage.js
 const api = fs.readFileSync(path.join(root, 'frontend/src/api.js'), 'utf8');
 const packageLock = fs.readFileSync(path.join(root, 'frontend/package-lock.json'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'frontend/src/styles.css'), 'utf8');
+
+if ((landingPage.match(/href=\{BOOK_MEETING_URL\}/g) || []).length !== 1 || !landingPage.includes("t('Book a call')")) throw new Error('Landing page must show one final Book a call action.');
+if (landingPage.includes("t('Book a meeting')") || landingPage.includes("t('Talk to our team')")) throw new Error('Duplicate meeting actions remain on the landing page.');
 const landingCss = fs.readFileSync(path.join(root, 'frontend/src/landing.css'), 'utf8');
 
 const requiredViews = [
