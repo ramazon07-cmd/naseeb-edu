@@ -15,9 +15,8 @@
   /* Radius: three steps and a pill. */
   --lp-r-sm: 4px; --lp-r-md: 10px; --lp-r-lg: 20px; --lp-r-pill: 999px;
 
-  /* Type: serif display against a sans text face, with a wide scale gap so
-     the headline actually dominates instead of politely coexisting. */
-  --lp-display: 'Cinzel', 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  /* Type: one multilingual sans family across display and body copy. */
+  --lp-display: 'Montserrat', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --lp-body: 'Montserrat', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --lp-t-eyebrow: 11px;
   --lp-t-caption: 12px;
@@ -376,9 +375,7 @@
 /* English is the only language whose headline was set to these break points. */
 :lang(en) .landing-hero h1 :is(span, em) { display: block; }
 :lang(ru) .landing-page, :lang(uz) .landing-page { --lp-t-display: var(--lp-t-display-lang); }
-/* The turn in the headline is carried by the accent colour alone. Cinzel is an
-   inscriptional roman and ships no italic; with font-synthesis: none an italic
-   request would render upright anyway, so the device is colour, not slope. */
+/* The turn in the headline is carried by the accent colour alone. */
 .landing-hero h1 em { color: var(--lp-ink-accent); font-style: normal; }
 .landing-hero-lede {
   max-width: 40ch; margin: 0 0 var(--lp-6);
