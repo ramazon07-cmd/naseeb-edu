@@ -332,29 +332,82 @@ function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }
     }
   }
 
-  return <main className="login-page">
-    <section className="login-copy">
-      <button type="button" className="login-return" onClick={onBack}><ArrowLeft size={17} /> {t('Home')}</button>
-      <div className="login-copy-content">
-        <BrandLogo theme={theme} className="login-emblem" />
-        <span className="eyebrow">{t("NASEEB EDU / EDUCATION PLATFORM")}</span>
-        <h1>{t('Every opportunity.')}<br />{t('One trusted path.')}</h1>
-        <p>{t('A professional counseling platform connecting students in Uzbekistan with global education opportunities.')}</p>
-        <span className="brand-tagline">{t('Bridging Uzbekistan to the World Through Education')}</span>
-      </div>
-    </section>
-    <section className="login-form-panel" aria-label={t('Sign in')}>
-      <form className="login-card" onSubmit={submit}>
-        <div className="login-brand-row"><BrandLockup theme={theme} /><div className="login-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div></div>
-        <div><h2>{t('Sign in')}</h2><p>{t('Enter your username and password.')}</p></div>
-        <Field label={t('Username')}><input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="username" required /></Field>
-        <Field label={t('Password')}><input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="current-password" required /></Field>
-        {error && <div className="alert error">{error}</div>}
-        <button className="button primary full" disabled={loading} aria-busy={loading}>{loading ? t("Signing in…") : t("Sign in")}<ChevronRight size={18} /></button>
-        {SHOW_DEMO_ACCOUNTS && <div className="demo-hint">{t("Demo: counselor / admin12345")}</div>}
-      </form>
-    </section>
-  </main>;
+  return (
+    <main className="login-page">
+      <section className="login-copy">
+        <button type="button" className="login-return" onClick={onBack}>
+          <ArrowLeft size={17} /> {t("Home")}
+        </button>
+        <div className="login-copy-content">
+          <BrandLogo theme={theme} className="login-emblem" />
+          <span className="eyebrow">
+            {t("NASEEB EDU / EDUCATION PLATFORM")}
+          </span>
+          <h1>
+            {t("Every opportunity.")}
+            <br />
+            {t("One trusted path.")}
+          </h1>
+          <p>
+            {t(
+              "A professional counseling platform connecting students worldwide with global education opportunities.",
+            )}
+          </p>
+          <span className="brand-tagline">
+            {t("Connecting Students to the World Through Education")}
+          </span>
+        </div>
+      </section>
+      <section className="login-form-panel" aria-label={t("Sign in")}>
+        <form className="login-card" onSubmit={submit}>
+          <div className="login-brand-row">
+            <BrandLockup theme={theme} />
+            <div className="login-preferences">
+              <LanguageSelector
+                language={language}
+                onChange={changeLanguage}
+                compact
+              />
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            </div>
+          </div>
+          <div>
+            <h2>{t("Sign in")}</h2>
+            <p>{t("Enter your username and password.")}</p>
+          </div>
+          <Field label={t("Username")}>
+            <input
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              autoComplete="username"
+              required
+            />
+          </Field>
+          <Field label={t("Password")}>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              autoComplete="current-password"
+              required
+            />
+          </Field>
+          {error && <div className="alert error">{error}</div>}
+          <button
+            className="button primary full"
+            disabled={loading}
+            aria-busy={loading}
+          >
+            {loading ? t("Signing in…") : t("Sign in")}
+            <ChevronRight size={18} />
+          </button>
+          {SHOW_DEMO_ACCOUNTS && (
+            <div className="demo-hint">{t("Demo: counselor / admin12345")}</div>
+          )}
+        </form>
+      </section>
+    </main>
+  );
 }
 
 function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, language, changeLanguage }) {
