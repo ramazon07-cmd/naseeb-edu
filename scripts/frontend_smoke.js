@@ -4,6 +4,8 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'frontend/src/App.jsx'), 'utf8');
+const landing = fs.readFileSync(path.join(root, 'frontend/src/LandingPage.jsx'), 'utf8');
+const reachMap = fs.readFileSync(path.join(root, 'frontend/src/components/ReachMapSection.jsx'), 'utf8');
 const api = fs.readFileSync(path.join(root, 'frontend/src/api.js'), 'utf8');
 const packageLock = fs.readFileSync(path.join(root, 'frontend/package-lock.json'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'frontend/src/styles.css'), 'utf8');
@@ -27,6 +29,8 @@ const requiredApiMethods = [
   'dismissMessageReport', 'resolveMessageReport',
   'bookingParticipants', 'approveBooking', 'rejectBooking', 'completeBooking',
 ];
+if (!landing.includes("import { ReachMapSection }") || !landing.includes('<ReachMapSection theme={theme} />') || !landing.includes('href="#reach"')) throw new Error('The public reach map must be rendered and linked from the landing page.');
+if (!reachMap.includes('id="reach"') || !reachMap.includes('api.publicReach()')) throw new Error('The public reach map section or data request is missing.');
 
 for (const view of requiredViews) {
   if (!app.includes(`${view}:`)) throw new Error(`Missing page metadata: ${view}`);

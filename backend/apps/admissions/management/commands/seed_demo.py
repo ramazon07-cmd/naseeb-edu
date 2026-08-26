@@ -16,6 +16,50 @@ from apps.admissions.services import extend_level_one_roadmap
 class Command(BaseCommand):
     help = 'Create Naseeb Edu demo data.'
 
+    REGIONAL_COVERAGE = (
+        (School.Region.SAMARKAND, 'Samarkand Demo Lyceum', 4),
+        (School.Region.BUKHARA, 'Bukhara Demo Lyceum', 3),
+        (School.Region.FERGANA, 'Fergana Demo Lyceum', 3),
+        (School.Region.ANDIJAN, 'Andijan Demo Lyceum', 2),
+        (School.Region.NAMANGAN, 'Namangan Demo Lyceum', 2),
+        (School.Region.KARAKALPAKSTAN, 'Nukus Demo Lyceum', 2),
+        (School.Region.TASHKENT_REGION, 'Tashkent Region Demo Lyceum', 3),
+    )
+
+    def seed_regional_coverage(self):
+        for region, name, student_count in self.REGIONAL_COVERAGE:
+            code = f'naseeb-demo-{region.value.replace("_", "-")}'
+            regional_school, _ = School.objects.get_or_create(
+                code=code,
+                defaults={'name': name, 'region': region},
+            )
+            if regional_school.region != region:
+                regional_school.region = region
+                regional_school.save(update_fields=['region', 'updated_at'])
+            for index in range(1, student_count + 1):
+                username = f'{code}-student-{index}'
+                user, created = User.objects.get_or_create(
+                    username=username,
+                    defaults={
+                        'email': f'{username}@naseeb.local',
+                        'first_name': 'Demo',
+                        'last_name': f'{name.split()[0]} {index}',
+                        'role': User.Role.STUDENT,
+                        'school': regional_school,
+                    },
+                )
+                if created:
+                    user.set_unusable_password()
+                    user.save(update_fields=['password'])
+                StudentProfile.objects.get_or_create(
+                    user=user,
+                    defaults={
+                        'school': regional_school,
+                        'school_name': regional_school.name,
+                        'grade': StudentProfile.Grade.GRADE_10,
+                    },
+                )
+
     def handle(self, *args, **options):
         if not settings.DEMO_ACCOUNTS_ENABLED:
             self.stdout.write(self.style.WARNING('Demo accounts are disabled; skipping seed_demo.'))
@@ -29,6 +73,10 @@ class Command(BaseCommand):
                 'contact_phone': '+998971230586',
             },
         )
+        if not school.region:
+            school.region = School.Region.TASHKENT_CITY
+            school.save(update_fields=['region', 'updated_at'])
+        self.seed_regional_coverage()
         counselor, _ = User.objects.get_or_create(
             username='counselor',
             defaults={
