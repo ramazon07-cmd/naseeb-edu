@@ -181,7 +181,7 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
     { title: 'Private by default', description: 'Messages, counselor notes, essay drafts and task submissions stay out of staff overviews unless policy puts them there.' },
   ]
   const aboutPrinciples = [
-    { title: 'Built for Uzbekistan', description: 'Uzbek, Russian and English are part of the product — not an afterthought.' },
+    { title: 'Built for international applications', description: 'Designed for students, counselors and schools navigating universities across borders.' },
     { title: 'Human guidance, supported by software', description: 'The platform organizes progress and evidence; counselors keep every decision personal.' },
     { title: 'From first plan to final offer', description: 'Goals, documents, applications and outcomes stay connected across the whole journey.' },
   ]
@@ -396,17 +396,17 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
             <div className="landing-journey-grid">
             <div className="landing-section-head" data-reveal>
               <h2>{t('Four steps, in order.')}</h2>
-              <p>{t('Each step unlocks the next only after a counselor approves the work behind it.')}</p>
-              <figure className="landing-specimen">
-                <figcaption>{t('Step 3')} · {t('Applications')}</figcaption>
-                <p>{t('Build a balanced university shortlist')}</p>
-                <div><span className="landing-specimen-status">{t('Submitted for approval')}</span><b>{tx`+${formatNumberLocale(75)} XP`}</b></div>
-                <small>{t('The next step stays locked until a counselor approves this one. XP counts toward the student’s level.')}</small>
-              </figure>
+              <p>{t('The application journey moves through four clear stages.')}</p>
             </div>
             <ol className="landing-path-list">
               {path.map((step) => <li key={step.title}><h3>{t(step.title)}</h3><p>{t(step.description)}</p></li>)}
             </ol>
+            <figure className="landing-specimen">
+              <figcaption>{t('Step 3')} · {t('Applications')}</figcaption>
+              <p>{t('Build a balanced university shortlist')}</p>
+              <div><span className="landing-specimen-status">{t('Submitted for approval')}</span><b>{tx`+${formatNumberLocale(75)} XP`}</b></div>
+              <small>{t('The next step stays locked until a counselor approves this one. XP counts toward the student’s level.')}</small>
+            </figure>
             </div>
             <div className="landing-product-showcase landing-student-showcase" data-reveal>
               <div className="landing-showcase-copy">

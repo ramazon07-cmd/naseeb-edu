@@ -124,7 +124,7 @@
   /* The pull-quote glyph: orchid at a given alpha on ink reads far brighter
      than brown at the same alpha on paper, so the percentage differs. */
   --lp-story-glyph: color-mix(in srgb, var(--lp-signal) 30%, transparent);
-  --lp-brand-logo-image: url('/brand/icon-light.png');
+  --lp-brand-logo-image: url('/brand/icon-light-transparent-hd.png');
   --lp-journey-bg: var(--lp-page-bg);
   /* The marks keep their own brand colours — that is what makes them read as
      real placements. Only dark mode lifts them off the near-black canvas. */
@@ -174,7 +174,7 @@
   --lp-preview-progress: var(--accent-deep);
   --lp-frame-halo: color-mix(in srgb, var(--purple) 62%, transparent);
   --lp-story-glyph: color-mix(in srgb, var(--lp-signal) 38%, transparent);
-  --lp-brand-logo-image: url('/brand/icon-dark-transparent.png');
+  --lp-brand-logo-image: url('/brand/icon-dark-transparent-hd.png');
   /* Several official marks contain black lettering. Convert the placement
      strip to one restrained light ink so every logo remains legible on plum. */
   --lp-logo-filter: grayscale(1) brightness(0) invert(1);
@@ -540,8 +540,9 @@
 /* A product specimen, not a card: the same ruled register language used
    everywhere else on the page, showing one real mission in one real state. */
 .landing-specimen {
+  grid-column: 2;
   max-width: 30em;
-  margin: var(--lp-fluid-md) 0 0;
+  margin: 0;
   padding-top: var(--lp-5);
   border-top: 1px solid var(--lp-rule-strong);
 }
@@ -1222,6 +1223,7 @@
 @media (max-width: 1080px) {
   .landing-journey-grid { grid-template-columns: 1fr; gap: var(--lp-7); }
   .landing-journey .landing-section-head { position: static; }
+  .landing-specimen { grid-column: 1; }
   .landing-story-rail { grid-auto-columns: 320px; }
   .landing-product-showcase { margin-top: var(--lp-8); grid-template-columns: 1fr; row-gap: var(--lp-6); }
   .landing-product-showcase .landing-showcase-copy,
