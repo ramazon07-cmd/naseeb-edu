@@ -7,6 +7,7 @@ from .views import (
     ActivityLogViewSet,
     ApplicationViewSet,
     BookingViewSet,
+    ChallengeAttemptViewSet,
     ChannelMessageViewSet,
     CommunityPostViewSet,
     CollegeResearchView,
@@ -77,6 +78,7 @@ router.register('store-items', StoreItemViewSet, basename='store-items')
 router.register('support-tickets', SupportTicketViewSet, basename='support-tickets')
 router.register('screen-time', ScreenTimeViewSet, basename='screen-time')
 router.register('parent-links', ParentStudentLinkViewSet, basename='parent-links')
+router.register('challenge-attempts', ChallengeAttemptViewSet, basename='challenge-attempts')
 
 urlpatterns = [
     path('assistant/chat/', AssistantChatView.as_view(), name='assistant-chat'),
