@@ -804,6 +804,115 @@
 }
 .landing-ledger dd { margin: 0; color: var(--lp-ink-muted); font-size: var(--lp-t-small); }
 
+/* --- FAQ: the register, answered ------------------------------------------
+   Not a stack of lavender pills. The page's whole vocabulary is a ruled
+   record — the journey meridian, the about principles, the trust ledger — so
+   the questions are ruled rows too, and the only state a row carries is its
+   own top rule turning to the signal colour when it is the one being read.
+   Deliberately unnumbered: these questions are a register to scan, not a
+   sequence to follow, and the about band already owns the 01/02/03 device.
+   The head is sticky beside the list on wide screens so the section keeps a
+   title while the reader works down nine answers. */
+
+/* --lp-signal resolves to --accent-deep, which on the ivory system IS --text:
+   using it here would make "open" and "hover" invisible in light mode. The
+   only token that is a genuine accent in BOTH themes is --lp-ink-accent —
+   warm brown on paper (4.9:1 on white), orchid on plum. */
+.landing-faq {
+  --lp-faq-accent: var(--lp-ink-accent);
+  background: var(--lp-page-bg);
+}
+.landing-faq-grid {
+  display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+  align-items: start; gap: var(--lp-fluid-xl);
+}
+.landing-faq-head {
+  position: sticky; top: calc(var(--lp-nav-h) + var(--lp-5));
+}
+.landing-faq-head .lp-eyebrow { margin: 0 0 var(--lp-5); color: var(--accent-muted); }
+.landing-faq-head h2 {
+  max-width: 15ch; margin: 0 0 var(--lp-4);
+  font-size: var(--lp-t-h2); line-height: 1.04; letter-spacing: -.012em;
+}
+.landing-faq-head > p:not(.lp-eyebrow) {
+  max-width: 38ch; margin: 0;
+  color: var(--muted); font-size: var(--lp-t-small); line-height: 1.7;
+}
+
+.landing-faq-list { min-width: 0; }
+.landing-faq-item {
+  border-top: 1px solid var(--lp-rule);
+  transition: border-color var(--lp-dur-short) var(--lp-ease-io);
+}
+.landing-faq-item:last-child { border-bottom: 1px solid var(--lp-rule); }
+.landing-faq-item.is-open { border-top-color: var(--lp-faq-accent); }
+.landing-faq-item h3 { margin: 0; font-size: inherit; }
+
+.landing-faq-trigger {
+  width: 100%; min-height: 64px; padding: var(--lp-5) 0;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--lp-5);
+  color: var(--text); background: transparent; border: 0;
+  font-family: var(--lp-display); font-size: var(--lp-t-h3); font-weight: 500;
+  line-height: 1.3; letter-spacing: -.01em; text-align: left; cursor: pointer;
+  transition: color var(--lp-dur-micro) var(--lp-ease-io);
+}
+.landing-faq-trigger > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.landing-faq-trigger:hover { color: var(--lp-faq-accent); }
+.landing-faq-item.is-open .landing-faq-trigger { color: var(--lp-faq-accent); }
+
+/* The mark is two hairlines, matching the rules it sits between: a plus that
+   spins its vertical stroke away into a minus. No icon, no filled disc. */
+.landing-faq-mark {
+  position: relative; flex: 0 0 auto; width: 34px; height: 34px;
+  border: 1px solid var(--lp-rule-strong); border-radius: var(--lp-r-pill);
+  transition: border-color var(--lp-dur-short) var(--lp-ease-io), background-color var(--lp-dur-short) var(--lp-ease-io);
+}
+.landing-faq-mark::before,
+.landing-faq-mark::after {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  width: 11px; height: 1px; background: currentColor;
+  transform: translate(-50%, -50%);
+  transition: transform var(--lp-dur-short) var(--lp-ease-io), opacity var(--lp-dur-short) var(--lp-ease-io);
+}
+.landing-faq-mark::after { transform: translate(-50%, -50%) rotate(90deg); }
+.landing-faq-trigger:hover .landing-faq-mark { border-color: var(--lp-faq-accent); }
+.landing-faq-item.is-open .landing-faq-mark { border-color: var(--lp-faq-accent); background: color-mix(in srgb, var(--lp-faq-accent) 12%, transparent); }
+.landing-faq-item.is-open .landing-faq-mark::after { transform: translate(-50%, -50%) rotate(180deg); opacity: 0; }
+
+/* Height animates through grid-template-rows so no script has to measure the
+   panel, and the closed panel is visibility:hidden so its links stay out of
+   the tab order and out of the accessibility tree. */
+.landing-faq-answer {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows var(--lp-dur-short) var(--lp-ease-io);
+}
+.landing-faq-item.is-open .landing-faq-answer { grid-template-rows: 1fr; }
+.landing-faq-answer > div {
+  overflow: hidden; visibility: hidden; opacity: 0;
+  transition: opacity var(--lp-dur-short) var(--lp-ease-io), visibility 0s linear var(--lp-dur-short);
+}
+.landing-faq-item.is-open .landing-faq-answer > div {
+  visibility: visible; opacity: 1;
+  transition: opacity var(--lp-dur-short) var(--lp-ease-io) .06s, visibility 0s;
+}
+.landing-faq-answer p {
+  max-width: 62ch; margin: 0 0 var(--lp-5);
+  padding-right: calc(34px + var(--lp-5));
+  color: var(--muted); font-size: var(--lp-t-small); line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+/* The qualifying second paragraph is an aside on the claim above it, not a
+   second answer — it is set back behind its own rule so it cannot be quoted
+   as a headline number. Colour does no work here: --accent-muted inverts
+   between themes (darker than --muted on paper, lighter on plum), so the
+   qualifier keeps --muted and lets its rule and smaller size subordinate it. */
+.landing-faq-answer p + p {
+  padding-left: var(--lp-4); padding-right: var(--lp-4);
+  border-left: 1px solid var(--lp-rule-strong);
+  font-size: var(--lp-t-caption); line-height: 1.7;
+}
+.landing-faq-contact { margin-bottom: var(--lp-5); color: var(--lp-faq-accent); }
+
 /* --- Closing CTA and footer: one broad curve, one brand field ------------- */
 
 .landing-closing {
@@ -1139,6 +1248,9 @@
   .landing-role-track { animation: none; transform: none; }
   .landing-story-rail { scroll-behavior: auto; }
   .landing-story-card, .landing-story-dots button::before { transition: none; }
+  .landing-faq-item, .landing-faq-trigger, .landing-faq-mark,
+  .landing-faq-mark::before, .landing-faq-mark::after,
+  .landing-faq-answer, .landing-faq-answer > div { transition: none; }
 }
 
 /* --- Login (shares the public-page scale) -------------------------------- */
@@ -1218,6 +1330,10 @@
 }
 
 @media (max-width: 1080px) {
+  .landing-faq-grid { grid-template-columns: 1fr; gap: var(--lp-7); }
+  .landing-faq-head { position: static; }
+  .landing-faq-head h2 { max-width: 20ch; }
+  .landing-faq-head > p:not(.lp-eyebrow) { max-width: 56ch; }
   .landing-journey-grid { grid-template-columns: 1fr; gap: var(--lp-7); }
   .landing-journey .landing-section-head { position: static; }
   .landing-specimen { grid-column: 1; }
@@ -1323,6 +1439,11 @@
   :lang(ru) .landing-hero h1, :lang(uz) .landing-hero h1 { font-size: clamp(32px, 9vw, 42px); }
   .landing-hero-actions { width: 100%; }
   .landing-hero-actions .landing-primary-cta { flex: 1 1 auto; }
+  .landing-faq-trigger { min-height: 56px; padding-block: var(--lp-4); gap: var(--lp-4); font-size: var(--lp-t-body); }
+  .landing-faq-mark { width: 28px; height: 28px; }
+  .landing-faq-mark::before, .landing-faq-mark::after { width: 10px; }
+  .landing-faq-answer p { padding-right: 0; }
+  .landing-faq-answer p + p { padding-right: 0; }
   .landing-role-marquee { gap: var(--lp-4); }
   .landing-role-track span { gap: var(--lp-3); font-size: 21px; }
   .landing-product-showcase { padding-top: var(--lp-7); }

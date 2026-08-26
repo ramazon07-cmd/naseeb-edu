@@ -10,6 +10,7 @@ import {
   HeartHandshake,
   Instagram,
   Linkedin,
+  Mail,
   MessageSquareText,
   Moon,
   PenLine,
@@ -97,6 +98,68 @@ const UNIVERSITY_PLACEMENTS = [
   { name: 'Stanford University', file: 'stanford.svg' },
 ]
 
+/* ---------------------------------------------------------------------------
+   Frequently asked questions. Answers are product claims, so every line here
+   must stay true of what the platform actually does: readiness is preparation
+   progress and never an admission probability, accounts are provisioned by a
+   school, and matching is profile-driven rather than a ranking table.
+   `answer` is an array so a question can carry a qualifying second paragraph
+   without a second component. The final entry is the contact hand-off and
+   renders the support address as a real mailto action rather than prose.
+--------------------------------------------------------------------------- */
+const FAQS = [
+  {
+    id: 'faq-counselor',
+    question: 'Who is a school counselor?',
+    answer: ['A school counselor helps students understand their strengths, interests and career options. They guide students in choosing suitable majors and universities, finding scholarships, and preparing strong applications.'],
+  },
+  {
+    id: 'faq-what',
+    question: 'What is Naseeb Edu?',
+    answer: ['Naseeb Edu is a university and career counseling platform for schools. It brings student discovery, university matching, application planning, progress tracking and counselor guidance together in one structured system.'],
+  },
+  {
+    id: 'faq-counselors',
+    question: 'How does Naseeb Edu help school counselors?',
+    answer: ['Naseeb Edu gives counselors a clear overview of every student\u2019s journey. They can create personalized roadmaps, assign tasks, track progress, manage deadlines, review application materials and identify students who need additional support.'],
+  },
+  {
+    id: 'faq-students',
+    question: 'What can students do on Naseeb Edu?',
+    answer: ['Students can explore their personality, interests and career options, discover matching universities, follow a personalized roadmap, manage tasks and deadlines, prepare application materials and message their counselor \u2014 all from one account.'],
+  },
+  {
+    id: 'faq-discovery',
+    question: 'How does Naseeb Edu help students discover their path?',
+    answer: ['Naseeb Edu helps students explore their personality, interests and possible career paths before choosing a major or university. These insights give students a clearer understanding of themselves and help counselors provide more personalized guidance.'],
+  },
+  {
+    id: 'faq-match',
+    question: 'How does University Match work?',
+    answer: ['University Match uses each student\u2019s profile \u2014 interests, career goals, academic performance, test scores, financial needs and preferences \u2014 to recommend suitable universities. Students explore and compare those options with guidance from their counselor.'],
+  },
+  {
+    id: 'faq-progress',
+    question: 'Can schools and parents track student progress?',
+    answer: [
+      'Yes. Naseeb Edu shows each student\u2019s university readiness as a clear percentage based on completed tasks and application milestones. Schools monitor progress through their dashboard, and parents review it from the student\u2019s account.',
+      'The readiness percentage reflects preparation progress, not the probability of admission.',
+    ],
+  },
+  {
+    id: 'faq-join',
+    question: 'How can my school join Naseeb Edu?',
+    answer: ['Contact our team to tell us about your school and counseling needs. We will introduce the platform, help set up your school workspace, and guide your counselors and students through onboarding.'],
+  },
+  {
+    id: 'faq-contact',
+    question: 'Didn\u2019t find your question?',
+    answer: ['Send it to our team and we will answer it directly.'],
+    contact: true,
+  },
+]
+
+const SUPPORT_EMAIL = (import.meta.env.VITE_SUPPORT_EMAIL || 'support@naseebedu.com').trim()
 const SCHOOL_CONTACT_URL = (import.meta.env.VITE_SCHOOL_CONTACT_URL || '').trim()
 const DEFAULT_BOOK_MEETING_URL = 'https://calendly.com/khumoyunnasipkulov/full-support-asia'
 const BOOK_MEETING_URL = (import.meta.env.VITE_BOOK_MEETING_URL || DEFAULT_BOOK_MEETING_URL).trim()
@@ -156,6 +219,10 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
   const pageRef = useRef(null)
   const railRef = useRef(null)
   const [activeStory, setActiveStory] = useState(0)
+  /* One answer open at a time: nine questions stacked open would bury the
+     closing call to action under a wall of prose. The first is open on load
+     so the section reads as answers rather than as a row of shut drawers. */
+  const [openFaq, setOpenFaq] = useState(FAQS[0]?.id || '')
   const path = [
     { title: 'Set the direction', description: 'Turn a student’s goals into a focused university and scholarship strategy.' },
     { title: 'Build the profile', description: 'Academics, activities, honors and documents collected in one verified profile.' },
@@ -310,6 +377,7 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
             <a href="#about">{t('About us')}</a>
             {hasStories && <a href="#reviews">{t('Stories')}</a>}
             <a href="#trust">{t('Trust')}</a>
+            <a href="#faq">{t('FAQ')}</a>
           </nav>
           <div className="landing-nav-actions">
             <LanguageSelector language={language} onChange={changeLanguage} />
@@ -531,6 +599,55 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
           </div>
         </section>
 
+        <section className="landing-band landing-faq" id="faq">
+          <div className="lp-shell landing-faq-grid">
+            <header className="landing-faq-head" data-reveal>
+              <p className="lp-eyebrow">{t('Frequently asked questions')}</p>
+              <h2>{t('What schools and students ask before they start.')}</h2>
+              <p>{t('What the platform does, who it is for, and what it takes for a school to begin.')}</p>
+            </header>
+
+            <div className="landing-faq-list" data-reveal>
+              {FAQS.map((item) => {
+                const isOpen = openFaq === item.id
+                return (
+                  <div className={`landing-faq-item ${isOpen ? 'is-open' : ''}`} key={item.id}>
+                    <h3>
+                      <button
+                        type="button"
+                        className="landing-faq-trigger"
+                        id={`${item.id}-question`}
+                        aria-expanded={isOpen}
+                        aria-controls={`${item.id}-answer`}
+                        onClick={() => setOpenFaq(isOpen ? '' : item.id)}
+                      >
+                        <span>{t(item.question)}</span>
+                        <span className="landing-faq-mark" aria-hidden="true" />
+                      </button>
+                    </h3>
+                    <div
+                      className="landing-faq-answer"
+                      id={`${item.id}-answer`}
+                      role="region"
+                      aria-labelledby={`${item.id}-question`}
+                    >
+                      <div>
+                        {item.answer.map((paragraph) => <p key={paragraph}>{t(paragraph)}</p>)}
+                        {item.contact && (
+                          <a className="landing-text-cta landing-faq-contact" href={`mailto:${SUPPORT_EMAIL}`}>
+                            <Mail size={16} aria-hidden="true" />
+                            {SUPPORT_EMAIL}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+
         <section className="landing-closing">
           <div className="lp-shell" data-reveal>
             <h2>{t('Bring every application into one clear workspace.')}</h2>
@@ -572,6 +689,7 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
             <a href="#about">{t('About us')}</a>
             {hasStories && <a href="#reviews">{t('Stories')}</a>}
             <a href="#trust">{t('Trust')}</a>
+            <a href="#faq">{t('FAQ')}</a>
           </nav>
           {SCHOOL_CONTACT_URL && (
             <nav className="landing-footer-links" aria-label={t('Access links')}>
