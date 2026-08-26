@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { LANGUAGE_OPTIONS, formatNumberLocale, t, tx } from './i18n'
+import { ReachMapSection } from './components/ReachMapSection'
 import './landing.css'
 
 const SCHOOL_CONTACT_URL = (import.meta.env.VITE_SCHOOL_CONTACT_URL || '').trim()
@@ -140,6 +141,7 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
         <div className="lp-shell">
           <a href="#landing-top" className="landing-brand" aria-label={t('Naseeb Edu home')}><BrandLockup /></a>
           <nav aria-label={t('Landing navigation')}>
+            <a href="#reach">{t('Reach')}</a>
             <a href="#journey">{t('Journey')}</a>
             <a href="#platform">{t('Platform')}</a>
             <a href="#trust">{t('Trust')}</a>
@@ -185,6 +187,8 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
             </div>
           </div>
         </section>
+
+        <ReachMapSection theme={theme} />
 
         <section className="landing-band landing-journey" id="journey">
           <div className="lp-shell">
@@ -241,6 +245,7 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
           <small>© {new Date().getFullYear()} Naseeb Edu</small>
           <a className="landing-footer-mark" href="#landing-top" aria-label={t('Back to top')} title={t('Back to top')}><BrandLockup /></a>
           <nav className="landing-footer-links" aria-label={t('Footer navigation')}>
+            <a href="#reach">{t('Reach')}</a>
             <a href="#journey">{t('Journey')}</a>
             <a href="#platform">{t('Platform')}</a>
             <a href="#trust">{t('Trust')}</a>
