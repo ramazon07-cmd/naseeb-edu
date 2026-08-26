@@ -223,7 +223,7 @@
   font-size: var(--lp-t-eyebrow); font-weight: 600;
   letter-spacing: .19em; text-transform: uppercase;
 }
-.lp-eyebrow::before { content: ''; flex: 0 0 auto; align-self: start; margin-top: .62em; width: clamp(24px, 4vw, 56px); height: 1px; background: currentColor; opacity: .55; }
+
 
 /* --- Navigation ----------------------------------------------------------
    The top bar uses the supplied flat theme swatches. Once the page moves, it
