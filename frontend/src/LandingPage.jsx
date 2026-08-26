@@ -101,7 +101,7 @@ const SCHOOL_CONTACT_URL = (import.meta.env.VITE_SCHOOL_CONTACT_URL || '').trim(
 const DEFAULT_BOOK_MEETING_URL = 'https://calendly.com/khumoyunnasipkulov/full-support-asia'
 const BOOK_MEETING_URL = (import.meta.env.VITE_BOOK_MEETING_URL || DEFAULT_BOOK_MEETING_URL).trim()
 const SOCIAL_LINKS = [
-  { label: 'Instagram', href: (import.meta.env.VITE_INSTAGRAM_URL || '').trim(), icon: Instagram },
+  { label: 'Instagram', href: (import.meta.env.VITE_INSTAGRAM_URL || 'https://www.instagram.com/naseeb_edu/').trim(), icon: Instagram },
   { label: 'LinkedIn', href: (import.meta.env.VITE_LINKEDIN_URL || 'https://www.linkedin.com/in/khumoyun-nasipkulov').trim(), icon: Linkedin },
   { label: 'YouTube', href: (import.meta.env.VITE_YOUTUBE_URL || '').trim(), icon: Youtube },
   { label: 'Telegram', href: (import.meta.env.VITE_TELEGRAM_URL || 'https://t.me/naseeb_edu').trim(), icon: Send },
