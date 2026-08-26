@@ -12,6 +12,7 @@ const styles = fs.readFileSync(path.join(root, 'frontend/src/styles.css'), 'utf8
 if ((landingPage.match(/href=\{BOOK_MEETING_URL\}/g) || []).length !== 1 || !landingPage.includes("t('Book a call')")) throw new Error('Landing page must show one final Book a call action.');
 if (landingPage.includes("t('Book a meeting')") || landingPage.includes("t('Talk to our team')")) throw new Error('Duplicate meeting actions remain on the landing page.');
 const landingCss = fs.readFileSync(path.join(root, 'frontend/src/landing.css'), 'utf8');
+const reachMapCss = fs.readFileSync(path.join(root, 'frontend/src/components/reach-map.css'), 'utf8');
 
 const requiredViews = [
   'dashboard', 'profile', 'academics', 'portfolio', 'activities', 'recommendations',
@@ -42,6 +43,7 @@ for (const method of requiredApiMethods) {
 if (!html.includes('id="root"')) throw new Error('React root is missing.');
 if (!packageLock.includes('naseeb-edu-frontend')) throw new Error('npm lockfile is missing or invalid.');
 if (!app.includes('function StudentOverview(')) throw new Error('Student 360 profile is missing.');
+if (app.includes('07 /')) throw new Error('Legacy numeric page-heading prefix must not be rendered.');
 if (!api.includes('function listAll(') || !api.includes('payload.next')) throw new Error('Paginated API traversal is missing.');
 if (!app.includes("label={t('Temporary password')}") || !app.includes('minLength="12"') || !app.includes('function ForcedPasswordChange(')) throw new Error('One-time credential and forced password-change UI is missing.');
 if (!app.includes('VITE_SHOW_DEMO_ACCOUNTS') || !app.includes('SHOW_DEMO_ACCOUNTS &&')) throw new Error('Demo credentials must be explicitly enabled in development.');
@@ -121,7 +123,7 @@ if (!app.includes('Promise.allSettled') || !app.includes('function PageDataBound
 if (!html.includes('class="app-boot"') || !app.includes('function AppBootLoader(') || !app.includes('bootstrapping')) throw new Error('First-paint and authenticated bootstrap loading states are missing.');
 if (styles.includes('fonts.googleapis.com') || styles.includes('@import url(')) throw new Error('Frontend fonts must not depend on a render-blocking remote import.');
 if (!styles.includes("font-family: 'Montserrat'") || !html.includes('/fonts/montserrat-latin.woff2')) throw new Error('Self-hosted Montserrat typography is missing.');
-if (styles.includes('Cinzel') || styles.includes('EB Garamond')) throw new Error('Legacy mixed heading typography must not be reintroduced.');
+if (`${styles}\n${landingCss}\n${reachMapCss}`.includes('Cinzel') || `${styles}\n${landingCss}\n${reachMapCss}`.includes('EB Garamond')) throw new Error('Legacy mixed heading typography must not be reintroduced.');
 for (const asset of ['montserrat-latin.woff2', 'montserrat-cyrillic.woff2']) {
   if (!fs.existsSync(path.join(root, 'frontend/public/fonts', asset))) throw new Error(`Font asset missing: ${asset}`);
 }
