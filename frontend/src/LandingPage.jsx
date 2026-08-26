@@ -329,11 +329,6 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
               <p className="landing-hero-lede">{t('One workspace where a school, a counselor and a student run an international university application together — from the first goal to the final offer.')}</p>
               <div className="landing-hero-actions">
                 <a className="landing-primary-cta" href="#journey">{t('See how it works')} <ChevronRight size={17} /></a>
-                {BOOK_MEETING_URL ? (
-                  <a className="landing-text-cta" href={BOOK_MEETING_URL}>{t('Book a meeting')} <ChevronRight size={15} /></a>
-                ) : (
-                  <button type="button" className="landing-text-cta" disabled>{t('Book a meeting')} <ChevronRight size={15} /></button>
-                )}
               </div>
             </div>
             <figure className="landing-hero-media">
@@ -452,9 +447,6 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
               <p className="lp-eyebrow">{t('About Naseeb Edu')}</p>
               <h2>{t('Guidance works better when everyone works from the same record.')}</h2>
               <p>{t('Naseeb Edu is an education counseling platform built for schools, counselors, students and families navigating international university applications from Uzbekistan.')}</p>
-              {BOOK_MEETING_URL && (
-                <a className="landing-text-cta" href={BOOK_MEETING_URL}>{t('Talk to our team')} <ChevronRight size={15} /></a>
-              )}
             </header>
             <dl className="landing-about-principles" data-reveal>
               {aboutPrinciples.map((item, index) => (
@@ -489,9 +481,6 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
                       <small>{t(featuredStory.role)}{featuredStory.organization ? ` · ${featuredStory.organization}` : ''}</small>
                     </span>
                   </span>
-                  {BOOK_MEETING_URL && (
-                    <a className="landing-text-cta" href={BOOK_MEETING_URL}>{t('Book a meeting')} <ChevronRight size={15} /></a>
-                  )}
                 </figcaption>
               </figure>
             </div>
@@ -548,11 +537,10 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
             <p>{t('Give counselors and students one shared place to plan, review and move forward.')}</p>
             <div className="landing-closing-actions">
               {BOOK_MEETING_URL ? (
-                <a className="landing-primary-cta" href={BOOK_MEETING_URL}>{t('Book a meeting')} <ChevronRight size={17} /></a>
+                <a className="landing-primary-cta" href={BOOK_MEETING_URL}>{t('Book a call')} <ChevronRight size={17} /></a>
               ) : (
-                <button type="button" className="landing-primary-cta" disabled>{t('Book a meeting')} <ChevronRight size={17} /></button>
+                <button type="button" className="landing-primary-cta" disabled>{t('Book a call')} <ChevronRight size={17} /></button>
               )}
-              <a className="landing-text-cta" href="#journey">{t('See how it works')} <ChevronRight size={15} /></a>
             </div>
           </div>
         </section>
@@ -560,7 +548,7 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
 
       <footer className="landing-footer">
         <a className="landing-footer-emblem" href="#landing-top" aria-label={t('Back to top')} title={t('Back to top')}><BrandLogo /></a>
-        <div className={`lp-shell landing-footer-grid ${BOOK_MEETING_URL || SCHOOL_CONTACT_URL ? 'has-access' : ''}`}>
+        <div className={`lp-shell landing-footer-grid ${SCHOOL_CONTACT_URL ? 'has-access' : ''}`}>
           <div className="landing-footer-brand">
             <BrandLockup />
             <nav className="landing-social-links" aria-label={t('Social media')}>
@@ -585,11 +573,10 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
             {hasStories && <a href="#reviews">{t('Stories')}</a>}
             <a href="#trust">{t('Trust')}</a>
           </nav>
-          {(BOOK_MEETING_URL || SCHOOL_CONTACT_URL) && (
+          {SCHOOL_CONTACT_URL && (
             <nav className="landing-footer-links" aria-label={t('Access links')}>
               <span>{t('Access')}</span>
-              {BOOK_MEETING_URL && <a href={BOOK_MEETING_URL}>{t('Book a meeting')}</a>}
-              {SCHOOL_CONTACT_URL && <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>}
+              <a href={SCHOOL_CONTACT_URL}>{t('Contact')}</a>
             </nav>
           )}
           <small>© {new Date().getFullYear()} Naseeb Edu. {t('All rights reserved.')}</small>
