@@ -135,14 +135,15 @@ async function refreshAccessToken() {
 }
 
 export async function request(path, options = {}, retry = true, unwrapPagination = true) {
-  const headers = new Headers(options.headers || {})
-  const isFormData = options.body instanceof FormData
-  if (!isFormData && options.body !== undefined) headers.set('Content-Type', 'application/json')
-  const access = getToken('access')
+  const { auth = true, ...fetchOptions } = options
+  const headers = new Headers(fetchOptions.headers || {})
+  const isFormData = fetchOptions.body instanceof FormData
+  if (!isFormData && fetchOptions.body !== undefined) headers.set('Content-Type', 'application/json')
+  const access = auth ? getToken('access') : null
   if (access) headers.set('Authorization', `Bearer ${access}`)
 
-  const response = await fetchWithTimeout(`${API_URL}${path}`, { ...options, headers })
-  if (response.status === 401 && retry && getToken('refresh')) {
+  const response = await fetchWithTimeout(`${API_URL}${path}`, { ...fetchOptions, headers })
+  if (auth && response.status === 401 && retry && getToken('refresh')) {
     await refreshAccessToken()
     return request(path, options, false, unwrapPagination)
   }
@@ -231,6 +232,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  publicReach: () => request('/public/reach/', { auth: false }),
   list: listAll,
   create: (resource, payload) => request(`/${resource}/`, {
     method: 'POST',

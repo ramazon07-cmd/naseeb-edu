@@ -176,6 +176,5 @@ counselor-crm/
 ├── .github/workflows/ci.yml
 ├── Dockerfile
 ├── docker-compose.yml
-├── Procfile
-└── PROJECT_CHECKLIST.md
+└── Procfile
 ```

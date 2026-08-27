@@ -23,6 +23,7 @@ from .views import (
     OpportunityProgramViewSet,
     ParentPortalView,
     ParentStudentLinkViewSet,
+    PublicReachView,
     ProgramServiceViewSet,
     ProjectViewSet,
     RecommendationLetterViewSet,
@@ -82,6 +83,7 @@ router.register('challenge-attempts', ChallengeAttemptViewSet, basename='challen
 
 urlpatterns = [
     path('assistant/chat/', AssistantChatView.as_view(), name='assistant-chat'),
+    path('public/reach/', PublicReachView.as_view(), name='public-reach'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('college-research/', CollegeResearchView.as_view(), name='college-research'),
     path('student-team/', StudentTeamView.as_view(), name='student-team'),

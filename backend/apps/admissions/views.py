@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.cache import cache
 from django.db import transaction
 from django.http import FileResponse, Http404
 from django.utils.text import slugify
@@ -13,6 +14,7 @@ from rest_framework import mixins, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -2861,6 +2863,72 @@ class StudentTeamView(APIView):
                     'kind': 'school',
                 })
         return Response(team)
+
+
+PUBLIC_REACH_CACHE_KEY = 'public-reach:v1'
+PUBLIC_REACH_CACHE_SECONDS = 300
+
+
+def _public_reach_counts():
+    """Aggregate counts without loading student or school records."""
+    per_region = dict(
+        StudentProfile.objects
+        .filter(school__region__in=School.Region.values)
+        .values_list('school__region')
+        .order_by()
+        .annotate(students=Count('id'))
+    )
+    return {'total': StudentProfile.objects.count(), 'per_region': per_region}
+
+
+def _public_reach_payload(counts):
+    """Publish every region while optionally suppressing small cells."""
+    min_cell = max(int(getattr(settings, 'PUBLIC_REACH_MIN_CELL', 0) or 0), 0)
+    regions = []
+    for value, label in School.Region.choices:
+        students = counts['per_region'].get(value, 0)
+        suppressed = bool(min_cell) and students < min_cell
+        regions.append({
+            'region': value,
+            'label': label,
+            'students': 0 if suppressed else students,
+            'active': students > 0,
+        })
+    return {'total': counts['total'], 'regions': regions}
+
+
+class PublicReachView(APIView):
+    """Unauthenticated, count-only regional coverage aggregate."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'public_reach'
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='PublicReach',
+            fields={
+                'total': drf_serializers.IntegerField(),
+                'regions': inline_serializer(
+                    name='PublicReachRegion',
+                    fields={
+                        'region': drf_serializers.ChoiceField(choices=School.Region.choices),
+                        'label': drf_serializers.CharField(),
+                        'students': drf_serializers.IntegerField(),
+                        'active': drf_serializers.BooleanField(),
+                    },
+                    many=True,
+                ),
+            },
+        )
+    )
+    def get(self, request):
+        counts = cache.get(PUBLIC_REACH_CACHE_KEY)
+        if counts is None:
+            counts = _public_reach_counts()
+            cache.set(PUBLIC_REACH_CACHE_KEY, counts, PUBLIC_REACH_CACHE_SECONDS)
+        return Response(_public_reach_payload(counts))
 
 
 class DashboardStatsView(APIView):

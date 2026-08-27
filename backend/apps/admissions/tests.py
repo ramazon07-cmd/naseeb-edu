@@ -1,8 +1,11 @@
 from datetime import date, timedelta
 import io
+import json
 import tempfile
 import zipfile
 
+from django.conf import settings
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.urls import reverse
@@ -2520,3 +2523,147 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(child['meetings'], [])
         links = self.results(self.client.get('/api/parent-links/'))
         self.assertEqual({item['parent'] for item in links}, {parent.id})
+
+
+class PublicReachTests(APITestCase):
+    URL = '/api/public/reach/'
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.samarkand = School.objects.create(
+            name='Reach School Alpha', code='reach-alpha', region=School.Region.SAMARKAND,
+        )
+        self.tashkent_city = School.objects.create(
+            name='Reach School Beta', code='reach-beta', region=School.Region.TASHKENT_CITY,
+        )
+        self.unassigned = School.objects.create(name='Reach School Gamma', code='reach-gamma')
+
+        self.students = {}
+        for username, school in (
+            ('reach-sam-1', self.samarkand),
+            ('reach-sam-2', self.samarkand),
+            ('reach-tas-1', self.tashkent_city),
+            ('reach-none-1', self.unassigned),
+        ):
+            user = User.objects.create_user(
+                username=username,
+                email=f'{username}@example.com',
+                password='StrongPass123!',
+                first_name='Zuhra',
+                last_name='Reachtest',
+                role=User.Role.STUDENT,
+                school=school,
+            )
+            self.students[username] = StudentProfile.objects.create(
+                user=user, school=school, school_name=school.name,
+            )
+
+    @staticmethod
+    def regions_by_value(response):
+        return {item['region']: item for item in response.data['regions']}
+
+    def test_public_reach_is_available_without_credentials(self):
+        response = self.client.get(self.URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_public_reach_has_no_personally_identifying_data(self):
+        response = self.client.get(self.URL)
+        self.assertEqual(set(response.data), {'total', 'regions'})
+        for item in response.data['regions']:
+            self.assertEqual(set(item), {'region', 'label', 'students', 'active'})
+
+        payload = json.dumps(response.data)
+        for school in (self.samarkand, self.tashkent_city, self.unassigned):
+            self.assertNotIn(school.name, payload)
+            self.assertNotIn(school.code, payload)
+        for profile in self.students.values():
+            self.assertNotIn(profile.user.username, payload)
+            self.assertNotIn(profile.user.email, payload)
+
+    def test_public_reach_counts_are_correct(self):
+        response = self.client.get(self.URL)
+        regions = self.regions_by_value(response)
+        self.assertEqual(len(regions), 14)
+        self.assertEqual(set(regions), set(School.Region.values))
+        self.assertEqual(regions['samarkand']['students'], 2)
+        self.assertTrue(regions['samarkand']['active'])
+        self.assertEqual(regions['tashkent_city']['students'], 1)
+        self.assertTrue(regions['tashkent_city']['active'])
+        self.assertEqual(regions['khorezm']['students'], 0)
+        self.assertFalse(regions['khorezm']['active'])
+        self.assertEqual(sum(item['students'] for item in response.data['regions']), 3)
+        self.assertEqual(response.data['total'], 4)
+
+    def test_public_reach_is_cached(self):
+        self.client.get(self.URL)
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(self.URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(queries), 0)
+
+    @override_settings(PUBLIC_REACH_MIN_CELL=2)
+    def test_small_regions_can_be_suppressed(self):
+        regions = self.regions_by_value(self.client.get(self.URL))
+        self.assertEqual(regions['samarkand']['students'], 2)
+        self.assertEqual(regions['tashkent_city']['students'], 0)
+        self.assertTrue(regions['tashkent_city']['active'])
+
+    def test_region_contract_matches_schema_configuration(self):
+        self.assertEqual(settings.PUBLIC_REACH_MIN_CELL, 0)
+        configured = settings.SPECTACULAR_SETTINGS['ENUM_NAME_OVERRIDES']['SchoolRegionEnum']
+        self.assertEqual([tuple(pair) for pair in configured], [tuple(pair) for pair in School.Region.choices])
+
+    def test_other_existing_endpoints_remain_authenticated(self):
+        for url in (
+            '/api/students/',
+            '/api/schools/',
+            '/api/applications/',
+            '/api/tasks/',
+            '/api/dashboard/stats/',
+            '/api/parent-portal/',
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_public_reach_rejects_writes(self):
+        response = self.client.post(self.URL, {'total': 99}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class SchoolRegionWritePermissionTests(APITestCase):
+    def setUp(self):
+        self.school = School.objects.create(
+            name='Region Write School', code='region-write', region=School.Region.BUKHARA,
+        )
+        self.admin = User.objects.create_user(
+            username='region-admin', email='region-admin@example.com',
+            password='StrongPass123!', role=User.Role.ADMIN,
+        )
+        self.organization = User.objects.create_user(
+            username='region-org', email='region-org@example.com',
+            password='StrongPass123!', role=User.Role.ORGANIZATION, school=self.school,
+        )
+
+    def test_product_admin_can_set_region(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            f'/api/schools/{self.school.id}/', {'region': School.Region.NAVOIY}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['region'], School.Region.NAVOIY)
+
+    def test_organization_cannot_change_its_region(self):
+        self.client.force_authenticate(self.organization)
+        response = self.client.patch(
+            f'/api/schools/{self.school.id}/', {'region': School.Region.NAVOIY}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.school.refresh_from_db()
+        self.assertEqual(self.school.region, School.Region.BUKHARA)
+
+    def test_region_is_readable_on_school_serializer(self):
+        self.client.force_authenticate(self.organization)
+        response = self.client.get(f'/api/schools/{self.school.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['region'], School.Region.BUKHARA)
