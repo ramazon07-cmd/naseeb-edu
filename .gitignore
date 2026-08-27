@@ -25,3 +25,8 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Claude Code — local agent config and project notes, kept out of the repo
+.claude/
+CLAUDE.md
+PROJECT_CHECKLIST.md

@@ -36,6 +36,7 @@ AI_ASSISTANT_MAX_INPUT_CHARS = config('AI_ASSISTANT_MAX_INPUT_CHARS', default=60
 AI_ASSISTANT_MAX_OUTPUT_TOKENS = config('AI_ASSISTANT_MAX_OUTPUT_TOKENS', default=450, cast=int)
 AI_ASSISTANT_TIMEOUT_SECONDS = config('AI_ASSISTANT_TIMEOUT_SECONDS', default=35, cast=int)
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)
+PUBLIC_REACH_MIN_CELL = config('PUBLIC_REACH_MIN_CELL', default=0, cast=int)
 TEMPORARY_CREDENTIAL_TTL_HOURS = config('TEMPORARY_CREDENTIAL_TTL_HOURS', default=72, cast=int)
 
 environment_errors = validate_runtime_environment(
@@ -183,6 +184,7 @@ REST_FRAMEWORK = {
         'login': config('AUTH_LOGIN_RATE', default='10/minute'),
         'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
         'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
+        'public_reach': config('PUBLIC_REACH_RATE', default='60/minute'),
     },
 }
 
@@ -218,6 +220,14 @@ SPECTACULAR_SETTINGS = {
         'RecommendationStatusEnum': [
             ('requested', 'Requested'), ('drafting', 'Drafting'),
             ('submitted', 'Submitted'), ('approved', 'Approved'),
+        ],
+        'SchoolRegionEnum': [
+            ('karakalpakstan', 'Republic of Karakalpakstan'), ('andijan', 'Andijan'),
+            ('bukhara', 'Bukhara'), ('fergana', 'Fergana'), ('jizzakh', 'Jizzakh'),
+            ('kashkadarya', 'Kashkadarya'), ('khorezm', 'Khorezm'), ('namangan', 'Namangan'),
+            ('navoiy', 'Navoiy'), ('samarkand', 'Samarkand'), ('sirdaryo', 'Sirdaryo'),
+            ('surkhandarya', 'Surkhandarya'), ('tashkent_region', 'Tashkent Region'),
+            ('tashkent_city', 'Tashkent City'),
         ],
     },
 }

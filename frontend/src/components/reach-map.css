@@ -1,0 +1,151 @@
+.reach-section {
+  padding: clamp(64px, 7vw, 112px) clamp(20px, 5vw, 72px);
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.reach-section-header {
+  max-width: 1320px;
+  margin: 0 auto clamp(32px, 5vw, 64px);
+  padding-bottom: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  align-items: end;
+  gap: clamp(24px, 4vw, 64px);
+  border-bottom: 1px solid var(--border);
+}
+
+.reach-section-header h2 {
+  max-width: 19ch;
+  margin: 0;
+  font: 600 clamp(2.4rem, 5vw, 5.4rem) / 0.98 'Montserrat', system-ui, sans-serif;
+}
+
+.reach-section-header p {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.reach-section-grid {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: clamp(32px, 6vw, 84px);
+  align-items: start;
+}
+
+.reach-section-total {
+  padding-top: 20px;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  border-top: 1px solid var(--border-strong, var(--border));
+}
+
+.reach-section-total strong {
+  font: 600 clamp(3.5rem, 7vw, 7rem) / 1 'Montserrat', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.reach-section-total > span,
+.reach-section-total p,
+.reach-section-readout {
+  color: var(--muted);
+}
+
+.reach-section-total p { margin: 16px 0 0; line-height: 1.5; }
+.reach-section-total p button { color: inherit; background: transparent; border: 0; text-decoration: underline; cursor: pointer; }
+
+.reach-section-skeleton {
+  width: 7ch;
+  height: clamp(3.5rem, 7vw, 7rem);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.reach-section-map { display: grid; gap: 16px; min-width: 0; }
+
+.reach-map-canvas {
+  position: relative;
+  width: 100%;
+  min-height: 280px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+}
+
+.reach-map-canvas canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+.reach-map-canvas.is-rotating canvas { cursor: grabbing; }
+.reach-map-canvas:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; }
+
+.reach-map-hint {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 1;
+  padding: 10px 16px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-card);
+  font-size: 0.9rem;
+  font-weight: 700;
+  pointer-events: none;
+  user-select: none;
+}
+
+.reach-region-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  list-style: none;
+}
+
+.reach-region-list button {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.reach-region-list button b { font-variant-numeric: tabular-nums lining-nums; font-weight: 500; }
+.reach-region-list button:hover,
+.reach-region-list li.is-active button { color: var(--accent); background: var(--selected-bg); }
+.reach-section-readout { margin: 0; }
+
+@media (max-width: 760px) {
+  .reach-section-header,
+  .reach-section-grid { grid-template-columns: 1fr; }
+  .reach-map-canvas { min-height: 240px; border-radius: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reach-region-list button { transition: none; }
+}
