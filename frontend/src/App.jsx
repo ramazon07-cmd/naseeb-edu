@@ -80,7 +80,7 @@ const BRAND_LOGOS = {
 };
 const THEME_ICONS = {
   light: '/brand/icon-light-64.png?v=2',
-  dark: '/brand/icon-dark-64.png?v=2'
+  dark: '/brand/icon-dark-64.png?v=3'
 };
 
 function brandLogoFor(theme) {

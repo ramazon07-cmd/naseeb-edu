@@ -113,8 +113,8 @@ if (app.includes('className="palette-row"')) throw new Error('Login palette swat
 if (!app.includes("activeUser.role === 'organization'")) throw new Error('Organization data scope is missing.');
 if (!app.includes("const THEME_KEY = 'naseeb-edu-theme'")) throw new Error('Persistent theme support is missing.');
 if (!app.includes('/brand/naseeb-dark-256.png') || !app.includes('/brand/naseeb-light-256.jpg')) throw new Error('Optimized theme-aware logos are missing.');
-if (!app.includes("light: '/brand/icon-light-64.png?v=2'") || !app.includes("dark: '/brand/icon-dark-64.png?v=2'") || !app.includes('favicon.href = themeIconFor(theme)')) throw new Error('The favicon must follow the active app theme.');
-if (!html.includes("theme === 'dark' ? '/brand/icon-dark-64.png?v=2' : '/brand/icon-light-64.png?v=2'")) throw new Error('The pre-paint favicon must follow the initial app theme.');
+if (!app.includes("light: '/brand/icon-light-64.png?v=2'") || !app.includes("dark: '/brand/icon-dark-64.png?v=3'") || !app.includes('favicon.href = themeIconFor(theme)')) throw new Error('The favicon must follow the active app theme.');
+if (!html.includes("theme === 'dark' ? '/brand/icon-dark-64.png?v=3' : '/brand/icon-light-64.png?v=2'")) throw new Error('The pre-paint favicon must follow the initial app theme.');
 if (!html.includes('rel="preload"') || !html.includes('naseeb-dark-256.png') || !html.includes('naseeb-light-256.jpg')) throw new Error('Theme logos must be preloaded.');
 if (!app.includes('login-form-panel') || !styles.includes('.login-form-panel')) throw new Error('Responsive login form panel is missing.');
 if (!app.includes('TARGET_COUNTRIES_MAX_LENGTH') || !app.includes('normalizeCountries') || !styles.includes('.student-target-cell')) throw new Error('Target-country validation or overflow protection is missing.');
