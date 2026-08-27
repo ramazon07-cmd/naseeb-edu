@@ -851,13 +851,13 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 /* The four letters, sized so the code is the thing you see first. A letter that
    sits within 3 points of the threshold is set in muted weight -- it was nearly
    the other letter, and it should not look as settled as the rest. */
-.type-code { display: flex; justify-content: center; gap: clamp(8px, 3vw, 20px); margin: 4px 0 20px; font-family: 'Cinzel', Georgia, serif; font-size: clamp(44px, 11vw, 76px); font-weight: 700; line-height: 1; letter-spacing: .04em; }
+.type-code { display: flex; justify-content: center; gap: clamp(8px, 3vw, 20px); margin: 4px 0 20px; font-family: 'Montserrat', system-ui, sans-serif; font-size: clamp(44px, 11vw, 76px); font-weight: 700; line-height: 1; letter-spacing: .04em; }
 .type-code span { color: var(--text); }
 .type-code span.soft { color: var(--text-disabled); font-weight: 500; }
 .type-code small { font-size: .45em; vertical-align: super; letter-spacing: 0; }
 /* The plain-language name for the code. Sits directly under it because they are
    one result read two ways, not two separate findings. */
-.type-name { margin: 0 0 22px; font-family: 'Cinzel', Georgia, serif; font-size: clamp(19px, 4vw, 26px); font-weight: 600; letter-spacing: .01em; text-align: center; }
+.type-name { margin: 0 0 22px; font-family: 'Montserrat', system-ui, sans-serif; font-size: clamp(19px, 4vw, 26px); font-weight: 600; letter-spacing: .01em; text-align: center; }
 .type-axes { display: grid; gap: 16px; }
 .type-axis header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .type-axis header b { font-size: 11.5px; font-weight: 600; }
