@@ -38,6 +38,7 @@ export const UI_TRANSLATIONS = {
   "The roadmap tells me what to do next, and my counselor sees it the moment I submit it.": ["Yo‘l xaritasi keyingi qadamni aytadi, maslahatchim esa topshirgan zahotim uni ko‘radi.", "Дорожная карта подсказывает следующий шаг, а консультант видит его сразу после отправки."],
   "I can follow how my daughter’s application is going without having to ask her about it every evening.": ["Qizimning arizasi qanday ketayotganini har oqshom so‘ramasdan kuzatib boraman.", "Я слежу за тем, как идёт заявка дочери, не расспрашивая её об этом каждый вечер."],
   "Our students were admitted to": ["O‘quvchilarimiz qabul qilingan universitetlar", "Университеты, куда поступили наши ученики"],
+  "Government scholarships & international programs": ["Davlat stipendiyalari va xalqaro dasturlar", "Государственные стипендии и международные программы"],
   "Customer stories": ["Mijozlar hikoyalari", "Истории клиентов"],
   "What our customers say": ["Mijozlarimiz nima deydi", "Что говорят наши клиенты"],
   "Bring every application into one clear workspace.": ["Har bir arizani bitta aniq ish maydoniga birlashtiring.", "Соберите все заявки в одном понятном рабочем пространстве."],

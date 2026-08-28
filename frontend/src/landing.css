@@ -125,9 +125,14 @@
   --lp-story-glyph: color-mix(in srgb, var(--lp-signal) 30%, transparent);
   --lp-brand-logo-image: url('/brand/icon-light-transparent-hd.png');
   --lp-journey-bg: var(--lp-page-bg);
-  /* The marks keep their own brand colours — that is what makes them read as
-     real placements. Only dark mode lifts them off the near-black canvas. */
+  /* Logos sit directly on the page with no backplates. Source tone controls
+     contrast; blend modes hide white fields baked into some older assets. */
+  --lp-placement-bg: var(--lp-page-bg);
+  --lp-placement-fg: var(--accent-muted);
+  --lp-placement-rule: var(--lp-rule);
   --lp-logo-filter: none;
+  --lp-logo-inverse-filter: invert(1) hue-rotate(180deg);
+  --lp-logo-blend-mode: multiply;
 }
 
 :root[data-theme='dark'] .landing-page,
@@ -174,9 +179,12 @@
   --lp-frame-halo: color-mix(in srgb, var(--purple) 62%, transparent);
   --lp-story-glyph: color-mix(in srgb, var(--lp-signal) 38%, transparent);
   --lp-brand-logo-image: url('/brand/icon-dark-transparent-hd.png');
-  /* Several official marks contain black lettering. Convert the placement
-     strip to one restrained light ink so every logo remains legible on plum. */
-  --lp-logo-filter: grayscale(1) brightness(0) invert(1);
+  /* Invert luminance without flattening the internal details of crests.
+     White-source wordmarks already have the contrast needed on dark pages. */
+  --lp-placement-fg: var(--lp-ink-muted);
+  --lp-logo-filter: invert(1) hue-rotate(180deg);
+  --lp-logo-inverse-filter: none;
+  --lp-logo-blend-mode: screen;
 }
 /* == landing tokens end == */
 /* Everything below is component CSS: var() and color-mix(var(...)) only.
@@ -460,7 +468,8 @@
   background: var(--lp-page-bg);
   border-bottom: 1px solid var(--lp-rule);
 }
-.landing-role-strip > p {
+.landing-role-strip > p,
+.landing-placement-row > p {
   margin: 0 0 var(--lp-6);
   color: var(--accent-muted);
   font-size: var(--lp-t-eyebrow); font-weight: 600;
@@ -491,22 +500,79 @@
   font-family: var(--lp-display); font-size: clamp(24px, 2.7vw, 40px); line-height: 1;
 }
 .landing-role-track svg { color: var(--lp-signal); stroke-width: 1.45; }
-/* Logo variant of the same track. University marks are multi-coloured and each
-   one carries its own crimson or navy; rendered raw they would drag a third
-   palette across the page and, on the dark canvas, dark-red marks on near-black
-   are simply unreadable. So they run as monochrome marks that take the band's
-   own ink — the standard treatment for a placement wall. */
-.landing-logo-marquee .landing-role-track span { padding-inline: clamp(28px, 3.4vw, 60px); border-right: 0; }
-.landing-logo-marquee img {
-  width: auto; height: clamp(30px, 3vw, 46px); display: block;
-  object-fit: contain;
-  filter: var(--lp-logo-filter);
-  opacity: .82;
+/* The band follows the active theme; logo contrast is handled per image. */
+.landing-placement-strip {
+  padding-block: var(--lp-7);
+  color: var(--lp-placement-fg);
+  background: var(--lp-placement-bg);
+  border-bottom: 1px solid var(--lp-placement-rule);
 }
-/* Boston's supplied mark is white lettering inside a filled red field; a
-   one-colour filter would flatten both into the same rectangle. Its original
-   high-contrast lockup already works on both landing surfaces. */
-.landing-logo-marquee img[src*='boston-university'] { filter: none; }
+.landing-placement-row > p { padding-inline: var(--lp-5); color: var(--lp-placement-fg); }
+.landing-placement-row + .landing-placement-row { margin-top: var(--lp-7); }
+/* Fixed slots prevent image loading from changing the track width. Duration
+   scales with the entry count so the longer university row stays readable. */
+.landing-logo-marquee .landing-role-track {
+  animation-duration: var(--lp-marquee-duration);
+  transform: translateX(0);
+  /* Blend against the strip, including inside the animated stacking context. */
+  background: var(--lp-placement-bg);
+  isolation: isolate;
+}
+.landing-logo-marquee:hover .landing-role-track { animation-play-state: paused; }
+.landing-logo-marquee:focus {
+  overflow-x: auto; mask-image: none; -webkit-mask-image: none;
+}
+.landing-logo-marquee:focus .landing-role-track { animation: none; transform: none; }
+.landing-logo-marquee:focus [data-marquee-copy='true'] { display: none; }
+.landing-logo-marquee .landing-role-track > span {
+  width: clamp(208px, 19vw, 280px); min-width: 0; flex: 0 0 auto;
+  min-height: 72px;
+  padding-inline: var(--lp-5); justify-content: center; border-right: 0;
+}
+/* Marks range from an 8.9:1 wordmark to a 1.5:1 crest. Height alone would let
+   the widest wordmark run four times the width of the narrowest mark and take
+   over the strip, so width is capped too and object-fit settles each mark
+   inside that box — the usual way a logo wall keeps optical weight even. */
+.landing-logo-marquee img {
+  width: 100%; height: 72px;
+  max-width: 192px;
+  padding: var(--lp-3);
+  display: block; object-fit: contain;
+  background: none;
+  filter: var(--lp-logo-filter);
+  mix-blend-mode: var(--lp-logo-blend-mode);
+}
+.landing-logo-marquee .landing-placement-logo-inverse {
+  filter: var(--lp-logo-inverse-filter);
+}
+.landing-logo-marquee .landing-placement-logo-square {
+  width: 104px; height: 104px; padding: var(--lp-2);
+}
+.landing-logo-marquee .landing-placement-logo-tall {
+  height: 104px; padding: 0;
+}
+.landing-logo-marquee .landing-placement-logo-icon {
+  width: 32px; height: 50px; flex: 0 0 32px;
+  padding: 0;
+}
+.landing-logo-marquee .landing-placement-logo-original { filter: none; }
+.landing-placement-name {
+  max-width: 176px; color: var(--lp-placement-fg);
+  font-size: clamp(16px, 1.35vw, 20px); font-weight: 700;
+  line-height: 1.2; letter-spacing: -.025em; text-align: center;
+}
+.landing-logo-marquee .landing-placement-lockup { gap: var(--lp-3); }
+.landing-placement-lockup .landing-placement-name {
+  font-family: Arial, var(--lp-body); font-size: 18px;
+  line-height: 1; white-space: pre-line; text-align: left;
+}
+.landing-placement-lockup .landing-placement-name small {
+  display: block; margin-top: var(--lp-1);
+  font-size: 11px; letter-spacing: -.025em;
+}
+.landing-logo-marquee .landing-placement-lockup img {
+  width: 52px; height: 52px; flex-basis: 52px;
+}
 @keyframes lp-role-marquee { to { transform: translateX(-50%); } }
 
 /* --- Bands --------------------------------------------------------------- */
@@ -1228,6 +1294,8 @@
   .landing-login-button, .landing-primary-cta, .landing-text-cta { transition: none; }
   .landing-particle-field { opacity: .52; }
   .landing-role-track { animation: none; transform: none; }
+  .landing-logo-marquee { overflow-x: auto; mask-image: none; -webkit-mask-image: none; }
+  .landing-logo-marquee [data-marquee-copy='true'] { display: none; }
   .landing-story-rail { scroll-behavior: auto; }
   .landing-story-card, .landing-story-dots button::before { transition: none; }
   .landing-faq-item, .landing-faq-trigger, .landing-faq-mark,

@@ -80,7 +80,8 @@ const CUSTOMER_STORIES = [
    confirmed placement — this strip is a factual claim about our own students,
    not a partner or customer list.
 
-   Each entry needs a logo file at frontend/public/landing/universities/<file>
+   University logos live at frontend/public/landing/universities/<file>;
+   scholarship and program logos live at frontend/public/landing/programs/<file>
    (SVG preferred, or a transparent PNG at least 2x the rendered 44px height).
    Use the mark the university publishes on its own brand/identity page, and
    follow that page's usage terms.
@@ -89,14 +90,79 @@ const CUSTOMER_STORIES = [
    the band is never blank and never claims a placement we cannot show.
 --------------------------------------------------------------------------- */
 const UNIVERSITY_PLACEMENTS = [
-  { name: 'Massachusetts Institute of Technology', file: 'mit.svg' },
-  { name: 'Northeastern University', file: 'northeastern.svg' },
-  { name: 'Boston University', file: 'boston-university.svg' },
-  { name: 'University of Chicago', file: 'chicago.svg' },
-  { name: 'University of Washington', file: 'washington.svg' },
-  { name: 'University of Michigan', file: 'michigan.svg' },
-  { name: 'Stanford University', file: 'stanford.svg' },
+  { name: 'The University of Hong Kong', file: 'hku.svg' },
+  { name: 'The Chinese University of Hong Kong', file: 'cuhk.png' },
+  { name: 'Hong Kong University of Science and Technology', file: 'hkust.svg' },
+  { name: 'The Hong Kong Polytechnic University', file: 'polyu.png' },
+  { name: 'City University of Hong Kong', file: 'cityu.png' },
+  { name: 'The Education University of Hong Kong', file: 'eduhk.png' },
+  { name: 'Lingnan University', file: 'lingnan.png' },
+  { name: 'Hong Kong Metropolitan University', file: 'hkmu.png' },
+  { name: 'Korea University', file: 'korea.png' },
+  { name: 'Yonsei University', file: 'yonsei.png' },
+  { name: 'KAIST', file: 'kaist.svg' },
+  { name: 'Seoul National University', file: 'snu.png' },
+  { name: 'Northwestern University', file: 'northwestern.svg', tone: 'light' },
+  { name: 'EPFL', file: 'epfl.svg' },
+  { name: 'University of Toronto', file: 'toronto.png' },
+  { name: 'University of Alberta', file: 'alberta.png' },
+  { name: 'State University of New York (SUNY)', file: 'suny.png' },
+  { name: 'Hamad Bin Khalifa University', file: 'hbku.svg' },
+  { name: 'University of South Florida', file: 'usf.png' },
+  { name: 'University of Leeds', file: 'leeds.svg' },
+  { name: 'University at Buffalo', file: 'buffalo.png', tone: 'light' },
+  { name: 'University of Arizona', file: 'arizona.svg' },
+  { name: 'Arizona State University', file: 'asu.png', tone: 'light' },
+  { name: 'Virginia Tech', file: 'virginia-tech.svg' },
+  { name: 'Purdue University', file: 'purdue.svg' },
+  { name: 'University of Debrecen', file: 'debrecen.svg' },
+  { name: 'Eötvös Loránd University (ELTE)', file: 'elte.svg' },
+  { name: 'The College of Wooster', file: 'wooster.svg' },
+  { name: 'Gettysburg College', file: 'gettysburg.png', tone: 'light' },
+  { name: 'Middle East Technical University (METU)', file: 'metu.svg' },
+  { name: 'Bilkent University', file: 'bilkent.svg' },
+  { name: 'Tokyo International University', file: 'tiu.png' },
+  { name: 'VinUniversity', file: 'vinuni.png' },
+  { name: 'New York University (NYU)', file: 'nyu.svg' },
+  { name: 'Duke University', file: 'duke.svg' },
+  { name: 'Pennsylvania State University', file: 'penn-state.svg', tone: 'light' },
+  { name: 'University of Minnesota', file: 'minnesota.svg' },
+  { name: 'University of Cincinnati', file: 'cincinnati.svg' },
+  { name: 'Drexel University', file: 'drexel.svg' },
+  { name: 'Lynn University', file: 'lynn.png' },
+  { name: 'University of Liverpool', file: 'liverpool.svg' },
+  { name: 'University of Nottingham', file: 'nottingham.svg', tone: 'light' },
+  { name: 'Mount Allison University', file: 'mount-allison.svg' },
+  { name: 'Waseda University', file: 'waseda.svg' },
+  { name: 'Harbin Institute of Technology', file: 'hit.png', tone: 'light' },
+  { name: 'Constructor University', file: 'constructor.svg', tone: 'light' },
+  { name: 'The University of Sydney', file: 'sydney.svg' },
 ]
+
+const GOVERNMENT_SCHOLARSHIPS = [
+  { name: 'El-yurt umidi (EYUF)', file: 'eyuf.svg', label: 'EL-YURT\nUMIDI', caption: 'JAMG‘ARMASI', layout: 'lockup' },
+  { name: 'Stipendium Hungaricum', file: 'stipendium-hungaricum.png' },
+  { name: 'Türkiye Bursları', file: 'turkiye-burslari.png' },
+  { name: 'National Scholarship Programme of Slovakia (NSP)', file: 'nsp.jpg', layout: 'tall' },
+  // HKSAR funder emblem, not a separately verified scholarship logo.
+  { name: 'Belt & Road Scholarship (HKSAR Government Scholarship Fund)', file: 'hksar.svg', label: 'Belt & Road\nScholarship', caption: 'HKSAR Government', layout: 'lockup', tone: 'original' },
+]
+
+const INTERNATIONAL_PROGRAMS = [
+  { name: 'Apple Developer Academy', file: 'apple-academy.webp', layout: 'square' },
+  { name: 'Future Leaders Exchange (FLEX)', file: 'flex.png' },
+  { name: 'United World Colleges (UWC)', file: 'uwc.svg' },
+  { name: 'Lumiere Research', file: 'lumiere-wordmark.png', tone: 'light' },
+  { name: 'LaunchX', file: 'launchx.svg', label: 'LaunchX', tone: 'original' },
+  { name: 'Veritas AI', file: 'veritas.webp', tone: 'light', layout: 'square' },
+]
+
+// Keep each category in its own row. Each track repeats only its own entries
+// once to make the marquee seamless; accessible lists never repeat them.
+const PLACEMENT_ROWS = [
+  { id: 'universities', title: 'Our students were admitted to', directory: 'universities', entries: UNIVERSITY_PLACEMENTS },
+  { id: 'scholarships-programs', title: 'Government scholarships & international programs', directory: 'programs', entries: [...GOVERNMENT_SCHOLARSHIPS, ...INTERNATIONAL_PROGRAMS] },
+].filter(({ entries }) => entries.length > 0)
 
 /* ---------------------------------------------------------------------------
    Frequently asked questions. Answers are product claims, so every line here
@@ -260,7 +326,7 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
     { icon: HeartHandshake, label: 'Parents' },
     { icon: ShieldCheck, label: 'Admins' },
   ]
-  const hasPlacements = UNIVERSITY_PLACEMENTS.length > 0
+  const hasPlacements = PLACEMENT_ROWS.length > 0
   const featuredStory = CUSTOMER_STORIES.find((story) => story.featured) || CUSTOMER_STORIES[0]
   const railStories = CUSTOMER_STORIES.filter((story) => story !== featuredStory)
   const hasStories = Boolean(featuredStory)
@@ -416,25 +482,43 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
           </div>
         </section>
 
-        <section className="landing-role-strip" aria-labelledby="connected-roles-title">
+        <section className={`landing-role-strip ${hasPlacements ? 'landing-placement-strip' : ''}`} aria-labelledby={hasPlacements ? PLACEMENT_ROWS.map(({ id }) => `placement-${id}-title`).join(' ') : 'connected-roles-title'}>
           {hasPlacements ? (
-            <>
-              <p id="connected-roles-title">{t('Our students were admitted to')}</p>
-              <ul className="landing-role-accessible">
-                {UNIVERSITY_PLACEMENTS.map(({ name }) => <li key={name}>{name}</li>)}
-              </ul>
-              <div className="landing-role-marquee landing-logo-marquee" aria-hidden="true">
-                {[0, 1].map((row) => (
-                  <div className={`landing-role-track landing-role-track-${row + 1}`} key={row}>
-                    {[...UNIVERSITY_PLACEMENTS, ...UNIVERSITY_PLACEMENTS].map(({ name, file }, index) => (
-                      <span key={`${row}-${file}-${index}`}>
-                        <img src={`/landing/universities/${file}`} alt="" loading="lazy" decoding="async" />
+            PLACEMENT_ROWS.map(({ id, title, directory, entries }, row) => (
+              <div className="landing-placement-row" key={id}>
+                <p id={`placement-${id}-title`}>{t(title)}</p>
+                <ul className="landing-role-accessible" aria-labelledby={`placement-${id}-title`}>
+                  {entries.map(({ name }) => <li key={name}>{name}</li>)}
+                </ul>
+                <div className="landing-role-marquee landing-logo-marquee" role="region" aria-labelledby={`placement-${id}-title`} tabIndex={0}>
+                  <div className={`landing-role-track landing-role-track-${row + 1}`} style={{ '--lp-marquee-duration': `${entries.length * 4.5}s` }} aria-hidden="true">
+                    {[...entries, ...entries].map(({ name, file, label, caption, tone, layout }, index) => (
+                      <span key={`${id}-${name}-${index}`} title={name} className={layout === 'lockup' ? 'landing-placement-lockup' : undefined} data-marquee-copy={index >= entries.length ? 'true' : undefined}>
+                        {file ? (
+                          <>
+                            <img
+                              className={[
+                                tone === 'light' && 'landing-placement-logo-inverse',
+                                tone === 'original' && 'landing-placement-logo-original',
+                                layout === 'square' && 'landing-placement-logo-square',
+                                layout === 'tall' && 'landing-placement-logo-tall',
+                                label && 'landing-placement-logo-icon',
+                              ].filter(Boolean).join(' ') || undefined}
+                              src={`/landing/${directory}/${file}`}
+                              alt=""
+                              decoding="async"
+                            />
+                            {label ? <b className="landing-placement-name">{label}{caption ? <small>{caption}</small> : null}</b> : null}
+                          </>
+                        ) : (
+                          <b className="landing-placement-name">{label || name}</b>
+                        )}
                       </span>
                     ))}
                   </div>
-                ))}
+                </div>
               </div>
-            </>
+            ))
           ) : (
             <>
               <p id="connected-roles-title">{t('One workspace, every role connected')}</p>
