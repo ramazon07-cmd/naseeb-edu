@@ -29,6 +29,7 @@ from .models import (
     Application,
     ApplicationStatusHistory,
     Booking,
+    ChallengeAttempt,
     ChannelMembership,
     ChannelMessage,
     CommunityPost,
@@ -70,6 +71,7 @@ from .serializers import (
     ActivityLogSerializer,
     ApplicationSerializer,
     BookingSerializer,
+    ChallengeAttemptSerializer,
     ChannelMembershipSerializer,
     ChannelMessageSerializer,
     CommunityPostSerializer,
@@ -3016,3 +3018,62 @@ class DashboardStatsView(APIView):
             'task_by_status': list(tasks.values('status').annotate(count=Count('id')).order_by('status')),
         }
         return Response(data)
+
+
+class ChallengeAttemptPermission(permissions.BasePermission):
+    """Deliberately narrower than CounselorOrOwnerPermission.
+
+    A personality profile is not the same kind of record as a task list. The
+    shared permission lets a school-account holder read anything with a student
+    FK, which here would hand an administrator every student's trait scores --
+    the class-ranked-by-conscientiousness list this product must never produce.
+
+    So: a student reads and writes their own attempts; their ASSIGNED counselor
+    reads them; nobody else, including other counselors at the same school and
+    including teachers. Nobody but the student may create one, and no one at all
+    may edit or delete one -- the record belongs to the student and is not
+    something staff can quietly correct.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if view.action in {'update', 'partial_update', 'destroy'}:
+            return False
+        if view.action == 'create':
+            return user.role == User.Role.STUDENT
+        return user.role == User.Role.STUDENT or user.is_counselor_like
+
+    def has_object_permission(self, request, view, obj):
+        if request.method not in permissions.SAFE_METHODS:
+            return False
+        user = request.user
+        if obj.student.user_id == user.id:
+            return True
+        if user.role == User.Role.ADMIN or user.is_superuser:
+            return True
+        return user.is_counselor_like and obj.student.assigned_counselor_id == user.id
+
+
+class ChallengeAttemptViewSet(viewsets.ModelViewSet):
+    serializer_class = ChallengeAttemptSerializer
+    permission_classes = [ChallengeAttemptPermission]
+    http_method_names = ['get', 'post', 'head', 'options']
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = ChallengeAttempt.objects.select_related('student__user')
+        if user.role == User.Role.STUDENT:
+            return queryset.filter(student__user=user)
+        if user.role == User.Role.ADMIN or user.is_superuser:
+            pass
+        elif user.is_counselor_like:
+            queryset = queryset.filter(student__assigned_counselor=user)
+        else:
+            return queryset.none()
+        student = self.request.query_params.get('student')
+        return queryset.filter(student_id=student) if student else queryset
+
+    def perform_create(self, serializer):
+        serializer.save(student=self.request.user.student_profile)

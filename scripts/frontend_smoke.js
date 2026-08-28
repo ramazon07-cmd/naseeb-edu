@@ -8,6 +8,7 @@ const landingPage = fs.readFileSync(path.join(root, 'frontend/src/LandingPage.js
 const api = fs.readFileSync(path.join(root, 'frontend/src/api.js'), 'utf8');
 const packageLock = fs.readFileSync(path.join(root, 'frontend/package-lock.json'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'frontend/src/styles.css'), 'utf8');
+const challenges = fs.readFileSync(path.join(root, 'frontend/src/challenges.js'), 'utf8');
 
 if ((landingPage.match(/href=\{BOOK_MEETING_URL\}/g) || []).length !== 1 || !landingPage.includes("t('Book a call')")) throw new Error('Landing page must show one final Book a call action.');
 if (landingPage.includes("t('Book a meeting')") || landingPage.includes("t('Talk to our team')")) throw new Error('Duplicate meeting actions remain on the landing page.');
@@ -83,7 +84,16 @@ for (const missionState of ['current', 'locked', 'submitted', 'completed', 'upco
 if (!app.includes('function ProgramUsagePage(') || !app.includes('function ProgramServiceForm(') || !styles.includes('.usage-summary') || !styles.includes('.usage-toolbar')) throw new Error('Enhanced Program Usage or staff service management UI is missing.');
 if (!app.includes("['programServices', 'program-services']") || !app.includes('Unlimited service access')) throw new Error('Scoped Program Usage resource or unlimited service state is missing.');
 if (!app.includes('data.programServices.filter((item) => item.student === selectedStudentNumericId)')) throw new Error('Program Usage is not scoped to the selected student.');
-if (!app.includes('function DashboardDiscoveryCards(') || !app.includes('VITE_PERSONALITY_QUIZ_URL') || !app.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
+if (!app.includes('function DashboardDiscoveryCards(') || !app.includes("setPage('find_personality')") || !app.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
+if (!app.includes('function ChallengeRunner(') || !app.includes('function ChallengeResult(') || !styles.includes('.challenge-scale')) throw new Error('Find Your Personality challenges are missing.');
+// One challenge per instrument, each with its own response scale: personality is
+// answered on agreement, interests on liking, values on importance.
+for (const scoring of ['bigfive', 'riasec', 'values', 'subjects', 'wil']) {
+  if (!challenges.includes(`"scoring": "${scoring}"`)) throw new Error(`The ${scoring} instrument is missing from challenges.js.`);
+  if (!challenges.includes(`challenge.scoring === '${scoring}'`)) throw new Error(`No scorer for ${scoring}.`);
+}
+if (!app.includes('challenge.scale.map(')) throw new Error('The runner must use each challenge\'s own response scale, not one shared scale.');
+if (app.includes('PERSONALITY_QUIZ_URL')) throw new Error('The personality challenges must run inside the platform, not link out.');
 if (!app.includes('{t("· MISSION")} {Math.min(completed + 1') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-path-row.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
 if (!app.includes("aria-pressed={post.liked_by_me}") || !app.includes('Each student counts once') || !styles.includes('.community-like-help')) throw new Error('Community like/unlike feedback is missing.');
 if (!app.includes('Meet with') || !app.includes('Pending approval') || !app.includes('Mark completed') || !styles.includes('.booking-actions')) throw new Error('Booking participant and approval UI is missing.');

@@ -21,6 +21,17 @@ import {
   t,
   tx } from
 './i18n';
+import {
+  CHALLENGES, PLANNED, RIASEC_LEAD, RIASEC_NAME, RIASEC_ORDER,
+  INSTRUMENT_VERSION, SUBJECT_NAME, TRAIT_BLURB, TRAIT_LABEL, TRAIT_ORDER,
+  VALUE_NAME, WIL_LEAD, WIL_NAME, WIL_ORDER, scoreChallenge } from
+'./challenges';
+import { TYPE_AXES, typeCodeOf } from './typecode';
+import { archetypeNameOf } from './archetype';
+import {
+  CAREER_ENTRIES, CAREER_FAMILIES, MAJOR_ENTRIES, NAMES,
+  recDrivers, recRank, recRankFamilies, recSignals, subjectPerformance } from
+'./careers';
 
 const LABELS = {
   admin: 'Admin', counselor: 'School Counselor', teacher: 'Teacher', organization: 'Organization School', student: 'Student',
@@ -55,7 +66,6 @@ const dateTimeText = (value) => formatDateLocale(value, { day: '2-digit', month:
 const isCounselor = (user) => ['admin', 'counselor'].includes(user?.role);
 const isTaskManager = (user) => ['admin', 'counselor', 'teacher'].includes(user?.role);
 const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
-const PERSONALITY_QUIZ_URL = (import.meta.env.VITE_PERSONALITY_QUIZ_URL || '').trim();
 const ownStudent = (data) => data.students?.[0];
 const studentName = (data, id) => fullName(data.students?.find((student) => student.id === Number(id))?.user_detail);
 const THEME_KEY = 'naseeb-edu-theme';
@@ -155,6 +165,7 @@ const PAGE_META = {
   certificates: { label: 'Certificates', icon: Award, description: 'Certificates and supporting files' },
   essays: { label: 'Essays', icon: GraduationCap, description: 'Essay drafts and revision history' },
   student_center: { label: 'Student Center', icon: UsersRound, description: 'Academic profile, portfolio, activities, and documents' },
+  find_personality: { label: 'Find Your Personality', icon: Fingerprint, description: `${CHALLENGES.length + PLANNED.length} challenges that unlock your personality profile` },
   roadmap: { label: 'Roadmap', icon: Compass, description: 'Level-linked missions, milestones, and reflections' },
   community: { label: 'Community', icon: Users, description: 'Student discussions, questions, and shared experience' },
   bookings: { label: 'Meetings', icon: CalendarClock, description: 'Schedule and manage meetings' },
@@ -187,7 +198,7 @@ function navigationFor(user) {
   if (isCounselor(user)) return ['dashboard', 'schools', 'students', 'counselor_roadmap', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'program_usage', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages', 'screen_time', 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'roadmap', 'community', 'bookings', 'messages', 'program_usage', 'programs', 'resource_index', 'essay_lab', 'applications', 'college_search', 'store', 'contacts', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'community', 'bookings', 'messages', 'program_usage', 'programs', 'resource_index', 'essay_lab', 'applications', 'college_search', 'store', 'contacts', 'screen_time', 'support'];
 }
 
 const EMPTY_DATA = {
@@ -869,13 +880,10 @@ function StudentDashboard({ user, data, setPage }) {
 }
 
 function DashboardDiscoveryCards({ setPage }) {
-  const personalityAction = PERSONALITY_QUIZ_URL ?
-  <a href={PERSONALITY_QUIZ_URL} target="_blank" rel="noreferrer">{t("Start assessment")} <ExternalLink size={15} /></a> :
-  <button type="button" disabled title={t("Add VITE_PERSONALITY_QUIZ_URL to enable this assessment")}>{t("Link coming soon")}</button>;
   return <section className="dashboard-discovery-rail" aria-label={t("Student discovery tools")}>
     <article className="dashboard-discovery-card personality">
       <Fingerprint className="discovery-card-art" size={118} strokeWidth={1.35} />
-      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Personality & Interests")}</h3><p>{t("Identify your strengths, interests, and future study direction.")}</p>{personalityAction}</div>
+      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Personality & Interests")}</h3><p>{t("Identify your strengths, interests, and future study direction.")}</p><button type="button" onClick={() => setPage('find_personality')}>{t("Start challenges")} <ChevronRight size={16} /></button></div>
     </article>
     <article className="dashboard-discovery-card university">
       <GraduationCap className="discovery-card-art" size={122} strokeWidth={1.35} />
@@ -1070,6 +1078,67 @@ function StudentDocumentList({ title, items, onPreview, notify }) {
   return <Panel title={title}><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={`${label(doc.document_type)}${doc.has_file ? ` · ${doc.file_name || 'File'} · ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} /></>} />)}{!items.length && <Empty />}</div></Panel>;
 }
 
+// What a counselor sees of a student's Find Your Personality record.
+//
+// Results only, never the item-by-item answers. Which of fifty statements a
+// fourteen-year-old agreed with is more intrusive than the profile it produces,
+// and a counselor does not need it to have the conversation. The API returns
+// them, so this is a deliberate omission and not an oversight.
+//
+// Read-only by construction: the record is the student's, and the backend
+// refuses edits from anyone including counselors.
+function StudentPersonalityRecord({ student }) {
+  const [attempts, setAttempts] = useState(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    setAttempts(null)
+    setFailed(false)
+    api.challengeAttempts(student.id)
+      .then((rows) => { if (alive) setAttempts(rows) })
+      .catch(() => { if (alive) setFailed(true) })
+    return () => { alive = false }
+  }, [student.id])
+
+  if (failed) return <Panel title="Find Your Personality"><Empty text="Could not load this student’s record." /></Panel>
+  if (!attempts) return <Panel title="Find Your Personality"><Empty text="Loading…" /></Panel>
+
+  // Newest first from the API, so the first row per challenge is current and the
+  // rest are the history that makes a four-year record worth keeping.
+  const current = {}
+  const history = {}
+  for (const row of attempts) {
+    if (!current[row.challenge]) current[row.challenge] = row
+    else (history[row.challenge] = history[row.challenge] || []).push(row)
+  }
+  const done = CHALLENGES.filter((challenge) => current[challenge.key])
+
+  if (!done.length) {
+    return <Panel title="Find Your Personality" action={<Badge>Not started</Badge>}>
+      <Empty text="This student has not completed any challenges yet." />
+    </Panel>
+  }
+
+  return <Panel title="Find Your Personality" action={<Badge>{`${done.length} of ${CHALLENGES.length} done`}</Badge>}>
+    <div className="record-list" style={{ marginBottom: 14 }}>{CHALLENGES.map((challenge) => {
+      const row = current[challenge.key]
+      const older = history[challenge.key] || []
+      return <Record
+        key={challenge.key}
+        title={challenge.title}
+        meta={row ? `${dateText(row.completed_at)} · ${challenge.instrument} · version ${row.instrument_version}` : challenge.instrument}
+        description={older.length ? `Taken ${older.length + 1} times — earliest ${dateText(older[older.length - 1].completed_at)}` : ''}
+        badge={row ? 'Completed' : 'Not started'}
+      />
+    })}</div>
+    {/* Same compact summary the student sees, so the two are never telling
+        different stories, with the scale-by-scale numbers folded underneath. */}
+    <ResultsSummary results={done.map((challenge) => [challenge, current[challenge.key].scores])} />
+    <p className="journey-disclaimer" style={{ marginTop: 12 }}>These describe how the student answered on the day, not what they are capable of, and no direction on any scale is the better one. The record is the student’s: it cannot be edited or removed from here.</p>
+  </Panel>
+}
+
 function ParentInviteModal({ student, onClose, notify }) {
   const [saving, setSaving] = useState(false);
   async function submit(event) {
@@ -1159,6 +1228,7 @@ function StudentOverview({ student, data, onBack, user, notify }) {
     </section>
     <div className="stat-grid"><Stat label={t("Level")} value={student.level ?? 1} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : t("Teacher approved")} /><Stat label={t("XP")} value={student.xp_total ?? 0} note={tx`Next: ${student.next_level_xp ?? 0} XP`} /><Stat label={t("Assigned tasks")} value={tasks.length} /><Stat label={t("Applications")} value={applications.length} /></div>
     <LevelProgress student={student} />
+    <StudentPersonalityRecord student={student} />
     <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")}><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget USD")} value={student.budget_usd} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? "Needed" : "Not needed"} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
     <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} /></div>
     <div className="overview-grid">
@@ -2777,6 +2847,624 @@ function AdminAuditPage({ data, query }) {
   return <Panel title={t("Product administration audit")}><div className="record-list audit-list">{events.map((event) => <article className="record" key={event.id}><ShieldCheck size={20} /><div className="record-main"><h3>{event.action}</h3><p>{event.target_label || event.target_type}</p><div className="record-meta"><span>{event.actor_name || t("System")}</span><span>{dateTimeText(event.created_at)}</span></div></div></article>)}{!events.length && <Empty text={t("No audit events found.")} />}</div></Panel>;
 }
 
+// One challenge per instrument: personality, then interests, then values. Each
+// bank has its own response scale and its own scoring, and a challenge is only
+// scored once its whole instrument is answered -- half an inventory is not a
+// result. Fifty questions at once is a wall, so a challenge is paged.
+const FP_STORAGE_KEY = 'naseeb-find-personality-v1'
+const FP_PAGE_SIZE = 10
+
+function loadChallengeAnswers() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(FP_STORAGE_KEY) || '{}')
+    return saved && typeof saved === 'object' ? saved : {}
+  } catch { return {} }
+}
+
+// The Work Importance Locator is a card sort: exactly four cards in each of five
+// columns. The constraint IS the instrument -- allowing everything to be "most
+// important" would flatten the ranking it exists to produce -- so a level stops
+// accepting cards once it holds four.
+function SortRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
+  const perColumn = [1, 2, 3, 4, 5].map((level) => challenge.items.filter((item) => answers[item.id] === level).length)
+  const placed = perColumn.reduce((a, b) => a + b, 0)
+  const legal = perColumn.every((n) => n === challenge.perColumn)
+  return <div className="section-stack student-portal">
+    <section className="portal-hero"><div><span className="eyebrow">CHALLENGE {challenge.number} · {challenge.instrument}</span><h2>{challenge.title}</h2><p>{challenge.blurb}</p></div><Fingerprint size={64} /></section>
+    <Panel title={`${placed} of ${challenge.items.length} placed`} action={<button className="button quiet small" onClick={onBack}>Back to challenges</button>}>
+      <div className="sort-tally">{challenge.scale.map((label, index) => <div key={label} className={perColumn[index] === challenge.perColumn ? 'full' : ''}>
+        <b>{perColumn[index]}/{challenge.perColumn}</b><span>{label}</span>
+      </div>)}</div>
+      <div className="challenge-items">{challenge.items.map((item) => <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
+        <legend>{item.text}</legend>
+        <div className="challenge-scale">
+          <span className="scale-pole left">{challenge.scale[0]}</span>
+          <div className="scale-dots">{challenge.scale.map((label, position) => {
+            const level = position + 1
+            const chosen = answers[item.id] === level
+            const full = perColumn[position] >= challenge.perColumn && !chosen
+            return <label key={label} className={`scale-opt s${level}${chosen ? ' sel' : ''}${full ? ' full' : ''}`} title={full ? `${label} is already full` : label}>
+              <input type="radio" name={`item-${item.id}`} checked={chosen} disabled={full} aria-label={label} onChange={() => onAnswer(item.id, level)} />
+              <span className="scale-dot" aria-hidden="true" />
+            </label>
+          })}</div>
+          <span className="scale-pole right">{challenge.scale[challenge.scale.length - 1]}</span>
+        </div>
+      </fieldset>)}</div>
+      <div className="challenge-actions">
+        <button className="button primary" disabled={!legal} onClick={onFinish}>{legal ? 'Finish challenge' : `Put exactly ${challenge.perColumn} in every level`}<ChevronRight size={17} /></button>
+      </div>
+    </Panel>
+  </div>
+}
+
+// On a bipolar challenge every item carries its own two ends, so the poles come
+// from the item rather than from one scale shared by the whole bank.
+const poleText = (challenge, item) => challenge.bipolar
+  ? item.poles
+  : [challenge.scale[0], challenge.scale[challenge.scale.length - 1]]
+
+// What a screen reader hears on each circle. A bipolar item has no wording of
+// its own for the middle three, so they are described by which end they lean
+// toward -- "3 of 5" alone would be a number with nothing attached to it.
+function optionLabel(challenge, item, position) {
+  if (!challenge.bipolar) return challenge.scale[position]
+  const [left, right] = item.poles
+  if (position === 0) return left
+  if (position === 4) return right
+  if (position === 2) return 'In between'
+  return position === 1 ? `Closer to “${left}”` : `Closer to “${right}”`
+}
+
+function ChallengeRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
+  if (challenge.interaction === 'sort') return <SortRunner {...{ challenge, answers, onAnswer, onFinish, onBack }} />
+  return <RatingRunner {...{ challenge, answers, onAnswer, onFinish, onBack }} />
+}
+
+function RatingRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
+  const [page, setPage] = useState(0)
+  const pages = Math.ceil(challenge.items.length / FP_PAGE_SIZE)
+  const slice = challenge.items.slice(page * FP_PAGE_SIZE, (page + 1) * FP_PAGE_SIZE)
+  const answered = challenge.items.filter((item) => answers[item.id]).length
+  const pageDone = slice.every((item) => answers[item.id])
+  const last = page === pages - 1
+  const complete = answered === challenge.items.length
+  const listRef = useRef(null)
+
+  // Auto-advance, copied rule for rule from TestMind.
+  //
+  //  - POINTER ONLY. Chrome fires a synthetic click for arrow-key selection, and
+  //    those report detail 0. Advancing on an arrow press would carry the student
+  //    past the option they were still travelling towards.
+  //  - ONLY FROM THE CURRENT QUESTION. Going back to change an earlier answer
+  //    must not fling the page forward; that is the student re-reading, not
+  //    progressing.
+  //  - THE NEXT ROW LANDS WHERE THE LAST ONE WAS. Every row has identical
+  //    geometry, so matching the row of circles means the pointer is already on
+  //    the next question and never has to travel.
+  const advanceFrom = useCallback((itemId) => {
+    const list = listRef.current
+    if (!list) return
+    const sets = Array.from(list.querySelectorAll('fieldset'))
+    const fromIndex = sets.findIndex((f) => f.querySelector(`input[name="item-${itemId}"]`))
+    if (fromIndex < 0) return
+    // Only the question they were on. Anything earlier still unanswered means
+    // they skipped back, and we leave the scroll where they put it.
+    if (sets.slice(0, fromIndex).some((f) => !f.querySelector('input:checked'))) return
+    const anchorRow = sets[fromIndex].querySelector('.scale-dots')
+    const anchor = anchorRow ? anchorRow.getBoundingClientRect() : null
+    const anchorMid = anchor ? anchor.top + anchor.height / 2 : null
+
+    // After the re-render, so "unanswered" reflects the answer just given.
+    requestAnimationFrame(() => {
+      const fresh = Array.from(list.querySelectorAll('fieldset'))
+      const next = fresh.slice(fromIndex + 1).find((f) => !f.querySelector('input:checked'))
+      const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      const behavior = smooth ? 'smooth' : 'auto'
+      if (!next) {
+        // Page finished. Bring the button that continues into view rather than
+        // leaving them at the bottom of a page with nothing obvious to do.
+        list.parentElement?.querySelector('.challenge-actions')
+          ?.scrollIntoView({ behavior, block: 'center' })
+        return
+      }
+      next.querySelector('input[type=radio]')?.focus({ preventScroll: true })
+      const nextRow = next.querySelector('.scale-dots')
+      if (anchorMid !== null && nextRow) {
+        const r = nextRow.getBoundingClientRect()
+        window.scrollBy({ top: (r.top + r.height / 2) - anchorMid, behavior })
+      } else {
+        next.scrollIntoView({ behavior, block: 'center' })
+      }
+    })
+  }, [])
+
+  return <div className="section-stack student-portal">
+    <section className="portal-hero"><div><span className="eyebrow">CHALLENGE {challenge.number} · {challenge.instrument}</span><h2>{challenge.title}</h2><p>{challenge.blurb}</p></div><Fingerprint size={64} /></section>
+    <Panel title={`${answered} of ${challenge.items.length} answered`} action={<button className="button quiet small" onClick={onBack}>Back to challenges</button>}>
+      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>Page {page + 1} of {pages}</small></div>
+      {/* A challenge whose items carry a section shows it at the top of every page
+          and again wherever the block changes mid-page. Without it, a student who
+          turns the page into "…makes me anxious" has no idea they are being asked
+          a different question about the same eleven subjects.
+
+          The heading is a SIBLING of the fieldset, not a child: an answered
+          fieldset drops to .45 opacity, and opacity applies to the whole subtree,
+          so a heading inside it would fade exactly when someone scrolls back to
+          ask what this block was. */}
+      <div className="challenge-items" ref={listRef}>{slice.flatMap((item, index) => [
+        item.section && (index === 0 || item.section !== slice[index - 1].section)
+          ? <p key={`s-${item.id}`} className="challenge-section"><span className="eyebrow">{item.section}</span></p>
+          : null,
+        <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
+        <legend className={challenge.bipolar ? 'sr-only' : undefined}>{item.text}</legend>
+        <div className="challenge-scale">
+          <span className="scale-pole left" aria-hidden={challenge.bipolar || undefined}>{poleText(challenge, item)[0]}</span>
+          <div className="scale-dots">{challenge.scale.map((scaleLabel, position) => {
+            const chosen = answers[item.id] === position + 1
+            const label = optionLabel(challenge, item, position)
+            return <label key={scaleLabel} className={`scale-opt s${position + 1}${chosen ? ' sel' : ''}`} title={label}>
+              <input
+                type="radio"
+                name={`item-${item.id}`}
+                checked={chosen}
+                aria-label={label}
+                onChange={() => onAnswer(item.id, position + 1)}
+                // detail is 0 for a keyboard-generated click, so this fires only
+                // on a real tap. onChange above still records arrow-key answers.
+                onClick={(event) => { if (event.detail > 0) advanceFrom(item.id) }}
+              />
+              <span className="scale-dot" aria-hidden="true" />
+            </label>
+          })}</div>
+          <span className="scale-pole right" aria-hidden={challenge.bipolar || undefined}>{poleText(challenge, item)[1]}</span>
+        </div>
+      </fieldset>,
+      ].filter(Boolean))}</div>
+      <div className="challenge-actions">
+        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>Back</button>}
+        {last
+          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? 'Finish challenge' : 'Answer every question to finish'}<ChevronRight size={17} /></button>
+          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? 'Next' : 'Answer these to continue'}<ChevronRight size={17} /></button>}
+      </div>
+    </Panel>
+  </div>
+}
+
+// Ten items per trait cannot separate a 3.2 from a 3.4, so the wording stays
+// banded. No trait direction is described as the better one.
+const band = (value) => value >= 3.6 ? 'Higher' : value <= 2.4 ? 'Lower' : 'In the middle'
+
+// A profile shape: pentagon for the five traits, hexagon for the six interest
+// scales, and so on -- the polygon takes as many sides as the instrument has
+// scales, so each challenge has a recognisably different silhouette.
+//
+// Only used up to six axes. Past that the labels crowd the corners and the shape
+// stops being readable, so values (10) and subjects (11) stay as bars -- which is
+// also what the more-than-seven-classes rule says.
+//
+// Two things this shape gets wrong if you let it, and the guards against them:
+//  - AREA LIES. A radius twice as long draws four times the area, so a middling
+//    profile can look dramatic. Guarded by drawing the fill faint and the outline
+//    thin, keeping every ring visible so the scale is readable, and always
+//    shipping the numbers underneath rather than instead.
+//  - THE ORDER SHAPES THE SHAPE. Reordering the axes changes the silhouette
+//    without changing the data. For interests that order is not arbitrary -- it
+//    is Holland's own hexagon, where neighbours are the most alike -- but for the
+//    Big Five it IS arbitrary, so the shape is a picture of the profile and never
+//    evidence about it.
+const POLYGON_MAX_AXES = 6
+
+function ProfilePolygon({ axes, caption }) {
+  const [hover, setHover] = useState(null)
+  // Wider than tall on purpose: the left and right labels sit outside the shape
+  // and need room, and without it they overflow into whatever is beside the
+  // chart. Sized so the longest label fits inside the viewBox rather than
+  // relying on overflow.
+  const W = 360, H = 268
+  const cx = W / 2, cy = H / 2
+  const rMax = 84
+  const rings = [0.25, 0.5, 0.75, 1]
+
+  // Straight up for the first axis, then clockwise.
+  const pointAt = (index, t) => {
+    const angle = (Math.PI * 2 * index) / axes.length - Math.PI / 2
+    return [cx + Math.cos(angle) * rMax * t, cy + Math.sin(angle) * rMax * t]
+  }
+  const ringPath = (t) => axes.map((_, i) => pointAt(i, t).map((n) => n.toFixed(1)).join(',')).join(' ')
+  // 1..5 onto 0..1, so the centre is "lowest" rather than "none".
+  const norm = (value) => Math.max(0, Math.min(1, (value - 1) / 4))
+  const shape = axes.map((axis, i) => pointAt(i, norm(axis.value)).map((n) => n.toFixed(1)).join(',')).join(' ')
+
+  return <figure className="profile-polygon">
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={caption}>
+      {rings.map((t) => <polygon key={t} className="ring" points={ringPath(t)} />)}
+      {axes.map((_, i) => {
+        const [x, y] = pointAt(i, 1)
+        return <line key={i} className="spoke" x1={cx} y1={cy} x2={x} y2={y} />
+      })}
+      <polygon className="shape" points={shape} />
+      {axes.map((axis, i) => {
+        const [x, y] = pointAt(i, norm(axis.value))
+        const [lx, ly] = pointAt(i, 1.22)
+        const anchor = Math.abs(lx - cx) < 6 ? 'middle' : lx > cx ? 'start' : 'end'
+        return <g key={axis.key}>
+          <circle
+            className={`vertex ${hover === axis.key ? 'on' : ''}`} cx={x} cy={y} r={hover === axis.key ? 6 : 4.5}
+            onMouseEnter={() => setHover(axis.key)} onMouseLeave={() => setHover(null)}
+          />
+          <text className="axis-label" x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle">
+            {axis.short || axis.label}
+          </text>
+        </g>
+      })}
+    </svg>
+    <figcaption>{hover
+      ? <><strong>{axes.find((a) => a.key === hover).label}</strong> — {axes.find((a) => a.key === hover).value.toFixed(1)} of 5</>
+      : caption}</figcaption>
+  </figure>
+}
+
+function ResultRows({ rows }) {
+  return <div className="trait-list">{rows.map(([title, lead, value, tag]) => <div key={title} className="trait-row">
+    <div><b>{title}</b><small>{lead}</small></div>
+    <div className="progress wide"><span style={{ width: `${((value - 1) / 4) * 100}%` }} /></div>
+    <Badge>{tag}</Badge>
+  </div>)}</div>
+}
+
+function ChallengeResult({ challenge, result }) {
+  if (challenge.scoring === 'bigfive') {
+    return <>
+      <TypeResult scores={result} />
+      <Panel title="Your personality">
+        {/* No polygon here on purpose. The five traits have no fixed order, so the
+            silhouette changes with the axis order while the answers stay the same
+            -- a shape that looks like evidence and is not. Bars carry it honestly. */}
+        <ResultRows rows={TRAIT_ORDER.map((t) => [TRAIT_LABEL[t], TRAIT_BLURB[t], result[t], band(result[t])])} />
+        <p className="journey-disclaimer">This describes how you answered today, not what you are capable of. There is no better or worse direction on any of the five. Bring it to your counselor — it is a conversation starter, not a verdict.</p>
+      </Panel>
+    </>
+  }
+  if (challenge.scoring === 'riasec') {
+    const top = result.code.map((s) => RIASEC_NAME[s]).join(' · ')
+    return <Panel title="Your interests" action={<Badge>{result.code.join('')}</Badge>}>
+      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Your strongest three: <strong>{top}</strong>. Holland codes are used worldwide to group occupations, so this is the part a counselor can turn into a shortlist.</p>
+      {/* No hexagon here: the summary above already carries it, and drawing the
+          same shape twice on one page is noise, not emphasis. */}
+      <ResultRows rows={RIASEC_ORDER.map((s) => [RIASEC_NAME[s], RIASEC_LEAD[s], result.means[s], result.code.includes(s) ? 'Top three' : 'Lower'])} />
+    </Panel>
+  }
+  if (challenge.scoring === 'values') {
+    const top = result.ranked.slice(0, 3)
+    return <Panel title="What you want from work">
+      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Most important to you: <strong>{top.map((d) => VALUE_NAME[d]).join(' · ')}</strong>. Values are not abilities — two students with the same interests can want completely different things from a job.</p>
+      <ResultRows rows={result.ranked.map((d) => [VALUE_NAME[d], '', result.byDim[d], top.includes(d) ? 'Top three' : 'Lower'])} />
+    </Panel>
+  }
+  if (challenge.scoring === 'subjects') {
+    const top = result.ranked.slice(0, 3)
+    const names = (list) => list.map((s) => SUBJECT_NAME[s]).join(' · ')
+    // The patterns come first and the ranking second. A student who reads one
+    // thing on this page should read "you like biology but it frightens you",
+    // not their subjects in an order they could have written out themselves.
+    //
+    // Every one of these is PHRASED AS A QUESTION, and that is not modesty.
+    // Simulated over 12,000 students, "blocked" is right about two times in five
+    // when it fires -- three single items cannot pin down a three-way condition
+    // any harder than that. Two in five is a good reason to raise something with
+    // a fifteen-year-old and a bad reason to tell them what they are.
+    // The eyebrow names which question this is, so three cards in a row are not
+    // three identical labels; the sentence under it is what stays open-ended.
+    const NOTE = {
+      blocked: ['Able, keen, still anxious', 'You said you can handle these and that you look forward to them — and that they still make you anxious, more than your other subjects do. If that is right, it is the most fixable thing on this page. Nerves talk people out of subjects they are actually suited to.'],
+      aspiring: ['Keen, but not sure you can', 'You look forward to these but said you cannot handle the hard parts — a wider gap than you have on your other subjects. Is that really the subject, or is it one year and one teacher?'],
+      coasting: ['Able, but not keen', 'You can handle these but do not look forward to them. Marks alone would push you towards them, and that is how people end up on a course they did not want.'],
+      strength: ['Where to start', 'You can handle these, you look forward to them, and they take less out of you than your other subjects do.'],
+    }
+    const shown = Object.keys(NOTE).filter((k) => result.patterns[k].length)
+    return <Panel title="How school feels">
+      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Strongest overall: <strong>{names(top)}</strong>. Each subject was asked three ways — what you can do, what you enjoy, and what it costs you — because those three come apart, and the places they disagree are the useful part.</p>
+      {shown.length > 0 && <div className="subject-patterns">{shown.map((key) => <div key={key} className={`subject-pattern ${key}`}>
+        <span className="eyebrow">{NOTE[key][0]}</span>
+        <b>{names(result.patterns[key])}</b>
+        <small>{NOTE[key][1]}</small>
+      </div>)}
+      <p className="journey-disclaimer">These are questions raised by how you answered, not conclusions about you. Any of them can be wrong — say so, out loud, to your counselor.</p>
+      </div>}
+      <ResultRows rows={result.ranked.map((s) => [
+        SUBJECT_NAME[s],
+        `Can do ${result.byFacet.ability[s]}/5 · enjoys ${result.byFacet.interest[s]}/5 · costs ${result.byFacet.cost[s]}/5`,
+        result.bySubject[s],
+        top.includes(s) ? 'Strongest' : 'Lower',
+      ])} />
+      <p className="journey-disclaimer" style={{ marginTop: 12 }}>This is how the subjects feel to you, which is not the same as how you score in them — the gap between the two is worth a conversation with your counselor.</p>
+    </Panel>
+  }
+  if (challenge.scoring === 'wil') {
+    // Published scores span 6..30 whatever the value; rescale to the 1..5 the
+    // shared bar expects rather than giving this one panel its own geometry.
+    const top = result.ranked.slice(0, 2)
+    // Published scores span 6..30 whatever the value; rescale to the 1..5 the
+    // shared bar and the polygon both expect.
+    const scaled = (v) => 1 + ((result.scores[v] - 6) / 24) * 4
+    return <Panel title="What matters most to you">
+      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Your two highest work values: <strong>{top.map((v) => WIL_NAME[v]).join(' · ')}</strong>. O*NET groups occupations by these six, so these two are what a counselor searches on.</p>
+      {/* Six axes, but no fixed order between them either -- same objection as
+          the personality shape. Ranked bars say "you chose this over that",
+          which is exactly what a forced sort measured. */}
+      <ResultRows rows={result.ranked.map((v) => [WIL_NAME[v], WIL_LEAD[v], scaled(v), top.includes(v) ? 'Highest' : 'Lower'])} />
+    </Panel>
+  }
+  return null
+}
+
+// The headline result: the four-letter code and how firmly each letter was
+// earned. Derived from challenge 1's fifty answers -- it asks which side of the
+// middle each trait sits on, so it is a reading of that result and not a second
+// test.
+//
+// The NAME is here; the historical figure is not. The figures are what make
+// TestMind feel made-for-you and they stay there -- this side gets the code and
+// a plain-language label for it.
+//
+// The part every other type site leaves out is the margin. A trait a hair from
+// the midpoint produced a letter that would flip if the student had answered
+// one item differently, and printing all five in the same confident type hides
+// that completely.
+function TypeResult({ scores }) {
+  const type = typeCodeOf(scores)
+  const name = archetypeNameOf(scores)
+
+  return <Panel title="Your type" action={<Badge>{type.code}</Badge>}>
+    <p className="type-code" aria-label={`Your type is ${type.code.replace('-', ', ').split('').join(' ')}`}>
+      {TYPE_AXES.map((axis) => <span key={axis.trait} className={type.borderline.includes(axis.trait) ? 'soft' : undefined}>
+        {axis.trait === 'ES' ? <small>-{type.letters.ES}</small> : type.letters[axis.trait]}
+      </span>)}
+    </p>
+    <p className="type-name">{name}</p>
+
+    <div className="type-axes">{TYPE_AXES.map((axis) => {
+      // Trait means run 1..5, so the midpoint is the middle of the track and a
+      // marker's distance from centre IS how settled that letter is.
+      const value = scores[axis.trait]
+      const pct = ((value - 1) / 4) * 100
+      const chosen = type.letters[axis.trait]
+      return <div key={axis.trait} className="type-axis">
+        <header><b>{axis.name}</b>{type.borderline.includes(axis.trait) && <small>could go either way</small>}</header>
+        <div className="type-track" role="img" aria-label={`${axis.name}: ${axis.lowName} to ${axis.highName}, you are ${chosen === axis.high ? axis.highName : axis.lowName}`}>
+          <span className="type-marker" style={{ left: `${pct}%` }} />
+        </div>
+        <footer>
+          <span className={chosen === axis.low ? 'on' : undefined}>{axis.lowName}</span>
+          <span className={chosen === axis.high ? 'on' : undefined}>{axis.highName}</span>
+        </footer>
+      </div>
+    })}</div>
+
+    {type.borderline.length > 0 && <p className="journey-disclaimer" style={{ marginTop: 14 }}>
+      {type.borderline.length === 1 ? 'One letter sits' : `${type.borderline.length} letters sit`} close to the middle and could read the other way on a different day. That is ordinary — the code is a nickname, and the spectrum above it is the honest version.
+    </p>}
+  </Panel>
+}
+
+// What a fifteen-year-old actually wants from a personality result: names of
+// jobs. Interests carry half the weight, so nothing is shown until challenge 2
+// is done; values, subjects and personality sharpen it as they arrive.
+function CareerMatches({ results }) {
+  const scored = Object.fromEntries(results.filter(([, r]) => r).map(([c, r]) => [c.scoring, r]))
+  if (!scored.riasec) return null
+
+  // Values must come from challenge 3, not the Work Importance Locator: the
+  // career table is keyed on TestMind's ten value dimensions, and the WIL's six
+  // are a different taxonomy. Feeding WIL scores in would overlap on
+  // "independence" alone and quietly produce a near-empty signal.
+  const signals = recSignals(
+    scored.riasec.means,
+    scored.values ? scored.values.byDim : null,
+    // The ability/interest/cost composite, not a bare confidence rating -- still
+    // on 1..5, so this call is unchanged. The scorer wants {score 0..1, weight},
+    // and a self-report is discounted against a real mark either way.
+    scored.subjects ? subjectPerformance(scored.subjects.bySubject) : null,
+    scored.bigfive || null,
+  )
+  const careers = recRank(CAREER_ENTRIES, signals, 'career', 8)
+  const majors = recRank(MAJOR_ENTRIES, signals, 'major', 5)
+  const families = recRankFamilies(CAREER_FAMILIES, signals, 3)
+  if (!careers.length) return null
+
+  const used = careers[0].used
+  const missing = ['values', 'subjects', 'personality'].filter((part) => !used.includes(part))
+  const driver = recDrivers(careers[0], 'career')[0]
+  const DRIVER_TEXT = {
+    riasec: 'what you said you enjoy doing',
+    values: 'what you want a job to give you',
+    subjects: 'the subjects you feel strongest in',
+    personality: 'how you tend to work',
+  }
+
+  return <Panel title="Where this could lead" action={<Badge>{families.map((f) => NAMES.families[f.key]).slice(0, 1)}</Badge>}>
+    <p className="journey-disclaimer" style={{ marginBottom: 14 }}>
+      Mostly from <strong>{DRIVER_TEXT[driver.part]}</strong>. These are directions to look into and talk over with your counselor — not a prediction, and not a limit.
+      {missing.length > 0 && <> Finish {missing.map((m) => m === 'personality' ? 'the personality challenge' : `the ${m} challenge`).join(' and ')} to sharpen it.</>}
+    </p>
+    {/* Fields run across the top rather than owning a third of the grid: there
+        are only ever three of them, and a column that is empty below its first
+        few rows reads as something failed to load. */}
+    <div className="career-chips">{families.map((f) => <span key={f.key} className={`badge ${f.band}`}>{NAMES.families[f.key]}</span>)}</div>
+    <div className="career-groups">
+      <div>
+        <span className="eyebrow">JOBS TO LOOK INTO</span>
+        <ul className="career-list">{careers.map((row) => <li key={row.key} className={row.band}>
+          <b>{NAMES.careers[row.key]}</b>
+          <small>{NAMES.families[row.family]}</small>
+        </li>)}</ul>
+      </div>
+      <div>
+        <span className="eyebrow">WHAT TO STUDY</span>
+        <ul className="career-list">{majors.map((row) => <li key={row.key} className={row.band}>
+          <b>{NAMES.majors[row.key]}</b>
+        </li>)}</ul>
+      </div>
+    </div>
+    <p className="journey-disclaimer" style={{ marginTop: 12 }}>No salaries or demand figures are shown, because there is no Uzbek labour-market data behind these lists and inventing it would be worse than leaving it out.</p>
+  </Panel>
+}
+
+// One figure, five short lines, and the numbers folded away.
+//
+// The long version was five stacked panels of bars -- about four screens of
+// scrolling, which a fifteen-year-old will not read, and an unread result is
+// worth nothing however carefully it was scored. What survives here is the
+// single sentence each instrument actually produced; the full scale-by-scale
+// numbers are one click away for the student who wants them and for the
+// counselor sitting beside them.
+function headlineFor(challenge, result) {
+  // The code and its name, not a list of trait bands. This is the line the
+  // student reads first and repeats to a friend, so it carries the labels
+  // rather than five numbers they would have to interpret.
+  if (challenge.scoring === 'bigfive') return `${typeCodeOf(result).code} · ${archetypeNameOf(result)}`
+  if (challenge.scoring === 'riasec') return result.code.map((s) => RIASEC_NAME[s]).join(' · ')
+  if (challenge.scoring === 'values') return result.ranked.slice(0, 3).map((d) => VALUE_NAME[d]).join(' · ')
+  if (challenge.scoring === 'subjects') return result.ranked.slice(0, 3).map((s) => SUBJECT_NAME[s]).join(' · ')
+  if (challenge.scoring === 'wil') return result.ranked.slice(0, 2).map((v) => WIL_NAME[v]).join(' · ')
+  return ''
+}
+
+const HEADLINE_LEAD = {
+  bigfive: 'Your type',
+  riasec: 'What you would enjoy',
+  values: 'What you want from a job',
+  subjects: 'Where you feel strongest',
+  wil: 'What you would not trade',
+}
+
+function ResultsSummary({ results }) {
+  const done = results.filter(([, r]) => r)
+  if (!done.length) return null
+  const interests = done.find(([c]) => c.scoring === 'riasec')
+
+  return <Panel
+    title="Your results"
+    action={interests ? <Badge>{interests[1].code.join('')}</Badge> : null}
+  >
+    <div className="summary-split">
+      {interests && <ProfilePolygon
+        caption="Holland's hexagon: neighbouring points are the most alike, so a lopsided shape is a real signal."
+        axes={RIASEC_ORDER.map((s) => ({ key: s, label: RIASEC_NAME[s], short: s, value: interests[1].means[s] }))}
+      />}
+      <dl className="summary-lines">{done.map(([challenge, result]) => <div key={challenge.key}>
+        <dt>{HEADLINE_LEAD[challenge.scoring] || challenge.title}</dt>
+        <dd>{headlineFor(challenge, result)}</dd>
+      </div>)}</dl>
+    </div>
+    <details className="record-fold">
+      <summary><ChevronRight size={16} /><span>Show the full numbers</span></summary>
+      <div className="record-fold-body">
+        {done.map(([challenge, result]) => <ChallengeResult key={challenge.key} challenge={challenge} result={result} />)}
+      </div>
+    </details>
+  </Panel>
+}
+
+function FindPersonalityPage({ notify }) {
+  const [answers, setAnswers] = useState(loadChallengeAnswers)
+  const [openKey, setOpenKey] = useState(null)
+  // Completed attempts already on the server, newest per challenge.
+  const [saved, setSaved] = useState({})
+  const [syncing, setSyncing] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    api.challengeAttempts()
+      .then((rows) => {
+        if (!alive) return
+        // The API returns newest first, so the first row seen for a challenge is
+        // the current one; the older ones stay for the year-on-year comparison.
+        const latest = {}
+        for (const row of rows) if (!latest[row.challenge]) latest[row.challenge] = row
+        setSaved(latest)
+        // Server answers win over whatever is half-finished on this device.
+        setAnswers((prev) => Object.assign({}, prev, ...Object.values(latest).map((row) => row.answers)))
+      })
+      .catch(() => { /* offline: the device copy below still works */ })
+      .finally(() => { if (alive) setSyncing(false) })
+    return () => { alive = false }
+  }, [])
+
+  // The device copy is for a challenge left half-finished; the account holds the
+  // completed ones. Losing this is an inconvenience, losing those is the product.
+  useEffect(() => {
+    try { window.localStorage.setItem(FP_STORAGE_KEY, JSON.stringify(answers)) } catch { /* private mode */ }
+  }, [answers])
+
+  const answerItem = useCallback((id, value) => setAnswers((prev) => ({ ...prev, [id]: value })), [])
+
+  const finishChallenge = useCallback(async (challenge) => {
+    setOpenKey(null)
+    window.scrollTo(0, 0)
+    const result = scoreChallenge(challenge, answers)
+    if (!result) return
+    try {
+      const row = await api.saveChallengeAttempt({
+        challenge: challenge.key,
+        instrument_version: INSTRUMENT_VERSION[challenge.key] || '1',
+        answers: Object.fromEntries(challenge.items.map((item) => [item.id, answers[item.id]])),
+        scores: result,
+      })
+      setSaved((prev) => ({ ...prev, [challenge.key]: row }))
+      notify?.('Saved to your account.')
+    } catch {
+      notify?.('Saved on this device only — we could not reach your account.', 'error')
+    }
+  }, [answers, notify])
+  const results = CHALLENGES.map((challenge) => [challenge, scoreChallenge(challenge, answers)])
+  const doneCount = results.filter(([, result]) => result).length
+  const total = CHALLENGES.length + PLANNED.length
+  const open = CHALLENGES.find((challenge) => challenge.key === openKey)
+
+  if (open) return <ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} />
+
+  return <div className="section-stack student-portal">
+    <section className="portal-hero"><div><span className="eyebrow">SELF DISCOVERY</span><h2>Find Your Personality</h2><p>Each challenge is a different assessment. Finish one and that part of your profile unlocks — answered honestly, not quickly.</p></div><Fingerprint size={64} /></section>
+    <section className="journey-progress">
+      <div><span className="eyebrow">YOUR PROGRESS</span><h3>{doneCount} of {CHALLENGES.length} unlocked</h3><p>{syncing ? 'Loading what you have already done…' : doneCount === CHALLENGES.length ? `Everything available is done. ${PLANNED.length} more challenges are being built.` : `${CHALLENGES.length - doneCount} available now, ${PLANNED.length} more being built.`}</p></div>
+      <div className="journey-progress-bars"><div><header><b>Unlocked</b><strong>{Math.round((doneCount / CHALLENGES.length) * 100)}%</strong></header><div className="progress"><span style={{ width: `${(doneCount / CHALLENGES.length) * 100}%` }} /></div><small>{CHALLENGES.reduce((sum, c) => sum + c.items.length, 0)} questions across the {CHALLENGES.length} you can take today</small></div></div>
+    </section>
+
+    <ResultsSummary results={results} />
+    <CareerMatches results={results} />
+
+    <Panel title="Your challenges">
+      <div className="journey-map">{results.map(([challenge, result]) => {
+        const answered = challenge.items.filter((item) => answers[item.id]).length
+        return <article key={challenge.key} className={`journey-module ${result ? 'done' : 'open'}`}>
+          <header><span>CHALLENGE {challenge.number} · {challenge.items.length} QUESTIONS</span>{result ? <CheckCircle2 size={15} /> : <Compass size={15} />}</header>
+          <b>{challenge.title}</b>
+          <p>{challenge.blurb}</p>
+          <small className="challenge-source">{challenge.instrument} · {challenge.licence}</small>
+          {/* Loud on purpose. This challenge is playable locally so it can be
+              judged, and the one thing that must not happen is it reaching a
+              paying student before the licence allows it. */}
+          {challenge.licencePending && <small className="licence-pending"><AlertTriangle size={11} /> {challenge.licencePending}</small>}
+          <footer>
+            <Badge>{result ? (saved[challenge.key] ? 'Saved' : 'Unlocked') : `${answered}/${challenge.items.length} answered`}</Badge>
+            <button className="button quiet small" onClick={() => { setOpenKey(challenge.key); window.scrollTo(0, 0) }}>{result ? 'Review' : answered ? 'Continue' : 'Start'}<ChevronRight size={13} /></button>
+          </footer>
+        </article>
+      })}
+      {PLANNED.map((planned) => <article key={planned.number} className="journey-module later">
+        <header><span>CHALLENGE {planned.number}</span><Clock3 size={15} /></header>
+        <b>{planned.title}</b>
+        <p>{planned.blurb}</p>
+        <small className="challenge-source">{planned.instrument} · {planned.licence}</small>
+        <footer><Badge>Being built</Badge></footer>
+      </article>)}</div>
+      <p className="journey-disclaimer" style={{ marginTop: 14 }}>The {PLANNED.length} still being built are real instruments whose questions are not freely downloadable. They are listed rather than approximated — an invented question set described as a validated scale is not something this product would recover from.</p>
+    </Panel>
+  </div>
+}
+
 function PageRouter({ page, user, data, stats, query, reload, notify, setPage }) {
   if (user.role === 'parent') return <ParentPortalPage {...{ page, data, reload, notify }} />;
   if (user.role === 'admin' && page === 'admin_dashboard') return <AdminControlDashboard data={data} setPage={setPage} />;
@@ -2789,6 +3477,7 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (user.role === 'student' && page === 'student_center') return <StudentCenterPage {...{ user, data, query, reload, notify }} />;
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
+  if (user.role === 'student' && page === 'find_personality') return <FindPersonalityPage notify={notify} />;
   if (user.role === 'student' && page === 'community') return <CommunityPage {...{ data, reload, notify }} />;
   if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />;
   if (page === 'messages') return <MessagesPage {...{ user, data, notify }} />;
@@ -2997,3 +3686,9 @@ export default function App() {
     {toast && <div className={`toast ${toast.type}`}>{toast.type === 'success' ? <ShieldCheck size={18} /> : <X size={18} />}{toast.message}</div>}
   </>;
 }
+
+
+
+
+
+
