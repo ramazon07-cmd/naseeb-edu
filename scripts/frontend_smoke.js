@@ -133,7 +133,7 @@ if (!app.includes('function ChannelListSkeleton(') || !app.includes('function Me
 if (!app.includes('The preview is taking longer than expected.') || !styles.includes('.embedded-preview-state')) throw new Error('Embedded preview slow-loading fallback is missing.');
 if (!app.includes('Create self-task') || !app.includes('Self-task · no XP') || !app.includes('item.is_self_assigned')) throw new Error('Student zero-XP self-task UI is missing.');
 if (!app.includes('Only students connected to your account are listed.')) throw new Error('Scoped task-assignment guidance is missing.');
-if (!styles.includes('--sidebar: #FFFCF7') || !styles.includes('--sidebar: #0E0713')) throw new Error('Theme-aware sidebar colors are missing.');
+if (!styles.includes('--sidebar: #FFFFFF') || !styles.includes('--sidebar: #0E0713')) throw new Error('Theme-aware sidebar colors are missing.');
 if (!styles.includes('--accent: #B8A58A') || !styles.includes('--accent: #4A1368')) throw new Error('Light/dark accent palettes are missing.');
 if (!styles.includes("--brand-logo-image: url('/brand/naseeb-light-256.jpg')") || !styles.includes("--brand-logo-image: url('/brand/naseeb-dark-256.png')")) throw new Error('Logo must switch instantly through theme tokens.');
 if (styles.includes('--nav-active-bg: var(--silver-gradient)')) throw new Error('Dark navigation must not reuse the light silver active state.');
