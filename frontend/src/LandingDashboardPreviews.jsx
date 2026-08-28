@@ -1,186 +1,202 @@
 import {
-  Bell,
-  CalendarDays,
-  Check,
-  ChevronRight,
-  ClipboardCheck,
-  Clock3,
-  FileText,
-  Flag,
-  FolderOpen,
-  GraduationCap,
-  Home,
-  Map,
-  MessageSquareText,
-  PenLine,
-  Search,
-  UsersRound,
+  Activity, Award, BookOpen, CalendarDays, ChevronDown, ChevronRight,
+  ClipboardCheck, Clock3, Compass, ContactRound, ExternalLink, Eye,
+  FileText, Fingerprint, FolderOpen, Globe2, GraduationCap, LayoutDashboard,
+  Library, LifeBuoy, ListChecks, LogOut, MessageSquareText, Moon, Pencil,
+  PenLine, Plus, RefreshCw, School, Search, ShoppingCart, Sun, Target,
+  Trash2, UsersRound,
 } from 'lucide-react'
 
-import { t } from './i18n'
+import { getLanguage, t, tx } from './i18n'
 
-function PreviewBrand() {
-  return (
-    <div className="landing-preview-brand" aria-label={t('Naseeb Edu')}>
-      <span className="brand-logo landing-preview-emblem" aria-hidden="true" />
-      <b>Naseeb Edu</b>
-    </div>
-  )
-}
-
+// Static previews of the real product. Never fetch student records or expose
+// contact details on the public landing page.
 function ProductChrome({ children, label }) {
   return (
-    /* role="img": a screen reader should hear what the picture shows, not sixty
-       fragments of illustrative dashboard data read as if they were content. */
     <div className="landing-product-window" role="img" aria-label={t(label)}>
       <div className="landing-product-chrome" aria-hidden="true"><i /><i /><i /></div>
-      {children}
+      <div aria-hidden="true">{children}</div>
     </div>
   )
 }
 
-function PreviewNav({ items, active }) {
+function PreviewSidebar({ items, active, initials, name, role }) {
   return (
-    <nav aria-label={t('Dashboard preview navigation')}>
-      {items.map(({ icon: Icon, label }) => (
-        <span className={label === active ? 'is-active' : ''} key={label}>
-          <Icon size={16} aria-hidden="true" />
-          <span className="landing-preview-label">{t(label)}</span>
-        </span>
-      ))}
-    </nav>
+    <aside className="landing-preview-sidebar">
+      <div className="landing-preview-brand">
+        <span className="brand-logo landing-preview-emblem" />
+        <div><b>Naseeb Edu</b><small>{t('Education Counseling Platform')}</small></div>
+      </div>
+      <div className="landing-preview-nav">
+        {items.map(([Icon, label]) => (
+          <span className={label === active ? 'is-active' : ''} key={label}>
+            <Icon size={15} /><span className="landing-preview-label">{t(label)}</span>
+          </span>
+        ))}
+      </div>
+      <div className="landing-preview-user">
+        <span>{initials}</span>
+        <div><b>{name}</b><small>{t(role)}</small></div>
+        <LogOut size={14} />
+      </div>
+    </aside>
   )
 }
 
-function PreviewUser({ initials, name, role }) {
+function PreviewToolbar({ title, description }) {
   return (
-    <div className="landing-preview-user">
-      <span>{initials}</span>
-      <div><b>{name}</b><small>{t(role)}</small></div>
-      <ChevronRight size={13} aria-hidden="true" />
+    <header className="landing-preview-toolbar">
+      <div className="landing-preview-heading"><span>{t(title)}</span><h3>{t(title)}</h3><p>{t(description)}</p></div>
+      <div className="landing-preview-tools">
+        <span className="landing-preview-search"><Search size={14} />{t('Search pages and records…')}</span>
+        <span><Globe2 size={13} /><b>{getLanguage().toUpperCase()}</b><ChevronDown size={11} /></span>
+        <span><Moon className="landing-preview-moon" size={14} /><Sun className="landing-preview-sun" size={14} /></span>
+        <span><RefreshCw size={14} /></span>
+      </div>
+    </header>
+  )
+}
+
+function PreviewProgress({ label, value, note }) {
+  return (
+    <div className="landing-preview-progress-row">
+      <b>{t(label)}</b><strong>{value}%</strong>
+      <i style={{ '--landing-progress': `${value}%` }} />
+      {note && <small>{note}</small>}
     </div>
   )
 }
-
-const COUNSELOR_NAV = [
-  { icon: Home, label: 'Overview' },
-  { icon: UsersRound, label: 'Students' },
-  { icon: ClipboardCheck, label: 'Reviews' },
-  { icon: MessageSquareText, label: 'Messages' },
-]
 
 const STUDENT_NAV = [
-  { icon: Home, label: 'Home' },
-  { icon: Map, label: 'Roadmap' },
-  { icon: GraduationCap, label: 'Universities' },
-  { icon: PenLine, label: 'Essays' },
-  { icon: FolderOpen, label: 'Documents' },
+  [LayoutDashboard, 'Dashboard'], [UsersRound, 'Student Center'], [Compass, 'Roadmap'],
+  [UsersRound, 'Community'], [CalendarDays, 'Meetings'], [MessageSquareText, 'Messages'],
+  [ListChecks, 'Program Usage'], [Globe2, 'Programs'], [Library, 'Resource Index'],
+  [PenLine, 'Essay Lab'], [Target, 'Applications'], [School, 'College Search'],
+  [ShoppingCart, 'Naseeb Store'], [ContactRound, 'Contacts'], [Clock3, 'Screen Time'],
+  [LifeBuoy, 'Support'],
+]
+
+const COUNSELOR_NAV = [
+  [LayoutDashboard, 'Dashboard'], [School, 'Schools'], [UsersRound, 'Students'],
+  [Compass, 'Counselor Roadmap'], [BookOpen, 'Academics'], [FolderOpen, 'Portfolio'],
+  [Activity, 'Activities'], [MessageSquareText, 'Recommendations'], [ClipboardCheck, 'Tasks'],
+  [Compass, 'Roadmap'], [ListChecks, 'Program Usage'], [Target, 'Applications'],
+  [FileText, 'Documents'], [Award, 'Certificates'], [GraduationCap, 'Essays'],
+  [CalendarDays, 'Meetings'], [MessageSquareText, 'Messages'], [Clock3, 'Screen Time'],
 ]
 
 const STUDENT_ROWS = [
-  { initials: 'AS', name: 'Aisha S.', major: 'Computer Science', progress: 78, status: 'On track', tone: 'success' },
-  { initials: 'HK', name: 'Hamza K.', major: 'Mechanical Engineering', progress: 55, status: 'Needs review', tone: 'warning' },
-  { initials: 'MN', name: 'Maya N.', major: 'Business Analytics', progress: 92, status: 'On track', tone: 'success' },
-  { initials: 'ZA', name: 'Zain A.', major: 'Electrical Engineering', progress: 41, status: 'Deadline soon', tone: 'danger' },
-]
-
-const REVIEW_ITEMS = [
-  { icon: FileText, title: 'Personal statement', owner: 'Hamza K.', time: '2h ago' },
-  { icon: ClipboardCheck, title: 'Activity list', owner: 'Maya N.', time: '5h ago' },
-  { icon: PenLine, title: 'Essay draft', owner: 'Zain A.', time: '1d ago' },
+  { initials: 'AM', name: 'Abbos Misraliyev', major: 'Computer Science', country: 'China', gpa: '4.90', ielts: '6.0', sat: '—' },
+  { initials: 'AA', name: 'Akbar Alipov', major: 'Law', country: 'America', gpa: '4.80', ielts: '6.5', sat: '1340' },
+  { initials: 'AM', name: 'Akmal Mirzayev', major: 'Economics', country: 'USA', gpa: '4.80', ielts: '6.5', sat: '1340' },
+  { initials: 'ES', name: 'Ergashova Shohinur', major: 'Digital marketing leader', country: 'China', gpa: '5.00', ielts: '—', sat: '—' },
+  { initials: 'ED', name: 'Esonboyev Dilyorbek', major: 'Computer science/game development', country: 'Korea', gpa: '4.95', ielts: '7.5', sat: '1310' },
+  { initials: 'KO', name: 'Karimberdiyeva Odinaxon', major: 'Digital Education', country: 'UK', gpa: '5.00', ielts: '7.0', sat: '—' },
+  { initials: 'MD', name: 'Musayeva Dinara', major: 'Hospitality Management', country: 'Netherlands', gpa: '—', ielts: '—', sat: '—' },
+  { initials: 'NO', name: 'Nilufar Otabekova', major: "International Relations (minor in Women's Rights)", country: 'Europe', gpa: '5.00', ielts: '7.0', sat: '—' },
+  { initials: 'SX', name: 'Shabnam Xamzayeva', major: 'Educational policy', country: 'Hong Kong', gpa: '4.80', ielts: '7.0', sat: '—' },
 ]
 
 export function CounselorDashboardPreview() {
   return (
-    <ProductChrome label="Counselor dashboard preview: student list, progress and review queue.">
+    <ProductChrome label="Counselor Students page preview: student profiles, targets, scores, XP and progress.">
       <div className="landing-product-layout landing-counselor-ui">
-        <aside className="landing-preview-sidebar">
-          <PreviewBrand />
-          <PreviewNav items={COUNSELOR_NAV} active="Overview" />
-          <PreviewUser initials="SC" name="Sara Karimova" role="Counselor" />
-        </aside>
+        <PreviewSidebar items={COUNSELOR_NAV} active="Students" initials="MC" name="Madina" role="School Counselor" />
         <div className="landing-preview-main">
-          <header className="landing-preview-toolbar">
-            <div><span>{t('Counselor workspace')}</span><h3>{t('Student progress')}</h3></div>
-            <label><Search size={13} aria-hidden="true" /><span>{t('Search students')}</span></label>
-            <Bell size={16} aria-hidden="true" />
-          </header>
-          <div className="landing-preview-metrics">
-            <div><UsersRound size={17} /><strong>24</strong><span>{t('Students')}</span></div>
-            <div><ClipboardCheck size={17} /><strong>7</strong><span>{t('Reviews')}</span></div>
-            <div><CalendarDays size={17} /><strong>3</strong><span>{t('Deadlines')}</span></div>
-          </div>
-          <div className="landing-counselor-grid">
-            <div className="landing-student-table">
-              <header><span>{t('Student')}</span><span>{t('Target major')}</span><span>{t('Roadmap progress')}</span><span>{t('Status')}</span></header>
-              {STUDENT_ROWS.map((student) => (
-                <div className="landing-student-row" key={student.name}>
-                  <span className="landing-preview-person"><i>{student.initials}</i><b>{student.name}</b></span>
-                  <span>{student.major}</span>
-                  <span className="landing-preview-progress"><i style={{ '--landing-progress': `${student.progress}%` }} /><b>{student.progress}%</b></span>
-                  <span className={`landing-preview-status ${student.tone}`}>{t(student.status)}</span>
-                </div>
-              ))}
-              <footer>{t('View all students')} <ChevronRight size={13} /></footer>
+          <PreviewToolbar title="Students" description="Student profiles and progress" />
+          <section className="landing-preview-students-panel">
+            <header><h4>{t('Students')}</h4><div className="landing-preview-actions">
+              <span><UsersRound size={13} />{t('Connect students')}</span>
+              <span className="is-primary"><Plus size={13} />{t('Add student')}</span>
+            </div></header>
+            <div className="landing-preview-table-wrap">
+              <table className="landing-preview-students-table">
+                <thead><tr>
+                  {['Student', 'School', 'Target', 'Scores', 'XP / Level', 'Task / Roadmap / Overall'].map((label) => <th key={label}>{t(label)}</th>)}
+                  <th />
+                </tr></thead>
+                <tbody>{STUDENT_ROWS.slice(0, 5).map((student) => (
+                  <tr key={student.name}>
+                    <td><span className="landing-preview-person"><i>{student.initials}</i><b>{student.name}</b></span></td>
+                    <td>RBIS</td>
+                    <td><b>{t(student.major)}</b><small>{t(student.country)}</small></td>
+                    <td>GPA {student.gpa}<small>IELTS {student.ielts} · SAT {student.sat}</small></td>
+                    <td><b>{t('Level')} 1</b><small>0 XP</small></td>
+                    <td><div className="landing-preview-progress-stack">{['Task', 'Roadmap', 'Overall'].map((label) => <PreviewProgress key={label} label={label} value={0} />)}</div></td>
+                    <td><span className="landing-preview-row-actions"><i><Eye size={12} /></i><i><Pencil size={12} /></i><i className="is-danger"><Trash2 size={12} /></i></span></td>
+                  </tr>
+                ))}</tbody>
+              </table>
             </div>
-            <aside className="landing-review-queue">
-              <header><div><h4>{t('Review queue')}</h4><span>{t('Waiting for your review')}</span></div><b>7</b></header>
-              {REVIEW_ITEMS.map(({ icon: Icon, title, owner, time }) => (
-                <div key={title}><Icon size={14} /><span><b>{t(title)}</b><small>{owner}</small></span><time>{t(time)}</time></div>
-              ))}
-              <footer>{t('View all reviews')} <ChevronRight size={13} /></footer>
-            </aside>
-          </div>
+            <footer className="landing-preview-table-footer">
+              <span>{tx`Showing ${5} of ${STUDENT_ROWS.length} students`}</span>
+              <span>{t('View all students')} <ChevronRight size={12} /></span>
+            </footer>
+          </section>
         </div>
       </div>
     </ProductChrome>
   )
 }
 
-const TODAY_ITEMS = [
-  ['Compare Computer Science programs', '30 min'],
-  ['Outline personal statement', '45 min'],
-  ['Request a recommendation', '15 min'],
+const DISCOVERY_CARDS = [
+  { icon: Fingerprint, eyebrow: 'SELF DISCOVERY', title: 'Personality & Interests', description: 'Identify your strengths, interests, and future study direction.', action: 'Start assessment', actionIcon: ExternalLink },
+  { icon: GraduationCap, eyebrow: 'COLLEGE RESEARCH', title: 'University Match', description: 'Find universities that match your academic profile and goals.', action: 'Explore matches', actionIcon: ChevronRight },
 ]
 
 export function StudentDashboardPreview() {
+  const metrics = [
+    ['Active tasks', 4, tx`${0} completed`], ['Applications', 3, tx`${0} submitted`],
+    ['Essays', 1, tx`${0} approved`], ['Achievements', 2, t('Honors included')],
+  ]
+
   return (
-    <ProductChrome label="Student dashboard preview: roadmap progress, next priority and today’s plan.">
+    <ProductChrome label="Student dashboard preview: welcome, journey progress, XP, assessments and applications.">
       <div className="landing-product-layout landing-student-ui">
-        <aside className="landing-preview-sidebar">
-          <PreviewBrand />
-          <PreviewNav items={STUDENT_NAV} active="Home" />
-          <PreviewUser initials="AS" name="Aisha Siddiqi" role="Class of 2026" />
-        </aside>
+        <PreviewSidebar items={STUDENT_NAV} active="Dashboard" initials="RE" name="Ramazon Ergashev" role="Student" />
         <div className="landing-preview-main">
-          <header className="landing-preview-toolbar landing-student-toolbar">
-            <div><span>{t('Your application workspace')}</span><h3>{t('Good morning, Aisha')}</h3></div>
-            <Bell size={16} aria-hidden="true" />
-          </header>
-          <div className="landing-student-overview">
-            <section className="landing-journey-progress">
-              <header><span>{t('Application journey')}</span></header>
-              <div className="landing-progress-ring"><strong>64%</strong></div>
-              <p><b>{t('Keep going')}</b><span>{t('16 of 25 roadmap steps complete')}</span></p>
-            </section>
-            <section className="landing-next-priority">
-              <header><Flag size={14} /><span>{t('Next priority')}</span></header>
-              <h4>{t('Finalize university shortlist')}</h4>
-              <p>{t('Refine 8–10 universities that fit your goals and academic profile.')}</p>
-              <small><CalendarDays size={13} /> {t('Due Friday')}</small>
-            </section>
-            <section className="landing-today-plan">
-              <header><span>{t("Today's plan")}</span></header>
-              {TODAY_ITEMS.map(([title, duration]) => (
-                <div key={title}><i><Check size={11} /></i><span>{t(title)}</span><small><Clock3 size={11} /> {t(duration)}</small><ChevronRight size={12} /></div>
+          <PreviewToolbar title="Dashboard" description="A complete view of the application journey" />
+          <section className="landing-preview-welcome">
+            <div>
+              <span className="landing-preview-eyebrow">{t('WELCOME BACK')}</span>
+              <h4>Ramazon Ergashev</h4>
+              <p>{t('Complete today’s priorities and strengthen your application profile.')}</p>
+              <div className="landing-preview-actions">
+                <span className="is-light"><Compass size={14} />{t('Open roadmap')}</span>
+                <span className="is-ghost"><Search size={14} />{t('Find universities')}</span>
+              </div>
+            </div>
+            <div className="landing-preview-journey-ring" style={{ '--landing-progress': '11%' }}>
+              <strong>11%</strong><span>{t('Journey progress')}</span>
+            </div>
+          </section>
+          <div className="landing-preview-dashboard-grid">
+            <div className="landing-preview-progress-panels">
+              <section className="landing-preview-progress-card">
+                <div><span className="landing-preview-eyebrow">{t('LIVE PROGRESS')}</span><h4>{t('Tasks and roadmap progress')}</h4><p>{t('Every update is added to your overall progress automatically.')}</p></div>
+                <div>
+                  <PreviewProgress label="Tasks" value={10} note={tx`${0} approved`} />
+                  <PreviewProgress label="Roadmap" value={12} note={tx`${1} completed`} />
+                  <PreviewProgress label="Overall journey" value={11} note={t('A deadline needs your attention')} />
+                </div>
+              </section>
+              <section className="landing-preview-progress-card">
+                <div><span className="landing-preview-eyebrow">{t('XP & LEVEL')}</span><h4>{t('Level')} 1</h4><p>{tx`Next level: ${100} XP`}</p></div>
+                <div><PreviewProgress label="75 XP" value={75} note={tx`${25} XP remaining`} /></div>
+              </section>
+            </div>
+            <div className="landing-preview-discovery-cards">
+              {DISCOVERY_CARDS.map(({ icon: Icon, eyebrow, title, description, action, actionIcon: ActionIcon }) => (
+                <section className="landing-preview-discovery" key={title}>
+                  <Icon className="landing-preview-discovery-art" size={74} strokeWidth={1.4} />
+                  <div><span className="landing-preview-eyebrow">{t(eyebrow)}</span><h4>{t(title)}</h4><p>{t(description)}</p><span className="landing-preview-discovery-action">{t(action)}<ActionIcon size={12} /></span></div>
+                </section>
               ))}
-            </section>
-            <section className="landing-application-counts">
-              <header><span>{t('Applications')}</span></header>
-              <div><span><b>3</b><small>{t('Draft')}</small></span><span><b>2</b><small>{t('Reviewing')}</small></span><span className="ready"><b>1</b><small>{t('Ready')}</small></span></div>
-            </section>
+            </div>
           </div>
-          <div className="landing-check-in"><MessageSquareText size={15} /><span><b>{t('Counselor check-in')}</b><small>{t('Your next check-in is Wednesday at 4:00 PM.')}</small></span><i>{t('Send a message')}</i></div>
+          <div className="landing-preview-stat-cards">
+            {metrics.map(([label, value, note]) => <section key={label}><h4>{t(label)}</h4><strong>{value}</strong><p>{note}</p></section>)}
+          </div>
         </div>
       </div>
     </ProductChrome>

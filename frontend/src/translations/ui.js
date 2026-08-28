@@ -1,4 +1,10 @@
 export const UI_TRANSLATIONS = {
+  "Showing {0} of {1} students": ["{1} o‘quvchidan {0} tasi ko‘rsatilmoqda", "Показано {0} из {1} учеников"],
+  "Counselor Students page preview: student profiles, targets, scores, XP and progress.": ["Maslahatchining O‘quvchilar sahifasi: profillar, maqsadlar, ballar, XP va jarayon.", "Предпросмотр страницы учеников консультанта: профили, цели, баллы, XP и прогресс."],
+  "Student dashboard preview: welcome, journey progress, XP, assessments and applications.": ["O‘quvchi boshqaruv paneli: salomlashuv, umumiy jarayon, XP, baholash va arizalar.", "Предпросмотр панели ученика: приветствие, общий прогресс, XP, оценивание и заявки."],
+  "A deadline needs your attention": ["Topshirish muddatiga e’tibor bering", "Обратите внимание на срок сдачи"],
+  "A look at how schools, counselors and families can use Naseeb Edu.": ["Maktablar, maslahatchilar va oilalar Naseeb Edu’dan qanday foydalanishi mumkinligi haqida.", "Примеры того, как школы, консультанты и семьи могут использовать Naseeb Edu."],
+  "Sample stories: names and quotes are illustrative, not verified customer testimonials.": ["Namuna fikrlar: ism va iqtiboslar misol sifatida keltirilgan, ular tasdiqlangan mijoz sharhlari emas.", "Примеры отзывов: имена и цитаты приведены для иллюстрации и не являются подтверждёнными отзывами клиентов."],
   "+{0} XP": ["+{0} XP", "+{0} XP"],
   "A counselor sees the students assigned to them, a school sees its own, and a parent sees only the sections consent allows.": ["Maslahatchi faqat o‘ziga biriktirilgan o‘quvchilarni, maktab o‘zinikini, ota-ona esa faqat rozilik bergan bo‘limlarni ko‘radi.", "Консультант видит закреплённых за ним учеников, школа — своих, а родитель — только те разделы, которые разрешает согласие."],
   "A record here means something because the platform decides who may write it, who must approve it, and who is allowed to read it.": ["Bu yerdagi yozuv mazmunga ega, chunki platforma kim yozishini, kim tasdiqlashini va kim o‘qiy olishini belgilaydi.", "Запись здесь что-то значит, потому что платформа определяет, кто её создаёт, кто согласует и кому разрешено её читать."],
