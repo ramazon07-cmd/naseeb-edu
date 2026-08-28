@@ -165,7 +165,7 @@ const DEFAULT_BOOK_MEETING_URL = 'https://calendly.com/khumoyunnasipkulov/full-s
 const BOOK_MEETING_URL = (import.meta.env.VITE_BOOK_MEETING_URL || DEFAULT_BOOK_MEETING_URL).trim()
 const SOCIAL_LINKS = [
   { label: 'Instagram', href: (import.meta.env.VITE_INSTAGRAM_URL || 'https://www.instagram.com/naseeb_edu/').trim(), icon: Instagram },
-  { label: 'LinkedIn', href: (import.meta.env.VITE_LINKEDIN_URL || 'https://www.linkedin.com/in/khumoyun-nasipkulov').trim(), icon: Linkedin },
+  { label: 'LinkedIn', href: (import.meta.env.VITE_LINKEDIN_URL || 'https://www.linkedin.com/company/naseeb-edu').trim(), icon: Linkedin },
   { label: 'YouTube', href: (import.meta.env.VITE_YOUTUBE_URL || 'https://www.youtube.com/@naseeb_edu').trim(), icon: Youtube },
   { label: 'Telegram', href: (import.meta.env.VITE_TELEGRAM_URL || 'https://t.me/naseeb_edu').trim(), icon: Send },
 ]
