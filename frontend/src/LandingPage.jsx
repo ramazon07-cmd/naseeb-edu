@@ -40,26 +40,26 @@ const CUSTOMER_STORIES = [
   {
     id: 'story-counselor-1',
     quote: 'Every student’s progress, deadlines and submitted work now live in one place. I stopped rebuilding the same spreadsheet every September.',
-    name: 'Sample Name',
-    initials: 'SN',
+    name: 'Madina Karimova',
+    initials: 'MK',
     role: 'Counselors',
-    organization: 'Sample School',
+    organization: '',
     featured: true,
   },
   {
     id: 'story-school-1',
     quote: 'We can see how our whole cohort is moving without asking anyone for a status update.',
-    name: 'Sample Name',
-    initials: 'SN',
+    name: 'Azizbek Tursunov',
+    initials: 'AT',
     role: 'Schools',
-    organization: 'Sample School',
+    organization: '',
     featured: false,
   },
   {
     id: 'story-student-1',
     quote: 'The roadmap tells me what to do next, and my counselor sees it the moment I submit it.',
-    name: 'Sample Name',
-    initials: 'SN',
+    name: 'Shahnoza Rahimova',
+    initials: 'SR',
     role: 'Students',
     organization: '',
     featured: false,
@@ -67,8 +67,8 @@ const CUSTOMER_STORIES = [
   {
     id: 'story-parent-1',
     quote: 'I can follow how my daughter’s application is going without having to ask her about it every evening.',
-    name: 'Sample Name',
-    initials: 'SN',
+    name: 'Dilnoza Usmonova',
+    initials: 'DU',
     role: 'Parents',
     organization: '',
     featured: false,
@@ -535,7 +535,8 @@ export default function LandingPage({ onLogin, theme, toggleTheme, language, cha
                 <p className="lp-eyebrow">{t('Customer stories')}</p>
                 <div>
                   <h2>{t('What our customers say')}</h2>
-                  <p>{t('Words from the schools and counselors who use Naseeb Edu.')}</p>
+                  <p>{t('A look at how schools, counselors and families can use Naseeb Edu.')}</p>
+                  <p className="landing-story-disclaimer">{t('Sample stories: names and quotes are illustrative, not verified customer testimonials.')}</p>
                 </div>
               </header>
 
