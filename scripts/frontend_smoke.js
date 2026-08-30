@@ -84,7 +84,7 @@ for (const missionState of ['current', 'locked', 'submitted', 'completed', 'upco
 if (!app.includes('function ProgramUsagePage(') || !app.includes('function ProgramServiceForm(') || !styles.includes('.usage-summary') || !styles.includes('.usage-toolbar')) throw new Error('Enhanced Program Usage or staff service management UI is missing.');
 if (!app.includes("['programServices', 'program-services']") || !app.includes('Unlimited service access')) throw new Error('Scoped Program Usage resource or unlimited service state is missing.');
 if (!app.includes('data.programServices.filter((item) => item.student === selectedStudentNumericId)')) throw new Error('Program Usage is not scoped to the selected student.');
-if (!app.includes('function DashboardDiscoveryCards(') || !app.includes("setPage('find_personality')") || !app.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
+if (!app.includes('const personalityDone = CHALLENGES.filter') || !app.includes('attempts={data.challengeAttempts}') || app.includes('dashboard-discovery-card')) throw new Error('The student dashboard must report personality progress instead of repeating the sidebar link as a card.');
 if (!app.includes('function ChallengeRunner(') || !app.includes('function ChallengeResult(') || !styles.includes('.challenge-scale')) throw new Error('Find Your Personality challenges are missing.');
 // One challenge per instrument, each with its own response scale: personality is
 // answered on agreement, interests on liking, values on importance.

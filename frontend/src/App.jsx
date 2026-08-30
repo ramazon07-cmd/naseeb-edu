@@ -860,8 +860,8 @@ function StudentDashboard({ user, data, setPage }) {
       <div className="readiness-ring" style={{ '--progress': `${student?.journey_progress_percent || 0}%` }}><strong>{formatPercentLocale(student?.journey_progress_percent || 0)}</strong><span>{t("Journey progress")}</span></div>
     </section>
     <div className="student-dashboard-overview">
-      <div className="student-dashboard-progress"><JourneyProgress student={student} /><LevelProgress student={student} /></div>
-      <DashboardDiscoveryCards setPage={setPage} attempts={data.challengeAttempts} />
+      <JourneyProgress student={student} attempts={data.challengeAttempts} />
+      <LevelProgress student={student} />
     </div>
     <div className="stat-grid"><Stat label={t("Active tasks")} value={pendingTasks.length} note={tx`${completed} completed`} /><Stat label={t("Applications")} value={data.applications.length} note={tx`${data.applications.filter((item) => item.status === 'submitted').length} submitted`} /><Stat label={t("Essays")} value={data.essays.length} note={tx`${data.essays.filter((item) => item.status === 'approved').length} approved`} /><Stat label={t("Achievements")} value={achievementTotal} note={t("Honors included")} /></div>
     <div className="student-dashboard-grid">
@@ -879,30 +879,16 @@ function StudentDashboard({ user, data, setPage }) {
   </div>;
 }
 
-// The card sits next to a permanent sidebar link to the same page, so a static
-// promo would just be a second copy of the nav. It earns its place by carrying
-// the state the sidebar cannot: how far the student actually is.
-function DashboardDiscoveryCards({ setPage, attempts = [] }) {
+function JourneyProgress({ student, attempts = [] }) {
   const taken = new Set(attempts.map((row) => row.challenge));
-  const done = CHALLENGES.filter((challenge) => taken.has(challenge.key)).length;
-  const complete = done === CHALLENGES.length;
-  return <section className="dashboard-discovery-rail" aria-label={t("Student discovery tools")}>
-    <article className="dashboard-discovery-card personality">
-      <Fingerprint className="discovery-card-art" size={118} strokeWidth={1.35} />
-      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Personality & Interests")}</h3><p>{complete ? t("Every challenge available today is done. Bring the profile to your counselor.") : done ? tx`${done} of ${CHALLENGES.length} challenges done. Finish the rest to sharpen your profile.` : t("Identify your strengths, interests, and future study direction.")}</p><button type="button" onClick={() => setPage('find_personality')}>{complete ? t("View your profile") : done ? t("Continue challenges") : t("Start challenges")} <ChevronRight size={16} /></button></div>
-    </article>
-    <article className="dashboard-discovery-card university">
-      <GraduationCap className="discovery-card-art" size={122} strokeWidth={1.35} />
-      <div><span>{t("COLLEGE RESEARCH")}</span><h3>{t("University Match")}</h3><p>{t("Find universities that match your academic profile and goals.")}</p><button type="button" onClick={() => setPage('college_search')}>{t("Explore matches")} <ChevronRight size={16} /></button></div>
-    </article>
-  </section>;
-}
-
-function JourneyProgress({ student }) {
+  const personalityDone = CHALLENGES.filter((challenge) => taken.has(challenge.key)).length;
   const rows = [
   ['Tasks', student?.task_progress_percent || 0, `${student?.task_status_counts?.approved || 0} approved`],
   ['Roadmap', student?.roadmap_progress_percent || 0, `${student?.roadmap_status_counts?.completed || 0} completed`],
-  ['Overall journey', student?.journey_progress_percent || 0, student?.is_at_risk ? 'A deadline needs your attention' : 'Progress is on track']];
+  ['Overall journey', student?.journey_progress_percent || 0, student?.is_at_risk ? 'A deadline needs your attention' : 'Progress is on track'],
+  // The sidebar already links to the page, so the dashboard reports how far along
+  // it is instead of repeating the link as a card.
+  [t("Find Your Personality"), CHALLENGES.length ? Math.round(personalityDone / CHALLENGES.length * 100) : 0, tx`${personalityDone} of ${CHALLENGES.length} challenges done`]];
 
   return <section className="journey-progress"><div><span className="eyebrow">{t("LIVE PROGRESS")}</span><h3>{t("Tasks and roadmap progress")}</h3><p>{t("Every update is added to your overall progress automatically.")}</p></div><div className="journey-progress-bars">{rows.map(([title, value, note]) => <div key={title}><header><b>{title}</b><strong>{formatPercentLocale(value)}</strong></header><div className="progress"><span style={{ width: `${value}%` }} /></div><small>{note}</small></div>)}</div></section>;
 }
