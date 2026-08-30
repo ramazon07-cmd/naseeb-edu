@@ -740,7 +740,7 @@ function AssistantCenter({ user, onOpenScreenTime }) {
         <small>{t("AI can make mistakes. Verify important deadlines with your counselor. History is kept only while this page is open.")}</small>
       </form>
     </section>}
-    <div className="assistant-launchers"><button type="button" className="screen-time-launcher" onClick={onOpenScreenTime} aria-label={t("Open screen time")}><Clock3 size={19} /><span>{t("Time")}</span></button><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><Sparkles size={22} /><span>{t("AI")}</span></button></div>
+    <div className="assistant-launchers"><button type="button" className="screen-time-launcher" onClick={onOpenScreenTime} aria-label={t("Open screen time")}><Clock3 size={19} /><span>{t("Time")}</span></button><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><span className="assistant-launcher-mark" aria-hidden="true" /><span>{t("AI")}</span></button></div>
   </div>;
 }
 
