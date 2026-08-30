@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, ArrowLeft, Award, BookOpen, Bot, Building2, CheckCircle2,
+  Activity, ArrowLeft, Award, BookOpen, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
   ContactRound, DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
   LibraryBig, LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
@@ -726,10 +726,10 @@ function AssistantCenter({ user, onOpenScreenTime }) {
 
   return <div className={`assistant-center ${open ? 'open' : ''}`}>
     {open && <section className="assistant-drawer" role="dialog" aria-label={t("Naseeb AI assistant")}>
-      <header><div className="assistant-title"><span className="assistant-mark"><Bot size={18} /></span><div><span className="eyebrow">{t("READ-ONLY GUIDANCE")}</span><h2>{t("Naseeb AI")}</h2></div></div><div className="assistant-header-actions"><button type="button" className="icon-button" onClick={clearConversation} aria-label={t("Clear conversation")} title={t("Clear conversation")}><Trash2 size={16} /></button><button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label={t("Close assistant")}><X size={18} /></button></div></header>
+      <header><div className="assistant-title"><span className="assistant-mark"><span className="assistant-title-mark" aria-hidden="true" /></span><div><span className="eyebrow">{t("READ-ONLY GUIDANCE")}</span><h2>{t("Naseeb AI")}</h2></div></div><div className="assistant-header-actions"><button type="button" className="icon-button" onClick={clearConversation} aria-label={t("Clear conversation")} title={t("Clear conversation")}><Trash2 size={16} /></button><button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label={t("Close assistant")}><X size={18} /></button></div></header>
       <div className="assistant-safety"><ShieldCheck size={15} /><span>{t("Role-scoped context only. Do not share contact, passport, password, or payment details.")}</span></div>
       <div ref={listRef} className="assistant-messages" aria-live="polite" aria-busy={busy}>
-        {messages.map((message) => <article className={`assistant-message ${message.role}`} key={message.id}><span>{message.role === 'assistant' ? <Sparkles size={14} /> : initials(fullName(user))}</span><div><b>{message.role === 'assistant' ? t("Naseeb AI") : t("You")}</b><p>{message.content || <span className="assistant-typing" aria-label={t("Assistant is thinking")}><i /><i /><i /></span>}</p></div></article>)}
+        {messages.map((message) => <article className={`assistant-message ${message.role}`} key={message.id}><span>{message.role === 'assistant' ? <span className="assistant-avatar-mark" aria-hidden="true" /> : initials(fullName(user))}</span><div><b>{message.role === 'assistant' ? t("Naseeb AI") : t("You")}</b><p>{message.content || <span className="assistant-typing" aria-label={t("Assistant is thinking")}><i /><i /><i /></span>}</p></div></article>)}
         {status === 'submitted' && <span className="sr-only">{t("Assistant is preparing a response.")}</span>}
         {error && <div className="assistant-error" role="alert"><WifiOff size={15} /><span>{error}</span></div>}
       </div>
@@ -740,7 +740,7 @@ function AssistantCenter({ user, onOpenScreenTime }) {
         <small>{t("AI can make mistakes. Verify important deadlines with your counselor. History is kept only while this page is open.")}</small>
       </form>
     </section>}
-    <div className="assistant-launchers"><button type="button" className="screen-time-launcher" onClick={onOpenScreenTime} aria-label={t("Open screen time")}><Clock3 size={19} /><span>{t("Time")}</span></button><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><Sparkles size={22} /><span>{t("AI")}</span></button></div>
+    <div className="assistant-launchers"><button type="button" className="screen-time-launcher" onClick={onOpenScreenTime} aria-label={t("Open screen time")}><Clock3 size={19} /><span>{t("Time")}</span></button><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><span className="assistant-launcher-mark" aria-hidden="true" /><span>{t("AI")}</span></button></div>
   </div>;
 }
 
