@@ -669,9 +669,10 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .assistant-launcher:hover { background: var(--assistant-surface-hover); transform: translateY(-2px); }
 .assistant-launcher:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 .assistant-launcher > span { font-size: 11px; font-weight: 850; letter-spacing: .08em; }
-.assistant-launcher-mark, .assistant-title-mark { flex: none; background: var(--assistant-logo-image) center / contain no-repeat; }
+.assistant-launcher-mark, .assistant-title-mark, .assistant-avatar-mark { flex: none; background: var(--assistant-logo-image) center / contain no-repeat; }
 .assistant-launcher-mark { width: 30px; height: 30px; }
 .assistant-title-mark { width: 24px; height: 24px; }
+.assistant-avatar-mark { width: 20px; height: 20px; }
 .assistant-drawer { position: absolute; right: 0; bottom: 70px; width: min(420px, calc(100vw - 32px)); height: min(700px, calc(100dvh - 118px)); overflow: hidden; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 20px; box-shadow: var(--shadow-modal); }
 .assistant-drawer > header { min-height: 76px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .assistant-title { min-width: 0; display: flex; align-items: center; gap: 11px; }
@@ -684,6 +685,7 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .assistant-message { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: start; gap: 9px; }
 .assistant-message > span { width: 30px; height: 30px; display: grid; place-items: center; color: var(--accent-deep); background: var(--surface-soft); border: 1px solid var(--border-subtle); border-radius: 9px; font-size: 8px; font-weight: 850; }
 .assistant-message.user { grid-template-columns: minmax(0, 1fr) 30px; }
+.assistant-message.assistant > span { background: var(--assistant-surface); border-color: var(--assistant-surface); }
 .assistant-message.user > span { grid-column: 2; grid-row: 1; color: var(--accent-contrast); background: var(--accent); border-color: var(--accent); }
 .assistant-message.user > div { grid-column: 1; grid-row: 1; justify-self: end; }
 .assistant-message > div { min-width: 0; max-width: 92%; }
