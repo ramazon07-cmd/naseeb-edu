@@ -86,15 +86,15 @@ const COUNSELOR_NAV = [
 ]
 
 const STUDENT_ROWS = [
-  { initials: 'AM', name: 'Abbos Misraliyev', major: 'Computer Science', country: 'China', gpa: '4.90', ielts: '6.0', sat: '—' },
-  { initials: 'AA', name: 'Akbar Alipov', major: 'Law', country: 'America', gpa: '4.80', ielts: '6.5', sat: '1340' },
-  { initials: 'AM', name: 'Akmal Mirzayev', major: 'Economics', country: 'USA', gpa: '4.80', ielts: '6.5', sat: '1340' },
-  { initials: 'ES', name: 'Ergashova Shohinur', major: 'Digital marketing leader', country: 'China', gpa: '5.00', ielts: '—', sat: '—' },
-  { initials: 'ED', name: 'Esonboyev Dilyorbek', major: 'Computer science/game development', country: 'Korea', gpa: '4.95', ielts: '7.5', sat: '1310' },
-  { initials: 'KO', name: 'Karimberdiyeva Odinaxon', major: 'Digital Education', country: 'UK', gpa: '5.00', ielts: '7.0', sat: '—' },
-  { initials: 'MD', name: 'Musayeva Dinara', major: 'Hospitality Management', country: 'Netherlands', gpa: '—', ielts: '—', sat: '—' },
-  { initials: 'NO', name: 'Nilufar Otabekova', major: "International Relations (minor in Women's Rights)", country: 'Europe', gpa: '5.00', ielts: '7.0', sat: '—' },
-  { initials: 'SX', name: 'Shabnam Xamzayeva', major: 'Educational policy', country: 'Hong Kong', gpa: '4.80', ielts: '7.0', sat: '—' },
+  { initials: 'AM', name: 'Abbos Misraliyev', major: 'Computer Science', country: 'China', gpa: '4.90', ielts: '6.0', sat: '—', level: 3, xp: 550, task: 80, roadmap: 63, overall: 72 },
+  { initials: 'AA', name: 'Akbar Alipov', major: 'Law', country: 'America', gpa: '4.80', ielts: '6.5', sat: '1340', level: 3, xp: 500, task: 60, roadmap: 75, overall: 68 },
+  { initials: 'AM', name: 'Akmal Mirzayev', major: 'Economics', country: 'USA', gpa: '4.80', ielts: '6.5', sat: '1340', level: 2, xp: 250, task: 40, roadmap: 38, overall: 39 },
+  { initials: 'ES', name: 'Ergashova Shohinur', major: 'Digital marketing leader', country: 'China', gpa: '5.00', ielts: '—', sat: '—', level: 4, xp: 875, task: 100, roadmap: 88, overall: 94 },
+  { initials: 'ED', name: 'Esonboyev Dilyorbek', major: 'Computer science/game development', country: 'Korea', gpa: '4.95', ielts: '7.5', sat: '1310', level: 3, xp: 450, task: 80, roadmap: 50, overall: 65 },
+  { initials: 'KO', name: 'Karimberdiyeva Odinaxon', major: 'Digital Education', country: 'UK', gpa: '5.00', ielts: '7.0', sat: '—', level: 4, xp: 625, task: 80, roadmap: 75, overall: 78 },
+  { initials: 'MD', name: 'Musayeva Dinara', major: 'Hospitality Management', country: 'Netherlands', gpa: '—', ielts: '—', sat: '—', level: 2, xp: 300, task: 40, roadmap: 50, overall: 45 },
+  { initials: 'NO', name: 'Nilufar Otabekova', major: "International Relations (minor in Women's Rights)", country: 'Europe', gpa: '5.00', ielts: '7.0', sat: '—', level: 4, xp: 725, task: 80, roadmap: 88, overall: 84 },
+  { initials: 'SX', name: 'Shabnam Xamzayeva', major: 'Educational policy', country: 'Hong Kong', gpa: '4.80', ielts: '7.0', sat: '—', level: 3, xp: 475, task: 70, roadmap: 62, overall: 66 },
 ]
 
 export function CounselorDashboardPreview() {
@@ -121,8 +121,8 @@ export function CounselorDashboardPreview() {
                     <td>RBIS</td>
                     <td><b>{t(student.major)}</b><small>{t(student.country)}</small></td>
                     <td>GPA {student.gpa}<small>IELTS {student.ielts} · SAT {student.sat}</small></td>
-                    <td><b>{t('Level')} 1</b><small>0 XP</small></td>
-                    <td><div className="landing-preview-progress-stack">{['Task', 'Roadmap', 'Overall'].map((label) => <PreviewProgress key={label} label={label} value={0} />)}</div></td>
+                    <td><b>{t('Level')} {student.level}</b><small>{student.xp} XP</small></td>
+                    <td><div className="landing-preview-progress-stack">{[['Task', student.task], ['Roadmap', student.roadmap], ['Overall', student.overall]].map(([label, value]) => <PreviewProgress key={label} label={label} value={value} />)}</div></td>
                     <td><span className="landing-preview-row-actions"><i><Eye size={12} /></i><i><Pencil size={12} /></i><i className="is-danger"><Trash2 size={12} /></i></span></td>
                   </tr>
                 ))}</tbody>
@@ -146,8 +146,8 @@ const DISCOVERY_CARDS = [
 
 export function StudentDashboardPreview() {
   const metrics = [
-    ['Active tasks', 4, tx`${0} completed`], ['Applications', 3, tx`${0} submitted`],
-    ['Essays', 1, tx`${0} approved`], ['Achievements', 2, t('Honors included')],
+    ['Active tasks', 4, tx`${12} completed`], ['Applications', 3, tx`${2} submitted`],
+    ['Essays', 3, tx`${2} approved`], ['Achievements', 2, t('Honors included')],
   ]
 
   return (
@@ -166,8 +166,8 @@ export function StudentDashboardPreview() {
                 <span className="is-ghost"><Search size={14} />{t('Find universities')}</span>
               </div>
             </div>
-            <div className="landing-preview-journey-ring" style={{ '--landing-progress': '11%' }}>
-              <strong>11%</strong><span>{t('Journey progress')}</span>
+            <div className="landing-preview-journey-ring" style={{ '--landing-progress': '72%' }}>
+              <strong>72%</strong><span>{t('Journey progress')}</span>
             </div>
           </section>
           <div className="landing-preview-dashboard-grid">
@@ -175,14 +175,14 @@ export function StudentDashboardPreview() {
               <section className="landing-preview-progress-card">
                 <div><span className="landing-preview-eyebrow">{t('LIVE PROGRESS')}</span><h4>{t('Tasks and roadmap progress')}</h4><p>{t('Every update is added to your overall progress automatically.')}</p></div>
                 <div>
-                  <PreviewProgress label="Tasks" value={10} note={tx`${0} approved`} />
-                  <PreviewProgress label="Roadmap" value={12} note={tx`${1} completed`} />
-                  <PreviewProgress label="Overall journey" value={11} note={t('A deadline needs your attention')} />
+                  <PreviewProgress label="Tasks" value={80} note={tx`${12} approved`} />
+                  <PreviewProgress label="Roadmap" value={63} note={tx`${7} completed`} />
+                  <PreviewProgress label="Overall journey" value={72} note={t('A deadline needs your attention')} />
                 </div>
               </section>
               <section className="landing-preview-progress-card">
-                <div><span className="landing-preview-eyebrow">{t('XP & LEVEL')}</span><h4>{t('Level')} 1</h4><p>{tx`Next level: ${100} XP`}</p></div>
-                <div><PreviewProgress label="75 XP" value={75} note={tx`${25} XP remaining`} /></div>
+                <div><span className="landing-preview-eyebrow">{t('XP & LEVEL')}</span><h4>{t('Level')} 3</h4><p>{tx`Next level: ${600} XP`}</p></div>
+                <div><PreviewProgress label="550 XP" value={92} note={tx`${50} XP remaining`} /></div>
               </section>
             </div>
             <div className="landing-preview-discovery-cards">

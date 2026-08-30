@@ -181,6 +181,7 @@ export const UI_TRANSLATIONS = {
   '45 min': ['45 daqiqa', '45 мин'],
   '60 min': ['60 daqiqa', '60 мин'],
   '75 XP': ['75 XP', '75 XP'],
+  '550 XP': ['550 XP', '550 XP'],
   '8-step Level 1 path': ['1-darajaning 8 bosqichli yo‘li', 'Путь уровня 1 из 8 шагов'],
   'A child appears here only after you accept an invitation from their assigned counselor or Naseeb Edu admin.': ['Bola faqat uning counselori yoki Naseeb Edu admini yuborgan taklifni qabul qilganingizdan keyin shu yerda ko‘rinadi.', 'Ребёнок появится здесь только после принятия приглашения от его консультанта или администратора Naseeb Edu.'],
   'A clearly labeled private workspace is created automatically. An admin can later transfer this counselor to an organization school after their students are reassigned.': ['Aniq belgilangan shaxsiy workspace avtomatik yaratiladi. Studentlar qayta biriktirilgach, admin counselorni tashkilot maktabiga o‘tkaza oladi.', 'Отдельное личное пространство создаётся автоматически. После переназначения учеников администратор сможет перевести консультанта в школу организации.'],
