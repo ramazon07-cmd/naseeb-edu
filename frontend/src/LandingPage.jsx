@@ -828,9 +828,9 @@ export default function LandingPage({
                 {t("For schools, counselors and students in Uzbekistan")}
               </p>
               <h1>
-                <span>{t("The application")}</span>{" "}
-                <span>{t("is a long year.")}</span>{" "}
-                <em>{t("Hold it together.")}</em>
+                <span>{t("Applying to university")}</span>{" "}
+                <span>{t("is a long process.")}</span>{" "}
+                <em>{t("You are not alone on this journey.")}</em>
               </h1>
               <p className="landing-hero-lede">
                 {t(
@@ -845,13 +845,18 @@ export default function LandingPage({
             </div>
             <figure className="landing-hero-media">
               <img
-                src="/landing/naseeb-counseling-hero-v2.jpg"
+                src={
+                  theme === "dark"
+                    ? "/landing/naseeb-student-application-hero-dark.jpg"
+                    : "/landing/naseeb-student-application-hero.jpg"
+                }
                 alt={t(
-                  "A student and counselor planning a university application together.",
+                  "A student managing a university application in the Naseeb Edu platform.",
                 )}
-                width="1717"
-                height="916"
+                width="1448"
+                height="1086"
                 decoding="async"
+                fetchPriority="high"
               />
             </figure>
           </div>

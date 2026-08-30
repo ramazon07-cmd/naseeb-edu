@@ -26,8 +26,7 @@
   --lp-t-h3: clamp(19px, 1.5vw, 24px);
   --lp-t-h2: clamp(30px, 4vw, 58px);
   --lp-t-figure: clamp(30px, 3vw, 44px);
-  --lp-t-display: clamp(36px, 4.9vw, 74px);
-  --lp-t-display-lang: clamp(34px, 4.6vw, 70px);
+  --lp-t-display: clamp(26px, 2.4vw, 38px);
 
   /* Layout */
   /* Fluid layer: clamp() endpoints were a second, undeclared spacing scale.
@@ -164,7 +163,7 @@
   --lp-ink-muted: color-mix(in srgb, var(--light-grey) 70%, var(--charcoal));
   --lp-ink-accent: var(--accent-deep);
   --lp-ink-rule: color-mix(in srgb, var(--light-grey) 20%, transparent);
-  --lp-ink-photo: saturate(.62) contrast(1.14) brightness(.72);
+  --lp-ink-photo: saturate(.96) contrast(1.04) brightness(.98);
   --lp-particle-dot: #F2F2F5;
   --lp-particle-line: #D7A8EE;
 
@@ -371,7 +370,7 @@
   align-items: center;
   column-gap: var(--lp-5);
 }
-.landing-hero-copy { grid-column: 1 / 8; grid-row: 1; position: relative; z-index: 4; min-width: 0; }
+.landing-hero-copy { grid-column: 1 / 6; grid-row: 1; position: relative; z-index: 4; min-width: 0; }
 .landing-hero-grid { position: relative; z-index: 2; min-height: min(74vh, 660px); }
 .landing-hero .lp-eyebrow { color: var(--lp-ink-accent); }
 .landing-hero h1 {
@@ -382,7 +381,6 @@
 }
 /* English is the only language whose headline was set to these break points. */
 :lang(en) .landing-hero h1 :is(span, em) { display: block; }
-:lang(ru) .landing-page, :lang(uz) .landing-page { --lp-t-display: var(--lp-t-display-lang); }
 /* The turn in the headline is carried by the accent colour alone. */
 .landing-hero h1 em { color: var(--lp-ink-accent); font-style: normal; }
 .landing-hero-lede {
@@ -415,30 +413,46 @@
 .landing-text-cta:active:not(:disabled) { opacity: .8; }
 .landing-text-cta:disabled { opacity: .45; cursor: not-allowed; }
 
-/* A plate, not a backdrop: hard-cropped, held to the right columns so the copy
-   always sits on ink. Capped at 470px so the 1600x853 source is used at ~1:1 on
-   a 2x display instead of being upscaled. */
+/* Preserve the source's 4:3 composition so every in-image application label
+   remains visible. The plate holds its own column exactly: it used to be set
+   wider than the column and anchored right, which bled it ~72px back over the
+   copy, and once the headlines filled their column the type printed on top of
+   the photograph. */
 .landing-hero-media {
-  grid-column: 8 / 13; grid-row: 1; align-self: end;
+  grid-column: 6 / 13; grid-row: 1; align-self: center;
   position: relative; z-index: 2;
-  margin: 0; width: 100%; max-width: 470px; justify-self: end;
-  aspect-ratio: 11 / 10; overflow: clip;
+  margin: 0; width: 100%; max-width: 760px; justify-self: end;
+  aspect-ratio: 4 / 3; overflow: clip;
   background: var(--lp-ink-solid);
-  border-radius: var(--lp-r-sm);
+  border-radius: var(--lp-r-md);
+  box-shadow:
+    0 28px 80px color-mix(in srgb, var(--lp-ink-fg) 14%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--lp-ink-fg) 12%, transparent);
+  transition: transform var(--lp-dur-medium) var(--lp-ease), box-shadow var(--lp-dur-medium) var(--lp-ease);
 }
 .landing-hero-media img {
   width: 100%; height: 100%;
-  display: block; object-fit: cover; object-position: 65% 50%;
+  display: block; object-fit: cover; object-position: center;
   filter: var(--lp-ink-photo);
+  transition: transform var(--lp-dur-long) var(--lp-ease);
 }
-/* One soft edge, facing the headline; three hard ones. */
+/* The reference treatment feathers only the outer edge. It stops before the
+   application cards, keeping every label legible. */
 .landing-hero-media::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(97deg,
-    var(--lp-ink-solid) 0 4%,
-    color-mix(in srgb, var(--lp-ink-solid) 62%, transparent) 18%,
-    color-mix(in srgb, var(--lp-ink-solid) 16%, transparent) 38%,
-    transparent 60%);
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--lp-ink-solid) 82%, transparent) 0,
+    color-mix(in srgb, var(--lp-ink-solid) 26%, transparent) 6%,
+    transparent 13%);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .landing-hero-media:hover {
+    transform: translateY(-5px);
+    box-shadow:
+      0 36px 96px color-mix(in srgb, var(--lp-ink-fg) 18%, transparent),
+      inset 0 0 0 1px color-mix(in srgb, var(--lp-ink-fg) 16%, transparent);
+  }
+  .landing-hero-media:hover img { transform: scale(1.012); }
 }
 
 /* --- Proof rail: real platform facts, inside the first viewport ---------- */
@@ -1180,6 +1194,9 @@
   .landing-hero-copy > :nth-child(2) { animation-delay: calc(var(--lp-stagger) * 2); }
   .landing-hero-copy > :nth-child(3) { animation-delay: calc(var(--lp-stagger) * 3); }
   .landing-hero-copy > :nth-child(4) { animation-delay: calc(var(--lp-stagger) * 4); }
+  .landing-hero-media {
+    animation: lp-media-reveal var(--lp-dur-long) var(--lp-ease) calc(var(--lp-stagger) * 3) both;
+  }
   .landing-rail article { animation: lp-rise var(--lp-dur-medium) var(--lp-ease) both; }
   .landing-rail article:nth-child(1) { animation-delay: calc(var(--lp-stagger) * 5); }
   .landing-rail article:nth-child(2) { animation-delay: calc(var(--lp-stagger) * 6); }
@@ -1187,6 +1204,10 @@
 }
 @keyframes lp-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes lp-rise { from { opacity: 0; transform: translateY(var(--lp-reveal-y)); } to { opacity: 1; transform: none; } }
+@keyframes lp-media-reveal {
+  from { opacity: 0; clip-path: inset(0 100% 0 0 round var(--lp-r-md)); }
+  to { opacity: 1; clip-path: inset(0 0 0 0 round var(--lp-r-md)); }
+}
 
 .landing-page.is-animated .landing-path-list { --lp-meridian: 0; }
 .landing-page.is-animated .landing-path-list.is-in { --lp-meridian: 1; }
@@ -1506,6 +1527,7 @@
     width: auto; max-width: none; aspect-ratio: 3 / 2;
     margin: var(--lp-6) calc(var(--lp-gutter) * -1) 0;
     border-radius: 0;
+    box-shadow: none;
   }
   .landing-hero-media img { object-position: 48% 50%; }
   .landing-hero-media::after { display: none; }
