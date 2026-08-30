@@ -982,8 +982,28 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .trait-row b { display: block; font-size: 13px; }
 .trait-row small { color: var(--muted); font-size: 10px; }
 .student-dashboard-overview { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(310px,.65fr); align-items: stretch; gap: 20px; }
+.student-dashboard-progress { min-width: 0; display: grid; align-content: start; gap: 20px; }
+.student-dashboard-overview .dashboard-discovery-rail { height: 100%; grid-template-rows: repeat(2,minmax(0,1fr)); }
+.student-dashboard-overview .dashboard-discovery-card { min-height: 0; padding: 18px 20px; }
+.student-dashboard-overview .dashboard-discovery-card h3 { font-size: clamp(17px,1.6vw,22px); }
+.student-dashboard-overview .dashboard-discovery-card p { margin-bottom: 12px; font-size: 9px; }
+.student-dashboard-overview .dashboard-discovery-card a, .student-dashboard-overview .dashboard-discovery-card button { min-height: 32px; }
+.student-dashboard-overview .discovery-card-art { width: 92px; height: 92px; }
 .student-dashboard-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 20px; }
-.student-dashboard-column { min-width: 0; display: grid; align-content: start; gap: 20px; }
+.student-dashboard-column, .dashboard-discovery-rail { min-width: 0; display: grid; align-content: start; gap: 20px; }
+.dashboard-discovery-rail { gap: 12px; }
+.dashboard-discovery-card { min-height: 190px; padding: 24px; position: relative; overflow: hidden; color: var(--student-hero-text); background: linear-gradient(135deg,var(--student-hero-start),var(--student-hero-mid) 58%,var(--student-hero-end)); border: 1px solid var(--student-hero-line); border-radius: 17px; box-shadow: var(--student-card-shadow); }
+.dashboard-discovery-card.university { background: linear-gradient(135deg,var(--student-hero-start),var(--hero-college-mid) 58%,var(--hero-college-end)); }
+.dashboard-discovery-card::before { content: ''; position: absolute; width: 190px; height: 190px; right: -52px; bottom: -82px; background: var(--student-hero-decoration); border-radius: 50%; }
+.dashboard-discovery-card > div { max-width: 72%; position: relative; z-index: 2; }
+.dashboard-discovery-card > div > span { color: var(--student-hero-eyebrow); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
+.dashboard-discovery-card h3 { margin: 8px 0 7px; color: var(--student-hero-text); font: 700 clamp(19px,2vw,26px)/1.1 'Montserrat',system-ui,sans-serif; letter-spacing: -.03em; }
+.dashboard-discovery-card p { margin: 0 0 18px; color: var(--student-hero-muted); font-size: 10px; line-height: 1.55; }
+.dashboard-discovery-card a, .dashboard-discovery-card button { width: max-content; min-height: 36px; padding: 0 13px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: var(--student-hero-button-text); background: var(--student-hero-button-bg); border: 1px solid var(--student-hero-button-bg); border-radius: 9px; font-size: 9px; font-weight: 800; text-decoration: none; }
+.dashboard-discovery-card a:hover, .dashboard-discovery-card button:hover:not(:disabled) { background: var(--student-hero-button-hover); border-color: var(--student-hero-button-hover); transform: translateY(-1px); }
+.dashboard-discovery-card button:disabled { color: var(--on-accent-muted); background: var(--student-hero-ghost-bg); border-color: var(--student-hero-ghost-border); cursor: not-allowed; }
+.discovery-card-art { position: absolute; right: 15px; bottom: 13px; z-index: 1; color: var(--student-hero-muted); transform: rotate(-8deg); }
+.dashboard-discovery-card.university .discovery-card-art { right: 10px; bottom: 7px; transform: rotate(5deg); }
 .quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .quick-grid button { min-height: 80px; display: grid; grid-template-columns: 38px 1fr 18px; align-items: center; gap: 10px; padding: 12px; color: var(--text); background: var(--surface-soft); border: 1px solid var(--border); border-radius: 12px; text-align: left; }
 .quick-grid button:hover { border-color: var(--accent); transform: translateY(-2px); }
@@ -1424,6 +1444,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .college-research-overview { grid-template-columns: 1fr auto; }
   .college-research-overview .research-profile-chips { grid-column: 1 / -1; justify-content: flex-start; }
   .student-dashboard-overview { grid-template-columns: 1fr; }
+  .student-dashboard-overview .dashboard-discovery-rail { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: none; }
+  .student-dashboard-overview .dashboard-discovery-card { min-height: 172px; }
   .usage-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .usage-toolbar { grid-template-columns: 1fr 180px 180px auto; }
   .student-workspace-selector { grid-template-columns: 1fr minmax(220px,280px); }
@@ -1464,6 +1486,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .student-welcome, .portal-hero, .college-banner, .store-hero { align-items: flex-start; flex-direction: column; }
   .readiness-ring { width: 126px; height: 126px; flex-basis: 126px; }
   .student-dashboard-grid, .mission-grid, .contact-grid { grid-template-columns: 1fr; }
+  .dashboard-discovery-rail, .student-dashboard-overview .dashboard-discovery-rail { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .level-roadmap-summary { align-items: stretch; flex-direction: column; }
   .roadmap-level-score { width: 100%; }
   .journey-progress, .finder-layout, .aid-checklist { grid-template-columns: 1fr; }
@@ -1549,6 +1572,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .modal { width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
   .welcome-actions, .portal-toolbar, .college-toolbar { align-items: stretch; flex-direction: column; }
   .quick-grid, .store-grid { grid-template-columns: 1fr; }
+  .dashboard-discovery-rail, .student-dashboard-overview .dashboard-discovery-rail { grid-template-columns: 1fr; }
+  .dashboard-discovery-card > div { max-width: 78%; }
   .program-grid, .choice-card-group, .program-filters, .university-metrics { grid-template-columns: 1fr; }
   .programs-hero { align-items: flex-start; flex-direction: column; }
   .university-card > header { grid-template-columns: 42px 1fr; }.university-card .fit-badge { grid-column: 1 / -1; width: max-content; }.university-card > footer, .finder-results > header { align-items: flex-start; flex-direction: column; }.finder-results > header small { text-align: left; }

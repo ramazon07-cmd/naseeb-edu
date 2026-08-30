@@ -204,7 +204,7 @@ function navigationFor(user) {
 const EMPTY_DATA = {
   schools: [], students: [], universities: [], tasks: [], applications: [], documents: [], essays: [],
   achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
-  recommendations: [], roadmapMissions: [], communityPosts: [], challengeAttempts: [],
+  recommendations: [], roadmapMissions: [], communityPosts: [],
   bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], resourceLibrary: [], storeItems: [], team: [], supportTickets: [],
   accounts: [], counselorRoadmapTemplates: [], counselorRoadmaps: [], adminAuditEvents: [],
   parentPortal: { children: [], pending_invitations: [], privacy: { hidden: [], read_only: true } }
@@ -438,7 +438,7 @@ function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, 
 }
 
 const PAGE_RESOURCE_KEYS = {
-  dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'parentPortal', 'challengeAttempts'],
+  dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'parentPortal'],
   schools: ['schools'], students: ['students'], profile: ['students'], academics: ['students', 'researches'],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
@@ -860,11 +860,10 @@ function StudentDashboard({ user, data, setPage }) {
       <div className="readiness-ring" style={{ '--progress': `${student?.journey_progress_percent || 0}%` }}><strong>{formatPercentLocale(student?.journey_progress_percent || 0)}</strong><span>{t("Journey progress")}</span></div>
     </section>
     <div className="student-dashboard-overview">
-      <JourneyProgress student={student} attempts={data.challengeAttempts} />
-      <LevelProgress student={student} />
+      <div className="student-dashboard-progress"><JourneyProgress student={student} /><LevelProgress student={student} /></div>
+      <DashboardDiscoveryCards setPage={setPage} />
     </div>
     <div className="stat-grid"><Stat label={t("Active tasks")} value={pendingTasks.length} note={tx`${completed} completed`} /><Stat label={t("Applications")} value={data.applications.length} note={tx`${data.applications.filter((item) => item.status === 'submitted').length} submitted`} /><Stat label={t("Essays")} value={data.essays.length} note={tx`${data.essays.filter((item) => item.status === 'approved').length} approved`} /><Stat label={t("Achievements")} value={achievementTotal} note={t("Honors included")} /></div>
-    <DashboardUniversityCard setPage={setPage} />
     <div className="student-dashboard-grid">
       <div className="student-dashboard-column">
         <Panel title={t("Next priorities")} action={<button className="button quiet small" onClick={() => setPage('roadmap')}>{t("View roadmap")} <ChevronRight size={14} /></button>}><div className="record-list">{pendingTasks.slice(0, 4).map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} • ${label(task.priority)}`} badge={task.status} />)}{!pendingTasks.length && <Empty text={t("All tasks are complete.")} />}</div></Panel>
@@ -880,31 +879,24 @@ function StudentDashboard({ user, data, setPage }) {
   </div>;
 }
 
-// The personality half of the old discovery rail became a live-progress row, so
-// only the college entry point is left. It reuses the full-width banner the
-// portal already uses for its section headers rather than a parallel card system.
-function DashboardUniversityCard({ setPage }) {
-  return <section className="college-banner">
-    <div>
-      <span className="eyebrow">{t("COLLEGE RESEARCH")}</span>
-      <h2>{t("University Match")}</h2>
-      <p>{t("Find universities that match your academic profile and goals.")}</p>
-      <div className="welcome-actions"><button className="button light" onClick={() => setPage('college_search')}><Search size={17} /> {t("Explore matches")}</button></div>
-    </div>
-    <GraduationCap size={80} />
+function DashboardDiscoveryCards({ setPage }) {
+  return <section className="dashboard-discovery-rail" aria-label={t("Student discovery tools")}>
+    <article className="dashboard-discovery-card personality">
+      <Fingerprint className="discovery-card-art" size={118} strokeWidth={1.35} />
+      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Personality & Interests")}</h3><p>{t("Identify your strengths, interests, and future study direction.")}</p><button type="button" onClick={() => setPage('find_personality')}>{t("Start challenges")} <ChevronRight size={16} /></button></div>
+    </article>
+    <article className="dashboard-discovery-card university">
+      <GraduationCap className="discovery-card-art" size={122} strokeWidth={1.35} />
+      <div><span>{t("COLLEGE RESEARCH")}</span><h3>{t("University Match")}</h3><p>{t("Find universities that match your academic profile and goals.")}</p><button type="button" onClick={() => setPage('college_search')}>{t("Explore matches")} <ChevronRight size={16} /></button></div>
+    </article>
   </section>;
 }
 
-function JourneyProgress({ student, attempts = [] }) {
-  const taken = new Set(attempts.map((row) => row.challenge));
-  const personalityDone = CHALLENGES.filter((challenge) => taken.has(challenge.key)).length;
+function JourneyProgress({ student }) {
   const rows = [
   ['Tasks', student?.task_progress_percent || 0, `${student?.task_status_counts?.approved || 0} approved`],
   ['Roadmap', student?.roadmap_progress_percent || 0, `${student?.roadmap_status_counts?.completed || 0} completed`],
-  ['Overall journey', student?.journey_progress_percent || 0, student?.is_at_risk ? 'A deadline needs your attention' : 'Progress is on track'],
-  // The sidebar already links to the page, so the dashboard reports how far along
-  // it is instead of repeating the link as a card.
-  [t("Find Your Personality"), CHALLENGES.length ? Math.round(personalityDone / CHALLENGES.length * 100) : 0, tx`${personalityDone} of ${CHALLENGES.length} challenges done`]];
+  ['Overall journey', student?.journey_progress_percent || 0, student?.is_at_risk ? 'A deadline needs your attention' : 'Progress is on track']];
 
   return <section className="journey-progress"><div><span className="eyebrow">{t("LIVE PROGRESS")}</span><h3>{t("Tasks and roadmap progress")}</h3><p>{t("Every update is added to your overall progress automatically.")}</p></div><div className="journey-progress-bars">{rows.map(([title, value, note]) => <div key={title}><header><b>{title}</b><strong>{formatPercentLocale(value)}</strong></header><div className="progress"><span style={{ width: `${value}%` }} /></div><small>{note}</small></div>)}</div></section>;
 }
@@ -3588,8 +3580,7 @@ export default function App() {
       ['roadmapMissions', 'roadmap-missions'], ['communityPosts', 'community-posts'], ['bookings', 'bookings'],
       ['messageChannels', 'message-channels'], ['programServices', 'program-services'],
       ['scholarships', 'scholarships'], ['opportunityPrograms', 'opportunity-programs'],
-      ['resourceLibrary', 'resource-library'], ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets'],
-      ['challengeAttempts', 'challenge-attempts']];
+      ['resourceLibrary', 'resource-library'], ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets']];
 
       const resources = activeUser.role === 'parent' ?
       [['parentPortal', 'parent-portal']] :

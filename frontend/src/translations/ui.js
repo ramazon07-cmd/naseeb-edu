@@ -1222,8 +1222,6 @@ export const UI_TRANSLATIONS = {
   Company: ['Kompaniya', 'Компания'],
   Team: ['Jamoa', 'Команда'],
   'Contact our team': ['Jamoamiz bilan bog‘lanish', 'Связаться с нашей командой'],
-  'Find Your Personality': ['Shaxsiyatingizni aniqlang', 'Определите свою личность'],
-  '{0} of {1} challenges done': ['{1} sinovdan {0} tasi bajarildi', 'Выполнено {0} из {1} испытаний'],
 }
 
 export function uiMessages(language) {
