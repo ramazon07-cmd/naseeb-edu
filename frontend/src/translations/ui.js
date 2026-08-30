@@ -1173,6 +1173,55 @@ export const UI_TRANSLATIONS = {
   'Contact our team to tell us about your school and counseling needs. We will introduce the platform, help set up your school workspace, and guide your counselors and students through onboarding.': ['Jamoamizga murojaat qiling va maktabingiz hamda maslahat ehtiyojlaringiz haqida gapirib bering. Biz platformani tanishtiramiz, maktab ish maydonini sozlashga yordam beramiz va maslahatchilaringiz bilan o‘quvchilaringizni onboardingdan o‘tkazamiz.', 'Свяжитесь с нашей командой и расскажите о своей школе и задачах сопровождения. Мы покажем платформу, поможем настроить рабочее пространство школы и проведём ваших консультантов и учеников через онбординг.'],
   'Didn’t find your question?': ['Savolingizni topmadingizmi?', 'Не нашли свой вопрос?'],
   'Send it to our team and we will answer it directly.': ['Uni jamoamizga yuboring — biz to‘g‘ridan-to‘g‘ri javob beramiz.', 'Отправьте его нашей команде — мы ответим напрямую.'],
+
+  // Landing — team band. Roles and standing lines only; names and email
+  // addresses are a real person's identity and are printed, never translated.
+  'Big Five': ['Bizning beshlik', 'Нас пятеро'],
+  Founder: ['Asoschi', 'Основатель'],
+  'ex-Walt Disney': ['sobiq Walt Disney', 'ранее Walt Disney'],
+  CEO: ['CEO', 'CEO'],
+  'EdManagement 3+ y.': ['Ta’lim menejmentida 3+ yil', '3+ года в управлении образованием'],
+  COO: ['COO', 'COO'],
+  'Apple Academy ’24': ['Apple Academy ’24', 'Apple Academy ’24'],
+  CPO: ['CPO', 'CPO'],
+  'Admission Expert': ['Qabul bo‘yicha ekspert', 'Эксперт по поступлению'],
+  CTO: ['CTO', 'CTO'],
+  '6 y. in Data Integrity Services.': ['Data Integrity Services sohasida 6 yil.', '6 лет в Data Integrity Services.'],
+
+  // Landing — footer navigation
+  Information: ['Ma’lumot', 'Информация'],
+
+  // Landing — student stories band
+  'Student stories': ['O‘quvchilar fikri', 'Истории учеников'],
+  'Hear from our students.': ['O‘quvchilarimiz nima deydi.', 'Что говорят наши ученики.'],
+  'How students describe running an application inside Naseeb Edu.': ['O‘quvchilar Naseeb Edu ichida arizani qanday olib borishini o‘z so‘zlari bilan aytadi.', 'Как сами ученики описывают работу над заявкой внутри Naseeb Edu.'],
+  'Previous stories': ['Oldingi fikrlar', 'Предыдущие отзывы'],
+  'More stories': ['Yana fikrlar', 'Ещё отзывы'],
+  'Scholarship': ['Stipendiya', 'Стипендия'],
+  'Admitted to': ['Qabul qilingan', 'Поступление'],
+  'Grade 12 · applying to computer science': ['12-sinf · kompyuter fanlariga hujjat topshirmoqda', '12 класс · подаёт документы на компьютерные науки'],
+  'The roadmap tells me what to do next, and my counselor sees it the moment I submit it.': ['Yo‘l xaritasi menga keyingi qadamni aytadi, maslahatchim esa men topshirgan zahoti ko‘radi.', 'План показывает мне следующий шаг, а консультант видит его сразу, как только я его сдаю.'],
+  'Grade 11 · first year on the platform': ['11-sinf · platformadagi birinchi yil', '11 класс · первый год на платформе'],
+  'I used to keep deadlines in three different notebooks. Now every task has one place and one date.': ['Ilgari muddatlarni uchta har xil daftarda saqlardim. Endi har bir vazifaning bitta joyi va bitta sanasi bor.', 'Раньше я держал сроки в трёх разных тетрадях. Теперь у каждой задачи одно место и одна дата.'],
+  'Grade 12 · applying to economics': ['12-sinf · iqtisodiyotga hujjat topshirmoqda', '12 класс · подаёт документы на экономику'],
+  'My drafts and my counselor’s comments stay together, so I can see exactly what changed between two versions.': ['Qoralamalarim va maslahatchimning izohlari birga turadi, shuning uchun ikki versiya orasida nima o‘zgarganini aniq ko‘raman.', 'Мои черновики и комментарии консультанта лежат вместе, поэтому я точно вижу, что изменилось между двумя версиями.'],
+  'Grade 11 · exploring engineering': ['11-sinf · muhandislik yo‘nalishini o‘rganmoqda', '11 класс · изучает инженерное направление'],
+  'University Match gave me a list I could actually argue about with my counselor, instead of a ranking table.': ['University Match menga reyting jadvalini emas, maslahatchim bilan haqiqatan muhokama qila oladigan ro‘yxatni berdi.', 'University Match дал мне список, который я мог реально обсуждать с консультантом, а не таблицу рейтингов.'],
+  'Grade 12 · applying to design': ['12-sinf · dizayn yo‘nalishiga hujjat topshirmoqda', '12 класс · подаёт документы на дизайн'],
+  'Watching my readiness move after each approved task made the year feel less like guessing.': ['Har bir tasdiqlangan vazifadan keyin tayyorgarligim o‘sganini ko‘rish bu yilni taxmindan chiqardi.', 'Когда после каждой одобренной задачи готовность росла, год перестал быть сплошной догадкой.'],
+  'Applied last year': ['O‘tgan yili hujjat topshirgan', 'Заявка подана в прошлом году'],
+  'Asking my counselor a question no longer meant waiting for the next meeting.': ['Maslahatchimga savol berish endi keyingi uchrashuvni kutishni anglatmaydi.', 'Задать вопрос консультанту больше не значило ждать следующей встречи.'],
+  'Grade 12 · applying to medicine': ['12-sinf · tibbiyot yo‘nalishiga hujjat topshirmoqda', '12 класс · подаёт документы на медицину'],
+  'Every step I finish is signed off by a teacher, so my progress is a record rather than my own opinion of it.': ['Men tugatgan har bir qadamni o‘qituvchi tasdiqlaydi, shuning uchun progressim mening fikrim emas, yozuvga aylanadi.', 'Каждый мой завершённый шаг подтверждает учитель, поэтому мой прогресс — это запись, а не моё мнение о нём.'],
+  'Grade 11 · preparing for IELTS': ['11-sinf · IELTS’ga tayyorlanmoqda', '11 класс · готовится к IELTS'],
+  'I used to hear about a deadline only after it had passed. Now I see it coming weeks ahead.': ['Ilgari muddat haqida u o‘tib ketgandan keyin bilardim. Endi uni haftalar oldin ko‘rib turaman.', 'Раньше я узнавал о сроке уже после того, как он проходил. Теперь я вижу его за недели.'],
+  'Grade 12 · applying to international relations': ['12-sinf · xalqaro munosabatlarga hujjat topshirmoqda', '12 класс · подаёт документы на международные отношения'],
+  'I could compare my universities side by side instead of keeping ten browser tabs open.': ['Universitetlarimni o‘nta brauzer varag‘ini ochiq tutish o‘rniga yonma-yon solishtira oldim.', 'Я мог сравнивать свои университеты рядом, вместо того чтобы держать открытыми десять вкладок.'],
+
+  // Landing — footer
+  Company: ['Kompaniya', 'Компания'],
+  Team: ['Jamoa', 'Команда'],
+  'Contact our team': ['Jamoamiz bilan bog‘lanish', 'Связаться с нашей командой'],
 }
 
 export function uiMessages(language) {
