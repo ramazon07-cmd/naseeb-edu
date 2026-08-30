@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/montserrat-latin.woff2" crossorigin />
     <link rel="preload" as="image" href="/landing/naseeb-counseling-hero.jpg" />
-    <link rel="preload" as="image" href="/brand/naseeb-light-256.jpg" fetchpriority="high" />
+    <link rel="preload" as="image" href="/brand/naseeb-light-256.png" fetchpriority="high" />
     <link rel="preload" as="image" href="/brand/naseeb-dark-256.png" fetchpriority="high" />
     <link rel="icon" type="image/png" sizes="64x64" data-theme-icon href="/brand/icon-light-64.png?v=2" />
     <title>Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi</title>
@@ -57,8 +57,6 @@
           document.documentElement.dataset.theme = theme
           document.documentElement.style.colorScheme = theme
           document.getElementById('theme-color').content = theme === 'dark' ? '#121015' : '#F5F0E6'
-          const icon = document.querySelector('link[data-theme-icon]')
-          if (icon) icon.href = theme === 'dark' ? '/brand/icon-dark-64.png?v=3' : '/brand/icon-light-64.png?v=2'
         } catch {
           document.documentElement.dataset.theme = 'light'
           document.documentElement.style.colorScheme = 'light'

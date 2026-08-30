@@ -85,12 +85,12 @@ const localDateKey = () => {
   return now.toISOString().slice(0, 10);
 };
 const BRAND_LOGOS = {
-  light: '/brand/naseeb-light-256.jpg',
+  light: '/brand/naseeb-light-256.png',
   dark: '/brand/naseeb-dark-256.png'
 };
 const THEME_ICONS = {
-  light: '/brand/icon-light-64.png?v=2',
-  dark: '/brand/icon-dark-64.png?v=3'
+  light: "/brand/icon-light-64.png?v=2",
+  dark: "/brand/icon-dark-64.png?v=9",
 };
 
 function brandLogoFor(theme) {
