@@ -1313,11 +1313,11 @@ export default function LandingPage({
             <div className="landing-closing-actions">
               {BOOK_MEETING_URL ? (
                 <a className="landing-primary-cta" href={BOOK_MEETING_URL}>
-                  {t("Book a call")} <ChevronRight size={17} />
+                  {t('Book a call')} <ChevronRight size={17} />
                 </a>
               ) : (
                 <button type="button" className="landing-primary-cta" disabled>
-                  {t("Book a call")} <ChevronRight size={17} />
+                  {t('Book a call')} <ChevronRight size={17} />
                 </button>
               )}
             </div>
