@@ -138,7 +138,7 @@
   --student-hero-ring-track: rgba(255, 250, 242, .2);
   --student-hero-ring-border: rgba(255, 250, 242, .12);
   --student-hero-button-shadow: 0 9px 24px rgba(42, 34, 28, .16);
-  --brand-logo-image: url('/brand/naseeb-light-256.jpg');
+  --brand-logo-image: url('/brand/naseeb-light-256.png');
   --brand-logo-border: var(--accent);
   --brand-logo-shadow: 0 5px 18px var(--accent-shadow);
   --progress-roadmap: #806C54;

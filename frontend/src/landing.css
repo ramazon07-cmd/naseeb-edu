@@ -626,9 +626,7 @@
   gap: var(--lp-4); padding-bottom: var(--lp-4);
   border-bottom: 1px solid var(--lp-rule);
 }
-/* One badge, two homes: the journey specimen and the story cards. */
-.landing-specimen-status,
-.landing-story-badge {
+.landing-specimen-status {
   padding: var(--lp-1) var(--lp-3);
   color: var(--lp-signal);
   background: var(--lp-signal-wash);
@@ -700,7 +698,7 @@
 
 .landing-about {
   padding-block: clamp(68px, 7.2vw, 112px);
-  background: var(--lp-page-bg); border-bottom: 1px solid var(--lp-rule);
+  background: var(--lp-page-bg);
 }
 .landing-about-grid {
   display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
@@ -739,80 +737,145 @@
   color: var(--muted); font-size: var(--lp-t-small); line-height: 1.7;
 }
 
-/* --- Customer stories: an honest publishing slot, never invented proof ---- */
+/* --- Team: the people, at portrait scale --------------------------------- */
 
-.landing-reviews { background: var(--lp-page-bg); border-top: 1px solid var(--lp-rule); }
-.landing-reviews-head {
-  max-width: 800px;
-  display: grid; gap: var(--lp-4);
+/* --lp-signal resolves to --accent-deep, which IS --text on the ivory system,
+   so a role line set in it would be indistinguishable from body copy in light
+   mode. --lp-ink-accent is the only token that reads as an accent on BOTH page
+   backgrounds — warm brown on paper, orchid on plum — which is why the FAQ
+   already borrows it, and why the team and story bands do too. */
+.landing-team {
+  --lp-person-accent: var(--lp-ink-accent);
+  background: var(--lp-page-bg);
 }
-.landing-reviews-head .lp-eyebrow { margin: 0; color: var(--accent-muted); }
-.landing-reviews-head h2 { max-width: 15ch; margin: 0 0 var(--lp-3); font-size: var(--lp-t-h2); line-height: 1.04; letter-spacing: -.008em; }
-.landing-reviews-head > div > p { max-width: 46ch; margin: 0; color: var(--accent-muted); font-size: var(--lp-t-body); }
+.landing-team-head { max-width: 800px; margin-bottom: var(--lp-8); }
+.landing-team-head h2 { margin: 0; font-size: var(--lp-t-h2); line-height: 1.04; letter-spacing: -.008em; }
 
-/* The featured quote is the argument; the rail beneath it is the chorus. The
-   lead is deliberately not a card, so the two treatments read as different
-   kinds of evidence rather than one repeated component. */
-.landing-story-lead {
-  position: relative; margin: var(--lp-7) 0 0;
-  padding: clamp(28px, 4vw, 58px);
-  display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(240px, .65fr);
-  align-items: end; gap: var(--lp-fluid-lg);
-  overflow: hidden;
+/* A portrait, a name, a role and one line of standing — no card around each
+   one. The page's register vocabulary carries the grouping; a framed box per
+   colleague would be the fourth container style on one page. The roster stays
+   on one horizontal line; narrower screens can swipe the row without making
+   the entire page overflow. */
+.landing-team-grid {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-wrap: nowrap; gap: var(--lp-fluid-sm);
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity; scrollbar-width: none;
+}
+.landing-team-grid::-webkit-scrollbar { display: none; }
+/* One column, explicitly capped: an auto grid track sizes to the widest child,
+   so a long email or surname would otherwise stretch the card past its own
+   168px basis and spill over the neighbour. */
+.landing-team-card {
+  min-width: 168px; flex: 1 0 168px;
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  align-content: start; gap: var(--lp-1);
+  scroll-snap-align: start;
+}
+/* A round headshot, capped so five of them read as a row of people rather than
+   a wall of plates, and so a missing photograph is a small mark rather than a
+   large empty rectangle. */
+.landing-team-portrait {
+  width: 100%; max-width: 168px; margin-bottom: var(--lp-4);
+  aspect-ratio: 1; overflow: hidden;
+  display: grid; place-items: center;
   background: var(--surface-soft);
-  border: 1px solid var(--lp-rule); border-radius: var(--lp-r-lg);
-  box-shadow: 0 24px 70px var(--lp-frame-halo);
+  border: 1px solid var(--lp-rule); border-radius: var(--lp-r-pill);
 }
-/* The mark is painted by the figure and the quote is raised above it, so the
-   glyph sits behind the words without needing a negative z-index (which would
-   drop it behind the band's own background). */
-.landing-story-lead::before {
-  content: var(--lp-quote-open);
-  position: absolute; left: .16em; top: .03em;
-  color: var(--lp-story-glyph);
-  font-family: var(--lp-display); font-size: calc(var(--lp-t-figure) * 2.7); line-height: 1;
+.landing-team-portrait img { width: 100%; height: 100%; display: block; object-fit: cover; }
+/* No photograph yet is a designed state, not a broken image: the monogram
+   uses the same mark the story avatars use, at portrait scale. */
+.landing-team-monogram {
+  color: var(--lp-person-accent);
+  font-family: var(--lp-display); font-size: var(--lp-t-figure);
+  font-weight: 500; letter-spacing: .08em;
+}
+/* Two lines are reserved whether the name needs them or not: across a row of
+   five, a name that wraps would otherwise push its own role, standing and
+   email a line below everyone else's and break the horizontal reading. */
+.landing-team-card b {
+  min-height: 2.5em; margin-top: var(--lp-3);
+  font-family: var(--lp-display); font-size: var(--lp-t-h3);
+  font-weight: 700; line-height: 1.22; letter-spacing: -.015em; overflow-wrap: anywhere;
+}
+/* Role and standing are one sentence broken over two lines — the role carries
+   a trailing comma in the markup — so they share a size and a colour and only
+   the line break separates them. */
+.landing-team-role, .landing-team-note {
+  color: var(--muted); font-size: var(--lp-t-small); line-height: 1.55; overflow-wrap: anywhere;
+}
+.landing-team-role { margin-top: var(--lp-2); }
+/* The contact line leads the block, set in the band's accent so the row reads
+   address-first the way the brand deck sets it. */
+.landing-team-email {
+  width: max-content; max-width: 100%;
+  color: var(--lp-person-accent); font-size: var(--lp-t-caption);
+  border-bottom: 1px solid transparent;
+  overflow-wrap: anywhere;
+  transition: color var(--lp-fast) ease, border-color var(--lp-fast) ease;
+}
+.landing-team-email:hover { border-bottom-color: currentColor; }
+
+/* --- Student stories: an honest publishing slot, never invented proof ----- */
+
+.landing-reviews {
+  --lp-person-accent: var(--lp-ink-accent);
+  position: relative;
+  background: var(--lp-page-bg); border-top: 1px solid var(--lp-rule);
+}
+.landing-reviews-head {
+  max-width: 860px; margin-inline: auto;
+  display: grid; gap: var(--lp-4); text-align: center;
+}
+.landing-reviews-head .lp-eyebrow { margin: 0; justify-content: center; color: var(--accent-muted); }
+.landing-reviews-head h2 { max-width: none; margin: 0 0 var(--lp-3); font-size: var(--lp-t-h2); line-height: 1.04; letter-spacing: -.008em; }
+.landing-reviews-title {
+  display: block;
+}
+.landing-reviews-title p { max-width: 46ch; margin: 0 auto; color: var(--accent-muted); font-size: var(--lp-t-body); }
+
+/* Real controls, not indicators: a mouse user with no trackpad otherwise has
+   no way to move the rail, and the disabled ends say where the rail stops. */
+.landing-reviews-controls {
+  position: absolute; z-index: 4; top: 61%; inset-inline: var(--lp-5);
+  display: flex; align-items: center; justify-content: space-between;
   pointer-events: none;
 }
-.landing-story-lead blockquote {
-  position: relative; z-index: 1; max-width: 25ch; margin: 0;
-  color: var(--text);
-  font-family: var(--lp-display); font-weight: 500;
-  font-size: clamp(28px, 3vw, 43px); line-height: 1.2; letter-spacing: -.014em;
-  text-wrap: pretty; overflow-wrap: anywhere;
+.landing-reviews-controls button {
+  width: 52px; height: 52px; flex: 0 0 auto;
+  display: grid; place-items: center;
+  color: var(--text); background: var(--surface-raised);
+  border: 1px solid var(--lp-rule-strong); border-radius: var(--lp-r-pill);
+  box-shadow: var(--shadow-card); pointer-events: auto;
+  transition:
+    color var(--lp-dur-micro) var(--lp-ease-io),
+    background-color var(--lp-dur-micro) var(--lp-ease-io),
+    border-color var(--lp-dur-micro) var(--lp-ease-io),
+    transform var(--lp-dur-micro) var(--lp-ease-io);
 }
-:lang(ru) .landing-story-lead blockquote,
-:lang(uz) .landing-story-lead blockquote { max-width: 28ch; }
-/* Russian sets its own opening mark; everything else uses the curly quote. */
-.landing-page { --lp-quote-open: '\201C'; }
-:lang(ru) .landing-page { --lp-quote-open: '\00AB'; }
-
-.landing-story-byline {
-  min-height: 100%; padding-left: var(--lp-fluid-md);
-  display: grid; align-content: end; justify-items: start; gap: var(--lp-6);
-  border-left: 1px solid var(--lp-rule);
+.landing-reviews-controls button:hover:not(:disabled) {
+  color: var(--lp-cta-fg); background: var(--lp-signal); border-color: var(--lp-signal);
 }
-.landing-story-byline .landing-text-cta { justify-self: start; }
-.landing-story-who { min-width: 0; display: flex; align-items: center; gap: var(--lp-4); }
-.landing-story-who b { display: block; color: var(--lp-signal); font-size: var(--lp-t-body); font-weight: 700; overflow-wrap: anywhere; }
-.landing-story-who small { display: block; margin-top: 2px; color: var(--muted); font-size: var(--lp-t-small); overflow-wrap: anywhere; }
+.landing-reviews-controls button:active:not(:disabled) { transform: scale(.94); }
+.landing-reviews-controls button:disabled { opacity: .3; cursor: not-allowed; }
 
 .landing-story-avatar {
   width: 52px; height: 52px; flex: 0 0 52px;
-  display: grid; place-items: center;
+  display: grid; place-items: center; overflow: hidden;
   color: var(--lp-signal); background: var(--lp-signal-wash);
   border: 1px solid color-mix(in srgb, var(--lp-signal) 26%, transparent);
   border-radius: var(--lp-r-pill);
   font-family: var(--lp-display); font-size: var(--lp-t-small); font-weight: 500; letter-spacing: .05em;
 }
-.landing-story-card .landing-story-avatar { width: 36px; height: 36px; flex-basis: 36px; font-size: var(--lp-t-caption); }
+.landing-story-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; }
 
 /* Full-bleed track whose first card still lands on the shell's content edge.
    100%, never 100vw, so a desktop scrollbar cannot push the page sideways. */
 .landing-story-rail {
-  --lp-rail-inset: max(var(--lp-gutter), calc((100% - var(--lp-container)) / 2 + var(--lp-gutter)));
-  margin: var(--lp-8) 0 0; padding: var(--lp-1) var(--lp-rail-inset);
+  --lp-rail-inset: clamp(24px, 3.2vw, 56px);
+  margin: var(--lp-7) 0 0; padding: var(--lp-1) var(--lp-rail-inset);
   list-style: none;
-  display: grid; grid-auto-flow: column; grid-auto-columns: 340px; gap: var(--lp-5);
+  display: grid; grid-auto-flow: column; grid-auto-columns: 460px; gap: 16px;
   overflow-x: auto; overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory; scroll-padding-inline: var(--lp-rail-inset);
   scroll-behavior: smooth; scrollbar-width: none;
@@ -824,51 +887,36 @@
 .landing-story-rail:focus-within { mask-image: none; -webkit-mask-image: none; }
 
 .landing-story-card {
-  min-width: 0; padding: var(--lp-5);
-  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--lp-4);
+  position: relative; min-width: 0; min-height: 600px; padding: 30px 32px 34px;
+  display: flex; flex-direction: column;
   scroll-snap-align: start;
   color: var(--text); background: var(--surface-soft);
-  border: 1px solid var(--lp-rule); border-radius: var(--lp-r-lg);
+  border: 1px solid var(--lp-rule); border-radius: 28px;
   transition: transform var(--lp-dur-micro) var(--lp-ease-io), border-color var(--lp-dur-micro) var(--lp-ease-io);
 }
 .landing-story-card:hover { transform: translateY(-2px); border-color: var(--lp-rule-strong); }
-.landing-story-card blockquote { margin: 0; color: var(--text); font-size: var(--lp-t-body); line-height: 1.6; overflow-wrap: anywhere; }
-.landing-story-card footer { display: flex; align-items: center; gap: var(--lp-3); padding-top: var(--lp-4); border-top: 1px solid var(--lp-rule); }
-.landing-story-card footer b { display: block; font-size: var(--lp-t-small); font-weight: 700; overflow-wrap: anywhere; }
-.landing-story-card footer small { display: block; margin-top: 2px; color: var(--muted); font-size: var(--lp-t-caption); }
-.landing-story-badge { width: max-content; max-width: 100%; padding: var(--lp-1) var(--lp-3); overflow-wrap: anywhere; }
+.landing-story-card blockquote { margin: 20px 0 0; color: var(--muted); font-size: clamp(15px, .98vw, 16px); line-height: 1.5; overflow-wrap: anywhere; }
+.landing-story-card blockquote p { margin: 0; }
+.landing-review-person { min-width: 0; display: flex; align-items: center; gap: 16px; }
+/* A name wraps between the first and last name, never inside one. `break-word`
+   only splits a word that cannot fit a line by itself, so the column is left
+   wide enough that it never has to. */
+.landing-review-person > span:last-child { min-width: 0; }
+.landing-review-person b { display: block; font-size: 21px; font-weight: 700; line-height: 1.3; overflow-wrap: break-word; text-wrap: balance; }
+.landing-review-person small { display: block; margin-top: 3px; color: var(--muted); font-size: var(--lp-t-caption); line-height: 1.45; overflow-wrap: break-word; }
+.landing-story-card .landing-story-avatar { width: 62px; height: 62px; flex-basis: 62px; font-size: var(--lp-t-small); }
 
-/* Real controls, not indicators: a mouse user with no trackpad otherwise has
-   no way to move the rail. */
-.landing-story-dots { margin-top: var(--lp-5); display: flex; align-items: center; justify-content: center; gap: 0; }
-.landing-story-dots button {
-  min-width: 32px; min-height: 44px; padding: 0;
-  display: grid; place-items: center;
-  background: transparent; border: 0; border-radius: var(--lp-r-sm);
+.landing-review-meta {
+  margin: 20px 0 0;
+  display: grid; gap: 5px;
 }
-.landing-story-dots button::before {
-  content: ''; width: 22px; height: 7px; border-radius: var(--lp-r-pill);
-  background: color-mix(in srgb, var(--lp-signal) 30%, transparent);
-  transform: scaleX(.32); transform-origin: center;
-  transition: transform var(--lp-dur-short) var(--lp-ease-io), background-color var(--lp-dur-micro) var(--lp-ease-io);
+.landing-review-meta p {
+  min-width: 0; margin: 0;
+  display: flex; align-items: flex-start; gap: 8px;
+  color: var(--muted); font-size: 17px; line-height: 1.4;
 }
-.landing-story-dots button[aria-current='true']::before { transform: none; background: var(--lp-signal); }
-
-/* --- Trust: a quieter branded band. Proof here is governance, not a claimed
-   result. No second photograph: one crop, used well, beats two generic ones. */
-
-.landing-trust-head { margin-bottom: var(--lp-fluid-lg); }
-.landing-trust h2 { max-width: 18ch; margin: 0 0 var(--lp-4); font-size: var(--lp-t-h2); line-height: 1.02; letter-spacing: -.032em; }
-.landing-trust-head p { max-width: 52ch; margin: 0; color: var(--lp-ink-muted); }
-.landing-ledger { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--lp-fluid-md); }
-.landing-ledger > div { padding-top: var(--lp-5); border-top: 1px solid var(--lp-ink-rule); }
-.landing-ledger dt {
-  margin-bottom: var(--lp-3);
-  color: var(--lp-ink-fg);
-  font-family: var(--lp-display); font-size: var(--lp-t-h3);
-  font-weight: 500; letter-spacing: -.015em;
-}
-.landing-ledger dd { margin: 0; color: var(--lp-ink-muted); font-size: var(--lp-t-small); }
+.landing-review-meta svg { margin-top: 2px; flex: 0 0 auto; color: var(--lp-person-accent); stroke-width: 2.5; }
+.landing-review-meta span { min-width: 0; overflow-wrap: anywhere; }
 
 /* --- FAQ: the register, answered ------------------------------------------
    Not a stack of lavender pills. The page's whole vocabulary is a ruled
@@ -982,7 +1030,7 @@
 /* --- Closing CTA and footer: one broad curve, one brand field ------------- */
 
 .landing-closing {
-  padding: var(--lp-section) 0 clamp(150px, 13vw, 210px);
+  padding-block: var(--lp-section);
   position: relative; z-index: 2;
   color: var(--text); background: var(--lp-page-bg); text-align: center;
 }
@@ -994,19 +1042,16 @@
 .landing-closing .landing-primary-cta:disabled { opacity: .5; cursor: not-allowed; }
 
 .landing-footer {
-  min-height: 360px; margin-top: -1px; padding: 128px 0 var(--lp-6);
-  position: relative; z-index: 3; isolation: isolate;
+  margin: var(--lp-5) var(--lp-4) 0; padding-top: var(--lp-8);
+  position: relative; z-index: 3; isolation: isolate; overflow: clip;
   color: var(--lp-footer-fg); background: var(--lp-footer-bg);
+  border-radius: var(--lp-r-lg) var(--lp-r-lg) 0 0;
 }
-.landing-footer::before {
-  content: ''; position: absolute; z-index: -1;
-  width: 125%; height: 180px; left: -12.5%; top: -105px;
-  background: var(--lp-page-bg);
-  border-radius: 0 0 50% 50% / 0 0 100% 100%;
-}
+/* The band's texture, held well back now that the wordmark occupies its lower
+   half: at the old strength the diagonals read straight through the letters. */
 .landing-footer::after {
   content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
-  opacity: .4;
+  opacity: .16;
   background-image:
     linear-gradient(28deg, transparent 48%, var(--lp-footer-glyph) 49%, var(--lp-footer-glyph) 50%, transparent 51%),
     radial-gradient(circle at 11% 61%, var(--lp-footer-glyph) 0 2px, transparent 3px),
@@ -1022,56 +1067,86 @@
   background-size: contain; background-repeat: no-repeat;
 }
 .landing-page .brand-logo::after { content: none; }
-.landing-footer-emblem {
-  width: 146px; height: 146px; padding: 10px;
-  display: grid; place-items: center;
-  position: absolute; z-index: 2; left: 50%; top: -8px; transform: translate(-50%, -50%);
-  background: transparent; border: 0; border-radius: 0;
-  transition: transform var(--lp-dur-short) var(--lp-ease-io);
-}
-.landing-footer-emblem:hover { transform: translate(-50%, calc(-50% - 3px)); }
-.landing-footer-emblem .brand-logo {
-  width: 126px; height: 126px; flex-basis: 126px;
-  filter: drop-shadow(0 8px 18px var(--lp-frame-halo));
-}
+/* Columns of words, starting at the shell's left edge: no lockup, no strapline
+   and no icon row above them. The wordmark at the foot of the band is the only
+   brand mark the footer needs, so repeating the logo here would say it twice. */
+/* Three deliberate columns mirror the reference composition. Contact details
+   form one line below instead of creating a fourth navigation group. */
 .landing-footer-grid {
-  display: grid; grid-template-columns: minmax(260px, 1.5fr) minmax(130px, .7fr);
-  align-items: start; column-gap: var(--lp-fluid-xl); row-gap: var(--lp-7);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 260px));
+  align-items: start; justify-content: start;
+  column-gap: var(--lp-9); row-gap: var(--lp-7);
 }
-.landing-footer-grid.has-access { grid-template-columns: minmax(260px, 1.5fr) repeat(2, minmax(130px, .7fr)); }
-.landing-footer-brand { display: grid; justify-items: start; gap: var(--lp-5); }
-.landing-footer-brand .brand-lockup { align-items: center; }
-.landing-footer-brand .brand-logo { width: 56px; height: 56px; flex-basis: 56px; }
-.landing-footer-brand .brand-lockup b { color: var(--lp-footer-fg); font-size: 22px; }
-.landing-footer-brand .brand-lockup small { display: block; max-width: 24ch; margin-top: 5px; color: var(--lp-footer-muted); }
-.landing-social-links { display: flex; align-items: center; flex-wrap: wrap; gap: var(--lp-2); }
-.landing-social-links :is(a, span) {
-  width: 38px; height: 38px; display: grid; place-items: center;
+.landing-footer-links { min-width: 0; display: grid; justify-items: start; align-content: start; gap: var(--lp-3); }
+.landing-footer-links > span {
+  margin-bottom: var(--lp-4); color: var(--lp-footer-fg);
+  font-size: 15px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+/* The sign-in control is a button because it opens the app rather than moving
+   the page, but it belongs to this list and is set like the rest of it. */
+.landing-footer-links :is(a, button, .landing-footer-soon) {
+  width: max-content; max-width: 100%; min-height: 28px; padding: 0;
+  display: inline-flex; align-items: center; text-align: left;
+  color: var(--lp-footer-muted); background: transparent; border: 0;
+  font-family: inherit; font-size: var(--lp-t-body); font-weight: 400; line-height: 1.4;
+  overflow-wrap: anywhere;
+  transition: color var(--lp-fast) ease, transform var(--lp-fast) var(--lp-ease);
+}
+.landing-footer-links :is(a, button):hover { color: var(--lp-footer-fg); transform: translateX(2px); }
+.landing-footer-soon { opacity: .5; cursor: not-allowed; }
+
+.landing-footer-legal {
+  margin-top: var(--lp-9);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--lp-4);
+}
+.landing-footer-legal small { color: var(--lp-footer-muted); font-size: var(--lp-t-caption); }
+.landing-footer-imprint { min-width: 0; display: grid; gap: var(--lp-2); }
+/* Inline text flow, not a flex row: two short actions that simply wrap when the
+   column runs out, with the separator carrying its own breathing room. JSX eats
+   the whitespace between the elements, so the gap has to be a margin. */
+.landing-footer-contact {
+  min-width: 0; margin: 0;
+  color: var(--lp-footer-muted); font-size: var(--lp-t-caption); line-height: 1.6;
+}
+.landing-footer-contact > span { margin: 0 var(--lp-2); }
+/* The actions carry the line; the imprint under them stays quiet. */
+.landing-footer-contact a { font-weight: 600; }
+.landing-footer-contact a {
+  color: inherit; border-bottom: 1px solid transparent;
+  transition: color var(--lp-fast) ease, border-color var(--lp-fast) ease;
+}
+.landing-footer-contact a:hover { color: var(--lp-footer-fg); border-bottom-color: currentColor; }
+.landing-footer-top {
+  width: 40px; height: 40px; flex: 0 0 auto;
+  display: grid; place-items: center;
   color: var(--lp-footer-muted); background: color-mix(in srgb, var(--lp-footer-fg) 5%, transparent);
-  border: 1px solid var(--lp-footer-rule); border-radius: var(--lp-r-md);
-}
-.landing-social-links a {
+  border: 1px solid var(--lp-footer-rule); border-radius: var(--lp-r-pill);
   transition: color var(--lp-dur-micro) ease, background-color var(--lp-dur-micro) ease,
     border-color var(--lp-dur-micro) ease, transform var(--lp-dur-micro) var(--lp-ease-io);
 }
-.landing-social-links a:hover {
+.landing-footer-top:hover {
   color: var(--lp-footer-fg); background: color-mix(in srgb, var(--lp-footer-fg) 10%, transparent);
   border-color: var(--lp-footer-accent); transform: translateY(-2px);
 }
-.landing-social-links a:active { transform: translateY(0) scale(.97); }
-.landing-social-links span[aria-disabled='true'] { opacity: .34; cursor: not-allowed; }
-.landing-footer-links { display: grid; align-content: start; gap: var(--lp-2); }
-.landing-footer-links > span { margin-bottom: var(--lp-2); color: var(--lp-footer-accent); font-family: var(--lp-display); font-size: 17px; }
-.landing-footer-links a {
-  width: max-content; min-height: 32px; display: inline-flex; align-items: center;
-  color: var(--lp-footer-muted); font-size: var(--lp-t-small);
-  transition: color var(--lp-fast) ease, transform var(--lp-fast) var(--lp-ease);
-}
-.landing-footer-links a:hover { color: var(--lp-footer-fg); transform: translateX(2px); }
-.landing-footer-grid > small {
-  grid-column: 1 / -1; padding-top: var(--lp-5);
-  color: var(--lp-footer-muted); border-top: 1px solid var(--lp-footer-rule);
-  font-size: var(--lp-t-caption); text-align: center;
+
+/* The sign-off fills the footer without losing either edge of the name. It
+   brightens downward and is cut only vertically by the negative margin, so the
+   band still stops mid-letter while the final U remains completely visible.
+   It says nothing the columns above have not said, so it is aria-hidden in the
+   markup and unselectable here. */
+.landing-footer-wordmark {
+  margin: var(--lp-7) 0 calc(var(--lp-7) * -1);
+  font-family: var(--lp-display); font-size: clamp(42px, 15vw, 288px); font-weight: 600;
+  line-height: .78; letter-spacing: -.045em;
+  text-align: center; text-transform: uppercase; white-space: nowrap;
+  background-image: linear-gradient(180deg,
+    color-mix(in srgb, var(--lp-footer-fg) 14%, transparent) 4%,
+    color-mix(in srgb, var(--lp-footer-fg) 46%, transparent) 58%,
+    color-mix(in srgb, var(--lp-footer-fg) 92%, transparent) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent;
+  user-select: none; -webkit-user-select: none;
 }
 
 /* Section reveal: grouped per block, two variants, small distances. A block is
@@ -1297,7 +1372,7 @@
   .landing-logo-marquee { overflow-x: auto; mask-image: none; -webkit-mask-image: none; }
   .landing-logo-marquee [data-marquee-copy='true'] { display: none; }
   .landing-story-rail { scroll-behavior: auto; }
-  .landing-story-card, .landing-story-dots button::before { transition: none; }
+  .landing-story-card, .landing-reviews-controls button, .landing-footer-top { transition: none; }
   .landing-faq-item, .landing-faq-trigger, .landing-faq-mark,
   .landing-faq-mark::before, .landing-faq-mark::after,
   .landing-faq-answer, .landing-faq-answer > div { transition: none; }
@@ -1308,7 +1383,9 @@
 .login-page {
   min-height: 100dvh; display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(400px, .8fr);
-  color: var(--text); background: var(--canvas); font-family: var(--lp-body);
+  --brand-panel: var(--lp-page-bg);
+  --login-panel: var(--lp-page-bg);
+  color: var(--text); background: var(--lp-page-bg); font-family: var(--lp-body);
 }
 .login-page :is(h1, h2), .login-page .brand-lockup b { font-family: var(--lp-display); font-weight: 500; }
 .login-copy {
@@ -1387,7 +1464,8 @@
   .landing-journey-grid { grid-template-columns: 1fr; gap: var(--lp-7); }
   .landing-journey .landing-section-head { position: static; }
   .landing-specimen { grid-column: 1; }
-  .landing-story-rail { grid-auto-columns: 320px; }
+  .landing-story-rail { grid-auto-columns: 380px; }
+  .landing-story-card { min-height: 500px; }
   .landing-product-showcase { margin-top: var(--lp-8); grid-template-columns: 1fr; row-gap: var(--lp-6); }
   .landing-product-showcase .landing-showcase-copy,
   .landing-showcase-note,
@@ -1450,20 +1528,12 @@
   .landing-preview-sidebar { padding-inline: 9px; }
   .landing-preview-brand { margin-inline: 5px; }
   .landing-preview-brand b { font-size: 11px; }
-  .landing-review-stage { grid-template-columns: 100px minmax(0, 1fr); }
-  .landing-review-stage aside { grid-column: 2; width: max-content; max-width: 100%; }
-  .landing-story-lead { grid-template-columns: 1fr; align-items: start; }
-  .landing-story-byline {
-    min-height: 0; padding: var(--lp-5) 0 0;
-    border-top: 1px solid var(--lp-rule); border-left: 0;
-  }
-  .landing-story-rail { grid-auto-columns: 300px; gap: var(--lp-4); }
-  .landing-ledger { grid-template-columns: 1fr; }
-  .landing-ledger > div { padding-block: var(--lp-5); }
-  .landing-trust h2 { max-width: none; }
-  .landing-footer-grid { grid-template-columns: 1fr 1fr; }
-  .landing-footer-grid.has-access { grid-template-columns: 1fr 1fr; }
-  .landing-footer-brand { grid-column: 1 / -1; }
+  .landing-reviews-title { display: block; }
+  .landing-reviews-controls { top: 63%; inset-inline: var(--lp-3); }
+  .landing-story-rail { grid-auto-columns: 360px; gap: var(--lp-4); }
+  .landing-team-grid { row-gap: var(--lp-6); }
+  .landing-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .landing-footer-legal { margin-top: var(--lp-8); }
   .login-page { grid-template-columns: 1fr; }
   .login-copy { min-height: 42dvh; padding: 30px 28px 42px; }
   .login-copy h1 { font-size: 46px; }
@@ -1507,36 +1577,26 @@
   .landing-preview-user div, .landing-preview-user > svg { display: none; }
   .landing-preview-main { padding: 16px; }
   .landing-preview-toolbar h3 { font-size: 19px; }
-  .landing-review-stage { margin-top: var(--lp-7); padding-block: var(--lp-6); grid-template-columns: 1fr; gap: var(--lp-5); }
-  .landing-review-stage > svg { width: 62px; height: 62px; }
-  .landing-review-stage aside { grid-column: 1; width: 100%; }
-  .landing-review-selectors > span { min-height: 72px; padding: var(--lp-4) var(--lp-2); gap: var(--lp-2); }
-  .landing-review-selectors b { font-size: 21px; }
-  /* At 30px the head and the quote would stack as two identical blocks. */
-  .landing-story-lead blockquote { font-size: var(--lp-t-h3); }
-  .landing-story-lead::before { font-size: calc(var(--lp-t-h3) * 2.6); }
-  .landing-story-byline { gap: var(--lp-5); }
+  .landing-reviews-controls button { width: 42px; height: 42px; }
   .landing-story-avatar { width: 44px; height: 44px; flex-basis: 44px; }
   .landing-about-principles > div { grid-template-columns: 34px minmax(0, 1fr); row-gap: var(--lp-2); }
   .landing-about-principles dd { grid-column: 2; }
-  .landing-story-rail { grid-auto-columns: min(82%, 300px); }
-  .landing-closing { padding-bottom: 138px; }
-  .landing-footer { padding-top: 112px; }
-  .landing-footer-grid { grid-template-columns: 1fr; text-align: center; }
-  .landing-footer-grid.has-access { grid-template-columns: 1fr; }
-  .landing-footer-brand { grid-column: 1; }
-  .landing-footer-brand { justify-items: center; }
-  .landing-footer-brand .brand-lockup { justify-content: center; }
-  .landing-footer-links { justify-items: center; }
-  .landing-footer-emblem { width: 98px; height: 98px; }
-  .landing-footer-emblem .brand-logo { width: 82px; height: 82px; flex-basis: 82px; }
+  .landing-reviews-controls { top: 62%; inset-inline: var(--lp-2); }
+  .landing-story-rail { grid-auto-columns: min(88%, 360px); }
+  .landing-story-card { min-height: 460px; padding: var(--lp-5); }
+  .landing-story-card .landing-story-avatar { width: 52px; height: 52px; flex-basis: 52px; }
+  .landing-footer { margin-inline: var(--lp-2); padding-top: var(--lp-7); }
+  .landing-footer-grid { grid-template-columns: 1fr; row-gap: var(--lp-6); }
+  .landing-footer-links > span { font-size: 13px; }
+  .landing-footer-links :is(a, button, .landing-footer-soon) { font-size: var(--lp-t-small); }
+  .landing-footer-legal { margin-top: var(--lp-7); }
+  .landing-footer-wordmark { margin-block: var(--lp-6) calc(var(--lp-5) * -1); }
   .landing-path-list { padding-left: var(--lp-6); }
   .landing-path-list::before { left: 11px; }
   .landing-path-list li::before { left: calc(var(--lp-6) * -1); width: 23px; height: 23px; font-size: 10px; }
   .landing-capability { grid-template-columns: 20px minmax(0, 1fr); }
   .landing-capability h3 { grid-column: 2; }
   .landing-capability-note { grid-row: auto; grid-column: 2; justify-self: start; }
-  .landing-ledger > div { grid-template-columns: 1fr; gap: var(--lp-2); }
   .login-copy { min-height: auto; padding: 24px 22px 34px; }
   .login-copy h1 { margin: 22px 0 16px; font-size: 38px; }
   :lang(ru) .login-copy h1 { font-size: clamp(30px, 8vw, 38px); }
@@ -1561,6 +1621,12 @@
   .landing-story-avatar { width: 40px; height: 40px; flex-basis: 40px; }
   .landing-story-card { padding: var(--lp-4); }
   .landing-story-rail { grid-auto-columns: min(82%, 260px); }
+  /* The card is 260px here, leaving ~158px beside the avatar. At 21px a long
+     Uzbek surname no longer fits that column on its own and would be split
+     mid-word, so the name steps down with the card. */
+  .landing-story-card .landing-story-avatar { width: 48px; height: 48px; flex-basis: 48px; }
+  .landing-review-person { gap: 12px; }
+  .landing-review-person b { font-size: 18px; }
 
 }
 

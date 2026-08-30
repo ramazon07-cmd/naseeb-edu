@@ -122,10 +122,10 @@ for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchra
 if (app.includes('className="palette-row"')) throw new Error('Login palette swatches must not be rendered.');
 if (!app.includes("activeUser.role === 'organization'")) throw new Error('Organization data scope is missing.');
 if (!app.includes("const THEME_KEY = 'naseeb-edu-theme'")) throw new Error('Persistent theme support is missing.');
-if (!app.includes('/brand/naseeb-dark-256.png') || !app.includes('/brand/naseeb-light-256.jpg')) throw new Error('Optimized theme-aware logos are missing.');
-if (!app.includes("light: '/brand/icon-light-64.png?v=2'") || !app.includes("dark: '/brand/icon-dark-64.png?v=3'") || !app.includes('favicon.href = themeIconFor(theme)')) throw new Error('The favicon must follow the active app theme.');
-if (!html.includes("theme === 'dark' ? '/brand/icon-dark-64.png?v=3' : '/brand/icon-light-64.png?v=2'")) throw new Error('The pre-paint favicon must follow the initial app theme.');
-if (!html.includes('rel="preload"') || !html.includes('naseeb-dark-256.png') || !html.includes('naseeb-light-256.jpg')) throw new Error('Theme logos must be preloaded.');
+if (!app.includes('/brand/naseeb-dark-256.png') || !app.includes('/brand/naseeb-light-256.png')) throw new Error('Optimized theme-aware logos are missing.');
+if (!app.includes("light: '/brand/icon-light-64.png?v=2'") || !app.includes("dark: '/brand/icon-dark-64-transparent.png?v=9'") || !app.includes('favicon.href = themeIconFor(theme)')) throw new Error('The favicon must follow the active app theme.');
+if (!html.includes("theme === 'dark' ? '/brand/icon-dark-64-transparent.png?v=9' : '/brand/icon-light-64.png?v=2'")) throw new Error('The pre-paint favicon must follow the initial app theme.');
+if (!html.includes('rel="preload"') || !html.includes('naseeb-dark-256.png') || !html.includes('naseeb-light-256.png')) throw new Error('Theme logos must be preloaded.');
 if (!app.includes('login-form-panel') || !styles.includes('.login-form-panel')) throw new Error('Responsive login form panel is missing.');
 if (!app.includes('TARGET_COUNTRIES_MAX_LENGTH') || !app.includes('normalizeCountries') || !styles.includes('.student-target-cell')) throw new Error('Target-country validation or overflow protection is missing.');
 if (!api.includes('fetchWithTimeout') || !api.includes('REQUEST_TIMEOUT_MS')) throw new Error('Slow-network timeout handling is missing.');
@@ -145,7 +145,7 @@ if (!app.includes('Create self-task') || !app.includes('Self-task · no XP') || 
 if (!app.includes('Only students connected to your account are listed.')) throw new Error('Scoped task-assignment guidance is missing.');
 if (!styles.includes('--sidebar: #FFFFFF') || !styles.includes('--sidebar: #0E0713')) throw new Error('Theme-aware sidebar colors are missing.');
 if (!styles.includes('--accent: #B8A58A') || !styles.includes('--accent: #4A1368')) throw new Error('Light/dark accent palettes are missing.');
-if (!styles.includes("--brand-logo-image: url('/brand/naseeb-light-256.jpg')") || !styles.includes("--brand-logo-image: url('/brand/naseeb-dark-256.png')")) throw new Error('Logo must switch instantly through theme tokens.');
+if (!styles.includes("--brand-logo-image: url('/brand/naseeb-light-256.png')") || !styles.includes("--brand-logo-image: url('/brand/naseeb-dark-256.png')")) throw new Error('Logo must switch instantly through theme tokens.');
 if (styles.includes('--nav-active-bg: var(--silver-gradient)')) throw new Error('Dark navigation must not reuse the light silver active state.');
 if (styles.includes('--student-accent-token: #C8B99F')) throw new Error('Dark student UI must not reuse the beige light accent.');
 if (!app.includes("user.role === 'student' ? 'student-portal' : ''")) throw new Error('Student messaging must inherit the student theme scope.');
@@ -172,7 +172,7 @@ if (!app.includes('function CheckboxControl(') || !app.includes('function Choice
 if (app.includes('program-type-tabs') || app.includes('check-filter')) throw new Error('Legacy program filters are still rendered.')
 if ((html.match(/name="theme-color"/g) || []).length !== 1) throw new Error('Exactly one dynamic theme-color meta tag is required.');
 if (app.includes('AdmitFlow') || html.includes('AdmitFlow')) throw new Error('Legacy AdmitFlow branding is still rendered.');
-for (const asset of ['naseeb-dark-256.png', 'naseeb-light-256.jpg', 'icon-dark-64.png', 'icon-light-64.png']) {
+for (const asset of ['naseeb-dark-256.png', 'naseeb-light-256.png', 'icon-dark-64-transparent.png', 'icon-light-64.png']) {
   if (!fs.existsSync(path.join(root, 'frontend/public/brand', asset))) throw new Error(`Brand asset missing: ${asset}`);
 }
 for (const color of ['#4A1368', '#C0C0C6', '#1A1A1F', '#F2F2F5']) {
