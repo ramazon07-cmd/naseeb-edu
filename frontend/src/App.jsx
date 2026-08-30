@@ -860,8 +860,8 @@ function StudentDashboard({ user, data, setPage }) {
       <div className="readiness-ring" style={{ '--progress': `${student?.journey_progress_percent || 0}%` }}><strong>{formatPercentLocale(student?.journey_progress_percent || 0)}</strong><span>{t("Journey progress")}</span></div>
     </section>
     <div className="student-dashboard-overview">
-      <JourneyProgress student={student} attempts={data.challengeAttempts} />
-      <LevelProgress student={student} />
+      <div className="student-dashboard-progress"><JourneyProgress student={student} attempts={data.challengeAttempts} /><LevelProgress student={student} /></div>
+      <DashboardUniversityCard setPage={setPage} />
     </div>
     <div className="stat-grid"><Stat label={t("Active tasks")} value={pendingTasks.length} note={tx`${completed} completed`} /><Stat label={t("Applications")} value={data.applications.length} note={tx`${data.applications.filter((item) => item.status === 'submitted').length} submitted`} /><Stat label={t("Essays")} value={data.essays.length} note={tx`${data.essays.filter((item) => item.status === 'approved').length} approved`} /><Stat label={t("Achievements")} value={achievementTotal} note={t("Honors included")} /></div>
     <div className="student-dashboard-grid">
@@ -877,6 +877,15 @@ function StudentDashboard({ user, data, setPage }) {
       </div>
     </div>
   </div>;
+}
+
+// The personality half of the old discovery rail became a live-progress row, so
+// only the college entry point is still a card here.
+function DashboardUniversityCard({ setPage }) {
+  return <article className="dashboard-discovery-card university">
+    <GraduationCap className="discovery-card-art" size={122} strokeWidth={1.35} />
+    <div><span>{t("COLLEGE RESEARCH")}</span><h3>{t("University Match")}</h3><p>{t("Find universities that match your academic profile and goals.")}</p><button type="button" onClick={() => setPage('college_search')}>{t("Explore matches")} <ChevronRight size={16} /></button></div>
+  </article>;
 }
 
 function JourneyProgress({ student, attempts = [] }) {
