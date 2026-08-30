@@ -89,8 +89,8 @@ const BRAND_LOGOS = {
   dark: '/brand/naseeb-dark-256.png'
 };
 const THEME_ICONS = {
-  light: "/brand/icon-light-64.png?v=2",
-  dark: "/brand/icon-dark-64.png?v=9",
+  light: '/brand/icon-light-64.png?v=2',
+  dark: '/brand/icon-dark-64-transparent.png?v=9',
 };
 
 function brandLogoFor(theme) {
