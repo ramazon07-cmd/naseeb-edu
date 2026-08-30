@@ -204,7 +204,7 @@ function navigationFor(user) {
 const EMPTY_DATA = {
   schools: [], students: [], universities: [], tasks: [], applications: [], documents: [], essays: [],
   achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
-  recommendations: [], roadmapMissions: [], communityPosts: [],
+  recommendations: [], roadmapMissions: [], communityPosts: [], challengeAttempts: [],
   bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], resourceLibrary: [], storeItems: [], team: [], supportTickets: [],
   accounts: [], counselorRoadmapTemplates: [], counselorRoadmaps: [], adminAuditEvents: [],
   parentPortal: { children: [], pending_invitations: [], privacy: { hidden: [], read_only: true } }
@@ -438,7 +438,7 @@ function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, 
 }
 
 const PAGE_RESOURCE_KEYS = {
-  dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'parentPortal'],
+  dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'parentPortal', 'challengeAttempts'],
   schools: ['schools'], students: ['students'], profile: ['students'], academics: ['students', 'researches'],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
@@ -861,7 +861,7 @@ function StudentDashboard({ user, data, setPage }) {
     </section>
     <div className="student-dashboard-overview">
       <div className="student-dashboard-progress"><JourneyProgress student={student} /><LevelProgress student={student} /></div>
-      <DashboardDiscoveryCards setPage={setPage} />
+      <DashboardDiscoveryCards setPage={setPage} attempts={data.challengeAttempts} />
     </div>
     <div className="stat-grid"><Stat label={t("Active tasks")} value={pendingTasks.length} note={tx`${completed} completed`} /><Stat label={t("Applications")} value={data.applications.length} note={tx`${data.applications.filter((item) => item.status === 'submitted').length} submitted`} /><Stat label={t("Essays")} value={data.essays.length} note={tx`${data.essays.filter((item) => item.status === 'approved').length} approved`} /><Stat label={t("Achievements")} value={achievementTotal} note={t("Honors included")} /></div>
     <div className="student-dashboard-grid">
@@ -879,11 +879,17 @@ function StudentDashboard({ user, data, setPage }) {
   </div>;
 }
 
-function DashboardDiscoveryCards({ setPage }) {
+// The card sits next to a permanent sidebar link to the same page, so a static
+// promo would just be a second copy of the nav. It earns its place by carrying
+// the state the sidebar cannot: how far the student actually is.
+function DashboardDiscoveryCards({ setPage, attempts = [] }) {
+  const taken = new Set(attempts.map((row) => row.challenge));
+  const done = CHALLENGES.filter((challenge) => taken.has(challenge.key)).length;
+  const complete = done === CHALLENGES.length;
   return <section className="dashboard-discovery-rail" aria-label={t("Student discovery tools")}>
     <article className="dashboard-discovery-card personality">
       <Fingerprint className="discovery-card-art" size={118} strokeWidth={1.35} />
-      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Personality & Interests")}</h3><p>{t("Identify your strengths, interests, and future study direction.")}</p><button type="button" onClick={() => setPage('find_personality')}>{t("Start challenges")} <ChevronRight size={16} /></button></div>
+      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Personality & Interests")}</h3><p>{complete ? t("Every challenge available today is done. Bring the profile to your counselor.") : done ? tx`${done} of ${CHALLENGES.length} challenges done. Finish the rest to sharpen your profile.` : t("Identify your strengths, interests, and future study direction.")}</p><button type="button" onClick={() => setPage('find_personality')}>{complete ? t("View your profile") : done ? t("Continue challenges") : t("Start challenges")} <ChevronRight size={16} /></button></div>
     </article>
     <article className="dashboard-discovery-card university">
       <GraduationCap className="discovery-card-art" size={122} strokeWidth={1.35} />
@@ -3580,7 +3586,8 @@ export default function App() {
       ['roadmapMissions', 'roadmap-missions'], ['communityPosts', 'community-posts'], ['bookings', 'bookings'],
       ['messageChannels', 'message-channels'], ['programServices', 'program-services'],
       ['scholarships', 'scholarships'], ['opportunityPrograms', 'opportunity-programs'],
-      ['resourceLibrary', 'resource-library'], ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets']];
+      ['resourceLibrary', 'resource-library'], ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets'],
+      ['challengeAttempts', 'challenge-attempts']];
 
       const resources = activeUser.role === 'parent' ?
       [['parentPortal', 'parent-portal']] :

@@ -1222,6 +1222,11 @@ export const UI_TRANSLATIONS = {
   Company: ['Kompaniya', 'Компания'],
   Team: ['Jamoa', 'Команда'],
   'Contact our team': ['Jamoamiz bilan bog‘lanish', 'Связаться с нашей командой'],
+  'Start challenges': ['Sinovlarni boshlash', 'Начать испытания'],
+  'Continue challenges': ['Sinovlarni davom ettirish', 'Продолжить испытания'],
+  'View your profile': ['Profilingizni ko‘rish', 'Посмотреть профиль'],
+  '{0} of {1} challenges done. Finish the rest to sharpen your profile.': ['{1} sinovdan {0} tasi bajarildi. Qolganini tugatsangiz, profilingiz aniqroq bo‘ladi.', 'Выполнено {0} из {1} испытаний. Завершите остальные, чтобы профиль стал точнее.'],
+  'Every challenge available today is done. Bring the profile to your counselor.': ['Bugun mavjud barcha sinovlar bajarildi. Profilni maslahatchingiz bilan muhokama qiling.', 'Все доступные сегодня испытания пройдены. Обсудите профиль со своим консультантом.'],
 }
 
 export function uiMessages(language) {
