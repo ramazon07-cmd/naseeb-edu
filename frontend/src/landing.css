@@ -433,17 +433,8 @@
 .landing-hero-media img {
   width: 100%; height: 100%;
   display: block; object-fit: cover; object-position: center;
-  filter: var(--lp-ink-photo);
+  filter: none;
   transition: transform var(--lp-dur-long) var(--lp-ease);
-}
-/* The reference treatment feathers only the outer edge. It stops before the
-   application cards, keeping every label legible. */
-.landing-hero-media::after {
-  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--lp-ink-solid) 82%, transparent) 0,
-    color-mix(in srgb, var(--lp-ink-solid) 26%, transparent) 6%,
-    transparent 13%);
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .landing-hero-media:hover {
@@ -539,18 +530,22 @@
 .landing-logo-marquee:focus .landing-role-track { animation: none; transform: none; }
 .landing-logo-marquee:focus [data-marquee-copy='true'] { display: none; }
 .landing-logo-marquee .landing-role-track > span {
-  width: clamp(208px, 19vw, 280px); min-width: 0; flex: 0 0 auto;
-  min-height: 72px;
+  width: clamp(232px, 21vw, 320px); min-width: 0; flex: 0 0 auto;
+  min-height: 92px;
   padding-inline: var(--lp-5); justify-content: center; border-right: 0;
+}
+.landing-logo-marquee .landing-role-track > .landing-placement-slot-prominent {
+  width: clamp(320px, 26vw, 360px);
+  padding-inline: var(--lp-4);
 }
 /* Marks range from an 8.9:1 wordmark to a 1.5:1 crest. Height alone would let
    the widest wordmark run four times the width of the narrowest mark and take
    over the strip, so width is capped too and object-fit settles each mark
    inside that box — the usual way a logo wall keeps optical weight even. */
 .landing-logo-marquee img {
-  width: 100%; height: 72px;
-  max-width: 192px;
-  padding: var(--lp-3);
+  width: 100%; height: 88px;
+  max-width: 232px;
+  padding: var(--lp-2);
   display: block; object-fit: contain;
   background: none;
   filter: var(--lp-logo-filter);
@@ -560,13 +555,16 @@
   filter: var(--lp-logo-inverse-filter);
 }
 .landing-logo-marquee .landing-placement-logo-square {
-  width: 104px; height: 104px; padding: var(--lp-2);
+  width: 112px; height: 112px; padding: var(--lp-2);
 }
 .landing-logo-marquee .landing-placement-logo-tall {
-  height: 104px; padding: 0;
+  height: 112px; padding: 0;
+}
+.landing-logo-marquee .landing-placement-logo-prominent {
+  width: 100%; height: 112px; max-width: 328px; padding: 0;
 }
 .landing-logo-marquee .landing-placement-logo-icon {
-  width: 32px; height: 50px; flex: 0 0 32px;
+  width: 38px; height: 58px; flex: 0 0 38px;
   padding: 0;
 }
 .landing-logo-marquee .landing-placement-logo-original { filter: none; }
@@ -577,7 +575,7 @@
 }
 .landing-logo-marquee .landing-placement-lockup { gap: var(--lp-3); }
 .landing-placement-lockup .landing-placement-name {
-  font-family: Arial, var(--lp-body); font-size: 18px;
+  font-family: Arial, var(--lp-body); font-size: 19px;
   line-height: 1; white-space: pre-line; text-align: left;
 }
 .landing-placement-lockup .landing-placement-name small {
@@ -585,13 +583,16 @@
   font-size: 11px; letter-spacing: -.025em;
 }
 .landing-logo-marquee .landing-placement-lockup img {
-  width: 52px; height: 52px; flex-basis: 52px;
+  width: 60px; height: 60px; flex-basis: 60px;
 }
 @keyframes lp-role-marquee { to { transform: translateX(-50%); } }
 
 /* --- Bands --------------------------------------------------------------- */
 
-.landing-band { padding-block: var(--lp-section); }
+.landing-band {
+  padding-block: var(--lp-section);
+  scroll-margin-top: calc(var(--lp-nav-h) + var(--lp-4));
+}
 .landing-journey { background: var(--lp-journey-bg); }
 .landing-invert {
   color: var(--lp-ink-fg);
@@ -838,61 +839,67 @@
   background: var(--lp-page-bg); border-top: 1px solid var(--lp-rule);
 }
 .landing-reviews-head {
-  max-width: 860px; margin-inline: auto;
-  display: grid; gap: var(--lp-4); text-align: center;
+  width: 100%; text-align: center;
 }
-.landing-reviews-head .lp-eyebrow { margin: 0; justify-content: center; color: var(--accent-muted); }
-.landing-reviews-head h2 { max-width: none; margin: 0 0 var(--lp-3); font-size: var(--lp-t-h2); line-height: 1.04; letter-spacing: -.008em; }
+.landing-reviews-head h2 {
+  margin: 0 0 var(--lp-3);
+  font-size: clamp(30px, 3.5vw, 48px); line-height: 1.12; letter-spacing: -.035em;
+  text-wrap: balance;
+}
 .landing-reviews-title {
   display: block;
 }
-.landing-reviews-title p { max-width: 46ch; margin: 0 auto; color: var(--accent-muted); font-size: var(--lp-t-body); }
+.landing-reviews-title p { max-width: 46ch; margin: 0 auto; color: var(--accent-muted); font-size: var(--lp-t-small); }
 
-/* Real controls, not indicators: a mouse user with no trackpad otherwise has
-   no way to move the rail, and the disabled ends say where the rail stops. */
+.landing-reviews-intro {
+  display: grid; justify-items: center;
+  gap: var(--lp-5);
+}
+/* Quiet gallery navigation below the stories, separate from the heading. */
 .landing-reviews-controls {
-  position: absolute; z-index: 4; top: 61%; inset-inline: var(--lp-5);
-  display: flex; align-items: center; justify-content: space-between;
-  pointer-events: none;
+  width: min(calc(100% - 2 * var(--lp-gutter)), var(--lp-container));
+  margin: 0 auto; padding-top: var(--lp-2);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--lp-4);
+  border-top: 1px solid var(--lp-rule);
 }
 .landing-reviews-controls button {
-  width: 52px; height: 52px; flex: 0 0 auto;
-  display: grid; place-items: center;
-  color: var(--text); background: var(--surface-raised);
-  border: 1px solid var(--lp-rule-strong); border-radius: var(--lp-r-pill);
-  box-shadow: var(--shadow-card); pointer-events: auto;
+  min-height: 44px; padding: 0;
+  color: var(--muted); background: transparent;
+  border: 0; border-radius: var(--lp-r-sm);
+  font: inherit; cursor: pointer;
   transition:
     color var(--lp-dur-micro) var(--lp-ease-io),
-    background-color var(--lp-dur-micro) var(--lp-ease-io),
-    border-color var(--lp-dur-micro) var(--lp-ease-io),
-    transform var(--lp-dur-micro) var(--lp-ease-io);
+    background-color var(--lp-dur-micro) var(--lp-ease-io);
 }
 .landing-reviews-controls button:hover:not(:disabled) {
-  color: var(--lp-cta-fg); background: var(--lp-signal); border-color: var(--lp-signal);
+  color: var(--lp-person-accent);
 }
-.landing-reviews-controls button:active:not(:disabled) { transform: scale(.94); }
+.landing-reviews-controls button:focus-visible {
+  outline: 2px solid var(--lp-person-accent); outline-offset: 4px;
+}
 .landing-reviews-controls button:disabled { opacity: .3; cursor: not-allowed; }
-
-.landing-story-avatar {
-  width: 52px; height: 52px; flex: 0 0 52px;
-  display: grid; place-items: center; overflow: hidden;
-  color: var(--lp-signal); background: var(--lp-signal-wash);
-  border: 1px solid color-mix(in srgb, var(--lp-signal) 26%, transparent);
-  border-radius: var(--lp-r-pill);
-  font-family: var(--lp-display); font-size: var(--lp-t-small); font-weight: 500; letter-spacing: .05em;
-}
-.landing-story-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.landing-reviews-directions { margin-left: auto; display: flex; align-items: center; gap: var(--lp-2); }
+.landing-reviews-directions button { width: 44px; display: grid; place-items: center; }
+.landing-reviews-directions button:hover:not(:disabled) { background: var(--lp-signal-wash); }
+.landing-reviews-directions button svg { transition: transform var(--lp-dur-micro) var(--lp-ease-io); }
+.landing-reviews-directions button:first-child:hover:not(:disabled) svg { transform: translateX(-3px); }
+.landing-reviews-directions button:last-child:hover:not(:disabled) svg { transform: translateX(3px); }
+.landing-reviews-directions button:active:not(:disabled) svg { transform: scale(.9); }
+.landing-reviews-divider { width: 1px; height: 16px; background: var(--lp-rule); }
 
 /* Full-bleed track whose first card still lands on the shell's content edge.
    100%, never 100vw, so a desktop scrollbar cannot push the page sideways. */
 .landing-story-rail {
-  --lp-rail-inset: clamp(24px, 3.2vw, 56px);
-  margin: var(--lp-7) 0 0; padding: var(--lp-1) var(--lp-rail-inset);
+  --lp-rail-inset: max(
+    var(--lp-gutter),
+    calc((100% - var(--lp-container)) / 2 + var(--lp-gutter))
+  );
+  margin: var(--lp-5) 0 0; padding: var(--lp-5) var(--lp-rail-inset) var(--lp-6);
   list-style: none;
-  display: grid; grid-auto-flow: column; grid-auto-columns: 460px; gap: 16px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: 360px; gap: var(--lp-5);
   overflow-x: auto; overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory; scroll-padding-inline: var(--lp-rail-inset);
-  scroll-behavior: smooth; scrollbar-width: none;
+  scroll-padding-inline: var(--lp-rail-inset);
+  scroll-behavior: auto; scrollbar-width: none;
   mask-image: linear-gradient(90deg, transparent, black 3%, black 97%, transparent);
   -webkit-mask-image: linear-gradient(90deg, transparent, black 3%, black 97%, transparent);
 }
@@ -900,37 +907,99 @@
 /* A mask clips a focus ring, so drop it while anything inside is focused. */
 .landing-story-rail:focus-within { mask-image: none; -webkit-mask-image: none; }
 
+/* Slightly smaller cards pass through a continuous, native-scroll belt. */
+@media (min-width: 1081px) {
+  .landing-story-rail {
+    --lp-rail-inset: var(--lp-5);
+    width: min(100%, 1360px);
+    margin-inline: auto;
+    padding-inline: var(--lp-rail-inset);
+    grid-auto-columns: 360px;
+  }
+}
+
 .landing-story-card {
-  position: relative; min-width: 0; min-height: 600px; padding: 30px 32px 34px;
+  position: relative; min-width: 0; padding: var(--lp-5); overflow: hidden;
   display: flex; flex-direction: column;
   scroll-snap-align: start;
   color: var(--text); background: var(--surface-soft);
-  border: 1px solid var(--lp-rule); border-radius: 28px;
-  transition: transform var(--lp-dur-micro) var(--lp-ease-io), border-color var(--lp-dur-micro) var(--lp-ease-io);
+  border: 1px solid var(--lp-rule); border-radius: var(--lp-r-lg);
+  transform-origin: center center;
+  transition:
+    transform var(--lp-dur-short) var(--lp-ease),
+    border-color var(--lp-dur-short) var(--lp-ease-io),
+    box-shadow var(--lp-dur-short) var(--lp-ease-io);
 }
-.landing-story-card:hover { transform: translateY(-2px); border-color: var(--lp-rule-strong); }
-.landing-story-card blockquote { margin: 20px 0 0; color: var(--muted); font-size: clamp(15px, .98vw, 16px); line-height: 1.5; overflow-wrap: anywhere; }
+/* Lift the whole frame, not the avatar. Track padding leaves room for the lift. */
+@media (hover: hover) and (pointer: fine) {
+  .landing-story-card:hover {
+    z-index: 1; transform: translateY(-4px) scale(1.025);
+    border-color: var(--lp-person-accent); box-shadow: var(--shadow-card);
+  }
+}
+.landing-story-card blockquote {
+  margin: var(--lp-4) 0 0; padding: 0;
+  color: var(--muted); font-size: clamp(13px, .82vw, 14.5px); line-height: 1.6; overflow-wrap: anywhere;
+}
 .landing-story-card blockquote p { margin: 0; }
-.landing-review-person { min-width: 0; display: flex; align-items: center; gap: 16px; }
-/* A name wraps between the first and last name, never inside one. `break-word`
-   only splits a word that cannot fit a line by itself, so the column is left
-   wide enough that it never has to. */
-.landing-review-person > span:last-child { min-width: 0; }
-.landing-review-person b { display: block; font-size: 21px; font-weight: 700; line-height: 1.3; overflow-wrap: break-word; text-wrap: balance; }
-.landing-review-person small { display: block; margin-top: 3px; color: var(--muted); font-size: var(--lp-t-caption); line-height: 1.45; overflow-wrap: break-word; }
-.landing-story-card .landing-story-avatar { width: 62px; height: 62px; flex-basis: 62px; font-size: var(--lp-t-small); }
 
-.landing-review-meta {
-  margin: 20px 0 0;
-  display: grid; gap: 5px;
+/* Show only the emblem from each original lockup; the institution's name
+   remains readable text alongside it instead of a second miniature wordmark. */
+.landing-review-university {
+  min-width: 0; min-height: 44px; margin-top: var(--lp-4);
+  display: flex; align-items: center; gap: var(--lp-2);
 }
-.landing-review-meta p {
-  min-width: 0; margin: 0;
-  display: flex; align-items: flex-start; gap: 8px;
-  color: var(--muted); font-size: 17px; line-height: 1.4;
+.landing-review-university-name {
+  min-width: 0; color: var(--muted);
+  font-family: var(--lp-body); font-size: 13px; font-weight: 400;
+  line-height: 1.5; overflow-wrap: break-word; text-wrap: pretty;
 }
-.landing-review-meta svg { margin-top: 2px; flex: 0 0 auto; color: var(--lp-person-accent); stroke-width: 2.5; }
-.landing-review-meta span { min-width: 0; overflow-wrap: anywhere; }
+.landing-review-logo {
+  width: 24px; height: 28px; flex: 0 0 24px;
+  display: block; overflow: hidden;
+  filter: var(--lp-logo-filter); mix-blend-mode: var(--lp-logo-blend-mode);
+}
+/* Escape hatches remain available for a future source supplied only in white. */
+.landing-review-logo.landing-placement-logo-inverse { filter: invert(1) hue-rotate(180deg); }
+.landing-review-logo.landing-placement-logo-original { filter: none; mix-blend-mode: normal; }
+.landing-review-portrait {
+  margin: 0; display: flex; align-items: center; gap: var(--lp-3);
+}
+.landing-review-photo {
+  width: 52px; height: 52px; flex: 0 0 52px; overflow: hidden;
+  border-radius: 50%; background: var(--surface-raised);
+}
+.landing-review-photo > img {
+  width: 100%; height: 100%; display: block;
+  object-fit: cover; object-position: var(--review-photo-position, center top);
+  transform: scale(var(--review-photo-scale, 1)); transform-origin: center top;
+}
+/* Keep the face in the small avatar; these crops do not change on hover. */
+.landing-review-photo[data-portrait='dilshod.jpg'] { --review-photo-position: center 25%; }
+.landing-review-photo[data-portrait='diyorbek.jpg'] { --review-photo-scale: 1.25; }
+.landing-review-photo[data-portrait='saidakmal.jpg'] { --review-photo-position: center 8%; }
+.landing-review-photo[data-portrait='muhammadrizo.jpg'] { --review-photo-position: center 21%; }
+.landing-review-photo[data-portrait='amirali.jpg'] > img {
+  object-position: center top;
+}
+.landing-review-photo > span {
+  width: 100%; height: 100%; display: grid; place-items: center;
+  background: var(--surface-soft);
+  color: var(--lp-person-accent); font-family: var(--lp-display); font-size: 18px; font-weight: 600;
+}
+.landing-review-portrait figcaption {
+  min-width: 0; color: var(--text);
+}
+.landing-review-portrait figcaption strong {
+  font-family: var(--lp-display); font-size: 17px;
+  font-weight: 650; line-height: 1.3; letter-spacing: -.025em; text-wrap: balance;
+}
+.landing-review-scholarship {
+  margin: auto 0 0; padding-top: var(--lp-4);
+  display: flex; align-items: center; gap: var(--lp-2);
+  color: var(--lp-person-accent); border-top: 1px solid var(--lp-rule);
+  font-size: var(--lp-t-small); font-weight: 600;
+}
 
 /* --- FAQ: the register, answered ------------------------------------------
    Not a stack of lavender pills. The page's whole vocabulary is a ruled
@@ -1392,8 +1461,11 @@
   .landing-role-track { animation: none; transform: none; }
   .landing-logo-marquee { overflow-x: auto; mask-image: none; -webkit-mask-image: none; }
   .landing-logo-marquee [data-marquee-copy='true'] { display: none; }
-  .landing-story-rail { scroll-behavior: auto; }
+  .landing-story-rail { scroll-behavior: auto; scroll-snap-type: x proximity; }
+  .landing-story-rail [data-marquee-copy='true'] { display: none; }
   .landing-story-card, .landing-reviews-controls button, .landing-footer-top { transition: none; }
+  .landing-reviews-directions button svg { transition: none; }
+  .landing-story-card:hover { transform: none; }
   .landing-faq-item, .landing-faq-trigger, .landing-faq-mark,
   .landing-faq-mark::before, .landing-faq-mark::after,
   .landing-faq-answer, .landing-faq-answer > div { transition: none; }
@@ -1485,8 +1557,7 @@
   .landing-journey-grid { grid-template-columns: 1fr; gap: var(--lp-7); }
   .landing-journey .landing-section-head { position: static; }
   .landing-specimen { grid-column: 1; }
-  .landing-story-rail { grid-auto-columns: 380px; }
-  .landing-story-card { min-height: 500px; }
+  .landing-story-rail { grid-auto-columns: 360px; }
   .landing-product-showcase { margin-top: var(--lp-8); grid-template-columns: 1fr; row-gap: var(--lp-6); }
   .landing-product-showcase .landing-showcase-copy,
   .landing-showcase-note,
@@ -1551,8 +1622,7 @@
   .landing-preview-brand { margin-inline: 5px; }
   .landing-preview-brand b { font-size: 11px; }
   .landing-reviews-title { display: block; }
-  .landing-reviews-controls { top: 63%; inset-inline: var(--lp-3); }
-  .landing-story-rail { grid-auto-columns: 360px; gap: var(--lp-4); }
+  .landing-story-rail { grid-auto-columns: min(82vw, 360px); gap: var(--lp-4); }
   .landing-team-grid { row-gap: var(--lp-6); }
   .landing-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .landing-footer-legal { margin-top: var(--lp-8); }
@@ -1599,14 +1669,13 @@
   .landing-preview-user div, .landing-preview-user > svg { display: none; }
   .landing-preview-main { padding: 16px; }
   .landing-preview-toolbar h3 { font-size: 19px; }
-  .landing-reviews-controls button { width: 42px; height: 42px; }
-  .landing-story-avatar { width: 44px; height: 44px; flex-basis: 44px; }
   .landing-about-principles > div { grid-template-columns: 34px minmax(0, 1fr); row-gap: var(--lp-2); }
   .landing-about-principles dd { grid-column: 2; }
-  .landing-reviews-controls { top: 62%; inset-inline: var(--lp-2); }
-  .landing-story-rail { grid-auto-columns: min(88%, 360px); }
-  .landing-story-card { min-height: 460px; padding: var(--lp-5); }
-  .landing-story-card .landing-story-avatar { width: 52px; height: 52px; flex-basis: 52px; }
+  .landing-reviews-head h2 { font-size: clamp(30px, 8vw, 40px); }
+  .landing-story-rail { margin-top: var(--lp-5); grid-auto-columns: min(86%, 296px); }
+  .landing-story-card { padding: 20px; }
+  .landing-review-photo { width: 48px; height: 48px; flex-basis: 48px; }
+  .landing-review-portrait figcaption strong { font-size: 16px; }
   .landing-footer { margin-inline: var(--lp-2); padding-top: var(--lp-7); }
   .landing-footer-grid { grid-template-columns: 1fr; row-gap: var(--lp-6); }
   .landing-footer-links > span { font-size: 13px; }
@@ -1640,15 +1709,7 @@
   }
   /* 34px mark carries the link; the anchor keeps its aria-label. */
   .landing-brand .brand-lockup b { display: none; }
-  .landing-story-avatar { width: 40px; height: 40px; flex-basis: 40px; }
-  .landing-story-card { padding: var(--lp-4); }
-  .landing-story-rail { grid-auto-columns: min(82%, 260px); }
-  /* The card is 260px here, leaving ~158px beside the avatar. At 21px a long
-     Uzbek surname no longer fits that column on its own and would be split
-     mid-word, so the name steps down with the card. */
-  .landing-story-card .landing-story-avatar { width: 48px; height: 48px; flex-basis: 48px; }
-  .landing-review-person { gap: 12px; }
-  .landing-review-person b { font-size: 18px; }
+  .landing-story-rail { grid-auto-columns: min(84%, 276px); }
 
 }
 

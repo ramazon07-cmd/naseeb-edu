@@ -12,8 +12,6 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/montserrat-latin.woff2" crossorigin />
     <link rel="preload" as="image" data-theme-hero fetchpriority="high" />
-    <link rel="preload" as="image" href="/brand/naseeb-light-256.png" fetchpriority="high" />
-    <link rel="preload" as="image" href="/brand/naseeb-dark-256.png" fetchpriority="high" />
     <link rel="icon" type="image/png" sizes="64x64" data-theme-icon href="/brand/icon-light-64.png?v=2" />
     <title>Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi</title>
     <style>
@@ -59,12 +57,13 @@
           document.getElementById('theme-color').content = theme === 'dark' ? '#121015' : '#F5F0E6'
           const favicon = document.querySelector('link[data-theme-icon]')
           if (favicon) favicon.href = theme === 'dark' ? '/brand/icon-dark-64-transparent.png?v=9' : '/brand/icon-light-64.png?v=2'
-          const hero = document.querySelector('link[data-theme-hero]')
-          if (hero) hero.href = theme === 'dark' ? '/landing/naseeb-student-application-hero-dark.jpg' : '/landing/naseeb-student-application-hero.jpg'
         } catch {
           document.documentElement.dataset.theme = 'light'
           document.documentElement.style.colorScheme = 'light'
         }
+        // Match the rendered hero, including the storage-disabled fallback.
+        const hero = document.querySelector('link[data-theme-hero]')
+        if (hero) hero.href = document.documentElement.dataset.theme === 'dark' ? '/landing/naseeb-student-application-hero-dark.png' : '/landing/naseeb-student-application-hero-light.png'
       })()
     </script>
   </head>
