@@ -27,20 +27,22 @@ detail inside crests. The downloaded artwork is retained unchanged.
 | `universities/korea.png` | [Source](https://www.korea.edu/Web-home/_UI/images/message/message_logo.png) |
 | `universities/kaist.svg` | [Source](https://www.kaist.ac.kr/site/kr/img/layout/logo.svg) |
 | `universities/snu.png` | [Source](https://en.snu.ac.kr/_skin/eng/layout/image/snu-logo-blue_lg.png) |
-| `universities/northwestern.svg` | [Source](https://common.northwestern.edu/dept/4.0/css/styles.css) |
+| `universities/northwestern.svg` | [Seal + name lockup](https://de.wikipedia.org/wiki/Datei:NorthwesternUniversity_SealAndLogo.svg), matching Northwestern's documented [formal lockup](https://www.northwestern.edu/brand/visual-identity/logos-lockups/northwestern-wordmark-lockup/) |
 | `universities/epfl.svg` | [Source](https://www.epfl.ch/wp-content/themes/wp-theme-2018/assets/svg/epfl-logo.svg) |
 | `universities/toronto.png` | [Source](https://upload.wikimedia.org/wikipedia/en/thumb/b/b5/UofT_logo.svg/250px-UofT_logo.svg.png) |
 | `universities/alberta.png` | [Source](https://upload.wikimedia.org/wikipedia/en/thumb/e/e8/University_of_Alberta_Logo_%282021%29.svg/250px-University_of_Alberta_Logo_%282021%29.svg.png) |
 | `universities/suny.png` | [Source](https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/SUNY_brandmark.svg/250px-SUNY_brandmark.svg.png) |
 | `universities/asu.png` | [Source](https://www.asu.edu/profiles/contrib/webspark/modules/asu_footer/img/ASU-EndorsedLogo.png) |
+| `universities/arizona.svg` | [Full University of Arizona lockup](https://commons.wikimedia.org/wiki/File:University_of_Arizona_logo.svg) |
+| `universities/debrecen.png` | [Official English lockup](https://edu.unideb.hu/elemek/fologo.png) from the university's international admissions site; replaces the crest-only header SVG, which carried no wordmark |
 | `universities/elte.svg` | [Source](https://www.elte.hu/sites/default/files/ELTE/logo/elte_logo_en_3.svg) |
 | `universities/wooster.svg` | [Source](https://wooster.edu/hubfs/Huble/WOOSTER_primary_3c%201.svg) |
-| `universities/gettysburg.png` | [Source](https://www.gettysburg.edu/gbc-wordmark) |
+| `universities/gettysburg.svg` | Official Gettysburg logotype vector ([`GettysburgWordmarkCroppedOrange.svg`](https://web.archive.org/web/20150214184544if_/http://www.gettysburg.edu/global3/images/2014/GettysburgWordmarkCroppedOrange.svg)), recoloured to the approved two-colour version — "Gettysburg" in PMS 294 C `#043371`, "COLLEGE" in PMS 158 C `#CC4E00` — per the college's [wordmark standard](https://web.archive.org/web/20161113095635/http://www.gettysburg.edu/about/offices/ees/communications/brand/visual-standards/college-wordmark.dot) and the hex values published in its [visual style guide](https://www.gettysburg.edu/brand-guide/visual-style). Replaces the single-colour header wordmark. Paths were only recoloured; no outline was redrawn |
 | `universities/metu.svg` | [Source](https://www.metu.edu.tr/sites/all/themes/odtu/images/odtu-logo-en.svg) |
 | `universities/bilkent.svg` | [Source](https://w3.bilkent.edu.tr/bilkent/wp-content/uploads/sites/2/2015/09/ING-amblem-yazi.svg) |
 | `universities/nyu.svg` | [Source](https://upload.wikimedia.org/wikipedia/en/5/58/NYU_logo.svg) |
 | `universities/duke.svg` | [Source](https://upload.wikimedia.org/wikipedia/commons/e/e6/Duke_University_logo.svg) |
-| `universities/penn-state.svg` | [Source](https://images.ctfassets.net/p7x3ai5plaz1/1wVBvFkhF0ArrdaMlzLiCi/125b0659267cacef241e88b5517a51eb/logotype.svg) |
+| `universities/penn-state.png` | [Penn State primary mark](https://brand.psu.edu/visual-identity-standards/university-mark-and-shield) from the official brand site; replaces the unsupported logotype-only asset |
 | `universities/minnesota.svg` | [Source](https://upload.wikimedia.org/wikipedia/commons/6/6a/University_of_Minnesota_Logo.svg) |
 | `universities/cincinnati.svg` | [Source](https://www.uc.edu/) |
 | `universities/drexel.svg` | [Source](https://drexel.edu/) |
@@ -48,7 +50,7 @@ detail inside crests. The downloaded artwork is retained unchanged.
 | `universities/liverpool.svg` | [Source](https://www.liverpool.ac.uk/) |
 | `universities/nottingham.svg` | [Source](https://www.nottingham.ac.uk/etc.clientlibs/uon/clientlibs/clientlib-site/resources/images/Logo-white.svg) |
 | `universities/mount-allison.svg` | [Source](https://mta.ca/themes/custom/mount_allison/images/ma__logo-red.svg) |
-| `universities/waseda.svg` | [Source](https://upload.wikimedia.org/wikipedia/en/0/0d/Waseda_University_Logo.svg) |
+| `universities/waseda.svg` | [Full Waseda University lockup](https://commons.wikimedia.org/wiki/File:Waseda_university_logo.svg) |
 | `universities/hit.png` | [Source](https://en.hit.edu.cn/_upload/site/01/00/256/logo.png) |
 | `universities/constructor.svg` | [Official homepage logo](https://constructor.university/sites/default/files/CU-25-White-On-Transparent-logo.svg) (current 25th-anniversary wordmark) |
 | `universities/sydney.svg` | [Official homepage logo](https://www.sydney.edu.au/content/dam/icons/logos/logo-usyd-dark.svg) |

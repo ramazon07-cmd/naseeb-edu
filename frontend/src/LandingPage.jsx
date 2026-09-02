@@ -28,6 +28,8 @@ import {
   StudentDashboardPreview,
 } from "./LandingDashboardPreviews";
 import HeroParticleNetwork from "./HeroParticleNetwork";
+import useStoryMarquee from "./useStoryMarquee";
+import { deferSvgImages } from "./deferSvgImages";
 import "./landing.css";
 
 /* ---------------------------------------------------------------------------
@@ -95,6 +97,19 @@ const TEAM = [
    STUDENT REVIEWS — reference content supplied for this landing page. Names,
    outcomes, portraits and quotations stay together as a single record.
    Emptying the array removes the section and its navigation entries.
+
+   `universityLogo.src` names a file in frontend/public/landing/universities/ and is
+   the proof next to the claim, so it must be the institution's own published
+   mark — never a lookalike or a generated one. It is optional: a record without
+   it keeps a text-only university row rather than showing a gap. The
+   name is always rendered as text, because several marks carry the university
+   only in Chinese, Korean or an abbreviation. Its viewBox frames the existing
+   emblem without repeating the wordmark next to that text. The source artwork
+   stays unchanged; width and height describe its original canvas.
+
+   `logoTone` is the same escape hatch the placement strip uses: `"light"` for
+   artwork drawn for dark backgrounds, `"original"` for a mark whose own colour
+   is the point. Omit it and the mark follows the page theme.
 --------------------------------------------------------------------------- */
 const STUDENT_REVIEWS = [
   {
@@ -103,6 +118,7 @@ const STUDENT_REVIEWS = [
     initials: "AK",
     photo: "nurbek.jpg",
     university: "The Education University of Hong Kong (EdUHK)",
+    universityLogo: { src: "eduhk.png", width: 271, height: 85, viewBox: "0 0 73 85" },
     quote: `Before joining Naseeb Edu, I was confused about choosing between Computer Science and Education. My mentors helped me discover Educational Technology — a field I did not even know existed, but which perfectly combines the two subjects I love most.
 
 Throughout the process, I learned much more than just how to write essays. Naseeb Edu helped me grow personally, present my achievements and passions effectively, and strengthen my portfolio through international and national opportunities.
@@ -116,6 +132,7 @@ With their guidance, I received a full-ride scholarship to The Education Univers
     initials: "RD",
     photo: "dilshod.jpg",
     university: "The Hong Kong Polytechnic University (PolyU)",
+    universityLogo: { src: "polyu.png", width: 1002, height: 192, viewBox: "0 0 184 192" },
     scholarship: "",
     quote: `Before joining Naseeb Edu, I already knew I wanted to study Tourism and Hospitality abroad, but I had no idea where to apply or how to begin.
 
@@ -130,6 +147,7 @@ What excited me most about PolyU was its practical approach to hospitality educa
     initials: "DB",
     photo: "diyorbek.jpg",
     university: "The Hong Kong University of Science and Technology  (HKUST)",
+    universityLogo: { src: "hkust.svg", width: 187, height: 60, viewBox: "0 0 40 60" },
     quote: `My journey toward HKUST was not easy. There were moments when I felt overwhelmed, but whenever things became difficult, my mentors were there to guide and support me.
 
 My story truly began in June 2026, when Firdavs Jurayev introduced us to the idea of building a strong student portfolio during a school assembly. Before that, I did not fully understand how important my time, activities, and experiences could be for my future.
@@ -143,6 +161,7 @@ At first, I thought I was simply joining another program. Over time, I realized 
     initials: "AI",
     photo: "amirali.jpg",
     university: "Hong Kong University  (HKU)",
+    universityLogo: { src: "hku.svg", width: 255, height: 49, viewBox: "0 0 43 49" },
     scholarship: "",
     quote: `Working with the Naseeb Edu team has been insightful in many ways. Since joining the community, I have met many new people, made great friends, and had the opportunity to reflect more deeply on my interest in Law.
 
@@ -157,6 +176,7 @@ I have dreamed of studying at an international university from a young age, and 
     initials: "SJ",
     photo: "saidakmal.jpg",
     university: "Vin University",
+    universityLogo: { src: "vinuni.png", width: 478, height: 108, viewBox: "0 20 90 88" },
     scholarship: "",
     quote: `Before joining Naseeb Edu, I had ambitions to study abroad, but I was not completely sure how to turn those ambitions into a strong university application.
 
@@ -171,6 +191,7 @@ The journey taught me that applying to a competitive university is not only abou
     initials: "MM",
     photo: "muhammadrizo.jpg",
     university: "Yonsei University",
+    universityLogo: { src: "yonsei.png", width: 197, height: 61, viewBox: "0 0 61 61" },
     scholarship: "",
     quote: `When I first started thinking seriously about studying abroad, the number of universities, majors, and application requirements felt overwhelming.
 
@@ -179,6 +200,11 @@ Naseeb Edu helped me make the process much more structured. Through discussions 
 What I appreciated most was the personal guidance throughout the journey. I never felt like I was working on my application alone, and that support gave me much more confidence in applying to universities such as Yonsei University.`,
   },
 ];
+
+// A second, assistive-technology-hidden set makes the native scroll loop seamless.
+const STORY_RAIL_ITEMS = (STUDENT_REVIEWS.length > 1 ? [false, true] : [false]).flatMap((copy) =>
+  STUDENT_REVIEWS.map((review) => ({ review, copy })),
+);
 
 /* ---------------------------------------------------------------------------
    Universities our students were admitted to. Add an entry only for a real,
@@ -207,24 +233,42 @@ const UNIVERSITY_PLACEMENTS = [
   { name: "Yonsei University", file: "yonsei.png" },
   { name: "KAIST", file: "kaist.svg" },
   { name: "Seoul National University", file: "snu.png" },
-  { name: "Northwestern University", file: "northwestern.svg", tone: "light" },
+  {
+    name: "Northwestern University",
+    file: "northwestern.svg",
+    layout: "tall",
+  },
   { name: "EPFL", file: "epfl.svg" },
   { name: "University of Toronto", file: "toronto.png" },
   { name: "University of Alberta", file: "alberta.png" },
   { name: "State University of New York (SUNY)", file: "suny.png" },
   { name: "Hamad Bin Khalifa University", file: "hbku.svg" },
   { name: "University of South Florida", file: "usf.png" },
-  { name: "University of Leeds", file: "leeds.svg" },
+  { name: "University of Leeds", file: "leeds.svg", size: "prominent" },
   { name: "University at Buffalo", file: "buffalo.png", tone: "light" },
   { name: "University of Arizona", file: "arizona.svg" },
   { name: "Arizona State University", file: "asu.png", tone: "light" },
   { name: "Virginia Tech", file: "virginia-tech.svg" },
   { name: "Purdue University", file: "purdue.svg" },
-  { name: "University of Debrecen", file: "debrecen.svg" },
+  {
+    name: "University of Debrecen",
+    file: "debrecen-lockup.png",
+    tone: "original",
+    size: "prominent",
+  },
   { name: "Eötvös Loránd University (ELTE)", file: "elte.svg" },
   { name: "The College of Wooster", file: "wooster.svg" },
-  { name: "Gettysburg College", file: "gettysburg.png", tone: "light" },
-  { name: "Middle East Technical University (METU)", file: "metu.svg" },
+  {
+    name: "Gettysburg College",
+    file: "gettysburg-color.png",
+    tone: "original",
+  },
+  {
+    name: "Middle East Technical University (METU)",
+    file: "metu.svg",
+    tone: "original",
+    size: "prominent",
+  },
   { name: "Bilkent University", file: "bilkent.svg" },
   { name: "Tokyo International University", file: "tiu.png" },
   { name: "VinUniversity", file: "vinuni.png" },
@@ -232,19 +276,31 @@ const UNIVERSITY_PLACEMENTS = [
   { name: "Duke University", file: "duke.svg" },
   {
     name: "Pennsylvania State University",
-    file: "penn-state.svg",
-    tone: "light",
+    file: "penn-state.png",
+    size: "prominent",
   },
-  { name: "University of Minnesota", file: "minnesota.svg" },
+  {
+    name: "University of Minnesota",
+    file: "minnesota.svg",
+    label: "University of\nMinnesota",
+    layout: "lockup",
+  },
   { name: "University of Cincinnati", file: "cincinnati.svg" },
   { name: "Drexel University", file: "drexel.svg" },
   { name: "Lynn University", file: "lynn.png" },
   { name: "University of Liverpool", file: "liverpool.svg" },
-  { name: "University of Nottingham", file: "nottingham.svg", tone: "light" },
+  {
+    name: "University of Nottingham",
+    file: "nottingham.svg",
+  },
   { name: "Mount Allison University", file: "mount-allison.svg" },
   { name: "Waseda University", file: "waseda.svg" },
   { name: "Harbin Institute of Technology", file: "hit.png", tone: "light" },
-  { name: "Constructor University", file: "constructor.svg", tone: "light" },
+  {
+    name: "Constructor University",
+    file: "constructor.svg",
+    tone: "light",
+  },
   { name: "The University of Sydney", file: "sydney.svg" },
 ];
 
@@ -495,11 +551,10 @@ export default function LandingPage({
   changeLanguage,
 }) {
   const pageRef = useRef(null);
-  const railRef = useRef(null);
-  /* The rail is scrolled, never paginated, so its controls are derived from the
-     scroll position rather than from an index the component owns — a touch
-     swipe and an arrow press then agree about which end has been reached. */
-  const [railEdges, setRailEdges] = useState({ atStart: true, atEnd: false });
+  const stories = useStoryMarquee(STUDENT_REVIEWS.length);
+  useEffect(() => {
+    if (stories.railRef.current) return deferSvgImages(stories.railRef.current);
+  }, [stories.railRef]);
   /* One answer open at a time: nine questions stacked open would bury the
      closing call to action under a wall of prose. The first is open on load
      so the section reads as answers rather than as a row of shut drawers. */
@@ -644,25 +699,6 @@ export default function LandingPage({
     },
   ];
 
-  /* One card per press, measured from the two cards themselves so the step
-     always includes the real gap — no duplicated width constant to keep in
-     sync with the four breakpoints the rail is retuned at. */
-  const scrollRailBy = (direction) => {
-    const rail = railRef.current;
-    if (!rail) return;
-    const [first, second] = rail.children;
-    const step = second
-      ? second.offsetLeft - first.offsetLeft
-      : rail.clientWidth;
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    rail.scrollBy({
-      left: direction * step,
-      behavior: reduced ? "auto" : "smooth",
-    });
-  };
-
   useEffect(() => {
     const page = pageRef.current;
     if (!page) return undefined;
@@ -672,11 +708,11 @@ export default function LandingPage({
     const paths = [...page.querySelectorAll(".landing-path-list")];
     const steps = [...page.querySelectorAll(".landing-path-list li")];
     const groups = [...page.querySelectorAll("[data-reveal]")];
+    const nav = page.querySelector(".landing-nav");
     const navLinks = [...page.querySelectorAll(".landing-nav nav a")];
     const navTargets = navLinks.map((link) =>
       page.querySelector(link.getAttribute("href")),
     );
-    const rail = railRef.current;
     if (!reduced) page.classList.add("is-animated");
 
     /* Reveals are observed, not scroll-computed. A scroll listener only fires
@@ -715,20 +751,18 @@ export default function LandingPage({
       page.classList.toggle("is-scrolled", window.scrollY > 24);
       page.classList.toggle("is-compact", window.scrollY > viewport * 0.6);
       if (steps.length) {
-        let nearest = 0;
-        let shortestDistance = Infinity;
+        // Start at step one on anchor arrival. Advance only once the next
+        // step reaches the reading line below the sticky navigation.
+        const stepLine = (nav?.getBoundingClientRect().bottom ?? 0) + 24;
+        let currentStep = 0;
         steps.forEach((step, index) => {
-          const distance = Math.abs(
-            step.getBoundingClientRect().top - viewport * 0.38,
-          );
-          if (distance < shortestDistance) {
-            nearest = index;
-            shortestDistance = distance;
-          }
+          if (step.getBoundingClientRect().top <= stepLine) currentStep = index;
         });
-        steps.forEach((step, index) =>
-          step.classList.toggle("is-active", index === nearest),
-        );
+        steps.forEach((step, index) => {
+          step.classList.toggle("is-active", index === currentStep);
+          if (index === currentStep) step.setAttribute("aria-current", "step");
+          else step.removeAttribute("aria-current");
+        });
       }
       let current = -1;
       navTargets.forEach((section, index) => {
@@ -740,45 +774,15 @@ export default function LandingPage({
         else link.removeAttribute("aria-current");
       });
     };
-    /* Deliberately not rAF-throttled like the page-scroll work above it. That
-       pattern writes classes on every frame, where a frame budget is the point;
-       this one derives two booleans, so throttling to a frame would still hand
-       React a fresh object 60 times a second and re-render the whole page for
-       it. Bailing out unless an edge is actually crossed is the cheaper trade:
-       three cached layout reads per scroll event, and a re-render only twice
-       across a full traverse of the rail. */
-    const syncRail = () => {
-      if (!rail) return;
-      /* A 2px tolerance: fractional layout widths mean scrollLeft rarely lands
-         exactly on the maximum, which would leave "next" live at the end. */
-      const remaining = rail.scrollWidth - rail.clientWidth - rail.scrollLeft;
-      const atStart = rail.scrollLeft <= 2;
-      const atEnd = remaining <= 2;
-      setRailEdges((current) =>
-        current.atStart === atStart && current.atEnd === atEnd
-          ? current
-          : { atStart, atEnd },
-      );
-    };
     const onChange = () => {
       if (!frame) frame = window.requestAnimationFrame(update);
     };
-    /* Resizing changes how many cards fit, so the arrows have to be re-derived
-       on resize as well as on scroll — otherwise a rail that stops overflowing
-       keeps a live "next" arrow that does nothing. */
-    const onResize = () => {
-      onChange();
-      syncRail();
-    };
     update();
-    syncRail();
     window.addEventListener("scroll", onChange, { passive: true });
-    window.addEventListener("resize", onResize, { passive: true });
-    rail?.addEventListener("scroll", syncRail, { passive: true });
+    window.addEventListener("resize", onChange, { passive: true });
     return () => {
       window.removeEventListener("scroll", onChange);
-      window.removeEventListener("resize", onResize);
-      rail?.removeEventListener("scroll", syncRail);
+      window.removeEventListener("resize", onChange);
       observer?.disconnect();
       if (frame) window.cancelAnimationFrame(frame);
     };
@@ -834,7 +838,7 @@ export default function LandingPage({
               </h1>
               <p className="landing-hero-lede">
                 {t(
-                  "One workspace where a school, a counselor and a student run an international university application together — from the first goal to the final offer.",
+                  "One workspace where a school, a counselor and a student run an international university application together - from the first goal to the final offer.",
                 )}
               </p>
               <div className="landing-hero-actions">
@@ -847,14 +851,15 @@ export default function LandingPage({
               <img
                 src={
                   theme === "dark"
-                    ? "/landing/naseeb-student-application-hero-dark.jpg"
-                    : "/landing/naseeb-student-application-hero.jpg"
+                    ? "/landing/naseeb-student-application-hero-dark.png"
+                    : "/landing/naseeb-student-application-hero-light.png"
                 }
                 alt={t(
                   "A student managing a university application in the Naseeb Edu platform.",
                 )}
                 width="1448"
                 height="1086"
+                loading="eager"
                 decoding="async"
                 fetchPriority="high"
               />
@@ -909,14 +914,19 @@ export default function LandingPage({
                     aria-hidden="true"
                   >
                     {[...entries, ...entries].map(
-                      ({ name, file, label, caption, tone, layout }, index) => (
+                      ({ name, file, label, caption, tone, layout, size }, index) => (
                         <span
                           key={`${id}-${name}-${index}`}
                           title={name}
                           className={
-                            layout === "lockup"
-                              ? "landing-placement-lockup"
-                              : undefined
+                            [
+                              layout === "lockup" &&
+                                "landing-placement-lockup",
+                              size === "prominent" &&
+                                "landing-placement-slot-prominent",
+                            ]
+                              .filter(Boolean)
+                              .join(" ") || undefined
                           }
                           data-marquee-copy={
                             index >= entries.length ? "true" : undefined
@@ -935,6 +945,8 @@ export default function LandingPage({
                                       "landing-placement-logo-square",
                                     layout === "tall" &&
                                       "landing-placement-logo-tall",
+                                    size === "prominent" &&
+                                      "landing-placement-logo-prominent",
                                     label && "landing-placement-logo-icon",
                                   ]
                                     .filter(Boolean)
@@ -942,6 +954,9 @@ export default function LandingPage({
                                 }
                                 src={`/landing/${directory}/${file}`}
                                 alt=""
+                                width="232"
+                                height="88"
+                                loading="lazy"
                                 decoding="async"
                               />
                               {label ? (
@@ -1127,6 +1142,8 @@ export default function LandingPage({
                         <img
                           src={`/landing/team/${member.photo}`}
                           alt=""
+                          width="168"
+                          height="168"
                           loading="lazy"
                           decoding="async"
                         />
@@ -1156,10 +1173,13 @@ export default function LandingPage({
         )}
 
         {hasReviews && (
-          <section className="landing-band landing-reviews" id="reviews">
-            <div className="lp-shell">
+          <section
+            className="landing-band landing-reviews"
+            id="reviews"
+            ref={stories.regionRef}
+          >
+            <div className="lp-shell landing-reviews-intro">
               <header className="landing-reviews-head" data-reveal>
-                <p className="lp-eyebrow">{t("Student stories")}</p>
                 <div className="landing-reviews-title">
                   <div>
                     <h2>{t("Hear from our students.")}</h2>
@@ -1173,76 +1193,108 @@ export default function LandingPage({
               </header>
             </div>
 
-            {STUDENT_REVIEWS.length > 1 && (
-              <div className="landing-reviews-controls">
-                <button
-                  type="button"
-                  aria-label={t("Previous stories")}
-                  disabled={railEdges.atStart}
-                  onClick={() => scrollRailBy(-1)}
-                >
-                  <ArrowLeft size={18} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  aria-label={t("More stories")}
-                  disabled={railEdges.atEnd}
-                  onClick={() => scrollRailBy(1)}
-                >
-                  <ArrowRight size={18} aria-hidden="true" />
-                </button>
-              </div>
-            )}
-
             <ul
               className="landing-story-rail"
               role="group"
               aria-label={t("Student stories")}
-              ref={railRef}
+              aria-live="off"
+              tabIndex={0}
+              ref={stories.railRef}
             >
-              {STUDENT_REVIEWS.map((review) => (
-                <li className="landing-story-card" key={review.id}>
-                  <header className="landing-review-person">
-                    <span className="landing-story-avatar" aria-hidden="true">
+              {STORY_RAIL_ITEMS.map(({ review, copy }) => (
+                <li
+                  className="landing-story-card"
+                  key={`${review.id}-${copy}`}
+                  data-marquee-copy={copy || undefined}
+                  aria-hidden={copy || undefined}
+                >
+                  <figure className="landing-review-portrait">
+                    <div className="landing-review-photo" data-portrait={review.photo}>
                       {review.photo ? (
                         <img
                           src={`/landing/reviews/${review.photo}`}
-                          alt=""
+                          alt={review.name}
+                          width="52"
+                          height="52"
                           loading="lazy"
                           decoding="async"
                         />
                       ) : (
-                        review.initials
-                      )}
-                    </span>
-                    <span>
-                      <b>{review.name}</b>
-                    </span>
-                  </header>
-                  {(review.university || review.scholarship) && (
-                    <div className="landing-review-meta">
-                      {review.university && (
-                        <p>
-                          <GraduationCap size={19} aria-hidden="true" />
-                          <span>{review.university}</span>
-                        </p>
-                      )}
-                      {review.scholarship && (
-                        <p>
-                          <CircleDollarSign size={18} aria-hidden="true" />
-                          <span>
-                            {t("Scholarship")}: {review.scholarship}
-                          </span>
-                        </p>
+                        <span aria-hidden="true">{review.initials}</span>
                       )}
                     </div>
-                  )}
+                    <figcaption>
+                      <strong>{review.name}</strong>
+                    </figcaption>
+                  </figure>
+                  <div className="landing-review-university">
+                    {review.universityLogo ? (
+                      <svg
+                        className={[
+                          "landing-review-logo",
+                          review.logoTone === "light" &&
+                            "landing-placement-logo-inverse",
+                          review.logoTone === "original" &&
+                            "landing-placement-logo-original",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        viewBox={review.universityLogo.viewBox}
+                        width="24"
+                        height="28"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <image
+                          data-deferred-href={`/landing/universities/${review.universityLogo.src}`}
+                          width={review.universityLogo.width}
+                          height={review.universityLogo.height}
+                          decoding="async"
+                        />
+                      </svg>
+                    ) : null}
+                    <span className="landing-review-university-name">
+                      {review.university}
+                    </span>
+                  </div>
+
                   <blockquote>
                     <p>{t(review.quote)}</p>
                   </blockquote>
+                  {review.scholarship && (
+                    <p className="landing-review-scholarship">
+                      <CircleDollarSign size={18} aria-hidden="true" />
+                      <span>
+                        {t("Scholarship")}: {review.scholarship}
+                      </span>
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
+            {STUDENT_REVIEWS.length > 1 && (
+              <div className="landing-reviews-controls">
+                <div className="landing-reviews-directions">
+                  <button
+                    type="button"
+                    aria-label={t("Previous stories")}
+                    disabled={stories.reducedMotion && stories.edges.atStart}
+                    onClick={() => stories.scrollByCard(-1)}
+                  >
+                    <ArrowLeft size={20} strokeWidth={1.5} aria-hidden="true" />
+                  </button>
+                  <span className="landing-reviews-divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    aria-label={t("More stories")}
+                    disabled={stories.reducedMotion && stories.edges.atEnd}
+                    onClick={() => stories.scrollByCard(1)}
+                  >
+                    <ArrowRight size={20} strokeWidth={1.5} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         )}
 
