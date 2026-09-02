@@ -60,41 +60,34 @@
   --lp-cta-fg: var(--canvas);
   --lp-rule: var(--border);
   --lp-rule-strong: var(--border-strong);
-  /* Resolves per theme: warm brown on ivory, orchid on ink. Never the other
+  /* Resolves per theme: warm brown on ivory, ice blue on ink. Never the other
      theme's accent — that is what made light-theme steps read as dark-theme. */
   --lp-signal: var(--accent-deep);
   --lp-signal-wash: color-mix(in srgb, var(--accent-deep) 10%, transparent);
 
-  /* The light navigation now belongs to the white page instead of reading as
-     a separate dark slab. Dark mode uses plum, not near-black. */
-  --lp-nav-bg: #FFFFFF;
+  /* Navigation shares the page background in both themes. */
+  --lp-nav-bg: var(--canvas);
   --lp-nav-fg: #4A4036;
   --lp-nav-rule: rgba(74, 64, 54, .18);
   --lp-nav-button-hover: #5B5046;
-  /* The footer is a dark brand field in both themes, but it must be each
-     theme's OWN dark: deep ink on the ivory system, plum on the purple one.
-     A plum band on an ivory page was the dark identity leaking into light. */
+  /* The footer uses deep ink in light mode and the page canvas in dark mode. */
   --lp-footer-bg: var(--deep-ink);
   --lp-footer-fg: var(--canvas);
   --lp-footer-muted: color-mix(in srgb, var(--lp-footer-fg) 70%, transparent);
   --lp-footer-rule: color-mix(in srgb, var(--lp-footer-fg) 16%, transparent);
-  /* The footer band is plum in both themes, so its accent must be legible on
-     plum in both: taupe on ivory pages, orchid once the app goes dark. */
   /* Raw taupe on deep ink lands at 4.2:1 — just short of AA for the 17px
      column headings, so it is lifted toward the footer's own ivory. */
   --lp-footer-accent: color-mix(in srgb, var(--accent) 78%, var(--lp-footer-fg));
   --lp-footer-hover: color-mix(in srgb, var(--lp-footer-bg) 86%, var(--lp-footer-fg));
   --lp-footer-glyph: color-mix(in srgb, var(--accent) 60%, transparent);
 
-  /* Public landing surfaces use true white in light mode. */
-  --lp-page-bg: #FFFFFF;
-  --lp-platform-bg: #FFFFFF;
+  /* Public page bands follow the shared light and dark backgrounds. */
+  --lp-page-bg: var(--canvas);
+  --lp-platform-bg: var(--canvas);
 
-  /* Brand surfaces. Light mode uses a true-white field through the hero,
-     trust section and footer. Dark mode replaces it below with the original
-     purple-black treatment. */
-  --lp-ink-solid: #FFFFFF;
-  --lp-ink: #FFFFFF;
+  /* Hero and trust sections use the same background as the page. */
+  --lp-ink-solid: var(--canvas);
+  --lp-ink: var(--canvas);
   --lp-ink-fg: #4A4036;
   --lp-ink-muted: #6F6255;
   --lp-ink-accent: #8A6B42;
@@ -114,15 +107,15 @@
   --lp-preview-dot: #C9BBA8;
   --lp-preview-accent: #8A6B42;
   --lp-preview-progress: var(--accent-hover);
-  /* Product frame lift: a warm drop shadow on paper, a plum halo on ink,
+  /* Product frame lift: a warm drop shadow on paper, a navy halo on ink,
      because a black shadow is invisible against the dark canvas. */
   --lp-frame-halo: color-mix(in srgb, var(--deep-ink) 14%, transparent);
   /* Preview interior scale. One multiplier per breakpoint. */
   --lp-ui-unit: 1;
-  /* The pull-quote glyph: orchid at a given alpha on ink reads far brighter
+  /* The pull-quote glyph: ice blue at a given alpha on ink reads far brighter
      than brown at the same alpha on paper, so the percentage differs. */
   --lp-story-glyph: color-mix(in srgb, var(--lp-signal) 30%, transparent);
-  --lp-brand-logo-image: url('/brand/icon-light-transparent-hd.png');
+  --lp-brand-logo-image: var(--brand-logo-image);
   --lp-journey-bg: var(--lp-page-bg);
   /* Logos sit directly on the page with no backplates. Source tone controls
      contrast; blend modes hide white fields baked into some older assets. */
@@ -136,36 +129,22 @@
 
 :root[data-theme='dark'] .landing-page,
 :root[data-theme='dark'] .login-page {
-  /* The bar floats over a radial hero gradient, so a flat colour darker than
-     that gradient always reads as a slab bolted on top. #5D247A is the dark
-     palette's own --accent-hover and the only plum whose luminance sits above
-     the hero's brightest point, so the pill can never look pasted on. */
-  --lp-nav-bg: #5D247A;
+  --lp-nav-bg: var(--canvas);
   --lp-nav-fg: var(--light-grey);
-  --lp-nav-rule: rgba(242, 242, 245, .22);
-  --lp-nav-button-hover: #E8E1EB;
-  --lp-footer-bg: #32143F;
+  --lp-nav-rule: rgba(181, 199, 211, .22);
+  --lp-nav-button-hover: var(--text);
+  --lp-footer-bg: var(--canvas);
   --lp-footer-fg: var(--light-grey);
   --lp-footer-accent: var(--accent-deep);
   --lp-footer-glyph: color-mix(in srgb, var(--accent-deep) 72%, transparent);
-  /* The public page should feel plum, not like the product's near-black app
-     canvas. These tonal surfaces keep the dark page continuous while still
-     separating the journey and platform bands. */
-  --lp-page-bg: #211724;
-  --lp-platform-bg: #281D2C;
-  --lp-journey-bg: radial-gradient(110% 92% at 78% 4%, #392342 0%, #281A2F 48%, #211724 100%);
-  --lp-ink-solid: var(--purple-deep);
-  --lp-ink: radial-gradient(128% 116% at 74% 6%,
-    var(--purple) 0%,
-    var(--purple-deep) 44%,
-    var(--charcoal) 100%);
+  --lp-journey-bg: var(--lp-page-bg);
   --lp-ink-fg: var(--light-grey);
   --lp-ink-muted: color-mix(in srgb, var(--light-grey) 70%, var(--charcoal));
   --lp-ink-accent: var(--accent-deep);
   --lp-ink-rule: color-mix(in srgb, var(--light-grey) 20%, transparent);
   --lp-ink-photo: saturate(.96) contrast(1.04) brightness(.98);
-  --lp-particle-dot: #F2F2F5;
-  --lp-particle-line: #D7A8EE;
+  --lp-particle-dot: #f7f7f7;
+  --lp-particle-line: #9fc6e2;
 
   --lp-preview-bg: var(--surface);
   --lp-preview-chrome: var(--surface-raised);
@@ -175,9 +154,8 @@
   --lp-preview-dot: var(--border-strong);
   --lp-preview-accent: var(--accent-deep);
   --lp-preview-progress: var(--accent-deep);
-  --lp-frame-halo: color-mix(in srgb, var(--purple) 62%, transparent);
+  --lp-frame-halo: color-mix(in srgb, var(--accent) 14%, transparent);
   --lp-story-glyph: color-mix(in srgb, var(--lp-signal) 38%, transparent);
-  --lp-brand-logo-image: url('/brand/icon-dark-transparent-hd.png');
   /* Invert luminance without flattening the internal details of crests.
      White-source wordmarks already have the contrast needed on dark pages. */
   --lp-placement-fg: var(--lp-ink-muted);
@@ -757,7 +735,7 @@
 /* --lp-signal resolves to --accent-deep, which IS --text on the ivory system,
    so a role line set in it would be indistinguishable from body copy in light
    mode. --lp-ink-accent is the only token that reads as an accent on BOTH page
-   backgrounds — warm brown on paper, orchid on plum — which is why the FAQ
+   backgrounds — warm brown on paper, ice blue on navy — which is why the FAQ
    already borrows it, and why the team and story bands do too. */
 .landing-team {
   --lp-person-accent: var(--lp-ink-accent);
@@ -1014,7 +992,7 @@
 /* --lp-signal resolves to --accent-deep, which on the ivory system IS --text:
    using it here would make "open" and "hover" invisible in light mode. The
    only token that is a genuine accent in BOTH themes is --lp-ink-accent —
-   warm brown on paper (4.9:1 on white), orchid on plum. */
+   warm brown on paper (4.9:1 on white), ice blue on navy. */
 .landing-faq {
   --lp-faq-accent: var(--lp-ink-accent);
   background: var(--lp-page-bg);
@@ -1101,7 +1079,7 @@
 /* The qualifying second paragraph is an aside on the claim above it, not a
    second answer — it is set back behind its own rule so it cannot be quoted
    as a headline number. Colour does no work here: --accent-muted inverts
-   between themes (darker than --muted on paper, lighter on plum), so the
+   between themes (darker than --muted on paper, lighter on navy), so the
    qualifier keeps --muted and lets its rule and smaller size subordinate it. */
 .landing-faq-answer p + p {
   padding-left: var(--lp-4); padding-right: var(--lp-4);
@@ -1335,7 +1313,7 @@
   min-width: 0; overflow: hidden;
   color: var(--text); background: var(--lp-preview-bg);
   /* A bezel wide enough to read as a frame, a brand hairline, and a lift that
-     is a warm shadow on paper and a plum halo on ink. Radius stays at the
+     is a warm shadow on paper and a navy halo on ink. Radius stays at the
      system ceiling; the 8px band carries the weight, not a bigger curve. */
   border: 8px solid var(--lp-preview-frame); border-radius: var(--lp-r-lg);
   box-shadow:
@@ -1383,7 +1361,7 @@
 [data-theme='dark'] .landing-preview-sun { display: block; }
 [data-theme='dark'] .landing-preview-moon { display: none; }
 .landing-preview-actions > span { padding: 9px 12px; font-weight: 700; background: var(--lp-preview-sunken); }
-.landing-preview-actions > .is-primary { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.landing-preview-actions > .is-primary { color: var(--accent-contrast); background: var(--accent); border-color: var(--accent); }
 .landing-preview-welcome, .landing-preview-discovery { position: relative; overflow: hidden; color: var(--student-hero-text-token); background: linear-gradient(135deg, var(--student-hero-start-token), var(--student-hero-mid-token) 58%, var(--student-hero-end-token)); border: 1px solid var(--student-hero-line-token); border-radius: 16px; }
 .landing-preview-welcome { min-height: 180px; padding: 22px 26px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .landing-preview-welcome::after { content: ''; position: absolute; width: 230px; height: 230px; right: -45px; top: -135px; border: 1px solid var(--student-hero-line-token); border-radius: 50%; pointer-events: none; }
