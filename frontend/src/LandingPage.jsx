@@ -851,7 +851,7 @@ export default function LandingPage({
               <img
                 src={
                   theme === "dark"
-                    ? "/landing/naseeb-student-application-hero-dark.png"
+                    ? "/landing/naseeb-student-application-hero-cool.png"
                     : "/landing/naseeb-student-application-hero-light.png"
                 }
                 alt={t(
