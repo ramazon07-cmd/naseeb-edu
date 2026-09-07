@@ -97,6 +97,19 @@ const TEAM = [
    STUDENT REVIEWS — reference content supplied for this landing page. Names,
    outcomes, portraits and quotations stay together as a single record.
    Emptying the array removes the section and its navigation entries.
+
+   `universityLogo.src` names a file in frontend/public/landing/universities/ and is
+   the proof next to the claim, so it must be the institution's own published
+   mark — never a lookalike or a generated one. It is optional: a record without
+   it keeps a text-only university row rather than showing a gap. The
+   name is always rendered as text, because several marks carry the university
+   only in Chinese, Korean or an abbreviation. Its viewBox frames the existing
+   emblem without repeating the wordmark next to that text. The source artwork
+   stays unchanged; width and height describe its original canvas.
+
+   `logoTone` is the same escape hatch the placement strip uses: `"light"` for
+   artwork drawn for dark backgrounds, `"original"` for a mark whose own colour
+   is the point. Omit it and the mark follows the page theme.
 --------------------------------------------------------------------------- */
 const STUDENT_REVIEWS = [
   {
@@ -220,24 +233,42 @@ const UNIVERSITY_PLACEMENTS = [
   { name: "Yonsei University", file: "yonsei.png" },
   { name: "KAIST", file: "kaist.svg" },
   { name: "Seoul National University", file: "snu.png" },
-  { name: "Northwestern University", file: "northwestern.svg", tone: "light" },
+  {
+    name: "Northwestern University",
+    file: "northwestern.svg",
+    layout: "tall",
+  },
   { name: "EPFL", file: "epfl.svg" },
   { name: "University of Toronto", file: "toronto.png" },
   { name: "University of Alberta", file: "alberta.png" },
   { name: "State University of New York (SUNY)", file: "suny.png" },
   { name: "Hamad Bin Khalifa University", file: "hbku.svg" },
   { name: "University of South Florida", file: "usf.png" },
-  { name: "University of Leeds", file: "leeds.svg" },
+  { name: "University of Leeds", file: "leeds.svg", size: "prominent" },
   { name: "University at Buffalo", file: "buffalo.png", tone: "light" },
   { name: "University of Arizona", file: "arizona.svg" },
   { name: "Arizona State University", file: "asu.png", tone: "light" },
   { name: "Virginia Tech", file: "virginia-tech.svg" },
   { name: "Purdue University", file: "purdue.svg" },
-  { name: "University of Debrecen", file: "debrecen.svg" },
+  {
+    name: "University of Debrecen",
+    file: "debrecen-lockup.png",
+    tone: "original",
+    size: "prominent",
+  },
   { name: "Eötvös Loránd University (ELTE)", file: "elte.svg" },
   { name: "The College of Wooster", file: "wooster.svg" },
-  { name: "Gettysburg College", file: "gettysburg.png", tone: "light" },
-  { name: "Middle East Technical University (METU)", file: "metu.svg" },
+  {
+    name: "Gettysburg College",
+    file: "gettysburg-color.png",
+    tone: "original",
+  },
+  {
+    name: "Middle East Technical University (METU)",
+    file: "metu.svg",
+    tone: "original",
+    size: "prominent",
+  },
   { name: "Bilkent University", file: "bilkent.svg" },
   { name: "Tokyo International University", file: "tiu.png" },
   { name: "VinUniversity", file: "vinuni.png" },
@@ -245,19 +276,31 @@ const UNIVERSITY_PLACEMENTS = [
   { name: "Duke University", file: "duke.svg" },
   {
     name: "Pennsylvania State University",
-    file: "penn-state.svg",
-    tone: "light",
+    file: "penn-state.png",
+    size: "prominent",
   },
-  { name: "University of Minnesota", file: "minnesota.svg" },
+  {
+    name: "University of Minnesota",
+    file: "minnesota.svg",
+    label: "University of\nMinnesota",
+    layout: "lockup",
+  },
   { name: "University of Cincinnati", file: "cincinnati.svg" },
   { name: "Drexel University", file: "drexel.svg" },
   { name: "Lynn University", file: "lynn.png" },
   { name: "University of Liverpool", file: "liverpool.svg" },
-  { name: "University of Nottingham", file: "nottingham.svg", tone: "light" },
+  {
+    name: "University of Nottingham",
+    file: "nottingham.svg",
+  },
   { name: "Mount Allison University", file: "mount-allison.svg" },
   { name: "Waseda University", file: "waseda.svg" },
   { name: "Harbin Institute of Technology", file: "hit.png", tone: "light" },
-  { name: "Constructor University", file: "constructor.svg", tone: "light" },
+  {
+    name: "Constructor University",
+    file: "constructor.svg",
+    tone: "light",
+  },
   { name: "The University of Sydney", file: "sydney.svg" },
 ];
 
@@ -795,7 +838,7 @@ export default function LandingPage({
               </h1>
               <p className="landing-hero-lede">
                 {t(
-                  "One workspace where a school, a counselor and a student run an international university application together — from the first goal to the final offer.",
+                  "One workspace where a school, a counselor and a student run an international university application together - from the first goal to the final offer.",
                 )}
               </p>
               <div className="landing-hero-actions">
@@ -808,14 +851,15 @@ export default function LandingPage({
               <img
                 src={
                   theme === "dark"
-                    ? "/landing/naseeb-student-application-hero-dark.jpg"
-                    : "/landing/naseeb-student-application-hero.jpg"
+                    ? "/landing/naseeb-student-application-hero-cool.png"
+                    : "/landing/naseeb-student-application-hero-light.png"
                 }
                 alt={t(
                   "A student managing a university application in the Naseeb Edu platform.",
                 )}
                 width="1448"
                 height="1086"
+                loading="eager"
                 decoding="async"
                 fetchPriority="high"
               />
@@ -870,14 +914,19 @@ export default function LandingPage({
                     aria-hidden="true"
                   >
                     {[...entries, ...entries].map(
-                      ({ name, file, label, caption, tone, layout }, index) => (
+                      ({ name, file, label, caption, tone, layout, size }, index) => (
                         <span
                           key={`${id}-${name}-${index}`}
                           title={name}
                           className={
-                            layout === "lockup"
-                              ? "landing-placement-lockup"
-                              : undefined
+                            [
+                              layout === "lockup" &&
+                                "landing-placement-lockup",
+                              size === "prominent" &&
+                                "landing-placement-slot-prominent",
+                            ]
+                              .filter(Boolean)
+                              .join(" ") || undefined
                           }
                           data-marquee-copy={
                             index >= entries.length ? "true" : undefined
@@ -896,6 +945,8 @@ export default function LandingPage({
                                       "landing-placement-logo-square",
                                     layout === "tall" &&
                                       "landing-placement-logo-tall",
+                                    size === "prominent" &&
+                                      "landing-placement-logo-prominent",
                                     label && "landing-placement-logo-icon",
                                   ]
                                     .filter(Boolean)
@@ -903,6 +954,9 @@ export default function LandingPage({
                                 }
                                 src={`/landing/${directory}/${file}`}
                                 alt=""
+                                width="232"
+                                height="88"
+                                loading="lazy"
                                 decoding="async"
                               />
                               {label ? (
@@ -1088,6 +1142,8 @@ export default function LandingPage({
                         <img
                           src={`/landing/team/${member.photo}`}
                           alt=""
+                          width="168"
+                          height="168"
                           loading="lazy"
                           decoding="async"
                         />
