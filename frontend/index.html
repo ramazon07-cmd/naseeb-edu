@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta id="theme-color" name="theme-color" content="#F5F0E6" />
+    <meta id="theme-color" name="theme-color" content="#f7f7f7" />
     <meta name="description" content="Naseeb Edu o‘quvchilar, oilalar va maktablar uchun universitetga ariza jarayonini boshqaradigan ta’lim maslahat platformasi." />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Naseeb Edu - Global ta’lim uchun aniq yo‘l" />
@@ -12,29 +12,29 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/montserrat-latin.woff2" crossorigin />
     <link rel="preload" as="image" data-theme-hero fetchpriority="high" />
-    <link rel="icon" type="image/png" sizes="64x64" data-theme-icon href="/brand/icon-light-64.png?v=2" />
+    <link rel="icon" data-theme-icon href="/brand/naseeb-gold-shield.png" />
     <title>Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi</title>
     <style>
-      html { background: #F5F0E6; color-scheme: light; }
-      html[data-theme='dark'] { background: #121015; color-scheme: dark; }
+      html { background: #f7f7f7; color-scheme: light; }
+      html[data-theme='dark'] { background: #10202d; color-scheme: dark; }
       body { margin: 0; min-width: 320px; min-height: 100dvh; background: inherit; }
       .app-boot { min-height: 100dvh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; color: #4A4036; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-      html[data-theme='dark'] .app-boot { color: #F2F2F5; }
+      html[data-theme='dark'] .app-boot { color: #f7f7f7; }
       .app-boot-card { width: min(360px, 100%); display: grid; justify-items: center; gap: 18px; text-align: center; }
       .app-boot-mark { width: 76px; height: 76px; position: relative; display: grid; place-items: center; border: 1px solid rgba(74,64,54,.22); border-radius: 50%; font: 600 27px/1 Georgia, serif; }
-      html[data-theme='dark'] .app-boot-mark { border-color: rgba(215,168,238,.34); }
+      html[data-theme='dark'] .app-boot-mark { border-color: rgba(159,198,226,.34); }
       .app-boot-mark::before, .app-boot-mark::after { content: ''; position: absolute; inset: -1px; border: 2px solid transparent; border-top-color: #765E42; border-radius: 50%; animation: boot-spin 1.05s linear infinite; }
       .app-boot-mark::after { inset: 7px; border-top-color: transparent; border-bottom-color: #B8A58A; animation-direction: reverse; animation-duration: 1.4s; }
-      html[data-theme='dark'] .app-boot-mark::before { border-top-color: #D7A8EE; }
-      html[data-theme='dark'] .app-boot-mark::after { border-bottom-color: #8F59AB; }
+      html[data-theme='dark'] .app-boot-mark::before { border-top-color: #9fc6e2; }
+      html[data-theme='dark'] .app-boot-mark::after { border-bottom-color: #6f99b5; }
       .app-boot-copy b, .app-boot-copy span { display: block; }
       .app-boot-copy b { font: 600 20px/1.2 Georgia, serif; letter-spacing: .035em; }
       .app-boot-copy span { margin-top: 7px; color: #766A5D; font-size: 12px; }
-      html[data-theme='dark'] .app-boot-copy span { color: #B6AFBB; }
+      html[data-theme='dark'] .app-boot-copy span { color: #b5c3ce; }
       .app-boot-line { width: 190px; height: 4px; overflow: hidden; background: rgba(74,64,54,.13); border-radius: 99px; }
-      html[data-theme='dark'] .app-boot-line { background: rgba(232,225,236,.13); }
+      html[data-theme='dark'] .app-boot-line { background: rgba(181,199,211,.13); }
       .app-boot-line::after { content: ''; width: 42%; height: 100%; display: block; background: #765E42; border-radius: inherit; animation: boot-slide 1.25s ease-in-out infinite; }
-      html[data-theme='dark'] .app-boot-line::after { background: #C69BDD; }
+      html[data-theme='dark'] .app-boot-line::after { background: #9fc6e2; }
       @keyframes boot-spin { to { transform: rotate(360deg); } }
       @keyframes boot-slide { 0% { transform: translateX(-120%); } 100% { transform: translateX(340%); } }
       @media (prefers-reduced-motion: reduce) { .app-boot-mark::before, .app-boot-mark::after, .app-boot-line::after { animation-duration: .01ms; animation-iteration-count: 1; } }
@@ -54,16 +54,16 @@
             : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
           document.documentElement.dataset.theme = theme
           document.documentElement.style.colorScheme = theme
-          document.getElementById('theme-color').content = theme === 'dark' ? '#121015' : '#F5F0E6'
+          document.getElementById('theme-color').content = theme === 'dark' ? '#10202d' : '#f7f7f7'
           const favicon = document.querySelector('link[data-theme-icon]')
-          if (favicon) favicon.href = theme === 'dark' ? '/brand/icon-dark-64-transparent.png?v=9' : '/brand/icon-light-64.png?v=2'
+          if (favicon) favicon.href = theme === 'dark' ? '/brand/naseeb-midnight-shield.svg' : '/brand/naseeb-gold-shield.png'
         } catch {
           document.documentElement.dataset.theme = 'light'
           document.documentElement.style.colorScheme = 'light'
         }
         // Match the rendered hero, including the storage-disabled fallback.
         const hero = document.querySelector('link[data-theme-hero]')
-        if (hero) hero.href = document.documentElement.dataset.theme === 'dark' ? '/landing/naseeb-student-application-hero-dark.png' : '/landing/naseeb-student-application-hero-light.png'
+        if (hero) hero.href = document.documentElement.dataset.theme === 'dark' ? '/landing/naseeb-student-application-hero-cool.png' : '/landing/naseeb-student-application-hero-light.png'
       })()
     </script>
   </head>

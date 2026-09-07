@@ -85,12 +85,12 @@ const localDateKey = () => {
   return now.toISOString().slice(0, 10);
 };
 const BRAND_LOGOS = {
-  light: '/brand/naseeb-light-256.png',
-  dark: '/brand/naseeb-dark-256.png'
+  light: '/brand/naseeb-gold-shield.png',
+  dark: '/brand/naseeb-midnight-shield.svg'
 };
 const THEME_ICONS = {
-  light: '/brand/icon-light-64.png?v=2',
-  dark: '/brand/icon-dark-64-transparent.png?v=9',
+  light: '/brand/naseeb-gold-shield.png',
+  dark: '/brand/naseeb-midnight-shield.svg',
 };
 
 function brandLogoFor(theme) {
@@ -740,7 +740,7 @@ function AssistantCenter({ user, onOpenScreenTime }) {
         <small>{t("AI can make mistakes. Verify important deadlines with your counselor. History is kept only while this page is open.")}</small>
       </form>
     </section>}
-    <div className="assistant-launchers"><button type="button" className="screen-time-launcher" onClick={onOpenScreenTime} aria-label={t("Open screen time")}><Clock3 size={19} /><span>{t("Time")}</span></button><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><span className="assistant-launcher-mark" aria-hidden="true" /><span>{t("AI")}</span></button></div>
+    <div className="assistant-launchers"><button type="button" className="screen-time-launcher" onClick={onOpenScreenTime} aria-label={t("Open screen time")}><Clock3 size={24} strokeWidth={1.8} aria-hidden="true" /></button><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><span className="assistant-launcher-mark" aria-hidden="true" /></button></div>
   </div>;
 }
 

@@ -30,15 +30,17 @@ test('only the hero has an image preload and it matches the active theme', () =>
   const imagePreloads = html.match(/<link\b[^>]*rel="preload"[^>]*as="image"[^>]*>/g);
   assert.equal(imagePreloads.length, 1);
   assert.match(imagePreloads[0], /fetchpriority="high"/);
-  for (const theme of ['light', 'dark']) {
-    const href = `/landing/naseeb-student-application-hero-${theme}.png`;
+  for (const [theme, href] of Object.entries({
+    light: '/landing/naseeb-student-application-hero-light.png',
+    dark: '/landing/naseeb-student-application-hero-cool.png',
+  })) {
     assert.deepEqual(boot({ saved: theme }), { href, theme });
     assert.ok(landing.includes(href), 'preload must match the JSX image URL');
   }
 });
 
 test('the hero is preloaded for system-dark and storage-disabled visitors', () => {
-  assert.equal(boot({ systemDark: true }).href, '/landing/naseeb-student-application-hero-dark.png');
+  assert.equal(boot({ systemDark: true }).href, '/landing/naseeb-student-application-hero-cool.png');
   assert.deepEqual(boot({ storageBlocked: true }), {
     href: '/landing/naseeb-student-application-hero-light.png', theme: 'light',
   });
