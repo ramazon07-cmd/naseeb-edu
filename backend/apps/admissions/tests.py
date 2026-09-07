@@ -4,6 +4,8 @@ import json
 import tempfile
 import zipfile
 
+from openpyxl import Workbook
+
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -509,6 +511,174 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('target_countries', response.data)
         self.assertFalse(User.objects.filter(email='long-country-list@example.com').exists())
+
+    @staticmethod
+    def student_import_csv():
+        return (
+            'F.I.SH,Sinf,Telefon raqami,Ota yoki onaning F.I.SH,Holati,JSHIR raqami\n'
+            'Spreadsheet Student,11,+998901112233,Spreadsheet Parent,Faol,12345678901234\n'
+            'Invalid Grade Student,12,+998909998877,Another Parent,Faol,99999999999999\n'
+        ).encode('utf-8')
+
+    def test_organization_previews_and_partially_commits_safe_student_import(self):
+        self.client.force_authenticate(self.organization)
+        mapping = json.dumps({'phone': 'column_2'})
+        preview = self.client.post(
+            '/api/students/bulk-import/',
+            {
+                'file': SimpleUploadedFile('students.csv', self.student_import_csv(), content_type='text/csv'),
+                'mapping': mapping,
+                'portfolio_links': json.dumps({
+                    '2': 'https://docs.google.com/document/d/student-portfolio-id/edit',
+                }),
+            },
+            format='multipart',
+        )
+        self.assertEqual(preview.status_code, status.HTTP_200_OK)
+        self.assertFalse(preview.data['committed'])
+        self.assertEqual(preview.data['sheet_name'], 'CSV')
+        self.assertEqual(preview.data['mapping']['full_name'], 'column_0')
+        self.assertEqual(preview.data['mapping']['grade'], 'column_1')
+        self.assertEqual(preview.data['summary'], {
+            'total': 2, 'ready': 1, 'duplicate': 0, 'error': 1,
+        })
+        self.assertIn('JSHIR raqami', preview.data['ignored_columns'])
+        self.assertEqual(preview.data['headers'][2]['position'], 3)
+        self.assertNotIn('12345678901234', json.dumps(preview.data))
+        self.assertFalse(User.objects.filter(first_name='Spreadsheet').exists())
+
+        committed = self.client.post(
+            '/api/students/bulk-import/',
+            {
+                'file': SimpleUploadedFile('students.csv', self.student_import_csv(), content_type='text/csv'),
+                'mapping': mapping,
+                'portfolio_links': json.dumps({
+                    '2': 'https://docs.google.com/document/d/student-portfolio-id/edit',
+                }),
+                'commit': 'true',
+            },
+            format='multipart',
+        )
+        self.assertEqual(committed.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(committed.data['summary']['created'], 1)
+        self.assertEqual(committed.data['summary']['error'], 1)
+        self.assertEqual(len(committed.data['credentials']), 1)
+        credential = committed.data['credentials'][0]
+        imported = StudentProfile.objects.get(user__username=credential['username'])
+        self.assertEqual(imported.school, self.school_a)
+        self.assertEqual(imported.user.phone, '+998901112233')
+        self.assertEqual(imported.parent_contact, 'Spreadsheet Parent')
+        self.assertEqual(
+            imported.portfolio_google_docs_url,
+            'https://docs.google.com/document/d/student-portfolio-id/edit',
+        )
+        self.assertTrue(imported.user.must_change_password)
+        self.assertTrue(imported.user.check_password(credential['temporary_password']))
+        self.assertEqual(imported.user.temporary_credentials.count(), 1)
+        self.assertFalse(StudentProfile.objects.filter(user__first_name='Invalid').exists())
+
+    def test_student_import_detects_existing_student_instead_of_duplicating(self):
+        self.client.force_authenticate(self.organization)
+        StudentProfile.objects.create(
+            user=User.objects.create_user(
+                username='spreadsheet-existing',
+                email='spreadsheet-existing@example.com',
+                password='StrongPass123!',
+                first_name='Spreadsheet',
+                last_name='Student',
+                role=User.Role.STUDENT,
+                school=self.school_a,
+            ),
+            school=self.school_a,
+            school_name=self.school_a.name,
+        )
+        response = self.client.post(
+            '/api/students/bulk-import/',
+            {'file': SimpleUploadedFile('students.csv', self.student_import_csv(), content_type='text/csv')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['summary']['duplicate'], 1)
+        self.assertEqual(response.data['summary']['error'], 1)
+
+    def test_student_import_finds_the_best_excel_worksheet(self):
+        workbook = Workbook()
+        workbook.active.title = 'Instructions'
+        workbook.active.append(['Use the Students sheet'])
+        students = workbook.create_sheet('Students')
+        students.append(['№', 'F.I.SH', 'Sinf', 'IELTS'])
+        students.append([1, 'Excel Student', '10-Sinf', '6,5'])
+        content = io.BytesIO()
+        workbook.save(content)
+        workbook.close()
+
+        self.client.force_authenticate(self.organization)
+        response = self.client.post(
+            '/api/students/bulk-import/',
+            {
+                'file': SimpleUploadedFile(
+                    'students.xlsx', content.getvalue(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ),
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['sheet_name'], 'Students')
+        self.assertEqual(response.data['summary']['ready'], 1)
+        self.assertEqual(response.data['rows'][0]['values']['ielts_score'], '6.5')
+
+    def test_teacher_cannot_import_students(self):
+        self.client.force_authenticate(self.teacher)
+        response = self.client.post(
+            '/api/students/bulk-import/',
+            {'file': SimpleUploadedFile('students.csv', self.student_import_csv(), content_type='text/csv')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_counselor_import_is_assigned_and_cross_school_import_is_blocked(self):
+        content = b'F.I.SH,Sinf\nCounselor Imported Student,9\n'
+        self.client.force_authenticate(self.counselor)
+        imported = self.client.post(
+            '/api/students/bulk-import/',
+            {
+                'file': SimpleUploadedFile('students.csv', content, content_type='text/csv'),
+                'commit': 'true',
+            },
+            format='multipart',
+        )
+        self.assertEqual(imported.status_code, status.HTTP_201_CREATED)
+        profile = StudentProfile.objects.get(user__username=imported.data['credentials'][0]['username'])
+        self.assertEqual(profile.school, self.school_a)
+        self.assertEqual(profile.assigned_counselor, self.counselor)
+
+        self.client.force_authenticate(self.organization)
+        blocked = self.client.post(
+            '/api/students/bulk-import/',
+            {
+                'file': SimpleUploadedFile('students.csv', content, content_type='text/csv'),
+                'school': self.school_b.id,
+            },
+            format='multipart',
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_import_preview_rejects_invalid_portfolio_and_oversized_name_parts(self):
+        content = f'F.I.SH,Sinf\n{"A" * 151} Student,11\n'.encode()
+        self.client.force_authenticate(self.organization)
+        response = self.client.post(
+            '/api/students/bulk-import/',
+            {
+                'file': SimpleUploadedFile('students.csv', content, content_type='text/csv'),
+                'portfolio_links': json.dumps({'2': 'https://example.com/not-a-google-doc'}),
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['summary']['error'], 1)
+        self.assertIn('First name must use 150 characters or fewer.', response.data['rows'][0]['errors'])
+        self.assertIn('Portfolio must use a valid https://docs.google.com/document/... link.', response.data['rows'][0]['errors'])
 
     def test_organization_can_only_read_its_school(self):
         self.client.force_authenticate(self.organization)

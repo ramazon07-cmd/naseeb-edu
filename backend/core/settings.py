@@ -184,6 +184,7 @@ REST_FRAMEWORK = {
         'login': config('AUTH_LOGIN_RATE', default='10/minute'),
         'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
         'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
+        'student_import': config('STUDENT_IMPORT_RATE', default='30/hour'),
         'public_reach': config('PUBLIC_REACH_RATE', default='60/minute'),
     },
 }

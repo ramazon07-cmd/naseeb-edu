@@ -3,12 +3,13 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.cache import cache
-from django.db import transaction
+from django.db import DataError, IntegrityError, transaction
 from django.http import FileResponse, Http404
 from django.utils.text import slugify
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 from pathlib import Path
+import json
 import mimetypes
 from rest_framework import mixins, permissions, viewsets
 from rest_framework.decorators import action
@@ -122,6 +123,7 @@ from .serializers import (
     TaskSerializer,
     UniversitySerializer,
     XPTransactionSerializer,
+    google_docs_document_id,
 )
 from .services import (
     ROADMAP_APPROVAL_XP,
@@ -129,6 +131,7 @@ from .services import (
     award_approval_xp,
     extend_level_one_roadmap,
 )
+from .student_import import StudentImportError, prepare_student_import
 from apps.users.services import audit_product_action
 
 
@@ -274,6 +277,7 @@ class ScopedQuerysetMixin:
 
 class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = StudentProfileSerializer
+    throttle_scope = None
     queryset = StudentProfile.objects.select_related('user', 'assigned_counselor', 'school').order_by('user__first_name', 'user__last_name', 'id')
 
     def get_queryset(self):
@@ -552,6 +556,11 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             return Response({
                 'target_countries': [f'Use {target_countries_max_length} characters or fewer.'],
             }, status=400)
+        portfolio_google_docs_url = str(request.data.get('portfolio_google_docs_url') or '').strip()
+        if portfolio_google_docs_url and not google_docs_document_id(portfolio_google_docs_url):
+            return Response({
+                'portfolio_google_docs_url': ['Use a valid https://docs.google.com/document/... link.'],
+            }, status=400)
 
         parts = full_name.split()
         first_name = parts[0]
@@ -617,11 +626,160 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
                 budget_usd=request.data.get('budget_usd') or None,
                 scholarship_needed=str(request.data.get('scholarship_needed', 'true')).lower() not in {'false', '0', 'no'},
                 parent_contact=request.data.get('parent_contact', ''),
+                portfolio_google_docs_url=portfolio_google_docs_url,
                 notes=request.data.get('notes', ''),
             )
             ActivityLog.objects.create(actor=request.user, student=student, action=f'Student profile created: {full_name}')
 
         return Response(StudentProfileSerializer(student, context={'request': request}).data, status=201)
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='bulk-import',
+        throttle_classes=[ScopedRateThrottle],
+        throttle_scope='student_import',
+    )
+    def bulk_import(self, request):
+        """Preview or commit a school-scoped student import without storing the source file."""
+        if not (request.user.is_counselor_like or request.user.is_organization):
+            return Response({'detail': 'Only counselors or school organizations can import students.'}, status=403)
+
+        if request.user.role in {User.Role.COUNSELOR, User.Role.ORGANIZATION}:
+            school = request.user.school
+            if not school or not school.is_active:
+                return Response({'school': ['Your account is not connected to an active school.']}, status=400)
+            supplied_school = request.data.get('school')
+            if supplied_school and str(supplied_school) != str(school.id):
+                return Response({'school': ['You can only import students into your own school.']}, status=403)
+        else:
+            school = School.objects.filter(pk=request.data.get('school'), is_active=True).first()
+            if not school:
+                return Response({'school': ['Select an active school.']}, status=400)
+
+        def json_object(field):
+            raw_value = request.data.get(field, '{}')
+            if isinstance(raw_value, dict):
+                return raw_value
+            try:
+                value = json.loads(raw_value or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise StudentImportError(f'{field} must be a JSON object.') from exc
+            if not isinstance(value, dict):
+                raise StudentImportError(f'{field} must be a JSON object.')
+            return value
+
+        try:
+            prepared = prepare_student_import(
+                request.FILES.get('file'),
+                school=school,
+                requested_mapping=json_object('mapping'),
+                portfolio_links=json_object('portfolio_links'),
+            )
+        except StudentImportError as exc:
+            return Response({'file': [str(exc)]}, status=400)
+
+        commit = str(request.data.get('commit', '')).strip().lower() in {'1', 'true', 'yes'}
+        if not commit:
+            prepared['committed'] = False
+            return Response(prepared)
+
+        credentials = []
+        created_count = 0
+        assigned_counselor = request.user if request.user.role == User.Role.COUNSELOR else None
+        for row in prepared['rows']:
+            if row['status'] != 'ready':
+                continue
+            values = row['values']
+            full_name = values['full_name']
+            name_parts = full_name.split()
+            first_name = name_parts[0]
+            last_name = ' '.join(name_parts[1:])
+            base_username = slugify(full_name)[:140] or 'student'
+            username = base_username
+            suffix = 1
+            while User.objects.filter(username=username).exists():
+                suffix += 1
+                suffix_text = str(suffix)
+                username = f'{base_username[:149 - len(suffix_text)]}-{suffix_text}'
+            email = values['email'] or f'{username}@rbis.local'
+            try:
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        username=username,
+                        email=email,
+                        password=None,
+                        first_name=first_name,
+                        last_name=last_name,
+                        role=User.Role.STUDENT,
+                        phone=values['phone'],
+                        school=school,
+                        is_active=values['is_active'],
+                    )
+                    user, credential, password, _ = issue_temporary_credential(
+                        user=user,
+                        issued_by=request.user,
+                        request=request,
+                    )
+                    student = StudentProfile.objects.create(
+                        user=user,
+                        assigned_counselor=assigned_counselor,
+                        school=school,
+                        school_name=school.name,
+                        grade=values['grade'],
+                        gpa=values['gpa'] or None,
+                        ielts_score=values['ielts_score'] or None,
+                        sat_score=values['sat_score'] or None,
+                        target_major=values['target_major'],
+                        target_countries=values['target_countries'],
+                        budget_usd=values['budget_usd'] or None,
+                        scholarship_needed=values['scholarship_needed'],
+                        parent_contact=values['parent_contact'],
+                        portfolio_google_docs_url=values['portfolio_google_docs_url'],
+                    )
+                    ActivityLog.objects.create(
+                        actor=request.user,
+                        student=student,
+                        action=f'Student imported from spreadsheet: {full_name}',
+                        metadata={'school': school.id, 'source_row': row['row_number']},
+                    )
+                created_count += 1
+                row['status'] = 'created'
+                credentials.append({
+                    'row_number': row['row_number'],
+                    'full_name': full_name,
+                    'username': user.username,
+                    'email': user.email,
+                    'temporary_password': password,
+                    'expires_at': credential.expires_at,
+                })
+            except (DataError, IntegrityError, DjangoValidationError):
+                row['status'] = 'error'
+                row['errors'].append('The account could not be created because a unique value changed. Preview the file again.')
+
+        failed_count = sum(row['status'] == 'error' for row in prepared['rows'])
+        duplicate_count = sum(row['status'] == 'duplicate' for row in prepared['rows'])
+        if created_count:
+            audit_product_action(
+                actor=request.user,
+                action='students.bulk_imported',
+                target=school,
+                metadata={
+                    'created_count': created_count,
+                    'duplicate_count': duplicate_count,
+                    'error_count': failed_count,
+                },
+            )
+        prepared['committed'] = True
+        prepared['credentials'] = credentials
+        prepared['summary'] = {
+            'total': len(prepared['rows']),
+            'created': created_count,
+            'duplicate': duplicate_count,
+            'error': failed_count,
+            'skipped': duplicate_count + failed_count,
+        }
+        return Response(prepared, status=201 if created_count else 200)
 
 
 class SchoolViewSet(viewsets.ModelViewSet):

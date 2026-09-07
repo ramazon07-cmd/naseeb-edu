@@ -10,3 +10,5 @@ whitenoise==6.9.0
 gunicorn==23.0.0
 
 dj-database-url==2.3.0
+openpyxl==3.1.5
+xlrd==2.0.1
