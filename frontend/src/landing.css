@@ -1745,3 +1745,18 @@
 @media (max-width: 380px) {
   .landing-preview-tools { display: none; }
 }
+
+/* Naseeb Mind section navigation, available in both navigation layouts. */
+.landing-nav nav .landing-mind-link { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--lp-signal); font-weight: 650; }
+@media (min-width: 821px) and (max-width: 1200px) {
+  .landing-nav > .lp-shell { grid-template-columns: auto 1fr auto; gap: 12px; }
+  .landing-nav nav { gap: 13px; }
+  .landing-nav nav a { font-size: 12px; white-space: nowrap; }
+  .landing-brand .brand-lockup b { font-size: 14px; }
+}
+@media (min-width: 821px) and (max-width: 1000px) {
+  .landing-page { --lp-nav-h: 104px; }
+  .landing-nav > .lp-shell { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; border-radius: var(--lp-r-lg); }
+  .landing-nav nav { grid-column: 1 / -1; grid-row: 2; justify-content: center; gap: 24px; }
+  .landing-nav nav a { min-height: 40px; display: inline-flex; align-items: center; }
+}

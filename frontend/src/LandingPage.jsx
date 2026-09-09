@@ -28,6 +28,7 @@ import {
   StudentDashboardPreview,
 } from "./LandingDashboardPreviews";
 import HeroParticleNetwork from "./HeroParticleNetwork";
+import MindSection from "./MindSection";
 import useStoryMarquee from "./useStoryMarquee";
 import { deferSvgImages } from "./deferSvgImages";
 import "./landing.css";
@@ -709,7 +710,7 @@ export default function LandingPage({
     const steps = [...page.querySelectorAll(".landing-path-list li")];
     const groups = [...page.querySelectorAll("[data-reveal]")];
     const nav = page.querySelector(".landing-nav");
-    const navLinks = [...page.querySelectorAll(".landing-nav nav a")];
+    const navLinks = [...page.querySelectorAll('.landing-nav nav a[href^="#"]')];
     const navTargets = navLinks.map((link) =>
       page.querySelector(link.getAttribute("href")),
     );
@@ -805,6 +806,7 @@ export default function LandingPage({
           <nav aria-label={t("Landing navigation")}>
             <a href="#journey">{t("Journey")}</a>
             <a href="#platform">{t("Platform")}</a>
+            <a className="landing-mind-link" href="#naseeb-mind">Naseeb Mind</a>
             <a href="#about">{t("About us")}</a>
             {hasReviews && <a href="#reviews">{t("Stories")}</a>}
             <a href="#faq">{t("FAQ")}</a>
@@ -1097,6 +1099,8 @@ export default function LandingPage({
             </div>
           </div>
         </section>
+
+        <MindSection language={language} />
 
         <section className="landing-band landing-about" id="about">
           <div className="lp-shell landing-about-grid">
