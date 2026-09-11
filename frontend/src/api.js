@@ -9,6 +9,32 @@ const TOKEN_KEYS = {
   refresh: 'admitflow-refresh-token',
 }
 
+let sessionVersion = 0
+let refreshTask = null
+
+function tokenUserId(token) {
+  try {
+    return String(JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).user_id)
+  } catch {
+    return null
+  }
+}
+
+function assertSession(version, expectedUserId) {
+  if (version !== sessionVersion || (expectedUserId != null && tokenUserId(getToken('access')) !== String(expectedUserId))) {
+    throw new DOMException('The account session changed.', 'AbortError')
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener?.('storage', (event) => {
+    if (event.key === null || (event.key === TOKEN_KEYS.access && (!event.newValue || tokenUserId(event.oldValue) !== tokenUserId(event.newValue)))) {
+      sessionVersion += 1
+      refreshTask = null
+    }
+  })
+}
+
 export class ApiError extends Error {
   constructor(message, status, details) {
     super(message)
@@ -62,6 +88,7 @@ function responseFileName(response, fallback = 'document') {
 }
 
 async function protectedFileRequest(path, download = false, retry = true) {
+  const session = sessionVersion
   const headers = new Headers()
   const access = getToken('access')
   if (access) headers.set('Authorization', `Bearer ${access}`)
@@ -69,16 +96,19 @@ async function protectedFileRequest(path, download = false, retry = true) {
     `${API_URL}${path}${download ? '?download=1' : ''}`,
     { headers, timeoutMs: 120_000 },
   )
+  assertSession(session)
   if (response.status === 401 && retry && getToken('refresh')) {
-    await refreshAccessToken()
+    await refreshAccessToken(access, session)
     return protectedFileRequest(path, download, false)
   }
   if (!response.ok) {
     const payload = await parseResponse(response)
     throw new ApiError(errorMessage(payload), response.status, payload)
   }
+  const blob = await response.blob()
+  assertSession(session)
   return {
-    blob: await response.blob(),
+    blob,
     contentType: response.headers.get('Content-Type') || 'application/octet-stream',
     fileName: responseFileName(response),
   }
@@ -91,6 +121,8 @@ const evidenceFileRequest = (resource, id, download = false) =>
   protectedFileRequest(`/${resource}/${id}/proof-file/`, download)
 
 export function clearTokens() {
+  sessionVersion += 1
+  refreshTask = null
   localStorage.removeItem(TOKEN_KEYS.access)
   localStorage.removeItem(TOKEN_KEYS.refresh)
 }
@@ -117,25 +149,45 @@ function errorMessage(payload) {
     .join(' • ')
 }
 
-async function refreshAccessToken() {
+async function refreshAccessToken(failedAccess, session) {
+  assertSession(session)
+  // A slower 401 may arrive after another request has already rotated the pair.
+  const currentAccess = getToken('access')
+  if (currentAccess && currentAccess !== failedAccess) return currentAccess
+  if (refreshTask?.session === session) return refreshTask.promise
   const refresh = getToken('refresh')
   if (!refresh) throw new ApiError(t('Your session has expired.'), 401)
-  const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh }),
+  const task = { session, promise: null }
+  task.promise = (async () => {
+    const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh }),
+    })
+    const payload = await parseResponse(response)
+    assertSession(session)
+    // Another tab may have refreshed the same account in the meantime.
+    if (getToken('refresh') !== refresh) {
+      if (getToken('access')) return getToken('access')
+      throw new DOMException('The account session changed.', 'AbortError')
+    }
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) clearTokens()
+      throw new ApiError(errorMessage(payload), response.status, payload)
+    }
+    saveTokens(payload)
+    return payload.access
+  })().finally(() => {
+    if (refreshTask === task) refreshTask = null
   })
-  const payload = await parseResponse(response)
-  if (!response.ok) {
-    clearTokens()
-    throw new ApiError(t('Your session has expired. Sign in again.'), response.status, payload)
-  }
-  saveTokens(payload)
-  return payload.access
+  refreshTask = task
+  return task.promise
 }
 
 export async function request(path, options = {}, retry = true, unwrapPagination = true) {
-  const { auth = true, ...fetchOptions } = options
+  const { auth = true, expectedUserId, ...fetchOptions } = options
+  const session = sessionVersion
+  if (auth) assertSession(session, expectedUserId)
   const headers = new Headers(fetchOptions.headers || {})
   const isFormData = fetchOptions.body instanceof FormData
   if (!isFormData && fetchOptions.body !== undefined) headers.set('Content-Type', 'application/json')
@@ -143,16 +195,19 @@ export async function request(path, options = {}, retry = true, unwrapPagination
   if (access) headers.set('Authorization', `Bearer ${access}`)
 
   const response = await fetchWithTimeout(`${API_URL}${path}`, { ...fetchOptions, headers })
+  if (auth) assertSession(session, expectedUserId)
   if (auth && response.status === 401 && retry && getToken('refresh')) {
-    await refreshAccessToken()
+    await refreshAccessToken(access, session)
     return request(path, options, false, unwrapPagination)
   }
   const payload = await parseResponse(response)
+  if (auth) assertSession(session, expectedUserId)
   if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
   return unwrapPagination ? payload?.results ?? payload : payload
 }
 
 async function streamRequest(path, payload, signal, retry = true) {
+  const session = sessionVersion
   const headers = new Headers({ 'Content-Type': 'application/json' })
   const access = getToken('access')
   if (access) headers.set('Authorization', `Bearer ${access}`)
@@ -162,8 +217,9 @@ async function streamRequest(path, payload, signal, retry = true) {
     body: JSON.stringify(payload),
     signal,
   })
+  assertSession(session)
   if (response.status === 401 && retry && getToken('refresh')) {
-    await refreshAccessToken()
+    await refreshAccessToken(access, session)
     return streamRequest(path, payload, signal, false)
   }
   if (!response.ok) {
@@ -182,42 +238,52 @@ function nextApiPath(url) {
   return `${pathname.startsWith('/') ? pathname : `/${pathname}`}${parsed.search}`
 }
 
-async function listAll(resource, query = '') {
+async function listAll(resource, query = '', options = {}) {
+  const session = sessionVersion
   let path = `/${resource}/${query}`
   const items = []
   let pages = 0
   while (path) {
-    const payload = await request(path, {}, true, false)
+    assertSession(session, options.expectedUserId)
+    const payload = await request(path, options, true, false)
     if (!payload || !Array.isArray(payload.results)) return payload ?? []
     items.push(...payload.results)
     path = nextApiPath(payload.next)
     pages += 1
-    if (pages >= 100) throw new ApiError(t('Too many paginated API results.'), 500, null)
+    if (path && pages >= 100) throw new ApiError(t('Too many paginated API results.'), 500, null)
   }
   return items
 }
 
 export const api = {
   baseUrl: API_URL,
+  sessionVersion: () => sessionVersion,
   hasSession: () => Boolean(getToken('access') || getToken('refresh')),
   login: async (username, password) => {
+    clearTokens()
+    const session = sessionVersion
     const response = await fetchWithTimeout(`${API_URL}/auth/token/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     })
     const payload = await parseResponse(response)
+    assertSession(session)
     if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
     saveTokens(payload)
     return payload
   },
   logout: clearTokens,
   changePassword: async (newPassword, confirmPassword) => {
+    const session = sessionVersion
     const payload = await request('/users/accounts/change-password/', {
       method: 'POST',
       body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
     })
+    assertSession(session)
     saveTokens(payload)
+    sessionVersion += 1
+    refreshTask = null
     return payload
   },
   issueTemporaryCredential: (userId, password = '') => request(`/users/accounts/${userId}/temporary-credential/`, {
@@ -247,6 +313,19 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  importStudents: ({ file, mapping = {}, portfolioLinks = {}, school = '', commit = false }) => {
+    const payload = new FormData()
+    payload.append('file', file)
+    payload.append('mapping', JSON.stringify(mapping))
+    payload.append('portfolio_links', JSON.stringify(portfolioLinks))
+    if (school) payload.append('school', school)
+    if (commit) payload.append('commit', 'true')
+    return request('/students/bulk-import/', {
+      method: 'POST',
+      body: payload,
+      timeoutMs: 120_000,
+    })
+  },
   studentAssignmentCandidates: (counselor = null) => request(
     `/students/assignment-candidates/${counselor ? `?counselor=${encodeURIComponent(counselor)}` : ''}`,
   ),
@@ -279,7 +358,8 @@ export const api = {
   deactivateAccount: (id) => request(`/users/accounts/${id}/deactivate/`, { method: 'POST' }),
   submitCounselorMission: (roadmapId, mission, counselorNote) => request(`/counselor-roadmaps/${roadmapId}/submit-mission/`, { method: 'POST', body: JSON.stringify({ mission, counselor_note: counselorNote }) }),
   reviewCounselorMission: (roadmapId, mission, decision, adminFeedback = '') => request(`/counselor-roadmaps/${roadmapId}/review-mission/`, { method: 'POST', body: JSON.stringify({ mission, decision, admin_feedback: adminFeedback }) }),
-  trackScreenTime: (entries) => request('/screen-time/track/', {
+  trackScreenTime: (entries, options = {}) => request('/screen-time/track/', {
+    ...options,
     method: 'POST',
     body: JSON.stringify({ entries }),
   }),
@@ -293,8 +373,9 @@ export const api = {
   revokeParentLink: (id) => request(`/parent-links/${id}/revoke/`, { method: 'POST' }),
   // Find Your Personality. Attempts are append-only: a retake is a new row, so
   // there is deliberately no update or delete here.
-  challengeAttempts: (studentId) => listAll('challenge-attempts', studentId ? `?student=${encodeURIComponent(studentId)}` : ''),
-  saveChallengeAttempt: (payload) => request('/challenge-attempts/', {
+  challengeAttempts: (studentId, options = {}) => listAll('challenge-attempts', studentId ? `?student=${encodeURIComponent(studentId)}` : '', options),
+  saveChallengeAttempt: (payload, options = {}) => request('/challenge-attempts/', {
+    ...options,
     method: 'POST',
     body: JSON.stringify(payload),
   }),

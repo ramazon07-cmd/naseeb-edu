@@ -251,6 +251,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     next_level_xp = serializers.IntegerField(read_only=True)
     xp_progress_percent = serializers.IntegerField(read_only=True)
     level_up_pending = serializers.BooleanField(read_only=True)
+    portfolio_google_docs_preview_url = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentProfile
@@ -261,6 +262,12 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         if not obj.assigned_counselor:
             return None
         return obj.assigned_counselor.get_full_name() or obj.assigned_counselor.username
+
+    def get_portfolio_google_docs_preview_url(self, obj):
+        return google_docs_preview_url(obj.portfolio_google_docs_url)
+
+    def validate_portfolio_google_docs_url(self, value):
+        return validate_google_docs_url(value)
 
     def get_task_status_counts(self, obj):
         counts = {choice: 0 for choice, _ in Task.Status.choices}
@@ -906,12 +913,14 @@ class SchoolVisibilityStudentSerializer(serializers.ModelSerializer):
     journey_progress_percent = serializers.IntegerField(read_only=True)
     eligible_level = serializers.IntegerField(read_only=True)
     xp_progress_percent = serializers.IntegerField(read_only=True)
+    portfolio_google_docs_preview_url = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentProfile
         fields = (
             'id', 'user', 'grade', 'school', 'school_name', 'gpa', 'ielts_score', 'sat_score',
             'target_major', 'target_countries', 'budget_usd', 'scholarship_needed', 'parent_contact',
+            'portfolio_google_docs_url', 'portfolio_google_docs_preview_url',
             'xp_total', 'level', 'eligible_level', 'xp_progress_percent', 'progress_percent',
             'task_progress_percent', 'roadmap_progress_percent', 'journey_progress_percent',
             'counselor_name', 'created_at', 'updated_at',
@@ -919,6 +928,9 @@ class SchoolVisibilityStudentSerializer(serializers.ModelSerializer):
 
     def get_counselor_name(self, obj):
         return obj.assigned_counselor.get_full_name() or obj.assigned_counselor.username if obj.assigned_counselor else None
+
+    def get_portfolio_google_docs_preview_url(self, obj):
+        return google_docs_preview_url(obj.portfolio_google_docs_url)
 
 
 class SchoolVisibilityTaskSerializer(serializers.ModelSerializer):

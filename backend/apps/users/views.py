@@ -56,7 +56,8 @@ class IsProductAdmin(permissions.BasePermission):
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    # Legacy creation endpoint is never self-service, even after sign-in.
+    permission_classes = [permissions.IsAuthenticated, IsProductAdmin]
 
 
 class UserViewSet(viewsets.ModelViewSet):

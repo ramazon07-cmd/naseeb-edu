@@ -1548,7 +1548,7 @@
   .landing-preview-main { padding: 22px; }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 1080px) {
   /* The bar becomes two rows rather than losing its navigation. --lp-nav-h is
      read by the hero pull-up and the journey sticky head, so raising it here
      keeps both in step. */
@@ -1567,6 +1567,9 @@
   }
   .landing-nav nav::-webkit-scrollbar { display: none; }
   .landing-nav nav a { min-height: 40px; display: inline-flex; align-items: center; scroll-snap-align: start; white-space: nowrap; }
+}
+
+@media (max-width: 820px) {
   /* Single column; the copy is the hero. */
   .landing-hero-grid { padding-block: var(--lp-6) var(--lp-7); grid-template-columns: 1fr; }
   .landing-hero-copy { grid-column: 1; grid-row: 1; }

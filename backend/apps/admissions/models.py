@@ -98,6 +98,7 @@ class StudentProfile(TimeStampedModel):
     budget_usd = models.PositiveIntegerField(null=True, blank=True)
     scholarship_needed = models.BooleanField(default=True)
     parent_contact = models.CharField(max_length=120, blank=True)
+    portfolio_google_docs_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
     xp_total = models.PositiveIntegerField(default=0)
     level = models.PositiveSmallIntegerField(default=1)

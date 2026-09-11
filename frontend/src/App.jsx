@@ -2,12 +2,14 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   Activity, ArrowLeft, Award, BookOpen, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
-  ContactRound, DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
+  ContactRound, DollarSign, Download, ExternalLink, Eye, FileSpreadsheet, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
   LibraryBig, LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
   PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, ShieldAlert, ShieldCheck,
-  ShoppingCart, Sparkles, Square, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X } from
+  ShoppingCart, Sparkles, Square, Sun, Target, Trash2, Upload, UserRound, Users, UsersRound, WifiOff, X } from
 'lucide-react';
 import { api } from './api';
+import { taskPriorities } from './dashboardPriorities';
+import { getScreenTimeQueue, readAccountStorage, writeAccountStorage } from './accountStorage';
 import LandingPage from './LandingPage';
 import {
   LANGUAGE_OPTIONS,
@@ -385,6 +387,7 @@ function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }
           <div>
             <h2>{t("Sign in")}</h2>
             <p>{t("Enter your username and password.")}</p>
+            <p className="login-access-note">{t("Your school or counselor provides your account. Public sign-up is not available.")}</p>
           </div>
           <Field label={t("Username")}>
             <input
@@ -566,56 +569,34 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, retry, c
   </>;
 }
 
-function ScreenTimeTracker({ page }) {
+function ScreenTimeTracker({ page, userId }) {
   const activeSeconds = useRef(0);
   const lastInteraction = useRef(Date.now());
-  const sending = useRef(false);
-  const queued = useRef(null);
 
   useEffect(() => {
+    const queue = getScreenTimeQueue(SCREEN_TIME_QUEUE_KEY, userId);
+    if (!queue) return undefined;
     const markInteraction = () => {lastInteraction.current = Date.now();};
     const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
     events.forEach((eventName) => window.addEventListener(eventName, markInteraction, { passive: true }));
 
-    const persistAndSend = async () => {
+    const persist = () => {
       const seconds = activeSeconds.current;
       activeSeconds.current = 0;
-      if (!queued.current) {
-        try {queued.current = JSON.parse(localStorage.getItem(SCREEN_TIME_QUEUE_KEY) || '[]');} catch {queued.current = [];}
-      }
-      let queue = queued.current;
-      if (seconds > 0) {
-        const date = localDateKey();
-        const existing = queue.find((entry) => entry.date === date && entry.page === page);
-        if (existing) existing.seconds += seconds;else
-        queue.push({ date, page, seconds });
-        try {localStorage.setItem(SCREEN_TIME_QUEUE_KEY, JSON.stringify(queue));} catch {/* Memory queue remains available in strict privacy modes. */}
-      }
-      if (!navigator.onLine || sending.current || !queue.length) return;
-      sending.current = true;
-      const batch = queue.slice(0, 50).map((entry) => ({ ...entry, seconds: Math.min(300, entry.seconds) }));
+      queue.add(localDateKey(), page, seconds);
+    };
+    const persistAndSend = async () => {
+      persist();
+      if (!navigator.onLine) return;
       try {
-        await api.trackScreenTime(batch);
-        batch.forEach((sent) => {
-          const current = queue.find((entry) => entry.date === sent.date && entry.page === sent.page);
-          if (current) current.seconds -= sent.seconds;
-        });
-        queue = queue.filter((entry) => entry.seconds > 0);
-        queued.current = queue;
-        try {
-          if (queue.length) localStorage.setItem(SCREEN_TIME_QUEUE_KEY, JSON.stringify(queue));else
-          localStorage.removeItem(SCREEN_TIME_QUEUE_KEY);
-        } catch {/* The in-memory queue still holds any remaining aggregate. */}
+        await queue.flush((batch) => api.trackScreenTime(batch, { expectedUserId: userId }));
       } catch {
-
-
-
-
-
-
-        // Aggregate seconds stay queued locally and retry when the connection returns.
-      } finally {sending.current = false;}};const tick = window.setInterval(() => {if (document.visibilityState === 'visible' && Date.now() - lastInteraction.current < 60_000) activeSeconds.current += 1;
-      }, 1_000);
+        // Retry this account's aggregate after reconnection or its next sign-in.
+      }
+    };
+    const tick = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && Date.now() - lastInteraction.current < 60_000) activeSeconds.current += 1;
+    }, 1_000);
     const flush = window.setInterval(persistAndSend, 30_000);
     const onVisibility = () => {if (document.visibilityState === 'hidden') persistAndSend();};
     document.addEventListener('visibilitychange', onVisibility);
@@ -627,9 +608,10 @@ function ScreenTimeTracker({ page }) {
       events.forEach((eventName) => window.removeEventListener(eventName, markInteraction));
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('online', persistAndSend);
-      persistAndSend();
+      // Cleanup may run after logout. Persist locally without starting a request.
+      persist();
     };
-  }, [page]);
+  }, [page, userId]);
   return null;
 }
 
@@ -792,17 +774,21 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
       openSearchResult(searchResults[activeSearchIndex]);
     }
   }
+  function renderNavigationItem(item) {
+    const ItemIcon = PAGE_META[item].icon;
+    const itemLabel = t(PAGE_META[item].label);
+    return <button key={item} className={page === item ? 'active' : ''} aria-current={page === item ? 'page' : undefined} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
+  }
   return <div className="app-shell">
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="sidebar-top">
         <BrandLockup theme={theme} />
         <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label={t("Close navigation")}><X /></button>
       </div>
-      <nav>{navigation.map((item) => {
-          const ItemIcon = PAGE_META[item].icon;
-          const itemLabel = t(PAGE_META[item].label);
-          return <button key={item} className={page === item ? "active" : ''} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
-        })}</nav>
+      <nav aria-label={t("Workspace navigation")}>
+        {(user.role === 'student' ? ['dashboard', 'roadmap', 'student_center', 'applications', 'messages'] : navigation).map(renderNavigationItem)}
+        {user.role === 'student' && <details className="sidebar-more" key={page} open={!['dashboard', 'roadmap', 'student_center', 'applications', 'messages'].includes(page)}><summary>{t("Explore more")}<ChevronRight size={16} /></summary><div>{navigation.filter((item) => !['dashboard', 'roadmap', 'student_center', 'applications', 'messages'].includes(item)).map(renderNavigationItem)}</div></details>}
+      </nav>
       <div className="sidebar-profile"><span className="avatar">{initials(fullName(user))}</span><div><b>{fullName(user)}</b><small>{label(user.role)}</small></div><button className="icon-button" onClick={logout} title={t('Logout')} aria-label={t('Logout')}><LogOut size={18} /></button></div>
     </aside>
     <main className="workspace">
@@ -830,34 +816,50 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
       {error && <div className="alert error workspace-alert">{error}</div>}
       <div className="page-content"><PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} retry={retryResources}>{children}</PageDataBoundary></div>
     </main>
-    <ScreenTimeTracker page={page} />
+    <ScreenTimeTracker key={user.id} page={page} userId={user.id} />
     {['counselor', 'student'].includes(user.role) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} />}
   </div>;
 }
 
-function Dashboard({ user, data, stats, setPage }) {
+function Dashboard({ user, data, stats, setPage, reload, notify }) {
   const student = ownStudent(data);
   if (user.role === 'organization') return <>
     <div className="stat-grid"><Stat label={t("School students")} value={formatNumberLocale(stats?.students_total ?? data.students.length)} note={t("Only students from your school")} /><Stat label={t("Task progress")} value={formatPercentLocale(stats?.average_task_progress ?? 0)} note={t("Weighted completion")} /><Stat label={t("Roadmap progress")} value={formatPercentLocale(stats?.average_roadmap_progress ?? 0)} note={t("Mission completion")} /><Stat label={t("Need attention")} value={formatNumberLocale(stats?.students_at_risk ?? 0)} note={t("Late task or mission")} tone="danger" /></div>
     <Panel title={t("Student progress")} action={<button className="button primary" onClick={() => setPage('students')}>{t("Student profiles")} <ChevronRight size={17} /></button>}><StudentTable data={data} readOnly /></Panel>
   </>;
-  if (user.role === 'student') return <StudentDashboard user={user} data={data} stats={stats} setPage={setPage} />;
+  if (user.role === 'student') return <StudentDashboard {...{ user, data, setPage, reload, notify }} />;
   return <>
     <div className="stat-grid"><Stat label={t("Students")} value={formatNumberLocale(stats?.students_total ?? data.students.length)} /><Stat label={t("Task progress")} value={formatPercentLocale(stats?.average_task_progress ?? 0)} /><Stat label={t("Roadmap progress")} value={formatPercentLocale(stats?.average_roadmap_progress ?? 0)} /><Stat label={t("Need attention")} value={formatNumberLocale(stats?.students_at_risk ?? stats?.tasks_late ?? 0)} tone="danger" /></div>
     <div className="split-grid wide-left"><Panel title={t("Student progress")} action={<button className="button quiet" onClick={() => setPage('students')}>{t("View all")} <ChevronRight size={16} /></button>}><StudentTable data={data} readOnly /></Panel><Panel title={t("Deadline radar")}>{data.tasks.slice(0, 6).map((task) => <Record key={task.id} title={task.title} meta={`${studentName(data, task.student)} • ${dateText(task.due_date)}`} badge={task.status} />)}{!data.tasks.length && <Empty />}</Panel></div>
   </>;
 }
 
-function StudentDashboard({ user, data, setPage }) {
+function StudentDashboard({ user, data, setPage, reload, notify }) {
   const student = ownStudent(data);
-  const pendingTasks = data.tasks.filter((item) => item.status !== 'approved');
+  const { actionable: pendingTasks, reviewing, overdue } = taskPriorities(data.tasks);
+  const [editingTask, setEditingTask] = useState(null);
+  const [viewingTask, setViewingTask] = useState(null);
+  const nextTask = pendingTasks[0];
   const nextBooking = [...data.bookings].filter((item) => new Date(item.starts_at) >= new Date() && !['rejected', 'completed'].includes(item.status)).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0];
   const completed = data.tasks.filter((item) => item.status === 'approved').length;
   const achievementTotal = data.achievements.length + data.honors.length;
   return <div className="section-stack student-portal">
-    <section className="student-welcome">
-      <div><span className="eyebrow">{t("WELCOME BACK")}</span><h2>{fullName(user)}</h2><p>{t("Complete today’s priorities and strengthen your application profile.")}</p><div className="welcome-actions"><button className="button light" onClick={() => setPage('roadmap')}><Compass size={17} /> {t("Open roadmap")}</button><button className="button ghost-light" onClick={() => setPage('college_search')}><Search size={17} /> {t("Find universities")}</button></div></div>
-      <div className="readiness-ring" style={{ '--progress': `${student?.journey_progress_percent || 0}%` }}><strong>{formatPercentLocale(student?.journey_progress_percent || 0)}</strong><span>{t("Journey progress")}</span></div>
+    <section className="student-today" aria-labelledby="student-today-title">
+      <header className="student-today-header"><div><span className="eyebrow">{t("Your next step")}</span><h2 id="student-today-title">{t("Today")}, {fullName(user)}</h2></div><span className="student-today-date">{dateText(new Date())}</span></header>
+      <div className="student-focus">
+        <div className="student-focus-copy">
+          <span className="detail-label">{nextTask ? t("Start here") : t("You are up to date")}</span>
+          <h3>{nextTask?.title || t("Make room for your next opportunity.")}</h3>
+          <p>{nextTask ? nextTask.description || t("Open this task to review the instructions and prepare your response.") : reviewing.length ? t("Your submitted work is waiting for review. You can continue your roadmap.") : t("Explore your roadmap to find your next milestone.")}</p>
+          {nextTask && <div className="student-focus-meta"><span><CalendarDays size={16} />{dateText(nextTask.due_date)}</span><Badge>{label(nextTask.priority)}</Badge><Badge>{label(nextTask.status)}</Badge></div>}
+          <button className="button primary" onClick={() => nextTask ? setEditingTask(nextTask) : setPage('roadmap')}>{nextTask ? t("Open task") : t("Open roadmap")}<ArrowLeft className="forward-arrow" size={17} /></button>
+        </div>
+        <dl className="student-work-summary">
+          <div><dt>{t("Needs your action")}</dt><dd>{formatNumberLocale(pendingTasks.length)}</dd></div>
+          <div><dt>{t("Awaiting review")}</dt><dd>{formatNumberLocale(reviewing.length)}</dd></div>
+          <div className={overdue.length ? 'is-overdue' : ''}><dt>{t("Overdue")}</dt><dd>{formatNumberLocale(overdue.length)}</dd></div>
+        </dl>
+      </div>
     </section>
     <div className="student-dashboard-overview">
       <div className="student-dashboard-progress"><JourneyProgress student={student} /><LevelProgress student={student} /></div>
@@ -866,16 +868,19 @@ function StudentDashboard({ user, data, setPage }) {
     <div className="stat-grid"><Stat label={t("Active tasks")} value={pendingTasks.length} note={tx`${completed} completed`} /><Stat label={t("Applications")} value={data.applications.length} note={tx`${data.applications.filter((item) => item.status === 'submitted').length} submitted`} /><Stat label={t("Essays")} value={data.essays.length} note={tx`${data.essays.filter((item) => item.status === 'approved').length} approved`} /><Stat label={t("Achievements")} value={achievementTotal} note={t("Honors included")} /></div>
     <div className="student-dashboard-grid">
       <div className="student-dashboard-column">
-        <Panel title={t("Next priorities")} action={<button className="button quiet small" onClick={() => setPage('roadmap')}>{t("View roadmap")} <ChevronRight size={14} /></button>}><div className="record-list">{pendingTasks.slice(0, 4).map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} • ${label(task.priority)}`} badge={task.status} />)}{!pendingTasks.length && <Empty text={t("All tasks are complete.")} />}</div></Panel>
+        <Panel title={t("Up next")}><div className="record-list">{pendingTasks.slice(1, 4).map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} • ${label(task.priority)}`} badge={task.status} actions={<button className="button quiet small" onClick={() => setEditingTask(task)}>{t("Open task")}<ChevronRight size={14} /></button>} />)}{pendingTasks.length <= 1 && <p className="dashboard-empty-copy">{t("No other tasks need your action right now.")}</p>}</div></Panel>
+        {reviewing.length > 0 && <Panel title={t("Awaiting review")}><p className="dashboard-empty-copy">{t("Submitted work stays here until your counselor reviews it.")}</p><div className="record-list">{reviewing.slice(0, 3).map((task) => <Record key={task.id} title={task.title} badge={task.status} actions={<button className="button quiet small" onClick={() => setViewingTask(task)}>{t("View")}<Eye size={14} /></button>} />)}</div></Panel>}
         <Panel title={t("Upcoming session")} action={<button className="button quiet small" onClick={() => setPage('bookings')}>{t("Meetings")}</button>}>{nextBooking ? <div className="booking-highlight"><span><CalendarClock size={22} /></span><div><b>{nextBooking.topic}</b><small>{dateTimeText(nextBooking.starts_at)} • {nextBooking.duration_minutes} {t("min")}</small><p>{nextBooking.participant_name || t("Meeting participant")} · {label(nextBooking.participant_role)}</p></div><Badge>{nextBooking.status}</Badge></div> : <Empty text={t("No upcoming sessions.")} />}</Panel>
       </div>
       <div className="student-dashboard-column">
         <Panel title={t("Student Center quick access")}><div className="quick-grid">{[
             ['Profile & academics', 'student_center', BookOpen], ['Essay Lab', 'essay_lab', PenLine], ['Applications', 'applications', Target], ['Resources', 'resource_index', LibraryBig]].
-            map(([title, page, Icon]) => <button key={page} onClick={() => setPage(page)}><span><Icon size={19} /></span><b>{title}</b><ChevronRight size={15} /></button>)}</div></Panel>
+            map(([title, page, Icon]) => <button key={page} onClick={() => setPage(page)}><span><Icon size={19} /></span><b>{t(title)}</b><ChevronRight size={15} /></button>)}</div></Panel>
         <Panel title={t("My Naseeb team")} action={<button className="button quiet small" onClick={() => setPage('contacts')}>{t("All contacts")}</button>}><div className="team-mini-list">{data.team.slice(0, 3).map((member) => <div key={`${member.kind}-${member.id}`}><span className="avatar">{initials(member.name)}</span><div><b>{member.name}</b><small>{member.role}</small></div><button className="icon-button" onClick={() => setPage('messages')} aria-label={tx`Message ${member.name}`}><MessageCircle size={16} /></button></div>)}{!data.team.length && <Empty text={t("No team members have been assigned yet.")} />}</div></Panel>
       </div>
     </div>
+    {editingTask && <ResourceForm resource="tasks" item={editingTask} {...{ data, user, notify }} onClose={() => setEditingTask(null)} onSaved={() => {setEditingTask(null);reload();}} />}
+    {viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} />}
   </div>;
 }
 
@@ -1212,6 +1217,7 @@ function StudentOverview({ student, data, onBack, user, notify }) {
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [parentInviteOpen, setParentInviteOpen] = useState(false);
   const [credentialOpen, setCredentialOpen] = useState(false);
+  const [portfolioOpen, setPortfolioOpen] = useState(false);
   if (!student) return <Empty text={t("Student profile not found.")} />;
   const documents = studentItems(data, 'documents', student.id);
   const certificates = documents.filter((item) => item.document_type === 'certificate');
@@ -1219,11 +1225,16 @@ function StudentOverview({ student, data, onBack, user, notify }) {
   const tasks = studentItems(data, 'tasks', student.id);
   const applications = studentItems(data, 'applications', student.id);
   const essays = studentItems(data, 'essays', student.id);
+  const portfolioDocument = {
+    name: tx`${fullName(student.user_detail)} portfolio`,
+    google_docs_url: student.portfolio_google_docs_url,
+    google_docs_preview_url: student.portfolio_google_docs_preview_url,
+  };
 
   return <div className="section-stack student-overview">
     <section className="student-overview-hero">
       <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><span className="avatar large">{initials(fullName(student.user_detail))}</span><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{student.user_detail?.email} • {student.school_name || t("No school assigned")}</p></div></div></div>
-      <div className="student-overview-actions">{['admin', 'counselor', 'organization'].includes(user?.role) && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{['admin', 'counselor'].includes(user?.role) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}</div>
+      <div className="student-overview-actions"><GoogleDocsActions item={portfolioDocument} onPreview={() => setPortfolioOpen(true)} />{['admin', 'counselor', 'organization'].includes(user?.role) && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{['admin', 'counselor'].includes(user?.role) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}</div>
       <div className="overview-progress"><strong>{formatPercentLocale(student.progress_percent || 0)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${student.progress_percent || 0}%` }} /></div></div>
     </section>
     <div className="stat-grid"><Stat label={t("Level")} value={student.level ?? 1} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : t("Teacher approved")} /><Stat label={t("XP")} value={student.xp_total ?? 0} note={tx`Next: ${student.next_level_xp ?? 0} XP`} /><Stat label={t("Assigned tasks")} value={tasks.length} /><Stat label={t("Applications")} value={applications.length} /></div>
@@ -1240,6 +1251,7 @@ function StudentOverview({ student, data, onBack, user, notify }) {
     {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} />}
     {parentInviteOpen && <ParentInviteModal student={student} onClose={() => setParentInviteOpen(false)} notify={notify} />}
     {credentialOpen && <TemporaryCredentialModal account={student.user_detail} onClose={() => setCredentialOpen(false)} notify={notify} />}
+    {portfolioOpen && <GoogleDocsRecordModal item={portfolioDocument} onClose={() => setPortfolioOpen(false)} />}
   </div>;
 }
 
@@ -1271,6 +1283,7 @@ function SchoolStudent360({ visibility, student, loading, error, onBack, user, n
   const [credentialOpen, setCredentialOpen] = useState(false);
   const [document, setDocument] = useState(null);
   const [evidence, setEvidence] = useState(null);
+  const [portfolioOpen, setPortfolioOpen] = useState(false);
   if (loading) return <PageSkeleton />;
   if (error) return <div className="section-stack"><button className="button quiet back-button" onClick={onBack}>{t("← Students")}</button><div className="alert error">{error}</div></div>;
   if (!visibility) return <Empty text={t("Student visibility data is unavailable.")} />;
@@ -1279,7 +1292,8 @@ function SchoolStudent360({ visibility, student, loading, error, onBack, user, n
   const included = visibility.policy?.included || [];
   const excluded = visibility.policy?.excluded || [];
   const portfolio = [...visibility.achievements, ...visibility.researches, ...visibility.projects, ...visibility.internships, ...visibility.activities, ...visibility.honors];
-  return <div className="section-stack school-student-360"><section className="student-overview-hero"><div className="student-overview-title"><button className="button quiet" onClick={onBack}>{t("← Students")}</button><div className="profile-identity"><span className="avatar large">{initials(fullName(identity))}</span><div><span className="eyebrow">{t("PRIVACY-SAFE STUDENT 360")}</span><h2>{fullName(identity)}</h2><p>{identity.email} • {profile.school_name}</p></div></div><button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t("Reset login")}</button></div><div className="overview-progress"><strong>{formatPercentLocale(profile.journey_progress_percent || 0)}</strong><span>{t("Application journey")}</span><div className="progress wide"><span style={{ width: `${profile.journey_progress_percent || 0}%` }} /></div></div></section><section className="visibility-policy"><div><ShieldCheck size={22} /><div><span className="eyebrow">{t("DATA VISIBILITY POLICY")}</span><h3>{visibility.policy.access_scope === 'global' ? t("Global admin scope") : t("Own-school scope")}</h3><p>{t("Admissions data is read-only here. Sensitive communication, credentials, and internal notes require a separate authorized workflow.")}</p></div></div><Badge tone="success">{t("Read only")}</Badge><details><summary>{t("What is visible")}</summary><div className="visibility-tags included">{included.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details><details><summary>{t("What is protected")}</summary><div className="visibility-tags protected">{excluded.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details></section><div className="stat-grid"><Stat label={t("Level")} value={profile.level} note={tx`${profile.xp_total} XP`} /><Stat label={t("Tasks")} value={visibility.tasks.length} note={formatPercentLocale(profile.task_progress_percent || 0)} /><Stat label={t("Roadmap")} value={visibility.roadmap.length} note={formatPercentLocale(profile.roadmap_progress_percent || 0)} /><Stat label={t("Applications")} value={visibility.applications.length} note={t("Metadata and status")}/></div><div className="split-grid"><Panel title={t("Academic & planning")}><div className="detail-grid"><Detail label={t("Grade")} value={profile.grade} /><Detail label={t("GPA")} value={profile.gpa} /><Detail label={t("IELTS")} value={profile.ielts_score} /><Detail label={t("SAT")} value={profile.sat_score} /><Detail label={t("Target major")} value={profile.target_major} /><Detail label={t("Target countries")} value={profile.target_countries} /><Detail label={t("Parent contact")} value={profile.parent_contact} /><Detail label={t("Counselor")} value={profile.counselor_name} /></div></Panel><VisibilitySection title={t("Meetings")} items={visibility.meetings} /></div><div className="overview-grid"><VisibilitySection title={t("Tasks")} items={visibility.tasks} /><VisibilitySection title={t("Roadmap")} items={visibility.roadmap} /><VisibilitySection title={t("Applications")} items={visibility.applications} /><VisibilitySection title={t("Documents")} items={visibility.documents} onDocument={setDocument} /><VisibilitySection title={t("Essays")} items={visibility.essays} /><VisibilitySection title={t("Recommendations")} items={visibility.recommendations} /><VisibilitySection title={t("Portfolio & activities")} items={portfolio} onEvidence={setEvidence} /><VisibilitySection title={t("Program Usage")} items={visibility.program_usage} /></div>{credentialOpen && <TemporaryCredentialModal account={{ ...identity, role: 'student' }} onClose={() => setCredentialOpen(false)} notify={notify} />}{document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}{evidence && <EvidencePreviewModal item={evidence} onClose={() => setEvidence(null)} notify={notify} />}</div>;
+  const portfolioDocument = { name: tx`${fullName(identity)} portfolio`, google_docs_url: profile.portfolio_google_docs_url, google_docs_preview_url: profile.portfolio_google_docs_preview_url };
+  return <div className="section-stack school-student-360"><section className="student-overview-hero"><div className="student-overview-title"><button className="button quiet" onClick={onBack}>{t("← Students")}</button><div className="profile-identity"><span className="avatar large">{initials(fullName(identity))}</span><div><span className="eyebrow">{t("PRIVACY-SAFE STUDENT 360")}</span><h2>{fullName(identity)}</h2><p>{identity.email} • {profile.school_name}</p></div></div><GoogleDocsActions item={portfolioDocument} onPreview={() => setPortfolioOpen(true)} /><button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t("Reset login")}</button></div><div className="overview-progress"><strong>{formatPercentLocale(profile.journey_progress_percent || 0)}</strong><span>{t("Application journey")}</span><div className="progress wide"><span style={{ width: `${profile.journey_progress_percent || 0}%` }} /></div></div></section><section className="visibility-policy"><div><ShieldCheck size={22} /><div><span className="eyebrow">{t("DATA VISIBILITY POLICY")}</span><h3>{visibility.policy.access_scope === 'global' ? t("Global admin scope") : t("Own-school scope")}</h3><p>{t("Admissions data is read-only here. Sensitive communication, credentials, and internal notes require a separate authorized workflow.")}</p></div></div><Badge tone="success">{t("Read only")}</Badge><details><summary>{t("What is visible")}</summary><div className="visibility-tags included">{included.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details><details><summary>{t("What is protected")}</summary><div className="visibility-tags protected">{excluded.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details></section><div className="stat-grid"><Stat label={t("Level")} value={profile.level} note={tx`${profile.xp_total} XP`} /><Stat label={t("Tasks")} value={visibility.tasks.length} note={formatPercentLocale(profile.task_progress_percent || 0)} /><Stat label={t("Roadmap")} value={visibility.roadmap.length} note={formatPercentLocale(profile.roadmap_progress_percent || 0)} /><Stat label={t("Applications")} value={visibility.applications.length} note={t("Metadata and status")}/></div><div className="split-grid"><Panel title={t("Academic & planning")}><div className="detail-grid"><Detail label={t("Grade")} value={profile.grade} /><Detail label={t("GPA")} value={profile.gpa} /><Detail label={t("IELTS")} value={profile.ielts_score} /><Detail label={t("SAT")} value={profile.sat_score} /><Detail label={t("Target major")} value={profile.target_major} /><Detail label={t("Target countries")} value={profile.target_countries} /><Detail label={t("Parent contact")} value={profile.parent_contact} /><Detail label={t("Counselor")} value={profile.counselor_name} /></div></Panel><VisibilitySection title={t("Meetings")} items={visibility.meetings} /></div><div className="overview-grid"><VisibilitySection title={t("Tasks")} items={visibility.tasks} /><VisibilitySection title={t("Roadmap")} items={visibility.roadmap} /><VisibilitySection title={t("Applications")} items={visibility.applications} /><VisibilitySection title={t("Documents")} items={visibility.documents} onDocument={setDocument} /><VisibilitySection title={t("Essays")} items={visibility.essays} /><VisibilitySection title={t("Recommendations")} items={visibility.recommendations} /><VisibilitySection title={t("Portfolio & activities")} items={portfolio} onEvidence={setEvidence} /><VisibilitySection title={t("Program Usage")} items={visibility.program_usage} /></div>{credentialOpen && <TemporaryCredentialModal account={{ ...identity, role: 'student' }} onClose={() => setCredentialOpen(false)} notify={notify} />}{portfolioOpen && <GoogleDocsRecordModal item={portfolioDocument} onClose={() => setPortfolioOpen(false)} />}{document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}{evidence && <EvidencePreviewModal item={evidence} onClose={() => setEvidence(null)} notify={notify} />}</div>;
 }
 
 function StudentAssignmentModal({ user, data, onClose, onSaved, notify }) {
@@ -1341,9 +1355,196 @@ function StudentAssignmentModal({ user, data, onClose, onSaved, notify }) {
   </form></Modal>;
 }
 
+function safeSpreadsheetCell(value) {
+  const text = String(value ?? '');
+  const guarded = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${guarded.replaceAll('"', '""')}"`;
+}
+
+function StudentImportModal({ user, data, onClose, onImported, notify }) {
+  const [file, setFile] = useState(null);
+  const [school, setSchool] = useState(user.role === 'admin' ? '' : String(user.school || ''));
+  const [mapping, setMapping] = useState({});
+  const [portfolioLinks, setPortfolioLinks] = useState({});
+  const [preview, setPreview] = useState(null);
+  const [previewPage, setPreviewPage] = useState(0);
+  const [result, setResult] = useState(null);
+  const [stale, setStale] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [credentialsDownloaded, setCredentialsDownloaded] = useState(false);
+  const requestPending = useRef(false);
+  const importAttempted = useRef(false);
+  const closed = useRef(false);
+  const hasUnsavedCredentials = Boolean(result?.credentials?.length && !credentialsDownloaded);
+
+  useEffect(() => {
+    if (!busy && !hasUnsavedCredentials) return;
+    const warnBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [busy, hasUnsavedCredentials]);
+
+  function selectFile(event) {
+    if (requestPending.current) return;
+    setFile(event.target.files?.[0] || null);
+    setMapping({});
+    setPortfolioLinks({});
+    setPreview(null);
+    setPreviewPage(0);
+    setResult(null);
+    setStale(false);
+    setError('');
+  }
+
+  async function runPreview(event) {
+    event?.preventDefault();
+    if (requestPending.current || result) return;
+    if (!file) {setError(t('Select an Excel or CSV file.'));return;}
+    if (user.role === 'admin' && !school) {setError(t('Select a school.'));return;}
+    requestPending.current = true;
+    setBusy(true);
+    setError('');
+    setResult(null);
+    try {
+      const response = await api.importStudents({ file, mapping, portfolioLinks, school });
+      setPreview(response);
+      setPreviewPage(0);
+      setMapping(response.mapping || {});
+      setStale(false);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      requestPending.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function commitImport() {
+    if (requestPending.current || result || !preview || stale || preview.global_errors?.length || !preview.summary?.ready) return;
+    requestPending.current = true;
+    importAttempted.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const response = await api.importStudents({ file, mapping, portfolioLinks, school, commit: true });
+      setResult(response);
+      setPreview(response);
+      setCredentialsDownloaded(false);
+      notify(tx`${response.summary.created} students imported.`, response.summary.error || !response.summary.created ? 'error' : 'success');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      requestPending.current = false;
+      setBusy(false);
+    }
+  }
+
+  function updateMapping(field, column) {
+    if (requestPending.current) return;
+    setMapping((current) => ({ ...current, [field]: column }));
+    setStale(true);
+  }
+
+  function updatePortfolioLink(rowNumber, value) {
+    if (requestPending.current) return;
+    setPortfolioLinks((current) => ({ ...current, [String(rowNumber)]: value }));
+    setStale(true);
+  }
+
+  function downloadCredentials() {
+    if (!result?.credentials?.length) return;
+    const rows = [
+      ['F.I.SH', 'Username', 'Email', 'Temporary password', 'Expires at'],
+      ...result.credentials.map((credential) => [
+        credential.full_name,
+        credential.username,
+        credential.email,
+        credential.temporary_password,
+        credential.expires_at,
+      ]),
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map(safeSpreadsheetCell).join(',')).join('\r\n')}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `naseeb-student-logins-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    setCredentialsDownloaded(true);
+  }
+
+  const close = () => {
+    if (requestPending.current || closed.current) return;
+    if (result?.credentials?.length && !credentialsDownloaded && !window.confirm(t('Temporary passwords have not been downloaded. Close anyway?'))) return;
+    closed.current = true;
+    onClose();
+    // Refresh only after the one-time credential result has been acknowledged.
+    // Loading an initially empty student list unmounts this modal's parent.
+    if (importAttempted.current) onImported();
+  };
+  const rowsPerPage = 100;
+  const previewPageCount = Math.max(1, Math.ceil((preview?.rows?.length || 0) / rowsPerPage));
+  const previewStart = previewPage * rowsPerPage;
+  const visibleRows = preview?.rows?.slice(previewStart, previewStart + rowsPerPage) || [];
+
+  return <Modal title={t('Import students')} onClose={close}>
+    <form className="student-import-form" onSubmit={runPreview} aria-busy={busy}>
+      {!result && <>
+        <section className="import-upload-card form-wide">
+          <span className="import-upload-icon"><FileSpreadsheet size={24} /></span>
+          <div><b>{t('Upload a student spreadsheet')}</b><small>{t('.xlsx, .xls, or UTF-8 CSV · maximum 5 MB and 2,000 students')}</small></div>
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={selectFile} aria-label={t('Student spreadsheet')} disabled={busy} required />
+        </section>
+        {user.role === 'admin' && <Field label={t('School')}><select value={school} disabled={busy} onChange={(event) => {if (requestPending.current) return;setSchool(event.target.value);setPreview(null);setStale(false);}} required><option value="">{t('Select school')}</option>{data.schools.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>}
+        <p className="form-note form-wide"><ShieldCheck size={16} />{t('Only mapped student fields are imported. Contract, payment, address, workplace, and JSHSHIR columns are ignored.')}</p>
+        {!preview && <div className="form-actions"><button type="button" className="button quiet" onClick={close} disabled={busy}>{t('Cancel')}</button><button className="button primary" disabled={busy || !file || user.role === 'admin' && !school} aria-busy={busy}><Eye size={16} />{busy ? t('Checking…') : t('Preview import')}</button></div>}
+      </>}
+
+      {preview && !result && <>
+        <div className="import-summary form-wide">
+          <div><span>{t('Rows')}</span><strong>{formatNumberLocale(preview.summary.total)}</strong></div>
+          <div className="ready"><span>{t('Ready')}</span><strong>{formatNumberLocale(preview.summary.ready)}</strong></div>
+          <div className="duplicate"><span>{t('Duplicates')}</span><strong>{formatNumberLocale(preview.summary.duplicate)}</strong></div>
+          <div className="error"><span>{t('Errors')}</span><strong>{formatNumberLocale(preview.summary.error)}</strong></div>
+        </div>
+        <section className="import-mapping form-wide">
+          <div className="import-section-heading"><div><span className="eyebrow">{t('COLUMN MAPPING')}</span><h3>{t('Match spreadsheet columns')}</h3></div><small>{preview.sheet_name}</small></div>
+          <div className="import-mapping-grid">{preview.fields.map((field) => <Field key={field.key} label={`${t(field.label)}${field.required ? ' *' : ''}`}><select value={mapping[field.key] || ''} disabled={busy} onChange={(event) => updateMapping(field.key, event.target.value)}><option value="">{t('Do not import')}</option>{preview.headers.map((header) => <option key={header.key} value={header.key}>{header.position}. {header.label}</option>)}</select></Field>)}</div>
+          {preview.ignored_columns?.length > 0 && <details className="ignored-columns"><summary>{t('Ignored spreadsheet columns')}</summary><p>{preview.ignored_columns.join(' · ')}</p></details>}
+          {stale && <div className="alert warning" role="status">{t('Import details changed. Refresh the preview before importing.')}</div>}
+          {preview.global_errors?.map((message) => <div className="alert error" key={message}>{message}</div>)}
+        </section>
+        <section className="import-preview form-wide">
+          <div className="import-section-heading"><div><span className="eyebrow">{t('DRY RUN')}</span><h3>{t('Student preview')}</h3></div><small>{tx`${previewStart + 1}–${previewStart + visibleRows.length} of ${preview.rows.length} rows shown`}</small></div>
+          <div className="table-wrap"><table><thead><tr><th>{t('Row')}</th><th>{t('Student')}</th><th>{t('Grade')}</th><th>{t('Google Docs portfolio')}</th><th>{t('Result')}</th></tr></thead><tbody>{visibleRows.map((row) => <tr key={row.row_number}><td>{row.row_number}</td><td><b>{row.values.full_name || '—'}</b><small>{row.values.email || t('Internal login email')}</small></td><td>{row.values.grade || '—'}</td><td><input type="url" value={portfolioLinks[String(row.row_number)] ?? row.values.portfolio_google_docs_url ?? ''} disabled={busy} onChange={(event) => updatePortfolioLink(row.row_number, event.target.value)} placeholder={t('Google Docs document link')} aria-label={tx`Google Docs portfolio for row ${row.row_number}`} /></td><td><Badge tone={row.status === 'ready' ? 'success' : row.status === 'error' ? 'danger' : 'warning'}>{row.status === 'duplicate' ? t('Skipped') : row.status === 'ready' ? t('Ready') : row.status === 'created' ? t('Created') : t('Error')}</Badge>{[...row.errors, ...row.warnings].map((message) => <small className={row.errors.includes(message) ? 'import-row-error' : ''} key={message}>{message}</small>)}</td></tr>)}</tbody></table></div>
+          {previewPageCount > 1 && <div className="import-pagination"><button type="button" className="button quiet" onClick={() => setPreviewPage((page) => Math.max(0, page - 1))} disabled={previewPage === 0} aria-label={t('Previous import rows')}>←</button><span>{tx`Page ${previewPage + 1} of ${previewPageCount}`}</span><button type="button" className="button quiet" onClick={() => setPreviewPage((page) => Math.min(previewPageCount - 1, page + 1))} disabled={previewPage === previewPageCount - 1} aria-label={t('Next import rows')}>→</button></div>}
+        </section>
+        <div className="form-actions form-wide"><button type="button" className="button quiet" onClick={close} disabled={busy}>{t('Cancel')}</button><button type="submit" className="button quiet" disabled={busy}><RefreshCw size={15} />{busy ? t('Checking…') : t('Refresh preview')}</button><button type="button" className="button primary" onClick={commitImport} disabled={busy || stale || preview.global_errors?.length || !preview.summary.ready}><Upload size={16} />{busy ? t('Importing…') : tx`Import ${preview.summary.ready} students`}</button></div>
+      </>}
+
+      {result && <section className="import-complete form-wide" aria-live="polite">
+        <span className="import-complete-icon">{result.summary.created > 0 && !result.summary.error ? <CheckCircle2 size={28} /> : <ShieldAlert size={28} />}</span>
+        <div><span className="eyebrow">{result.summary.created > 0 && !result.summary.error ? t('IMPORT COMPLETE') : t('Import needs attention')}</span><h3>{tx`${result.summary.created} students created`}</h3><p>{tx`${result.summary.skipped} rows skipped · ${result.summary.error} errors`}</p></div>
+        {result.global_errors?.map((message) => <div className="alert error" key={message}>{message}</div>)}
+        {result.rows?.some((row) => row.status === 'error' || row.status === 'duplicate') && <div className="table-wrap"><table><thead><tr><th>{t('Row')}</th><th>{t('Student')}</th><th>{t('Result')}</th></tr></thead><tbody>{result.rows.filter((row) => row.status === 'error' || row.status === 'duplicate').map((row) => <tr key={row.row_number}><td>{row.row_number}</td><td>{row.values.full_name || '—'}</td><td><Badge tone={row.status === 'error' ? 'danger' : 'warning'}>{row.status === 'error' ? t('Error') : t('Skipped')}</Badge>{[...(row.errors || []), ...(row.warnings || [])].map((message, index) => <small className={row.status === 'error' ? 'import-row-error' : ''} key={`${index}-${message}`}>{message}</small>)}</td></tr>)}</tbody></table></div>}
+        {result.credentials?.length > 0 && <><div className="alert warning"><ShieldAlert size={16} />{t('Temporary passwords are shown only in this result. Download and deliver them through an approved secure channel.')}</div><button type="button" className="button primary" onClick={downloadCredentials}><Download size={16} />{credentialsDownloaded ? t('Download credentials again') : t('Download login credentials')}</button></>}
+        <div className="form-actions"><button type="button" className="button quiet" onClick={close}>{t('Close')}</button></div>
+      </section>}
+      {error && <div className="alert error form-wide" role="alert">{error}</div>}
+    </form>
+  </Modal>;
+}
+
 function StudentsPage({ user, data, query, reload, notify }) {
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [visibility, setVisibility] = useState(null);
@@ -1375,10 +1576,11 @@ function StudentsPage({ user, data, query, reload, notify }) {
   if (selected && ['admin', 'organization'].includes(user.role)) return <SchoolStudent360 visibility={visibility} student={selected} loading={visibilityLoading} error={visibilityError} onBack={() => setSelected(null)} user={user} notify={notify} />;
   if (selected) return <StudentOverview student={data.students.find((item) => item.id === selected.id) || selected} data={data} onBack={() => setSelected(null)} user={user} notify={notify} />;
 
-  const actions = user.role !== 'teacher' && <div className="panel-actions">{['admin', 'counselor'].includes(user.role) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {user.role === 'admin' ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
+  const actions = ['admin', 'counselor', 'organization'].includes(user.role) && <div className="panel-actions">{['admin', 'counselor'].includes(user.role) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {user.role === 'admin' ? t("Assign counselor") : t("Connect students")}</button>}<button className="button quiet" onClick={() => setImportOpen(true)}><FileSpreadsheet size={17} /> {t('Import students')}</button><button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
   return <>
     <Panel title={t("Students")} action={actions}><StudentTable data={data} query={query} onView={openStudent} onApproveLevel={isTaskManager(user) ? approveLevel : undefined} onEdit={user.role !== 'teacher' ? (student) => {setEditing(student);setOpen(true);} : undefined} onDelete={user.role !== 'teacher' ? remove : undefined} /></Panel>
     {open && <StudentForm user={user} data={data} student={editing} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
+    {importOpen && <StudentImportModal user={user} data={data} onClose={() => setImportOpen(false)} onImported={reload} notify={notify} />}
     {assignmentOpen && <StudentAssignmentModal user={user} data={data} onClose={() => setAssignmentOpen(false)} onSaved={() => {setAssignmentOpen(false);reload();}} notify={notify} />}
   </>;
 }
@@ -1391,7 +1593,7 @@ function StudentForm({ user, data, student, onClose, onSaved, notify }) {
     password: '',
     grade: student?.grade || '11', target_major: student?.target_major || '', target_countries: student?.target_countries || '',
     gpa: student?.gpa || '', ielts_score: student?.ielts_score || '', sat_score: student?.sat_score || '',
-    budget_usd: student?.budget_usd || '', parent_contact: student?.parent_contact || '', notes: student?.notes || '',
+    budget_usd: student?.budget_usd || '', parent_contact: student?.parent_contact || '', portfolio_google_docs_url: student?.portfolio_google_docs_url || '', notes: student?.notes || '',
     scholarship_needed: student?.scholarship_needed ?? true, school: student?.school || user.school || ''
   });
   function update(name, value) {
@@ -1413,8 +1615,8 @@ function StudentForm({ user, data, student, onClose, onSaved, notify }) {
     setFieldErrors({});
     setSaving(true);
     try {
-      const profilePayload = { grade: form.grade, target_major: form.target_major, target_countries: targetCountries, gpa: form.gpa || null, ielts_score: form.ielts_score || null, sat_score: form.sat_score || null, budget_usd: form.budget_usd || null, parent_contact: form.parent_contact, scholarship_needed: form.scholarship_needed, school: Number(form.school) };
-      const createPayload = { name: form.name, email: form.email, password: form.password, grade: form.grade, major: form.target_major, countries: targetCountries, gpa: form.gpa, ielts: form.ielts_score, sat: form.sat_score, budget_usd: form.budget_usd, parent_contact: form.parent_contact, scholarship_needed: form.scholarship_needed, school: form.school };
+      const profilePayload = { grade: form.grade, target_major: form.target_major, target_countries: targetCountries, gpa: form.gpa || null, ielts_score: form.ielts_score || null, sat_score: form.sat_score || null, budget_usd: form.budget_usd || null, parent_contact: form.parent_contact, portfolio_google_docs_url: form.portfolio_google_docs_url, scholarship_needed: form.scholarship_needed, school: Number(form.school) };
+      const createPayload = { name: form.name, email: form.email, password: form.password, grade: form.grade, major: form.target_major, countries: targetCountries, gpa: form.gpa, ielts: form.ielts_score, sat: form.sat_score, budget_usd: form.budget_usd, parent_contact: form.parent_contact, portfolio_google_docs_url: form.portfolio_google_docs_url, scholarship_needed: form.scholarship_needed, school: form.school };
       if (user.role !== 'organization') {
         profilePayload.notes = form.notes;
         createPayload.notes = form.notes;
@@ -1441,6 +1643,7 @@ function StudentForm({ user, data, student, onClose, onSaved, notify }) {
     <Field label={t("SAT")}><input type="number" value={form.sat_score} onChange={(e) => update('sat_score', e.target.value)} /></Field>
     <Field label={t("Annual budget USD")}><input type="number" value={form.budget_usd} onChange={(e) => update('budget_usd', e.target.value)} /></Field>
     <Field label={t("Parent contact")}><input value={form.parent_contact} onChange={(e) => update('parent_contact', e.target.value)} /></Field>
+    <Field label={t('Google Docs portfolio')} error={fieldErrors.portfolio_google_docs_url}><input type="url" value={form.portfolio_google_docs_url} onChange={(e) => update('portfolio_google_docs_url', e.target.value)} placeholder={t('Google Docs document link')} /></Field>
     {user.role !== 'organization' && <Field label={t("Notes")}><textarea value={form.notes} onChange={(e) => update('notes', e.target.value)} /></Field>}
     <CheckboxControl className="form-wide" checked={form.scholarship_needed} onChange={(e) => update('scholarship_needed', e.target.checked)}>{t("Scholarship needed")}</CheckboxControl>
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save student")}</button></div>
@@ -1586,6 +1789,7 @@ function ResourceForm({ resource, item, data, user, defaultStudentId = null, onC
     const payload = usesFileUpload ? new FormData() : {};
     for (const [name,, type] of fields) {
       const raw = values.get(name);
+      if (name === 'status' && item && (raw === null || raw === item.status)) continue;
       if (type === 'file') {
         if (raw?.size && payload instanceof FormData) payload.append(name, raw);
         continue;
@@ -1606,8 +1810,10 @@ function ResourceForm({ resource, item, data, user, defaultStudentId = null, onC
       notify(item ? t("Record updated.") : t("Record created."));onSaved();
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  const selfTask = resource === 'tasks' && user.role === 'student';
-  return <Modal title={selfTask ? item ? t("Edit self-task") : t("Create self-task") : `${item ? t("Edit") : t("Add")} ${resource}`} onClose={onClose}><form className="form-grid" onSubmit={submit}>
+  const studentTask = resource === 'tasks' && user.role === 'student';
+  const selfTask = studentTask && (!item || item.is_self_assigned);
+  return <Modal title={selfTask ? item ? t("Edit self-task") : t("Create self-task") : studentTask ? t("Your task response") : `${item ? t("Edit") : t("Add")} ${resource}`} onClose={onClose}><form className="form-grid" onSubmit={submit}>
+    {studentTask && item && <section className="form-wide task-instructions"><h3>{item.title}</h3><p>{item.description || t("No additional instructions.")}</p><span>{t("Deadline")}: {dateText(item.due_date)}</span></section>}
     {!item && isTaskManager(user) && <Field label={t("Student")} hint={t("Only students connected to your account are listed.")}><select name="student" required defaultValue={defaultStudentId || ''}><option value="" disabled>{t("Select student")}</option>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}
     {selfTask && <div className="form-wide self-task-note"><Sparkles size={18} /><div><b>{t("Personal development task")}</b><p>{t("This task is for your own planning and never awards XP.")}</p></div></div>}
     {fields.map(([name, title, type = 'text', required = false, choices = []]) => <DynamicField key={name} name={name} labelText={title} type={type} required={required} choices={choices} value={item?.[name]} data={data} user={user} />)}
@@ -1619,7 +1825,7 @@ function ResourceForm({ resource, item, data, user, defaultStudentId = null, onC
 function DynamicField({ name, labelText, type, required, choices, value, data, user }) {
   if (name === 'status' && !isTaskManager(user)) choices = choices.filter((choice) => !['approved', 'late', 'rejected', 'waitlisted', 'accepted', 'needs_revision', 'completed'].includes(choice));
   if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} /></Field>;
-  if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;
+  if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{value && !choices.includes(value) && <option value={value} disabled>{label(value)}</option>}{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;
   if (type === 'checkbox') return <CheckboxControl className="form-wide" name={name} defaultChecked={Boolean(value)}>{t(labelText)}</CheckboxControl>;
   if (type === 'file') return <Field label={t(labelText)}><input name={name} type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" /></Field>;
   if (type === 'university') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''} required={required}><option value="">{t('Select university')}</option>{data.universities.map((uni) => <option key={uni.id} value={uni.id}>{uni.name} — {uni.country}</option>)}</select></Field>;
@@ -2854,11 +3060,9 @@ function AdminAuditPage({ data, query }) {
 const FP_STORAGE_KEY = 'naseeb-find-personality-v1'
 const FP_PAGE_SIZE = 10
 
-function loadChallengeAnswers() {
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(FP_STORAGE_KEY) || '{}')
-    return saved && typeof saved === 'object' ? saved : {}
-  } catch { return {} }
+function loadChallengeAnswers(userId) {
+  const saved = readAccountStorage(FP_STORAGE_KEY, userId, {})
+  return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {}
 }
 
 // The Work Importance Locator is a card sort: exactly four cards in each of five
@@ -3367,8 +3571,8 @@ function ResultsSummary({ results }) {
   </Panel>
 }
 
-function FindPersonalityPage({ notify }) {
-  const [answers, setAnswers] = useState(loadChallengeAnswers)
+function FindPersonalityPage({ notify, userId }) {
+  const [answers, setAnswers] = useState(() => loadChallengeAnswers(userId))
   const [openKey, setOpenKey] = useState(null)
   // Completed attempts already on the server, newest per challenge.
   const [saved, setSaved] = useState({})
@@ -3376,7 +3580,7 @@ function FindPersonalityPage({ notify }) {
 
   useEffect(() => {
     let alive = true
-    api.challengeAttempts()
+    api.challengeAttempts(null, { expectedUserId: userId })
       .then((rows) => {
         if (!alive) return
         // The API returns newest first, so the first row seen for a challenge is
@@ -3390,13 +3594,13 @@ function FindPersonalityPage({ notify }) {
       .catch(() => { /* offline: the device copy below still works */ })
       .finally(() => { if (alive) setSyncing(false) })
     return () => { alive = false }
-  }, [])
+  }, [userId])
 
   // The device copy is for a challenge left half-finished; the account holds the
   // completed ones. Losing this is an inconvenience, losing those is the product.
   useEffect(() => {
-    try { window.localStorage.setItem(FP_STORAGE_KEY, JSON.stringify(answers)) } catch { /* private mode */ }
-  }, [answers])
+    writeAccountStorage(FP_STORAGE_KEY, userId, answers)
+  }, [answers, userId])
 
   const answerItem = useCallback((id, value) => setAnswers((prev) => ({ ...prev, [id]: value })), [])
 
@@ -3411,13 +3615,14 @@ function FindPersonalityPage({ notify }) {
         instrument_version: INSTRUMENT_VERSION[challenge.key] || '1',
         answers: Object.fromEntries(challenge.items.map((item) => [item.id, answers[item.id]])),
         scores: result,
-      })
+      }, { expectedUserId: userId })
       setSaved((prev) => ({ ...prev, [challenge.key]: row }))
       notify?.('Saved to your account.')
-    } catch {
+    } catch (error) {
+      if (error?.name === 'AbortError') return
       notify?.('Saved on this device only — we could not reach your account.', 'error')
     }
-  }, [answers, notify])
+  }, [answers, notify, userId])
   const results = CHALLENGES.map((challenge) => [challenge, scoreChallenge(challenge, answers)])
   const doneCount = results.filter(([, result]) => result).length
   const total = CHALLENGES.length + PLANNED.length
@@ -3473,11 +3678,11 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (user.role === 'admin' && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (['admin', 'counselor'].includes(user.role) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
   if (user.role === 'admin' && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
-  if (page === 'dashboard') return <Dashboard user={user} data={data} stats={stats} setPage={setPage} />;
+  if (page === 'dashboard') return <Dashboard {...{ user, data, stats, setPage, reload, notify }} />;
   if (user.role === 'student' && page === 'student_center') return <StudentCenterPage {...{ user, data, query, reload, notify }} />;
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
-  if (user.role === 'student' && page === 'find_personality') return <FindPersonalityPage notify={notify} />;
+  if (user.role === 'student' && page === 'find_personality') return <FindPersonalityPage key={user.id} userId={user.id} notify={notify} />;
   if (user.role === 'student' && page === 'community') return <CommunityPage {...{ data, reload, notify }} />;
   if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />;
   if (page === 'messages') return <MessagesPage {...{ user, data, notify }} />;
@@ -3565,14 +3770,22 @@ export default function App() {
     };
   }, []);
 
+  const clearPrivateState = useCallback(() => {
+    setUser(null);setData(EMPTY_DATA);setStats(null);setResourceStatus({});
+    setQuery('');setToast(null);setError('');setLoading(false);setPage('dashboard');
+  }, []);
+
   const loadUser = useCallback(async () => {
+    const session = api.sessionVersion();
     const current = await api.me();
+    if (session !== api.sessionVersion()) throw new DOMException('Session changed', 'AbortError');
     setUser(current);
     return current;
   }, []);
 
   const loadData = useCallback(async (activeUser = user, requestedKeys = null) => {
     if (!activeUser || activeUser.must_change_password) return;
+    const requestSession = api.sessionVersion();
     setLoading(true);setError('');
     try {
       const studentResources = ['students', 'tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations'].map((key) => [key, key]);
@@ -3600,6 +3813,9 @@ export default function App() {
         return next;
       });
       const settled = await Promise.allSettled(requests.map(([, request]) => request()));
+      // Logout or a fast account switch invalidates all in-flight responses.
+      // Do not let the previous account repopulate the new cabinet.
+      if (requestSession !== api.sessionVersion()) return;
       const successfulResources = {};
       const nextStatuses = {};
       let dashboardStats;
@@ -3617,7 +3833,7 @@ export default function App() {
       });
       if (unauthorized) {
         api.logout();
-        setUser(null);
+        clearPrivateState();
         return;
       }
       if (dashboardStats !== undefined) setStats(dashboardStats);
@@ -3630,8 +3846,8 @@ export default function App() {
       }
     } catch (err) {
       setError(err.message);
-    } finally {setLoading(false);}
-  }, [user]);
+    } finally {if (requestSession === api.sessionVersion()) setLoading(false);}
+  }, [user, clearPrivateState]);
 
   const bootstrapSession = useCallback(async () => {
     if (!api.hasSession()) {setBootstrapping(false);return;}
@@ -3644,13 +3860,13 @@ export default function App() {
     } catch (err) {
       if (err.status === 401) {
         api.logout();
-        setUser(null);
+        clearPrivateState();
       } else {
         setBootstrapError(err.message || t("Unable to connect to the server. Check your connection and retry."));
       }
       setBootstrapping(false);
     }
-  }, [loadUser, loadData]);
+  }, [loadUser, loadData, clearPrivateState]);
 
   useEffect(() => {
     if (bootstrapAttempted.current) return;
@@ -3670,7 +3886,7 @@ export default function App() {
     setUser(current);
     await loadData(current);
   }
-  function logout() {api.logout();setUser(null);setData(EMPTY_DATA);setStats(null);setResourceStatus({});setBootstrapError('');setPage('dashboard');showPublicPage('landing', true);}
+  function logout() {api.logout();clearPrivateState();setBootstrapError('');showPublicPage('landing', true);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
 
   if (bootstrapping) return <AppBootLoader message="Checking your secure session…" />;
@@ -3686,8 +3902,6 @@ export default function App() {
     {toast && <div className={`toast ${toast.type}`}>{toast.type === 'success' ? <ShieldCheck size={18} /> : <X size={18} />}{toast.message}</div>}
   </>;
 }
-
-
 
 
 
