@@ -232,6 +232,10 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  educationMatchAI: (payload) => request('/education-matches/ai/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
   publicReach: () => request('/public/reach/', { auth: false }),
   list: listAll,
   create: (resource, payload) => request(`/${resource}/`, {
@@ -291,7 +295,7 @@ export const api = {
   }),
   acceptParentInvite: (id) => request(`/parent-links/${id}/accept/`, { method: 'POST' }),
   revokeParentLink: (id) => request(`/parent-links/${id}/revoke/`, { method: 'POST' }),
-  // Find Your Personality. Attempts are append-only: a retake is a new row, so
+  // Profile Assessment. Attempts are append-only: a retake is a new row, so
   // there is deliberately no update or delete here.
   challengeAttempts: (studentId) => listAll('challenge-attempts', studentId ? `?student=${encodeURIComponent(studentId)}` : ''),
   saveChallengeAttempt: (payload) => request('/challenge-attempts/', {

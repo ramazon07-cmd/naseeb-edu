@@ -17,11 +17,12 @@ from rest_framework.test import APITestCase
 
 from apps.users.models import User
 from .assistant import build_role_context, redact_pii
+from .education_ai import latest_assessment_scores
 from .models import (
-    Achievement, Activity, Application, Booking, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, Honor,
+    Achievement, Activity, Application, Booking, ChallengeAttempt, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, Honor,
     Internship, MeetingNote, LevelApproval, Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project, RecommendationLetter,
     Research, ResourceLibraryItem, MessageChannel, MessageReport, RoadmapMission, School, Scholarship, ScreenTimeDaily, StoreItem,
-    StudentMessage, StudentProfile, SupportTicket, Task, University, XPTransaction,
+    StudentMessage, StudentProfile, SupportTicket, Task, University, UniversityProgram, XPTransaction,
 )
 
 
@@ -107,6 +108,31 @@ class RoleIsolationTests(APITestCase):
         response = self.client.get('/api/students/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([item['id'] for item in self.results(response)], [self.student_a.id])
+
+    def test_student_can_update_academic_and_goal_profile_details(self):
+        self.client.force_authenticate(self.student_a_user)
+        response = self.client.patch(
+            f'/api/students/{self.student_a.id}/',
+            {
+                'grade': '11',
+                'gpa': '4.50',
+                'ielts_score': '7.5',
+                'sat_score': 1420,
+                'target_major': 'Computer Science',
+                'target_countries': 'United States, Canada',
+                'budget_usd': 30000,
+                'scholarship_needed': True,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.student_a.refresh_from_db()
+        self.assertEqual(self.student_a.grade, '11')
+        self.assertEqual(str(self.student_a.gpa), '4.50')
+        self.assertEqual(str(self.student_a.ielts_score), '7.5')
+        self.assertEqual(self.student_a.sat_score, 1420)
+        self.assertEqual(self.student_a.target_major, 'Computer Science')
+        self.assertEqual(self.student_a.target_countries, 'United States, Canada')
 
     def test_student_reads_only_own_tasks_certificates_essays_and_meetings(self):
         records = {
@@ -1967,10 +1993,18 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual({item['program_type'] for item in programs}, {'national', 'international'})
 
     def test_university_api_exposes_niche_style_aid_fields(self):
-        University.objects.create(
+        university = University.objects.create(
             name='Aid University', country='Testland', acceptance_rate='42.50', sat_min=1200, sat_max=1400,
             net_price_usd=18000, average_aid_usd=12000, offers_merit_aid=True,
             offers_international_aid=True, test_optional=True,
+        )
+        UniversityProgram.objects.create(
+            university=university,
+            name='BSc Computer Science',
+            canonical_major='Computer Science',
+            tuition_usd=18000,
+            source_url='https://example.edu/programs/computer-science',
+            verified_at=date(2026, 9, 12),
         )
         self.client.force_authenticate(self.student_a_user)
         result = self.results(self.client.get('/api/universities/'))[0]
@@ -1978,6 +2012,19 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(result['net_price_usd'], 18000)
         self.assertTrue(result['offers_international_aid'])
         self.assertTrue(result['test_optional'])
+        self.assertEqual(result['programs'][0]['canonical_major'], 'Computer Science')
+        self.assertEqual(result['programs'][0]['verified_at'], '2026-09-12')
+
+    def test_university_market_is_inferred_from_country(self):
+        cases = [
+            ('United States', University.Market.US),
+            ('Canada', University.Market.CANADA),
+            ('China', University.Market.CHINA),
+            ('Hong Kong', University.Market.HONG_KONG),
+        ]
+        for index, (country, expected_market) in enumerate(cases):
+            university = University.objects.create(name=f'Market University {index}', country=country)
+            self.assertEqual(university.market, expected_market)
 
     def test_college_research_asks_only_for_missing_profile_data(self):
         self.student_a.gpa = '4.80'
@@ -2023,7 +2070,7 @@ class RoleIsolationTests(APITestCase):
         self.assertTrue(response.data['ready'])
         self.assertEqual(response.data['recommendations'][0]['university']['id'], university.id)
         self.assertGreaterEqual(response.data['recommendations'][0]['match_score'], 65)
-        self.assertIn(response.data['recommendations'][0]['admission_band'], {'reach', 'target', 'strong_option'})
+        self.assertIn(response.data['recommendations'][0]['admission_band'], {'reach', 'target', 'safety'})
         self.assertIn('academic', response.data['recommendations'][0]['score_breakdown'])
         self.student_a.refresh_from_db()
         self.assertEqual(self.student_a.sat_score, 1450)
@@ -2032,6 +2079,57 @@ class RoleIsolationTests(APITestCase):
     def test_non_student_cannot_use_college_research(self):
         self.client.force_authenticate(self.counselor)
         response = self.client.get('/api/college-research/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(GROQ_API_KEY='')
+    def test_major_match_ai_has_validated_offline_fallback(self):
+        self.student_a.gpa = '4.70'
+        self.student_a.sat_score = 1450
+        self.student_a.ielts_score = '7.5'
+        self.student_a.target_major = 'Computer Science'
+        self.student_a.target_countries = 'United States'
+        self.student_a.budget_usd = 30000
+        self.student_a.scholarship_needed = True
+        self.student_a.save(update_fields=[
+            'gpa', 'sat_score', 'ielts_score', 'target_major', 'target_countries',
+            'budget_usd', 'scholarship_needed', 'updated_at',
+        ])
+        self.client.force_authenticate(self.student_a_user)
+        response = self.client.post(
+            '/api/education-matches/ai/',
+            {
+                'major_candidates': ['Computer Science', 'Economics', 'Computer Science'],
+                'subject_strengths': ['Mathematics', 'Physics'],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mode'], 'deterministic')
+        self.assertFalse(response.data['provider_available'])
+        self.assertEqual(
+            [item['major'] for item in response.data['major_guidance']],
+            ['Computer Science', 'Economics'],
+        )
+        self.assertEqual(response.data['major_guidance'][0]['subjects_to_focus'], ['Mathematics', 'Physics'])
+        self.assertNotIn('college_explanations', response.data)
+
+    def test_major_ai_uses_current_assessments_and_ignores_retired_work_values(self):
+        for challenge in ['personality', 'interests', 'subjects', 'reasoning', 'values', 'workimportance']:
+            ChallengeAttempt.objects.create(
+                student=self.student_a,
+                challenge=challenge,
+                scores={'marker': challenge},
+            )
+        scores = latest_assessment_scores(self.student_a)
+        self.assertEqual(set(scores), {'personality', 'interests', 'subjects', 'reasoning'})
+
+    def test_non_student_cannot_generate_education_match_guidance(self):
+        self.client.force_authenticate(self.counselor)
+        response = self.client.post(
+            '/api/education-matches/ai/',
+            {'major_candidates': ['Computer Science']},
+            format='json',
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_task_roadmap_and_journey_progress_are_computed(self):
