@@ -10,7 +10,10 @@
 // Big Five scoring matches TestMind exactly, ES = 6 - mean(N) included, so a
 // student who takes both does not get two different answers.
 
-export const CHALLENGES = [
+// The retired value instruments stay in this bank only so historical saved
+// attempts remain decodable. The student assessment exports the three signals
+// used by the current major-matching release.
+const CHALLENGE_BANK = [
   {
     "key": "personality",
     "number": 1,
@@ -660,7 +663,7 @@ export const CHALLENGES = [
     "number": 4,
     "instrument": "Subject ability, interest and cost",
     "licence": "Written in-house (expectancy-value framework)",
-    "title": "How school feels",
+    "title": "Strongest Subjects",
     "blurb": "Eleven school subjects, asked three ways: what you can do, what you want, and what it costs you. Not your marks.",
     "scale": [
       "Disagree",
@@ -1046,8 +1049,57 @@ export const CHALLENGES = [
   }
 ]
 
-// Researched, licence-checked, not yet built.
-export const PLANNED = [
+export const REASONING_DOMAIN_LABEL = {
+  verbal: 'Verbal reasoning',
+  series: 'Letter and number series',
+  matrix: 'Matrix reasoning',
+  spatial: '3D rotation',
+}
+
+// The public-domain ICAR-16 sample test from Condon & Revelle (2014):
+// https://doi.org/10.1016/j.intell.2014.01.004
+// Keep this exact four-by-four item composition intact. Changing or replacing
+// items would break the connection to the published validation evidence.
+const REASONING_CHALLENGE = {
+  key: 'reasoning',
+  instrument: 'ICAR-16',
+  licence: 'Public domain',
+  title: 'IQ & Reasoning',
+  blurb: 'Sixteen research-backed questions covering verbal, pattern, matrix, and spatial reasoning. Work without a calculator or outside help.',
+  interaction: 'quiz',
+  pageSize: 4,
+  scoring: 'reasoning',
+  items: [
+    { id: 2100, sourceId: 'VR.04', domain: 'verbal', text: 'What number is one fifth of one fourth of one ninth of 900?', options: ['2', '3', '4', '5', '6', '7'], correct: 4 },
+    { id: 2101, sourceId: 'VR.16', domain: 'verbal', text: 'Zach is taller than Matt and Richard is shorter than Zach. Which of the following statements would be most accurate?', options: ['Richard is taller than Matt', 'Richard is shorter than Matt', 'Richard is as tall as Matt', "It's impossible to tell"], correct: 4 },
+    { id: 2102, sourceId: 'VR.17', domain: 'verbal', text: 'Joshua is 12 years old and his sister is three times as old as he. When Joshua is 23 years old, how old will his sister be?', options: ['35', '39', '44', '47', '53', '57'], correct: 4 },
+    { id: 2103, sourceId: 'VR.19', domain: 'verbal', text: 'If the day after tomorrow is two days before Thursday then what day is it today?', options: ['Friday', 'Monday', 'Wednesday', 'Saturday', 'Tuesday', 'Sunday'], correct: 6 },
+    { id: 2104, sourceId: 'LN.07', domain: 'series', text: 'In the following alphanumeric series, what letter comes next? K N P S U', options: ['S', 'T', 'U', 'V', 'W', 'X'], correct: 6 },
+    { id: 2105, sourceId: 'LN.33', domain: 'series', text: 'In the following alphanumeric series, what letter comes next? V Q M J H', options: ['E', 'F', 'G', 'H', 'I', 'J'], correct: 3 },
+    { id: 2106, sourceId: 'LN.34', domain: 'series', text: 'In the following alphanumeric series, what letter comes next? I J L O S', options: ['T', 'U', 'V', 'X', 'Y', 'Z'], correct: 4 },
+    { id: 2107, sourceId: 'LN.58', domain: 'series', text: 'In the following alphanumeric series, what letter comes next? Q S N P L', options: ['J', 'H', 'I', 'N', 'M', 'L'], correct: 4 },
+    { id: 2108, sourceId: 'MR.45', domain: 'matrix', text: 'Please indicate which answer best completes the figure below.', image: '/assessment/icar/icar16-mr45-v1.png', imageAlt: 'ICAR matrix reasoning puzzle with answer choices A through F', options: ['A', 'B', 'C', 'D', 'E', 'F'], correct: 5 },
+    { id: 2109, sourceId: 'MR.46', domain: 'matrix', text: 'Please indicate which answer best completes the figure below.', image: '/assessment/icar/icar16-mr46-v1.png', imageAlt: 'ICAR matrix reasoning puzzle with answer choices A through F', options: ['A', 'B', 'C', 'D', 'E', 'F'], correct: 2 },
+    { id: 2110, sourceId: 'MR.47', domain: 'matrix', text: 'Please indicate which answer best completes the figure below.', image: '/assessment/icar/icar16-mr47-v1.png', imageAlt: 'ICAR matrix reasoning puzzle with answer choices A through F', options: ['A', 'B', 'C', 'D', 'E', 'F'], correct: 2 },
+    { id: 2111, sourceId: 'MR.55', domain: 'matrix', text: 'Please indicate which answer best completes the figure below.', image: '/assessment/icar/icar16-mr55-v1.png', imageAlt: 'ICAR matrix reasoning puzzle with answer choices A through F', options: ['A', 'B', 'C', 'D', 'E', 'F'], correct: 4 },
+    { id: 2112, sourceId: 'R3D.03', domain: 'spatial', text: 'All the cubes below have a different image on each side. Select the choice that could represent a rotation of the cube labeled X.', image: '/assessment/icar/icar16-r3d03-v1.png', imageAlt: 'ICAR three-dimensional cube rotation puzzle with answer choices A through H', options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], correct: 3 },
+    { id: 2113, sourceId: 'R3D.04', domain: 'spatial', text: 'All the cubes below have a different image on each side. Select the choice that could represent a rotation of the cube labeled X.', image: '/assessment/icar/icar16-r3d04-v1.png', imageAlt: 'ICAR three-dimensional cube rotation puzzle with answer choices A through H', options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], correct: 2 },
+    { id: 2114, sourceId: 'R3D.06', domain: 'spatial', text: 'All the cubes below have a different image on each side. Select the choice that could represent a rotation of the cube labeled X.', image: '/assessment/icar/icar16-r3d06-v1.png', imageAlt: 'ICAR three-dimensional cube rotation puzzle with answer choices A through H', options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], correct: 6 },
+    { id: 2115, sourceId: 'R3D.08', domain: 'spatial', text: 'All the cubes below have a different image on each side. Select the choice that could represent a rotation of the cube labeled X.', image: '/assessment/icar/icar16-r3d08-v1.png', imageAlt: 'ICAR three-dimensional cube rotation puzzle with answer choices A through H', options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], correct: 7 },
+  ],
+}
+
+export const CHALLENGES = [
+  ...CHALLENGE_BANK.filter((challenge) => ['personality', 'interests', 'subjects'].includes(challenge.key)),
+  REASONING_CHALLENGE,
+].map((challenge, index) => ({ ...challenge, number: index + 1 }))
+
+// Keep future licensed instruments out of the student experience until the
+// four-part major assessment is complete and validated.
+export const PLANNED = []
+
+// Internal research backlog; not exported to the assessment UI.
+const RESEARCH_BACKLOG = [
   {
     "number": 6,
     "title": "Career adaptability",
@@ -1081,9 +1133,8 @@ export const PLANNED = [
 export const INSTRUMENT_VERSION = {
   "personality": "1",
   "interests": "1",
-  "values": "1",
   "subjects": "2",
-  "workimportance": "1"
+  "reasoning": "3"
 }
 
 export const TRAIT_ORDER = ['ES', 'E', 'O', 'A', 'C']
@@ -1407,6 +1458,43 @@ export function scoreChallenge(challenge, answers) {
         .slice(0, 2).map(([s]) => s)
     }
     return { byFacet, bySubject, ranked, patterns }
+  }
+
+  if (challenge.scoring === 'reasoning') {
+    const byDomain = {}
+    let correct = 0
+    for (const item of items) {
+      if (!byDomain[item.domain]) byDomain[item.domain] = { correct: 0, total: 0, percent: 0 }
+      byDomain[item.domain].total += 1
+      if (answers[item.id] === item.correct) {
+        correct += 1
+        byDomain[item.domain].correct += 1
+      }
+    }
+    for (const domain of Object.keys(byDomain)) {
+      byDomain[domain].percent = Math.round((byDomain[domain].correct / byDomain[domain].total) * 100)
+    }
+    const rankedDomains = Object.keys(byDomain).sort((a, b) =>
+      (byDomain[b].percent - byDomain[a].percent) || (a < b ? -1 : 1)
+    )
+    const highest = byDomain[rankedDomains[0]].percent
+    const strongestDomains = rankedDomains.filter((domain) => byDomain[domain].percent === highest)
+    const percent = Math.round((correct / items.length) * 100)
+    // Convert the empirical raw-score percentiles from the complete ICAR-16
+    // validation sample (n=4,574) to a familiar 100-centred, SD-15 scale.
+    // This remains an estimated cognitive score, not a supervised clinical IQ.
+    const cognitiveScoreByCorrect = [59, 67, 75, 80, 85, 89, 92, 96, 99, 103, 106, 110, 114, 118, 122, 127, 134]
+    const estimatedCognitiveScore = cognitiveScoreByCorrect[correct]
+    return {
+      correct,
+      total: items.length,
+      percent,
+      estimatedCognitiveScore,
+      estimateMethod: 'icar16-reference-percentile-v1',
+      byDomain,
+      rankedDomains,
+      strongestDomains,
+    }
   }
 
   if (challenge.scoring === 'wil') {

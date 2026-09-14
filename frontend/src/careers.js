@@ -3567,15 +3567,14 @@ export const NAMES = {
 // which matters more than sophistication: a school will be asked "why did it say
 // that about my child", and the answer has to be a sentence, not a matrix.
 //
-// FOUR SIGNALS, AND WHY EACH IS SHAPED THE WAY IT IS
-// --------------------------------------------------
+// THREE SIGNALS, AND WHY EACH IS SHAPED THE WAY IT IS
+// ---------------------------------------------------
 // interests (RIASEC)  what the student currently enjoys      -- dominant
-// values              what they want FROM a job              -- separates ties
 // subjects            what they can already demonstrate      -- evidence
 // personality         how they tend to work                  -- context only
 //
-// IPSATIVE, NOT ABSOLUTE. Interests and values are read RELATIVE to the
-// student's own range, not on the raw 1..5. A teenager who likes everything and
+// IPSATIVE, NOT ABSOLUTE. Interests are read RELATIVE to the student's own
+// range, not on the raw 1..5. A teenager who likes everything and
 // one who likes nothing would otherwise be ranked by how enthusiastic they are
 // rather than by what they actually prefer. Subject marks are the exception:
 // a 5 is a 5, so those stay absolute.
@@ -3588,22 +3587,21 @@ export const NAMES = {
 //
 // MISSING DATA IS NOT ZERO. A signal that was not collected is dropped and the
 // remaining weights are renormalised, so a student who skipped the subject
-// section is ranked on interests and values alone rather than being told they
+// section is ranked on interests alone rather than being told they
 // are bad at everything.
 //
 // NO PERCENTAGES ARE SHOWN. Scores exist to ORDER things. A "87% suitable"
-// number would be false precision built on a ten-item value scale and a handful
-// of self-entered marks, so the UI gets bands instead: strong / worth exploring
-// / alternative.
+// number would be false precision built on self-reported answers and a handful
+// of subject signals, so the UI gets bands instead: strong / worth exploring /
+// alternative.
 
 export const REC_WEIGHTS = {
   // Interests lead for careers: what a person enjoys doing predicts occupational
   // choice better than what they are currently graded on at fifteen.
-  career: { riasec: 0.50, values: 0.22, subjects: 0.20, personality: 0.08 },
-  // Majors invert the middle two. Admission and survival in a degree depend on
-  // demonstrated academic performance far more than a career does, and a major
-  // is a narrower, more academic commitment than "work in this area".
-  major:  { riasec: 0.36, values: 0.12, subjects: 0.44, personality: 0.08 }
+  career: { riasec: 0.64, subjects: 0.26, personality: 0.10 },
+  // Major fit gives subject evidence the largest share because a degree is a
+  // narrower academic commitment than a broad career direction.
+  major:  { riasec: 0.41, subjects: 0.50, personality: 0.09 }
 };
 
 // A part is only counted when it has data. These are the minimums below which a
@@ -3701,9 +3699,6 @@ export function recScoreEntry(entry, signals, weights){
   var riasec = recOverlap(signals.riasecRel, entry.riasec);
   if (riasec !== null){ parts.riasec = riasec; total += weights.riasec * riasec; wsum += weights.riasec; }
 
-  var values = recOverlap(signals.valuesRel, entry.values);
-  if (values !== null){ parts.values = values; total += weights.values * values; wsum += weights.values; }
-
   var subj = recSubjectFit(signals.subjects, entry.subjects);
   if (subj !== null){ parts.subjects = subj; total += weights.subjects * subj; wsum += weights.subjects; }
 
@@ -3715,10 +3710,9 @@ export function recScoreEntry(entry, signals, weights){
 }
 
 /** Turn a student's raw scores into the shapes the scorer wants, once. */
-export function recSignals(riasec, values, subjects, big5){
+export function recSignals(riasec, subjects, big5){
   return {
     riasecRel: recRelative(riasec),
-    valuesRel: recRelative(values),
     subjects: (subjects && recKeys(subjects).length) ? subjects : null,
     big5: big5 || null
   };

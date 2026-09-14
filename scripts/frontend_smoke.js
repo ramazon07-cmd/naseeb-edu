@@ -23,7 +23,7 @@ const requiredViews = [
 ];
 const requiredApiMethods = [
   'login', 'me', 'dashboard', 'list', 'create', 'update', 'remove',
-  'quickCreateStudent', 'createSchoolAccount', 'createIndividualCounselor', 'transferCounselor', 'streamAssistant', 'markSupportViewed',
+  'quickCreateStudent', 'createSchoolAccount', 'createIndividualCounselor', 'transferCounselor', 'streamAssistant', 'educationMatchAI', 'markSupportViewed',
   'trackScreenTime', 'screenTimeSummary',
   'parentPortal', 'inviteParent', 'acceptParentInvite', 'revokeParentLink',
   'messageChannels', 'channelMessages', 'messageContacts', 'openDirectChannel',
@@ -85,13 +85,26 @@ if (!app.includes('function ProgramUsagePage(') || !app.includes('function Progr
 if (!app.includes("['programServices', 'program-services']") || !app.includes('Unlimited service access')) throw new Error('Scoped Program Usage resource or unlimited service state is missing.');
 if (!app.includes('data.programServices.filter((item) => item.student === selectedStudentNumericId)')) throw new Error('Program Usage is not scoped to the selected student.');
 if (!app.includes('function DashboardDiscoveryCards(') || !app.includes("setPage('find_personality')") || !app.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
-if (!app.includes('function ChallengeRunner(') || !app.includes('function ChallengeResult(') || !styles.includes('.challenge-scale')) throw new Error('Find Your Personality challenges are missing.');
-// One challenge per instrument, each with its own response scale: personality is
-// answered on agreement, interests on liking, values on importance.
-for (const scoring of ['bigfive', 'riasec', 'values', 'subjects', 'wil']) {
-  if (!challenges.includes(`"scoring": "${scoring}"`)) throw new Error(`The ${scoring} instrument is missing from challenges.js.`);
+for (const region of ["label: 'US'", "label: 'Canada'", "label: 'China'", "label: 'Hong Kong'"]) {
+  if (!app.includes(region)) throw new Error(`College region missing: ${region}`);
+}
+if (!app.includes('universityRegion(item) === region') || !styles.includes('.college-region-tabs')) throw new Error('College region tabs are not wired to the university catalog.');
+if (!app.includes('recommendation?.admission_band === admissionBand') || !styles.includes('.college-tier-tabs')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
+if (!app.includes('function AIEducationGuidance(') || !app.includes('function MajorMatches(') || !app.includes('assessment-ai-orbit-mark') || !styles.includes('.assessment-ai-orbit-mark') || !styles.includes('.education-ai-guidance')) throw new Error('Assessment-based AI major guidance or the Naseeb logo mark is missing.');
+if (app.includes('education-ai-colleges') || app.includes('college_explanations')) throw new Error('University AI must remain separate from the major guidance stage.');
+if (app.includes('title="Where this could lead"')) throw new Error('The retired deterministic career recommendation panel has returned.');
+if (!app.includes('function ChallengeRunner(') || !app.includes('function ChallengeResult(') || !styles.includes('.challenge-scale') || !app.includes('Profile Assessment')) throw new Error('Profile Assessment challenges are missing.');
+if (!challenges.includes("['personality', 'interests', 'subjects']") || !challenges.includes('REASONING_CHALLENGE')) throw new Error('Profile Assessment must expose the three fit signals plus the reasoning challenge.');
+if (!app.includes("const ASSESSMENT_CARD_ORDER = ['personality', 'interests', 'subjects', 'reasoning']") || app.includes("key: 'academic-profile'") || app.includes("key: 'goals-preferences'") || app.includes('function AssessmentProfileStepCard(')) throw new Error('Profile Assessment must contain only the four active challenges.');
+if (!app.includes('assessment-card-visual') || !app.includes('assessment-card-progress') || !styles.includes('grid-template-columns: repeat(2, minmax(0, 1fr))') || !styles.includes('.assessment-card-visual')) throw new Error('Profile Assessment split-card design is missing.');
+// One current challenge per instrument: personality, interests, subjects, and reasoning.
+for (const scoring of ['bigfive', 'riasec', 'subjects', 'reasoning']) {
+  if (!challenges.includes(`"scoring": "${scoring}"`) && !challenges.includes(`scoring: '${scoring}'`)) throw new Error(`The ${scoring} instrument is missing from challenges.js.`);
   if (!challenges.includes(`challenge.scoring === '${scoring}'`)) throw new Error(`No scorer for ${scoring}.`);
 }
+if (!app.includes('function ReasoningRunner(') || app.includes('YOUR SNAPSHOT') || app.includes('ESTIMATED COGNITIVE SCORE') || !app.includes('assessment-number-breakdown') || !challenges.includes("instrument: 'ICAR-16'") || !challenges.includes('estimatedCognitiveScore') || !challenges.includes("sourceId: 'MR.45'") || !challenges.includes("sourceId: 'R3D.08'") || !styles.includes('.reasoning-options') || !styles.includes('.reasoning-item-image') || !styles.includes('.assessment-number-column')) throw new Error('The ICAR-16 challenge or numeric breakdown is missing, or the retired snapshot remains.');
+if (app.includes('ESTIMATED IQ') || challenges.includes('estimatedIq') || challenges.includes('iqRange')) throw new Error('The assessment must show only the estimated cognitive score, not the retired IQ result fields.');
+if (app.includes("title: 'AI Profile Analysis'")) throw new Error('AI Profile Analysis must not appear as a duplicate challenge card.');
 if (!app.includes('challenge.scale.map(')) throw new Error('The runner must use each challenge\'s own response scale, not one shared scale.');
 if (app.includes('PERSONALITY_QUIZ_URL')) throw new Error('The personality challenges must run inside the platform, not link out.');
 if (!app.includes('{t("· MISSION")} {Math.min(completed + 1') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-path-row.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
@@ -165,7 +178,8 @@ for (const token of [
 ]) {
   if (!styles.includes(token)) throw new Error(`Semantic theme token missing: ${token}`)
 }
-const componentStyles = styles.split("color-scheme: dark;\n}")[1] || ''
+const normalizedStyles = styles.replace(/\r\n/g, '\n')
+const componentStyles = normalizedStyles.split("color-scheme: dark;\n}")[1] || ''
 if (/#[0-9a-f]{3,8}|rgba?\(/i.test(componentStyles)) throw new Error('Component-level hardcoded color remains outside the theme token blocks.')
 const landingSentinel = '/* == landing tokens end == */'
 if (!landingCss.includes(landingSentinel)) throw new Error('landing.css token-block sentinel is missing; the public-page color guard cannot run.')

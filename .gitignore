@@ -20,6 +20,7 @@ node_modules/
 dist/
 .next/
 .vercel/
+outputs/
 
 # OS / IDE
 .DS_Store

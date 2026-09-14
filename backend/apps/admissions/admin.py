@@ -36,6 +36,7 @@ from .models import (
     SupportTicket,
     Task,
     University,
+    UniversityProgram,
     XPTransaction,
 )
 
@@ -56,9 +57,16 @@ class StudentProfileAdmin(admin.ModelAdmin):
 
 @admin.register(University)
 class UniversityAdmin(admin.ModelAdmin):
-    list_display = ('name', 'country', 'institution_type', 'acceptance_rate', 'net_price_usd', 'ranking')
+    list_display = ('name', 'market', 'country', 'institution_type', 'acceptance_rate', 'net_price_usd', 'ranking', 'catalog_verified_at')
     search_fields = ('name', 'country', 'city')
-    list_filter = ('country', 'institution_type', 'degree_type', 'test_optional', 'offers_international_aid')
+    list_filter = ('market', 'country', 'institution_type', 'degree_type', 'test_optional', 'offers_international_aid')
+
+
+@admin.register(UniversityProgram)
+class UniversityProgramAdmin(admin.ModelAdmin):
+    list_display = ('name', 'university', 'canonical_major', 'degree_level', 'teaching_language', 'tuition_usd', 'verified_at', 'is_active')
+    search_fields = ('name', 'canonical_major', 'university__name')
+    list_filter = ('university__market', 'degree_level', 'teaching_language', 'international_students_eligible', 'is_active')
 
 
 @admin.register(Scholarship)
