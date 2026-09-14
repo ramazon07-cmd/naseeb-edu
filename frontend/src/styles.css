@@ -919,7 +919,7 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .reasoning-items fieldset:last-child { border-bottom: 0; }
 .reasoning-items legend { width: 100%; margin-bottom: 13px; padding: 0; display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 10px; color: var(--text); font-size: 15px; font-weight: 650; line-height: 1.4; }
 .reasoning-items legend > span { color: var(--accent-deep); font-size: 10px; font-weight: 800; letter-spacing: .12em; }
-.reasoning-item-image { width: min(100%, 660px); max-height: 430px; margin: 0 auto 15px; display: block; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 12px; }
+.reasoning-item-image { width: min(100%, 660px); max-height: 430px; margin: 0 auto 15px; display: block; object-fit: contain; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
 .reasoning-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .reasoning-options.visual { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .reasoning-options.visual label { grid-template-columns: minmax(0, 1fr) 18px; }

@@ -178,7 +178,8 @@ for (const token of [
 ]) {
   if (!styles.includes(token)) throw new Error(`Semantic theme token missing: ${token}`)
 }
-const componentStyles = styles.split("color-scheme: dark;\n}")[1] || ''
+const normalizedStyles = styles.replace(/\r\n/g, '\n')
+const componentStyles = normalizedStyles.split("color-scheme: dark;\n}")[1] || ''
 if (/#[0-9a-f]{3,8}|rgba?\(/i.test(componentStyles)) throw new Error('Component-level hardcoded color remains outside the theme token blocks.')
 const landingSentinel = '/* == landing tokens end == */'
 if (!landingCss.includes(landingSentinel)) throw new Error('landing.css token-block sentinel is missing; the public-page color guard cannot run.')
