@@ -112,14 +112,16 @@
   --service-gradient: linear-gradient(90deg, #D8CEC0, #9D896E);
   --resource-group-border: #9D896E;
   --student-hero-start-token: #352D26;
-  --assessment-personality: #17364D;
-  --assessment-interests: #176979;
-  --assessment-subjects: #2D678A;
-  --assessment-reasoning: #34455D;
-  --assessment-analysis: #34455D;
-  --assessment-card-text: #FFFCF7;
-  --assessment-card-muted: rgba(255, 252, 247, .82);
-  --assessment-card-line: rgba(255, 252, 247, .54);
+  --assessment-personality: #EFE5D5;
+  --assessment-interests: #E1EDE5;
+  --assessment-subjects: #E3ECF2;
+  --assessment-reasoning: #E9E6EF;
+  --assessment-analysis: #F7F1E7;
+  --assessment-card-text: #40392F;
+  --assessment-card-muted: #625B51;
+  --assessment-card-line: rgba(64, 57, 47, .3);
+  --assessment-card-wash: rgba(64, 57, 47, .045);
+  --assessment-card-selected: rgba(64, 57, 47, .09);
   --student-hero-mid-token: #675746;
   --student-hero-end-token: #806C54;
   --student-hero-text-token: #FFFAF2;
@@ -193,6 +195,16 @@
 }
 
 :root[data-theme='dark'] {
+  --assessment-personality: #17364D;
+  --assessment-interests: #176979;
+  --assessment-subjects: #2D678A;
+  --assessment-reasoning: #34455D;
+  --assessment-analysis: #34455D;
+  --assessment-card-text: #FFFCF7;
+  --assessment-card-muted: rgba(255, 252, 247, .82);
+  --assessment-card-line: rgba(255, 252, 247, .54);
+  --assessment-card-wash: var(--student-hero-ghost-bg);
+  --assessment-card-selected: var(--student-hero-decoration);
   /* Midnight blue surfaces, ice-blue accents and neutral white text. */
   --silver: #c5d0d8;
   --silver-gradient: linear-gradient(135deg, #f7f7f7 0%, #c5d0d8 48%, #f7f7f7 100%);
@@ -845,7 +857,7 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .assessment-card-reasoning .assessment-card-visual { background-image: url('/assessment/ai-profile-analysis.webp'); }
 .assessment-card.unlocked { border-color: var(--success-border); }
 .assessment-ai-panel { min-width: 0; min-height: 520px; padding: 27px 24px 24px; position: sticky; top: 18px; overflow: hidden; color: var(--assessment-card-text); background: linear-gradient(155deg, var(--assessment-analysis), var(--assessment-personality)); border: 1px solid var(--assessment-card-line); border-radius: 15px; box-shadow: var(--student-card-shadow); }
-.assessment-ai-panel::after { content: ''; width: 220px; height: 220px; position: absolute; right: -112px; top: -102px; border: 1px solid var(--assessment-card-line); border-radius: 50%; box-shadow: 0 0 0 28px var(--student-hero-ghost-bg), 0 0 0 56px var(--student-hero-ghost-bg); pointer-events: none; }
+.assessment-ai-panel::after { content: ''; width: 220px; height: 220px; position: absolute; right: -112px; top: -102px; border: 1px solid var(--assessment-card-line); border-radius: 50%; box-shadow: 0 0 0 28px var(--assessment-card-wash), 0 0 0 56px var(--assessment-card-wash); pointer-events: none; }
 .assessment-ai-panel > * { position: relative; z-index: 1; }
 .assessment-ai-panel .eyebrow { color: var(--assessment-card-muted); letter-spacing: .19em; }
 .assessment-ai-panel h3 { max-width: 310px; margin: 16px 0 11px; color: var(--assessment-card-text); font-family: Georgia, 'Times New Roman', serif; font-size: clamp(28px, 2.5vw, 38px); font-weight: 600; letter-spacing: -.04em; line-height: 1.02; }
@@ -855,10 +867,10 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .assessment-ai-orbit-mark { width: 35px; height: 35px; display: block; background: var(--assessment-personality); -webkit-mask: var(--assistant-logo-image) center / contain no-repeat; mask: var(--assistant-logo-image) center / contain no-repeat; }
 .assessment-ai-readiness { margin: 24px 0 13px; padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--assessment-card-muted); border-top: 1px solid var(--assessment-card-line); font-size: 10px; font-weight: 700; }
 .assessment-ai-generate { width: 100%; min-height: 50px; padding: 12px 14px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--assessment-personality); background: var(--assessment-card-text); border: 1px solid var(--assessment-card-text); border-radius: 999px; font-family: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
-.assessment-ai-generate:disabled { color: var(--assessment-card-muted); background: var(--student-hero-ghost-bg); border-color: var(--assessment-card-line); cursor: not-allowed; }
+.assessment-ai-generate:disabled { color: var(--assessment-card-muted); background: var(--assessment-card-wash); border-color: var(--assessment-card-line); cursor: not-allowed; }
 .assessment-ai-fits { margin-top: 18px; display: grid; gap: 9px; }
-.assessment-ai-fits > button[role='radio'] { width: 100%; padding: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) 24px; align-items: start; gap: 10px; color: var(--assessment-card-text); text-align: left; background: var(--student-hero-ghost-bg); border: 1px solid var(--assessment-card-line); border-radius: 11px; cursor: pointer; }
-.assessment-ai-fits > button[role='radio']:hover, .assessment-ai-fits > button[role='radio'].selected { background: var(--student-hero-decoration); border-color: var(--assessment-card-text); }
+.assessment-ai-fits > button[role='radio'] { width: 100%; padding: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) 24px; align-items: start; gap: 10px; color: var(--assessment-card-text); text-align: left; background: var(--assessment-card-wash); border: 1px solid var(--assessment-card-line); border-radius: 11px; cursor: pointer; }
+.assessment-ai-fits > button[role='radio']:hover, .assessment-ai-fits > button[role='radio'].selected { background: var(--assessment-card-selected); border-color: var(--assessment-card-text); }
 .assessment-ai-fits > button[role='radio'] > span:first-child { color: var(--assessment-card-muted); font-size: 9px; font-weight: 800; }
 .assessment-ai-fits b, .assessment-ai-fits small { display: block; }
 .assessment-ai-fits b { margin-bottom: 4px; font-family: Georgia, 'Times New Roman', serif; font-size: 15px; }
