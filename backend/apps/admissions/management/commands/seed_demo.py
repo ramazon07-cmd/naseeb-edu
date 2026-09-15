@@ -7,7 +7,7 @@ from apps.admissions.models import (
     Achievement, Activity, Application, Booking, CommunityPost, Document, Essay,
     ChannelMembership, ChannelMessage, Honor, Internship, MeetingNote, MessageChannel,
     Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project,
-    RecommendationLetter, Research, ResourceLibraryItem, RoadmapMission, School,
+    RecommendationLetter, Research, RoadmapMission, School,
     Scholarship, StoreItem, StudentMessage, StudentProfile, Task, University,
 )
 from apps.admissions.services import extend_level_one_roadmap
@@ -245,26 +245,6 @@ class Command(BaseCommand):
         ]
 
         today = timezone.localdate()
-
-        resources = [
-            ('College Search', 'School resources', 'Find and compare universities', 'college_search', 1),
-            ('Essay Lab', 'Essays', 'Essay drafts, feedback, and revision history', 'essay_lab', 1),
-            ('Application Tracker', 'Applications', 'University applications and deadline tracking', 'applications', 1),
-            ('Activities & Honors', 'Profile building', 'Activities, honors, and achievements', 'student_center', 1),
-            ('Application Roadmap', 'Planning', 'Missions, tasks, and reflections', 'roadmap', 1),
-            ('National & International Programs', 'Programs', 'National and international program catalog', 'programs', 1),
-            ('Documents & Certificates', 'Documents', 'Application documents and certificates', 'student_center', 1),
-        ]
-        for title, category, description, destination, order in resources:
-            ResourceLibraryItem.objects.get_or_create(
-                title=title,
-                defaults={
-                    'category': category,
-                    'description': description,
-                    'destination': destination,
-                    'sort_order': order,
-                },
-            )
 
         store_items = [
             ('SAT Strategy Sprint', 'Test preparation', 'Personal diagnostic, study plan and weekly review.', 'Consultation'),

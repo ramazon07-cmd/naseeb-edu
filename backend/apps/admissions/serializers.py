@@ -42,7 +42,6 @@ from .models import (
     Project,
     RecommendationLetter,
     Research,
-    ResourceLibraryItem,
     RoadmapMission,
     CounselorRoadmap,
     CounselorRoadmapMission,
@@ -255,7 +254,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentProfile
         fields = '__all__'
-        read_only_fields = ('xp_total', 'level')
+        read_only_fields = ('xp_total', 'level', 'application_profile', 'profile_completed_at')
 
     def get_counselor_name(self, obj) -> str | None:
         if not obj.assigned_counselor:
@@ -283,6 +282,10 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context.get('request')
+        if self.instance and request and request.user.role != User.Role.STUDENT:
+            protected = set(attrs) - {'assigned_counselor', 'school', 'notes'}
+            if protected:
+                raise serializers.ValidationError({key: 'Only the student can edit their profile.' for key in protected})
         user = attrs.get('user', getattr(self.instance, 'user', None))
         school = attrs.get('school', getattr(self.instance, 'school', None))
         assigned_counselor = attrs.get(
@@ -1773,12 +1776,6 @@ class ParentInviteSerializer(serializers.Serializer):
     can_view_applications = serializers.BooleanField(default=True)
     can_view_documents = serializers.BooleanField(default=True)
     can_view_meetings = serializers.BooleanField(default=True)
-
-
-class ResourceLibraryItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ResourceLibraryItem
-        fields = '__all__'
 
 
 class StoreItemSerializer(serializers.ModelSerializer):

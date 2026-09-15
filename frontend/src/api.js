@@ -243,6 +243,8 @@ export const api = {
     body: payload instanceof FormData ? payload : JSON.stringify(payload),
   }),
   remove: (resource, id) => request(`/${resource}/${id}/`, { method: 'DELETE' }),
+  studentOnboarding: () => request('/students/onboarding/'),
+  saveStudentOnboarding: (payload) => request('/students/onboarding/', { method: 'POST', body: JSON.stringify(payload) }),
   quickCreateStudent: (payload) => request('/students/quick-create/', {
     method: 'POST',
     body: JSON.stringify(payload),

@@ -1,14 +1,16 @@
+import { cleanScreenTimeQueue } from './screenTimeQueue';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, ArrowLeft, Award, BookOpen, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
   ContactRound, DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
-  LibraryBig, LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
+  LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
   PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, ShieldAlert, ShieldCheck,
   ShoppingCart, Sparkles, Square, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X } from
 'lucide-react';
 import { api } from './api';
 import LandingPage from './LandingPage';
+import StudentOnboarding from './StudentOnboarding';
 import {
   LANGUAGE_OPTIONS,
   formatCurrencyLocale,
@@ -172,7 +174,6 @@ const PAGE_META = {
   messages: { label: 'Messages', icon: MessageCircle, description: 'Direct, Group, Community, and Discussion messages' },
   program_usage: { label: 'Program Usage', icon: ListChecks, description: 'Services, mentors, and usage balance' },
   programs: { label: 'Programs', icon: Globe2, description: 'National and international opportunity catalog' },
-  resource_index: { label: 'Resource Index', icon: LibraryBig, description: 'All tools and resources for students' },
   essay_lab: { label: 'Essay Lab', icon: PenLine, description: 'Essay drafts, feedback, and revision history' },
   college_search: { label: 'College Search', icon: School, description: 'Find, compare, and shortlist universities' },
   store: { label: 'Naseeb Store', icon: ShoppingCart, description: 'Additional education and application services' },
@@ -198,14 +199,14 @@ function navigationFor(user) {
   if (isCounselor(user)) return ['dashboard', 'schools', 'students', 'counselor_roadmap', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'program_usage', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages', 'screen_time', 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'community', 'bookings', 'messages', 'program_usage', 'programs', 'resource_index', 'essay_lab', 'applications', 'college_search', 'store', 'contacts', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'community', 'bookings', 'messages', 'program_usage', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'contacts', 'screen_time', 'support'];
 }
 
 const EMPTY_DATA = {
   schools: [], students: [], universities: [], tasks: [], applications: [], documents: [], essays: [],
   achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
   recommendations: [], roadmapMissions: [], communityPosts: [],
-  bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], resourceLibrary: [], storeItems: [], team: [], supportTickets: [],
+  bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], storeItems: [], team: [], supportTickets: [],
   accounts: [], counselorRoadmapTemplates: [], counselorRoadmaps: [], adminAuditEvents: [],
   parentPortal: { children: [], pending_invitations: [], privacy: { hidden: [], read_only: true } }
 };
@@ -216,7 +217,7 @@ const GLOBAL_SEARCH_RESOURCES = {
   activities: 'activities', honors: 'activities', recommendations: 'recommendations', roadmapMissions: 'roadmap',
   communityPosts: 'community', bookings: 'bookings', messageChannels: 'messages', programServices: 'program_usage',
   universities: 'college_search', scholarships: 'college_search', opportunityPrograms: 'programs',
-  resourceLibrary: 'resource_index', storeItems: 'store', team: 'contacts', supportTickets: 'support',
+  storeItems: 'store', team: 'contacts', supportTickets: 'support',
   accounts: 'admin_counselors', counselorRoadmaps: 'counselor_roadmap', adminAuditEvents: 'admin_audit'
 };
 
@@ -434,7 +435,7 @@ function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, 
     catch (requestError) {setError(requestError.message);} finally
     {setSaving(false);}
   }
-  return <main className="password-change-page"><section className="password-change-card"><header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div></header><div className="password-change-intro"><span className="password-change-icon"><Fingerprint size={24} /></span><span className="eyebrow">{t('Temporary login')}</span><h1>{t('Change temporary password')}</h1><p>{t('Create a permanent password before opening your cabinet.')}</p></div><form className="form-grid" onSubmit={submit}><Field label={t('New password')} hint={t('Use at least 12 characters with upper/lowercase letters and a number.')}><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="12" autoComplete="new-password" required /></Field><Field label={t('Confirm password')}><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="12" autoComplete="new-password" required /></Field>{error && <div className="alert error form-wide">{error}</div>}<div className="password-change-warning form-wide"><ShieldAlert size={17} /><p>{t('Your temporary password has already been consumed. If you leave now, an administrator must reissue it.')}</p></div><div className="form-actions form-wide"><button type="button" className="button quiet" onClick={onSignOut}>{t('Sign out')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving securely…") : t("Save new password")}</button></div></form><footer>{fullName(user)} · {user.school_name || label(user.role)}</footer></section></main>;
+  return <main className="password-change-page"><section className="password-change-card"><header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div></header><div className="password-change-intro"><span className="password-change-icon"><Fingerprint size={24} /></span><span className="eyebrow">{t('Temporary login')}</span><h1>{t('Change temporary password')}</h1><p>{t('Create a permanent password before opening your cabinet.')}</p></div><form className="form-grid" onSubmit={submit}><Field label={t('New password')} hint={t('Use at least 8 characters with upper/lowercase letters and a number.')}><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" autoComplete="new-password" required /></Field><Field label={t('Confirm password')}><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="8" autoComplete="new-password" required /></Field>{error && <div className="alert error form-wide">{error}</div>}<div className="password-change-warning form-wide"><ShieldAlert size={17} /><p>{t('Your temporary password has already been consumed. If you leave now, an administrator must reissue it.')}</p></div><div className="form-actions form-wide"><button type="button" className="button quiet" onClick={onSignOut}>{t('Sign out')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving securely…") : t("Save new password")}</button></div></form><footer>{fullName(user)} · {user.school_name || label(user.role)}</footer></section></main>;
 }
 
 const PAGE_RESOURCE_KEYS = {
@@ -446,7 +447,7 @@ const PAGE_RESOURCE_KEYS = {
   documents: ['documents'], certificates: ['documents'], essays: ['essays'],
   student_center: ['students', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations', 'documents'],
   community: ['communityPosts'], bookings: ['bookings'], messages: ['messageChannels'], program_usage: ['programServices', 'students'],
-  programs: ['opportunityPrograms', 'scholarships'], resource_index: ['resourceLibrary'], essay_lab: ['essays'],
+  programs: ['opportunityPrograms', 'scholarships'], essay_lab: ['essays'],
   college_search: ['students', 'universities', 'applications'], store: ['storeItems'], contacts: ['team'], support: ['supportTickets'],
   screen_time: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
@@ -523,7 +524,7 @@ function Modal({ title, onClose, children }) {
 }
 
 function Empty({ text = 'No information available yet.' }) {
-  return <div className="empty"><span>07</span><p>{t(text)}</p></div>;
+  return <div className="empty"><span>N/A</span><p>{t(text)}</p></div>;
 }
 
 function PageSkeleton() {
@@ -583,7 +584,9 @@ function ScreenTimeTracker({ page }) {
       if (!queued.current) {
         try {queued.current = JSON.parse(localStorage.getItem(SCREEN_TIME_QUEUE_KEY) || '[]');} catch {queued.current = [];}
       }
-      let queue = queued.current;
+      let queue = cleanScreenTimeQueue(queued.current, localDateKey());
+      queued.current = queue;
+      try {localStorage.setItem(SCREEN_TIME_QUEUE_KEY, JSON.stringify(queue));} catch {/* Keep the cleaned queue in memory. */}
       if (seconds > 0) {
         const date = localDateKey();
         const existing = queue.find((entry) => entry.date === date && entry.page === page);
@@ -871,7 +874,7 @@ function StudentDashboard({ user, data, setPage }) {
       </div>
       <div className="student-dashboard-column">
         <Panel title={t("Student Center quick access")}><div className="quick-grid">{[
-            ['Profile & academics', 'student_center', BookOpen], ['Essay Lab', 'essay_lab', PenLine], ['Applications', 'applications', Target], ['Resources', 'resource_index', LibraryBig]].
+            ['Profile & academics', 'student_center', BookOpen], ['Essay Lab', 'essay_lab', PenLine], ['Applications', 'applications', Target]].
             map(([title, page, Icon]) => <button key={page} onClick={() => setPage(page)}><span><Icon size={19} /></span><b>{title}</b><ChevronRight size={15} /></button>)}</div></Panel>
         <Panel title={t("My Naseeb team")} action={<button className="button quiet small" onClick={() => setPage('contacts')}>{t("All contacts")}</button>}><div className="team-mini-list">{data.team.slice(0, 3).map((member) => <div key={`${member.kind}-${member.id}`}><span className="avatar">{initials(member.name)}</span><div><b>{member.name}</b><small>{member.role}</small></div><button className="icon-button" onClick={() => setPage('messages')} aria-label={tx`Message ${member.name}`}><MessageCircle size={16} /></button></div>)}{!data.team.length && <Empty text={t("No team members have been assigned yet.")} />}</div></Panel>
       </div>
@@ -1033,11 +1036,11 @@ function DocumentPreviewModal({ document: doc, onClose, notify }) {
 
 function ProfileCard({ student }) {
   if (!student) return <Panel title={t("Profile")}><Empty text={t("Student profile not found.")} /></Panel>;
-  return <Panel title={t("Profile overview")} className="profile-card"><div className="profile-identity"><span className="avatar large">{initials(fullName(student.user_detail))}</span><div><h3>{fullName(student.user_detail)}</h3><p>{student.user_detail?.email}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : tx`Grade ${student.grade}`} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("IELTS")} value={student.ielts_score} /><Detail label={t("SAT")} value={student.sat_score} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div></Panel>;
+  return <Panel title={t("Profile overview")} className="profile-card"><div className="profile-identity"><span className="avatar large">{initials(fullName(student.user_detail))}</span><div><h3>{fullName(student.user_detail)}</h3><p>{student.user_detail?.email}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : student.grade ? tx`Grade ${student.grade}` : 'N/A'} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("IELTS")} value={student.ielts_score} /><Detail label={t("SAT")} value={student.sat_score} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div></Panel>;
 }
 
 function Detail({ label: title, value }) {
-  return <div className="detail"><span>{t(title)}</span><b>{value || '—'}</b></div>;
+  return <div className="detail"><span>{t(title)}</span><b>{value == null || (typeof value === 'string' && !value.trim()) ? 'N/A' : value}</b></div>;
 }
 
 function StudentTable({ data, onView, onEdit, onDelete, onApproveLevel, readOnly = false, query = '' }) {
@@ -1050,7 +1053,7 @@ function StudentTable({ data, onView, onEdit, onDelete, onApproveLevel, readOnly
 const STUDENT_RESOURCE_GROUPS = [
 ['Research', 'researches'], ['Projects', 'projects'], ['Internships', 'internships'],
 ['Activities', 'activities'], ['Honors', 'honors'], ['Achievements', 'achievements'],
-['Recommendation letters', 'recommendations'], ['Meetings', 'bookings']];
+['Recommendation letters', 'recommendations']];
 
 
 function studentItems(data, resource, studentId) {
@@ -1162,7 +1165,7 @@ function ParentInviteModal({ student, onClose, notify }) {
       onClose();
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" /></Field><Field label={t("Parent last name")}><input name="last_name" /></Field><Field label={t("Parent email")}><input name="email" type="email" required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Required only when this email does not already have a parent account.")}><input name="password" type="password" minLength="12" autoComplete="new-password" /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
+  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" /></Field><Field label={t("Parent last name")}><input name="last_name" /></Field><Field label={t("Parent email")}><input name="email" type="email" required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Required only when this email does not already have a parent account.")}><input name="password" type="password" minLength="8" autoComplete="new-password" /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
 }
 
 function TemporaryCredentialModal({ account, onClose, notify }) {
@@ -1385,66 +1388,28 @@ function StudentsPage({ user, data, query, reload, notify }) {
 
 function StudentForm({ user, data, student, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [form, setForm] = useState({
-    name: fullName(student?.user_detail) === 'User' ? '' : fullName(student?.user_detail), email: student?.user_detail?.email || '',
-    password: '',
-    grade: student?.grade || '11', target_major: student?.target_major || '', target_countries: student?.target_countries || '',
-    gpa: student?.gpa || '', ielts_score: student?.ielts_score || '', sat_score: student?.sat_score || '',
-    budget_usd: student?.budget_usd || '', parent_contact: student?.parent_contact || '', notes: student?.notes || '',
-    scholarship_needed: student?.scholarship_needed ?? true, school: student?.school || user.school || ''
-  });
-  function update(name, value) {
-    setForm((current) => ({ ...current, [name]: value }));
-    if (fieldErrors[name]) setFieldErrors((current) => ({ ...current, [name]: '' }));
-  }
   async function submit(event) {
-    event.preventDefault();
-    const targetCountries = normalizeCountries(form.target_countries);
-    if (!targetCountries) {
-      setFieldErrors({ target_countries: 'Add at least one target country.' });
-      return;
-    }
-    if (targetCountries.length > TARGET_COUNTRIES_MAX_LENGTH) {
-      setFieldErrors({ target_countries: `Use ${TARGET_COUNTRIES_MAX_LENGTH} characters or fewer.` });
-      return;
-    }
-    setForm((current) => ({ ...current, target_countries: targetCountries }));
-    setFieldErrors({});
-    setSaving(true);
+    event.preventDefault(); setSaving(true);
+    const values = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      const profilePayload = { grade: form.grade, target_major: form.target_major, target_countries: targetCountries, gpa: form.gpa || null, ielts_score: form.ielts_score || null, sat_score: form.sat_score || null, budget_usd: form.budget_usd || null, parent_contact: form.parent_contact, scholarship_needed: form.scholarship_needed, school: Number(form.school) };
-      const createPayload = { name: form.name, email: form.email, password: form.password, grade: form.grade, major: form.target_major, countries: targetCountries, gpa: form.gpa, ielts: form.ielts_score, sat: form.sat_score, budget_usd: form.budget_usd, parent_contact: form.parent_contact, scholarship_needed: form.scholarship_needed, school: form.school };
-      if (user.role !== 'organization') {
-        profilePayload.notes = form.notes;
-        createPayload.notes = form.notes;
-      }
-      if (student) await api.update('students', student.id, profilePayload);else
-      await api.quickCreateStudent(createPayload);
-      notify(student ? t("Student updated.") : t("Student created."));onSaved();
-    } catch (err) {
-      const countryErrors = err.details?.target_countries || err.details?.countries;
-      if (countryErrors) setFieldErrors({ target_countries: Array.isArray(countryErrors) ? countryErrors.join(' ') : String(countryErrors) });else
-      notify(err.message, 'error');
-    } finally {setSaving(false);}
+      if (student) await api.update('students', student.id, { notes: values.notes });
+      else await api.quickCreateStudent(values);
+      onSaved();
+    } catch (error) { notify(error.message, 'error'); }
+    finally { setSaving(false); }
   }
-  return <Modal title={student ? t("Edit student") : t("Add student")} onClose={onClose}><form className="form-grid" onSubmit={submit}>
-    <Field label={t("Full name")}><input value={form.name} onChange={(e) => update('name', e.target.value)} disabled={Boolean(student)} required /></Field>
-    <Field label={t("Email")}><input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} disabled={Boolean(student)} /></Field>
-    {!student && <Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input type="password" value={form.password} onChange={(e) => update('password', e.target.value)} minLength="12" autoComplete="new-password" required /></Field>}
-    <Field label={t("Grade")}><select value={form.grade} onChange={(e) => update('grade', e.target.value)}>{['8', '9', '10', '11', 'gap'].map((item) => <option key={item} value={item}>{item === 'gap' ? t("Gap year") : tx`Grade ${item}`}</option>)}</select></Field>
-    {isCounselor(user) && <Field label={t("School")}><select value={form.school} onChange={(e) => update('school', e.target.value)} required><option value="">{t("Select school")}</option>{data.schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></Field>}
-    <Field label={t("Target major")}><input value={form.target_major} onChange={(e) => update('target_major', e.target.value)} required /></Field>
-    <Field label={t("Target countries")} error={fieldErrors.target_countries} hint={tx`${form.target_countries.length}/${TARGET_COUNTRIES_MAX_LENGTH} characters · separate countries with commas`}><input value={form.target_countries} onChange={(e) => update('target_countries', e.target.value)} onBlur={() => update('target_countries', normalizeCountries(form.target_countries))} maxLength={TARGET_COUNTRIES_MAX_LENGTH} aria-invalid={Boolean(fieldErrors.target_countries)} required /></Field>
-    <Field label={t("GPA")}><input type="number" step=".01" value={form.gpa} onChange={(e) => update('gpa', e.target.value)} /></Field>
-    <Field label={t("IELTS")}><input type="number" step=".5" value={form.ielts_score} onChange={(e) => update('ielts_score', e.target.value)} /></Field>
-    <Field label={t("SAT")}><input type="number" value={form.sat_score} onChange={(e) => update('sat_score', e.target.value)} /></Field>
-    <Field label={t("Annual budget USD")}><input type="number" value={form.budget_usd} onChange={(e) => update('budget_usd', e.target.value)} /></Field>
-    <Field label={t("Parent contact")}><input value={form.parent_contact} onChange={(e) => update('parent_contact', e.target.value)} /></Field>
-    {user.role !== 'organization' && <Field label={t("Notes")}><textarea value={form.notes} onChange={(e) => update('notes', e.target.value)} /></Field>}
-    <CheckboxControl className="form-wide" checked={form.scholarship_needed} onChange={(e) => update('scholarship_needed', e.target.checked)}>{t("Scholarship needed")}</CheckboxControl>
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save student")}</button></div>
-  </form></Modal>;
+  return <Modal title={student ? t('Student notes') : t('Add student account')} onClose={onClose}>
+    <form className="form-grid student-access-form" onSubmit={submit}>
+      {student ? <Field label={t('Notes')}><textarea name="notes" defaultValue={student.notes} /></Field> : <>
+        <Field label={t('Student name')}><input name="name" required autoComplete="off" /></Field>
+        <Field label={t('Email')}><input name="email" type="email" /></Field>
+        <Field label={t('Temporary password')} hint={t('Use at least 8 characters.')}><input name="password" type="password" minLength={8} required autoComplete="new-password" /></Field>
+        {user.role === 'admin' && <Field label={t('School')}><select name="school" required defaultValue=""><option value="">{t('Select school')}</option>{data.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>}
+        <p className="form-wide">{t('The student completes their profile after signing in.')}</p>
+      </>}
+      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving}>{saving ? t('Saving…') : t(student ? 'Save' : 'Create login')}</button></div>
+    </form>
+  </Modal>;
 }
 
 function SchoolsPage({ user, data, reload, notify }) {
@@ -1516,7 +1481,7 @@ function SchoolForm({ school = null, onClose, onSaved, notify }) {
       if (school) {await api.update('schools', school.id, payload);notify(t("School updated."));} else {const createdSchool = await api.create('schools', payload);await api.createSchoolAccount(createdSchool.id, { username: values.get('username'), email: values.get('account_email'), password: values.get('password'), first_name: values.get('name'), last_name: 'Organization' });notify(t("School and organization account created."));}onSaved();
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  return <Modal title={school ? t("Edit school") : t("Add organization school")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("School name")}><input name="name" defaultValue={school?.name || ''} required /></Field><Field label={t("Unique code")}><input name="code" defaultValue={school?.code || ''} required /></Field><Field label={t("Contact email")}><input name="contact_email" type="email" defaultValue={school?.contact_email || ''} /></Field><Field label={t("Contact phone")}><input name="contact_phone" defaultValue={school?.contact_phone || ''} /></Field>{!school && <><Field label={t("Login username")}><input name="username" required /></Field><Field label={t("Login email")}><input name="account_email" type="email" required /></Field><Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input name="password" type="password" minLength="12" autoComplete="new-password" required /></Field></>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : school ? t("Save") : t("Create school")}</button></div></form></Modal>;
+  return <Modal title={school ? t("Edit school") : t("Add organization school")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("School name")}><input name="name" defaultValue={school?.name || ''} required /></Field><Field label={t("Unique code")}><input name="code" defaultValue={school?.code || ''} required /></Field><Field label={t("Contact email")}><input name="contact_email" type="email" defaultValue={school?.contact_email || ''} /></Field><Field label={t("Contact phone")}><input name="contact_phone" defaultValue={school?.contact_phone || ''} /></Field>{!school && <><Field label={t("Login username")}><input name="username" required /></Field><Field label={t("Login email")}><input name="account_email" type="email" required /></Field><Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field></>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : school ? t("Save") : t("Create school")}</button></div></form></Modal>;
 }
 
 function ResourceSection({ title, resource, data, user, query, reload, notify, canCreate = true, defaultStudentId = null }) {
@@ -2376,13 +2341,6 @@ function ProgramUsagePage({ user, data, reload, notify }) {
   </div>;
 }
 
-function ResourceIndexPage({ data, query, setPage }) {
-  const filtered = data.resourceLibrary.filter((item) => JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
-  const groups = Object.groupBy ? Object.groupBy(filtered, (item) => item.category) : filtered.reduce((acc, item) => ({ ...acc, [item.category]: [...(acc[item.category] || []), item] }), {});
-  function open(item) {if (item.destination && PAGE_META[item.destination]) setPage(item.destination);else if (item.external_url) window.open(item.external_url, '_blank', 'noopener,noreferrer');}
-  return <div className="section-stack student-portal"><label className="resource-search"><Search size={20} /><input value={query} readOnly placeholder={t("Use the search field in the top header")} /><span>{filtered.length} {t("resources")}</span></label>{Object.entries(groups).map(([category, items], index) => <section className="resource-group" key={category} style={{ '--group-index': index }}><header><span><LibraryBig size={20} /></span><div><h2>{category}</h2><p>{items.length} {t("student resources")}</p></div></header><div>{items.map((item) => <button key={item.id} onClick={() => open(item)}><span>{String(item.sort_order + 1).padStart(2, '0')}</span><div><b>{item.title}</b><small>{item.description}</small></div><ChevronRight size={18} /></button>)}</div></section>)}{!filtered.length && <Empty text={t("No resources found.")} />}</div>;
-}
-
 function EssayLabPage({ user, data, query, reload, notify }) {
   const approved = data.essays.filter((item) => item.status === 'approved').length;
   const active = data.essays.filter((item) => item.status !== 'approved').length;
@@ -2781,7 +2739,7 @@ function CounselorProvisionForm({ schools, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   async function submit(event) {event.preventDefault();setSaving(true);try {const payload = Object.fromEntries(new FormData(event.currentTarget).entries());payload.school = Number(payload.school);await api.createCounselor(payload);notify(t("Counselor account created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
   const organizationSchools = schools.filter((school) => school.workspace_type === 'school' && school.is_active);
-  return <Modal title={t("Add school counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit} autoComplete="off"><Field label={t("First name")}><input name="first_name" required /></Field><Field label={t("Last name")}><input name="last_name" /></Field><Field label={t("Username")}><input name="username" autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" autoComplete="off" required /></Field><Field label={t("Organization school")}><select name="school" required><option value="">{t("Select a school")}</option>{organizationSchools.map((school) => <option value={school.id} key={school.id}>{school.name}</option>)}</select></Field><Field label={t("Position")}><input name="position" /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="12" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("Each organization school can have at most three active counselors.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
+  return <Modal title={t("Add school counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit} autoComplete="off"><Field label={t("First name")}><input name="first_name" required /></Field><Field label={t("Last name")}><input name="last_name" /></Field><Field label={t("Username")}><input name="username" autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" autoComplete="off" required /></Field><Field label={t("Organization school")}><select name="school" required><option value="">{t("Select a school")}</option>{organizationSchools.map((school) => <option value={school.id} key={school.id}>{school.name}</option>)}</select></Field><Field label={t("Position")}><input name="position" /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("Each organization school can have at most three active counselors.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
 }
 
 function AccountTransferForm({ account, schools, onClose, onSaved, notify }) {
@@ -3485,7 +3443,6 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (page === 'screen_time') return <ScreenTimePage user={user} />;
   if (['student', 'admin', 'counselor'].includes(user.role) && page === 'program_usage') return <ProgramUsagePage {...{ user, data, reload, notify }} />;
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query }} />;
-  if (user.role === 'student' && page === 'resource_index') return <ResourceIndexPage {...{ data, query, setPage }} />;
   if (user.role === 'student' && page === 'essay_lab') return <EssayLabPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify }} />;
@@ -3493,7 +3450,7 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (user.role === 'student' && page === 'contacts') return <ContactsPage {...{ data, setPage }} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} reload={reload} notify={notify} />;
   if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
-  if (page === 'profile') return <StudentOverview student={ownStudent(data)} data={data} />;
+  if (page === 'profile') return user.role === 'student' ? <StudentOnboarding onSaved={() => { reload(); notify(t('Profile saved.')); }} /> : <StudentOverview student={ownStudent(data)} data={data} />;
   if (page === 'academics') return <div className="section-stack">{user.role === 'student' && <ProfileCard student={ownStudent(data)} />}<ResourceSection title={t("Research")} resource="researches" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'portfolio') return <div className="split-grid"><ResourceSection title={t("Projects")} resource="projects" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Internships")} resource="internships" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'activities') return <div className="section-stack"><div className="split-grid"><ResourceSection title={t("Activities")} resource="activities" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Honors")} resource="honors" {...{ user, data, query, reload, notify }} /></div><ResourceSection title={t("Achievements")} resource="achievements" {...{ user, data, query, reload, notify }} /></div>;
@@ -3572,7 +3529,7 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async (activeUser = user, requestedKeys = null) => {
-    if (!activeUser || activeUser.must_change_password) return;
+    if (!activeUser || activeUser.must_change_password || (activeUser.role === 'student' && !activeUser.student_profile_complete)) return;
     setLoading(true);setError('');
     try {
       const studentResources = ['students', 'tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations'].map((key) => [key, key]);
@@ -3580,7 +3537,7 @@ export default function App() {
       ['roadmapMissions', 'roadmap-missions'], ['communityPosts', 'community-posts'], ['bookings', 'bookings'],
       ['messageChannels', 'message-channels'], ['programServices', 'program-services'],
       ['scholarships', 'scholarships'], ['opportunityPrograms', 'opportunity-programs'],
-      ['resourceLibrary', 'resource-library'], ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets']];
+      ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets']];
 
       const resources = activeUser.role === 'parent' ?
       [['parentPortal', 'parent-portal']] :
@@ -3679,6 +3636,7 @@ export default function App() {
   <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> :
   <LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
+  if (user.role === 'student' && !user.student_profile_complete) return <StudentOnboarding onSaved={afterPasswordChanged} onSignOut={logout} />;
   return <>
     <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
       <PageRouter {...{ page, user, data, stats, query, reload: () => loadData(user), notify, setPage }} />

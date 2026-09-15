@@ -49,7 +49,6 @@ from .models import (
     Project,
     RecommendationLetter,
     Research,
-    ResourceLibraryItem,
     RoadmapMission,
     CounselorRoadmap,
     CounselorRoadmapMission,
@@ -93,7 +92,6 @@ from .serializers import (
     ProjectSerializer,
     RecommendationLetterSerializer,
     ResearchSerializer,
-    ResourceLibraryItemSerializer,
     RoadmapMissionSerializer,
     CounselorRoadmapSerializer,
     CounselorRoadmapTemplateSerializer,
@@ -164,7 +162,7 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         if view.basename == 'notifications' and view.action == 'read':
             return True
         if view.basename == 'students':
-            return view.action in {'update', 'partial_update'}
+            return view.action in {'update', 'partial_update', 'onboarding'}
         if view.basename == 'tasks' and view.action == 'create':
             return False
         return view.basename in {
@@ -282,6 +280,33 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
                 return self.queryset.none()
             return self.queryset.filter(school_id=self.request.user.school_id)
         return self.filter_for_user(self.queryset)
+
+    @action(detail=False, methods=['get', 'post'], url_path='onboarding')
+    def onboarding(self, request):
+        if request.user.role != User.Role.STUDENT:
+            return Response({'detail': 'Only students can complete their profile.'}, status=403)
+        profile = self.get_queryset().filter(user=request.user).first()
+        if not profile:
+            return Response({'detail': 'Student profile not found.'}, status=404)
+        if request.method == 'GET':
+            return Response(self.get_serializer(profile).data)
+        from .onboarding import OnboardingSerializer
+        serializer = OnboardingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        with transaction.atomic():
+            request.user.first_name = values['first_name']
+            request.user.last_name = values['last_name']
+            request.user.save(update_fields=['first_name', 'last_name'])
+            for key in ('grade', 'school_name', 'gpa', 'ielts_score', 'target_countries'):
+                setattr(profile, key, values.get(key))
+            profile.sat_score = (values.get('sat_reading') or 0) + (values.get('sat_math') or 0) or None
+            profile.target_major = ', '.join(values.get('interests', []))[:160]
+            profile.application_profile = serializer.data
+            profile.profile_completed_at = timezone.now()
+            profile.save()
+            request.user.student_profile = profile
+        return Response({'profile': self.get_serializer(profile).data, 'user': UserSerializer(request.user, context={'request': request}).data})
 
     def retrieve(self, request, *args, **kwargs):
         student = self.get_object()
@@ -608,16 +633,7 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
                 ),
                 school=school,
                 school_name=school.name if school else request.data.get('school_name', 'Naseeb Edu'),
-                grade=str(request.data.get('grade') or StudentProfile.Grade.GRADE_11).replace('-sinf', ''),
-                gpa=request.data.get('gpa') or None,
-                ielts_score=request.data.get('ielts') or request.data.get('ielts_score') or None,
-                sat_score=request.data.get('sat') or request.data.get('sat_score') or None,
-                target_major=request.data.get('major') or request.data.get('target_major') or '',
-                target_countries=target_countries,
-                budget_usd=request.data.get('budget_usd') or None,
-                scholarship_needed=str(request.data.get('scholarship_needed', 'true')).lower() not in {'false', '0', 'no'},
-                parent_contact=request.data.get('parent_contact', ''),
-                notes=request.data.get('notes', ''),
+
             )
             ActivityLog.objects.create(actor=request.user, student=student, action=f'Student profile created: {full_name}')
 
@@ -955,7 +971,7 @@ class StaffControlledWorkPermission(permissions.BasePermission):
                 return True
             if view.action in {'create', 'destroy'}:
                 return view.basename == 'tasks'
-            return view.action in {'update', 'partial_update'}
+            return view.action in {'update', 'partial_update', 'onboarding'}
         return False
 
     def has_object_permission(self, request, view, obj):
@@ -2821,12 +2837,6 @@ class ParentPortalView(APIView):
                 'read_only': True,
             },
         })
-
-
-class ResourceLibraryItemViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = ResourceLibraryItemSerializer
-    permission_classes = [StudentPortalPermission]
-    queryset = ResourceLibraryItem.objects.filter(is_active=True)
 
 
 class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):

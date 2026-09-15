@@ -2,7 +2,7 @@ import {
   Activity, Award, BookOpen, CalendarDays, ChevronDown, ChevronRight,
   ClipboardCheck, Clock3, Compass, ContactRound, ExternalLink, Eye,
   FileText, Fingerprint, FolderOpen, Globe2, GraduationCap, LayoutDashboard,
-  Library, LifeBuoy, ListChecks, LogOut, MessageSquareText, Moon, Pencil,
+  LifeBuoy, ListChecks, LogOut, MessageSquareText, Moon, Pencil,
   PenLine, Plus, RefreshCw, School, Search, ShoppingCart, Sun, Target,
   Trash2, UsersRound,
 } from 'lucide-react'
@@ -70,7 +70,7 @@ function PreviewProgress({ label, value, note }) {
 const STUDENT_NAV = [
   [LayoutDashboard, 'Dashboard'], [UsersRound, 'Student Center'], [Compass, 'Roadmap'],
   [UsersRound, 'Community'], [CalendarDays, 'Meetings'], [MessageSquareText, 'Messages'],
-  [ListChecks, 'Program Usage'], [Globe2, 'Programs'], [Library, 'Resource Index'],
+  [ListChecks, 'Program Usage'], [Globe2, 'Programs'],
   [PenLine, 'Essay Lab'], [Target, 'Applications'], [School, 'College Search'],
   [ShoppingCart, 'Naseeb Store'], [ContactRound, 'Contacts'], [Clock3, 'Screen Time'],
   [LifeBuoy, 'Support'],

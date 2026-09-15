@@ -65,6 +65,9 @@ class School(TimeStampedModel):
 
 
 class StudentProfile(TimeStampedModel):
+    application_profile = models.JSONField(default=dict, blank=True)
+    profile_completed_at = models.DateTimeField(null=True, blank=True)
+
     MAX_LEVEL = 100
     class Grade(models.TextChoices):
         GRADE_8 = '8', '8-sinf'
@@ -90,7 +93,7 @@ class StudentProfile(TimeStampedModel):
         blank=True,
         related_name='students',
     )
-    gpa = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    gpa = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     ielts_score = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     sat_score = models.PositiveIntegerField(null=True, blank=True)
     target_major = models.CharField(max_length=160, blank=True)
@@ -824,22 +827,6 @@ class ScreenTimeDaily(models.Model):
 
     def __str__(self):
         return f'{self.user} — {self.date} — {self.page}'
-
-
-class ResourceLibraryItem(TimeStampedModel):
-    title = models.CharField(max_length=220)
-    category = models.CharField(max_length=120)
-    description = models.CharField(max_length=300, blank=True)
-    destination = models.CharField(max_length=80, blank=True, help_text='Student frontend page key')
-    external_url = models.URLField(blank=True)
-    sort_order = models.PositiveSmallIntegerField(default=0)
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        ordering = ['category', 'sort_order', 'title']
-
-    def __str__(self):
-        return self.title
 
 
 class StoreItem(TimeStampedModel):

@@ -8,6 +8,14 @@ from .services import audit_product_action, validate_counselor_capacity
 
 
 class UserSerializer(serializers.ModelSerializer):
+    student_profile_complete = serializers.SerializerMethodField()
+
+    def get_student_profile_complete(self, obj):
+        if obj.role != User.Role.STUDENT:
+            return True
+        profile = getattr(obj, 'student_profile', None)
+        return bool(profile and profile.profile_completed_at)
+
     full_name = serializers.SerializerMethodField()
     school_name = serializers.CharField(source='school.name', read_only=True)
     school_workspace_type = serializers.CharField(source='school.workspace_type', read_only=True)
@@ -17,7 +25,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
+            'id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'student_profile_complete',
             'role', 'phone', 'position', 'avatar', 'school', 'school_name', 'school_workspace_type',
             'is_active',
             'must_change_password', 'password_changed_at', 'credential_status', 'credential_expires_at',

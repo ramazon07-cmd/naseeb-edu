@@ -28,7 +28,6 @@ from .views import (
     ProjectViewSet,
     RecommendationLetterViewSet,
     ResearchViewSet,
-    ResourceLibraryItemViewSet,
     RoadmapMissionViewSet,
     CounselorRoadmapTemplateViewSet,
     CounselorRoadmapViewSet,
@@ -74,7 +73,6 @@ router.register('message-channels', MessageChannelViewSet, basename='message-cha
 router.register('channel-messages', ChannelMessageViewSet, basename='channel-messages')
 router.register('message-reports', MessageReportViewSet, basename='message-reports')
 router.register('program-services', ProgramServiceViewSet, basename='program-services')
-router.register('resource-library', ResourceLibraryItemViewSet, basename='resource-library')
 router.register('store-items', StoreItemViewSet, basename='store-items')
 router.register('support-tickets', SupportTicketViewSet, basename='support-tickets')
 router.register('screen-time', ScreenTimeViewSet, basename='screen-time')

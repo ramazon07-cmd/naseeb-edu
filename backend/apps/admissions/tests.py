@@ -20,7 +20,7 @@ from .assistant import build_role_context, redact_pii
 from .models import (
     Achievement, Activity, Application, Booking, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, Honor,
     Internship, MeetingNote, LevelApproval, Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project, RecommendationLetter,
-    Research, ResourceLibraryItem, MessageChannel, MessageReport, RoadmapMission, School, Scholarship, ScreenTimeDaily, StoreItem,
+    Research, MessageChannel, MessageReport, RoadmapMission, School, Scholarship, ScreenTimeDaily, StoreItem,
     StudentMessage, StudentProfile, SupportTicket, Task, University, XPTransaction,
 )
 
@@ -1770,16 +1770,14 @@ class RoleIsolationTests(APITestCase):
         )
         self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_student_reads_program_resources_store_and_team(self):
+    def test_student_reads_program_store_and_team(self):
         ProgramService.objects.create(student=self.student_a, name='Admissions strategy', unlimited=True)
         ProgramService.objects.create(student=self.student_b, name='Private service', unlimited=True)
-        ResourceLibraryItem.objects.create(title='Essay Lab', category='Essays')
         StoreItem.objects.create(title='University Match', category='Planning')
         self.client.force_authenticate(self.student_a_user)
 
         services = self.results(self.client.get('/api/program-services/'))
         self.assertEqual([item['name'] for item in services], ['Admissions strategy'])
-        self.assertEqual(len(self.results(self.client.get('/api/resource-library/'))), 1)
         self.assertEqual(len(self.results(self.client.get('/api/store-items/'))), 1)
         team = self.client.get('/api/student-team/')
         self.assertEqual(team.status_code, status.HTTP_200_OK)
@@ -1891,7 +1889,7 @@ class RoleIsolationTests(APITestCase):
             'achievements', 'researches', 'projects', 'internships', 'activities', 'honors',
             'recommendations', 'notifications', 'universities', 'roadmap-missions',
             'community-posts', 'bookings', 'message-channels', 'program-services',
-            'scholarships', 'opportunity-programs', 'resource-library', 'store-items',
+            'scholarships', 'opportunity-programs', 'store-items',
             'student-team',
         )
         for path in paths:
