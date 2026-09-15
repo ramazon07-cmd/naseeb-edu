@@ -1026,7 +1026,7 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .scale-opt.sel.s3 .scale-dot { background: var(--muted); border-color: var(--muted); box-shadow: 0 0 0 3px var(--focus-ring); }
 .scale-opt.sel.s4 .scale-dot, .scale-opt.sel.s5 .scale-dot { background: var(--scale-pos); border-color: var(--scale-pos); box-shadow: 0 0 0 3px var(--scale-pos-ring); }
 .scale-opt input:focus-visible + .scale-dot { outline: 3px solid var(--focus-color); outline-offset: 2px; }
-.challenge-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 16px; }
+.challenge-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 9px; margin-top: 16px; }
 .challenge-progress { display: grid; gap: 6px; margin-bottom: 14px; }
 .challenge-progress small { color: var(--muted); font-size: 10px; }
 .challenge-source { display: block; color: var(--muted); font-size: 9px; letter-spacing: .03em; }

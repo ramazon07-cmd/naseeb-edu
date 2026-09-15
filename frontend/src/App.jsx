@@ -2924,27 +2924,27 @@ function ReasoningRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
   const complete = answered === challenge.items.length
 
   return <div className="section-stack student-portal reasoning-runner">
-    <section className="portal-hero"><div><span className="eyebrow">CHALLENGE {challenge.number} · {challenge.instrument}</span><h2>{challenge.title}</h2><p>{challenge.blurb}</p></div><BrainCircuit size={64} /></section>
-    <Panel title={`${answered} of ${challenge.items.length} answered`} action={<button className="button quiet small" onClick={onBack}>Back to challenges</button>}>
-      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>Round {page + 1} of {pages}</small></div>
-      <p className="reasoning-note"><BrainCircuit size={17} /> ICAR-16 is a public-domain cognitive assessment. Complete it without a calculator or outside help for the most useful result.</p>
+    <section className="portal-hero"><div><span className="eyebrow">{t('CHALLENGE')} {challenge.number} · {challenge.instrument}</span><h2>{t(challenge.title)}</h2><p>{t(challenge.blurb)}</p></div><BrainCircuit size={64} /></section>
+    <Panel title={t('{answered} of {total} answered', { answered, total: challenge.items.length })} action={<button className="button quiet small" onClick={onBack}>{t('Back to challenges')}</button>}>
+      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>{t('Round {page} of {total}', { page: page + 1, total: pages })}</small></div>
+      <p className="reasoning-note"><BrainCircuit size={17} /> {t('ICAR-16 is a public-domain cognitive assessment. Complete it without a calculator or outside help for the most useful result.')}</p>
       <div className="reasoning-items">{slice.map((item, index) => <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
-        <legend><span>{String(page * pageSize + index + 1).padStart(2, '0')}</span>{item.text}</legend>
-        {item.image && <img className="reasoning-item-image" src={item.image} alt={item.imageAlt} />}
+        <legend><span>{String(page * pageSize + index + 1).padStart(2, '0')}</span>{t(item.text)}</legend>
+        {item.image && <img className="reasoning-item-image" src={item.image} alt={t(item.imageAlt)} />}
         <div className={`reasoning-options${item.image ? ' visual' : ''}`}>{item.options.map((option, position) => {
           const value = position + 1
           const chosen = answers[item.id] === value
           return <label key={option} className={chosen ? 'selected' : ''}>
             <input type="radio" name={`item-${item.id}`} checked={chosen} onChange={() => onAnswer(item.id, value)} />
-            <span>{String.fromCharCode(65 + position)}</span><b>{option}</b>{chosen && <Check size={16} />}
+            <span>{String.fromCharCode(65 + position)}</span><b>{t(option)}</b>{chosen && <Check size={16} />}
           </label>
         })}</div>
       </fieldset>)}</div>
       <div className="challenge-actions">
-        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>Back</button>}
+        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>{t('Back')}</button>}
         {last
-          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? 'See my cognitive score' : 'Answer every question to finish'}<ChevronRight size={17} /></button>
-          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? 'Next round' : 'Answer these to continue'}<ChevronRight size={17} /></button>}
+          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? t('See my cognitive score') : t('Answer every question to finish')}<ChevronRight size={17} /></button>
+          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? t('Next round') : t('Answer these to continue')}<ChevronRight size={17} /></button>}
       </div>
     </Panel>
   </div>
@@ -2960,7 +2960,7 @@ const poleText = (challenge, item) => challenge.bipolar
 // its own for the middle three, so they are described by which end they lean
 // toward -- "3 of 5" alone would be a number with nothing attached to it.
 function optionLabel(challenge, item, position) {
-  if (!challenge.bipolar) return challenge.scale[position]
+  if (!challenge.bipolar) return t(challenge.scale[position])
   const [left, right] = item.poles
   if (position === 0) return left
   if (position === 4) return right
@@ -3033,9 +3033,9 @@ function RatingRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
   }, [])
 
   return <div className="section-stack student-portal">
-    <section className="portal-hero"><div><span className="eyebrow">CHALLENGE {challenge.number} · {challenge.instrument}</span><h2>{challenge.title}</h2><p>{challenge.blurb}</p></div><Fingerprint size={64} /></section>
-    <Panel title={`${answered} of ${challenge.items.length} answered`} action={<button className="button quiet small" onClick={onBack}>Back to challenges</button>}>
-      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>Page {page + 1} of {pages}</small></div>
+    <section className="portal-hero"><div><span className="eyebrow">{t('CHALLENGE')} {challenge.number} · {challenge.instrument}</span><h2>{t(challenge.title)}</h2><p>{t(challenge.blurb)}</p></div><Fingerprint size={64} /></section>
+    <Panel title={t('{answered} of {total} answered', { answered, total: challenge.items.length })} action={<button className="button quiet small" onClick={onBack}>{t('Back to challenges')}</button>}>
+      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>{t('Page {page} of {total}', { page: page + 1, total: pages })}</small></div>
       {/* A challenge whose items carry a section shows it at the top of every page
           and again wherever the block changes mid-page. Without it, a student who
           turns the page into "…makes me anxious" has no idea they are being asked
@@ -3047,12 +3047,12 @@ function RatingRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
           ask what this block was. */}
       <div className="challenge-items" ref={listRef}>{slice.flatMap((item, index) => [
         item.section && (index === 0 || item.section !== slice[index - 1].section)
-          ? <p key={`s-${item.id}`} className="challenge-section"><span className="eyebrow">{item.section}</span></p>
+          ? <p key={`s-${item.id}`} className="challenge-section"><span className="eyebrow">{t(item.section)}</span></p>
           : null,
         <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
-        <legend className={challenge.bipolar ? 'sr-only' : undefined}>{item.text}</legend>
+        <legend className={challenge.bipolar ? 'sr-only' : undefined}>{t(item.text)}</legend>
         <div className="challenge-scale">
-          <span className="scale-pole left" aria-hidden={challenge.bipolar || undefined}>{poleText(challenge, item)[0]}</span>
+          <span className="scale-pole left" aria-hidden={challenge.bipolar || undefined}>{t(poleText(challenge, item)[0])}</span>
           <div className="scale-dots">{challenge.scale.map((scaleLabel, position) => {
             const chosen = answers[item.id] === position + 1
             const label = optionLabel(challenge, item, position)
@@ -3070,15 +3070,15 @@ function RatingRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
               <span className="scale-dot" aria-hidden="true" />
             </label>
           })}</div>
-          <span className="scale-pole right" aria-hidden={challenge.bipolar || undefined}>{poleText(challenge, item)[1]}</span>
+          <span className="scale-pole right" aria-hidden={challenge.bipolar || undefined}>{t(poleText(challenge, item)[1])}</span>
         </div>
       </fieldset>,
       ].filter(Boolean))}</div>
       <div className="challenge-actions">
-        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>Back</button>}
+        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>{t('Back')}</button>}
         {last
-          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? 'Finish challenge' : 'Answer every question to finish'}<ChevronRight size={17} /></button>
-          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? 'Next' : 'Answer these to continue'}<ChevronRight size={17} /></button>}
+          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? t('Finish challenge') : t('Answer every question to finish')}<ChevronRight size={17} /></button>
+          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? t('Next') : t('Answer these to continue')}<ChevronRight size={17} /></button>}
       </div>
     </Panel>
   </div>
@@ -3298,7 +3298,7 @@ function AIEducationGuidance({ majors, subjects, locked, student, reload, notify
       setGuidance(nextGuidance)
       setSelectedMajor('')
     } catch (requestError) {
-      setError(requestError.message || 'AI guidance is unavailable right now.')
+      setError(requestError.message || t('AI guidance is unavailable right now.'))
     } finally {
       setLoading(false)
     }
@@ -3310,10 +3310,10 @@ function AIEducationGuidance({ majors, subjects, locked, student, reload, notify
     setError('')
     try {
       await api.update('students', student.id, { target_major: selectedMajor })
-      notify?.(`${selectedMajor} saved as your current study direction.`)
+      notify?.(t('{major} saved as your current study direction.', { major: selectedMajor }))
       reload?.()
     } catch (requestError) {
-      setError(requestError.message || 'We could not save your selected major.')
+      setError(requestError.message || t('We could not save your selected major.'))
     } finally {
       setSaving(false)
     }
@@ -3323,25 +3323,25 @@ function AIEducationGuidance({ majors, subjects, locked, student, reload, notify
 
   return <section id="assessment-ai-panel" className={`assessment-ai-panel ${locked ? 'locked' : ''}`}>
     <div className="assessment-ai-orbit" aria-hidden="true"><span className="assessment-ai-orbit-mark" /></div>
-    <span className="eyebrow">AI MAJOR MATCH</span>
-    <h3>{guidance ? 'Choose your strongest fit' : "Now let's find your direction"}</h3>
-    <p>{locked ? 'Complete all four challenges to unlock your recommendations.' : guidance ? 'These are your three strongest current matches. Select one to make it your study direction.' : 'AI will compare your interests, personality, subjects, and reasoning snapshot to return your three strongest major fits.'}</p>
+    <span className="eyebrow">{t('AI MAJOR MATCH')}</span>
+    <h3>{guidance ? t('Choose your strongest fit') : t("Now let's find your direction")}</h3>
+    <p>{locked ? t('Complete all four challenges to unlock your recommendations.') : guidance ? t('These are your three strongest current matches. Select one to make it your study direction.') : t('AI will compare your interests, personality, subjects, and reasoning snapshot to return your three strongest major fits.')}</p>
     <div className="assessment-ai-readiness">
-      <span>{locked ? 'Profile incomplete' : guidance ? 'Recommendations ready' : 'Profile ready'}</span>
+      <span>{locked ? t('Profile incomplete') : guidance ? t('Recommendations ready') : t('Profile ready')}</span>
       {locked ? <Lock size={16} /> : <CheckCircle2 size={16} />}
     </div>
     <button type="button" className="assessment-ai-generate" onClick={generate} disabled={locked || loading}>
-      {loading ? <><RefreshCw className="spin" size={17} /> Generating…</> : <><Sparkles size={17} /> {guidance ? 'Generate again' : 'Generate recommendations with AI'}</>}
+      {loading ? <><RefreshCw className="spin" size={17} /> {t("Generating…")}</> : <><Sparkles size={17} /> {guidance ? t('Generate again') : t('Generate recommendations with AI')}</>}
     </button>
     {error && <p className="education-ai-error" role="alert">{error}</p>}
-    {topFits.length > 0 && <div className="assessment-ai-fits" role="radiogroup" aria-label="Top three major fits">
+    {topFits.length > 0 && <div className="assessment-ai-fits" role="radiogroup" aria-label={t('Top three major fits')}>
       {topFits.map((item, index) => <button key={item.major} type="button" role="radio" aria-checked={selectedMajor === item.major} className={selectedMajor === item.major ? 'selected' : ''} onClick={() => setSelectedMajor(item.major)}>
         <span>{String(index + 1).padStart(2, '0')}</span>
         <div><b>{item.major}</b><small>{item.why_fit}</small></div>
         <span className="assessment-ai-choice">{selectedMajor === item.major ? <Check size={15} /> : null}</span>
       </button>)}
-      <button type="button" className="assessment-ai-confirm" onClick={confirmMajor} disabled={!selectedMajor || saving}>{saving ? 'Saving choice…' : selectedMajor ? `Choose ${selectedMajor}` : 'Select one major'}</button>
-      <small className="assessment-ai-disclaimer">You can regenerate or change this choice later. AI guidance supports your decision; it does not limit it.</small>
+      <button type="button" className="assessment-ai-confirm" onClick={confirmMajor} disabled={!selectedMajor || saving}>{saving ? t('Saving choice…') : selectedMajor ? t('Choose {major}', { major: selectedMajor }) : t('Select one major')}</button>
+      <small className="assessment-ai-disclaimer">{t('You can regenerate or change this choice later. AI guidance supports your decision; it does not limit it.')}</small>
     </div>}
   </section>
 }
@@ -3386,15 +3386,15 @@ function ResultsSummary({ results }) {
   return <section className="assessment-number-summary">
     <div className="assessment-number-hexagon">
       {interests && <ProfilePolygon
-        caption="Your interest profile"
-        axes={RIASEC_ORDER.map((s) => ({ key: s, label: RIASEC_NAME[s], short: s, value: interests[1].means[s] }))}
+        caption={t('Your interest profile')}
+        axes={RIASEC_ORDER.map((s) => ({ key: s, label: t(RIASEC_NAME[s]), short: s, value: interests[1].means[s] }))}
       />}
-      {!interests && <div className="assessment-number-placeholder"><Hexagon size={38} /><span>Complete Interests to reveal your hexagon.</span></div>}
+      {!interests && <div className="assessment-number-placeholder"><Hexagon size={38} /><span>{t('Complete Interests to reveal your hexagon.')}</span></div>}
     </div>
-    {numberColumns.length > 0 && <div className="assessment-number-breakdown" aria-label="Assessment score details">
+    {numberColumns.length > 0 && <div className="assessment-number-breakdown" aria-label={t('Assessment score details')}>
       {numberColumns.map(([title, rows]) => <article className="assessment-number-column" key={title}>
-        <h4>{title}</h4>
-        <div>{rows.map(([label, value]) => <div key={label}><span>{label}</span><strong>{Number(value).toFixed(1)}</strong></div>)}</div>
+        <h4>{t(title)}</h4>
+        <div>{rows.map(([label, value]) => <div key={label}><span>{t(label)}</span><strong>{Number(value).toFixed(1)}</strong></div>)}</div>
       </article>)}
     </div>}
   </section>
@@ -3426,14 +3426,14 @@ function AssessmentChallengeCard({ challenge, result, answers, saved, onOpen }) 
   const visual = ASSESSMENT_CARD_META[challenge.key]
   return <article className={`assessment-card assessment-card-${visual.visualClass} ${result ? 'done' : answered ? 'active' : ''}`}>
     <div className="assessment-card-copy">
-      <header><span>STEP {String(challenge.number).padStart(2, '0')}</span>{result ? <CheckCircle2 size={21} /> : <span className="assessment-card-count">{answered}/{challenge.items.length}</span>}</header>
-      <h3>{challenge.title}</h3>
-      <p>{visual.description}</p>
+      <header><span>{t('STEP')} {String(challenge.number).padStart(2, '0')}</span>{result ? <CheckCircle2 size={21} /> : <span className="assessment-card-count">{answered}/{challenge.items.length}</span>}</header>
+      <h3>{t(challenge.title)}</h3>
+      <p>{t(visual.description)}</p>
       {challenge.licencePending && <small className="licence-pending"><AlertTriangle size={11} /> {challenge.licencePending}</small>}
-      <div className="assessment-card-progress" aria-label={`${answered} of ${challenge.items.length} questions answered`}><strong>{answered} / {challenge.items.length}</strong><div className="progress"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div></div>
+      <div className="assessment-card-progress" aria-label={t('{answered} of {total} questions answered', { answered, total: challenge.items.length })}><strong>{answered} / {challenge.items.length}</strong><div className="progress"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div></div>
       <footer>
-        <span>{result ? (saved ? 'Completed and saved' : 'Completed') : answered ? 'In progress' : `${challenge.items.length} questions`}</span>
-        <button type="button" className="assessment-card-action" onClick={onOpen}>{result ? 'Review' : answered ? 'Continue' : 'Start'}<ChevronRight size={15} /></button>
+        <span>{result ? (saved ? t('Completed and saved') : t('Completed')) : answered ? t('In progress') : t('{count} questions', { count: challenge.items.length })}</span>
+        <button type="button" className="assessment-card-action" onClick={onOpen}>{result ? t('Review') : answered ? t('Continue') : t('Start')}<ChevronRight size={15} /></button>
       </footer>
     </div>
     <div className="assessment-card-visual" aria-hidden="true" />
@@ -3486,9 +3486,9 @@ function ProfileAssessmentPage({ notify, data, reload }) {
         scores: result,
       })
       setSaved((prev) => ({ ...prev, [challenge.key]: row }))
-      notify?.('Saved to your account.')
+      notify?.(t('Saved to your account.'))
     } catch {
-      notify?.('Saved on this device only — we could not reach your account.', 'error')
+      notify?.(t('Saved on this device only — we could not reach your account.'), 'error')
     }
   }, [answers, notify])
   const results = CHALLENGES.map((challenge) => [challenge, scoreChallenge(challenge, answers)])
@@ -3501,7 +3501,7 @@ function ProfileAssessmentPage({ notify, data, reload }) {
 
   return <div className="section-stack student-portal profile-assessment-page">
     <div className="assessment-overview-layout">
-      <section className="assessment-card-grid" aria-label="Profile assessment challenges">{ASSESSMENT_CARD_ORDER.map((key) => {
+      <section className="assessment-card-grid" aria-label={t('Profile assessment challenges')}>{ASSESSMENT_CARD_ORDER.map((key) => {
         const challengeEntry = resultByKey[key]
         return <AssessmentChallengeCard
           key={key}

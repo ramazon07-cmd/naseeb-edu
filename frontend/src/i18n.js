@@ -1,5 +1,7 @@
 import { uiMessages } from "./translations/ui.js";
 
+import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
+
 const LANGUAGE_KEY = "naseeb-edu-language-v1";
 
 export const LANGUAGE_OPTIONS = [
@@ -13,6 +15,7 @@ const LOCALES = { uz: "uz-UZ", ru: "ru-RU", en: "en-GB" };
 export const TRANSLATIONS = {
   uz: {
     ...uiMessages("uz"),
+    ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
     Schools: "Maktablar",
@@ -195,6 +198,7 @@ export const TRANSLATIONS = {
   },
   ru: {
     ...uiMessages("ru"),
+    ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",
     Schools: "Школы",
