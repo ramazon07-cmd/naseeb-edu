@@ -31,6 +31,10 @@
 .landing-mind-cta:focus-visible { outline: 2px solid var(--mind-accent); outline-offset: 5px; }
 .landing-mind-art { margin: 0; min-width: 0; position: relative; }
 .landing-mind-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 60% center; }
+/* opacity, not display:none: a hidden lazy image is never fetched, so the
+   first switch to dark would show an empty frame while it downloads. */
+.landing-mind-art .landing-mind-art-dark { position: absolute; inset: 0; object-position: 75% center; opacity: 0; transition: opacity .3s ease; }
+[data-theme='dark'] .landing-mind-art .landing-mind-art-dark { opacity: 1; }
 .landing-mind-facts { grid-column: 1 / -1; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 26px 40px; border-top: 1px solid var(--mind-line); }
 .landing-mind-facts > div { display: flex; align-items: center; justify-content: center; gap: 18px; }
 .landing-mind-facts > div + div { border-left: 1px solid var(--mind-line); }
@@ -59,7 +63,7 @@
   .landing-mind-facts dt { font-size: 24px; }
   .landing-mind-facts dd { font-size: 9px; }
 }
-@media (prefers-reduced-motion: reduce) { .landing-mind-cta { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .landing-mind-cta, .landing-mind-art-dark { transition: none; } }
 
 .landing-mind-logo { display: block; width: 32px; height: 48px; object-fit: contain; flex-shrink: 0; }
 [data-theme='dark'] .landing-mind-logo { filter: brightness(0) invert(1); }
