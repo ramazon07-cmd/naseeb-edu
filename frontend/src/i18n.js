@@ -37,7 +37,6 @@ export const TRANSLATIONS = {
     Messages: "Xabarlar",
     "Program Usage": "Dasturdan foydalanish",
     Programs: "Dasturlar",
-    "Resource Index": "Resurslar",
     "Essay Lab": "Insholar laboratoriyasi",
     "College Search": "Universitetlar qidiruvi",
     "Naseeb Store": "Naseeb do‘koni",
@@ -74,8 +73,6 @@ export const TRANSLATIONS = {
       "Xizmatlar, mentorlar va foydalanish balansi",
     "National and international opportunity catalog":
       "Mahalliy va xalqaro imkoniyatlar katalogi",
-    "All tools and resources for students":
-      "O‘quvchilar uchun barcha vosita va resurslar",
     "Essay drafts, feedback, and revision history":
       "Esse qoralamalari, fikrlar va tahrir tarixi",
     "Find, compare, and shortlist universities":
@@ -220,7 +217,6 @@ export const TRANSLATIONS = {
     Messages: "Сообщения",
     "Program Usage": "Использование программы",
     Programs: "Программы",
-    "Resource Index": "Ресурсы",
     "Essay Lab": "Лаборатория эссе",
     "College Search": "Поиск университетов",
     "Naseeb Store": "Магазин Naseeb",
@@ -255,8 +251,6 @@ export const TRANSLATIONS = {
       "Услуги, наставники и баланс использования",
     "National and international opportunity catalog":
       "Каталог местных и международных возможностей",
-    "All tools and resources for students":
-      "Все инструменты и ресурсы для учеников",
     "Essay drafts, feedback, and revision history":
       "Черновики, отзывы и история правок",
     "Find, compare, and shortlist universities":

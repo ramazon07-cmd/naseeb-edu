@@ -42,7 +42,6 @@ from .models import (
     Project,
     RecommendationLetter,
     Research,
-    ResourceLibraryItem,
     RoadmapMission,
     CounselorRoadmap,
     CounselorRoadmapMission,
@@ -1811,12 +1810,6 @@ class ParentInviteSerializer(serializers.Serializer):
     can_view_applications = serializers.BooleanField(default=True)
     can_view_documents = serializers.BooleanField(default=True)
     can_view_meetings = serializers.BooleanField(default=True)
-
-
-class ResourceLibraryItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ResourceLibraryItem
-        fields = '__all__'
 
 
 class StoreItemSerializer(serializers.ModelSerializer):
