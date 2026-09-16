@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, ArrowLeft, Award, BookOpen, BrainCircuit, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
   ContactRound, DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, Hexagon, LayoutDashboard,
-  LibraryBig, LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
+  LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
   PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, ShieldAlert, ShieldCheck,
   ShoppingCart, Sparkles, Square, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X, Lock } from
 'lucide-react';
@@ -171,7 +171,6 @@ const PAGE_META = {
   messages: { label: 'Messages', icon: MessageCircle, description: 'Direct, Group, Community, and Discussion messages' },
   program_usage: { label: 'Program Usage', icon: ListChecks, description: 'Services, mentors, and usage balance' },
   programs: { label: 'Programs', icon: Globe2, description: 'National and international opportunity catalog' },
-  resource_index: { label: 'Resource Index', icon: LibraryBig, description: 'All tools and resources for students' },
   essay_lab: { label: 'Essay Lab', icon: PenLine, description: 'Essay drafts, feedback, and revision history' },
   college_search: { label: 'College Search', icon: School, description: 'Find, compare, and shortlist universities' },
   store: { label: 'Naseeb Store', icon: ShoppingCart, description: 'Additional education and application services' },
@@ -197,14 +196,14 @@ function navigationFor(user) {
   if (isCounselor(user)) return ['dashboard', 'schools', 'students', 'counselor_roadmap', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'program_usage', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages', 'screen_time', 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'community', 'bookings', 'messages', 'program_usage', 'programs', 'resource_index', 'essay_lab', 'applications', 'college_search', 'store', 'contacts', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'community', 'bookings', 'messages', 'program_usage', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'contacts', 'screen_time', 'support'];
 }
 
 const EMPTY_DATA = {
   schools: [], students: [], universities: [], tasks: [], applications: [], documents: [], essays: [],
   achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
   recommendations: [], roadmapMissions: [], communityPosts: [],
-  bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], resourceLibrary: [], storeItems: [], team: [], supportTickets: [],
+  bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], storeItems: [], team: [], supportTickets: [],
   accounts: [], counselorRoadmapTemplates: [], counselorRoadmaps: [], adminAuditEvents: [],
   parentPortal: { children: [], pending_invitations: [], privacy: { hidden: [], read_only: true } }
 };
@@ -215,7 +214,7 @@ const GLOBAL_SEARCH_RESOURCES = {
   activities: 'activities', honors: 'activities', recommendations: 'recommendations', roadmapMissions: 'roadmap',
   communityPosts: 'community', bookings: 'bookings', messageChannels: 'messages', programServices: 'program_usage',
   universities: 'college_search', scholarships: 'college_search', opportunityPrograms: 'programs',
-  resourceLibrary: 'resource_index', storeItems: 'store', team: 'contacts', supportTickets: 'support',
+  storeItems: 'store', team: 'contacts', supportTickets: 'support',
   accounts: 'admin_counselors', counselorRoadmaps: 'counselor_roadmap', adminAuditEvents: 'admin_audit'
 };
 
@@ -445,7 +444,7 @@ const PAGE_RESOURCE_KEYS = {
   documents: ['documents'], certificates: ['documents'], essays: ['essays'],
   student_center: ['students', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations', 'documents'],
   community: ['communityPosts'], bookings: ['bookings'], messages: ['messageChannels'], program_usage: ['programServices', 'students'],
-  programs: ['opportunityPrograms', 'scholarships'], resource_index: ['resourceLibrary'], essay_lab: ['essays'],
+  programs: ['opportunityPrograms', 'scholarships'], essay_lab: ['essays'],
   college_search: ['students', 'universities', 'applications'], store: ['storeItems'], contacts: ['team'], support: ['supportTickets'],
   screen_time: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
@@ -870,7 +869,7 @@ function StudentDashboard({ user, data, setPage }) {
       </div>
       <div className="student-dashboard-column">
         <Panel title={t("Student Center quick access")}><div className="quick-grid">{[
-            ['Profile & academics', 'student_center', BookOpen], ['Essay Lab', 'essay_lab', PenLine], ['Applications', 'applications', Target], ['Resources', 'resource_index', LibraryBig]].
+            ['Profile & academics', 'student_center', BookOpen], ['Essay Lab', 'essay_lab', PenLine], ['Applications', 'applications', Target]].
             map(([title, page, Icon]) => <button key={page} onClick={() => setPage(page)}><span><Icon size={19} /></span><b>{title}</b><ChevronRight size={15} /></button>)}</div></Panel>
         <Panel title={t("My Naseeb team")} action={<button className="button quiet small" onClick={() => setPage('contacts')}>{t("All contacts")}</button>}><div className="team-mini-list">{data.team.slice(0, 3).map((member) => <div key={`${member.kind}-${member.id}`}><span className="avatar">{initials(member.name)}</span><div><b>{member.name}</b><small>{member.role}</small></div><button className="icon-button" onClick={() => setPage('messages')} aria-label={tx`Message ${member.name}`}><MessageCircle size={16} /></button></div>)}{!data.team.length && <Empty text={t("No team members have been assigned yet.")} />}</div></Panel>
       </div>
@@ -2375,13 +2374,6 @@ function ProgramUsagePage({ user, data, reload, notify }) {
   </div>;
 }
 
-function ResourceIndexPage({ data, query, setPage }) {
-  const filtered = data.resourceLibrary.filter((item) => JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
-  const groups = Object.groupBy ? Object.groupBy(filtered, (item) => item.category) : filtered.reduce((acc, item) => ({ ...acc, [item.category]: [...(acc[item.category] || []), item] }), {});
-  function open(item) {if (item.destination && PAGE_META[item.destination]) setPage(item.destination);else if (item.external_url) window.open(item.external_url, '_blank', 'noopener,noreferrer');}
-  return <div className="section-stack student-portal"><label className="resource-search"><Search size={20} /><input value={query} readOnly placeholder={t("Use the search field in the top header")} /><span>{filtered.length} {t("resources")}</span></label>{Object.entries(groups).map(([category, items], index) => <section className="resource-group" key={category} style={{ '--group-index': index }}><header><span><LibraryBig size={20} /></span><div><h2>{category}</h2><p>{items.length} {t("student resources")}</p></div></header><div>{items.map((item) => <button key={item.id} onClick={() => open(item)}><span>{String(item.sort_order + 1).padStart(2, '0')}</span><div><b>{item.title}</b><small>{item.description}</small></div><ChevronRight size={18} /></button>)}</div></section>)}{!filtered.length && <Empty text={t("No resources found.")} />}</div>;
-}
-
 function EssayLabPage({ user, data, query, reload, notify }) {
   const approved = data.essays.filter((item) => item.status === 'approved').length;
   const active = data.essays.filter((item) => item.status !== 'approved').length;
@@ -3542,7 +3534,6 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (page === 'screen_time') return <ScreenTimePage user={user} />;
   if (['student', 'admin', 'counselor'].includes(user.role) && page === 'program_usage') return <ProgramUsagePage {...{ user, data, reload, notify }} />;
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query }} />;
-  if (user.role === 'student' && page === 'resource_index') return <ResourceIndexPage {...{ data, query, setPage }} />;
   if (user.role === 'student' && page === 'essay_lab') return <EssayLabPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify }} />;
@@ -3637,7 +3628,7 @@ export default function App() {
       ['roadmapMissions', 'roadmap-missions'], ['communityPosts', 'community-posts'], ['bookings', 'bookings'],
       ['messageChannels', 'message-channels'], ['programServices', 'program-services'],
       ['scholarships', 'scholarships'], ['opportunityPrograms', 'opportunity-programs'],
-      ['resourceLibrary', 'resource-library'], ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets']];
+      ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets']];
 
       const resources = activeUser.role === 'parent' ?
       [['parentPortal', 'parent-portal']] :

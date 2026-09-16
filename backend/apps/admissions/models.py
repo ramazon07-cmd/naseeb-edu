@@ -887,22 +887,6 @@ class ScreenTimeDaily(models.Model):
         return f'{self.user} — {self.date} — {self.page}'
 
 
-class ResourceLibraryItem(TimeStampedModel):
-    title = models.CharField(max_length=220)
-    category = models.CharField(max_length=120)
-    description = models.CharField(max_length=300, blank=True)
-    destination = models.CharField(max_length=80, blank=True, help_text='Student frontend page key')
-    external_url = models.URLField(blank=True)
-    sort_order = models.PositiveSmallIntegerField(default=0)
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        ordering = ['category', 'sort_order', 'title']
-
-    def __str__(self):
-        return self.title
-
-
 class StoreItem(TimeStampedModel):
     title = models.CharField(max_length=220)
     category = models.CharField(max_length=120)

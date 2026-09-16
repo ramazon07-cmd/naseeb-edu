@@ -110,7 +110,6 @@
   --on-accent-muted: rgba(255, 255, 255, .7);
   --on-accent-wash: rgba(255, 255, 255, .18);
   --service-gradient: linear-gradient(90deg, #D8CEC0, #9D896E);
-  --resource-group-border: #9D896E;
   --student-hero-start-token: #352D26;
   --assessment-personality: #EFE5D5;
   --assessment-interests: #E1EDE5;
@@ -288,7 +287,6 @@
   --on-accent-muted: rgba(16, 32, 45, .8);
   --on-accent-wash: rgba(16, 32, 45, .12);
   --service-gradient: linear-gradient(90deg, #6f99b5, #c3dced);
-  --resource-group-border: #9fc6e2;
   --student-hero-start-token: #0c1923;
   --student-hero-mid-token: #193241;
   --student-hero-end-token: #294757;
@@ -773,7 +771,7 @@ select option, select optgroup { color: var(--text); background: var(--control-o
   --student-card-shadow: var(--shadow-card);
 }
 .student-portal h2, .student-portal h3 { letter-spacing: -.02em; }
-.student-portal .panel, .student-portal .stat-card, .student-portal .mission-card, .student-portal .community-card, .student-portal .booking-card, .student-portal .service-list article, .student-portal .college-table, .student-portal .store-grid article, .student-portal .contact-grid article, .student-portal .resource-search, .student-portal .resource-group button { box-shadow: var(--student-card-shadow); }
+.student-portal .panel, .student-portal .stat-card, .student-portal .mission-card, .student-portal .community-card, .student-portal .booking-card, .student-portal .service-list article, .student-portal .college-table, .student-portal .store-grid article, .student-portal .contact-grid article { box-shadow: var(--student-card-shadow); }
 .student-welcome, .portal-hero, .college-banner, .store-hero { min-height: 210px; padding: clamp(26px, 4vw, 46px); display: flex; align-items: center; justify-content: space-between; gap: 32px; position: relative; overflow: hidden; color: var(--student-hero-text); background: linear-gradient(135deg, var(--student-hero-start) 0%, var(--student-hero-mid) 58%, var(--student-hero-end) 100%); border: 1px solid var(--student-hero-line); border-radius: 22px; box-shadow: 0 18px 55px var(--student-hero-shadow); }
 .student-welcome::before, .portal-hero::before, .college-banner::before, .store-hero::before { content: ''; position: absolute; width: 440px; height: 440px; right: -120px; bottom: -330px; background: radial-gradient(circle, var(--student-hero-decoration), transparent 64%); border-radius: 50%; pointer-events: none; }
 .student-welcome::after, .portal-hero::after, .college-banner::after, .store-hero::after { content: ''; position: absolute; width: 320px; height: 320px; right: -80px; top: -150px; border: 1px solid var(--student-hero-line); border-radius: 45% 55% 62% 38%; transform: rotate(25deg); pointer-events: none; }
@@ -1351,7 +1349,6 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .service-card .service-bar.unlimited span { opacity: .45; }
 .service-card footer { margin-top: 16px; padding-top: 12px; display: flex; justify-content: flex-end; gap: 7px; border-top: 1px solid var(--border); }
 
-.resource-search { min-height: 60px; padding: 0 20px; display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }.resource-search input { flex: 1; color: var(--text); background: transparent; border: 0; outline: 0; }.resource-search span { color: var(--muted); font-size: 11px; }.resource-group { padding-left: 18px; border-left: 4px solid var(--resource-group-border); }.resource-group > header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }.resource-group > header > span { width: 42px; height: 42px; display: grid; place-items: center; color: var(--accent); background: var(--selected-bg); border-radius: 10px; }.resource-group h2 { margin: 0 0 4px; font-size: 17px; }.resource-group header p { margin: 0; color: var(--muted); font-size: 10px; }.resource-group > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }.resource-group button { min-height: 86px; display: grid; grid-template-columns: 38px 1fr 20px; align-items: center; gap: 12px; padding: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 13px; text-align: left; }.resource-group button:hover { background: var(--surface-hover); border-color: var(--border-interactive); transform: translateY(-2px); }.resource-group button > span { color: var(--accent); font: 600 18px/1 'Montserrat', system-ui, sans-serif; }.resource-group button b, .resource-group button small { display: block; }.resource-group button b { font-size: 13px; }.resource-group button small { margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.4; }
 .essay-progress { display: flex; gap: 12px; }.essay-progress > div { min-width: 92px; padding: 14px; text-align: center; background: var(--student-hero-ghost-bg); border: 1px solid var(--student-hero-line); border-radius: 13px; }.essay-progress strong, .essay-progress span { display: block; }.essay-progress strong { font: 600 28px/1 'Montserrat', system-ui, sans-serif; }.essay-progress span { margin-top: 7px; color: var(--student-hero-muted); font-size: 9px; text-transform: uppercase; }
 
 .college-banner { min-height: 190px; --student-hero-mid: var(--hero-college-mid); --student-hero-end: var(--hero-college-end); }.college-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.college-toolbar label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }.college-toolbar select { min-height: var(--control-height); padding: 0 12px; color: var(--text); background: var(--control-bg); border: 1px solid var(--border); border-radius: var(--radius-control); }.college-table { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }.college-row { min-width: 850px; display: grid; grid-template-columns: 70px 2fr 1fr 1.2fr 90px; align-items: center; gap: 14px; padding: 16px; border-bottom: 1px solid var(--border); }.college-row:last-child { border-bottom: 0; }.college-row.selected { background: var(--selected-bg); }.college-head { min-height: 48px; color: var(--muted); background: var(--surface-soft); font-size: 9px; font-weight: 800; text-transform: uppercase; }.college-row b, .college-row small { display: block; }.college-row b { font-size: 12px; }.college-row small { margin-top: 5px; color: var(--muted); font-size: 9px; }.college-row .rank { color: var(--accent); font-weight: 800; }.added { display: flex; align-items: center; gap: 5px; color: var(--success); font-size: 10px; font-weight: 800; }
@@ -1370,10 +1367,8 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 /* One student accent system keeps every student surface coherent in both themes. */
 .student-portal .quick-grid button > span,
 .student-portal .booking-highlight > span,
-.student-portal .resource-group > header > span,
 .student-portal .choice-card > svg:first-of-type,
 .student-portal .university-card .rank { color: var(--student-accent); background: var(--student-accent-wash); }
-.student-portal .resource-group button > span,
 .student-portal .mission-top > span,
 .student-portal .journey-progress-bars strong,
 .student-portal .scholarship-card header > div > span,
@@ -1400,7 +1395,7 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .student-portal .checklist-cards article { box-shadow: var(--student-card-shadow); }
 .student-portal :is(
   .panel, .stat-card, .journey-progress, .mission-card, .community-card,
-  .booking-card, .service-list article, .resource-search, .resource-group button,
+  .booking-card, .service-list article,
   .messages-shell, .message-contact, .message-thread > header, .message-compose,
   .message-bubble, .college-table, .college-row, .portal-tabs, .filter-panel,
   .filter-panel > header, .university-card, .university-card > footer,
@@ -1413,7 +1408,7 @@ select option, select optgroup { color: var(--text); background: var(--control-o
   .research-details, select, input, textarea, .button.quiet, .icon-button
 ) { border-color: var(--student-border); }
 .student-portal :is(select, input, textarea):focus-visible { border-color: var(--student-accent); box-shadow: 0 0 0 3px var(--student-accent-wash); outline: 0; }
-.student-portal :is(.quick-grid button, .resource-group button, .choice-card, .button.quiet, .icon-button):hover:not(:disabled) { border-color: var(--student-border-strong); }
+.student-portal :is(.quick-grid button, .choice-card, .button.quiet, .icon-button):hover:not(:disabled) { border-color: var(--student-border-strong); }
 .student-portal :is(.mission-card footer, .community-card footer, .university-card > footer, .store-grid footer, .college-profile-questions form > footer) { border-top-color: var(--student-border); }
 .student-portal :is(.timeline-list > div, .college-row) { border-bottom-color: var(--student-border); }
 .student-portal .message-contact { border-right-color: var(--student-border); }
@@ -1719,7 +1714,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .message-contact { padding: 18px; flex-direction: row; text-align: left; border-right: 0; border-bottom: 1px solid var(--border); }
   .message-contact .avatar.large { width: 46px; height: 46px; flex-basis: 46px; }
   .message-contact .button { margin-left: auto; }
-  .resource-group > div { grid-template-columns: 1fr; }
   .college-research-overview { grid-template-columns: 1fr; }
   .college-research-overview .research-profile-chips { grid-column: auto; }
   .college-research-overview > .button { width: max-content; }

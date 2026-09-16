@@ -25,7 +25,6 @@ from .models import (
     Project,
     RecommendationLetter,
     Research,
-    ResourceLibraryItem,
     RoadmapMission,
     School,
     ScreenTimeDaily,
@@ -167,7 +166,6 @@ admin.site.register(CommunityPost)
 admin.site.register(Booking)
 admin.site.register(StudentMessage)
 admin.site.register(ProgramService)
-admin.site.register(ResourceLibraryItem)
 admin.site.register(StoreItem)
 admin.site.register(XPTransaction)
 admin.site.register(LevelApproval)

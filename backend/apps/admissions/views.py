@@ -49,7 +49,6 @@ from .models import (
     Project,
     RecommendationLetter,
     Research,
-    ResourceLibraryItem,
     RoadmapMission,
     CounselorRoadmap,
     CounselorRoadmapMission,
@@ -94,7 +93,6 @@ from .serializers import (
     ProjectSerializer,
     RecommendationLetterSerializer,
     ResearchSerializer,
-    ResourceLibraryItemSerializer,
     RoadmapMissionSerializer,
     CounselorRoadmapSerializer,
     CounselorRoadmapTemplateSerializer,
@@ -2864,12 +2862,6 @@ class ParentPortalView(APIView):
                 'read_only': True,
             },
         })
-
-
-class ResourceLibraryItemViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = ResourceLibraryItemSerializer
-    permission_classes = [StudentPortalPermission]
-    queryset = ResourceLibraryItem.objects.filter(is_active=True)
 
 
 class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):
