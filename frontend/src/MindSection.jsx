@@ -52,7 +52,7 @@ export default function MindSection({ language }) {
           <figure className="landing-mind-art">
             <img src="/landing/mind-self-discovery.webp" alt={copy.art} width="1536" height="1024" loading="lazy" decoding="async" />
             {/* Dark-mode twin, stacked on top and faded in by CSS. Both load with the card, so switching theme never waits on a download. */}
-            <img className="landing-mind-art-dark" src="/landing/mind-self-discovery-dark.webp" alt="" aria-hidden="true" width="1448" height="1086" loading="lazy" decoding="async" />
+            <img className="landing-mind-art-dark" src="/landing/mind-self-discovery-dark.webp" alt="" aria-hidden="true" width="1536" height="1024" loading="lazy" decoding="async" />
           </figure>
           <dl className="landing-mind-facts">
             <div><dt>15</dt><dd>{copy.time}</dd></div>
