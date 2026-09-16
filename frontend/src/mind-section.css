@@ -33,7 +33,9 @@
 .landing-mind-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 60% center; }
 /* opacity, not display:none: a hidden lazy image is never fetched, so the
    first switch to dark would show an empty frame while it downloads. */
-.landing-mind-art .landing-mind-art-dark { position: absolute; inset: 0; object-position: 75% center; opacity: 0; transition: opacity .3s ease; }
+/* Same 1536x1024 frame as the light image, head in the same place, so the two
+   share one object-position and the head does not jump when the theme flips. */
+.landing-mind-art .landing-mind-art-dark { position: absolute; inset: 0; opacity: 0; transition: opacity .3s ease; }
 [data-theme='dark'] .landing-mind-art .landing-mind-art-dark { opacity: 1; }
 .landing-mind-facts { grid-column: 1 / -1; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 26px 40px; border-top: 1px solid var(--mind-line); }
 .landing-mind-facts > div { display: flex; align-items: center; justify-content: center; gap: 18px; }
