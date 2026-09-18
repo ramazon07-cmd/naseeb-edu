@@ -1449,83 +1449,23 @@
   .landing-faq-answer, .landing-faq-answer > div { transition: none; }
 }
 
-/* --- Login (shares the public-page scale) -------------------------------- */
+/* --- Login ---------------------------------------------------------------
+   The layout lives in styles.css (photograph, scrim, card). This block only
+   carries the public-page voice onto it: display type and the landing CTA. */
 
-.login-page {
-  min-height: 100dvh; display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(400px, .8fr);
-  --brand-panel: var(--lp-page-bg);
-  --login-panel: var(--lp-page-bg);
-  color: var(--text); background: var(--lp-page-bg); font-family: var(--lp-body);
-}
-.login-page :is(h1, h2), .login-page .brand-lockup b { font-family: var(--lp-display); font-weight: 500; }
-.login-copy {
-  padding: clamp(30px, 5vw, 72px) clamp(42px, 8vw, 120px);
-  display: flex; flex-direction: column; position: relative; overflow: hidden;
-  color: var(--brand-panel-text); background: var(--brand-panel);
-}
-.login-copy::after {
-  content: 'N'; position: absolute; right: -10px; bottom: -120px;
-  color: var(--brand-watermark); font-family: var(--lp-display);
-  font-size: clamp(300px, 38vw, 560px); line-height: 1;
-}
-.login-return {
-  width: max-content; min-height: 40px; padding: var(--lp-2) 0;
-  display: inline-flex; align-items: center; gap: var(--lp-2);
-  position: relative; z-index: 2;
-  color: var(--brand-panel-text); background: transparent;
-  border: 0; border-bottom: 1px solid color-mix(in srgb, var(--brand-panel-text) 34%, transparent); border-radius: 0;
-  font-size: var(--lp-t-caption); font-weight: 600;
-  transition: border-color var(--lp-fast) ease, transform var(--lp-fast) ease;
-}
-.login-return:hover { border-bottom-color: var(--brand-panel-text); transform: translateX(-2px); }
-.login-copy-content { max-width: 760px; margin: auto 0; position: relative; z-index: 1; }
-.login-copy .eyebrow { color: var(--eyebrow); }
-.login-copy h1 {
-  max-width: 12em; margin: var(--lp-6) 0 var(--lp-5);
-  font-size: clamp(46px, 6vw, 82px); line-height: 1.02; letter-spacing: -.045em; text-wrap: balance;
-}
-.login-copy p { max-width: 650px; margin: 0; color: var(--brand-panel-muted); font-size: 18px; line-height: 1.7; }
-.login-emblem {
-  width: 112px !important; height: 112px !important; flex: 0 0 112px !important;
-  align-self: flex-start; aspect-ratio: 1; margin-bottom: var(--lp-6);
-  position: relative; z-index: 1; font-size: 38px;
-}
-.brand-tagline {
-  max-width: 520px; margin-top: var(--lp-5); color: var(--brand-panel-muted);
-  font-size: 10px; font-weight: 600; letter-spacing: .2em; line-height: 1.7; text-transform: uppercase;
-}
-.login-form-panel {
-  min-width: 0; padding: clamp(24px, 5vw, 72px);
-  display: grid; place-items: center; position: relative; isolation: isolate; overflow: hidden;
-  background: var(--login-panel);
-}
-.login-form-panel::before {
-  content: ''; display: block; position: absolute; inset: 24px; z-index: -1;
-  border: 1px solid var(--login-panel-line); border-radius: 30px; pointer-events: none;
-}
-.login-card {
-  width: min(440px, 100%); display: grid; gap: var(--lp-4); padding: clamp(28px, 4vw, 40px);
-  color: var(--text); background: var(--surface);
-  border: 1px solid var(--lp-rule-strong); border-radius: var(--lp-r-lg); box-shadow: var(--shadow-raised);
-}
-.login-card h2 { margin: 0 0 var(--lp-2); font-size: 28px; font-weight: 600; letter-spacing: normal; }
-.login-card p { margin: 0; color: var(--muted); }
+.login-page { color: var(--text); font-family: var(--lp-body); }
+.login-page h1, .login-page .brand-lockup b { font-family: var(--lp-display); font-weight: 500; }
+.login-return { font-size: var(--lp-t-caption); font-weight: 600; transition: background var(--lp-fast) ease, transform var(--lp-fast) ease; }
+.login-return:hover { transform: translateX(-2px); }
+.login-card { border-radius: var(--lp-r-lg); }
 .login-card input { color: var(--text); background: var(--control-bg); border-color: var(--lp-rule-strong); border-radius: var(--radius-control); }
 .login-card .button.primary {
-  min-height: 44px; color: var(--lp-cta-fg); background: var(--lp-cta-bg);
+  min-height: 46px; color: var(--lp-cta-fg); background: var(--lp-cta-bg);
   border-color: var(--lp-cta-bg); border-radius: var(--lp-r-md);
 }
 .login-card .button.primary:hover:not(:disabled) { opacity: .88; }
-.login-brand-row { margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--lp-4); }
-.login-brand-row > .brand-lockup { min-width: 0; flex: 1 1 auto; }
-.login-brand-row > .brand-lockup small { display: block; max-width: 19ch; color: var(--muted); line-height: 1.4; text-wrap: balance; }
 
 /* --- Responsive ---------------------------------------------------------- */
-
-@media (max-width: 1400px) {
-  .login-brand-row > .brand-lockup small { display: none; }
-}
 
 @media (max-width: 1080px) {
   .landing-faq-grid { grid-template-columns: 1fr; gap: var(--lp-7); }
@@ -1604,12 +1544,6 @@
   .landing-team-grid { row-gap: var(--lp-6); }
   .landing-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .landing-footer-legal { margin-top: var(--lp-8); }
-  .login-page { grid-template-columns: 1fr; }
-  .login-copy { min-height: 42dvh; padding: 30px 28px 42px; }
-  .login-copy h1 { font-size: 46px; }
-  .login-form-panel { min-height: 58dvh; padding: 28px; }
-  .login-form-panel::before { inset: 14px; border-radius: 22px; }
-  .login-card { padding: 28px; }
 }
 
 @media (max-width: 560px) {
@@ -1666,15 +1600,6 @@
   .landing-capability { grid-template-columns: 20px minmax(0, 1fr); }
   .landing-capability h3 { grid-column: 2; }
   .landing-capability-note { grid-row: auto; grid-column: 2; justify-self: start; }
-  .login-copy { min-height: auto; padding: 24px 22px 34px; }
-  .login-copy h1 { margin: 22px 0 16px; font-size: 38px; }
-  :lang(ru) .login-copy h1 { font-size: clamp(30px, 8vw, 38px); }
-  .login-copy p { margin-bottom: 0; font-size: 15px; line-height: 1.55; }
-  .login-emblem { width: 82px !important; height: 82px !important; margin-bottom: 20px; }
-  .brand-tagline { margin-top: 18px; }
-  .login-form-panel { min-height: auto; padding: 24px 18px 30px; }
-  .login-form-panel::before { inset: 9px; border-radius: 18px; }
-  .login-card { padding: 24px 20px; }
 }
 
 @media (max-width: 380px) {

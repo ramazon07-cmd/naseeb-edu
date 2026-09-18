@@ -343,46 +343,27 @@ function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }
 
   return (
     <main className="login-page">
-      <section className="login-copy">
+      <header className="login-bar">
         <button type="button" className="login-return" onClick={onBack}>
           <ArrowLeft size={17} /> {t("Home")}
         </button>
-        <div className="login-copy-content">
-          <BrandLogo theme={theme} className="login-emblem" />
-          <span className="eyebrow">
-            {t("NASEEB EDU / EDUCATION PLATFORM")}
-          </span>
-          <h1>
-            {t("Every opportunity.")}
-            <br />
-            {t("One trusted path.")}
-          </h1>
-          <p>
-            {t(
-              "A professional counseling platform connecting students worldwide with global education opportunities.",
-            )}
-          </p>
-          <span className="brand-tagline">
-            {t("Connecting Students to the World Through Education")}
-          </span>
+        <div className="login-preferences">
+          <LanguageSelector
+            language={language}
+            onChange={changeLanguage}
+            compact
+          />
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
         </div>
-      </section>
+      </header>
       <section className="login-form-panel" aria-label={t("Sign in")}>
         <form className="login-card" onSubmit={submit}>
-          <div className="login-brand-row">
-            <BrandLockup theme={theme} />
-            <div className="login-preferences">
-              <LanguageSelector
-                language={language}
-                onChange={changeLanguage}
-                compact
-              />
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            </div>
-          </div>
-          <div>
-            <h2>{t("Sign in")}</h2>
-            <p>{t("Enter your username and password.")}</p>
+          <div className="login-card-head">
+            <BrandLogo theme={theme} className="login-emblem" />
+            <h1>{t("Naseeb Edu")}</h1>
+            <span className="brand-tagline">
+              {t("Connecting Students to the World Through Education")}
+            </span>
           </div>
           <Field label={t("Username")}>
             <input
