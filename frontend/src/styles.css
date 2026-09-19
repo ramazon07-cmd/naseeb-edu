@@ -580,6 +580,9 @@ h1, h2, h3, .brand-lockup b { font-family: 'Montserrat', system-ui, sans-serif; 
 .school-card-title h3 { margin: 0; }
 .school-card-title .badge { color: var(--accent-deep); }
 .panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Utilities that produce a file sit after the records, not in the heading
+   row where they competed with the section's own action. */
+.panel-footer { padding: 11px 18px; display: flex; justify-content: flex-end; border-top: 1px solid var(--border-subtle); }
 .form-note { margin: 0; padding: 12px; display: flex; align-items: flex-start; gap: 8px; color: var(--muted); background: var(--surface-soft); border: 1px solid var(--border); border-radius: 10px; font-size: 11px; line-height: 1.5; }
 .form-note svg { flex: 0 0 auto; color: var(--success); }
 .student-assignment-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
