@@ -90,6 +90,10 @@ const documentFileRequest = (id, download = false) =>
 const evidenceFileRequest = (resource, id, download = false) =>
   protectedFileRequest(`/${resource}/${id}/proof-file/`, download)
 
+// Profile photos live in private storage, so they are fetched as blobs like
+// every other personal file rather than pointed at with a media URL.
+const studentPhotoRequest = (id) => protectedFileRequest(`/students/${id}/photo/`, false)
+
 export function clearTokens() {
   localStorage.removeItem(TOKEN_KEYS.access)
   localStorage.removeItem(TOKEN_KEYS.refresh)
@@ -247,6 +251,8 @@ export const api = {
     body: payload instanceof FormData ? payload : JSON.stringify(payload),
   }),
   remove: (resource, id) => request(`/${resource}/${id}/`, { method: 'DELETE' }),
+  studentOnboarding: () => request('/students/onboarding/'),
+  saveStudentOnboarding: (payload) => request('/students/onboarding/', { method: 'POST', body: JSON.stringify(payload) }),
   quickCreateStudent: (payload) => request('/students/quick-create/', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -267,6 +273,13 @@ export const api = {
     body: payload,
     timeoutMs: 120_000,
   }),
+  studentPhoto: (id) => studentPhotoRequest(id),
+  uploadStudentPhoto: (id, file) => {
+    const payload = new FormData()
+    payload.append('photo', file)
+    return request(`/students/${id}/photo/`, { method: 'POST', body: payload, timeoutMs: 120_000 })
+  },
+  removeStudentPhoto: (id) => request(`/students/${id}/photo/`, { method: 'DELETE' }),
   documentFile: (id) => documentFileRequest(id),
   downloadDocument: (id) => documentFileRequest(id, true),
   evidenceFile: (resource, id) => evidenceFileRequest(resource, id),

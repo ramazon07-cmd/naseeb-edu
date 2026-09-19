@@ -164,7 +164,7 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         if view.basename == 'notifications' and view.action == 'read':
             return True
         if view.basename == 'students':
-            return view.action in {'update', 'partial_update'}
+            return view.action in {'update', 'partial_update', 'onboarding', 'photo'}
         if view.basename == 'tasks' and view.action == 'create':
             return False
         return view.basename in {
@@ -201,7 +201,7 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
             if view.basename == 'notifications' and view.action == 'read':
                 return True
             if view.basename == 'students':
-                return view.action in {'retrieve', 'update', 'partial_update'}
+                return view.action in {'retrieve', 'update', 'partial_update', 'photo'}
             return request.method in permissions.SAFE_METHODS or view.basename in {
                 'applications', 'documents', 'essays', 'tasks', 'achievements', 'researches', 'projects',
                 'internships', 'activities', 'honors', 'recommendations',
@@ -282,6 +282,94 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
                 return self.queryset.none()
             return self.queryset.filter(school_id=self.request.user.school_id)
         return self.filter_for_user(self.queryset)
+
+    @action(detail=False, methods=['get', 'post'], url_path='onboarding')
+    def onboarding(self, request):
+        if request.user.role != User.Role.STUDENT:
+            return Response({'detail': 'Only students can complete their profile.'}, status=403)
+        profile = self.get_queryset().filter(user=request.user).first()
+        if not profile:
+            return Response({'detail': 'Student profile not found.'}, status=404)
+        if request.method == 'GET':
+            return Response(self.get_serializer(profile).data)
+        from .onboarding import OnboardingSerializer
+        serializer = OnboardingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        with transaction.atomic():
+            request.user.first_name = values['first_name']
+            request.user.last_name = values['last_name']
+            request.user.save(update_fields=['first_name', 'last_name'])
+            for key in ('grade', 'school_name', 'gpa', 'ielts_score', 'target_countries', 'guardian_name', 'guardian_relation'):
+                setattr(profile, key, values.get(key) or '' if key.startswith('guardian') else values.get(key))
+            if values.get('guardian_contact'):
+                profile.parent_contact = values['guardian_contact']
+            profile.sat_score = (values.get('sat_reading') or 0) + (values.get('sat_math') or 0) or None
+            profile.target_major = ', '.join(values.get('interests', []))[:160]
+            profile.application_profile = serializer.data
+            profile.profile_completed_at = timezone.now()
+            profile.save()
+            request.user.student_profile = profile
+        return Response({'profile': self.get_serializer(profile).data, 'user': UserSerializer(request.user, context={'request': request}).data})
+
+    PHOTO_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
+    PHOTO_MAX_BYTES = 5 * 1024 * 1024
+
+    @action(detail=True, methods=['get', 'post', 'delete'], url_path='photo')
+    def photo(self, request, pk=None):
+        """Read, replace or remove a student's profile photo.
+
+        The file lives in private storage like every other personal upload, so it
+        is streamed through this authenticated action instead of a media URL.
+        """
+        student = self.get_object()
+        if request.method == 'GET':
+            if not student.photo:
+                raise Http404('This student has no profile photo.')
+            try:
+                stream = student.photo.open('rb')
+            except (FileNotFoundError, OSError):
+                raise Http404('The profile photo is unavailable.')
+            name = Path(student.photo.name).name
+            response = FileResponse(
+                stream,
+                content_type=mimetypes.guess_type(name)[0] or 'image/jpeg',
+            )
+            response['Cache-Control'] = 'private, no-store'
+            response['X-Content-Type-Options'] = 'nosniff'
+            return response
+
+        if request.user.role != User.Role.STUDENT or student.user_id != request.user.id:
+            return Response(
+                {'detail': 'Only the student can change their own profile photo.'},
+                status=403,
+            )
+
+        previous = student.photo.name if student.photo else ''
+        storage = student.photo.storage if previous else None
+        if request.method == 'DELETE':
+            student.photo = None
+            student.save(update_fields=['photo'])
+            if previous:
+                transaction.on_commit(lambda: storage.delete(previous))
+            return Response(status=204)
+
+        upload = request.FILES.get('photo')
+        if not upload:
+            return Response({'photo': 'Choose an image to upload.'}, status=400)
+        extension = Path(upload.name or '').suffix.lower()
+        if extension not in self.PHOTO_EXTENSIONS:
+            return Response(
+                {'photo': f'Unsupported image type. Allowed: {", ".join(sorted(self.PHOTO_EXTENSIONS))}.'},
+                status=400,
+            )
+        if upload.size > self.PHOTO_MAX_BYTES:
+            return Response({'photo': 'The photo must be 5 MB or smaller.'}, status=400)
+        student.photo = upload
+        student.save(update_fields=['photo'])
+        if previous and previous != student.photo.name:
+            transaction.on_commit(lambda: storage.delete(previous))
+        return Response(self.get_serializer(student).data)
 
     def retrieve(self, request, *args, **kwargs):
         student = self.get_object()
@@ -608,16 +696,7 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
                 ),
                 school=school,
                 school_name=school.name if school else request.data.get('school_name', 'Naseeb Edu'),
-                grade=str(request.data.get('grade') or StudentProfile.Grade.GRADE_11).replace('-sinf', ''),
-                gpa=request.data.get('gpa') or None,
-                ielts_score=request.data.get('ielts') or request.data.get('ielts_score') or None,
-                sat_score=request.data.get('sat') or request.data.get('sat_score') or None,
-                target_major=request.data.get('major') or request.data.get('target_major') or '',
-                target_countries=target_countries,
-                budget_usd=request.data.get('budget_usd') or None,
-                scholarship_needed=str(request.data.get('scholarship_needed', 'true')).lower() not in {'false', '0', 'no'},
-                parent_contact=request.data.get('parent_contact', ''),
-                notes=request.data.get('notes', ''),
+
             )
             ActivityLog.objects.create(actor=request.user, student=student, action=f'Student profile created: {full_name}')
 
@@ -996,7 +1075,7 @@ class StaffControlledWorkPermission(permissions.BasePermission):
                 return True
             if view.action in {'create', 'destroy'}:
                 return view.basename == 'tasks'
-            return view.action in {'update', 'partial_update'}
+            return view.action in {'update', 'partial_update', 'onboarding'}
         return False
 
     def has_object_permission(self, request, view, obj):

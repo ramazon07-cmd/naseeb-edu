@@ -46,7 +46,7 @@ if (!packageLock.includes('naseeb-edu-frontend')) throw new Error('npm lockfile 
 if (!app.includes('function StudentOverview(')) throw new Error('Student 360 profile is missing.');
 if (app.includes('07 /')) throw new Error('Legacy numeric page-heading prefix must not be rendered.');
 if (!api.includes('function listAll(') || !api.includes('payload.next')) throw new Error('Paginated API traversal is missing.');
-if (!app.includes("label={t('Temporary password')}") || !app.includes('minLength="12"') || !app.includes('function ForcedPasswordChange(')) throw new Error('One-time credential and forced password-change UI is missing.');
+if (!app.includes("label={t('Temporary password')}") || !app.includes('minLength="8"') || !app.includes('function ForcedPasswordChange(')) throw new Error('One-time credential and forced password-change UI is missing.');
 if (!app.includes('VITE_SHOW_DEMO_ACCOUNTS') || !app.includes('SHOW_DEMO_ACCOUNTS &&')) throw new Error('Demo credentials must be explicitly enabled in development.');
 if (!app.includes("teacher: 'Teacher'") || !app.includes('isTaskManager')) throw new Error('Teacher-controlled work UI is missing.');
 if (!api.includes('approveRoadmapMission')) throw new Error('Roadmap approval API action is missing.');
@@ -74,7 +74,7 @@ for (const resource of ['researches', 'projects', 'internships', 'activities', '
 }
 if (!app.includes('Assigned tasks & responses') || !app.includes('function TaskSubmissionModal(') || !app.includes('College list')) throw new Error('Counselor student workspace is incomplete.');
 if (!app.includes('Submission or Google Docs URL') || !app.includes('Google Docs URL')) throw new Error('Task/document Google Docs fields are missing.');
-if (!app.includes('function StudentRoadmapPath(') || !app.includes('75 XP') || !styles.includes('.level-roadmap-path')) throw new Error('Level-linked visual roadmap is missing.');
+if (!app.includes('function StudentRoadmapPath(') || !app.includes('roadmap-progress-card') || !styles.includes('.roadmap-steps')) throw new Error('Level-linked visual roadmap is missing.');
 if (!app.includes('function MissionList(') || !app.includes('NEXT MISSION') || !app.includes('Roadmap order') || !styles.includes('.next-mission-callout')) throw new Error('Roadmap mission filters, sorting, or next-mission CTA is missing.');
 if (!app.includes('function StudentWorkspaceSelector(') || !styles.includes('.student-workspace-selector')) throw new Error('Counselor student workspace selector is missing.');
 if (!app.includes('defaultStudentId={selectedStudentNumericId}') || !app.includes('roadmapMissions: data.roadmapMissions.filter')) throw new Error('Roadmap task/mission assignment is not scoped to the selected student.');
@@ -107,7 +107,7 @@ if (app.includes('ESTIMATED IQ') || challenges.includes('estimatedIq') || challe
 if (app.includes("title: 'AI Profile Analysis'")) throw new Error('AI Profile Analysis must not appear as a duplicate challenge card.');
 if (!app.includes('challenge.scale.map(')) throw new Error('The runner must use each challenge\'s own response scale, not one shared scale.');
 if (app.includes('PERSONALITY_QUIZ_URL')) throw new Error('The personality challenges must run inside the platform, not link out.');
-if (!app.includes('{t("· MISSION")} {Math.min(completed + 1') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-path-row.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
+if (!app.includes('of ${total} completed') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-step.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
 if (!app.includes("aria-pressed={post.liked_by_me}") || !app.includes('Each student counts once') || !styles.includes('.community-like-help')) throw new Error('Community like/unlike feedback is missing.');
 if (!app.includes('Meet with') || !app.includes('Pending approval') || !app.includes('Mark completed') || !styles.includes('.booking-actions')) throw new Error('Booking participant and approval UI is missing.');
 if (!app.includes('participant_name') || !app.includes('participant_role')) throw new Error('Booking participant identity is not displayed.');
@@ -127,7 +127,7 @@ if (!app.includes("user?.role === 'parent'") || !app.includes("activeUser.role =
 if (!app.includes('This cabinet never shows essays, messages, counselor notes') || !app.includes('FAMILY VIEW · READ ONLY')) throw new Error('Parent privacy and read-only disclosure is missing.');
 if (!app.includes('function ScreenTimeTracker(') || !app.includes('function ScreenTimePage(') || !app.includes("document.visibilityState === 'visible'") || !app.includes('60_000')) throw new Error('Active-tab and idle-aware screen time is missing.');
 if (!app.includes('SCREEN_TIME_QUEUE_KEY') || !app.includes("window.addEventListener('online'") || !styles.includes('.screen-time-privacy')) throw new Error('Offline retry or screen-time privacy UI is missing.');
-if (!app.includes('student.level ?? 1') || !app.includes('student.xp_total ?? 0')) throw new Error('Zero-valued student level and XP must remain visible.');
+if (!app.includes('student.level ?? 1') || !app.includes('student.roadmap_stars ?? 0')) throw new Error('Zero-valued student level and stars must remain visible.');
 if (!styles.includes('.sidebar-profile > div { min-width: 0; }') || !styles.includes('overflow-wrap: anywhere')) throw new Error('Long student names are not constrained.');
 for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchrashuv so‘rovi', 'Bu bo‘limda', 'Universitetlarni topish']) {
   if (app.includes(uzbekFragment)) throw new Error(`Non-English UI copy remains: ${uzbekFragment}`)

@@ -1,14 +1,16 @@
+import { cleanScreenTimeQueue } from './screenTimeQueue';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Award, BookOpen, BrainCircuit, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
   ContactRound, DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, Hexagon, LayoutDashboard,
-  LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
+  LifeBuoy, ListChecks, Lock, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
   PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, ShieldAlert, ShieldCheck,
-  ShoppingCart, Sparkles, Square, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X, Lock } from
+  ShoppingCart, Sparkles, Square, Star, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X } from
 'lucide-react';
 import { api } from './api';
 import LandingPage from './LandingPage';
+import StudentOnboarding from './StudentOnboarding';
 import {
   LANGUAGE_OPTIONS,
   formatCurrencyLocale,
@@ -68,6 +70,7 @@ const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO
 const ownStudent = (data) => data.students?.[0];
 const studentName = (data, id) => fullName(data.students?.find((student) => student.id === Number(id))?.user_detail);
 const THEME_KEY = 'naseeb-edu-theme';
+const SIDEBAR_KEY = 'naseeb-edu-sidebar';
 const TARGET_COUNTRIES_MAX_LENGTH = 255;
 const SCREEN_TIME_QUEUE_KEY = 'naseeb-screen-time-pending-v1';
 const formatDuration = (seconds = 0) => {
@@ -128,8 +131,8 @@ function initialTheme() {
     // Storage can be unavailable in strict privacy modes; the OS preference still works.
   }return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';}function BrandLogo({ className = '' }) {return <span className={`brand-logo ${className}`} role="img" aria-label={t("Naseeb Edu")} />;}
 
-function BrandLockup({ theme }) {
-  return <div className="brand-lockup"><BrandLogo theme={theme} /><div><b>{t("Naseeb Edu")}</b><small>{t('Education Counseling Platform')}</small></div></div>;
+function BrandLockup({ theme, subtitle = true }) {
+  return <div className="brand-lockup"><BrandLogo theme={theme} /><div><b>{t("Naseeb Edu")}</b>{subtitle && <small>{t('Education Counseling Platform')}</small>}</div></div>;
 }
 
 function LanguageSelector({ language, onChange, compact = false }) {
@@ -137,7 +140,7 @@ function LanguageSelector({ language, onChange, compact = false }) {
 }
 
 function AppBootLoader({ message = 'Preparing your workspace…' }) {
-  return <main className="app-boot" role="status" aria-label={message}><div className="app-boot-card"><div className="app-boot-mark" aria-hidden="true">{t("N")}</div><div className="app-boot-copy"><b>{t("Naseeb Edu")}</b><span>{message}</span></div><div className="app-boot-line" aria-hidden="true" /></div></main>;
+  return <main className="app-boot" role="status" aria-label={message}><div className="app-boot-card"><div className="app-boot-mark" aria-hidden="true"><i /></div><div className="app-boot-copy"><b>{t("Naseeb Edu")}</b><span>{message}</span></div><div className="app-boot-line" aria-hidden="true" /></div></main>;
 }
 
 function BootstrapError({ message, onRetry, onSignOut }) {
@@ -287,13 +290,13 @@ const RESOURCE_FIELDS = {
 
   honors: [
   ['title', 'Honor title', 'text', true], ['issuer', 'Issuer'], ['level', 'Level', 'select', true, ['school', 'regional', 'national', 'international']],
-  ['award_date', 'Award date', 'date'], ['description', 'Description', 'textarea'], ['proof_file', 'Proof file', 'file'],
+  ['award_date', 'Award date', 'date'], ['description', 'Description', 'textarea'],
   ['google_docs_url', 'Google Docs URL', 'url']],
 
   achievements: [
   ['title', 'Achievement title', 'text', true], ['category', 'Category', 'select', true, ['project', 'startup', 'olympiad', 'volunteering', 'leadership', 'research', 'sport', 'art', 'other']],
   ['date', 'Date', 'date'], ['impact', 'Impact'], ['description', 'Description', 'textarea', true],
-  ['proof_file', 'Proof file', 'file']],
+  ['google_docs_url', 'Google Docs URL', 'url']],
 
   recommendations: [
   ['recommender_name', 'Recommender name', 'text', true], ['recommender_title', 'Position'], ['recommender_email', 'Email', 'email'],
@@ -304,8 +307,7 @@ const RESOURCE_FIELDS = {
   ['title', 'Task title', 'text', true], ['description', 'Description', 'textarea'], ['due_date', 'Due date', 'date', true],
   ['priority', 'Priority', 'select', true, ['low', 'medium', 'high', 'urgent']],
   ['status', 'Status', 'select', true, ['todo', 'in_progress', 'submitted', 'late']],
-  ['student_response', 'Student response', 'textarea'], ['submission_url', 'Submission or Google Docs URL', 'url'],
-  ['submission_file', 'Submission file', 'file']],
+  ['student_response', 'Student response', 'textarea'], ['submission_url', 'Submission or Google Docs URL', 'url']],
 
   applications: [
   ['university', 'University', 'university', true], ['program', 'Program', 'text', true],
@@ -413,7 +415,7 @@ function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, 
     catch (requestError) {setError(requestError.message);} finally
     {setSaving(false);}
   }
-  return <main className="password-change-page"><section className="password-change-card"><header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div></header><div className="password-change-intro"><span className="password-change-icon"><Fingerprint size={24} /></span><span className="eyebrow">{t('Temporary login')}</span><h1>{t('Change temporary password')}</h1><p>{t('Create a permanent password before opening your cabinet.')}</p></div><form className="form-grid" onSubmit={submit}><Field label={t('New password')} hint={t('Use at least 12 characters with upper/lowercase letters and a number.')}><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="12" autoComplete="new-password" required /></Field><Field label={t('Confirm password')}><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="12" autoComplete="new-password" required /></Field>{error && <div className="alert error form-wide">{error}</div>}<div className="password-change-warning form-wide"><ShieldAlert size={17} /><p>{t('Your temporary password has already been consumed. If you leave now, an administrator must reissue it.')}</p></div><div className="form-actions form-wide"><button type="button" className="button quiet" onClick={onSignOut}>{t('Sign out')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving securely…") : t("Save new password")}</button></div></form><footer>{fullName(user)} · {user.school_name || label(user.role)}</footer></section></main>;
+  return <main className="password-change-page"><section className="password-change-card"><header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div></header><div className="password-change-intro"><span className="password-change-icon"><Fingerprint size={24} /></span><span className="eyebrow">{t('Temporary login')}</span><h1>{t('Change temporary password')}</h1><p>{t('Create a permanent password before opening your cabinet.')}</p></div><form className="form-grid" onSubmit={submit}><Field label={t('New password')} hint={t('Use at least 8 characters with upper/lowercase letters and a number.')}><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" autoComplete="new-password" required /></Field><Field label={t('Confirm password')}><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="8" autoComplete="new-password" required /></Field>{error && <div className="alert error form-wide">{error}</div>}<div className="password-change-warning form-wide"><ShieldAlert size={17} /><p>{t('Your temporary password has already been consumed. If you leave now, an administrator must reissue it.')}</p></div><div className="form-actions form-wide"><button type="button" className="button quiet" onClick={onSignOut}>{t('Sign out')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving securely…") : t("Save new password")}</button></div></form><footer>{fullName(user)} · {user.school_name || label(user.role)}</footer></section></main>;
 }
 
 const PAGE_RESOURCE_KEYS = {
@@ -502,7 +504,7 @@ function Modal({ title, onClose, children }) {
 }
 
 function Empty({ text = 'No information available yet.' }) {
-  return <div className="empty"><span>07</span><p>{t(text)}</p></div>;
+  return <div className="empty"><span>N/A</span><p>{t(text)}</p></div>;
 }
 
 function PageSkeleton() {
@@ -562,7 +564,9 @@ function ScreenTimeTracker({ page }) {
       if (!queued.current) {
         try {queued.current = JSON.parse(localStorage.getItem(SCREEN_TIME_QUEUE_KEY) || '[]');} catch {queued.current = [];}
       }
-      let queue = queued.current;
+      let queue = cleanScreenTimeQueue(queued.current, localDateKey());
+      queued.current = queue;
+      try {localStorage.setItem(SCREEN_TIME_QUEUE_KEY, JSON.stringify(queue));} catch {/* Keep the cleaned queue in memory. */}
       if (seconds > 0) {
         const date = localDateKey();
         const existing = queue.find((entry) => entry.date === date && entry.page === page);
@@ -725,6 +729,9 @@ function AssistantCenter({ user, onOpenScreenTime }) {
 
 function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, isOnline, logout, theme, toggleTheme, language, changeLanguage, children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';} catch {return false;}
+  });
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const searchRef = useRef(null);
@@ -744,6 +751,13 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
     document.addEventListener('pointerdown', closeSearch);
     return () => document.removeEventListener('pointerdown', closeSearch);
   }, []);
+  function toggleSidebar() {
+    setCollapsed((current) => {
+      const next = !current;
+      try {localStorage.setItem(SIDEBAR_KEY, next ? 'collapsed' : 'expanded');} catch {/* Collapse is a per-browser convenience only. */}
+      return next;
+    });
+  }
   function openSearchResult(result) {
     if (!result) return;
     setPage(result.destination);
@@ -771,18 +785,20 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
       openSearchResult(searchResults[activeSearchIndex]);
     }
   }
-  return <div className="app-shell">
+  const collapseLabel = collapsed ? t("Expand navigation") : t("Collapse navigation");
+  return <div className={`app-shell ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="sidebar-top">
-        <BrandLockup theme={theme} />
+        <BrandLockup theme={theme} subtitle={false} />
+        <button className="icon-button sidebar-collapse desktop-only" onClick={toggleSidebar} title={collapseLabel} aria-label={collapseLabel} aria-expanded={!collapsed}><ChevronRight size={18} /></button>
         <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label={t("Close navigation")}><X /></button>
       </div>
       <nav>{navigation.map((item) => {
           const ItemIcon = PAGE_META[item].icon;
           const itemLabel = t(PAGE_META[item].label);
-          return <button key={item} className={page === item ? "active" : ''} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
+          return <button key={item} className={page === item ? "active" : ''} title={collapsed ? itemLabel : undefined} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
         })}</nav>
-      <div className="sidebar-profile"><span className="avatar">{initials(fullName(user))}</span><div><b>{fullName(user)}</b><small>{label(user.role)}</small></div><button className="icon-button" onClick={logout} title={t('Logout')} aria-label={t('Logout')}><LogOut size={18} /></button></div>
+      <div className="sidebar-profile">{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<div><b>{fullName(user)}</b><small>{label(user.role)}</small></div><button className="icon-button" onClick={logout} title={t('Logout')} aria-label={t('Logout')}><LogOut size={18} /></button></div>
     </aside>
     <main className="workspace">
       <header className="top-header">
@@ -846,7 +862,6 @@ function StudentDashboard({ user, data, setPage }) {
     <div className="student-dashboard-grid">
       <div className="student-dashboard-column">
         <Panel title={t("Next priorities")} action={<button className="button quiet small" onClick={() => setPage('roadmap')}>{t("View roadmap")} <ChevronRight size={14} /></button>}><div className="record-list">{pendingTasks.slice(0, 4).map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} • ${label(task.priority)}`} badge={task.status} />)}{!pendingTasks.length && <Empty text={t("All tasks are complete.")} />}</div></Panel>
-        <Panel title={t("Upcoming session")} action={<button className="button quiet small" onClick={() => setPage('bookings')}>{t("Meetings")}</button>}>{nextBooking ? <div className="booking-highlight"><span><CalendarClock size={22} /></span><div><b>{nextBooking.topic}</b><small>{dateTimeText(nextBooking.starts_at)} • {nextBooking.duration_minutes} {t("min")}</small><p>{nextBooking.participant_name || t("Meeting participant")} · {label(nextBooking.participant_role)}</p></div><Badge>{nextBooking.status}</Badge></div> : <Empty text={t("No upcoming sessions.")} />}</Panel>
       </div>
       <div className="student-dashboard-column">
         <Panel title={t("Student Center quick access")}><div className="quick-grid">{[
@@ -882,7 +897,19 @@ function JourneyProgress({ student }) {
 
 function LevelProgress({ student }) {
   if (!student) return null;
-  return <section className="journey-progress"><div><span className="eyebrow">{t("XP & LEVEL")}</span><h3>{t("Level")} {formatNumberLocale(student.level ?? 1)}</h3><p>{student.level_up_pending ? tx`Teacher or counselor approval is pending for Level ${student.eligible_level}.` : tx`Next level: ${student.next_level_xp ?? 0} XP`}</p></div><div className="journey-progress-bars"><div><header><b>{formatNumberLocale(student.xp_total ?? 0)} {t("XP")}</b><strong>{formatPercentLocale(student.xp_progress_percent ?? 0)}</strong></header><div className="progress"><span style={{ width: `${student.xp_progress_percent ?? 0}%` }} /></div><small>{student.level_up_pending ? t("XP threshold reached — your level changes only after approval.") : tx`${Math.max(0, (student.next_level_xp ?? 0) - (student.xp_total ?? 0))} XP remaining`}</small></div></div></section>;
+  const stars = student.roadmap_stars ?? 0;
+  const roadmapPercent = student.roadmap_progress_percent ?? 0;
+  return <section className="roadmap-progress-card">
+    <span className="eyebrow">{t("YOUR LEVEL")}</span>
+    <h2>{t("Level")} {formatNumberLocale(student.level ?? 1)}</h2>
+    {student.level_up_pending && <p>{tx`Level ${student.eligible_level} is waiting for staff approval.`}</p>}
+    <div className="roadmap-star-count"><Star size={19} /><strong>{formatNumberLocale(stars)}</strong><small>{t("earned")}</small></div>
+    <div className="roadmap-progress-meter">
+      <span>{t("Roadmap approved by staff")}</span>
+      <b>{formatPercentLocale(roadmapPercent)}</b>
+      <div className="progress"><span style={{ width: `${roadmapPercent}%` }} /></div>
+    </div>
+  </section>;
 }
 
 function Stat({ label: title, value, note, tone = '' }) {
@@ -1012,11 +1039,56 @@ function DocumentPreviewModal({ document: doc, onClose, notify }) {
 
 function ProfileCard({ student }) {
   if (!student) return <Panel title={t("Profile")}><Empty text={t("Student profile not found.")} /></Panel>;
-  return <Panel title={t("Profile overview")} className="profile-card"><div className="profile-identity"><span className="avatar large">{initials(fullName(student.user_detail))}</span><div><h3>{fullName(student.user_detail)}</h3><p>{student.user_detail?.email}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : tx`Grade ${student.grade}`} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("IELTS")} value={student.ielts_score} /><Detail label={t("SAT")} value={student.sat_score} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div></Panel>;
+  return <Panel title={t("Profile overview")} className="profile-card" action={<ExportPdfButton />}><div className="profile-identity"><StudentAvatar student={student} className="large" /><div><h3>{fullName(student.user_detail)}</h3><p>{student.user_detail?.email}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : student.grade ? tx`Grade ${student.grade}` : 'N/A'} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("IELTS")} value={student.ielts_score} /><Detail label={t("SAT")} value={student.sat_score} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div></Panel>;
+}
+
+function StudentAvatar({ student, className = '' }) {
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    if (!student?.id || !student.has_photo) {setSrc('');return;}
+    let active = true;
+    let objectUrl = '';
+    api.studentPhoto(student.id).
+    then((result) => {
+      if (!active) return;
+      objectUrl = URL.createObjectURL(result.blob);
+      setSrc(objectUrl);
+    }).
+    catch(() => {if (active) setSrc('');});
+    return () => {active = false;if (objectUrl) URL.revokeObjectURL(objectUrl);};
+  }, [student?.id, student?.has_photo, student?.updated_at]);
+  const name = fullName(student?.user_detail);
+  return <span className={`avatar ${className}`.trim()}>{src ? <img src={src} alt={name} /> : initials(name)}</span>;
+}
+
+// One section, printed on its own: the browser writes the PDF, so no records
+// leave the device and no PDF dependency enters the build.
+function exportNodePdf(node) {
+  if (!node) return;
+  const root = document.documentElement;
+  const previous = root.getAttribute('data-theme');
+  const restore = () => {
+    document.body.classList.remove('printing-scope');
+    node.classList.remove('print-target');
+    if (previous) root.setAttribute('data-theme', previous);else
+    root.removeAttribute('data-theme');
+  };
+  document.body.classList.add('printing-scope');
+  node.classList.add('print-target');
+  root.setAttribute('data-theme', 'light');
+  window.addEventListener('afterprint', restore, { once: true });
+  window.print();
+  restore();
+}
+
+function ExportPdfButton() {
+  const ref = useRef(null);
+  return <button type="button" ref={ref} className="button quiet small" onClick={() => exportNodePdf(ref.current?.closest('.panel, section'))} title={t("Export PDF")} aria-label={t("Export PDF")}><Download size={14} /> {t("PDF")}</button>;
 }
 
 function Detail({ label: title, value }) {
-  return <div className="detail"><span>{t(title)}</span><b>{value || '—'}</b></div>;
+  const empty = value == null || value === '' || (typeof value === 'string' && !value.trim());
+  return <div className={`detail ${empty ? 'is-empty' : ''}`.trim()}><span>{t(title)}</span><b>{empty ? t("Not provided") : value}</b></div>;
 }
 
 function StudentTable({ data, onView, onEdit, onDelete, onApproveLevel, readOnly = false, query = '' }) {
@@ -1029,7 +1101,7 @@ function StudentTable({ data, onView, onEdit, onDelete, onApproveLevel, readOnly
 const STUDENT_RESOURCE_GROUPS = [
 ['Research', 'researches'], ['Projects', 'projects'], ['Internships', 'internships'],
 ['Activities', 'activities'], ['Honors', 'honors'], ['Achievements', 'achievements'],
-['Recommendation letters', 'recommendations'], ['Meetings', 'bookings']];
+['Recommendation letters', 'recommendations']];
 
 
 function studentItems(data, resource, studentId) {
@@ -1038,85 +1110,25 @@ function studentItems(data, resource, studentId) {
 
 function StudentOverviewList({ title, resource, items, data }) {
   const [viewingGoogleDoc, setViewingGoogleDoc] = useState(null);
-  return <><Panel title={title}><div className="record-list">{items.map((item) => <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />} />)}{!items.length && <Empty />}</div></Panel>{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>;
+  return <><Panel title={title} action={<ExportPdfButton />}><div className="record-list">{items.map((item) => <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />} />)}{!items.length && <Empty />}</div></Panel>{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>;
 }
 
 function StudentTaskList({ items, onView }) {
-  return <Panel title={t("Assigned tasks & responses")}><div className="record-list">{items.map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} · ${label(task.priority)}${task.submitted_at ? ` · Submitted ${dateText(task.submitted_at)}` : ''}`} description={task.student_response || task.description} badge={task.status} actions={<button className="button quiet small" onClick={() => onView(task)}><Eye size={14} /> {t("View response")}</button>} />)}{!items.length && <Empty text={t("No assigned tasks found.")} />}</div></Panel>;
+  return <Panel title={t("Assigned tasks & responses")} action={<ExportPdfButton />}><div className="record-list">{items.map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} · ${label(task.priority)}${task.submitted_at ? ` · Submitted ${dateText(task.submitted_at)}` : ''}`} description={task.student_response || task.description} badge={task.status} actions={<button className="button quiet small" onClick={() => onView(task)}><Eye size={14} /> {t("View response")}</button>} />)}{!items.length && <Empty text={t("No assigned tasks found.")} />}</div></Panel>;
 }
 
 function StudentCollegeList({ items }) {
-  return <Panel title={t("College list")}><div className="record-list">{items.map((application) => <Record key={application.id} title={application.university_detail?.name || t("University")} meta={`${application.program} · ${label(application.tier)} · Deadline ${dateText(application.deadline)}`} description={application.notes} badge={application.status} actions={application.application_portal_url && <a className="button quiet small" href={application.application_portal_url} target="_blank" rel="noreferrer">{t("Application portal")} <ExternalLink size={14} /></a>} />)}{!items.length && <Empty text={t("The student has not added any universities to the college list yet.")} />}</div></Panel>;
+  return <Panel title={t("College list")} action={<ExportPdfButton />}><div className="record-list">{items.map((application) => <Record key={application.id} title={application.university_detail?.name || t("University")} meta={`${application.program} · ${label(application.tier)} · Deadline ${dateText(application.deadline)}`} description={application.notes} badge={application.status} actions={application.application_portal_url && <a className="button quiet small" href={application.application_portal_url} target="_blank" rel="noreferrer">{t("Application portal")} <ExternalLink size={14} /></a>} />)}{!items.length && <Empty text={t("The student has not added any universities to the college list yet.")} />}</div></Panel>;
 }
 
 function StudentEssayList({ items, onView }) {
-  return <Panel title={t("Essays & Google Docs")}><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={`Version ${essay.version} · ${essay.university_name || 'General essay'}`} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={t("No essays found.")} />}</div></Panel>;
+  return <Panel title={t("Essays & Google Docs")} action={<ExportPdfButton />}><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={`Version ${essay.version} · ${essay.university_name || 'General essay'}`} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={t("No essays found.")} />}</div></Panel>;
 }
 
 function StudentDocumentList({ title, items, onPreview, notify }) {
-  return <Panel title={title}><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={`${label(doc.document_type)}${doc.has_file ? ` · ${doc.file_name || 'File'} · ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} /></>} />)}{!items.length && <Empty />}</div></Panel>;
+  return <Panel title={title} action={<ExportPdfButton />}><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={`${label(doc.document_type)}${doc.has_file ? ` · ${doc.file_name || 'File'} · ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} /></>} />)}{!items.length && <Empty />}</div></Panel>;
 }
 
-// What a counselor sees of a student's Profile Assessment record.
-//
-// Results only, never the item-by-item answers. Which of fifty statements a
-// fourteen-year-old agreed with is more intrusive than the profile it produces,
-// and a counselor does not need it to have the conversation. The API returns
-// them, so this is a deliberate omission and not an oversight.
-//
-// Read-only by construction: the record is the student's, and the backend
-// refuses edits from anyone including counselors.
-function StudentPersonalityRecord({ student }) {
-  const [attempts, setAttempts] = useState(null)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    let alive = true
-    setAttempts(null)
-    setFailed(false)
-    api.challengeAttempts(student.id)
-      .then((rows) => { if (alive) setAttempts(rows) })
-      .catch(() => { if (alive) setFailed(true) })
-    return () => { alive = false }
-  }, [student.id])
-
-  if (failed) return <Panel title="Profile Assessment"><Empty text="Could not load this student’s record." /></Panel>
-  if (!attempts) return <Panel title="Profile Assessment"><Empty text="Loading…" /></Panel>
-
-  // Newest first from the API, so the first row per challenge is current and the
-  // rest are the history that makes a four-year record worth keeping.
-  const current = {}
-  const history = {}
-  for (const row of attempts) {
-    if (!current[row.challenge]) current[row.challenge] = row
-    else (history[row.challenge] = history[row.challenge] || []).push(row)
-  }
-  const done = CHALLENGES.filter((challenge) => current[challenge.key])
-
-  if (!done.length) {
-    return <Panel title="Profile Assessment" action={<Badge>Not started</Badge>}>
-      <Empty text="This student has not completed any challenges yet." />
-    </Panel>
-  }
-
-  return <Panel title="Profile Assessment" action={<Badge>{`${done.length} of ${CHALLENGES.length} done`}</Badge>}>
-    <div className="record-list" style={{ marginBottom: 14 }}>{CHALLENGES.map((challenge) => {
-      const row = current[challenge.key]
-      const older = history[challenge.key] || []
-      return <Record
-        key={challenge.key}
-        title={challenge.title}
-        meta={row ? `${dateText(row.completed_at)} · ${challenge.instrument} · version ${row.instrument_version}` : challenge.instrument}
-        description={older.length ? `Taken ${older.length + 1} times — earliest ${dateText(older[older.length - 1].completed_at)}` : ''}
-        badge={row ? 'Completed' : 'Not started'}
-      />
-    })}</div>
-    {/* Same compact summary the student sees, so the two are never telling
-        different stories, with the scale-by-scale numbers folded underneath. */}
-    <ResultsSummary results={done.map((challenge) => [challenge, current[challenge.key].scores])} />
-    <p className="journey-disclaimer" style={{ marginTop: 12 }}>These describe how the student answered on the day, not what they are capable of, and no direction on any scale is the better one. The record is the student’s: it cannot be edited or removed from here.</p>
-  </Panel>
-}
 
 function ParentInviteModal({ student, onClose, notify }) {
   const [saving, setSaving] = useState(false);
@@ -1141,7 +1153,7 @@ function ParentInviteModal({ student, onClose, notify }) {
       onClose();
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" /></Field><Field label={t("Parent last name")}><input name="last_name" /></Field><Field label={t("Parent email")}><input name="email" type="email" required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Required only when this email does not already have a parent account.")}><input name="password" type="password" minLength="12" autoComplete="new-password" /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
+  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" /></Field><Field label={t("Parent last name")}><input name="last_name" /></Field><Field label={t("Parent email")}><input name="email" type="email" required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Required only when this email does not already have a parent account.")}><input name="password" type="password" minLength="8" autoComplete="new-password" /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
 }
 
 function TemporaryCredentialModal({ account, onClose, notify }) {
@@ -1201,14 +1213,14 @@ function StudentOverview({ student, data, onBack, user, notify }) {
 
   return <div className="section-stack student-overview">
     <section className="student-overview-hero">
-      <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><span className="avatar large">{initials(fullName(student.user_detail))}</span><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{student.user_detail?.email} • {student.school_name || t("No school assigned")}</p></div></div></div>
+      <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{student.user_detail?.email} • {student.school_name || t("No school assigned")}</p></div></div></div>
       <div className="student-overview-actions">{['admin', 'counselor', 'organization'].includes(user?.role) && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{['admin', 'counselor'].includes(user?.role) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}</div>
       <div className="overview-progress"><strong>{formatPercentLocale(student.progress_percent || 0)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${student.progress_percent || 0}%` }} /></div></div>
     </section>
-    <div className="stat-grid"><Stat label={t("Level")} value={student.level ?? 1} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : t("Teacher approved")} /><Stat label={t("XP")} value={student.xp_total ?? 0} note={tx`Next: ${student.next_level_xp ?? 0} XP`} /><Stat label={t("Assigned tasks")} value={tasks.length} /><Stat label={t("Applications")} value={applications.length} /></div>
+    <div className="stat-grid"><Stat label={t("Level")} value={student.level ?? 1} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : t("Teacher approved")} /><Stat label={t("Stars")} value={student.roadmap_stars ?? 0} note={t("One per approved step")} /><Stat label={t("Assigned tasks")} value={tasks.length} /><Stat label={t("Applications")} value={applications.length} /></div>
     <LevelProgress student={student} />
-    <StudentPersonalityRecord student={student} />
-    <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")}><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget USD")} value={student.budget_usd} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? "Needed" : "Not needed"} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
+    <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} action={<ExportPdfButton />}><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget USD")} value={student.budget_usd} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? "Needed" : "Not needed"} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
+    <Panel title={t("My guardian")} action={<ExportPdfButton />}><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
     <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} /></div>
     <div className="overview-grid">
       {STUDENT_RESOURCE_GROUPS.map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
@@ -1364,66 +1376,28 @@ function StudentsPage({ user, data, query, reload, notify }) {
 
 function StudentForm({ user, data, student, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [form, setForm] = useState({
-    name: fullName(student?.user_detail) === 'User' ? '' : fullName(student?.user_detail), email: student?.user_detail?.email || '',
-    password: '',
-    grade: student?.grade || '11', target_major: student?.target_major || '', target_countries: student?.target_countries || '',
-    gpa: student?.gpa || '', ielts_score: student?.ielts_score || '', sat_score: student?.sat_score || '',
-    budget_usd: student?.budget_usd || '', parent_contact: student?.parent_contact || '', notes: student?.notes || '',
-    scholarship_needed: student?.scholarship_needed ?? true, school: student?.school || user.school || ''
-  });
-  function update(name, value) {
-    setForm((current) => ({ ...current, [name]: value }));
-    if (fieldErrors[name]) setFieldErrors((current) => ({ ...current, [name]: '' }));
-  }
   async function submit(event) {
-    event.preventDefault();
-    const targetCountries = normalizeCountries(form.target_countries);
-    if (!targetCountries) {
-      setFieldErrors({ target_countries: 'Add at least one target country.' });
-      return;
-    }
-    if (targetCountries.length > TARGET_COUNTRIES_MAX_LENGTH) {
-      setFieldErrors({ target_countries: `Use ${TARGET_COUNTRIES_MAX_LENGTH} characters or fewer.` });
-      return;
-    }
-    setForm((current) => ({ ...current, target_countries: targetCountries }));
-    setFieldErrors({});
-    setSaving(true);
+    event.preventDefault(); setSaving(true);
+    const values = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      const profilePayload = { grade: form.grade, target_major: form.target_major, target_countries: targetCountries, gpa: form.gpa || null, ielts_score: form.ielts_score || null, sat_score: form.sat_score || null, budget_usd: form.budget_usd || null, parent_contact: form.parent_contact, scholarship_needed: form.scholarship_needed, school: Number(form.school) };
-      const createPayload = { name: form.name, email: form.email, password: form.password, grade: form.grade, major: form.target_major, countries: targetCountries, gpa: form.gpa, ielts: form.ielts_score, sat: form.sat_score, budget_usd: form.budget_usd, parent_contact: form.parent_contact, scholarship_needed: form.scholarship_needed, school: form.school };
-      if (user.role !== 'organization') {
-        profilePayload.notes = form.notes;
-        createPayload.notes = form.notes;
-      }
-      if (student) await api.update('students', student.id, profilePayload);else
-      await api.quickCreateStudent(createPayload);
-      notify(student ? t("Student updated.") : t("Student created."));onSaved();
-    } catch (err) {
-      const countryErrors = err.details?.target_countries || err.details?.countries;
-      if (countryErrors) setFieldErrors({ target_countries: Array.isArray(countryErrors) ? countryErrors.join(' ') : String(countryErrors) });else
-      notify(err.message, 'error');
-    } finally {setSaving(false);}
+      if (student) await api.update('students', student.id, { notes: values.notes });
+      else await api.quickCreateStudent(values);
+      onSaved();
+    } catch (error) { notify(error.message, 'error'); }
+    finally { setSaving(false); }
   }
-  return <Modal title={student ? t("Edit student") : t("Add student")} onClose={onClose}><form className="form-grid" onSubmit={submit}>
-    <Field label={t("Full name")}><input value={form.name} onChange={(e) => update('name', e.target.value)} disabled={Boolean(student)} required /></Field>
-    <Field label={t("Email")}><input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} disabled={Boolean(student)} /></Field>
-    {!student && <Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input type="password" value={form.password} onChange={(e) => update('password', e.target.value)} minLength="12" autoComplete="new-password" required /></Field>}
-    <Field label={t("Grade")}><select value={form.grade} onChange={(e) => update('grade', e.target.value)}>{['8', '9', '10', '11', 'gap'].map((item) => <option key={item} value={item}>{item === 'gap' ? t("Gap year") : tx`Grade ${item}`}</option>)}</select></Field>
-    {isCounselor(user) && <Field label={t("School")}><select value={form.school} onChange={(e) => update('school', e.target.value)} required><option value="">{t("Select school")}</option>{data.schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></Field>}
-    <Field label={t("Target major")}><input value={form.target_major} onChange={(e) => update('target_major', e.target.value)} required /></Field>
-    <Field label={t("Target countries")} error={fieldErrors.target_countries} hint={tx`${form.target_countries.length}/${TARGET_COUNTRIES_MAX_LENGTH} characters · separate countries with commas`}><input value={form.target_countries} onChange={(e) => update('target_countries', e.target.value)} onBlur={() => update('target_countries', normalizeCountries(form.target_countries))} maxLength={TARGET_COUNTRIES_MAX_LENGTH} aria-invalid={Boolean(fieldErrors.target_countries)} required /></Field>
-    <Field label={t("GPA")}><input type="number" step=".01" value={form.gpa} onChange={(e) => update('gpa', e.target.value)} /></Field>
-    <Field label={t("IELTS")}><input type="number" step=".5" value={form.ielts_score} onChange={(e) => update('ielts_score', e.target.value)} /></Field>
-    <Field label={t("SAT")}><input type="number" value={form.sat_score} onChange={(e) => update('sat_score', e.target.value)} /></Field>
-    <Field label={t("Annual budget USD")}><input type="number" value={form.budget_usd} onChange={(e) => update('budget_usd', e.target.value)} /></Field>
-    <Field label={t("Parent contact")}><input value={form.parent_contact} onChange={(e) => update('parent_contact', e.target.value)} /></Field>
-    {user.role !== 'organization' && <Field label={t("Notes")}><textarea value={form.notes} onChange={(e) => update('notes', e.target.value)} /></Field>}
-    <CheckboxControl className="form-wide" checked={form.scholarship_needed} onChange={(e) => update('scholarship_needed', e.target.checked)}>{t("Scholarship needed")}</CheckboxControl>
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save student")}</button></div>
-  </form></Modal>;
+  return <Modal title={student ? t('Student notes') : t('Add student account')} onClose={onClose}>
+    <form className="form-grid student-access-form" onSubmit={submit}>
+      {student ? <Field label={t('Notes')}><textarea name="notes" defaultValue={student.notes} /></Field> : <>
+        <Field label={t('Student name')}><input name="name" required autoComplete="off" /></Field>
+        <Field label={t('Email')}><input name="email" type="email" /></Field>
+        <Field label={t('Temporary password')} hint={t('Use at least 8 characters.')}><input name="password" type="password" minLength={8} required autoComplete="new-password" /></Field>
+        {user.role === 'admin' && <Field label={t('School')}><select name="school" required defaultValue=""><option value="">{t('Select school')}</option>{data.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>}
+        <p className="form-wide">{t('The student completes their profile after signing in.')}</p>
+      </>}
+      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving}>{saving ? t('Saving…') : t(student ? 'Save' : 'Create login')}</button></div>
+    </form>
+  </Modal>;
 }
 
 function SchoolsPage({ user, data, reload, notify }) {
@@ -1495,7 +1469,7 @@ function SchoolForm({ school = null, onClose, onSaved, notify }) {
       if (school) {await api.update('schools', school.id, payload);notify(t("School updated."));} else {const createdSchool = await api.create('schools', payload);await api.createSchoolAccount(createdSchool.id, { username: values.get('username'), email: values.get('account_email'), password: values.get('password'), first_name: values.get('name'), last_name: 'Organization' });notify(t("School and organization account created."));}onSaved();
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  return <Modal title={school ? t("Edit school") : t("Add organization school")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("School name")}><input name="name" defaultValue={school?.name || ''} required /></Field><Field label={t("Unique code")}><input name="code" defaultValue={school?.code || ''} required /></Field><Field label={t("Contact email")}><input name="contact_email" type="email" defaultValue={school?.contact_email || ''} /></Field><Field label={t("Contact phone")}><input name="contact_phone" defaultValue={school?.contact_phone || ''} /></Field>{!school && <><Field label={t("Login username")}><input name="username" required /></Field><Field label={t("Login email")}><input name="account_email" type="email" required /></Field><Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input name="password" type="password" minLength="12" autoComplete="new-password" required /></Field></>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : school ? t("Save") : t("Create school")}</button></div></form></Modal>;
+  return <Modal title={school ? t("Edit school") : t("Add organization school")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("School name")}><input name="name" defaultValue={school?.name || ''} required /></Field><Field label={t("Unique code")}><input name="code" defaultValue={school?.code || ''} required /></Field><Field label={t("Contact email")}><input name="contact_email" type="email" defaultValue={school?.contact_email || ''} /></Field><Field label={t("Contact phone")}><input name="contact_phone" defaultValue={school?.contact_phone || ''} /></Field>{!school && <><Field label={t("Login username")}><input name="username" required /></Field><Field label={t("Login email")}><input name="account_email" type="email" required /></Field><Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field></>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : school ? t("Save") : t("Create school")}</button></div></form></Modal>;
 }
 
 function ResourceSection({ title, resource, data, user, query, reload, notify, canCreate = true, defaultStudentId = null }) {
@@ -1523,7 +1497,7 @@ function ResourceSection({ title, resource, data, user, query, reload, notify, c
     if (!window.confirm(t("Delete this record?"))) return;
     try {await api.remove(resource, item.id);notify(t("Record deleted."));reload();} catch (err) {notify(err.message, 'error');}
   }
-  return <><Panel title={title} action={allowCreate && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}><div className="record-list">{filtered.map((item) => {
+  return <><Panel title={title} action={<><ExportPdfButton />{allowCreate && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}</>}><div className="record-list">{filtered.map((item) => {
           const lockedAfterApproval = item.status === 'approved';
           const allowDelete = !staffControlled ? allowCreate : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
           return <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{item.has_proof_file && <><button className="button quiet small" onClick={() => setViewingEvidence(item)}><Eye size={14} /> {t("Evidence")}</button><button className="button quiet small" onClick={() => downloadEvidenceFile(item, notify)}><Download size={14} /> {t("Download")}</button></>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
@@ -1556,29 +1530,18 @@ function ResourceForm({ resource, item, data, user, defaultStudentId = null, onC
   allFields.filter(([name]) =>
   !item ?
   ['title', 'description', 'due_date', 'priority'].includes(name) :
-  item.is_self_assigned || ['status', 'student_response', 'submission_url', 'submission_file'].includes(name)
+  item.is_self_assigned || ['status', 'student_response', 'submission_url'].includes(name)
   ) :
   allFields;
   async function submit(event) {
     event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);
-    const usesFileUpload = fields.some(([name,, type]) => type === 'file' && values.get(name)?.size);
-    const payload = usesFileUpload ? new FormData() : {};
+    const payload = {};
     for (const [name,, type] of fields) {
       const raw = values.get(name);
-      if (type === 'file') {
-        if (raw?.size && payload instanceof FormData) payload.append(name, raw);
-        continue;
-      }
       const nullable = ['date', 'number', 'university', 'application'].includes(type);
-      const normalized = type === 'checkbox' ? raw === 'on' : raw === '' && nullable ? null : raw;
-      if (payload instanceof FormData) payload.append(name, normalized ?? '');else
-      payload[name] = normalized;
+      payload[name] = type === 'checkbox' ? raw === 'on' : raw === '' && nullable ? null : raw;
     }
-    if (!item) {
-      const studentId = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
-      if (payload instanceof FormData) payload.append('student', studentId);else
-      payload.student = studentId;
-    }
+    if (!item) payload.student = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
     try {
       if (item) await api.update(resource, item.id, payload);else
       await api.create(resource, payload);
@@ -1600,7 +1563,6 @@ function DynamicField({ name, labelText, type, required, choices, value, data, u
   if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} /></Field>;
   if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;
   if (type === 'checkbox') return <CheckboxControl className="form-wide" name={name} defaultChecked={Boolean(value)}>{t(labelText)}</CheckboxControl>;
-  if (type === 'file') return <Field label={t(labelText)}><input name={name} type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" /></Field>;
   if (type === 'university') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''} required={required}><option value="">{t('Select university')}</option>{data.universities.map((uni) => <option key={uni.id} value={uni.id}>{uni.name} — {uni.country}</option>)}</select></Field>;
   if (type === 'application') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''}><option value="">{t('General essay')}</option>{data.applications.map((app) => <option key={app.id} value={app.id}>{app.university_detail?.name} — {studentName(data, app.student)}</option>)}</select></Field>;
   return <Field label={t(labelText)}><input name={name} type={type} defaultValue={value ?? ''} required={required} /></Field>;
@@ -1611,28 +1573,24 @@ function DocumentsPage({ user, data, query, reload, notify, typeFilter = '', tit
   const [previewing, setPreviewing] = useState(null);
   const docs = data.documents.filter((item) => (!typeFilter || item.document_type === typeFilter) && JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
   async function approve(doc) {try {await api.update('documents', doc.id, { status: 'approved' });notify(t("Document approved."));reload();} catch (err) {notify(err.message, 'error');}}
-  return <><Panel title={title} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? t("Upload certificate") : t("Upload document")}</button>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${studentName(data, doc.student)} • ${label(doc.document_type)}${doc.has_file ? ` • ${doc.file_name || 'File'} • ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => setPreviewing(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} />{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> {t("Approve")}</button>}</>} />)}{!docs.length && <Empty />}</div></Panel>{open && <DocumentForm user={user} data={data} defaultType={typeFilter} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} notify={notify} />}</>;
+  return <><Panel title={title} action={<><ExportPdfButton /><button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? t("Add certificate") : t("Add document")}</button></>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${studentName(data, doc.student)} • ${label(doc.document_type)}${doc.has_file ? ` • ${doc.file_name || 'File'} • ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => setPreviewing(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} />{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> {t("Approve")}</button>}</>} />)}{!docs.length && <Empty />}</div></Panel>{open && <DocumentForm user={user} data={data} defaultType={typeFilter} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} notify={notify} />}</>;
 }
 
 function DocumentForm({ user, data, defaultType = '', onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
   async function submit(event) {
     event.preventDefault();const values = new FormData(event.currentTarget);const payload = new FormData();
-    const file = values.get('file');
     const status = values.get('status') || 'uploaded';
-    if (status !== 'required' && !file?.size && !values.get('google_docs_url')) {
-      notify(t("Select a file or add a Google Docs link."), 'error');
+    if (status !== 'required' && !values.get('google_docs_url')) {
+      notify(t("Add a Google Docs link."), 'error');
       return;
     }
     setSaving(true);
     payload.append('student', isCounselor(user) ? values.get('student') : ownStudent(data)?.id);
     for (const name of ['title', 'document_type', 'status', 'google_docs_url']) payload.append(name, values.get(name) || '');
-    if (file?.size) payload.append('file', file);
-    try {await api.uploadDocument(payload);notify(status === 'required' ? t("Document requirement created.") : t("Document uploaded securely."));onSaved();} catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
+    try {await api.uploadDocument(payload);notify(status === 'required' ? t("Document requirement created.") : t("Document link saved."));onSaved();} catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  const acceptedFiles = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.png,.jpg,.jpeg,.webp,.heic';
-  return <Modal title={defaultType === 'certificate' ? t("Upload certificate") : t("Upload document")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{isCounselor(user) && <Field label={t("Student")}><select name="student" required>{data.students.map((student) => <option value={student.id} key={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}<Field label={t("Title")}><input name="title" required /></Field><Field label={t("Type")}><select name="document_type" defaultValue={defaultType || 'passport'} disabled={Boolean(defaultType)}>{['passport', 'transcript', 'ielts', 'sat', 'cv', 'recommendation', 'essay', 'certificate', 'other'].map((item) => <option key={item} value={item}>{label(item)}</option>)}</select>{defaultType && <input type="hidden" name="document_type" value={defaultType} />}</Field>{isCounselor(user) ? <Field label={t("Status")}><select name="status" defaultValue="uploaded">{['required', 'uploaded', 'reviewing', 'approved', 'rejected'].map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field> : <input type="hidden" name="status" value="uploaded" />}<Field label={t("File")} hint={t("PDF, Office, OpenDocument, text or image · maximum 25 MB")}><input name="file" type="file" accept={acceptedFiles} onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} /></Field>{selectedFile && <div className="selected-document-file"><FileText size={18} /><span><b>{selectedFile.name}</b><small>{formatFileSize(selectedFile.size)}</small></span><CheckCircle2 size={17} /></div>}<Field label={t("Google Docs URL")} hint={t("Optional alternative to an uploaded file")}><input name="google_docs_url" type="url" placeholder={t("https://docs.google.com/document/d/.../edit")} /></Field><div className="form-wide google-doc-sharing-hint"><ShieldCheck size={16} /><span>{t("Files are private and opened through an authenticated connection. For Google Docs preview, enable Viewer access.")}</span></div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Uploading securely…") : t("Upload")}</button></div></form></Modal>;
+  return <Modal title={defaultType === 'certificate' ? t("Add certificate") : t("Add document")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{isCounselor(user) && <Field label={t("Student")}><select name="student" required>{data.students.map((student) => <option value={student.id} key={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}<Field label={t("Title")}><input name="title" required /></Field><Field label={t("Type")}><select name="document_type" defaultValue={defaultType || 'passport'} disabled={Boolean(defaultType)}>{['passport', 'transcript', 'ielts', 'sat', 'cv', 'recommendation', 'essay', 'certificate', 'other'].map((item) => <option key={item} value={item}>{label(item)}</option>)}</select>{defaultType && <input type="hidden" name="document_type" value={defaultType} />}</Field>{isCounselor(user) ? <Field label={t("Status")}><select name="status" defaultValue="uploaded">{['required', 'uploaded', 'reviewing', 'approved', 'rejected'].map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field> : <input type="hidden" name="status" value="uploaded" />}<Field label={t("Google Docs URL")}><input name="google_docs_url" type="url" placeholder={t("https://docs.google.com/document/d/.../edit")} required={!isCounselor(user)} /></Field><div className="form-wide google-doc-sharing-hint"><ShieldCheck size={16} /><span>{t("Set Google Docs sharing to Viewer or “Anyone with the link” to enable the preview.")}</span></div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save")}</button></div></form></Modal>;
 }
 
 function PortalTabs({ items, active, onChange }) {
@@ -1646,10 +1604,32 @@ function PortalTabs({ items, active, onChange }) {
   return <div className="portal-tabs" role="tablist">{items.map(([key, title], index) => <button type="button" role="tab" aria-selected={active === key} tabIndex={active === key ? 0 : -1} key={key} className={active === key ? "active" : ''} onClick={() => onChange(key)} onKeyDown={(event) => handleKeyDown(event, index)}>{t(title)}</button>)}</div>;
 }
 
-function StudentCenterPage({ user, data, query, reload, notify }) {
+function StudentCenterPage({ user, data, query, reload, notify, setPage }) {
   const [tab, setTab] = useState('overview');
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    if (!printing) return;
+    // Paper is white in both themes, so the dark palette is swapped out for the print.
+    const root = document.documentElement;
+    const previous = root.getAttribute('data-theme');
+    const restore = () => {
+      if (previous) root.setAttribute('data-theme', previous);else
+      root.removeAttribute('data-theme');
+      setPrinting(false);
+    };
+    root.setAttribute('data-theme', 'light');
+    window.addEventListener('afterprint', restore, { once: true });
+    window.print();
+    restore();
+  }, [printing]);
   return <div className="section-stack student-portal">
-    <PortalTabs active={tab} onChange={setTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
+    <div className="student-center-head">
+      <PortalTabs active={tab} onChange={setTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
+      <div className="student-center-actions">
+        <button type="button" className="button quiet" onClick={() => setPage('profile')}><Pencil size={16} /> {t("Edit my data")}</button>
+        <button type="button" className="button quiet" onClick={() => {setTab('overview');setPrinting(true);}} aria-busy={printing}><Download size={16} /> {t("Export PDF")}</button>
+      </div>
+    </div>
     {tab === 'overview' && <StudentOverview student={ownStudent(data)} data={data} />}
     {tab === 'academics' && <div className="section-stack"><ProfileCard student={ownStudent(data)} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}
     {tab === 'portfolio' && <div className="split-grid"><ResourceSection title={t("Projects")} resource="projects" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Internships")} resource="internships" {...{ user, data, query, reload, notify }} /></div>}
@@ -1675,12 +1655,12 @@ function MissionForm({ mission, user, data, defaultStudentId = null, onClose, on
     event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);
     const payload = manager ?
     { title: values.get('title'), category: values.get('category'), description: values.get('description'), due_date: values.get('due_date') || null, status: values.get('status') } :
-    { status: 'submitted', reflection: values.get('reflection') };
+    { status: 'submitted', reflection: values.get('reflection'), google_docs_url: values.get('google_docs_url') || '' };
     if (manager && !mission) payload.student = Number(values.get('student'));
     try {mission ? await api.update('roadmap-missions', mission.id, payload) : await api.create('roadmap-missions', payload);notify(manager ? mission ? t("Mission updated.") : t("Mission created.") : t("Mission submitted for approval."));onSaved();} catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
   const statuses = ['planned', 'in_progress', 'submitted'];
-  return <Modal title={manager ? mission ? t("Edit roadmap mission") : t("Assign roadmap mission") : studentSubmitted ? t("Mission submitted") : t("Submit roadmap mission")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{manager && !mission && <Field label={t("Student")} hint={t("The currently selected student is preselected.")}><select name="student" required defaultValue={defaultStudentId || ''}><option value="" disabled>{t("Select student")}</option>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}{manager && <><Field label={t("Mission title")}><input name="title" defaultValue={mission?.title || ''} required /></Field><Field label={t("Category")}><input name="category" defaultValue={mission?.category || ''} placeholder={t("Applications, Essays...")} /></Field><Field label={t("Due date")}><input name="due_date" type="date" defaultValue={mission?.due_date || ''} /></Field><Field label={t("Status")}><select name="status" defaultValue={mission?.status || 'planned'}>{statuses.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field></>}{!manager && <div className={`form-wide mission-submit-status ${studentSubmitted ? 'submitted' : 'planned'}`}>{studentSubmitted ? <Clock3 size={21} /> : <Sparkles size={21} />}<div><b>{studentSubmitted ? t("Submitted") : t("Planned mission")}</b><p>{studentSubmitted ? t("Your work is awaiting teacher or counselor approval.") : t("Complete the mission, write your reflection, then submit it for approval.")}</p></div></div>}{manager ? <Field label={t("Description")}><textarea name="description" defaultValue={mission?.description || ''} /></Field> : <Field label={t("Reflection")}><textarea name="reflection" defaultValue={mission?.reflection || ''} placeholder={t("What did you learn while completing this mission?")} required readOnly={studentSubmitted} /></Field>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{studentSubmitted ? t("Close") : t("Cancel")}</button>{!studentSubmitted && <button className="button primary" disabled={saving} aria-busy={saving}>{saving ? manager ? t("Saving…") : t("Submitting…") : manager ? t("Save") : t("Submit mission")}</button>}</div></form></Modal>;
+  return <Modal title={manager ? mission ? t("Edit roadmap mission") : t("Assign roadmap mission") : studentSubmitted ? t("Mission submitted") : t("Submit roadmap mission")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{manager && !mission && <Field label={t("Student")} hint={t("The currently selected student is preselected.")}><select name="student" required defaultValue={defaultStudentId || ''}><option value="" disabled>{t("Select student")}</option>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}{manager && <><Field label={t("Mission title")}><input name="title" defaultValue={mission?.title || ''} required /></Field><Field label={t("Category")}><input name="category" defaultValue={mission?.category || ''} placeholder={t("Applications, Essays...")} /></Field><Field label={t("Due date")}><input name="due_date" type="date" defaultValue={mission?.due_date || ''} /></Field><Field label={t("Status")}><select name="status" defaultValue={mission?.status || 'planned'}>{statuses.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field></>}{!manager && <div className={`form-wide mission-submit-status ${studentSubmitted ? 'submitted' : 'planned'}`}>{studentSubmitted ? <Clock3 size={21} /> : <Sparkles size={21} />}<div><b>{studentSubmitted ? t("Submitted") : t("Planned mission")}</b><p>{studentSubmitted ? t("Your work is awaiting teacher or counselor approval.") : t("Complete the mission, write your reflection, then submit it for approval.")}</p></div></div>}{manager ? <Field label={t("Description")}><textarea name="description" defaultValue={mission?.description || ''} /></Field> : <><Field label={t("Reflection")}><textarea name="reflection" defaultValue={mission?.reflection || ''} placeholder={t("What did you learn while completing this mission?")} readOnly={studentSubmitted} /></Field><Field label={t("Google Docs URL")} hint={t("Add a note, a link, or both.")}><input name="google_docs_url" type="url" defaultValue={mission?.google_docs_url || ''} placeholder={t("https://docs.google.com/document/d/.../edit")} readOnly={studentSubmitted} /></Field></>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{studentSubmitted ? t("Close") : t("Cancel")}</button>{!studentSubmitted && <button className="button primary" disabled={saving} aria-busy={saving}>{saving ? manager ? t("Saving…") : t("Submitting…") : manager ? t("Save") : t("Submit mission")}</button>}</div></form></Modal>;
 }
 
 function LevelOneSetupModal({ data, defaultStudentId = null, onClose, onSaved, notify }) {
@@ -1720,21 +1700,36 @@ function StudentRoadmapPath({ student, missions, onOpen }) {
     if (item.status === 'in_progress' || index === currentIndex) return 'current';
     return 'upcoming';
   }
-  return <section className="level-roadmap-shell">
-    <header className="level-roadmap-summary">
-      <div><span className="eyebrow">{t("LEVEL")} {level} {t("· MISSION")} {Math.min(completed + 1, Math.max(1, levelMissions.length))} {t("OF")} {Math.max(1, levelMissions.length)}</span><h2>{levelMissions[currentIndex]?.title || t("Your next milestone")}</h2><p>{student?.level_up_pending ? tx`You have earned enough XP for Level ${student.eligible_level}. Teacher or counselor approval is pending.` : t("Complete each mission in order, submit your reflection, and earn XP after staff approval.")}</p></div>
-      <div className="roadmap-level-score"><span><Award size={18} /> {t("Level")} {level}</span><strong>{student?.xp_total || 0} {t("XP")}</strong><small>{student?.level_up_pending ? t("Level approval pending") : tx`${Math.max(0, (student?.next_level_xp || 0) - (student?.xp_total || 0))} XP to next level`}</small></div>
+  const total = Math.max(1, levelMissions.length);
+  const percent = Math.round(completed / total * 100);
+  return <section className="roadmap-track">
+    <header className="roadmap-progress-card">
+      <span className="eyebrow">{t("YOUR PROGRESS")}</span>
+      <h2>{t("Level")} {level}</h2>
+      {student?.level_up_pending && <p>{tx`Level ${student.eligible_level} is waiting for staff approval.`}</p>}
+      <div className="roadmap-star-count"><Star size={19} /><strong>{completed}</strong><small>{t("earned")}</small></div>
+      <div className="roadmap-progress-meter">
+        <span>{tx`${completed} of ${total} completed`}</span>
+        <b>{formatPercentLocale(percent)}</b>
+        <div className="progress"><span style={{ width: `${percent}%` }} /></div>
+      </div>
     </header>
-    <div className="roadmap-path-stats"><span><CheckCircle2 size={17} /><b>{completed}</b> {t("approved missions")}</span><span><Sparkles size={17} /><b>{t("75 XP")}</b> {t("per approved mission")}</span><span><Target size={17} /><b>{t("Level")} {nextLevel}</b> {t("next checkpoint")}</span></div>
-    <div className="roadmap-xp-track"><span style={{ width: `${student?.xp_progress_percent || 0}%` }} /><b>{formatPercentLocale(student?.xp_progress_percent || 0)}</b></div>
-    {levelMissions.length ? <div className="level-roadmap-path">{levelMissions.map((item, index) => {
+    {levelMissions.length ? <ol className="roadmap-steps">{levelMissions.map((item, index) => {
         const state = missionState(item, index);
-        const NodeIcon = state === 'complete' ? Check : state === 'approval' ? Clock3 : item.status === 'planned' ? Sparkles : state === 'current' ? BookOpen : state === 'locked' ? ShieldCheck : Sparkles;
-        return <article className={`roadmap-path-row ${state}`} style={{ '--path-offset': `${[0, -78, 0, 78][index % 4]}px` }} key={item.id}>
-        <button type="button" className="roadmap-node" onClick={() => onOpen(item)} disabled={state === 'complete' || state === 'locked'} aria-label={`${item.title}, ${state === 'locked' ? t("locked") : label(item.status)}`}><NodeIcon size={30} strokeWidth={2.7} /></button>
-        <div className="roadmap-node-card"><span>{t("Step")} {item.sequence || index + 1} · {item.category || t("Roadmap")}</span>{item.status === 'planned' && <div className="mission-status-chip"><Sparkles size={12} /> {t("Planned")}</div>}<h3>{item.title}</h3><p>{state === 'complete' ? t("Approved · XP awarded") : state === 'approval' ? t("Submitted · awaiting staff approval") : state === 'locked' ? t("Locked · complete the previous mission first") : item.status === 'planned' ? t("Complete the task and submit when ready") : state === 'current' ? t("Continue the mission and submit when ready") : tx`Upcoming · due ${dateText(item.due_date)}`}</p></div>
-      </article>;
-      })}<div className="roadmap-checkpoint"><span><Award size={26} /></span><div><small>{t("NEXT CHECKPOINT")}</small><h3>{t("Level")} {nextLevel}</h3><p>{student?.level_up_pending ? t("Ready for staff approval") : tx`${student?.next_level_xp || 0} total XP required`}</p></div></div></div> : <Empty text={t("Your counselor has not assigned any roadmap missions yet.")} />}
+        const done = state === 'complete' || state === 'locked';
+        return <li className={`roadmap-step ${state}`} key={item.id}>
+        <span className="roadmap-step-badge" aria-hidden="true">{state === 'complete' ? <Star size={16} /> : state === 'locked' ? <Lock size={15} /> : state === 'approval' ? <Clock3 size={16} /> : item.sequence || index + 1}</span>
+        <button type="button" className="roadmap-step-card" onClick={() => onOpen(item)} disabled={done} aria-label={`${item.title}, ${state === 'locked' ? t("locked") : label(item.status)}`}>
+          <span>{item.category || t("Roadmap")}</span>
+          {item.status === 'planned' && <div className="mission-status-chip"><Sparkles size={12} /> {t("Planned")}</div>}
+          <h3>{item.title}</h3>
+          <p>{state === 'complete' ? t("Approved") : state === 'approval' ? t("Awaiting approval") : state === 'locked' ? t("Locked") : state === 'current' ? t("Open task") : item.due_date ? tx`Due ${dateText(item.due_date)}` : t("Upcoming")}</p>
+        </button>
+      </li>;
+      })}<li className="roadmap-step checkpoint">
+        <span className="roadmap-step-badge" aria-hidden="true"><Award size={17} /></span>
+        <div className="roadmap-step-card"><span>{t("NEXT CHECKPOINT")}</span><h3>{t("Level")} {nextLevel}</h3><p>{student?.level_up_pending ? t("Ready for staff approval") : tx`${Math.max(0, total - completed)} steps left`}</p></div>
+      </li></ol> : <Empty text={t("Your counselor has not assigned any roadmap missions yet.")} />}
   </section>;
 }
 
@@ -1835,14 +1830,15 @@ function RoadmapPage({ user, data, query, reload, notify }) {
   ...scopedData.roadmapMissions.map((item) => ({ id: `mission-${item.id}`, title: item.title, date: item.due_date, status: item.status, kind: 'Mission' }))].
   filter((item) => item.date).sort((a, b) => new Date(a.date) - new Date(b.date));
   return <div className="section-stack student-portal">
-    <section className="portal-hero roadmap-hero"><div><span className="eyebrow">{t("YOUR APPLICATION PLAN")}</span><h2>{t("Roadmap")}</h2><p>{manager ? t("Assign missions, review student submissions, and approve the work that earns XP.") : t("Follow your visual learning path, submit reflections, and level up after teacher or counselor approval.")}</p></div>{manager && <div className="roadmap-hero-actions"><button className="button light" onClick={() => setSetupOpen(true)}><Sparkles size={17} /> {t("Extend Level 1")}</button><button className="button light" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Assign mission")}</button></div>}</section>
+    {manager && <section className="portal-hero roadmap-hero"><div><span className="eyebrow">{t("YOUR APPLICATION PLAN")}</span><h2>{t("Roadmap")}</h2><p>{t("Assign missions, review student submissions, and approve the work that earns XP.")}</p></div><div className="roadmap-hero-actions"><button className="button light" onClick={() => setSetupOpen(true)}><Sparkles size={17} /> {t("Extend Level 1")}</button><button className="button light" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Assign mission")}</button></div></section>}
     {manager && <StudentWorkspaceSelector students={data.students} value={selectedStudentId} onChange={setSelectedStudentId} metrics={[["Missions", scopedData.roadmapMissions.length], ["Tasks", scopedData.tasks.length], ["Awaiting approval", scopedData.roadmapMissions.filter((item) => item.status === 'submitted').length + scopedData.tasks.filter((item) => item.status === 'submitted').length]]} />}
-    <PortalTabs active={tab} onChange={setTab} items={manager ? [["missions", "Mission list"], ["tasks", "Task list"], ["timeline", "Timeline view"], ["reflections", "Reflection view"]] : [["path", "Level path"], ["tasks", "Task list"], ["missions", "Mission list"], ["reflections", "Reflections"]]} />
-    {tab === 'path' && !manager && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} />}
-    {tab === 'tasks' && <ResourceSection title={tx`${workspaceTitle} tasks`} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} defaultStudentId={selectedStudentNumericId} />}
-    {tab === 'missions' && <MissionList user={user} data={scopedData} query={query} onOpen={(item) => {setEditing(item);setOpen(true);}} onApprove={approve} onRemove={remove} />}
-    {tab === 'timeline' && <Panel title={tx`${workspaceTitle} application timeline`}><div className="timeline-list">{timeline.map((item) => <div key={item.id}><span className="timeline-dot" /><time>{dateText(item.date)}</time><div><b>{item.title}</b><small>{item.kind}</small></div><Badge>{item.status}</Badge></div>)}{!timeline.length && <Empty text={t("No dated tasks or missions for this student.")} />}</div></Panel>}
-    {tab === 'reflections' && <div className="reflection-grid">{scopedData.roadmapMissions.map((item) => <article key={item.id}><Sparkles size={20} /><div><span>{item.category || t("Mission")}</span><h3>{item.title}</h3>{manager && <small>{item.student_name}</small>}<p>{item.reflection || t("No reflection has been written for this mission yet.")}</p></div>{!manager && item.status !== 'completed' && <button className="button quiet small" onClick={() => {setEditing(item);setOpen(true);}}>{item.status === 'submitted' ? t("View submission") : t("Write reflection")}</button>}</article>)}{!scopedData.roadmapMissions.length && <Empty text={t("No roadmap reflections for this student.")} />}</div>}
+    {manager && <PortalTabs active={tab} onChange={setTab} items={[["missions", "Mission list"], ["tasks", "Task list"], ["timeline", "Timeline view"], ["reflections", "Reflection view"]]} />}
+    {!manager && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} />}
+    {!manager && <ResourceSection title={t("Tasks")} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} />}
+    {manager && tab === 'tasks' && <ResourceSection title={tx`${workspaceTitle} tasks`} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} defaultStudentId={selectedStudentNumericId} />}
+    {manager && tab === 'missions' && <MissionList user={user} data={scopedData} query={query} onOpen={(item) => {setEditing(item);setOpen(true);}} onApprove={approve} onRemove={remove} />}
+    {manager && tab === 'timeline' && <Panel title={tx`${workspaceTitle} application timeline`}><div className="timeline-list">{timeline.map((item) => <div key={item.id}><span className="timeline-dot" /><time>{dateText(item.date)}</time><div><b>{item.title}</b><small>{item.kind}</small></div><Badge>{item.status}</Badge></div>)}{!timeline.length && <Empty text={t("No dated tasks or missions for this student.")} />}</div></Panel>}
+    {manager && tab === 'reflections' && <div className="reflection-grid">{scopedData.roadmapMissions.map((item) => <article key={item.id}><Sparkles size={20} /><div><span>{item.category || t("Mission")}</span><h3>{item.title}</h3>{manager && <small>{item.student_name}</small>}<p>{item.reflection || t("No reflection has been written for this mission yet.")}</p></div>{!manager && item.status !== 'completed' && <button className="button quiet small" onClick={() => {setEditing(item);setOpen(true);}}>{item.status === 'submitted' ? t("View submission") : t("Write reflection")}</button>}</article>)}{!scopedData.roadmapMissions.length && <Empty text={t("No roadmap reflections for this student.")} />}</div>}
     {open && <MissionForm mission={editing} user={user} data={data} defaultStudentId={selectedStudentNumericId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
     {setupOpen && <LevelOneSetupModal data={data} defaultStudentId={selectedStudentNumericId} onClose={() => setSetupOpen(false)} onSaved={() => {setSetupOpen(false);reload();}} notify={notify} />}
   </div>;
@@ -2768,7 +2764,7 @@ function CounselorProvisionForm({ schools, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   async function submit(event) {event.preventDefault();setSaving(true);try {const payload = Object.fromEntries(new FormData(event.currentTarget).entries());payload.school = Number(payload.school);await api.createCounselor(payload);notify(t("Counselor account created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
   const organizationSchools = schools.filter((school) => school.workspace_type === 'school' && school.is_active);
-  return <Modal title={t("Add school counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit} autoComplete="off"><Field label={t("First name")}><input name="first_name" required /></Field><Field label={t("Last name")}><input name="last_name" /></Field><Field label={t("Username")}><input name="username" autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" autoComplete="off" required /></Field><Field label={t("Organization school")}><select name="school" required><option value="">{t("Select a school")}</option>{organizationSchools.map((school) => <option value={school.id} key={school.id}>{school.name}</option>)}</select></Field><Field label={t("Position")}><input name="position" /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="12" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("Each organization school can have at most three active counselors.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
+  return <Modal title={t("Add school counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit} autoComplete="off"><Field label={t("First name")}><input name="first_name" required /></Field><Field label={t("Last name")}><input name="last_name" /></Field><Field label={t("Username")}><input name="username" autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" autoComplete="off" required /></Field><Field label={t("Organization school")}><select name="school" required><option value="">{t("Select a school")}</option>{organizationSchools.map((school) => <option value={school.id} key={school.id}>{school.name}</option>)}</select></Field><Field label={t("Position")}><input name="position" /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("Each organization school can have at most three active counselors.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
 }
 
 function AccountTransferForm({ account, schools, onClose, onSaved, notify }) {
@@ -3504,7 +3500,7 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (['admin', 'counselor'].includes(user.role) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
   if (user.role === 'admin' && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
   if (page === 'dashboard') return <Dashboard user={user} data={data} stats={stats} setPage={setPage} />;
-  if (user.role === 'student' && page === 'student_center') return <StudentCenterPage {...{ user, data, query, reload, notify }} />;
+  if (user.role === 'student' && page === 'student_center') return <StudentCenterPage {...{ user, data, query, reload, notify, setPage }} />;
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage notify={notify} data={data} reload={reload} />;
@@ -3522,7 +3518,7 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (user.role === 'student' && page === 'contacts') return <ContactsPage {...{ data, setPage }} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} reload={reload} notify={notify} />;
   if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
-  if (page === 'profile') return <StudentOverview student={ownStudent(data)} data={data} />;
+  if (page === 'profile') return user.role === 'student' ? <StudentOnboarding onSaved={() => { reload(); notify(t('Profile saved.')); setPage('student_center'); }} onPhotoChanged={reload} /> : <StudentOverview student={ownStudent(data)} data={data} />;
   if (page === 'academics') return <div className="section-stack">{user.role === 'student' && <ProfileCard student={ownStudent(data)} />}<ResourceSection title={t("Research")} resource="researches" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'portfolio') return <div className="split-grid"><ResourceSection title={t("Projects")} resource="projects" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Internships")} resource="internships" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'activities') return <div className="section-stack"><div className="split-grid"><ResourceSection title={t("Activities")} resource="activities" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Honors")} resource="honors" {...{ user, data, query, reload, notify }} /></div><ResourceSection title={t("Achievements")} resource="achievements" {...{ user, data, query, reload, notify }} /></div>;
@@ -3601,7 +3597,7 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async (activeUser = user, requestedKeys = null) => {
-    if (!activeUser || activeUser.must_change_password) return;
+    if (!activeUser || activeUser.must_change_password || (activeUser.role === 'student' && !activeUser.student_profile_complete)) return;
     setLoading(true);setError('');
     try {
       const studentResources = ['students', 'tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations'].map((key) => [key, key]);
@@ -3688,7 +3684,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user && !navigationFor(user).includes(page)) setPage(user.role === 'admin' ? 'admin_dashboard' : 'dashboard');
+    const reachable = [...navigationFor(user), ...(user?.role === 'student' ? ['profile'] : [])];
+    if (user && !reachable.includes(page)) setPage(user.role === 'admin' ? 'admin_dashboard' : 'dashboard');
   }, [user, page]);
 
   async function afterLogin() {
@@ -3708,6 +3705,7 @@ export default function App() {
   <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> :
   <LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
+  if (user.role === 'student' && !user.student_profile_complete) return <StudentOnboarding onSaved={afterPasswordChanged} onSignOut={logout} />;
   return <>
     <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
       <PageRouter {...{ page, user, data, stats, query, reload: () => loadData(user), notify, setPage }} />
