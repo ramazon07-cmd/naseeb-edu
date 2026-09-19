@@ -1,10 +1,10 @@
 import { cleanScreenTimeQueue } from './screenTimeQueue';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, ArrowLeft, Award, BookOpen, Building2, CheckCircle2,
+  Activity, AlertTriangle, ArrowLeft, Award, BookOpen, BrainCircuit, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
-  ContactRound, DollarSign, Lock, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, LayoutDashboard,
-  LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
+  ContactRound, DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, Heart, Hexagon, LayoutDashboard,
+  LifeBuoy, ListChecks, Lock, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
   PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, ShieldAlert, ShieldCheck,
   ShoppingCart, Sparkles, Square, Star, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X } from
 'lucide-react';
@@ -24,15 +24,14 @@ import {
   tx } from
 './i18n';
 import {
-  CHALLENGES, PLANNED, RIASEC_LEAD, RIASEC_NAME, RIASEC_ORDER,
+  CHALLENGES, RIASEC_LEAD, RIASEC_NAME, RIASEC_ORDER,
   INSTRUMENT_VERSION, SUBJECT_NAME, TRAIT_BLURB, TRAIT_LABEL, TRAIT_ORDER,
-  VALUE_NAME, WIL_LEAD, WIL_NAME, WIL_ORDER, scoreChallenge } from
+  scoreChallenge } from
 './challenges';
 import { TYPE_AXES, typeCodeOf } from './typecode';
 import { archetypeNameOf } from './archetype';
 import {
-  CAREER_ENTRIES, CAREER_FAMILIES, MAJOR_ENTRIES, NAMES,
-  recDrivers, recRank, recRankFamilies, recSignals, subjectPerformance } from
+  MAJOR_ENTRIES, NAMES, recRank, recSignals, subjectPerformance } from
 './careers';
 
 const LABELS = {
@@ -52,7 +51,7 @@ const LABELS = {
   public: 'Public', private: 'Private', urban: 'Urban', suburban: 'Suburban', rural: 'Rural',
   four_year: '4-year', two_year: '2-year', merit: 'Merit', need_based: 'Need-based', athletic: 'Athletic',
   full_ride: 'Full ride', full: 'Full funding', partial: 'Partial funding', fixed: 'Fixed amount',
-  onsite: 'On-site', online: 'Online', hybrid: 'Hybrid', reach: 'Reach', strong_option: 'Strong option',
+  onsite: 'On-site', online: 'Online', hybrid: 'Hybrid', reach: 'Reach',
   academic: 'Academic', preferences: 'Preferences', financial: 'Financial', profile_strength: 'Profile strength',
   harassment: 'Harassment or bullying', unsafe: 'Unsafe content', privacy: 'Privacy concern', misinformation: 'Misinformation',
   open: 'Open', closed: 'Closed', technical: 'Technical', account: 'Account', application: 'Application', billing: 'Billing', other: 'Other',
@@ -168,7 +167,7 @@ const PAGE_META = {
   certificates: { label: 'Certificates', icon: Award, description: 'Certificates and supporting files' },
   essays: { label: 'Essays', icon: GraduationCap, description: 'Essay drafts and revision history' },
   student_center: { label: 'Student Center', icon: UsersRound, description: 'Academic profile, portfolio, activities, and documents' },
-  find_personality: { label: 'Find Your Personality', icon: Fingerprint, description: `${CHALLENGES.length + PLANNED.length} challenges that unlock your personality profile` },
+  find_personality: { label: 'Profile Assessment', icon: Fingerprint, description: `${CHALLENGES.length} challenges that reveal your best-fit study directions` },
   roadmap: { label: 'Roadmap', icon: Compass, description: 'Level-linked missions, milestones, and reflections' },
   community: { label: 'Community', icon: Users, description: 'Student discussions, questions, and shared experience' },
   bookings: { label: 'Meetings', icon: CalendarClock, description: 'Schedule and manage meetings' },
@@ -346,46 +345,27 @@ function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }
 
   return (
     <main className="login-page">
-      <section className="login-copy">
+      <header className="login-bar">
         <button type="button" className="login-return" onClick={onBack}>
           <ArrowLeft size={17} /> {t("Home")}
         </button>
-        <div className="login-copy-content">
-          <BrandLogo theme={theme} className="login-emblem" />
-          <span className="eyebrow">
-            {t("NASEEB EDU / EDUCATION PLATFORM")}
-          </span>
-          <h1>
-            {t("Every opportunity.")}
-            <br />
-            {t("One trusted path.")}
-          </h1>
-          <p>
-            {t(
-              "A professional counseling platform connecting students worldwide with global education opportunities.",
-            )}
-          </p>
-          <span className="brand-tagline">
-            {t("Connecting Students to the World Through Education")}
-          </span>
+        <div className="login-preferences">
+          <LanguageSelector
+            language={language}
+            onChange={changeLanguage}
+            compact
+          />
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
         </div>
-      </section>
+      </header>
       <section className="login-form-panel" aria-label={t("Sign in")}>
         <form className="login-card" onSubmit={submit}>
-          <div className="login-brand-row">
-            <BrandLockup theme={theme} />
-            <div className="login-preferences">
-              <LanguageSelector
-                language={language}
-                onChange={changeLanguage}
-                compact
-              />
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            </div>
-          </div>
-          <div>
-            <h2>{t("Sign in")}</h2>
-            <p>{t("Enter your username and password.")}</p>
+          <div className="login-card-head">
+            <BrandLogo theme={theme} className="login-emblem" />
+            <h1>{t("Naseeb Edu")}</h1>
+            <span className="brand-tagline">
+              {t("Connecting Students to the World Through Education")}
+            </span>
           </div>
           <Field label={t("Username")}>
             <input
@@ -897,7 +877,7 @@ function DashboardDiscoveryCards({ setPage }) {
   return <section className="dashboard-discovery-rail" aria-label={t("Student discovery tools")}>
     <article className="dashboard-discovery-card personality">
       <Fingerprint className="discovery-card-art" size={118} strokeWidth={1.35} />
-      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Personality & Interests")}</h3><p>{t("Identify your strengths, interests, and future study direction.")}</p><button type="button" onClick={() => setPage('find_personality')}>{t("Start challenges")} <ChevronRight size={16} /></button></div>
+      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Profile Assessment")}</h3><p>{t("Identify your personality, interests, subject strengths, and best-fit study direction.")}</p><button type="button" onClick={() => setPage('find_personality')}>{t("Open assessment")} <ChevronRight size={16} /></button></div>
     </article>
     <article className="dashboard-discovery-card university">
       <GraduationCap className="discovery-card-art" size={122} strokeWidth={1.35} />
@@ -1149,15 +1129,6 @@ function StudentDocumentList({ title, items, onPreview, notify }) {
   return <Panel title={title} action={<ExportPdfButton />}><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={`${label(doc.document_type)}${doc.has_file ? ` · ${doc.file_name || 'File'} · ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} /></>} />)}{!items.length && <Empty />}</div></Panel>;
 }
 
-// What a counselor sees of a student's Find Your Personality record.
-//
-// Results only, never the item-by-item answers. Which of fifty statements a
-// fourteen-year-old agreed with is more intrusive than the profile it produces,
-// and a counselor does not need it to have the conversation. The API returns
-// them, so this is a deliberate omission and not an oversight.
-//
-// Read-only by construction: the record is the student's, and the backend
-// refuses edits from anyone including counselors.
 
 function ParentInviteModal({ student, onClose, notify }) {
   const [saving, setSaving] = useState(false);
@@ -2393,6 +2364,19 @@ function ApplicationsPortalPage({ user, data, query, reload, notify, setPage }) 
 
 const money = (value) => formatCurrencyLocale(value);
 
+const COLLEGE_REGIONS = [
+  { key: 'us', label: 'US', countries: ['usa', 'united states', 'united states of america'] },
+  { key: 'canada', label: 'Canada', countries: ['canada'] },
+  { key: 'china', label: 'China', countries: ['china', 'mainland china'] },
+  { key: 'hong_kong', label: 'Hong Kong', countries: ['hong kong', 'hong kong sar'] },
+];
+
+function universityRegion(university) {
+  if (COLLEGE_REGIONS.some((region) => region.key === university?.market)) return university.market;
+  const country = String(university?.country || '').trim().toLowerCase();
+  return COLLEGE_REGIONS.find((region) => region.countries.includes(country))?.key || null;
+}
+
 function universityFit(university, student) {
   if (!student) return { score: 0, label: 'Profile needed' };
   let score = 20;
@@ -2423,7 +2407,8 @@ function eligibleScholarship(item, student) {
 
 function CollegeSearchPage({ data, query, reload, notify }) {
   const [tab, setTab] = useState('universities');
-  const [country, setCountry] = useState('all');
+  const [region, setRegion] = useState('us');
+  const [admissionBand, setAdmissionBand] = useState('all');
   const [institutionType, setInstitutionType] = useState('all');
   const [maxPrice, setMaxPrice] = useState('all');
   const [minimumAcceptance, setMinimumAcceptance] = useState('0');
@@ -2440,7 +2425,6 @@ function CollegeSearchPage({ data, query, reload, notify }) {
   const [researchError, setResearchError] = useState('');
   const student = ownStudent(data);
   const researchMap = new Map((research?.recommendations || []).map((item) => [item.university.id, item]));
-  const countries = [...new Set(data.universities.map((item) => item.country))].sort();
   const added = new Set(data.applications.map((item) => item.university));
 
   useEffect(() => {
@@ -2466,7 +2450,9 @@ function CollegeSearchPage({ data, query, reload, notify }) {
   }
   const items = data.universities.filter((item) => {
     const aidMatch = aid === 'all' || aid === 'need' && item.offers_need_based_aid || aid === 'merit' && item.offers_merit_aid || aid === 'international' && item.offers_international_aid || aid === 'full_need' && item.meets_full_need;
-    return (country === 'all' || item.country === country) && (
+    const recommendation = researchMap.get(item.id);
+    return universityRegion(item) === region && (
+    admissionBand === 'all' || recommendation?.admission_band === admissionBand) && (
     institutionType === 'all' || item.institution_type === institutionType) && (
     maxPrice === 'all' || Number(item.net_price_usd || Infinity) <= Number(maxPrice)) &&
     Number(item.acceptance_rate || 0) >= Number(minimumAcceptance) && (
@@ -2477,15 +2463,15 @@ function CollegeSearchPage({ data, query, reload, notify }) {
   const scholarships = data.scholarships.filter((item) => (scholarshipType === 'all' || item.scholarship_type === scholarshipType) && (
   funding === 'all' || item.funding_level === funding) && (scope === 'all' || item.scope === scope) && (
   !eligibleOnly || eligibleScholarship(item, student)) && JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
-  async function shortlist(university) {try {await api.create('applications', { student: student?.id, university: university.id, program: student?.target_major || 'Undeclared', tier: 'target', status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });notify(tx`${university.name} added to your shortlist.`);reload();} catch (err) {notify(err.message, 'error');}}
+  async function shortlist(university) {const band = researchMap.get(university.id)?.admission_band;const tier = band === 'reach' ? 'dream' : band === 'safety' ? 'safety' : 'target';try {await api.create('applications', { student: student?.id, university: university.id, program: student?.target_major || 'Undeclared', tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });notify(tx`${university.name} added to your shortlist.`);reload();} catch (err) {notify(err.message, 'error');}}
   return <div className="section-stack student-portal">
     <section className="college-banner"><div><span className="eyebrow">{t("NASEEB COLLEGE & AID FINDER")}</span><h2>{t("Universities, scholarships & aid")}</h2><p>{t("Filter profile-matched options by price, acceptance, testing, and financial aid.")}</p></div><School size={80} /></section>
     <div className="finder-tabs"><PortalTabs active={tab} onChange={setTab} items={[["universities", "Universities"], ["scholarships", "Scholarships & Aid"], ["aid", "What you need"]]} /></div>
     {tab === 'universities' && researchLoading && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, budget, and portfolio evidence.")}</p></div></div>}
     {tab === 'universities' && researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("Research yuklanmadi")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
     {tab === 'universities' && !researchLoading && research && !research.ready && <CollegeProfileQuestions research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
-    {tab === 'universities' && !researchLoading && research?.ready && <><CollegeResearchOverview research={research} onRefresh={refreshResearch} /><div className="finder-layout">
-      <aside className="filter-panel"><header><Filter size={18} /><b>{t("University filters")}</b></header><label>{t("Country")}<select value={country} onChange={(event) => setCountry(event.target.value)}><option value="all">{t("All countries")}</option>{countries.map((item) => <option key={item}>{item}</option>)}</select></label><label>{t("Institution type")}<select value={institutionType} onChange={(event) => setInstitutionType(event.target.value)}><option value="all">{t("Public & private")}</option><option value="public">{t("Public")}</option><option value="private">{t("Private")}</option></select></label><label>{t("Maximum net price")}<select value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)}><option value="all">{t("Any price")}</option><option value="15000">{t("Up to $15,000")}</option><option value="25000">{t("Up to $25,000")}</option><option value="40000">{t("Up to $40,000")}</option></select></label><label>{t("Minimum acceptance")}<select value={minimumAcceptance} onChange={(event) => setMinimumAcceptance(event.target.value)}><option value="0">{t("Any rate")}</option><option value="10">10%+</option><option value="25">25%+</option><option value="50">50%+</option></select></label><label>{t("Aid type")}<select value={aid} onChange={(event) => setAid(event.target.value)}><option value="all">{t("Any aid")}</option><option value="need">{t("Need-based")}</option><option value="merit">{t("Merit")}</option><option value="international">{t("International aid")}</option><option value="full_need">{t("Meets full need")}</option></select></label><CheckboxControl className="compact" checked={testOptional} onChange={(event) => setTestOptional(event.target.checked)}>{t("Test optional only")}</CheckboxControl><CheckboxControl className="compact" checked={scoreMatch} onChange={(event) => setScoreMatch(event.target.checked)}>{t("My SAT matches")}</CheckboxControl></aside>
+    {tab === 'universities' && !researchLoading && research?.ready && <><CollegeResearchOverview research={research} onRefresh={refreshResearch} /><div className="college-region-tabs"><PortalTabs active={region} onChange={(nextRegion) => {setRegion(nextRegion);setAdmissionBand('all');}} items={COLLEGE_REGIONS.map(({ key, label: regionLabel }) => [key, regionLabel])} /></div><div className="college-tier-tabs"><PortalTabs active={admissionBand} onChange={setAdmissionBand} items={[["all", "All matches"], ["reach", "Reach"], ["target", "Target"], ["safety", "Safety"]]} /></div><div className="finder-layout">
+      <aside className="filter-panel"><header><Filter size={18} /><b>{t("University filters")}</b></header><label>{t("Institution type")}<select value={institutionType} onChange={(event) => setInstitutionType(event.target.value)}><option value="all">{t("Public & private")}</option><option value="public">{t("Public")}</option><option value="private">{t("Private")}</option></select></label><label>{t("Maximum net price")}<select value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)}><option value="all">{t("Any price")}</option><option value="15000">{t("Up to $15,000")}</option><option value="25000">{t("Up to $25,000")}</option><option value="40000">{t("Up to $40,000")}</option></select></label><label>{t("Minimum acceptance")}<select value={minimumAcceptance} onChange={(event) => setMinimumAcceptance(event.target.value)}><option value="0">{t("Any rate")}</option><option value="10">10%+</option><option value="25">25%+</option><option value="50">50%+</option></select></label><label>{t("Aid type")}<select value={aid} onChange={(event) => setAid(event.target.value)}><option value="all">{t("Any aid")}</option><option value="need">{t("Need-based")}</option><option value="merit">{t("Merit")}</option><option value="international">{t("International aid")}</option><option value="full_need">{t("Meets full need")}</option></select></label><CheckboxControl className="compact" checked={testOptional} onChange={(event) => setTestOptional(event.target.checked)}>{t("Test optional only")}</CheckboxControl><CheckboxControl className="compact" checked={scoreMatch} onChange={(event) => setScoreMatch(event.target.checked)}>{t("My SAT matches")}</CheckboxControl></aside>
       <section className="finder-results"><header><div><span className="eyebrow">{t("PROFILE-BASED RESEARCH")}</span><h3>{formatNumberLocale(items.length)} {t("universities found")}</h3></div><small>{t("The match score is not an admission probability; it measures profile, preference, and affordability fit.")}</small></header><div className="university-results">{items.map((uni) => {const result = researchMap.get(uni.id);const fit = result ? { score: result.match_score, label: result.match_label } : universityFit(uni, student);return <article className="university-card" key={uni.id}><header><span className="rank">#{uni.ranking ? formatNumberLocale(uni.ranking) : '—'}</span><div><h3>{uni.name}</h3><p><MapPin size={14} /> {uni.city}, {uni.country} · {label(uni.institution_type)}</p></div><div className="university-fit"><span className="fit-badge">{formatPercentLocale(fit.score)} {label(fit.label)}</span>{result && <Badge>{result.admission_band}</Badge>}</div></header><div className="university-metrics"><div><span>{t("Acceptance")}</span><b>{uni.acceptance_rate ? formatPercentLocale(uni.acceptance_rate) : '—'}</b></div><div><span>{t("Net price")}</span><b>{money(uni.net_price_usd)}</b></div><div><span>{t("Average aid")}</span><b>{money(uni.average_aid_usd)}</b></div><div><span>{t("SAT range")}</span><b>{uni.sat_min ? `${formatNumberLocale(uni.sat_min)}–${uni.sat_max ? formatNumberLocale(uni.sat_max) : '—'}` : t("Optional/—")}</b></div></div>{result && <div className="research-breakdown">{Object.entries(result.score_breakdown).map(([name, value]) => <div key={name}><span>{label(name)}</span><div className="progress"><i style={{ width: `${Math.min(100, Number(value) * (name === 'academic' ? 2 : name === 'preferences' ? 4.5 : name === 'financial' ? 5 : 10))}%` }} /></div><b>{formatNumberLocale(value)}</b></div>)}</div>}<div className="aid-badges">{uni.offers_need_based_aid && <span>{t("Need-based")}</span>}{uni.offers_merit_aid && <span>{t("Merit")}</span>}{uni.offers_international_aid && <span>{t("International aid")}</span>}{uni.meets_full_need && <span>{t("Meets full need")}</span>}{uni.test_optional && <span>{t("Test optional")}</span>}</div>{result && <details className="research-details"><summary>{t("Why this result?")}</summary><div><ul>{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={13} /> {reason}</li>)}</ul>{result.gaps.length > 0 && <ul className="gaps">{result.gaps.map((gap) => <li key={gap}><Clock3 size={13} /> {gap}</li>)}</ul>}</div></details>}<footer><div><span>{t("Application:")} {dateText(uni.application_deadline)}</span><span>{t("Aid:")} {dateText(uni.scholarship_deadline)}</span></div>{added.has(uni.id) ? <span className="added"><Check size={17} /> {t("Shortlisted")}</span> : <button className="button primary small" onClick={() => shortlist(uni)}><Plus size={16} /> {t("Shortlist")}</button>}</footer></article>;})}{!items.length && <Empty text={t("No universities match these filters.")} />}</div></section>
     </div></>}
     {tab === 'scholarships' && <div className="finder-layout"><aside className="filter-panel"><header><DollarSign size={18} /><b>{t("Scholarship filters")}</b></header><label>{t("Scholarship type")}<select value={scholarshipType} onChange={(event) => setScholarshipType(event.target.value)}><option value="all">{t("All types")}</option><option value="merit">{t("Merit")}</option><option value="need_based">{t("Need-based")}</option><option value="leadership">{t("Leadership")}</option><option value="research">{t("Research")}</option><option value="full_ride">{t("Full ride")}</option></select></label><label>{t("Funding")}<select value={funding} onChange={(event) => setFunding(event.target.value)}><option value="all">{t("Any funding")}</option><option value="full">{t("Full funding")}</option><option value="partial">{t("Partial")}</option><option value="fixed">{t("Fixed amount")}</option></select></label><label>{t("Scope")}<select value={scope} onChange={(event) => setScope(event.target.value)}><option value="all">{t("National & International")}</option><option value="national">{t("National")}</option><option value="international">{t("International")}</option></select></label><CheckboxControl className="compact" checked={eligibleOnly} onChange={(event) => setEligibleOnly(event.target.checked)}>{t("Eligible for my profile")}</CheckboxControl></aside><section className="finder-results"><header><div><span className="eyebrow">{t("FUNDING OPTIONS")}</span><h3>{scholarships.length} {t("scholarships found")}</h3></div><small>{t("Eligibility is not a final decision; always verify the official requirements.")}</small></header><div className="scholarship-grid">{scholarships.map((item) => {const eligible = eligibleScholarship(item, student);return <article className="scholarship-card" key={item.id}><header><div><span>{label(item.scholarship_type)}</span><h3>{item.title}</h3><p>{item.provider}{item.university_name ? ` · ${item.university_name}` : ''}</p></div><Badge>{item.scope}</Badge></header><strong>{item.funding_level === 'fixed' ? money(item.amount_usd) : label(item.funding_level)}</strong><p>{item.coverage}</p><div className="eligibility-row"><span className={eligible ? "eligible" : "review"}>{eligible ? t("Profile match") : t("Review requirements")}</span><span>{t("Deadline")} {dateText(item.deadline)}</span></div><div className="score-requirements">{item.min_gpa && <span>{t("GPA")} {item.min_gpa}+</span>}{item.min_ielts && <span>{t("IELTS")} {item.min_ielts}+</span>}{item.min_sat && <span>{t("SAT")} {item.min_sat}+</span>}</div><div className="requirement-tags">{scholarshipRequirements(item).map((requirement) => <span key={requirement}>{requirement}</span>)}</div>{item.application_url && <a className="button quiet small" href={item.application_url} target="_blank" rel="noreferrer">{t("Application info")} <ExternalLink size={14} /></a>}</article>;})}{!scholarships.length && <Empty text={t("No matching scholarships found.")} />}</div></section></div>}
@@ -2844,7 +2830,8 @@ function AdminAuditPage({ data, query }) {
   return <Panel title={t("Product administration audit")}><div className="record-list audit-list">{events.map((event) => <article className="record" key={event.id}><ShieldCheck size={20} /><div className="record-main"><h3>{event.action}</h3><p>{event.target_label || event.target_type}</p><div className="record-meta"><span>{event.actor_name || t("System")}</span><span>{dateTimeText(event.created_at)}</span></div></div></article>)}{!events.length && <Empty text={t("No audit events found.")} />}</div></Panel>;
 }
 
-// One challenge per instrument: personality, then interests, then values. Each
+// One challenge per instrument: personality, interests, subjects, and the
+// public-domain ICAR-16 cognitive assessment. Each
 // bank has its own response scale and its own scoring, and a challenge is only
 // scored once its whole instrument is answered -- half an inventory is not a
 // result. Fifty questions at once is a wall, so a challenge is paged.
@@ -2895,6 +2882,43 @@ function SortRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
   </div>
 }
 
+function ReasoningRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
+  const [page, setPage] = useState(0)
+  const pageSize = challenge.pageSize || 4
+  const pages = Math.ceil(challenge.items.length / pageSize)
+  const slice = challenge.items.slice(page * pageSize, (page + 1) * pageSize)
+  const answered = challenge.items.filter((item) => answers[item.id]).length
+  const pageDone = slice.every((item) => answers[item.id])
+  const last = page === pages - 1
+  const complete = answered === challenge.items.length
+
+  return <div className="section-stack student-portal reasoning-runner">
+    <section className="portal-hero"><div><span className="eyebrow">{t('CHALLENGE')} {challenge.number} · {challenge.instrument}</span><h2>{t(challenge.title)}</h2><p>{t(challenge.blurb)}</p></div><BrainCircuit size={64} /></section>
+    <Panel title={t('{answered} of {total} answered', { answered, total: challenge.items.length })} action={<button className="button quiet small" onClick={onBack}>{t('Back to challenges')}</button>}>
+      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>{t('Round {page} of {total}', { page: page + 1, total: pages })}</small></div>
+      <p className="reasoning-note"><BrainCircuit size={17} /> {t('ICAR-16 is a public-domain cognitive assessment. Complete it without a calculator or outside help for the most useful result.')}</p>
+      <div className="reasoning-items">{slice.map((item, index) => <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
+        <legend><span>{String(page * pageSize + index + 1).padStart(2, '0')}</span>{t(item.text)}</legend>
+        {item.image && <img className="reasoning-item-image" src={item.image} alt={t(item.imageAlt)} />}
+        <div className={`reasoning-options${item.image ? ' visual' : ''}`}>{item.options.map((option, position) => {
+          const value = position + 1
+          const chosen = answers[item.id] === value
+          return <label key={option} className={chosen ? 'selected' : ''}>
+            <input type="radio" name={`item-${item.id}`} checked={chosen} onChange={() => onAnswer(item.id, value)} />
+            <span>{String.fromCharCode(65 + position)}</span><b>{t(option)}</b>{chosen && <Check size={16} />}
+          </label>
+        })}</div>
+      </fieldset>)}</div>
+      <div className="challenge-actions">
+        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>{t('Back')}</button>}
+        {last
+          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? t('See my cognitive score') : t('Answer every question to finish')}<ChevronRight size={17} /></button>
+          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? t('Next round') : t('Answer these to continue')}<ChevronRight size={17} /></button>}
+      </div>
+    </Panel>
+  </div>
+}
+
 // On a bipolar challenge every item carries its own two ends, so the poles come
 // from the item rather than from one scale shared by the whole bank.
 const poleText = (challenge, item) => challenge.bipolar
@@ -2905,7 +2929,7 @@ const poleText = (challenge, item) => challenge.bipolar
 // its own for the middle three, so they are described by which end they lean
 // toward -- "3 of 5" alone would be a number with nothing attached to it.
 function optionLabel(challenge, item, position) {
-  if (!challenge.bipolar) return challenge.scale[position]
+  if (!challenge.bipolar) return t(challenge.scale[position])
   const [left, right] = item.poles
   if (position === 0) return left
   if (position === 4) return right
@@ -2915,6 +2939,7 @@ function optionLabel(challenge, item, position) {
 
 function ChallengeRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
   if (challenge.interaction === 'sort') return <SortRunner {...{ challenge, answers, onAnswer, onFinish, onBack }} />
+  if (challenge.interaction === 'quiz') return <ReasoningRunner {...{ challenge, answers, onAnswer, onFinish, onBack }} />
   return <RatingRunner {...{ challenge, answers, onAnswer, onFinish, onBack }} />
 }
 
@@ -2977,9 +3002,9 @@ function RatingRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
   }, [])
 
   return <div className="section-stack student-portal">
-    <section className="portal-hero"><div><span className="eyebrow">CHALLENGE {challenge.number} · {challenge.instrument}</span><h2>{challenge.title}</h2><p>{challenge.blurb}</p></div><Fingerprint size={64} /></section>
-    <Panel title={`${answered} of ${challenge.items.length} answered`} action={<button className="button quiet small" onClick={onBack}>Back to challenges</button>}>
-      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>Page {page + 1} of {pages}</small></div>
+    <section className="portal-hero"><div><span className="eyebrow">{t('CHALLENGE')} {challenge.number} · {challenge.instrument}</span><h2>{t(challenge.title)}</h2><p>{t(challenge.blurb)}</p></div><Fingerprint size={64} /></section>
+    <Panel title={t('{answered} of {total} answered', { answered, total: challenge.items.length })} action={<button className="button quiet small" onClick={onBack}>{t('Back to challenges')}</button>}>
+      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>{t('Page {page} of {total}', { page: page + 1, total: pages })}</small></div>
       {/* A challenge whose items carry a section shows it at the top of every page
           and again wherever the block changes mid-page. Without it, a student who
           turns the page into "…makes me anxious" has no idea they are being asked
@@ -2991,12 +3016,12 @@ function RatingRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
           ask what this block was. */}
       <div className="challenge-items" ref={listRef}>{slice.flatMap((item, index) => [
         item.section && (index === 0 || item.section !== slice[index - 1].section)
-          ? <p key={`s-${item.id}`} className="challenge-section"><span className="eyebrow">{item.section}</span></p>
+          ? <p key={`s-${item.id}`} className="challenge-section"><span className="eyebrow">{t(item.section)}</span></p>
           : null,
         <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
-        <legend className={challenge.bipolar ? 'sr-only' : undefined}>{item.text}</legend>
+        <legend className={challenge.bipolar ? 'sr-only' : undefined}>{t(item.text)}</legend>
         <div className="challenge-scale">
-          <span className="scale-pole left" aria-hidden={challenge.bipolar || undefined}>{poleText(challenge, item)[0]}</span>
+          <span className="scale-pole left" aria-hidden={challenge.bipolar || undefined}>{t(poleText(challenge, item)[0])}</span>
           <div className="scale-dots">{challenge.scale.map((scaleLabel, position) => {
             const chosen = answers[item.id] === position + 1
             const label = optionLabel(challenge, item, position)
@@ -3014,15 +3039,15 @@ function RatingRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
               <span className="scale-dot" aria-hidden="true" />
             </label>
           })}</div>
-          <span className="scale-pole right" aria-hidden={challenge.bipolar || undefined}>{poleText(challenge, item)[1]}</span>
+          <span className="scale-pole right" aria-hidden={challenge.bipolar || undefined}>{t(poleText(challenge, item)[1])}</span>
         </div>
       </fieldset>,
       ].filter(Boolean))}</div>
       <div className="challenge-actions">
-        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>Back</button>}
+        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>{t('Back')}</button>}
         {last
-          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? 'Finish challenge' : 'Answer every question to finish'}<ChevronRight size={17} /></button>
-          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? 'Next' : 'Answer these to continue'}<ChevronRight size={17} /></button>}
+          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? t('Finish challenge') : t('Answer every question to finish')}<ChevronRight size={17} /></button>
+          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? t('Next') : t('Answer these to continue')}<ChevronRight size={17} /></button>}
       </div>
     </Panel>
   </div>
@@ -3132,13 +3157,6 @@ function ChallengeResult({ challenge, result }) {
       <ResultRows rows={RIASEC_ORDER.map((s) => [RIASEC_NAME[s], RIASEC_LEAD[s], result.means[s], result.code.includes(s) ? 'Top three' : 'Lower'])} />
     </Panel>
   }
-  if (challenge.scoring === 'values') {
-    const top = result.ranked.slice(0, 3)
-    return <Panel title="What you want from work">
-      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Most important to you: <strong>{top.map((d) => VALUE_NAME[d]).join(' · ')}</strong>. Values are not abilities — two students with the same interests can want completely different things from a job.</p>
-      <ResultRows rows={result.ranked.map((d) => [VALUE_NAME[d], '', result.byDim[d], top.includes(d) ? 'Top three' : 'Lower'])} />
-    </Panel>
-  }
   if (challenge.scoring === 'subjects') {
     const top = result.ranked.slice(0, 3)
     const names = (list) => list.map((s) => SUBJECT_NAME[s]).join(' · ')
@@ -3176,21 +3194,6 @@ function ChallengeResult({ challenge, result }) {
         top.includes(s) ? 'Strongest' : 'Lower',
       ])} />
       <p className="journey-disclaimer" style={{ marginTop: 12 }}>This is how the subjects feel to you, which is not the same as how you score in them — the gap between the two is worth a conversation with your counselor.</p>
-    </Panel>
-  }
-  if (challenge.scoring === 'wil') {
-    // Published scores span 6..30 whatever the value; rescale to the 1..5 the
-    // shared bar expects rather than giving this one panel its own geometry.
-    const top = result.ranked.slice(0, 2)
-    // Published scores span 6..30 whatever the value; rescale to the 1..5 the
-    // shared bar and the polygon both expect.
-    const scaled = (v) => 1 + ((result.scores[v] - 6) / 24) * 4
-    return <Panel title="What matters most to you">
-      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Your two highest work values: <strong>{top.map((v) => WIL_NAME[v]).join(' · ')}</strong>. O*NET groups occupations by these six, so these two are what a counselor searches on.</p>
-      {/* Six axes, but no fixed order between them either -- same objection as
-          the personality shape. Ranked bars say "you chose this over that",
-          which is exactly what a forced sort measured. */}
-      <ResultRows rows={result.ranked.map((v) => [WIL_NAME[v], WIL_LEAD[v], scaled(v), top.includes(v) ? 'Highest' : 'Lower'])} />
     </Panel>
   }
   return null
@@ -3245,126 +3248,168 @@ function TypeResult({ scores }) {
   </Panel>
 }
 
-// What a fifteen-year-old actually wants from a personality result: names of
-// jobs. Interests carry half the weight, so nothing is shown until challenge 2
-// is done; values, subjects and personality sharpen it as they arrive.
-function CareerMatches({ results }) {
-  const scored = Object.fromEntries(results.filter(([, r]) => r).map(([c, r]) => [c.scoring, r]))
-  if (!scored.riasec) return null
+// Major guidance starts once interests are complete. Personality and subjects
+// sharpen the deterministic ranking; AI explains that shortlist but does not
+// choose universities in this release.
+function AIEducationGuidance({ majors, subjects, locked, student, reload, notify }) {
+  const [guidance, setGuidance] = useState(null)
+  const [selectedMajor, setSelectedMajor] = useState(student?.target_major || '')
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
-  // Values must come from challenge 3, not the Work Importance Locator: the
-  // career table is keyed on TestMind's ten value dimensions, and the WIL's six
-  // are a different taxonomy. Feeding WIL scores in would overlap on
-  // "independence" alone and quietly produce a near-empty signal.
+  async function generate() {
+    if (locked) return
+    setLoading(true)
+    setError('')
+    try {
+      const nextGuidance = await api.educationMatchAI({ major_candidates: majors, subject_strengths: subjects })
+      setGuidance(nextGuidance)
+      setSelectedMajor('')
+    } catch (requestError) {
+      setError(requestError.message || t('AI guidance is unavailable right now.'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function confirmMajor() {
+    if (!selectedMajor || !student) return
+    setSaving(true)
+    setError('')
+    try {
+      await api.update('students', student.id, { target_major: selectedMajor })
+      notify?.(t('{major} saved as your current study direction.', { major: selectedMajor }))
+      reload?.()
+    } catch (requestError) {
+      setError(requestError.message || t('We could not save your selected major.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const topFits = guidance?.major_guidance?.slice(0, 3) || []
+
+  return <section id="assessment-ai-panel" className={`assessment-ai-panel ${locked ? 'locked' : ''}`}>
+    <div className="assessment-ai-orbit" aria-hidden="true"><span className="assessment-ai-orbit-mark" /></div>
+    <span className="eyebrow">{t('AI MAJOR MATCH')}</span>
+    <h3>{guidance ? t('Choose your strongest fit') : t("Now let's find your direction")}</h3>
+    <p>{locked ? t('Complete all four challenges to unlock your recommendations.') : guidance ? t('These are your three strongest current matches. Select one to make it your study direction.') : t('AI will compare your interests, personality, subjects, and reasoning snapshot to return your three strongest major fits.')}</p>
+    <div className="assessment-ai-readiness">
+      <span>{locked ? t('Profile incomplete') : guidance ? t('Recommendations ready') : t('Profile ready')}</span>
+      {locked ? <Lock size={16} /> : <CheckCircle2 size={16} />}
+    </div>
+    <button type="button" className="assessment-ai-generate" onClick={generate} disabled={locked || loading}>
+      {loading ? <><RefreshCw className="spin" size={17} /> {t("Generating…")}</> : <><Sparkles size={17} /> {guidance ? t('Generate again') : t('Generate recommendations with AI')}</>}
+    </button>
+    {error && <p className="education-ai-error" role="alert">{error}</p>}
+    {topFits.length > 0 && <div className="assessment-ai-fits" role="radiogroup" aria-label={t('Top three major fits')}>
+      {topFits.map((item, index) => <button key={item.major} type="button" role="radio" aria-checked={selectedMajor === item.major} className={selectedMajor === item.major ? 'selected' : ''} onClick={() => setSelectedMajor(item.major)}>
+        <span>{String(index + 1).padStart(2, '0')}</span>
+        <div><b>{item.major}</b><small>{item.why_fit}</small></div>
+        <span className="assessment-ai-choice">{selectedMajor === item.major ? <Check size={15} /> : null}</span>
+      </button>)}
+      <button type="button" className="assessment-ai-confirm" onClick={confirmMajor} disabled={!selectedMajor || saving}>{saving ? t('Saving choice…') : selectedMajor ? t('Choose {major}', { major: selectedMajor }) : t('Select one major')}</button>
+      <small className="assessment-ai-disclaimer">{t('You can regenerate or change this choice later. AI guidance supports your decision; it does not limit it.')}</small>
+    </div>}
+  </section>
+}
+
+function MajorMatches({ results, locked, student, reload, notify }) {
+  const scored = Object.fromEntries(results.filter(([, r]) => r).map(([c, r]) => [c.scoring, r]))
+  if (!scored.riasec) return <AIEducationGuidance majors={[]} subjects={[]} locked student={student} reload={reload} notify={notify} />
+
   const signals = recSignals(
     scored.riasec.means,
-    scored.values ? scored.values.byDim : null,
     // The ability/interest/cost composite, not a bare confidence rating -- still
     // on 1..5, so this call is unchanged. The scorer wants {score 0..1, weight},
     // and a self-report is discounted against a real mark either way.
     scored.subjects ? subjectPerformance(scored.subjects.bySubject) : null,
     scored.bigfive || null,
   )
-  const careers = recRank(CAREER_ENTRIES, signals, 'career', 8)
   const majors = recRank(MAJOR_ENTRIES, signals, 'major', 5)
-  const families = recRankFamilies(CAREER_FAMILIES, signals, 3)
-  if (!careers.length) return null
+  if (!majors.length) return null
 
-  const used = careers[0].used
-  const missing = ['values', 'subjects', 'personality'].filter((part) => !used.includes(part))
-  const driver = recDrivers(careers[0], 'career')[0]
-  const DRIVER_TEXT = {
-    riasec: 'what you said you enjoy doing',
-    values: 'what you want a job to give you',
-    subjects: 'the subjects you feel strongest in',
-    personality: 'how you tend to work',
-  }
-
-  return <Panel title="Where this could lead" action={<Badge>{families.map((f) => NAMES.families[f.key]).slice(0, 1)}</Badge>}>
-    <p className="journey-disclaimer" style={{ marginBottom: 14 }}>
-      Mostly from <strong>{DRIVER_TEXT[driver.part]}</strong>. These are directions to look into and talk over with your counselor — not a prediction, and not a limit.
-      {missing.length > 0 && <> Finish {missing.map((m) => m === 'personality' ? 'the personality challenge' : `the ${m} challenge`).join(' and ')} to sharpen it.</>}
-    </p>
-    {/* Fields run across the top rather than owning a third of the grid: there
-        are only ever three of them, and a column that is empty below its first
-        few rows reads as something failed to load. */}
-    <div className="career-chips">{families.map((f) => <span key={f.key} className={`badge ${f.band}`}>{NAMES.families[f.key]}</span>)}</div>
-    <div className="career-groups">
-      <div>
-        <span className="eyebrow">JOBS TO LOOK INTO</span>
-        <ul className="career-list">{careers.map((row) => <li key={row.key} className={row.band}>
-          <b>{NAMES.careers[row.key]}</b>
-          <small>{NAMES.families[row.family]}</small>
-        </li>)}</ul>
-      </div>
-      <div>
-        <span className="eyebrow">WHAT TO STUDY</span>
-        <ul className="career-list">{majors.map((row) => <li key={row.key} className={row.band}>
-          <b>{NAMES.majors[row.key]}</b>
-        </li>)}</ul>
-      </div>
-    </div>
-    <p className="journey-disclaimer" style={{ marginTop: 12 }}>No salaries or demand figures are shown, because there is no Uzbek labour-market data behind these lists and inventing it would be worse than leaving it out.</p>
-  </Panel>
-}
-
-// One figure, five short lines, and the numbers folded away.
-//
-// The long version was five stacked panels of bars -- about four screens of
-// scrolling, which a fifteen-year-old will not read, and an unread result is
-// worth nothing however carefully it was scored. What survives here is the
-// single sentence each instrument actually produced; the full scale-by-scale
-// numbers are one click away for the student who wants them and for the
-// counselor sitting beside them.
-function headlineFor(challenge, result) {
-  // The code and its name, not a list of trait bands. This is the line the
-  // student reads first and repeats to a friend, so it carries the labels
-  // rather than five numbers they would have to interpret.
-  if (challenge.scoring === 'bigfive') return `${typeCodeOf(result).code} · ${archetypeNameOf(result)}`
-  if (challenge.scoring === 'riasec') return result.code.map((s) => RIASEC_NAME[s]).join(' · ')
-  if (challenge.scoring === 'values') return result.ranked.slice(0, 3).map((d) => VALUE_NAME[d]).join(' · ')
-  if (challenge.scoring === 'subjects') return result.ranked.slice(0, 3).map((s) => SUBJECT_NAME[s]).join(' · ')
-  if (challenge.scoring === 'wil') return result.ranked.slice(0, 2).map((v) => WIL_NAME[v]).join(' · ')
-  return ''
-}
-
-const HEADLINE_LEAD = {
-  bigfive: 'Your type',
-  riasec: 'What you would enjoy',
-  values: 'What you want from a job',
-  subjects: 'Where you feel strongest',
-  wil: 'What you would not trade',
+  return <AIEducationGuidance
+      majors={majors.map((row) => NAMES.majors[row.key])}
+      subjects={scored.subjects ? scored.subjects.ranked.slice(0, 6).map((subject) => SUBJECT_NAME[subject]) : []}
+      locked={locked}
+      student={student}
+      reload={reload}
+      notify={notify}
+    />
 }
 
 function ResultsSummary({ results }) {
   const done = results.filter(([, r]) => r)
   if (!done.length) return null
+  const personality = done.find(([c]) => c.scoring === 'bigfive')
   const interests = done.find(([c]) => c.scoring === 'riasec')
+  const subjects = done.find(([c]) => c.scoring === 'subjects')
+  const numberColumns = [
+    personality && ['PERSONALITY', TRAIT_ORDER.slice(0, 6).map((trait) => [TRAIT_LABEL[trait], personality[1][trait]])],
+    interests && ['INTERESTS', RIASEC_ORDER.slice(0, 6).map((scale) => [RIASEC_NAME[scale], interests[1].means[scale]])],
+    subjects && ['STRONGEST SUBJECTS', subjects[1].ranked.slice(0, 6).map((subject) => [SUBJECT_NAME[subject], subjects[1].bySubject[subject]])],
+  ].filter(Boolean)
 
-  return <Panel
-    title="Your results"
-    action={interests ? <Badge>{interests[1].code.join('')}</Badge> : null}
-  >
-    <div className="summary-split">
+  return <section className="assessment-number-summary">
+    <div className="assessment-number-hexagon">
       {interests && <ProfilePolygon
-        caption="Holland's hexagon: neighbouring points are the most alike, so a lopsided shape is a real signal."
-        axes={RIASEC_ORDER.map((s) => ({ key: s, label: RIASEC_NAME[s], short: s, value: interests[1].means[s] }))}
+        caption={t('Your interest profile')}
+        axes={RIASEC_ORDER.map((s) => ({ key: s, label: t(RIASEC_NAME[s]), short: s, value: interests[1].means[s] }))}
       />}
-      <dl className="summary-lines">{done.map(([challenge, result]) => <div key={challenge.key}>
-        <dt>{HEADLINE_LEAD[challenge.scoring] || challenge.title}</dt>
-        <dd>{headlineFor(challenge, result)}</dd>
-      </div>)}</dl>
+      {!interests && <div className="assessment-number-placeholder"><Hexagon size={38} /><span>{t('Complete Interests to reveal your hexagon.')}</span></div>}
     </div>
-    <details className="record-fold">
-      <summary><ChevronRight size={16} /><span>Show the full numbers</span></summary>
-      <div className="record-fold-body">
-        {done.map(([challenge, result]) => <ChallengeResult key={challenge.key} challenge={challenge} result={result} />)}
-      </div>
-    </details>
-  </Panel>
+    {numberColumns.length > 0 && <div className="assessment-number-breakdown" aria-label={t('Assessment score details')}>
+      {numberColumns.map(([title, rows]) => <article className="assessment-number-column" key={title}>
+        <h4>{t(title)}</h4>
+        <div>{rows.map(([label, value]) => <div key={label}><span>{t(label)}</span><strong>{Number(value).toFixed(1)}</strong></div>)}</div>
+      </article>)}
+    </div>}
+  </section>
 }
 
-function FindPersonalityPage({ notify }) {
+const ASSESSMENT_CARD_META = {
+  personality: {
+    description: 'Understand how you think, learn, collaborate, and make decisions.',
+    visualClass: 'personality',
+  },
+  interests: {
+    description: 'Explore the activities and problems that naturally motivate you.',
+    visualClass: 'interests',
+  },
+  subjects: {
+    description: 'Identify the academic areas where ability and enjoyment meet.',
+    visualClass: 'subjects',
+  },
+  reasoning: {
+    description: 'Complete the research-backed ICAR-16 cognitive assessment.',
+    visualClass: 'reasoning',
+  },
+}
+
+const ASSESSMENT_CARD_ORDER = ['personality', 'interests', 'subjects', 'reasoning']
+
+function AssessmentChallengeCard({ challenge, result, answers, saved, onOpen }) {
+  const answered = challenge.items.filter((item) => answers[item.id]).length
+  const visual = ASSESSMENT_CARD_META[challenge.key]
+  return <article className={`assessment-card assessment-card-${visual.visualClass} ${result ? 'done' : answered ? 'active' : ''}`}>
+    <div className="assessment-card-copy">
+      <header><span>{t('STEP')} {String(challenge.number).padStart(2, '0')}</span>{result ? <CheckCircle2 size={21} /> : <span className="assessment-card-count">{answered}/{challenge.items.length}</span>}</header>
+      <h3>{t(challenge.title)}</h3>
+      <p>{t(visual.description)}</p>
+      {challenge.licencePending && <small className="licence-pending"><AlertTriangle size={11} /> {challenge.licencePending}</small>}
+      <div className="assessment-card-progress" aria-label={t('{answered} of {total} questions answered', { answered, total: challenge.items.length })}><strong>{answered} / {challenge.items.length}</strong><div className="progress"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div></div>
+      <footer>
+        <span>{result ? (saved ? t('Completed and saved') : t('Completed')) : answered ? t('In progress') : t('{count} questions', { count: challenge.items.length })}</span>
+        <button type="button" className="assessment-card-action" onClick={onOpen}>{result ? t('Review') : answered ? t('Continue') : t('Start')}<ChevronRight size={15} /></button>
+      </footer>
+    </div>
+    <div className="assessment-card-visual" aria-hidden="true" />
+  </article>
+}
+
+function ProfileAssessmentPage({ notify, data, reload }) {
   const [answers, setAnswers] = useState(loadChallengeAnswers)
   const [openKey, setOpenKey] = useState(null)
   // Completed attempts already on the server, newest per challenge.
@@ -3410,55 +3455,39 @@ function FindPersonalityPage({ notify }) {
         scores: result,
       })
       setSaved((prev) => ({ ...prev, [challenge.key]: row }))
-      notify?.('Saved to your account.')
+      notify?.(t('Saved to your account.'))
     } catch {
-      notify?.('Saved on this device only — we could not reach your account.', 'error')
+      notify?.(t('Saved on this device only — we could not reach your account.'), 'error')
     }
   }, [answers, notify])
   const results = CHALLENGES.map((challenge) => [challenge, scoreChallenge(challenge, answers)])
   const doneCount = results.filter(([, result]) => result).length
-  const total = CHALLENGES.length + PLANNED.length
+  const student = ownStudent(data)
   const open = CHALLENGES.find((challenge) => challenge.key === openKey)
+  const resultByKey = Object.fromEntries(results.map(([challenge, result]) => [challenge.key, { challenge, result }]))
 
   if (open) return <ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} />
 
-  return <div className="section-stack student-portal">
-    <section className="portal-hero"><div><span className="eyebrow">SELF DISCOVERY</span><h2>Find Your Personality</h2><p>Each challenge is a different assessment. Finish one and that part of your profile unlocks — answered honestly, not quickly.</p></div><Fingerprint size={64} /></section>
-    <section className="journey-progress">
-      <div><span className="eyebrow">YOUR PROGRESS</span><h3>{doneCount} of {CHALLENGES.length} unlocked</h3><p>{syncing ? 'Loading what you have already done…' : doneCount === CHALLENGES.length ? `Everything available is done. ${PLANNED.length} more challenges are being built.` : `${CHALLENGES.length - doneCount} available now, ${PLANNED.length} more being built.`}</p></div>
-      <div className="journey-progress-bars"><div><header><b>Unlocked</b><strong>{Math.round((doneCount / CHALLENGES.length) * 100)}%</strong></header><div className="progress"><span style={{ width: `${(doneCount / CHALLENGES.length) * 100}%` }} /></div><small>{CHALLENGES.reduce((sum, c) => sum + c.items.length, 0)} questions across the {CHALLENGES.length} you can take today</small></div></div>
-    </section>
+  return <div className="section-stack student-portal profile-assessment-page">
+    <div className="assessment-overview-layout">
+      <section className="assessment-card-grid" aria-label={t('Profile assessment challenges')}>{ASSESSMENT_CARD_ORDER.map((key) => {
+        const challengeEntry = resultByKey[key]
+        return <AssessmentChallengeCard
+          key={key}
+          challenge={challengeEntry.challenge}
+          result={challengeEntry.result}
+          answers={answers}
+          saved={saved[key]}
+          onOpen={() => { setOpenKey(key); window.scrollTo(0, 0) }}
+        />
+      })}</section>
 
-    <ResultsSummary results={results} />
-    <CareerMatches results={results} />
+      <MajorMatches results={results} locked={doneCount !== CHALLENGES.length || syncing} student={student} reload={reload} notify={notify} />
+    </div>
 
-    <Panel title="Your challenges">
-      <div className="journey-map">{results.map(([challenge, result]) => {
-        const answered = challenge.items.filter((item) => answers[item.id]).length
-        return <article key={challenge.key} className={`journey-module ${result ? 'done' : 'open'}`}>
-          <header><span>CHALLENGE {challenge.number} · {challenge.items.length} QUESTIONS</span>{result ? <CheckCircle2 size={15} /> : <Compass size={15} />}</header>
-          <b>{challenge.title}</b>
-          <p>{challenge.blurb}</p>
-          <small className="challenge-source">{challenge.instrument} · {challenge.licence}</small>
-          {/* Loud on purpose. This challenge is playable locally so it can be
-              judged, and the one thing that must not happen is it reaching a
-              paying student before the licence allows it. */}
-          {challenge.licencePending && <small className="licence-pending"><AlertTriangle size={11} /> {challenge.licencePending}</small>}
-          <footer>
-            <Badge>{result ? (saved[challenge.key] ? 'Saved' : 'Unlocked') : `${answered}/${challenge.items.length} answered`}</Badge>
-            <button className="button quiet small" onClick={() => { setOpenKey(challenge.key); window.scrollTo(0, 0) }}>{result ? 'Review' : answered ? 'Continue' : 'Start'}<ChevronRight size={13} /></button>
-          </footer>
-        </article>
-      })}
-      {PLANNED.map((planned) => <article key={planned.number} className="journey-module later">
-        <header><span>CHALLENGE {planned.number}</span><Clock3 size={15} /></header>
-        <b>{planned.title}</b>
-        <p>{planned.blurb}</p>
-        <small className="challenge-source">{planned.instrument} · {planned.licence}</small>
-        <footer><Badge>Being built</Badge></footer>
-      </article>)}</div>
-      <p className="journey-disclaimer" style={{ marginTop: 14 }}>The {PLANNED.length} still being built are real instruments whose questions are not freely downloadable. They are listed rather than approximated — an invented question set described as a validated scale is not something this product would recover from.</p>
-    </Panel>
+    {doneCount > 0 && <div id="assessment-results" className="assessment-results-stack">
+      <ResultsSummary results={results} />
+    </div>}
   </div>
 }
 
@@ -3474,7 +3503,7 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (user.role === 'student' && page === 'student_center') return <StudentCenterPage {...{ user, data, query, reload, notify, setPage }} />;
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
-  if (user.role === 'student' && page === 'find_personality') return <FindPersonalityPage notify={notify} />;
+  if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage notify={notify} data={data} reload={reload} />;
   if (user.role === 'student' && page === 'community') return <CommunityPage {...{ data, reload, notify }} />;
   if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />;
   if (page === 'messages') return <MessagesPage {...{ user, data, notify }} />;

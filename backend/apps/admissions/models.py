@@ -304,6 +304,12 @@ class ParentStudentLink(TimeStampedModel):
 
 
 class University(TimeStampedModel):
+    class Market(models.TextChoices):
+        US = 'us', 'United States'
+        CANADA = 'canada', 'Canada'
+        CHINA = 'china', 'China'
+        HONG_KONG = 'hong_kong', 'Hong Kong'
+
     class Tier(models.TextChoices):
         DREAM = 'dream', 'Dream'
         TARGET = 'target', 'Target'
@@ -324,6 +330,7 @@ class University(TimeStampedModel):
 
     name = models.CharField(max_length=220)
     country = models.CharField(max_length=120)
+    market = models.CharField(max_length=20, choices=Market.choices, blank=True, db_index=True)
     city = models.CharField(max_length=120, blank=True)
     website = models.URLField(blank=True)
     ranking = models.PositiveIntegerField(null=True, blank=True)
@@ -355,14 +362,68 @@ class University(TimeStampedModel):
     popular_majors = models.CharField(max_length=300, blank=True, help_text='Comma-separated majors')
     application_deadline = models.DateField(null=True, blank=True)
     scholarship_deadline = models.DateField(null=True, blank=True)
+    catalog_source_url = models.URLField(blank=True)
+    catalog_verified_at = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ['country', 'ranking', 'name']
         unique_together = ('name', 'country')
 
+    def save(self, *args, **kwargs):
+        country = (self.country or '').strip().lower()
+        aliases = {
+            self.Market.US: {'usa', 'united states', 'united states of america'},
+            self.Market.CANADA: {'canada'},
+            self.Market.CHINA: {'china', 'mainland china'},
+            self.Market.HONG_KONG: {'hong kong', 'hong kong sar'},
+        }
+        inferred = next((market for market, countries in aliases.items() if country in countries), '')
+        if inferred:
+            self.market = inferred
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {'market'}
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.name}, {self.country}'
+
+
+class UniversityProgram(TimeStampedModel):
+    class DegreeLevel(models.TextChoices):
+        BACHELOR = 'bachelor', "Bachelor's"
+
+    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name='programs')
+    name = models.CharField(max_length=220)
+    canonical_major = models.CharField(max_length=160, db_index=True)
+    degree_level = models.CharField(max_length=20, choices=DegreeLevel.choices, default=DegreeLevel.BACHELOR)
+    teaching_language = models.CharField(max_length=80, default='English')
+    duration_years = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    tuition_usd = models.PositiveIntegerField(null=True, blank=True)
+    estimated_living_cost_usd = models.PositiveIntegerField(null=True, blank=True)
+    min_gpa = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    sat_min = models.PositiveSmallIntegerField(null=True, blank=True)
+    ielts_min = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    toefl_min = models.PositiveSmallIntegerField(null=True, blank=True)
+    application_deadline = models.DateField(null=True, blank=True)
+    scholarship_deadline = models.DateField(null=True, blank=True)
+    application_url = models.URLField(blank=True)
+    source_url = models.URLField(blank=True)
+    verified_at = models.DateField(null=True, blank=True)
+    international_students_eligible = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['university__name', 'canonical_major', 'name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['university', 'name', 'degree_level'],
+                name='unique_university_program_degree',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.university.name} — {self.name}'
 
 
 class Scholarship(TimeStampedModel):
@@ -1402,7 +1463,7 @@ class ActivityLog(TimeStampedModel):
 
 
 class ChallengeAttempt(TimeStampedModel):
-    """One completed Find Your Personality challenge, kept for good.
+    """One completed Profile Assessment challenge, kept for good.
 
     Rows are never overwritten. A student who retakes the personality challenge
     in grade 10 gets a SECOND row, because the whole point of the journey is

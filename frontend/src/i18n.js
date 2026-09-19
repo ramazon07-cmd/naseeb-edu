@@ -1,5 +1,7 @@
 import { uiMessages } from "./translations/ui.js";
 
+import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
+
 const LANGUAGE_KEY = "naseeb-edu-language-v1";
 
 export const LANGUAGE_OPTIONS = [
@@ -13,6 +15,7 @@ const LOCALES = { uz: "uz-UZ", ru: "ru-RU", en: "en-GB" };
 export const TRANSLATIONS = {
   uz: {
     ...uiMessages("uz"),
+    ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
     Schools: "Maktablar",
@@ -70,8 +73,6 @@ export const TRANSLATIONS = {
       "Xizmatlar, mentorlar va foydalanish balansi",
     "National and international opportunity catalog":
       "Mahalliy va xalqaro imkoniyatlar katalogi",
-    "All tools and resources for students":
-      "O‘quvchilar uchun barcha vosita va resurslar",
     "Essay drafts, feedback, and revision history":
       "Esse qoralamalari, fikrlar va tahrir tarixi",
     "Find, compare, and shortlist universities":
@@ -194,6 +195,7 @@ export const TRANSLATIONS = {
   },
   ru: {
     ...uiMessages("ru"),
+    ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",
     Schools: "Школы",
@@ -249,8 +251,6 @@ export const TRANSLATIONS = {
       "Услуги, наставники и баланс использования",
     "National and international opportunity catalog":
       "Каталог местных и международных возможностей",
-    "All tools and resources for students":
-      "Все инструменты и ресурсы для учеников",
     "Essay drafts, feedback, and revision history":
       "Черновики, отзывы и история правок",
     "Find, compare, and shortlist universities":

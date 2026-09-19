@@ -56,6 +56,7 @@ from .models import (
     StudentMessage,
     Task,
     University,
+    UniversityProgram,
     XPTransaction,
 )
 
@@ -234,6 +235,7 @@ class OrganizationAccountSerializer(serializers.Serializer):
 
 class StudentProfileSerializer(serializers.ModelSerializer):
     STUDENT_EDITABLE_FIELDS = {
+        'grade', 'gpa', 'ielts_score', 'sat_score',
         'target_major', 'target_countries', 'budget_usd', 'scholarship_needed',
         'parent_contact', 'notes',
     }
@@ -384,10 +386,25 @@ class GoogleDocsModelSerializer(serializers.ModelSerializer):
         return google_docs_preview_url(obj.google_docs_url)
 
 
+class UniversityProgramSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UniversityProgram
+        fields = '__all__'
+
+
 class UniversitySerializer(serializers.ModelSerializer):
+    programs = serializers.SerializerMethodField()
+
     class Meta:
         model = University
         fields = '__all__'
+
+    def get_programs(self, obj):
+        programs = [
+            program for program in obj.programs.all()
+            if program.is_active and program.international_students_eligible
+        ]
+        return UniversityProgramSerializer(programs, many=True).data
 
 
 class CollegeResearchProfileSerializer(serializers.Serializer):
@@ -405,6 +422,27 @@ class CollegeResearchProfileSerializer(serializers.Serializer):
         if self.validated_data:
             profile.save(update_fields=[*self.validated_data.keys(), 'updated_at'])
         return profile
+
+
+class EducationMatchAIRequestSerializer(serializers.Serializer):
+    major_candidates = serializers.ListField(
+        child=serializers.CharField(max_length=160),
+        min_length=1,
+        max_length=8,
+    )
+    subject_strengths = serializers.ListField(
+        child=serializers.CharField(max_length=100),
+        required=False,
+        max_length=12,
+    )
+
+    def validate(self, attrs):
+        for field in ('major_candidates', 'subject_strengths'):
+            values = attrs.get(field, [])
+            attrs[field] = list(dict.fromkeys(value.strip() for value in values if value.strip()))
+        if not attrs['major_candidates']:
+            raise serializers.ValidationError({'major_candidates': 'Provide at least one major candidate.'})
+        return attrs
 
 
 class ScholarshipSerializer(serializers.ModelSerializer):

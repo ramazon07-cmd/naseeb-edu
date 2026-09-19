@@ -75,6 +75,7 @@ from .serializers import (
     ChannelMessageSerializer,
     CommunityPostSerializer,
     CollegeResearchProfileSerializer,
+    EducationMatchAIRequestSerializer,
     DocumentSerializer,
     EssaySerializer,
     HonorSerializer,
@@ -128,6 +129,7 @@ from .services import (
     extend_level_one_roadmap,
 )
 from apps.users.services import audit_product_action
+from .education_ai import generate_education_guidance, recommendation_ai_available
 
 
 class CounselorOrOwnerPermission(permissions.BasePermission):
@@ -779,7 +781,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
 class UniversityViewSet(viewsets.ModelViewSet):
     serializer_class = UniversitySerializer
-    queryset = University.objects.all()
+    queryset = University.objects.prefetch_related('programs').all()
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
@@ -836,7 +838,14 @@ def build_college_research(profile):
     profile_strength_score = min(10, evidence_total * 2)
     recommendations = []
 
-    for university in University.objects.all():
+    for university in University.objects.filter(
+        market__in=[
+            University.Market.US,
+            University.Market.CANADA,
+            University.Market.CHINA,
+            University.Market.HONG_KONG,
+        ],
+    ).prefetch_related('programs'):
         reasons = []
         gaps = []
 
@@ -877,10 +886,15 @@ def build_college_research(profile):
             reasons.append(f'{university.country} is one of your target countries')
         else:
             preference_score += 3
-        majors = [value.strip().lower() for value in university.popular_majors.split(',') if value.strip()]
+        active_programs = [
+            program for program in university.programs.all()
+            if program.is_active and program.international_students_eligible
+        ]
+        majors = [program.canonical_major.strip().lower() for program in active_programs]
+        majors.extend(value.strip().lower() for value in university.popular_majors.split(',') if value.strip())
         if target_major and any(target_major in major or major in target_major for major in majors):
             preference_score += 10
-            reasons.append(f'{profile.target_major} matches one of the university’s popular majors')
+            reasons.append(f'{profile.target_major} matches an available field of study')
         else:
             preference_score += 4
             gaps.append('Check the exact program requirements for your selected major')
@@ -914,15 +928,24 @@ def build_college_research(profile):
         if (acceptance_rate is not None and acceptance_rate < 15) or (university.sat_min and sat < university.sat_min):
             admission_band = 'reach'
         elif acceptance_rate is not None and acceptance_rate >= 45 and (not university.sat_min or sat >= university.sat_min):
-            admission_band = 'strong_option'
+            admission_band = 'safety'
         else:
             admission_band = 'target'
         match_label = 'Strong match' if total_score >= 80 else 'Good match' if total_score >= 65 else 'Developing match'
+        serialized_university = UniversitySerializer(university).data
+        matching_programs = [
+            program for program in serialized_university['programs']
+            if target_major and (
+                target_major in program['canonical_major'].strip().lower()
+                or program['canonical_major'].strip().lower() in target_major
+            )
+        ]
         recommendations.append({
-            'university': UniversitySerializer(university).data,
+            'university': serialized_university,
             'match_score': total_score,
             'match_label': match_label,
             'admission_band': admission_band,
+            'matched_programs': (matching_programs or serialized_university['programs'])[:5],
             'score_breakdown': {
                 'academic': academic_score,
                 'preferences': preference_score,
@@ -967,6 +990,26 @@ class CollegeResearchView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.update_profile(profile)
         return Response(build_college_research(profile))
+
+
+class EducationMatchAIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'assistant'
+
+    def post(self, request):
+        if request.user.role != User.Role.STUDENT or not hasattr(request.user, 'student_profile'):
+            return Response({'detail': 'Education match guidance is available to student accounts only.'}, status=403)
+        serializer = EducationMatchAIRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        profile = request.user.student_profile
+        result = generate_education_guidance(
+            profile=profile,
+            major_candidates=serializer.validated_data['major_candidates'],
+            subject_strengths=serializer.validated_data.get('subject_strengths', []),
+        )
+        result['provider_available'] = recommendation_ai_available()
+        return Response(result)
 
 
 class ScholarshipViewSet(viewsets.ReadOnlyModelViewSet):

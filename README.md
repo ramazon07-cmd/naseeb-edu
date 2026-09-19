@@ -43,7 +43,7 @@ Public registration is disabled. Students are created by a counselor or their sc
 - Confidential message reports with duplicate/self-report protection and a school-scoped moderation queue; trusted admins, counselors, teachers and school organizations can review/dismiss reports, remove content or mute a channel member for 24 hours/7 days while anonymous identity stays hidden in the normal feed
 - Counselor and school messaging interfaces add scoped contacts, inbox/report metrics, audience shortcuts and channel-member management
 - Fixed corner notification center for students, counselors and school organizations, with unread counts and mark-as-read controls
-- Program usage, resource index, Essay Lab, Naseeb Store and team contacts
+- Program usage, Essay Lab, Naseeb Store and team contacts
 - Profile-driven College & Aid Finder that uses GPA, SAT, IELTS, major, target countries, budget and portfolio evidence; asks only for missing information and explains each match
 - College filters for acceptance, SAT, net price, test-optional, merit, need-based and international aid
 - Scholarship catalog with eligibility indicators, funding level, deadline and document requirements
