@@ -1067,7 +1067,13 @@ function exportNodePdf(node) {
   if (!node) return;
   const root = document.documentElement;
   const previous = root.getAttribute('data-theme');
+  let restored = false;
+  let fallbackTimer;
   const restore = () => {
+    if (restored) return;
+    restored = true;
+    window.clearTimeout(fallbackTimer);
+    window.removeEventListener('afterprint', restore);
     document.body.classList.remove('printing-scope');
     node.classList.remove('print-target');
     if (previous) root.setAttribute('data-theme', previous);else
@@ -1076,9 +1082,11 @@ function exportNodePdf(node) {
   document.body.classList.add('printing-scope');
   node.classList.add('print-target');
   root.setAttribute('data-theme', 'light');
-  window.addEventListener('afterprint', restore, { once: true });
-  window.print();
-  restore();
+  window.addEventListener('afterprint', restore);
+  // Keep print() inside the click event so browsers that require a user
+  // gesture do not block it. Cleanup waits for the print lifecycle event.
+  fallbackTimer = window.setTimeout(restore, 60_000);
+  try { window.print(); } catch { restore(); }
 }
 
 function ExportPdfButton() {
@@ -1684,10 +1692,12 @@ function LevelOneSetupModal({ data, defaultStudentId = null, onClose, onSaved, n
 
 function StudentRoadmapPath({ student, missions, onOpen }) {
   const level = student?.level ?? 1;
-  const levelMissions = missions.
-  filter((item) => (item.level || 1) === level).
-  sort((a, b) => (a.sequence || 1) - (b.sequence || 1));
-  const missionById = new Map(levelMissions.map((item) => [item.id, item]));
+  const orderedMissions = [...missions].sort((a, b) => (a.level || 1) - (b.level || 1) || (a.sequence || 1) - (b.sequence || 1) || a.id - b.id);
+  const currentLevelMissions = orderedMissions.filter((item) => (item.level || 1) === level);
+  // Keep an assigned roadmap visible when leveling has moved ahead of the
+  // available mission template (production currently has a Level 1 path).
+  const levelMissions = currentLevelMissions.length ? currentLevelMissions : orderedMissions;
+  const missionById = new Map(orderedMissions.map((item) => [item.id, item]));
   const completed = levelMissions.filter((item) => item.status === 'completed').length;
   const activeIndex = levelMissions.findIndex((item) => item.status !== 'completed');
   const currentIndex = activeIndex === -1 ? Math.max(0, levelMissions.length - 1) : activeIndex;
@@ -1700,8 +1710,8 @@ function StudentRoadmapPath({ student, missions, onOpen }) {
     if (item.status === 'in_progress' || index === currentIndex) return 'current';
     return 'upcoming';
   }
-  const total = Math.max(1, levelMissions.length);
-  const percent = Math.round(completed / total * 100);
+  const total = levelMissions.length;
+  const percent = total ? Math.round(completed / total * 100) : 0;
   return <section className="roadmap-track">
     <header className="roadmap-progress-card">
       <span className="eyebrow">{t("YOUR PROGRESS")}</span>
