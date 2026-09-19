@@ -995,6 +995,88 @@ class RoleIsolationTests(APITestCase):
         notification.refresh_from_db()
         self.assertTrue(notification.is_read)
 
+    def test_only_the_student_can_change_their_own_profile_photo(self):
+        """Photos are private uploads: the owner writes, the scope decides who reads."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        png = SimpleUploadedFile(
+            'face.png',
+            b'\x89PNG\r\n\x1a\n' + b'0' * 64,
+            content_type='image/png',
+        )
+        self.client.force_authenticate(self.student_b_user)
+        stranger = self.client.post(
+            f'/api/students/{self.student_a.id}/photo/',
+            {'photo': png},
+            format='multipart',
+        )
+        self.assertIn(stranger.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
+
+        self.client.force_authenticate(self.student_a_user)
+        missing = self.client.get(f'/api/students/{self.student_a.id}/photo/')
+        self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
+
+        wrong_type = self.client.post(
+            f'/api/students/{self.student_a.id}/photo/',
+            {'photo': SimpleUploadedFile('notes.txt', b'hello', content_type='text/plain')},
+            format='multipart',
+        )
+        self.assertEqual(wrong_type.status_code, status.HTTP_400_BAD_REQUEST)
+
+        png.seek(0)
+        saved = self.client.post(
+            f'/api/students/{self.student_a.id}/photo/',
+            {'photo': png},
+            format='multipart',
+        )
+        self.assertEqual(saved.status_code, status.HTTP_200_OK)
+        self.assertTrue(saved.data['has_photo'])
+        self.assertNotIn('photo', saved.data, 'The private file must never be serialized as a URL.')
+        self.student_a.refresh_from_db()
+        self.assertTrue(self.student_a.photo)
+        served = self.client.get(f'/api/students/{self.student_a.id}/photo/')
+        self.assertEqual(served.status_code, status.HTTP_200_OK)
+        self.assertEqual(served['Cache-Control'], 'private, no-store')
+        served.close()
+        self.student_a.photo.delete(save=True)
+
+    def test_student_can_submit_roadmap_mission_with_a_google_docs_link_only(self):
+        """A written reflection or a Google Docs link is enough — neither is not."""
+        own = RoadmapMission.objects.create(
+            student=self.student_a,
+            assigned_by=self.teacher,
+            title='Docs-backed mission',
+        )
+        self.client.force_authenticate(self.student_a_user)
+        empty = self.client.patch(
+            f'/api/roadmap-missions/{own.id}/',
+            {'status': RoadmapMission.Status.SUBMITTED},
+            format='json',
+        )
+        self.assertEqual(empty.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Google Docs link', str(empty.data))
+        submitted = self.client.patch(
+            f'/api/roadmap-missions/{own.id}/',
+            {
+                'status': RoadmapMission.Status.SUBMITTED,
+                'google_docs_url': 'https://docs.google.com/document/d/mission-doc/edit',
+            },
+            format='json',
+        )
+        self.assertEqual(submitted.status_code, status.HTTP_200_OK)
+        own.refresh_from_db()
+        self.assertEqual(own.status, RoadmapMission.Status.SUBMITTED)
+        self.assertEqual(own.google_docs_url, 'https://docs.google.com/document/d/mission-doc/edit')
+
+    def test_roadmap_stars_count_only_approved_missions(self):
+        RoadmapMission.objects.create(student=self.student_a, title='Approved step', status=RoadmapMission.Status.COMPLETED)
+        RoadmapMission.objects.create(student=self.student_a, title='Open step')
+        self.client.force_authenticate(self.student_a_user)
+        response = self.client.get('/api/students/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile = response.data['results'][0]
+        self.assertEqual(profile['roadmap_stars'], 1)
+
     def test_student_can_only_submit_roadmap_mission_with_reflection(self):
         other = RoadmapMission.objects.create(student=self.student_b, title='Private mission')
         own = RoadmapMission.objects.create(

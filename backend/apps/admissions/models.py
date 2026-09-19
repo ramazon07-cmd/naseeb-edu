@@ -8,6 +8,38 @@ from uuid import uuid4
 import os
 
 
+def student_evidence_upload_path(instance, filename):
+    """Keep honor and achievement evidence private, grouped, and collision-free."""
+    suffix = Path(filename or '').suffix.lower()[:12]
+    resource = instance._meta.model_name
+    return f'student_evidence/{instance.student_id}/{resource}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
+
+
+class PrivateDocumentStorage(FileSystemStorage):
+    """A filesystem location that is never exposed by Django's public media route."""
+
+    @property
+    def base_location(self):
+        return settings.DOCUMENT_STORAGE_ROOT
+
+    @property
+    def location(self):
+        return os.path.abspath(self.base_location)
+
+    @property
+    def base_url(self):
+        return None
+
+
+private_document_storage = PrivateDocumentStorage()
+
+
+def student_photo_upload_path(instance, filename):
+    """Profile photos are private: UUID names, one folder per student."""
+    suffix = Path(filename or '').suffix.lower()[:12]
+    return f'student_photos/{instance.pk or "pending"}/{uuid4().hex}{suffix}'
+
+
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -69,6 +101,12 @@ class StudentProfile(TimeStampedModel):
     profile_completed_at = models.DateTimeField(null=True, blank=True)
 
     MAX_LEVEL = 100
+
+    class GuardianRelation(models.TextChoices):
+        MOTHER = 'mother', 'Mother'
+        FATHER = 'father', 'Father'
+        GUARDIAN = 'guardian', 'Guardian'
+
     class Grade(models.TextChoices):
         GRADE_8 = '8', '8-sinf'
         GRADE_9 = '9', '9-sinf'
@@ -101,6 +139,14 @@ class StudentProfile(TimeStampedModel):
     budget_usd = models.PositiveIntegerField(null=True, blank=True)
     scholarship_needed = models.BooleanField(default=True)
     parent_contact = models.CharField(max_length=120, blank=True)
+    guardian_name = models.CharField(max_length=160, blank=True)
+    guardian_relation = models.CharField(max_length=20, choices=GuardianRelation.choices, blank=True)
+    photo = models.ImageField(
+        upload_to=student_photo_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
     notes = models.TextField(blank=True)
     xp_total = models.PositiveIntegerField(default=0)
     level = models.PositiveSmallIntegerField(default=1)
@@ -172,6 +218,11 @@ class StudentProfile(TimeStampedModel):
             return 0
         completed = self.roadmap_missions.filter(status=RoadmapMission.Status.COMPLETED).count()
         return round((completed / total) * 100)
+
+    @property
+    def roadmap_stars(self):
+        """One star per approved roadmap mission: the student-facing counterpart of XP."""
+        return self.roadmap_missions.filter(status=RoadmapMission.Status.COMPLETED).count()
 
     @property
     def journey_progress_percent(self):
@@ -519,6 +570,7 @@ class RoadmapMission(TimeStampedModel):
     due_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PLANNED)
     reflection = models.TextField(blank=True)
+    google_docs_url = models.URLField(blank=True)
 
     class Meta:
         ordering = ['level', 'sequence', 'id']
@@ -1028,32 +1080,6 @@ def student_document_upload_path(instance, filename):
     """Keep private uploads collision-free and grouped by student."""
     suffix = Path(filename or '').suffix.lower()[:12]
     return f'student_documents/{instance.student_id}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
-
-
-def student_evidence_upload_path(instance, filename):
-    """Keep honor and achievement evidence private, grouped, and collision-free."""
-    suffix = Path(filename or '').suffix.lower()[:12]
-    resource = instance._meta.model_name
-    return f'student_evidence/{instance.student_id}/{resource}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
-
-
-class PrivateDocumentStorage(FileSystemStorage):
-    """A filesystem location that is never exposed by Django's public media route."""
-
-    @property
-    def base_location(self):
-        return settings.DOCUMENT_STORAGE_ROOT
-
-    @property
-    def location(self):
-        return os.path.abspath(self.base_location)
-
-    @property
-    def base_url(self):
-        return None
-
-
-private_document_storage = PrivateDocumentStorage()
 
 
 class Document(TimeStampedModel):

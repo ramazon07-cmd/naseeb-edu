@@ -162,7 +162,7 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         if view.basename == 'notifications' and view.action == 'read':
             return True
         if view.basename == 'students':
-            return view.action in {'update', 'partial_update', 'onboarding'}
+            return view.action in {'update', 'partial_update', 'onboarding', 'photo'}
         if view.basename == 'tasks' and view.action == 'create':
             return False
         return view.basename in {
@@ -199,7 +199,7 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
             if view.basename == 'notifications' and view.action == 'read':
                 return True
             if view.basename == 'students':
-                return view.action in {'retrieve', 'update', 'partial_update'}
+                return view.action in {'retrieve', 'update', 'partial_update', 'photo'}
             return request.method in permissions.SAFE_METHODS or view.basename in {
                 'applications', 'documents', 'essays', 'tasks', 'achievements', 'researches', 'projects',
                 'internships', 'activities', 'honors', 'recommendations',
@@ -298,8 +298,10 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             request.user.first_name = values['first_name']
             request.user.last_name = values['last_name']
             request.user.save(update_fields=['first_name', 'last_name'])
-            for key in ('grade', 'school_name', 'gpa', 'ielts_score', 'target_countries'):
-                setattr(profile, key, values.get(key))
+            for key in ('grade', 'school_name', 'gpa', 'ielts_score', 'target_countries', 'guardian_name', 'guardian_relation'):
+                setattr(profile, key, values.get(key) or '' if key.startswith('guardian') else values.get(key))
+            if values.get('guardian_contact'):
+                profile.parent_contact = values['guardian_contact']
             profile.sat_score = (values.get('sat_reading') or 0) + (values.get('sat_math') or 0) or None
             profile.target_major = ', '.join(values.get('interests', []))[:160]
             profile.application_profile = serializer.data
@@ -307,6 +309,65 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             profile.save()
             request.user.student_profile = profile
         return Response({'profile': self.get_serializer(profile).data, 'user': UserSerializer(request.user, context={'request': request}).data})
+
+    PHOTO_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
+    PHOTO_MAX_BYTES = 5 * 1024 * 1024
+
+    @action(detail=True, methods=['get', 'post', 'delete'], url_path='photo')
+    def photo(self, request, pk=None):
+        """Read, replace or remove a student's profile photo.
+
+        The file lives in private storage like every other personal upload, so it
+        is streamed through this authenticated action instead of a media URL.
+        """
+        student = self.get_object()
+        if request.method == 'GET':
+            if not student.photo:
+                raise Http404('This student has no profile photo.')
+            try:
+                stream = student.photo.open('rb')
+            except (FileNotFoundError, OSError):
+                raise Http404('The profile photo is unavailable.')
+            name = Path(student.photo.name).name
+            response = FileResponse(
+                stream,
+                content_type=mimetypes.guess_type(name)[0] or 'image/jpeg',
+            )
+            response['Cache-Control'] = 'private, no-store'
+            response['X-Content-Type-Options'] = 'nosniff'
+            return response
+
+        if request.user.role != User.Role.STUDENT or student.user_id != request.user.id:
+            return Response(
+                {'detail': 'Only the student can change their own profile photo.'},
+                status=403,
+            )
+
+        previous = student.photo.name if student.photo else ''
+        storage = student.photo.storage if previous else None
+        if request.method == 'DELETE':
+            student.photo = None
+            student.save(update_fields=['photo'])
+            if previous:
+                transaction.on_commit(lambda: storage.delete(previous))
+            return Response(status=204)
+
+        upload = request.FILES.get('photo')
+        if not upload:
+            return Response({'photo': 'Choose an image to upload.'}, status=400)
+        extension = Path(upload.name or '').suffix.lower()
+        if extension not in self.PHOTO_EXTENSIONS:
+            return Response(
+                {'photo': f'Unsupported image type. Allowed: {", ".join(sorted(self.PHOTO_EXTENSIONS))}.'},
+                status=400,
+            )
+        if upload.size > self.PHOTO_MAX_BYTES:
+            return Response({'photo': 'The photo must be 5 MB or smaller.'}, status=400)
+        student.photo = upload
+        student.save(update_fields=['photo'])
+        if previous and previous != student.photo.name:
+            transaction.on_commit(lambda: storage.delete(previous))
+        return Response(self.get_serializer(student).data)
 
     def retrieve(self, request, *args, **kwargs):
         student = self.get_object()

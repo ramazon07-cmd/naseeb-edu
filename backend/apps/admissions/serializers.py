@@ -250,11 +250,17 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     next_level_xp = serializers.IntegerField(read_only=True)
     xp_progress_percent = serializers.IntegerField(read_only=True)
     level_up_pending = serializers.BooleanField(read_only=True)
+    roadmap_stars = serializers.IntegerField(read_only=True)
+    photo = serializers.ImageField(write_only=True, required=False, allow_null=True)
+    has_photo = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentProfile
         fields = '__all__'
         read_only_fields = ('xp_total', 'level', 'application_profile', 'profile_completed_at')
+
+    def get_has_photo(self, obj) -> bool:
+        return bool(obj.photo)
 
     def get_counselor_name(self, obj) -> str | None:
         if not obj.assigned_counselor:
@@ -1125,7 +1131,7 @@ class ActivityLogSerializer(serializers.ModelSerializer):
         return obj.student.user.get_full_name() or obj.student.user.username
 
 
-class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
+class RoadmapMissionSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
     assigned_by_name = serializers.SerializerMethodField()
     prerequisite_title = serializers.CharField(source='prerequisite.title', read_only=True)
@@ -1175,7 +1181,7 @@ class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSe
                 'prerequisite': 'A mission cannot be its own prerequisite.'
             })
         if request and request.user.role == request.user.Role.STUDENT and self.instance:
-            forbidden = set(attrs) - {'status', 'reflection'}
+            forbidden = set(attrs) - {'status', 'reflection', 'google_docs_url'}
             if forbidden:
                 raise serializers.ValidationError({
                     field: 'Only a teacher or counselor can change this field.' for field in sorted(forbidden)
@@ -1193,9 +1199,10 @@ class RoadmapMissionSerializer(StudentRecordSerializerMixin, serializers.ModelSe
                     'status': 'Use Submit mission when the work is ready.'
                 })
             reflection = attrs.get('reflection', self.instance.reflection)
-            if not reflection or not reflection.strip():
+            docs_url = attrs.get('google_docs_url', self.instance.google_docs_url)
+            if not (reflection or '').strip() and not (docs_url or '').strip():
                 raise serializers.ValidationError({
-                    'reflection': 'Add a reflection before submitting the mission.'
+                    'reflection': 'Add a reflection or a Google Docs link before submitting the mission.'
                 })
             if prerequisite and prerequisite.status != RoadmapMission.Status.COMPLETED:
                 raise serializers.ValidationError({
