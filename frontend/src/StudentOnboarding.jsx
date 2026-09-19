@@ -5,6 +5,12 @@ import './student-onboarding.css';
 
 const steps = ['Personal', 'Education', 'Test scores', 'Preferences', 'Honors', 'Activities'];
 const countries = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
+// Older records hold spellings this form never offered ('USA', 'Singapore').
+// They match no checkbox, so they stay invisible on screen yet are still sent
+// on save, and the backend rejects the whole field for a country the student
+// cannot see or untick. Map what has an equivalent, drop what does not.
+const countryAliases = { USA: 'US', 'United States': 'US', 'United Kingdom': 'UK', GB: 'UK', HK: 'Hong Kong' };
+const supportedCountries = (list) => [...new Set(list.map(c => countryAliases[c] || c).filter(c => countries.includes(c)))];
 const incomes = ['Under $10,000', '$10,000–$25,000', '$25,000–$50,000', '$50,000–$100,000', '$100,000+'];
 const interests = ['Arts', 'Humanities', 'Political science', 'Business', 'Economics', 'Accounting', 'Communications', 'Health and Medicine', 'Public and Social Services', 'Math and Statistics', 'Environmental Science', 'Computer Technologies', 'Science', 'Education', 'Engineering', 'English', 'History', 'Psychology'];
 const strengths = ['STEM', 'Liberal Arts', 'Specialized programs', 'Research opportunities', 'No Preference'];
@@ -24,7 +30,7 @@ export default function StudentOnboarding({ onSaved, onSignOut, onPhotoChanged =
     let active = true;
     api.studentOnboarding().then(p => {
       if (active) { setProfileId(p.id); if (p.has_photo) loadPhoto(p.id); const saved = { ...defaults, guardian_name: p.guardian_name || '', guardian_relation: p.guardian_relation || '', guardian_contact: p.parent_contact || '', first_name: p.user_detail.first_name, last_name: p.user_detail.last_name, grade: p.grade, school_name: p.school_name, gpa: p.gpa ?? '', ielts_score: p.ielts_score ?? '', target_countries: p.target_countries, ...p.application_profile };
-        saved.target_countries = Array.isArray(saved.target_countries) ? saved.target_countries : (saved.target_countries || '').split(',').map(c => c.trim()).filter(Boolean);
+        saved.target_countries = supportedCountries(Array.isArray(saved.target_countries) ? saved.target_countries : (saved.target_countries || '').split(',').map(c => c.trim()).filter(Boolean));
         saved.sat_status = p.application_profile?.sat_status || (saved.sat_reading || saved.sat_math ? 'taken' : 'not_taken');
         setForm(saved); }
     }).catch(e => { if (active) setError(e.message); });
