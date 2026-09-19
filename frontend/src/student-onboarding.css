@@ -37,3 +37,12 @@
 .onboarding-choices label:has(input:checked) { border-color: var(--accent); background: var(--surface-soft); }
 .onboarding-choices label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .onboarding-choices input { flex: 0 0 auto; accent-color: var(--accent); }
+
+/* Profile photo: a private upload, previewed inline while the student edits. */
+.onboarding-photo { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 14px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 14px; }
+.onboarding-photo-preview { width: 64px; height: 64px; flex: none; display: grid; place-items: center; overflow: hidden; color: var(--accent-contrast); background: var(--accent); border-radius: 50%; font-size: 18px; font-weight: 700; }
+.onboarding-photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+.onboarding-photo b { display: block; font-size: 13px; }
+.onboarding-photo small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.onboarding-photo-actions { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 8px; }
+.onboarding-photo-actions .button { cursor: pointer; }
