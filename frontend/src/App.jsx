@@ -2382,7 +2382,8 @@ const COLLEGE_REGIONS = [
 ];
 
 function universityRegion(university) {
-  if (COLLEGE_REGIONS.some((region) => region.key === university?.market)) return university.market;
+  const market = String(university?.market || '').trim().toLowerCase();
+  if (COLLEGE_REGIONS.some((region) => region.key === market)) return market;
   const country = String(university?.country || '').trim().toLowerCase();
   return COLLEGE_REGIONS.find((region) => region.countries.includes(country))?.key || null;
 }
