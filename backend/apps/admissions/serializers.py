@@ -426,9 +426,15 @@ class EducationMatchAIRequestSerializer(serializers.Serializer):
         required=False,
         max_length=12,
     )
+    minor_candidates = serializers.ListField(
+        child=serializers.CharField(max_length=100),
+        required=False,
+        min_length=3,
+        max_length=20,
+    )
 
     def validate(self, attrs):
-        for field in ('major_candidates', 'subject_strengths'):
+        for field in ('major_candidates', 'subject_strengths', 'minor_candidates'):
             values = attrs.get(field, [])
             attrs[field] = list(dict.fromkeys(value.strip() for value in values if value.strip()))
         if not attrs['major_candidates']:

@@ -3168,66 +3168,49 @@ function ResultRows({ rows }) {
 
 function ChallengeResult({ challenge, result }) {
   if (challenge.scoring === 'bigfive') {
-    return <>
-      <TypeResult scores={result} />
-      <Panel title="Your personality">
-        {/* No polygon here on purpose. The five traits have no fixed order, so the
-            silhouette changes with the axis order while the answers stay the same
-            -- a shape that looks like evidence and is not. Bars carry it honestly. */}
-        <ResultRows rows={TRAIT_ORDER.map((t) => [TRAIT_LABEL[t], TRAIT_BLURB[t], result[t], band(result[t])])} />
-        <p className="journey-disclaimer">This describes how you answered today, not what you are capable of. There is no better or worse direction on any of the five. Bring it to your counselor — it is a conversation starter, not a verdict.</p>
-      </Panel>
-    </>
+    const type = typeCodeOf(result)
+    return <section className="assessment-result-view personality-result-view">
+      <header className="assessment-result-hero"><span className="eyebrow">PERSONALITY RESULT</span><h2>How you naturally approach the world</h2><p>Your answers suggest a <strong>{archetypeNameOf(result)}</strong> pattern. The code <b>{type.code}</b> is shorthand—not a box.</p></header>
+      <div className="assessment-insight-list">{TRAIT_ORDER.map((trait) => {
+        const [title, description] = personalityReading(trait, result[trait])
+        return <article key={trait}><span>{TRAIT_LABEL[trait]}</span><div><h3>{title}</h3><p>{description}</p></div></article>
+      })}</div>
+      <details className="assessment-score-fold"><summary><ChevronRight size={16} /> View detailed scores</summary><ResultRows rows={TRAIT_ORDER.map((trait) => [TRAIT_LABEL[trait], TRAIT_BLURB[trait], result[trait], band(result[trait])])} /></details>
+      <p className="journey-disclaimer">This describes how you answered today. No direction is better or worse, and your result can change as you grow.</p>
+    </section>
   }
   if (challenge.scoring === 'riasec') {
-    const top = result.code.map((s) => RIASEC_NAME[s]).join(' · ')
-    return <Panel title="Your interests" action={<Badge>{result.code.join('')}</Badge>}>
-      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Your strongest three: <strong>{top}</strong>. Holland codes are used worldwide to group occupations, so this is the part a counselor can turn into a shortlist.</p>
-      {/* No hexagon here: the summary above already carries it, and drawing the
-          same shape twice on one page is noise, not emphasis. */}
-      <ResultRows rows={RIASEC_ORDER.map((s) => [RIASEC_NAME[s], RIASEC_LEAD[s], result.means[s], result.code.includes(s) ? 'Top three' : 'Lower'])} />
-    </Panel>
+    const ranked = [...RIASEC_ORDER].sort((a, b) => result.means[b] - result.means[a])
+    return <section className="assessment-result-view interests-result-view">
+      <header className="assessment-result-hero"><span className="eyebrow">INTEREST RESULT · {result.code.join('')}</span><h2>What naturally draws you in</h2><p>Your strongest themes show the kinds of activities most likely to keep you curious and motivated.</p></header>
+      <div className="assessment-interest-result-grid"><ProfilePolygon caption="Your interest profile" axes={RIASEC_ORDER.map((scale) => ({ key: scale, label: RIASEC_NAME[scale], short: scale, value: result.means[scale] }))} /><div className="assessment-theme-list">{ranked.slice(0, 3).map((scale, index) => <article key={scale}><span>0{index + 1}</span><div><h3>{RIASEC_NAME[scale]}</h3><p>{RIASEC_LEAD[scale]}</p></div></article>)}</div></div>
+      <details className="assessment-score-fold"><summary><ChevronRight size={16} /> View detailed scores</summary><ResultRows rows={ranked.map((scale) => [RIASEC_NAME[scale], RIASEC_LEAD[scale], result.means[scale], result.code.includes(scale) ? 'Top theme' : 'Explore'])} /></details>
+    </section>
   }
   if (challenge.scoring === 'subjects') {
-    const top = result.ranked.slice(0, 3)
-    const names = (list) => list.map((s) => SUBJECT_NAME[s]).join(' · ')
-    // The patterns come first and the ranking second. A student who reads one
-    // thing on this page should read "you like biology but it frightens you",
-    // not their subjects in an order they could have written out themselves.
-    //
-    // Every one of these is PHRASED AS A QUESTION, and that is not modesty.
-    // Simulated over 12,000 students, "blocked" is right about two times in five
-    // when it fires -- three single items cannot pin down a three-way condition
-    // any harder than that. Two in five is a good reason to raise something with
-    // a fifteen-year-old and a bad reason to tell them what they are.
-    // The eyebrow names which question this is, so three cards in a row are not
-    // three identical labels; the sentence under it is what stays open-ended.
-    const NOTE = {
-      blocked: ['Able, keen, still anxious', 'You said you can handle these and that you look forward to them — and that they still make you anxious, more than your other subjects do. If that is right, it is the most fixable thing on this page. Nerves talk people out of subjects they are actually suited to.'],
-      aspiring: ['Keen, but not sure you can', 'You look forward to these but said you cannot handle the hard parts — a wider gap than you have on your other subjects. Is that really the subject, or is it one year and one teacher?'],
-      coasting: ['Able, but not keen', 'You can handle these but do not look forward to them. Marks alone would push you towards them, and that is how people end up on a course they did not want.'],
-      strength: ['Where to start', 'You can handle these, you look forward to them, and they take less out of you than your other subjects do.'],
-    }
-    const shown = Object.keys(NOTE).filter((k) => result.patterns[k].length)
-    return <Panel title="How school feels">
-      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Strongest overall: <strong>{names(top)}</strong>. Each subject was asked three ways — what you can do, what you enjoy, and what it costs you — because those three come apart, and the places they disagree are the useful part.</p>
-      {shown.length > 0 && <div className="subject-patterns">{shown.map((key) => <div key={key} className={`subject-pattern ${key}`}>
-        <span className="eyebrow">{NOTE[key][0]}</span>
-        <b>{names(result.patterns[key])}</b>
-        <small>{NOTE[key][1]}</small>
-      </div>)}
-      <p className="journey-disclaimer">These are questions raised by how you answered, not conclusions about you. Any of them can be wrong — say so, out loud, to your counselor.</p>
-      </div>}
-      <ResultRows rows={result.ranked.map((s) => [
-        SUBJECT_NAME[s],
-        `Can do ${result.byFacet.ability[s]}/5 · enjoys ${result.byFacet.interest[s]}/5 · costs ${result.byFacet.cost[s]}/5`,
-        result.bySubject[s],
-        top.includes(s) ? 'Strongest' : 'Lower',
-      ])} />
-      <p className="journey-disclaimer" style={{ marginTop: 12 }}>This is how the subjects feel to you, which is not the same as how you score in them — the gap between the two is worth a conversation with your counselor.</p>
-    </Panel>
+    return <section className="assessment-result-view subjects-result-view">
+      <header className="assessment-result-hero"><span className="eyebrow">SUBJECT RESULT</span><h2>Where your strengths come alive</h2><p>This combines what feels natural, what you enjoy, and how much energy each subject currently takes.</p></header>
+      <div className="assessment-subject-list">{result.ranked.slice(0, 6).map((subject, index) => <article key={subject}><span>0{index + 1}</span><div><h3>{SUBJECT_NAME[subject]}</h3><SubjectReading result={result} subject={subject} /></div><strong>{result.bySubject[subject].toFixed(1)}</strong></article>)}</div>
+      <details className="assessment-score-fold"><summary><ChevronRight size={16} /> View ability, enjoyment, and effort</summary><div className="assessment-subject-details">{result.ranked.slice(0, 6).map((subject) => <article key={subject}><b>{SUBJECT_NAME[subject]}</b><span>Ability {result.byFacet.ability[subject]}/5</span><span>Enjoyment {result.byFacet.interest[subject]}/5</span><span>Energy cost {result.byFacet.cost[subject]}/5</span></article>)}</div></details>
+      <p className="journey-disclaimer">These are self-reported patterns, not school grades. Use them to decide what to explore next.</p>
+    </section>
+  }
+  if (challenge.scoring === 'reasoning') {
+    return <section className="assessment-result-view reasoning-result-view">
+      <header className="assessment-result-hero"><span className="eyebrow">REASONING RESULT · ICAR-16</span><h2>How you worked through unfamiliar problems</h2><p>This short assessment samples four kinds of reasoning. It is useful as one signal, not a limit on your potential.</p></header>
+      <div className="assessment-cognitive-hero"><span>Estimated cognitive score</span><strong>{result.estimatedCognitiveScore}</strong><small>{result.correct} of {result.total} questions correct</small></div>
+      <div className="assessment-domain-grid">{result.rankedDomains.map((domain) => <article key={domain}><header><b>{REASONING_DOMAIN_NAME[domain]}</b><strong>{result.byDomain[domain].percent}%</strong></header><div className="progress"><span style={{ width: `${result.byDomain[domain].percent}%` }} /></div><small>{result.byDomain[domain].correct} of {result.byDomain[domain].total} correct</small></article>)}</div>
+      <p className="journey-disclaimer">This is an estimate from a brief, untimed sample—not a clinical IQ diagnosis. Language, familiarity, focus, and testing conditions can affect it.</p>
+    </section>
   }
   return null
+}
+
+function AssessmentResultPage({ challenge, result, onBack, onRetake }) {
+  return <div className="section-stack student-portal assessment-result-page">
+    <div className="assessment-result-navigation"><button type="button" className="button quiet" onClick={onBack}><ArrowLeft size={16} /> All challenges</button><button type="button" className="button quiet" onClick={onRetake}><RefreshCw size={15} /> Retake</button></div>
+    <ChallengeResult challenge={challenge} result={result} />
+  </div>
 }
 
 // The headline result: the four-letter code and how firmly each letter was
@@ -3284,19 +3267,18 @@ function TypeResult({ scores }) {
 // choose universities in this release.
 function AIEducationGuidance({ majors, subjects, locked, student, reload, notify }) {
   const [guidance, setGuidance] = useState(null)
-  const [selectedMajor, setSelectedMajor] = useState(student?.target_major || '')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const minorCandidates = ['Psychology', 'Design', 'Entrepreneurship', 'Data Science', 'Philosophy', 'Communication', 'Public Policy', 'Sustainability', 'Economics', 'Linguistics', 'Statistics', 'Anthropology']
 
   async function generate() {
     if (locked) return
     setLoading(true)
     setError('')
     try {
-      const nextGuidance = await api.educationMatchAI({ major_candidates: majors, subject_strengths: subjects })
+      const nextGuidance = await api.educationMatchAI({ major_candidates: majors, subject_strengths: subjects, minor_candidates: minorCandidates })
       setGuidance(nextGuidance)
-      setSelectedMajor('')
     } catch (requestError) {
       setError(requestError.message || 'AI guidance is unavailable right now.')
     } finally {
@@ -3305,6 +3287,7 @@ function AIEducationGuidance({ majors, subjects, locked, student, reload, notify
   }
 
   async function confirmMajor() {
+    const selectedMajor = guidance?.strongest_major?.major
     if (!selectedMajor || !student) return
     setSaving(true)
     setError('')
@@ -3319,13 +3302,14 @@ function AIEducationGuidance({ majors, subjects, locked, student, reload, notify
     }
   }
 
-  const topFits = guidance?.major_guidance?.slice(0, 3) || []
+  const direction = guidance?.strongest_major
+  const minors = guidance?.minor_guidance || []
 
   return <section id="assessment-ai-panel" className={`assessment-ai-panel ${locked ? 'locked' : ''}`}>
     <div className="assessment-ai-orbit" aria-hidden="true"><span className="assessment-ai-orbit-mark" /></div>
     <span className="eyebrow">AI MAJOR MATCH</span>
-    <h3>{guidance ? 'Choose your strongest fit' : "Now let's find your direction"}</h3>
-    <p>{locked ? 'Complete all four challenges to unlock your recommendations.' : guidance ? 'These are your three strongest current matches. Select one to make it your study direction.' : 'AI will compare your interests, personality, subjects, and reasoning snapshot to return your three strongest major fits.'}</p>
+    <h3>{guidance ? 'Your study direction' : "Now let's find your direction"}</h3>
+    <p>{locked ? 'Complete all four challenges to unlock your recommendations.' : guidance ? 'One strong foundation, with three distinctive ways to make it yours.' : 'Your complete profile will be compared to find one strongest-fit major and three complementary minors.'}</p>
     <div className="assessment-ai-readiness">
       <span>{locked ? 'Profile incomplete' : guidance ? 'Recommendations ready' : 'Profile ready'}</span>
       {locked ? <Lock size={16} /> : <CheckCircle2 size={16} />}
@@ -3334,16 +3318,39 @@ function AIEducationGuidance({ majors, subjects, locked, student, reload, notify
       {loading ? <><RefreshCw className="spin" size={17} /> Generating…</> : <><Sparkles size={17} /> {guidance ? 'Generate again' : 'Generate recommendations with AI'}</>}
     </button>
     {error && <p className="education-ai-error" role="alert">{error}</p>}
-    {topFits.length > 0 && <div className="assessment-ai-fits" role="radiogroup" aria-label="Top three major fits">
-      {topFits.map((item, index) => <button key={item.major} type="button" role="radio" aria-checked={selectedMajor === item.major} className={selectedMajor === item.major ? 'selected' : ''} onClick={() => setSelectedMajor(item.major)}>
-        <span>{String(index + 1).padStart(2, '0')}</span>
-        <div><b>{item.major}</b><small>{item.why_fit}</small></div>
-        <span className="assessment-ai-choice">{selectedMajor === item.major ? <Check size={15} /> : null}</span>
-      </button>)}
-      <button type="button" className="assessment-ai-confirm" onClick={confirmMajor} disabled={!selectedMajor || saving}>{saving ? 'Saving choice…' : selectedMajor ? `Choose ${selectedMajor}` : 'Select one major'}</button>
-      <small className="assessment-ai-disclaimer">You can regenerate or change this choice later. AI guidance supports your decision; it does not limit it.</small>
+    {direction && <div className="assessment-direction-result">
+      <div className="assessment-direction-provider"><span>{guidance.mode === 'groq' ? 'Generated with Groq' : 'Assessment fallback'}</span><small>{guidance.mode === 'groq' ? 'AI explanation' : 'The AI provider was unavailable, so your ranked assessment match is shown.'}</small></div>
+      <article className="assessment-primary-major"><span>STRONGEST MAJOR FIT</span><h4>{direction.major}</h4><p>{direction.why_fit}</p>{direction.evidence?.length > 0 && <div>{direction.evidence.map((item) => <span key={item}>{item}</span>)}</div>}</article>
+      <div className="assessment-minor-list"><span>THREE DISTINCTIVE MINORS</span>{minors.map((item, index) => <article key={item.minor}><strong>0{index + 1}</strong><div><h4>{item.minor}</h4><p>{item.why_fit}</p><small>{item.combination_idea}</small></div></article>)}</div>
+      <button type="button" className="assessment-ai-confirm" onClick={confirmMajor} disabled={saving}>{saving ? 'Saving direction…' : student?.target_major === direction.major ? 'Direction saved' : 'Save this direction'}</button>
+      <small className="assessment-ai-disclaimer">Minor titles and availability vary by university. This guidance supports exploration; it does not limit your choices.</small>
     </div>}
   </section>
+}
+
+const PERSONALITY_READING = {
+  ES: { high: ['Calm under pressure', 'You tend to stay steady when plans become difficult.'], middle: ['Emotionally responsive', 'You balance sensitivity with steadiness, depending on the situation.'], low: ['Feels situations deeply', 'You notice pressure quickly and may need time to reset.'] },
+  E: { high: ['Energized by people', 'Conversation and collaboration can help you think.'], middle: ['Socially flexible', 'You can enjoy company and still value independent time.'], low: ['Recharges independently', 'Quiet space often helps you focus and recover energy.'] },
+  O: { high: ['Curious and open-minded', 'New ideas, creative work, and unfamiliar topics pull you in.'], middle: ['Balances ideas and reality', 'You like fresh possibilities when they have a practical purpose.'], low: ['Practical and grounded', 'Clear, familiar methods usually feel more useful than abstraction.'] },
+  A: { high: ['Thoughtful with others', 'You naturally consider cooperation and how decisions affect people.'], middle: ['Warm and direct', 'You can cooperate while still protecting your own view.'], low: ['Independent-minded', 'You are comfortable questioning others and speaking directly.'] },
+  C: { high: ['Builds habits with purpose', 'Plans and steady follow-through help you do your best work.'], middle: ['Structured when needed', 'You can plan carefully or adapt as circumstances change.'], low: ['Flexible and spontaneous', 'You prefer room to adjust rather than following a rigid plan.'] },
+}
+
+const REASONING_DOMAIN_NAME = { verbal: 'Verbal reasoning', series: 'Pattern sequences', matrix: 'Matrix reasoning', spatial: 'Spatial reasoning' }
+const readingBand = (value) => value >= 3.6 ? 'high' : value <= 2.4 ? 'low' : 'middle'
+const personalityReading = (trait, value) => PERSONALITY_READING[trait][readingBand(value)]
+
+function SubjectReading({ result, subject }) {
+  const ability = result.byFacet.ability[subject]
+  const interest = result.byFacet.interest[subject]
+  const cost = result.byFacet.cost[subject]
+  let description = 'A balanced subject to keep exploring.'
+  if (ability >= 4 && interest >= 4 && cost <= 3) description = 'Strong ability, real enjoyment, and manageable effort.'
+  else if (ability >= 4 && interest >= 4) description = 'Strong ability and enjoyment; confidence may still grow.'
+  else if (interest >= 4 && ability < 4) description = 'High interest with room to build confidence and skill.'
+  else if (ability >= 4 && interest < 4) description = 'Comes naturally, though it may not hold your attention yet.'
+  else if (cost >= 4) description = 'Worth exploring carefully because it currently takes extra energy.'
+  return <span>{description}</span>
 }
 
 function MajorMatches({ results, locked, student, reload, notify }) {
@@ -3372,31 +3379,32 @@ function MajorMatches({ results, locked, student, reload, notify }) {
 }
 
 function ResultsSummary({ results }) {
-  const done = results.filter(([, r]) => r)
-  if (!done.length) return null
-  const personality = done.find(([c]) => c.scoring === 'bigfive')
-  const interests = done.find(([c]) => c.scoring === 'riasec')
-  const subjects = done.find(([c]) => c.scoring === 'subjects')
+  const scored = Object.fromEntries(results.filter(([, result]) => result).map(([challenge, result]) => [challenge.scoring, result]))
+  if (!scored.bigfive || !scored.riasec || !scored.subjects || !scored.reasoning) return null
+  const interestRanking = [...RIASEC_ORDER].sort((a, b) => scored.riasec.means[b] - scored.riasec.means[a])
   const numberColumns = [
-    personality && ['PERSONALITY', TRAIT_ORDER.slice(0, 6).map((trait) => [TRAIT_LABEL[trait], personality[1][trait]])],
-    interests && ['INTERESTS', RIASEC_ORDER.slice(0, 6).map((scale) => [RIASEC_NAME[scale], interests[1].means[scale]])],
-    subjects && ['STRONGEST SUBJECTS', subjects[1].ranked.slice(0, 6).map((subject) => [SUBJECT_NAME[subject], subjects[1].bySubject[subject]])],
-  ].filter(Boolean)
+    ['PERSONALITY', TRAIT_ORDER.map((trait) => [TRAIT_LABEL[trait], scored.bigfive[trait]])],
+    ['INTERESTS', interestRanking.slice(0, 6).map((scale) => [RIASEC_NAME[scale], scored.riasec.means[scale]])],
+    ['STRONGEST SUBJECTS', scored.subjects.ranked.slice(0, 6).map((subject) => [SUBJECT_NAME[subject], scored.subjects.bySubject[subject]])],
+  ]
 
-  return <section className="assessment-number-summary">
-    <div className="assessment-number-hexagon">
-      {interests && <ProfilePolygon
+  return <section className="assessment-summary">
+    <header className="assessment-summary-heading"><span className="eyebrow">YOUR RESULTS</span><h2>Your profile, at a glance</h2><p>The useful patterns first. Open the detailed scores only when you want the numbers.</p></header>
+    <div className="assessment-glance-grid">
+      <div className="assessment-number-hexagon"><ProfilePolygon
         caption="Your interest profile"
-        axes={RIASEC_ORDER.map((s) => ({ key: s, label: RIASEC_NAME[s], short: s, value: interests[1].means[s] }))}
-      />}
-      {!interests && <div className="assessment-number-placeholder"><Hexagon size={38} /><span>Complete Interests to reveal your hexagon.</span></div>}
+        axes={RIASEC_ORDER.map((scale) => ({ key: scale, label: RIASEC_NAME[scale], short: scale, value: scored.riasec.means[scale] }))}
+      /></div>
+      <div className="assessment-glance-columns">
+        <article><h3>Personality</h3>{TRAIT_ORDER.map((trait) => { const [title, description] = personalityReading(trait, scored.bigfive[trait]); return <div key={trait}><b>{title}</b><span>{description}</span></div> })}</article>
+        <article><h3>Interests</h3>{interestRanking.slice(0, 5).map((scale) => <div key={scale}><b>{RIASEC_NAME[scale]}</b><span>{RIASEC_LEAD[scale]}</span></div>)}</article>
+        <article><h3>Strongest subjects</h3>{scored.subjects.ranked.slice(0, 6).map((subject) => <div key={subject}><b>{SUBJECT_NAME[subject]}</b><SubjectReading result={scored.subjects} subject={subject} /></div>)}</article>
+      </div>
     </div>
-    {numberColumns.length > 0 && <div className="assessment-number-breakdown" aria-label="Assessment score details">
-      {numberColumns.map(([title, rows]) => <article className="assessment-number-column" key={title}>
-        <h4>{title}</h4>
-        <div>{rows.map(([label, value]) => <div key={label}><span>{label}</span><strong>{Number(value).toFixed(1)}</strong></div>)}</div>
-      </article>)}
-    </div>}
+    <details className="assessment-score-fold assessment-full-score-fold"><summary><ChevronRight size={16} /> View detailed scores</summary>
+      <div className="assessment-number-breakdown" aria-label="Assessment score details">{numberColumns.map(([title, rows]) => <article className="assessment-number-column" key={title}><h4>{title}</h4><div>{rows.map(([label, value]) => <div key={label}><span>{label}</span><strong>{Number(value).toFixed(1)}</strong></div>)}</div></article>)}</div>
+      <div className="assessment-summary-cognitive"><span>Estimated cognitive score</span><strong>{scored.reasoning.estimatedCognitiveScore}</strong><small>ICAR-16 · {scored.reasoning.correct} of {scored.reasoning.total} correct · brief estimate, not a clinical diagnosis</small></div>
+    </details>
   </section>
 }
 
@@ -3443,6 +3451,7 @@ function AssessmentChallengeCard({ challenge, result, answers, saved, onOpen }) 
 function ProfileAssessmentPage({ notify, data, reload }) {
   const [answers, setAnswers] = useState(loadChallengeAnswers)
   const [openKey, setOpenKey] = useState(null)
+  const [reviewKey, setReviewKey] = useState(null)
   // Completed attempts already on the server, newest per challenge.
   const [saved, setSaved] = useState({})
   const [syncing, setSyncing] = useState(true)
@@ -3495,9 +3504,16 @@ function ProfileAssessmentPage({ notify, data, reload }) {
   const doneCount = results.filter(([, result]) => result).length
   const student = ownStudent(data)
   const open = CHALLENGES.find((challenge) => challenge.key === openKey)
+  const review = CHALLENGES.find((challenge) => challenge.key === reviewKey)
   const resultByKey = Object.fromEntries(results.map(([challenge, result]) => [challenge.key, { challenge, result }]))
 
   if (open) return <ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} />
+  if (review) return <AssessmentResultPage
+    challenge={review}
+    result={resultByKey[review.key].result}
+    onBack={() => { setReviewKey(null); window.scrollTo(0, 0) }}
+    onRetake={() => { setReviewKey(null); setOpenKey(review.key); window.scrollTo(0, 0) }}
+  />
 
   return <div className="section-stack student-portal profile-assessment-page">
     <div className="assessment-overview-layout">
@@ -3509,14 +3525,14 @@ function ProfileAssessmentPage({ notify, data, reload }) {
           result={challengeEntry.result}
           answers={answers}
           saved={saved[key]}
-          onOpen={() => { setOpenKey(key); window.scrollTo(0, 0) }}
+          onOpen={() => { challengeEntry.result ? setReviewKey(key) : setOpenKey(key); window.scrollTo(0, 0) }}
         />
       })}</section>
 
       <MajorMatches results={results} locked={doneCount !== CHALLENGES.length || syncing} student={student} reload={reload} notify={notify} />
     </div>
 
-    {doneCount > 0 && <div id="assessment-results" className="assessment-results-stack">
+    {doneCount === CHALLENGES.length && <div id="assessment-results" className="assessment-results-stack">
       <ResultsSummary results={results} />
     </div>}
   </div>

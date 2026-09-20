@@ -930,6 +930,7 @@ class EducationMatchAIView(APIView):
             profile=profile,
             major_candidates=serializer.validated_data['major_candidates'],
             subject_strengths=serializer.validated_data.get('subject_strengths', []),
+            minor_candidates=serializer.validated_data.get('minor_candidates', []),
         )
         result['provider_available'] = recommendation_ai_available()
         return Response(result)

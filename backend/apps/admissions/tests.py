@@ -3,6 +3,7 @@ import io
 import json
 import tempfile
 import zipfile
+from unittest.mock import patch
 
 from django.conf import settings
 from django.core.cache import cache
@@ -2106,11 +2107,13 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['mode'], 'deterministic')
         self.assertFalse(response.data['provider_available'])
+        self.assertEqual(response.data['strongest_major']['major'], 'Computer Science')
+        self.assertEqual(response.data['strongest_major']['evidence'], ['Mathematics', 'Physics'])
         self.assertEqual(
-            [item['major'] for item in response.data['major_guidance']],
-            ['Computer Science', 'Economics'],
+            [item['minor'] for item in response.data['minor_guidance']],
+            ['Psychology', 'Design', 'Entrepreneurship'],
         )
-        self.assertEqual(response.data['major_guidance'][0]['subjects_to_focus'], ['Mathematics', 'Physics'])
+        self.assertEqual(len(response.data['minor_guidance']), 3)
         self.assertNotIn('college_explanations', response.data)
 
     def test_major_ai_uses_current_assessments_and_ignores_retired_work_values(self):
@@ -2122,6 +2125,55 @@ class RoleIsolationTests(APITestCase):
             )
         scores = latest_assessment_scores(self.student_a)
         self.assertEqual(set(scores), {'personality', 'interests', 'subjects', 'reasoning'})
+
+    @override_settings(GROQ_API_KEY='test-provider-key')
+    @patch('apps.admissions.education_ai._request_groq')
+    def test_major_match_ai_marks_valid_provider_direction_as_groq(self, request_groq):
+        request_groq.return_value = {
+            'summary': 'A focused direction.',
+            'strongest_major': {
+                'major': 'Computer Science',
+                'why_fit': 'It connects your investigating interests and subject strengths.',
+                'evidence': ['Mathematics'],
+                'explore_next': 'Build a small human-centered application.',
+            },
+            'minor_guidance': [
+                {'minor': 'Psychology', 'why_fit': 'Understand users.', 'combination_idea': 'Study human-computer interaction.'},
+                {'minor': 'Design', 'why_fit': 'Make ideas usable.', 'combination_idea': 'Prototype an accessible interface.'},
+                {'minor': 'Entrepreneurship', 'why_fit': 'Turn solutions into products.', 'combination_idea': 'Test a student product idea.'},
+            ],
+            'questions_to_consider': ['Which combination would you test first?'],
+        }
+        self.client.force_authenticate(self.student_a_user)
+        response = self.client.post('/api/education-matches/ai/', {
+            'major_candidates': ['Computer Science', 'Economics'],
+            'subject_strengths': ['Mathematics', 'Physics'],
+            'minor_candidates': ['Psychology', 'Design', 'Entrepreneurship', 'Philosophy'],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mode'], 'groq')
+        self.assertTrue(response.data['provider_available'])
+        self.assertEqual(response.data['strongest_major']['major'], 'Computer Science')
+        self.assertEqual(len(response.data['minor_guidance']), 3)
+
+    @override_settings(GROQ_API_KEY='test-provider-key')
+    @patch('apps.admissions.education_ai._request_groq')
+    def test_major_match_ai_rejects_invented_minor_and_uses_labeled_fallback(self, request_groq):
+        request_groq.return_value = {
+            'strongest_major': {'major': 'Computer Science', 'why_fit': 'Fit', 'evidence': [], 'explore_next': 'Explore'},
+            'minor_guidance': [
+                {'minor': 'Made-up Studies', 'why_fit': 'Invented', 'combination_idea': 'Invented'},
+                {'minor': 'Psychology', 'why_fit': 'Useful', 'combination_idea': 'Explore people'},
+            ],
+        }
+        self.client.force_authenticate(self.student_a_user)
+        response = self.client.post('/api/education-matches/ai/', {
+            'major_candidates': ['Computer Science'],
+            'minor_candidates': ['Psychology', 'Design', 'Entrepreneurship'],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mode'], 'deterministic')
+        self.assertEqual(len(response.data['minor_guidance']), 3)
 
     def test_non_student_cannot_generate_education_match_guidance(self):
         self.client.force_authenticate(self.counselor)
