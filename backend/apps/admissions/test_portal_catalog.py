@@ -69,5 +69,5 @@ class PortalCatalogTests(TestCase):
     def test_sample_service_api_exposes_price_provider_and_sample_flag(self):
         data = StoreItemSerializer(StoreItem.objects.get(catalog_key='sample-essay-review')).data
         self.assertTrue(data['is_sample'])
-        self.assertEqual(data['currency'], 'UZS')
+        self.assertEqual(data['currency'], 'USD')
         self.assertEqual(len(data['deliverables']), 3)
