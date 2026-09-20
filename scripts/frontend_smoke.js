@@ -18,7 +18,7 @@ const reachMapCss = fs.readFileSync(path.join(root, 'frontend/src/components/rea
 const requiredViews = [
   'dashboard', 'profile', 'academics', 'portfolio', 'activities', 'recommendations',
   'schools', 'students', 'tasks', 'applications', 'documents',
-  'certificates', 'essays', 'achievements', 'roadmap', 'program_usage', 'bookings', 'messages', 'support', 'screen_time',
+  'certificates', 'essays', 'achievements', 'roadmap', 'bookings', 'messages', 'support', 'screen_time',
   'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings',
 ];
 const requiredApiMethods = [
@@ -53,7 +53,6 @@ if (!api.includes('approveRoadmapMission')) throw new Error('Roadmap approval AP
 if (!api.includes('extendLevelOneRoadmap') || !app.includes('function LevelOneSetupModal(')) throw new Error('Level 1 roadmap extension is missing.');
 if (app.includes('Progress %') || app.includes('item.progress_percent') || app.includes("values.get('progress_percent')")) throw new Error('Manual roadmap progress controls must not be rendered.');
 if (!app.includes("status: 'submitted', reflection: values.get('reflection')") || !app.includes('Submit mission') || !styles.includes('.mission-submit-status')) throw new Error('Student submit-only roadmap workflow is missing.');
-if (!app.includes('<Sparkles size={12} /> {t("Planned")}') || !styles.includes('.mission-status-chip')) throw new Error('Planned mission badge is missing.');
 if (!app.includes('function LevelProgress(') || !api.includes('approveStudentLevel')) throw new Error('XP and teacher-approved leveling UI is missing.');
 for (const channelTab of ['Direct', 'Group', 'Community', 'Discussions']) {
   if (!app.includes(`\"${channelTab}\"`)) throw new Error(`Messaging tab missing: ${channelTab}`)
@@ -81,15 +80,19 @@ if (!app.includes('defaultStudentId={selectedStudentNumericId}') || !app.include
 for (const missionState of ['current', 'locked', 'submitted', 'completed', 'upcoming']) {
   if (!app.includes(`${missionState}: [`)) throw new Error(`Roadmap mission state copy missing: ${missionState}`)
 }
-if (!app.includes('function ProgramUsagePage(') || !app.includes('function ProgramServiceForm(') || !styles.includes('.usage-summary') || !styles.includes('.usage-toolbar')) throw new Error('Enhanced Program Usage or staff service management UI is missing.');
-if (!app.includes("['programServices', 'program-services']") || !app.includes('Unlimited service access')) throw new Error('Scoped Program Usage resource or unlimited service state is missing.');
-if (!app.includes('data.programServices.filter((item) => item.student === selectedStudentNumericId)')) throw new Error('Program Usage is not scoped to the selected student.');
+if (!app.includes('function ProgramUsageSummary(') || !app.includes('function ProgramServiceForm(') || !styles.includes('.usage-headline') || !styles.includes('.usage-ring')) throw new Error('Dashboard program-usage summary or staff service management UI is missing.');
+if (!app.includes("['programServices', 'program-services']") || !app.includes('Mentor pending')) throw new Error('Program service resource or mentor state is missing.');
+if (app.includes('function ProgramUsagePage(') || app.includes("page === 'program_usage'")) throw new Error('The standalone Program Usage page must stay removed.');
+if (!app.includes('<ProgramUsageSummary user={user} data={data} />') || !app.includes('{isCounselor(user) && <ProgramUsageSummary')) throw new Error('Program usage must render as a dashboard section for students and counselors.');
+if (app.includes("return ['dashboard', 'schools', 'students', 'counselor_roadmap'")) throw new Error('Counselors belong to one school; the Schools page must stay out of their navigation.');
+if (!app.includes('{!manager && <PortalTabs active={tab} onChange={setTab} items={[["path", "Level path"], ["tasks", "Task list"]]} />}')) throw new Error('Student roadmap level-path / task-list tabs are missing.');
+if (app.includes('filter-panel') || app.includes('finder-layout') || !app.includes('function FilterChip(') || !styles.includes('.college-filter-bar')) throw new Error('College search must use the compact filter bar, not the legacy sidebar filter panel.');
 if (!app.includes('function DashboardDiscoveryCards(') || !app.includes("setPage('find_personality')") || !app.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
 for (const region of ["label: 'US'", "label: 'Canada'", "label: 'China'", "label: 'Hong Kong'"]) {
   if (!app.includes(region)) throw new Error(`College region missing: ${region}`);
 }
-if (!app.includes('universityRegion(item) === region') || !styles.includes('.college-region-tabs')) throw new Error('College region tabs are not wired to the university catalog.');
-if (!app.includes('recommendation?.admission_band === admissionBand') || !styles.includes('.college-tier-tabs')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
+if (!app.includes('universityRegion(item) === region') || !app.includes('aria-label={t("Country")}')) throw new Error('College region chips are not wired to the university catalog.');
+if (!app.includes('recommendation?.admission_band === admissionBand') || !styles.includes('.filter-chip-row')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
 if (!app.includes('function AIEducationGuidance(') || !app.includes('function MajorMatches(') || !app.includes('assessment-ai-orbit-mark') || !styles.includes('.assessment-ai-orbit-mark') || !styles.includes('.education-ai-guidance')) throw new Error('Assessment-based AI major guidance or the Naseeb logo mark is missing.');
 if (app.includes('education-ai-colleges') || app.includes('college_explanations')) throw new Error('University AI must remain separate from the major guidance stage.');
 if (app.includes('title="Where this could lead"')) throw new Error('The retired deterministic career recommendation panel has returned.');
@@ -192,6 +195,7 @@ if (undefinedTokens.length) throw new Error(`Undefined CSS variables: ${undefine
 if (!html.includes("localStorage.getItem('naseeb-edu-theme')") || !app.includes('useLayoutEffect')) throw new Error('Pre-paint theme initialization is missing.')
 if (!app.includes('function CheckboxControl(') || !app.includes('function ChoiceCards(')) throw new Error('Accessible reusable form controls are missing.')
 if (app.includes('program-type-tabs') || app.includes('check-filter')) throw new Error('Legacy program filters are still rendered.')
+if ((app.match(/<Sparkles/g) || []).length !== 1) throw new Error('The sparkle icon is reserved for Naseeb AI actions only.')
 if ((html.match(/name="theme-color"/g) || []).length !== 1) throw new Error('Exactly one dynamic theme-color meta tag is required.');
 if (app.includes('AdmitFlow') || html.includes('AdmitFlow')) throw new Error('Legacy AdmitFlow branding is still rendered.');
 for (const asset of ['naseeb-gold-shield.png', 'naseeb-midnight-shield.svg', 'assistant-bird.png']) {
