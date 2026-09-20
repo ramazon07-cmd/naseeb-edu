@@ -137,7 +137,7 @@ export const TRANSLATIONS = {
     "This revokes existing sessions and any previous temporary password.":
       "Bu mavjud sessiyalarni va avvalgi vaqtinchalik parolni bekor qiladi.",
     Admin: "Admin",
-    "School Counselor": "Maktab counselori",
+    "School Counselor": "Maktab maslahatchisi",
     Teacher: "O‘qituvchi",
     "Organization School": "Maktab tashkiloti",
     Student: "O‘quvchi",
@@ -165,7 +165,7 @@ export const TRANSLATIONS = {
     Student: "O‘quvchi",
     School: "Maktab",
     Grade: "Sinf",
-    Counselor: "Counselor",
+    Counselor: "Maslahatchi",
     Major: "Yo‘nalish",
     Countries: "Davlatlar",
     Scholarship: "Stipendiya",
@@ -432,13 +432,35 @@ export function tx(strings, ...values) {
 }
 
 export const locale = () => LOCALES[activeLanguage] || LOCALES.en;
+const UZ_MONTHS = [
+  "yanvar", "fevral", "mart", "aprel", "may", "iyun",
+  "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr",
+];
+
+// Some Chromium builds ship without Uzbek month names and fall back to "M09".
+// Uzbek is the default language here, so compose the date ourselves when that happens.
+const formatUzbekDate = (date, options) => {
+  const pad = (part) => String(part).padStart(2, "0");
+  const pieces = [];
+  if (options.day && options.month) pieces.push(`${date.getDate()}-${UZ_MONTHS[date.getMonth()]}`);
+  else if (options.month) pieces.push(UZ_MONTHS[date.getMonth()]);
+  else if (options.day) pieces.push(String(date.getDate()));
+  if (options.year) pieces.push(String(date.getFullYear()));
+  const stamp = pieces.join(" ");
+  if (!options.hour && !options.minute) return stamp;
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return stamp ? `${stamp}, ${time}` : time;
+};
+
 export const formatDateLocale = (
   value,
   options = { day: "2-digit", month: "short", year: "numeric" },
-) =>
-  value
-    ? new Intl.DateTimeFormat(locale(), options).format(new Date(value))
-    : "—";
+) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  const formatted = new Intl.DateTimeFormat(locale(), options).format(date);
+  return /\bM\d{2}\b/.test(formatted) ? formatUzbekDate(date, options) : formatted;
+};
 export const formatNumberLocale = (value, options = {}) =>
   new Intl.NumberFormat(locale(), options).format(Number(value) || 0);
 export const formatPercentLocale = (value, options = {}) =>

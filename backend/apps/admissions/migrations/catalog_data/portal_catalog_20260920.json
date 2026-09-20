@@ -1,0 +1,3906 @@
+{
+ "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+ "reviewed_on": "2026-09-20",
+ "programs": [
+  {
+   "source_key": "sheet-2025-stanford-summer-fellows-program-in-usa",
+   "title": "2025 Stanford Summer Fellows Program in USA",
+   "provider": "opportunitiescorners.com",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16+",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "16-Jan-25",
+   "application_open_text": "",
+   "application_url": "https://opportunitiescorners.com/stanford-fisher-family-summer-fellows-program/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!99",
+     "grade 10!99",
+     "grade 11!98"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-ai-multimodal-championship",
+   "title": "AI Multimodal Championship",
+   "provider": "steaminai.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "5,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "5-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://steaminai.org/announcing-the-steam-in-ai-multimodal-championship-inaugural-season-2024-2025/?utm_source=DeepLearning.AI&utm_medium=post&utm_campaign=Championship&utm_content=Instructors",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "gerade 5!9",
+     "grade 8!56",
+     "grade 9!74",
+     "grade 10!74",
+     "grade 11!73"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-anson-l-clark-scholars-program",
+   "title": "Anson L. Clark Scholars Program",
+   "provider": "depts.ttu.edu",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-18",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "Feb 15",
+   "application_open_text": "",
+   "application_url": "https://www.depts.ttu.edu/honors/academicsandenrichment/affiliatedandhighschool/clarks/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!34",
+     "grade 10!34",
+     "grade 11!34"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-aral-summer-school-2026",
+   "title": "Aral Summer School 2026",
+   "provider": "",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-40",
+   "eligible_grades": "",
+   "deadline": null,
+   "deadline_text": "15th June",
+   "application_open_text": "",
+   "application_url": "",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "Summer programs!7"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-awardx-high-school-entrepreneur-competition",
+   "title": "AwardX: High School Entrepreneur Competition",
+   "provider": "award.launchx.com",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "1-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://award.launchx.com/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!46",
+     "grade 8!58",
+     "grade 9!76",
+     "grade 10!76",
+     "grade 11!75"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-ayfn-japan-winter-culture-camp-2025",
+   "title": "AYFN JAPAN Winter Culture Camp 2025",
+   "provider": "ayfnhq.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-25",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "31-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://ayfnhq.org/event/scholarship-opportunity-winter-japan-culture-camp-2025/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!60",
+     "grade 9!78",
+     "grade 10!78",
+     "grade 11!77"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-be-an-explorer",
+   "title": "Be An Explorer",
+   "provider": "iite.unesco.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "30-Sep-24",
+   "application_open_text": "",
+   "application_url": "https://iite.unesco.org/ru/announcements/prizyv-ko-vsem-yunym-novatoram-primite-uchastie-v-konkurse-molodezhnyh-innovatsij-2024/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!17",
+     "grade 7!17",
+     "grade 8!47",
+     "grade 9!59",
+     "grade 10!59",
+     "grade 11!58"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-camp-rising-sun",
+   "title": "Camp Rising Sun",
+   "provider": "lajf.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-16",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Dec 15",
+   "application_open_text": "Nov 15",
+   "application_url": "https://www.lajf.org/crs",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!6",
+     "grade 9!7",
+     "grade 10!7",
+     "grade 11!7"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-carnegie-mellon-summer-academy-for-math-and-science-sams",
+   "title": "Carnegie Mellon Summer Academy for Math and Science (SAMS)",
+   "provider": "cmu.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-18",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "25-Feb-25",
+   "application_open_text": "",
+   "application_url": "https://www.cmu.edu/pre-college/academic-programs/sams.html",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!41",
+     "grade 10!41",
+     "grade 11!40"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-ccir",
+   "title": "CCIR",
+   "provider": "cambridge-research.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Mar 1, Mar 15",
+   "application_open_text": "",
+   "application_url": "https://cambridge-research.org/academy/cambridge-future-scholar/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!36",
+     "grade 8!27",
+     "grade 9!35",
+     "grade 10!35",
+     "grade 11!35"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-civic-innovators-fellowship",
+   "title": "Civic Innovators Fellowship",
+   "provider": "civicsunplugged.org",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-22",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Sep 1",
+   "application_open_text": "",
+   "application_url": "https://www.civicsunplugged.org/fellowship",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!27",
+     "grade 8!12",
+     "grade 9!13",
+     "grade 10!13",
+     "grade 11!13"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-commonwealth-short-story-prize-2025",
+   "title": "Commonwealth Short Story Prize 2025",
+   "provider": "scholarshipscorner.website",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18+",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "2-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://scholarshipscorner.website/commonwealth-short-story-prize/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!83",
+     "grade 10!83",
+     "grade 11!82"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-congress-bundestag-youth-exchange-cbyx",
+   "title": "Congress-Bundestag Youth Exchange (CBYX)",
+   "provider": "usagermanyscholarship.org",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-18",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "1-Jan-25",
+   "application_open_text": "",
+   "application_url": "https://usagermanyscholarship.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!32",
+     "grade 9!43",
+     "grade 10!43",
+     "grade 11!42"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-cornell-precollege-program",
+   "title": "Cornell Precollege Program",
+   "provider": "sce.cornell.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-19",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "May 5, Jun 2",
+   "application_open_text": "",
+   "application_url": "https://sce.cornell.edu/precollege/admission/sc",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!29",
+     "grade 10!29",
+     "deadline!8",
+     "grade 11!29"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-crimson-access-opportunity",
+   "title": "Crimson Access Opportunity",
+   "provider": "crimsoneducation.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Apr 1",
+   "application_open_text": "",
+   "application_url": "https://www.crimsoneducation.org/nz/about-us/crimson-access-opportunity-scholarship/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!37",
+     "grade 8!30",
+     "grade 9!38",
+     "grade 10!38",
+     "grade 11!38"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-diamond-challenge",
+   "title": "Diamond Challenge",
+   "provider": "diamondchallenge.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "16-Jan-25",
+   "application_open_text": "",
+   "application_url": "https://diamondchallenge.org/impact/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!42",
+     "grade 8!42",
+     "grade 9!54",
+     "grade 10!54",
+     "grade 11!53"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-east-asia-young-scholars-association",
+   "title": "East Asia Young Scholars Association",
+   "provider": "eaysa.org",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "high school/early uni",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "30-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://eaysa.org/2025-international-conference-on-human-rights/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!64",
+     "grade 9!91",
+     "grade 10!91",
+     "grade 11!90"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-en-roads-climate-ambassador-camp",
+   "title": "En-Roads Climate Ambassador Camp",
+   "provider": "climateinteractive.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-22",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://www.climateinteractive.org/en-roads-ambassador-program/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!40",
+     "grade 8!38",
+     "grade 9!49",
+     "grade 10!49",
+     "grade 11!48"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-future-diplomats-forum-2025",
+   "title": "Future Diplomats Forum 2025",
+   "provider": "opportunitiescorners.com",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-25",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "20-Jan-25",
+   "application_open_text": "",
+   "application_url": "https://opportunitiescorners.com/future-diplomats-forum/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!87",
+     "grade 10!87",
+     "grade 11!86"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-future-generations-scientists",
+   "title": "Future Generations Scientists",
+   "provider": "",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-17",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": "2026-07-26",
+   "deadline_text": "26.07.2026",
+   "application_open_text": "",
+   "application_url": "https://sites.google.com/thefgs.org/fgs",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!34",
+     "grade 8!24",
+     "grade 9!30",
+     "grade 10!30",
+     "deadline!9",
+     "grade 11!30",
+     "Sheet10!8"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": false
+  },
+  {
+   "source_key": "sheet-genai-world-solutions-challenge",
+   "title": "GenAI World Solutions Challenge",
+   "provider": "fpspimart.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-22",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "28-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://www.fpspimart.org/product/world-solutions-challenge/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!20",
+     "grade 7!20",
+     "grade 8!62",
+     "grade 9!81",
+     "grade 10!81",
+     "grade 11!80"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-ghlc",
+   "title": "GHLC",
+   "provider": "glohea.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "ED: Jan 16, RD: Feb 28",
+   "application_open_text": "",
+   "application_url": "https://glohea.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!30",
+     "grade 8!17",
+     "grade 9!20",
+     "grade 10!20",
+     "grade 11!20"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-girls-in-research",
+   "title": "Girls In Research",
+   "provider": "girlsinresearch.com",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "10-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://www.girlsinresearch.com/application",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!43",
+     "grade 8!43",
+     "grade 9!55",
+     "grade 10!55",
+     "grade 11!54"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-girls-who-code",
+   "title": "Girls Who Code",
+   "provider": "girlswhocode.com",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "11-18",
+   "eligible_grades": "5,6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "ED: Feb 14, RD: March 22",
+   "application_open_text": "",
+   "application_url": "https://girlswhocode.com/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "gerade 5!3",
+     "grade 6!8",
+     "grade 7!8",
+     "grade 8!14",
+     "grade 9!16",
+     "grade 10!16",
+     "grade 11!16"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-girls-who-code-summer-immersion-program",
+   "title": "Girls Who Code Summer Immersion Program",
+   "provider": "girlswhocode.com",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "11-18",
+   "eligible_grades": "5,6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://girlswhocode.com/programs/summer-immersion-program",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "gerade 5!5",
+     "grade 6!13",
+     "grade 7!13",
+     "grade 8!39",
+     "grade 9!50",
+     "grade 10!50",
+     "grade 11!49"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-global-change-summit-2024",
+   "title": "Global Change Summit 2024",
+   "provider": "theogpd.org",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-25",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "7-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://theogpd.org/gcs-2024/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!48",
+     "grade 9!60",
+     "grade 10!60",
+     "grade 11!59"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-global-leaders-summit-2025",
+   "title": "Global Leaders Summit 2025",
+   "provider": "scholarshipscorner.website",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-25",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "27-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://scholarshipscorner.website/asia-foundation-leadership-program/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!64",
+     "grade 10!64",
+     "grade 11!63"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-global-peace-forum-2025",
+   "title": "Global Peace Forum 2025",
+   "provider": "cccd.ca",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-25",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "5-Mar-25",
+   "application_open_text": "",
+   "application_url": "https://cccd.ca/cultural-diplomacy-conflict-resolution-global-peace-forum/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!68",
+     "grade 10!68",
+     "grade 11!67"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-harvard-summer-school",
+   "title": "Harvard Summer School",
+   "provider": "summer.harvard.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-19",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "Dec 2",
+   "application_open_text": "",
+   "application_url": "https://summer.harvard.edu/high-school-programs/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!15",
+     "grade 10!15",
+     "Summer programs!4",
+     "grade 11!15"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-harvard-ventures-tech-winter-fellowship",
+   "title": "Harvard Ventures - Tech Winter Fellowship",
+   "provider": "tech.seas.harvard.edu",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-22",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "31-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://tech.seas.harvard.edu/fellowship",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!72",
+     "grade 10!72",
+     "grade 11!71"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-horizon-academics",
+   "title": "Horizon Academics",
+   "provider": "horizoninspires.com",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Dec 1",
+   "application_open_text": "",
+   "application_url": "https://www.horizoninspires.com/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!35",
+     "grade 8!25",
+     "grade 9!31",
+     "grade 10!31",
+     "grade 11!31"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-hub-global-enrepreneurship-competition",
+   "title": "HUB Global Enrepreneurship Competition",
+   "provider": "",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-22",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "21-Aug-24",
+   "application_open_text": "",
+   "application_url": "https://forms.gle/ziMA6q5gvsTXF2Pp7",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!44",
+     "grade 8!50",
+     "grade 9!63",
+     "grade 10!63",
+     "deadline!10",
+     "grade 11!62"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-iceland-writers-retreat-award",
+   "title": "Iceland Writers Retreat Award",
+   "provider": "icelandwritersretreat.com",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18+",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "2-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://icelandwritersretreat.com/scholarships/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!71",
+     "grade 10!71",
+     "grade 11!70"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-icu-global-youth-essay-competition",
+   "title": "ICU Global Youth Essay Competition",
+   "provider": "icu.ac.jp",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-25",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "9-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://www.icu.ac.jp/en/news/GlobalYouthEssay2024.html",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!21",
+     "grade 7!21",
+     "grade 8!63",
+     "grade 9!85",
+     "grade 10!85",
+     "grade 11!84"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-immerse-education-essay-competition",
+   "title": "Immerse Education Essay Competition",
+   "provider": "immerse.education",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": "2026-10-25",
+   "deadline_text": "25.10.2026",
+   "application_open_text": "03.08.2026",
+   "application_url": "https://www.immerse.education/essay-competition/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!5",
+     "grade 7!5",
+     "grade 8!5",
+     "grade 9!5",
+     "grade 10!5",
+     "grade 11!5",
+     "Sheet10!3"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": false
+  },
+  {
+   "source_key": "sheet-international-mathematical-summer-camp-2023",
+   "title": "International Mathematical Summer Camp 2023",
+   "provider": "bimsa.cn",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://www.bimsa.cn/research_detail/camp.html",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!38",
+     "grade 8!36",
+     "grade 9!47",
+     "grade 10!47",
+     "grade 11!46"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-international-young-researchers-tournament",
+   "title": "International Young Researchers Tournament",
+   "provider": "",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-18",
+   "eligible_grades": "",
+   "deadline": null,
+   "deadline_text": "20th may",
+   "application_open_text": "",
+   "application_url": "",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "Summer programs!6"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-international-youth-competition",
+   "title": "International Youth Competition",
+   "provider": "icu.ac.jp",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "Varies",
+   "eligible_grades": "5,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "9-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://www.icu.ac.jp/en/news/GlobalYouthEssay2024.html",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "gerade 5!6",
+     "grade 8!46",
+     "grade 9!58",
+     "grade 10!58",
+     "grade 11!57"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-irena-youth-forum",
+   "title": "IRENA youth forum",
+   "provider": "irena.org",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-35",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "24-Sep-24",
+   "application_open_text": "",
+   "application_url": "https://www.irena.org/Events/2025/Jan/The-New-Generation-of-Decision-Makers-IRENA-Youth-Forum-at-the-15th-IRENA-Assembly",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!96",
+     "grade 10!96",
+     "grade 11!95"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-issyp",
+   "title": "ISSYP",
+   "provider": "perimeterinstitute.ca",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-18",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "March 16",
+   "application_open_text": "",
+   "application_url": "https://perimeterinstitute.ca/issyp",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!33",
+     "grade 10!33",
+     "grade 11!33"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-istanbul-youth-summit-2025",
+   "title": "Istanbul youth Summit 2025",
+   "provider": "opportunitiescorners.com",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-30",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "20-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://opportunitiescorners.com/istanbul-youth-summit/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!88",
+     "grade 10!88",
+     "grade 11!87"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-john-hopkins-center-for-talented-youth",
+   "title": "John Hopkins Center for Talented Youth",
+   "provider": "cty.jhu.edu",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "5-18",
+   "eligible_grades": "5,6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://cty.jhu.edu/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "gerade 5!4",
+     "grade 6!11",
+     "grade 7!11",
+     "grade 8!29",
+     "grade 9!37",
+     "grade 10!37",
+     "grade 11!37"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-just-dilijan-it",
+   "title": "Just Dilijan It",
+   "provider": "justdilijanit.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "12-17",
+   "eligible_grades": "5,6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "08.03",
+   "application_open_text": "",
+   "application_url": "https://www.justdilijanit.org/en/home",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "gerade 5!2",
+     "grade 6!2",
+     "grade 6!7",
+     "grade 7!2",
+     "grade 7!7",
+     "grade 8!10",
+     "grade 9!11",
+     "grade 10!11",
+     "grade 11!11"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-kectil-program",
+   "title": "Kectil Program",
+   "provider": "kectil.com",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-20",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "15-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://kectil.com/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!52",
+     "grade 9!67",
+     "grade 10!67",
+     "grade 11!66"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-ladder-internships",
+   "title": "Ladder Internships",
+   "provider": "",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-20",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "24-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://airtable.com/appx1OFdMpDfxtEkR/shrNdEykWdhc4yeSv",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!45",
+     "grade 8!55",
+     "grade 9!73",
+     "grade 10!73",
+     "grade 11!72"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-launchx",
+   "title": "LaunchX",
+   "provider": "launchx.com",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": "2026-07-29",
+   "deadline_text": "29.07.2026",
+   "application_open_text": "",
+   "application_url": "https://www.launchx.com/programs",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!32",
+     "grade 8!22",
+     "grade 9!27",
+     "grade 10!27",
+     "grade 11!27",
+     "Sheet10!7"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": false
+  },
+  {
+   "source_key": "sheet-leadership-business-management-certification-usa-2025",
+   "title": "Leadership&Business Management Certification USA 2025",
+   "provider": "opportunitiescorners.com",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16+",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "10-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://opportunitiescorners.com/leadership-business-management-certification-usa/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!86",
+     "grade 10!86",
+     "grade 11!85"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-leadnext-ambassadors-for-a-global-future",
+   "title": "LeadNext: Ambassadors for a Global Future",
+   "provider": "asiafoundation.org",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-25",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "27-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://asiafoundation.org/programs/education-and-leadership/leadex/leadnext-ambassadors-for-a-global-future/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!84",
+     "grade 10!84",
+     "grade 11!83"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-lumiere-education",
+   "title": "Lumiere Education",
+   "provider": "lumiere-education.com",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "12-18",
+   "eligible_grades": "5,6,7,8,9,10,11",
+   "deadline": "2026-08-23",
+   "deadline_text": "23.08.2026",
+   "application_open_text": "",
+   "application_url": "https://www.lumiere-education.com/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!29",
+     "grade 8!15",
+     "grade 9!17",
+     "grade 10!17",
+     "grade 11!17",
+     "Sheet10!5"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": false
+  },
+  {
+   "source_key": "sheet-mcw-young-leaders-fellowship",
+   "title": "MCW Young leaders Fellowship",
+   "provider": "opportunitiescorners.info",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-30",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "14-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://opportunitiescorners.info/mcw-young-leaders-fellowship-program/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!90",
+     "grade 10!90",
+     "grade 11!89"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-meta-hacker-cup",
+   "title": "Meta Hacker Cup",
+   "provider": "facebook.com",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13+",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "5-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://www.facebook.com/codingcompetitions/hacker-cup",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!19",
+     "grade 7!19",
+     "grade 8!59",
+     "grade 9!77",
+     "grade 10!77",
+     "grade 11!76"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-nagoya-international-summer-school",
+   "title": "Nagoya International Summer School",
+   "provider": "",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "",
+   "deadline": null,
+   "deadline_text": "July 1(first come first served)",
+   "application_open_text": "",
+   "application_url": "",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "Summer programs!2"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-nasa-apps-challenge",
+   "title": "Nasa Apps Challenge",
+   "provider": "spaceappschallenge.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "6-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://www.spaceappschallenge.org/nasa-space-apps-2024/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!16",
+     "grade 7!16",
+     "grade 8!45",
+     "grade 9!57",
+     "grade 10!57",
+     "grade 11!56"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-national-security-language-initiative-for-youth-nsli-y",
+   "title": "National Security Language Initiative for Youth (NSLI-Y)",
+   "provider": "nsliforyouth.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-18",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "1-Dec-24",
+   "application_open_text": "",
+   "application_url": "https://www.nsliforyouth.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!31",
+     "grade 9!42",
+     "grade 10!42",
+     "grade 11!41"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-new-york-academy-of-science-junior",
+   "title": "New York Academy of Science Junior",
+   "provider": "nyas.org",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-17",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": "2026-07-09",
+   "deadline_text": "09.07.2026",
+   "application_open_text": "01.04.2026",
+   "application_url": "https://www.nyas.org/learning/high-school-research-programs/the-junior-academy/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!4",
+     "grade 7!4",
+     "grade 8!4",
+     "grade 9!4",
+     "grade 10!4",
+     "deadline!4",
+     "grade 11!4",
+     "Sheet10!2"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": false
+  },
+  {
+   "source_key": "sheet-nobel-learning-pbc-internship",
+   "title": "Nobel Learning PBC Internship",
+   "provider": "nobelnavigators.com",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13+",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "april 20",
+   "application_open_text": "",
+   "application_url": "https://nobelnavigators.com/internship/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!3",
+     "grade 7!3",
+     "grade 8!3",
+     "grade 9!3",
+     "grade 10!3",
+     "deadline!3",
+     "Summer programs!5",
+     "grade 11!3"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-notre-dame-leadership-scholars",
+   "title": "Notre Dame Leadership Scholars",
+   "provider": "precollege.nd.edu",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16+",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "21.01",
+   "application_open_text": "15.10",
+   "application_url": "https://precollege.nd.edu/leadership-seminars/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!8",
+     "grade 9!9",
+     "grade 10!9",
+     "grade 11!9"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-notre-dame-summer-scholar",
+   "title": "Notre Dame Summer Scholar",
+   "provider": "precollege.nd.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16+",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "Feb 19",
+   "application_open_text": "",
+   "application_url": "https://precollege.nd.edu/summer-scholars/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!18",
+     "grade 10!18",
+     "grade 11!18"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-nyu-coding-for-game-design-program",
+   "title": "NYU Coding for Game Design Program",
+   "provider": "connect.nyu.edu",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Apr 30",
+   "application_open_text": "",
+   "application_url": "https://connect.nyu.edu/register/?id=3857d11d-6c1c-4e3b-b87d-8cf29670cd38",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!33",
+     "grade 8!23",
+     "grade 9!28",
+     "grade 10!28",
+     "deadline!7",
+     "grade 11!28"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-online-immersion-programs",
+   "title": "Online Immersion Programs",
+   "provider": "wfuonline.precollegeprograms.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "24-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://wfuonline.precollegeprograms.org/?utm_source=wfu&utm_medium=website&utm_campaign=online-immersion-program",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!18",
+     "grade 7!18",
+     "grade 8!54",
+     "grade 9!70",
+     "grade 10!70",
+     "grade 11!69"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-osiyo-iqtisodiyot-olimpiyadasi",
+   "title": "Osiyo Iqtisodiyot Olimpiyadasi",
+   "provider": "",
+   "program_type": "national",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-18",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "23-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://forms.gle/v11dNPjVA2gvwmKY9",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!51",
+     "grade 9!65",
+     "grade 10!65",
+     "grade 11!64"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-oxbright-essay-competition",
+   "title": "Oxbright Essay Competition",
+   "provider": "oxbright.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Apr 15",
+   "application_open_text": "",
+   "application_url": "https://www.oxbright.org/resources/essay-competition/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!10",
+     "grade 7!10",
+     "grade 8!19",
+     "grade 9!24",
+     "grade 10!24",
+     "deadline!6",
+     "grade 11!24"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-physics-brawl-2024",
+   "title": "Physics Brawl 2024",
+   "provider": "physicsbrawl.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "high school/early uni",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "20-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://physicsbrawl.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!57",
+     "grade 9!75",
+     "grade 10!75",
+     "grade 11!74"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-pioneer-academics",
+   "title": "Pioneer Academics",
+   "provider": "pioneeracademics.com",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-19",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": "2026-07-12",
+   "deadline_text": "12.07.2026",
+   "application_open_text": "",
+   "application_url": "https://pioneeracademics.com/about/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!26",
+     "grade 8!11",
+     "grade 9!12",
+     "grade 10!12",
+     "grade 11!12",
+     "Sheet10!4"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": false
+  },
+  {
+   "source_key": "sheet-pioneer-academics-research-program",
+   "title": "Pioneer Academics Research Program",
+   "provider": "pioneeracademics.com",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://pioneeracademics.com/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!41",
+     "grade 8!40",
+     "grade 9!51",
+     "grade 10!51",
+     "grade 11!50"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-princeton-university-summer-journalism-program",
+   "title": "Princeton University Summer Journalism Program",
+   "provider": "academicinclusion.princeton.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-17",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "15-Feb-25",
+   "application_open_text": "",
+   "application_url": "https://academicinclusion.princeton.edu/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!40",
+     "grade 10!40",
+     "grade 11!39"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-professional-leadership-certification",
+   "title": "Professional Leadership Certification",
+   "provider": "globalpeacechain.org",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "Varies",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "25-Oct-24",
+   "application_open_text": "",
+   "application_url": "http://globalpeacechain.org/oxford",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!49",
+     "grade 9!62",
+     "grade 10!62",
+     "grade 11!61"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-rise",
+   "title": "RISE",
+   "provider": "precollege.nd.edu",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://precollege.nd.edu/leadership-seminars/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!7",
+     "grade 9!8",
+     "grade 10!8",
+     "grade 11!8"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-roundpier-summer-immersion-program",
+   "title": "RoundPier Summer Immersion Program",
+   "provider": "",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "14-Sep-24",
+   "application_open_text": "",
+   "application_url": "https://rsip.carrd.co/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!39",
+     "grade 8!37",
+     "grade 9!48",
+     "grade 10!48",
+     "grade 11!47"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-short-term-fellowship-program-in-australia-2025-fully-funded",
+   "title": "Short Term Fellowship Program in Australia 2025 — Fully funded",
+   "provider": "scholarshipscorner.website",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-30",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "13-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://scholarshipscorner.website/australia-awards-fellowships/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!80",
+     "grade 10!80",
+     "grade 11!79"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-sony-world-photography-competition",
+   "title": "Sony World Photography competition",
+   "provider": "worldphoto.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "-20",
+   "eligible_grades": "5,6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "3-Jan-25",
+   "application_open_text": "",
+   "application_url": "https://www.worldphoto.org/sony-world-photography-awards/youth",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "gerade 5!7",
+     "grade 6!22",
+     "grade 7!22",
+     "grade 8!65",
+     "grade 9!92",
+     "grade 10!92",
+     "grade 11!91"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-sowcoders-ambassadorship",
+   "title": "SOWCoders Ambassadorship",
+   "provider": "sowcoders.org",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "Varies",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "March 25",
+   "application_open_text": "",
+   "application_url": "https://www.sowcoders.org/copy-of-application-join-the-team",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!28",
+     "grade 9!36",
+     "grade 10!36",
+     "grade 11!36"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-standford-summer",
+   "title": "Standford Summer",
+   "provider": "summerinstitutes.spcs.stanford.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-19",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "ED: Dec 13, RD: Feb 12",
+   "application_open_text": "",
+   "application_url": "https://summerinstitutes.spcs.stanford.edu/admissions",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!22",
+     "grade 10!22",
+     "grade 11!22"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-stanford-daily-workshop",
+   "title": "Stanford Daily Workshop",
+   "provider": "stanforddaily.com",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Dec 12-winter; May 15",
+   "application_open_text": "",
+   "application_url": "https://stanforddaily.com/high-school-programs/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!25",
+     "grade 8!2",
+     "grade 9!2",
+     "grade 10!2",
+     "deadline!2",
+     "Summer programs!3",
+     "grade 11!2"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-stanford-institutes-of-medicine-summer-research-program-simr",
+   "title": "Stanford Institutes of Medicine Summer Research Program (SIMR)",
+   "provider": "simr.stanford.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-18",
+   "eligible_grades": "9,10",
+   "deadline": null,
+   "deadline_text": "15-Feb-25",
+   "application_open_text": "",
+   "application_url": "https://simr.stanford.edu/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!39",
+     "grade 10!39"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-stanford-pre-collegiate",
+   "title": "Stanford Pre-Collegiate",
+   "provider": "summerinstitutes.spcs.stanford.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14+",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "March 29",
+   "application_open_text": "",
+   "application_url": "https://summerinstitutes.spcs.stanford.edu/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!31",
+     "grade 8!18",
+     "grade 9!23",
+     "grade 10!23",
+     "grade 11!23"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-superposition-chapter",
+   "title": "Superposition Chapter",
+   "provider": "superposition.tech",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-18",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "-",
+   "application_open_text": "",
+   "application_url": "https://superposition.tech/chapters.html",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!28",
+     "grade 8!13",
+     "grade 9!14",
+     "grade 10!14",
+     "grade 11!14"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-talaria-summer-institute",
+   "title": "Talaria Summer Institute",
+   "provider": "talaria.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-18",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "March 22",
+   "application_open_text": "",
+   "application_url": "https://talaria.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!21",
+     "grade 9!26",
+     "grade 10!26",
+     "grade 11!26"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-techgirls",
+   "title": "TechGirls",
+   "provider": "uz.usembassy.gov",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-17",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Dec 6",
+   "application_open_text": "",
+   "application_url": "https://uz.usembassy.gov/education-culture/exchange-programs/techgirls/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!26",
+     "grade 9!32",
+     "grade 10!32",
+     "grade 11!32"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-telluride-association-summer-seminar",
+   "title": "Telluride association Summer Seminar",
+   "provider": "tellurideassociation.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-17",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "3-Dec-24",
+   "application_open_text": "",
+   "application_url": "https://www.tellurideassociation.org/our-programs/high-school-students",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!66",
+     "grade 10!66",
+     "grade 11!65"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-the-earth-prize",
+   "title": "The Earth Prize",
+   "provider": "theearthprize.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "14-20",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": "2026-11-01",
+   "deadline_text": "01.11.2026",
+   "application_open_text": "",
+   "application_url": "http://theearthprize.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!15",
+     "grade 7!15",
+     "grade 8!44",
+     "grade 9!56",
+     "grade 10!56",
+     "grade 11!55",
+     "Sheet10!9"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": false
+  },
+  {
+   "source_key": "sheet-the-experiment-in-international-living",
+   "title": "The Experiment in International Living",
+   "provider": "experiment.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-18",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://www.experiment.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!33",
+     "grade 9!44",
+     "grade 10!44",
+     "grade 11!43"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-the-harvard-crimson-global-essay-competition",
+   "title": "The harvard Crimson Global Essay Competition",
+   "provider": "essaycomp.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "31-Jan-25",
+   "application_open_text": "",
+   "application_url": "https://www.essaycomp.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!14",
+     "grade 7!14",
+     "grade 8!41",
+     "grade 9!53",
+     "grade 10!53",
+     "grade 11!52"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-tilting-futures",
+   "title": "Tilting Futures",
+   "provider": "apply.tiltingfutures.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "Varies",
+   "eligible_grades": "5,6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "24-Jan-25",
+   "application_open_text": "",
+   "application_url": "https://apply.tiltingfutures.org/apply/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "gerade 5!8",
+     "grade 6!23",
+     "grade 7!23",
+     "grade 7!48",
+     "grade 8!66",
+     "grade 9!93",
+     "grade 10!93",
+     "grade 11!92"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-tks",
+   "title": "TKS",
+   "provider": "tks.world",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-17",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "30.04",
+   "application_open_text": "",
+   "application_url": "https://www.tks.world/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!6",
+     "grade 7!6",
+     "grade 8!9",
+     "grade 9!10",
+     "grade 10!10",
+     "deadline!5",
+     "grade 11!10"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-upenn-leadership-in-the-business",
+   "title": "UPenn – Leadership in the Business",
+   "provider": "globalyouth.wharton.upenn.edu",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-18",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "Jan 29",
+   "application_open_text": "",
+   "application_url": "https://globalyouth.wharton.upenn.edu/programs-courses/leadership-in-the-business-world/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!20",
+     "grade 9!25",
+     "grade 10!25",
+     "grade 11!25"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-upg-sustainability-leadership",
+   "title": "UPG Sustainability Leadership",
+   "provider": "unitedpeople.global",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-25",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "31-Dec-24",
+   "application_open_text": "",
+   "application_url": "https://unitedpeople.global/sustainability/upg-sustainability-leader-application/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!61",
+     "grade 10!61",
+     "grade 11!60"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-upnext-research-competition",
+   "title": "UpNext Research Competition",
+   "provider": "",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "Varies",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "9-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://docs.google.com/forms/d/e/1FAIpQLScVBH2Yt3foozo7mwUpo7Vz9ulXPa03LtJHSBrGJbXLH3z3Hw/viewform",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!53",
+     "grade 9!69",
+     "grade 10!69",
+     "grade 11!68"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-uschool-xalqaro-ekologik-olimpiyadasi",
+   "title": "USCHOOL Xalqaro Ekologik Olimpiyadasi",
+   "provider": "uschool.ubirator.com",
+   "program_type": "national",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "high school",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "20-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://uschool.ubirator.com/olympiad",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!67",
+     "grade 9!94",
+     "grade 10!94",
+     "grade 11!93"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-uwc",
+   "title": "UWC",
+   "provider": "uz.uwc.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-19",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://www.uz.uwc.org/?lang=ru-uz",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!52",
+     "grade 10!52",
+     "grade 11!51"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-veritas-ai",
+   "title": "Veritas AI",
+   "provider": "veritasai.com",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": "2026-07-08",
+   "deadline_text": "08.07.2026",
+   "application_open_text": "",
+   "application_url": "https://www.veritasai.com/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!9",
+     "grade 7!9",
+     "grade 8!16",
+     "grade 9!19",
+     "grade 10!19",
+     "grade 11!19",
+     "Sheet10!6"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": false
+  },
+  {
+   "source_key": "sheet-veritas-ai-scholars",
+   "title": "Veritas AI Scholars",
+   "provider": "",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "20-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://airtable.com/appypCyHN77hElIcS/shr3zipn8qno8J4bj",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!24",
+     "grade 7!24",
+     "grade 8!68",
+     "grade 9!97",
+     "grade 10!97",
+     "grade 11!96"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-where-there-be-dragons",
+   "title": "Where There Be Dragons",
+   "provider": "wheretherebedragons.com",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "13-18",
+   "eligible_grades": "6,7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://www.wheretherebedragons.com/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 6!12",
+     "grade 7!12",
+     "grade 8!35",
+     "grade 9!46",
+     "grade 10!46",
+     "grade 11!45"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-yale-international-relations-institute",
+   "title": "Yale International Relations Institute",
+   "provider": "yirli.org",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-18",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "March 1",
+   "application_open_text": "",
+   "application_url": "https://yirli.org/schedule2023",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!21",
+     "grade 10!21",
+     "grade 11!21"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-yale-young-global-scholars",
+   "title": "Yale Young Global Scholars",
+   "provider": "globalscholars.yale.edu",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-18",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "Early-15 Oct; Reg-Jan 07",
+   "application_open_text": "Mid september",
+   "application_url": "https://globalscholars.yale.edu/welcome",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!6",
+     "grade 10!6",
+     "grade 11!6"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-young-cultural-diplomacy-forum-2024",
+   "title": "Young Cultural diplomacy Forum 2024",
+   "provider": "thecscd.org",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-30",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "27-Sep-24",
+   "application_open_text": "",
+   "application_url": "https://thecscd.org/ycdf/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!95",
+     "grade 10!95",
+     "grade 11!94"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-young-cultural-diplomacy-forum-2024-in-doha-qatar",
+   "title": "Young Cultural Diplomacy Forum 2024 in Doha , Qatar",
+   "provider": "scholarshipscorner.website",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-30",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "15-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://scholarshipscorner.website/young-cultural-diplomacy-forum-doha/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!82",
+     "grade 10!82",
+     "grade 11!81"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-young-economic-forum-2024",
+   "title": "Young Economic Forum 2024",
+   "provider": "opportunitiescorners.com",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "16-25",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "13-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://opportunitiescorners.com/young-economic-forum-indonesia/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!98",
+     "grade 10!98",
+     "grade 11!97"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-young-writers-award",
+   "title": "Young Writers Award",
+   "provider": "bennington.edu",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "-18,-25",
+   "eligible_grades": "7,8,9,10,11",
+   "deadline": null,
+   "deadline_text": "1-Nov-24",
+   "application_open_text": "",
+   "application_url": "https://www.bennington.edu/events/young-writers-awards",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 7!47",
+     "grade 8!61",
+     "grade 9!79",
+     "grade 10!79",
+     "grade 11!78"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-youth-congress-in-canada-2025",
+   "title": "Youth Congress In Canada 2025",
+   "provider": "opportunitiescorners.com",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "18-35",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "30-Oct-24",
+   "application_open_text": "",
+   "application_url": "https://opportunitiescorners.com/youth-congress-in-canada/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 9!89",
+     "grade 10!89",
+     "grade 11!88"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "sheet-youth-for-understanding-yfu",
+   "title": "Youth for Understanding (YFU)",
+   "provider": "online.yfuusa.org",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "15-18",
+   "eligible_grades": "8,9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "application_url": "https://online.yfuusa.org/",
+   "source_url": "https://docs.google.com/spreadsheets/d/1GkmkRPHMiX_CYtnrrsKbk7WrV_J3fNuOEKOk0GPi3NE/edit",
+   "source_metadata": {
+    "sheets": [
+     "grade 8!34",
+     "grade 9!45",
+     "grade 10!45",
+     "grade 11!44"
+    ],
+    "reviewed_on": "2026-09-20"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-first-robotics",
+   "title": "First Robotics",
+   "provider": "firstinspires.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.firstinspires.org/robotics/frc",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-vex-robotics",
+   "title": "Vex Robotics",
+   "provider": "vexrobotics.com",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.vexrobotics.com/?___store=vexroboticseu&___from_store=vexrobotics",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-educationusa-academy",
+   "title": "EducationUSA Academy",
+   "provider": "uz.usembassy.gov",
+   "program_type": "national",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://uz.usembassy.gov/education-culture/study-usa/educational-advising/the-educationusa-academy-scholarship/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-startup-initiatives",
+   "title": "StartUp Initiatives",
+   "provider": "startupinitiatives.uz",
+   "program_type": "national",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://startupinitiatives.uz/en/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-y-combinator-startup-school",
+   "title": "Y Combinator Startup School",
+   "provider": "startupschool.org",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.startupschool.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-society-of-women-coders-uzbekistan",
+   "title": "Society of Women Coders Uzbekistan",
+   "provider": "",
+   "program_type": "national",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "http://instagram.com/sowcoders_uzbekistan",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-teens-in-ai",
+   "title": "Teens in AI",
+   "provider": "teensinai.com",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.teensinai.com/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-makercamp",
+   "title": "MakerCamp",
+   "provider": "",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "http://instagram.com/makercamp.ca",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-tumaris-tech",
+   "title": "Tumaris Tech",
+   "provider": "tumaris.tech",
+   "program_type": "international",
+   "category": "Program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://tumaris.tech/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-qubit-by-qubit-quantum-camp",
+   "title": "Qubit by Qubit Quantum Camp",
+   "provider": "qubitbyqubit.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.qubitbyqubit.org/hs-college-camps#",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-ny-academy-of-sciences-1000-girls-1000-futures",
+   "title": "NY Academy of Sciences: 1000 Girls, 1000 Futures",
+   "provider": "nyas.org",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.nyas.org/programs/global-stem-alliance/1000-girls-1000-futures/?tab=overview",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-climatehack",
+   "title": "ClimateHack",
+   "provider": "climatehack.io",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://climatehack.io/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-technovation-uzbekistan",
+   "title": "Technovation Uzbekistan",
+   "provider": "technovation.uz",
+   "program_type": "national",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "http://technovation.uz/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-the-world-scholar-s-cup",
+   "title": "The World Scholar’s Cup",
+   "provider": "scholarscup.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.scholarscup.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-48-hour-film-race",
+   "title": "48 Hour Film Race",
+   "provider": "48hourfilmrace.com",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://48hourfilmrace.com/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-nu-q-summer-programs",
+   "title": "NU-Q Summer Programs",
+   "provider": "qatar.northwestern.edu",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.qatar.northwestern.edu/admissions/undergraduate/pre-university-programs.html",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-microsoft-imagine-cup",
+   "title": "Microsoft Imagine Cup",
+   "provider": "imaginecup.microsoft.com",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://imaginecup.microsoft.com/en-us/main",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-khan-academy-uzbekistan",
+   "title": "Khan Academy Uzbekistan",
+   "provider": "uz.khanacademy.org",
+   "program_type": "national",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://uz.khanacademy.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-paperlab-kz",
+   "title": "Paperlab KZ",
+   "provider": "paperlab.kz",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://paperlab.kz/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-hashar-week",
+   "title": "Hashar Week",
+   "provider": "hasharweek.uz",
+   "program_type": "national",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "http://hasharweek.uz/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-central-asia-nobel-fest",
+   "title": "Central Asia Nobel Fest",
+   "provider": "nobel-fest.org",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://nobel-fest.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-nobelintern-virtual-internships",
+   "title": "NobelIntern Virtual Internships",
+   "provider": "nobelexplorers.com",
+   "program_type": "international",
+   "category": "Fellowship",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://nobelexplorers.com/nobel-internships/#top",
+   "source_url": "",
+   "source_metadata": {
+    "document": "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-research-science-institute-rsi",
+   "title": "Research Science Institute (RSI)",
+   "provider": "cee.org",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "December 13",
+   "application_open_text": "",
+   "scholarship_available": true,
+   "aid_details": "Cost-free program covering tuition, room, and board",
+   "application_url": "https://www.cee.org/programs/apply-rsi",
+   "source_url": "",
+   "source_metadata": {
+    "document": "High School Programs list",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-trust-for-sustainable-living-tsl-international-schools-essay-competition-debate",
+   "title": "Trust for Sustainable Living (TSL) International Schools Essay Competition & Debate",
+   "provider": "trustforsustainableliving.org",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "Typically in January",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://trustforsustainableliving.org/take-part/international-schools-essay-competition-and-debate",
+   "source_url": "",
+   "source_metadata": {
+    "document": "High School Programs list",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-international-essay-competition-goi-peace-foundation",
+   "title": "International Essay Competition (Goi Peace Foundation)",
+   "provider": "goipeace.or.jp",
+   "program_type": "international",
+   "category": "Competition",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "Usually in June",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.goipeace.or.jp/en/work/essay-contest/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "High School Programs list",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-summer-science-program-ssp",
+   "title": "Summer Science Program (SSP)",
+   "provider": "summerscience.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "Typically in March",
+   "application_open_text": "",
+   "scholarship_available": true,
+   "aid_details": "Immersive research program in astrophysics and biochemistry; financial aid available",
+   "application_url": "https://summerscience.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "High School Programs list",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-nyuad-design-lab-ai",
+   "title": "NYUAD Design Lab AI",
+   "provider": "nyuad.nyu.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "March 28 - April 20",
+   "application_open_text": "",
+   "scholarship_available": true,
+   "aid_details": "Fully funded",
+   "application_url": "https://nyuad.nyu.edu/en/apply/undergraduate/why-nyu-abu-dhabi/nyuad-programs-for-high-school-students.html",
+   "source_url": "",
+   "source_metadata": {
+    "document": "High School Programs list",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-asu-camp-cronkite-media-camp",
+   "title": "ASU Camp Cronkite Media Camp",
+   "provider": "cronkite.asu.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "April 1st",
+   "application_open_text": "",
+   "scholarship_available": true,
+   "aid_details": "Fully-funded",
+   "application_url": "https://cronkite.asu.edu/community/high-school-programs/camps/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "High School Programs list",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-young-scholars-programme-at-ashoka-university",
+   "title": "Young Scholars Programme at Ashoka University",
+   "provider": "ashoka.edu.in",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.ashoka.edu.in/academic-programme/young-scholar-programme/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-ross-mathematics-program",
+   "title": "Ross Mathematics Program",
+   "provider": "rossprogram.org",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://rossprogram.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-summer-insead",
+   "title": "Summer@INSEAD",
+   "provider": "insead.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.insead.edu/insead-summer-school",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-insead-startup-bootcamp",
+   "title": "INSEAD Startup Bootcamp",
+   "provider": "insead.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.insead.edu/insead-centre-entrepreneurship/startup-bootcamp",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-stanford-university-mathematics-camp-sumac",
+   "title": "Stanford University Mathematics Camp (SUMaC)",
+   "provider": "spcs.stanford.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://spcs.stanford.edu/programs/stanford-university-mathematics-camp-sumac",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-usa-canada-mathcamp",
+   "title": "USA/Canada Mathcamp",
+   "provider": "mathcamp.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.mathcamp.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-msu-high-school-honors-science-program-hshsp",
+   "title": "MSU High School Honors Science Program (HSHSP)",
+   "provider": "education.msu.edu",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://education.msu.edu/hshsp/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-economics-for-leaders",
+   "title": "Economics for Leaders",
+   "provider": "fte.org",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.fte.org/students/economics-for-leaders-program/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-research-in-science-and-engineering-rise-at-boston-university",
+   "title": "Research in Science and Engineering (RISE) at Boston University",
+   "provider": "bu.edu",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.bu.edu/mysummer/academics/research-internship-in-science-engineering/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-national-student-leadership-conference-nslc",
+   "title": "National Student Leadership Conference (NSLC)",
+   "provider": "nslcleaders.org",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.nslcleaders.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-usc-bovard-scholars",
+   "title": "USC Bovard Scholars",
+   "provider": "bovardscholars.usc.edu",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://bovardscholars.usc.edu/our-program/summer-residency/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-computer-science-for-cyber-security-cs4cs-at-nyu",
+   "title": "Computer Science for Cyber Security (CS4CS) at NYU",
+   "provider": "engineering.nyu.edu",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://engineering.nyu.edu/academics/programs/k12-stem-education/computer-science-cyber-security-cs4cs",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-sadie-nash-summer-institute",
+   "title": "Sadie Nash Summer Institute",
+   "provider": "sadienash.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.sadienash.org/summer-institute",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-hampshire-college-summer-studies-in-mathematics",
+   "title": "Hampshire College Summer Studies in Mathematics",
+   "provider": "hampshire.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.hampshire.edu/summer-academic-programs/hampshire-college-summer-studies-mathematics-hcssim",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-mites-summer-at-mit",
+   "title": "MITES Summer at MIT",
+   "provider": "mites.mit.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://mites.mit.edu/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-simons-summer-research-program",
+   "title": "Simons Summer Research Program",
+   "provider": "stonybrook.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.stonybrook.edu/simons/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-jackson-laboratory-summer-student-program",
+   "title": "Jackson Laboratory Summer Student Program",
+   "provider": "jax.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.jax.org/education-and-learning/high-school-students-and-undergraduates/learn-earn-and-explore",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-bank-of-america-student-leaders",
+   "title": "Bank of America Student Leaders",
+   "provider": "about.bankofamerica.com",
+   "program_type": "international",
+   "category": "Leadership",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://about.bankofamerica.com/en/making-an-impact/student-leaders",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-young-women-s-institute-at-indiana-university",
+   "title": "Young Women’s Institute at Indiana University",
+   "provider": "kelley.iu.edu",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://kelley.iu.edu/programs/undergrad/pre-college/ywi.html",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-american-legion-boys-state-and-girls-state",
+   "title": "American Legion Boys State and Girls State",
+   "provider": "americanlegiongh.org",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.americanlegiongh.org/boysgirls-state.html",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-kenyon-review-young-writers-workshop",
+   "title": "Kenyon Review Young Writers Workshop",
+   "provider": "kenyon.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.kenyon.edu/academics/departments-and-majors/english/creative-writing/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-iowa-young-writers-studio",
+   "title": "Iowa Young Writers’ Studio",
+   "provider": "iyws.clas.uiowa.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://iyws.clas.uiowa.edu/2-week-summer-residential-program",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-pre-college-art-experience-at-academy-of-art-university",
+   "title": "Pre-College Art Experience at Academy of Art University",
+   "provider": "academyart.edu",
+   "program_type": "international",
+   "category": "Summer program",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.academyart.edu/art-degree/pre-college-art-design-experience/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-lumiere-breakthrough-research-program",
+   "title": "Lumiere Breakthrough Research Program",
+   "provider": "lumiere.foundation",
+   "program_type": "international",
+   "category": "Research",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://lumiere.foundation/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  },
+  {
+   "source_key": "pdf-kennedy-lugar-youth-exchange-and-study-kl-yes",
+   "title": "Kennedy-Lugar Youth Exchange and Study (KL-YES)",
+   "provider": "yesprograms.org",
+   "program_type": "international",
+   "category": "Conference",
+   "delivery_mode": "unspecified",
+   "eligible_ages": "",
+   "eligible_grades": "9,10,11",
+   "deadline": null,
+   "deadline_text": "",
+   "application_open_text": "",
+   "scholarship_available": false,
+   "aid_details": "",
+   "application_url": "https://www.yesprograms.org/",
+   "source_url": "",
+   "source_metadata": {
+    "document": "List of summer programs for high school students",
+    "reviewed_on": "2026-09-20",
+    "grades_from": "document states high school students"
+   },
+   "needs_verification": true
+  }
+ ],
+ "sample_services": [
+  {
+   "catalog_key": "sample-university-match",
+   "title": "University Match Session",
+   "category": "School selection",
+   "description": "Build a focused university shortlist around your goals and budget.",
+   "price_amount": "25",
+   "currency": "USD",
+   "provider_name": "Dilshod Rahimov",
+   "provider_role": "Admissions adviser",
+   "duration_minutes": 60,
+   "deliverables": [
+    "Profile and goals review",
+    "A balanced university shortlist",
+    "Application timeline"
+   ],
+   "is_sample": true,
+   "is_featured": true,
+   "price_label": "",
+   "is_active": true
+  },
+  {
+   "catalog_key": "sample-essay-review",
+   "title": "Essay Review Pack",
+   "category": "Application support",
+   "description": "Get detailed feedback on your essay structure, story and clarity.",
+   "price_amount": "35",
+   "currency": "USD",
+   "provider_name": "Malika Usmonova",
+   "provider_role": "Essay mentor",
+   "duration_minutes": 60,
+   "deliverables": [
+    "One personal statement review",
+    "Written feedback and revision notes",
+    "A follow-up review"
+   ],
+   "is_sample": true,
+   "is_featured": false,
+   "price_label": "",
+   "is_active": true
+  },
+  {
+   "catalog_key": "sample-interview-practice",
+   "title": "Interview Practice",
+   "category": "Application support",
+   "description": "Rehearse an admissions interview and leave with a clear practice plan.",
+   "price_amount": "20",
+   "currency": "USD",
+   "provider_name": "Sardor Akbarov",
+   "provider_role": "Interview coach",
+   "duration_minutes": 45,
+   "deliverables": [
+    "A mock admissions interview",
+    "Personal feedback",
+    "A practice checklist"
+   ],
+   "is_sample": true,
+   "is_featured": false,
+   "price_label": "",
+   "is_active": true
+  },
+  {
+   "catalog_key": "sample-sat-strategy",
+   "title": "SAT Strategy Sprint",
+   "category": "Test preparation",
+   "description": "Turn your diagnostic results into a practical SAT preparation plan.",
+   "price_amount": "50",
+   "currency": "USD",
+   "provider_name": "Dilshod Rahimov",
+   "provider_role": "Test preparation mentor",
+   "duration_minutes": 90,
+   "deliverables": [
+    "Diagnostic results review",
+    "A four-week study plan",
+    "Weekly progress milestones"
+   ],
+   "is_sample": true,
+   "is_featured": false,
+   "price_label": "",
+   "is_active": true
+  }
+ ],
+ "source_sheets": [
+  "gerade 5",
+  "grade 6",
+  "grade 7",
+  "grade 8",
+  "grade 9",
+  "grade 10",
+  "grade 11",
+  "deadline",
+  "Summer programs",
+  "Sheet10"
+ ],
+ "source_documents": [
+  "Compilation of extracurricular opportunities for Uzbek high school students (2022)",
+  "High School Programs list",
+  "List of summer programs for high school students"
+ ]
+}
