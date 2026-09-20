@@ -420,6 +420,58 @@ function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }
   );
 }
 
+const SIGNUP_PREVIEW_COPY = {
+  uz: {
+    back: 'Bosh sahifaga qaytish', brand: 'Naseeb Mind', title: 'Kelajagingizni tushunish shu yerdan boshlanadi.',
+    description: 'O‘zingizni yaxshiroq taning, sizga mos yo‘nalishlarni toping va keyingi qadamingizni aniq belgilang.',
+    heading: 'Hisob yarating', subheading: 'Naseeb Mind’dan bepul foydalanishni boshlang.', google: 'Google orqali davom etish',
+    or: 'yoki', email: 'Email manzilingiz', emailPlaceholder: 'Email manzilingizni kiriting', password: 'Parol yarating',
+    passwordPlaceholder: 'Kamida 8 ta belgi', submit: 'Ro‘yxatdan o‘tish', existing: 'Hisobingiz bormi?', signIn: 'Kirish',
+  },
+  en: {
+    back: 'Back to home', brand: 'Naseeb Mind', title: 'Understanding your future starts here.',
+    description: 'Get to know yourself, find directions that fit you, and choose your next step with confidence.',
+    heading: 'Create an account', subheading: 'Start using Naseeb Mind for free.', google: 'Continue with Google',
+    or: 'or', email: 'Your email address', emailPlaceholder: 'Enter your email address', password: 'Create a password',
+    passwordPlaceholder: 'At least 8 characters', submit: 'Create account', existing: 'Already have an account?', signIn: 'Sign in',
+  },
+  ru: {
+    back: 'Вернуться на главную', brand: 'Naseeb Mind', title: 'Понимание вашего будущего начинается здесь.',
+    description: 'Узнайте себя лучше, найдите подходящие направления и уверенно выберите следующий шаг.',
+    heading: 'Создать аккаунт', subheading: 'Начните бесплатно пользоваться Naseeb Mind.', google: 'Продолжить с Google',
+    or: 'или', email: 'Ваш email', emailPlaceholder: 'Введите ваш email', password: 'Создайте пароль',
+    passwordPlaceholder: 'Не менее 8 символов', submit: 'Зарегистрироваться', existing: 'Уже есть аккаунт?', signIn: 'Войти',
+  },
+};
+
+function SignupPreview({ onBack, onSignIn, language, changeLanguage }) {
+  const copy = SIGNUP_PREVIEW_COPY[language] || SIGNUP_PREVIEW_COPY.uz;
+  return <main className="mind-signup-preview">
+    <div className="mind-signup-shell">
+      <header className="mind-signup-topbar">
+        <button type="button" className="mind-signup-back" onClick={onBack}><ArrowLeft size={18} /> {copy.back}</button>
+        <LanguageSelector language={language} onChange={changeLanguage} compact />
+      </header>
+      <div className="mind-signup-layout">
+        <section className="mind-signup-intro" aria-labelledby="mind-signup-title">
+          <div className="mind-signup-brand"><BrandLogo /><b>{copy.brand.split(' ')[0]} <em>{copy.brand.split(' ')[1]}</em></b></div>
+          <h1 id="mind-signup-title">{copy.title}</h1>
+          <p>{copy.description}</p>
+        </section>
+        <section className="mind-signup-card" aria-labelledby="mind-signup-card-title">
+          <div className="mind-signup-card-copy"><h2 id="mind-signup-card-title">{copy.heading}</h2><p>{copy.subheading}</p></div>
+          <button type="button" className="mind-signup-google"><span className="mind-signup-google-mark" aria-hidden="true">G</span>{copy.google}</button>
+          <div className="mind-signup-divider"><span />{copy.or}<span /></div>
+          <label>{copy.email}<input type="email" placeholder={copy.emailPlaceholder} autoComplete="email" /></label>
+          <label>{copy.password}<span className="mind-signup-password"><input type="password" placeholder={copy.passwordPlaceholder} autoComplete="new-password" minLength="8" /><Eye size={19} aria-hidden="true" /></span></label>
+          <button type="button" className="mind-signup-submit">{copy.submit}</button>
+          <p className="mind-signup-existing">{copy.existing} <button type="button" onClick={onSignIn}>{copy.signIn}</button></p>
+        </section>
+      </div>
+    </div>
+  </main>;
+}
+
 function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, language, changeLanguage }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -3580,7 +3632,8 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
 export default function App() {
   const [theme, setTheme] = useState(initialTheme);
   const [language, setLanguageState] = useState(getLanguage);
-  const [publicPage, setPublicPage] = useState(() => window.location.hash === '#/login' ? 'login' : 'landing');
+  const currentPublicPage = () => window.location.hash === '#/login' ? 'login' : window.location.hash === '#/signup-preview' ? 'signup-preview' : 'landing';
+  const [publicPage, setPublicPage] = useState(currentPublicPage);
   const [user, setUser] = useState(null);
   const [data, setData] = useState(EMPTY_DATA);
   const [stats, setStats] = useState(null);
@@ -3615,14 +3668,14 @@ export default function App() {
 
   const showPublicPage = useCallback((nextPage, replace = false) => {
     const url = new URL(window.location.href);
-    url.hash = nextPage === 'login' ? '/login' : '';
+    url.hash = nextPage === 'login' ? '/login' : nextPage === 'signup-preview' ? '/signup-preview' : '';
     window.history[replace ? 'replaceState' : 'pushState']({ publicPage: nextPage }, '', url);
     setPublicPage(nextPage);
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, []);
 
   useEffect(() => {
-    const handlePublicNavigation = () => setPublicPage(window.location.hash === '#/login' ? 'login' : 'landing');
+    const handlePublicNavigation = () => setPublicPage(currentPublicPage());
     window.addEventListener('popstate', handlePublicNavigation);
     return () => window.removeEventListener('popstate', handlePublicNavigation);
   }, []);
@@ -3749,7 +3802,8 @@ export default function App() {
   if (bootstrapping) return <AppBootLoader message="Checking your secure session…" />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={bootstrapSession} onSignOut={logout} />;
   if (!user) return publicPage === 'login' ?
-  <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> :
+  <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> : publicPage === 'signup-preview' ?
+  <SignupPreview onBack={() => showPublicPage('landing')} onSignIn={() => showPublicPage('login')} language={language} changeLanguage={changeLanguage} /> :
   <LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   return <>
