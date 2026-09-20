@@ -166,7 +166,14 @@ admin.site.register(CommunityPost)
 admin.site.register(Booking)
 admin.site.register(StudentMessage)
 admin.site.register(ProgramService)
-admin.site.register(StoreItem)
+@admin.register(StoreItem)
+class StoreItemAdmin(admin.ModelAdmin):
+    list_display = ('title', 'provider_name', 'price_amount', 'currency', 'is_sample', 'is_active')
+    list_filter = ('is_sample', 'is_active', 'category', 'currency')
+    search_fields = ('title', 'provider_name', 'provider_role')
+    readonly_fields = ('catalog_key',)
+
+
 admin.site.register(XPTransaction)
 admin.site.register(LevelApproval)
 admin.site.register(MessageChannel)

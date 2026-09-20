@@ -485,11 +485,21 @@ class OpportunityProgram(TimeStampedModel):
     class ProgramType(models.TextChoices):
         NATIONAL = 'national', 'National'
         INTERNATIONAL = 'international', 'International'
+        UNSPECIFIED = 'unspecified', 'To verify'
 
     class DeliveryMode(models.TextChoices):
         ONSITE = 'onsite', 'On-site'
         ONLINE = 'online', 'Online'
         HYBRID = 'hybrid', 'Hybrid'
+        UNSPECIFIED = 'unspecified', 'To verify'
+
+    source_key = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    source_url = models.URLField(max_length=1000, blank=True)
+    source_metadata = models.JSONField(default=dict, blank=True)
+    eligible_ages = models.CharField(max_length=160, blank=True)
+    deadline_text = models.TextField(blank=True)
+    application_open_text = models.TextField(blank=True)
+    needs_verification = models.BooleanField(default=False)
 
     title = models.CharField(max_length=220)
     provider = models.CharField(max_length=180)
@@ -507,7 +517,7 @@ class OpportunityProgram(TimeStampedModel):
     scholarship_available = models.BooleanField(default=False)
     aid_details = models.CharField(max_length=300, blank=True)
     requirements = models.TextField(blank=True)
-    application_url = models.URLField(blank=True)
+    application_url = models.URLField(max_length=1000, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -943,6 +953,15 @@ class ScreenTimeDaily(models.Model):
 
 
 class StoreItem(TimeStampedModel):
+    catalog_key = models.SlugField(max_length=100, unique=True, null=True, blank=True)
+    provider_name = models.CharField(max_length=160, blank=True)
+    provider_role = models.CharField(max_length=160, blank=True)
+    price_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    currency = models.CharField(max_length=3, default='UZS')
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    deliverables = models.JSONField(default=list, blank=True)
+    is_sample = models.BooleanField(default=False)
+
     title = models.CharField(max_length=220)
     category = models.CharField(max_length=120)
     description = models.TextField(blank=True)

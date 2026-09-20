@@ -1881,6 +1881,7 @@ class RoleIsolationTests(APITestCase):
     def test_student_reads_program_store_and_team(self):
         ProgramService.objects.create(student=self.student_a, name='Admissions strategy', unlimited=True)
         ProgramService.objects.create(student=self.student_b, name='Private service', unlimited=True)
+        StoreItem.objects.filter(catalog_key__isnull=False).delete()  # migrated catalog snapshot
         StoreItem.objects.create(title='University Match', category='Planning')
         self.client.force_authenticate(self.student_a_user)
 
@@ -2053,6 +2054,7 @@ class RoleIsolationTests(APITestCase):
             title='Hidden Scholarship', provider='Naseeb', scholarship_type=Scholarship.Type.NEED_BASED,
             scope=Scholarship.Scope.NATIONAL, is_active=False,
         )
+        OpportunityProgram.objects.filter(source_key__isnull=False).delete()  # migrated catalog snapshot
         national_program = OpportunityProgram.objects.create(
             title='National Program', provider='Naseeb', program_type=OpportunityProgram.ProgramType.NATIONAL,
             category='Research',

@@ -1020,6 +1020,8 @@ class ScholarshipViewSet(viewsets.ReadOnlyModelViewSet):
 
 class OpportunityProgramViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = OpportunityProgramSerializer
+    # Most catalog entries repeat every year with a text deadline, so a closed cycle is
+    # labelled in the UI instead of hidden here.
     queryset = OpportunityProgram.objects.filter(is_active=True)
     permission_classes = [permissions.IsAuthenticated]
 
