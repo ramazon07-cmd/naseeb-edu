@@ -1,15 +1,18 @@
 import { cleanScreenTimeQueue } from './screenTimeQueue';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowLeft, Award, BookOpen, BrainCircuit, Building2, CheckCircle2,
+  Activity, AlertTriangle, ArrowLeft, Award, Bell, ChevronsLeft, ChevronsRight, Info, BookOpen, Bookmark, BrainCircuit, Building2, CheckCircle2,
   CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
-  ContactRound, DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, HandCoins, Heart, Hexagon, LayoutDashboard,
+  DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, HandCoins, Hexagon, LayoutDashboard,
   LifeBuoy, Lock, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
-  PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, ShieldAlert, ShieldCheck,
+  PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, Smile, ShieldAlert, ShieldCheck,
   ShoppingCart, Sparkles, Square, Star, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X } from
 'lucide-react';
 import { api } from './api';
 import LandingPage from './LandingPage';
+import './workspaceRefinement.css';
+import ChatDetails from './ChatDetails';
+import CompactDashboard, { ScreenTimeShortcut } from './CompactDashboard';
 import StudentOnboarding from './StudentOnboarding';
 import {
   LANGUAGE_OPTIONS,
@@ -158,6 +161,15 @@ function ThemeToggle({ theme, onToggle }) {
   return <button type="button" className="icon-button theme-toggle" onClick={onToggle} title={isDark ? t("Light mode") : t("Dark mode")} aria-label={isDark ? t("Switch to light mode") : t("Switch to dark mode")} aria-pressed={isDark}>{isDark ? <Sun size={18} /> : <Moon size={18} />}</button>;
 }
 
+// Export belongs to the page, not to every panel on it. These are the pages
+// whose content is a record people print; student_center keeps its own button
+// because it prints the Overview tab rather than whatever tab is open.
+const PDF_EXPORT_PAGES = new Set([
+  'student_center',
+  'students', 'admin_students', 'academics', 'portfolio', 'activities', 'recommendations',
+  'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays', 'essay_lab',
+]);
+
 const PAGE_META = {
   dashboard: { label: 'Dashboard', icon: LayoutDashboard, description: 'A complete view of the application journey' },
   schools: { label: 'Schools', icon: Building2, description: 'Schools and organization accounts' },
@@ -175,14 +187,12 @@ const PAGE_META = {
   student_center: { label: 'Student Center', icon: UsersRound, description: 'Academic profile, portfolio, activities, and documents' },
   find_personality: { label: 'Profile Assessment', icon: Fingerprint, description: `${CHALLENGES.length} challenges that reveal your best-fit study directions` },
   roadmap: { label: 'Roadmap', icon: Compass, description: 'Level-linked missions, milestones, and reflections' },
-  community: { label: 'Community', icon: Users, description: 'Student discussions, questions, and shared experience' },
   bookings: { label: 'Meetings', icon: CalendarClock, description: 'Schedule and manage meetings' },
-  messages: { label: 'Messages', icon: MessageCircle, description: 'Direct, Group, Community, and Discussion messages' },
+  messages: { label: 'Messages', icon: MessageCircle, description: 'Private, group, and discussion messages' },
   programs: { label: 'Programs', icon: Globe2, description: 'National and international opportunity catalog' },
   essay_lab: { label: 'Essay Lab', icon: PenLine, description: 'Essay drafts, feedback, and revision history' },
   college_search: { label: 'College Search', icon: School, description: 'Find, compare, and shortlist universities' },
   store: { label: 'Naseeb Store', icon: ShoppingCart, description: 'Additional education and application services' },
-  contacts: { label: 'Contacts', icon: ContactRound, description: 'Contact your counselor and school coordinator' },
   support: { label: 'Support', icon: LifeBuoy, description: 'Contact support and track your requests' },
   screen_time: { label: 'Screen Time', icon: Clock3, description: 'Active learning time without idle minutes' },
   parent_progress: { label: 'Progress', icon: Activity, description: 'Academic profile and application journey' },
@@ -204,13 +214,13 @@ function navigationFor(user) {
   if (isCounselor(user)) return ['dashboard', 'students', 'counselor_roadmap', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages', 'screen_time', 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'community', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'contacts', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
 }
 
 const EMPTY_DATA = {
   schools: [], students: [], universities: [], tasks: [], applications: [], documents: [], essays: [],
   achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
-  recommendations: [], roadmapMissions: [], communityPosts: [],
+  recommendations: [], roadmapMissions: [],
   bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], storeItems: [], team: [], supportTickets: [],
   accounts: [], counselorRoadmapTemplates: [], counselorRoadmaps: [], adminAuditEvents: [],
   parentPortal: { children: [], pending_invitations: [], privacy: { hidden: [], read_only: true } }
@@ -220,9 +230,9 @@ const GLOBAL_SEARCH_RESOURCES = {
   schools: 'schools', students: 'students', tasks: 'tasks', applications: 'applications', documents: 'documents',
   essays: 'essays', achievements: 'activities', researches: 'academics', projects: 'portfolio', internships: 'portfolio',
   activities: 'activities', honors: 'activities', recommendations: 'recommendations', roadmapMissions: 'roadmap',
-  communityPosts: 'community', bookings: 'bookings', messageChannels: 'messages', programServices: 'dashboard',
+  bookings: 'bookings', messageChannels: 'messages', programServices: 'dashboard',
   universities: 'college_search', scholarships: 'college_search', opportunityPrograms: 'programs',
-  storeItems: 'store', team: 'contacts', supportTickets: 'support',
+  storeItems: 'store', team: 'dashboard', supportTickets: 'support',
   accounts: 'admin_counselors', counselorRoadmaps: 'counselor_roadmap', adminAuditEvents: 'admin_audit'
 };
 
@@ -431,9 +441,9 @@ const PAGE_RESOURCE_KEYS = {
   roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'universities', 'students'],
   documents: ['documents'], certificates: ['documents'], essays: ['essays'],
   student_center: ['students', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations', 'documents'],
-  community: ['communityPosts'], bookings: ['bookings'], messages: ['messageChannels'],
+  bookings: ['bookings'], messages: ['messageChannels'],
   programs: ['opportunityPrograms', 'scholarships'], essay_lab: ['essays'],
-  college_search: ['students', 'universities', 'applications'], store: ['storeItems'], contacts: ['team'], support: ['supportTickets'],
+  college_search: ['students', 'universities', 'applications'], store: ['storeItems'], support: ['supportTickets'],
   screen_time: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal']
@@ -478,7 +488,7 @@ function Badge({ children, tone = '' }) {
   return <span className={`badge ${tone || normalized}`}>{label(children)}</span>;
 }
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, className = '' }) {
   const modalRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -501,7 +511,7 @@ function Modal({ title, onClose, children }) {
     return () => {document.removeEventListener('keydown', handleKeyDown);previous?.focus?.();};
   }, []);
   return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-    <section ref={modalRef} className="modal" role="dialog" aria-modal="true" aria-label={t(title)} tabIndex="-1">
+    <section ref={modalRef} className={`modal ${className}`} role="dialog" aria-modal="true" aria-label={t(title)} tabIndex="-1">
       <header><div><span className="eyebrow">{t("NASEEB EDU")}</span><h2>{t(title)}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('Close')}><X /></button></header>
       {children}
     </section>
@@ -733,6 +743,18 @@ function AssistantCenter({ user, onOpenScreenTime }) {
 }
 
 function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, isOnline, logout, theme, toggleTheme, language, changeLanguage, children }) {
+  const [utility, setUtility] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+  useEffect(() => {
+    function shortcut(event) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {event.preventDefault();setUtility('search');}
+      if (event.key === 'Escape') setProfileOpen(false);
+    }
+    function outside(event) {if (!profileMenuRef.current?.contains(event.target)) setProfileOpen(false);}
+    document.addEventListener('keydown', shortcut);document.addEventListener('pointerdown', outside);
+    return () => {document.removeEventListener('keydown', shortcut);document.removeEventListener('pointerdown', outside);};
+  }, []);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     try {return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';} catch {return false;}
@@ -740,7 +762,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const searchRef = useRef(null);
-  const navigation = navigationFor(user);
+  const navigation = navigationFor(user).filter((item) => !['support', 'screen_time'].includes(item));
   const meta = PAGE_META[page];
   const searchResults = useMemo(() => globalSearchResults(user, data, query), [user, data, query, language]);
   const supportBadge = user.role === 'admin' ?
@@ -765,6 +787,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   }
   function openSearchResult(result) {
     if (!result) return;
+    setUtility(null);setMobileOpen(false);
     setPage(result.destination);
     setQuery(result.kind === 'record' ? result.filterQuery : '');
     setSearchOpen(false);
@@ -795,17 +818,19 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="sidebar-top">
         <BrandLockup theme={theme} subtitle={false} />
-        <button className="icon-button sidebar-collapse desktop-only" onClick={toggleSidebar} title={collapseLabel} aria-label={collapseLabel} aria-expanded={!collapsed}><ChevronRight size={18} /></button>
+        <button className="icon-button sidebar-collapse desktop-only" onClick={toggleSidebar} title={collapseLabel} aria-label={collapseLabel} aria-expanded={!collapsed}>{collapsed ? <ChevronsRight size={19} /> : <ChevronsLeft size={19} />}</button>
         <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label={t("Close navigation")}><X /></button>
       </div>
-      <nav>{navigation.map((item) => {
+      <div className="sidebar-utilities"><button onClick={() => setUtility('notifications')} title={t('Notifications')} aria-label={t('Notifications')}><Bell size={20} /><span>{t('Notifications')}</span>{data.messageChannels.some((item) => item.unread_count > 0) && <i className="sidebar-unread-dot" />}</button></div>
+      <nav aria-label={t('Main navigation')}>{navigation.map((item) => {
           const ItemIcon = PAGE_META[item].icon;
           const itemLabel = t(PAGE_META[item].label);
           return <button key={item} className={page === item ? "active" : ''} title={collapsed ? itemLabel : undefined} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
         })}</nav>
-      <div className="sidebar-profile">{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<div><b title={fullName(user)}>{fullName(user)}</b><small>{label(user.role)}</small></div><button className="icon-button" onClick={logout} title={t('Logout')} aria-label={t('Logout')}><LogOut size={18} /></button></div>
+
+      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{user.role === 'student' && <button onClick={() => {setPage('profile');setProfileOpen(false);setMobileOpen(false);}}><UserRound size={17} />{t('My profile')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
     </aside>
-    <main className="workspace">
+    <main className={`workspace ${page === 'messages' ? 'workspace-messages' : ''} ${page === 'dashboard' && user.role === 'student' ? 'workspace-dashboard' : ''}`}>
       <header className="top-header">
         <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label={t("Open navigation")}><Menu /></button>
         <div className="page-heading"><span className="eyebrow">{t(meta.label).toUpperCase()}</span><h1>{t(meta.label)}</h1><p>{t(meta.description)}</p></div>
@@ -823,58 +848,35 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
           </div>
           <LanguageSelector language={language} onChange={changeLanguage} compact />
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          {PDF_EXPORT_PAGES.has(page) && <button className="icon-button" onClick={() => exportNodePdf(document.querySelector('.page-content'))} title={t("Export PDF")} aria-label={t("Export PDF")}><Download size={19} /></button>}
           <button className="icon-button" onClick={refresh} disabled={loading} aria-busy={loading} title={t('Refresh')}><RefreshCw className={loading ? "spin" : ''} size={19} /></button>
         </div>
       </header>
       {!isOnline && <div className="data-state offline" role="status"><WifiOff size={18} /><div><b>{t('You are offline')}</b><p>{t('Current information remains available. Reconnect before saving changes.')}</p></div></div>}
       {error && <div className="alert error workspace-alert">{error}</div>}
-      <div className="page-content"><PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} retry={retryResources}>{children}</PageDataBoundary></div>
+      <div className="page-content">{['dashboard', 'admin_dashboard'].includes(page) && user.role !== 'student' && <ScreenTimeShortcut userId={user.id} setPage={setPage} />}<PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} retry={retryResources}>{children}</PageDataBoundary></div>
     </main>
+    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');}}><div className="sidebar-utility-panel">{utility === 'search' ? <><label className="search"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(query.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t(PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}</span><ChevronRight size={16} /></button>)}{query.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></> : <><p>{t('Unread conversations and upcoming work.')}</p>{data.messageChannels.filter((item) => item.unread_count > 0).map((item) => <button className="sidebar-notice" key={`message-${item.id}`} onClick={() => {setPage('messages');setUtility(null);setMobileOpen(false);}}><MessageCircle size={18} /><span><b>{item.display_name}</b><small>{item.unread_count} {t('Unread')}</small></span><ChevronRight size={16} /></button>)}{data.tasks.filter((item) => item.status !== 'approved').slice(0,5).map((item) => <button className="sidebar-notice" key={`task-${item.id}`} onClick={() => {setPage('roadmap');setUtility(null);setMobileOpen(false);}}><ClipboardCheck size={18} /><span><b>{item.title}</b><small>{dateText(item.due_date)}</small></span><ChevronRight size={16} /></button>)}{!data.messageChannels.some((item) => item.unread_count > 0) && !data.tasks.some((item) => item.status !== 'approved') && <Empty text={t('All caught up')} />}</>}</div></Modal>}
     <ScreenTimeTracker page={page} />
     {['counselor', 'student'].includes(user.role) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} />}
   </div>;
 }
 
-function Dashboard({ user, data, stats, reload, notify, setPage }) {
+function Dashboard({ user, data, stats, reload, notify, setPage, onDirect }) {
   const student = ownStudent(data);
   if (user.role === 'organization') return <>
     <div className="stat-grid"><Stat label={t("School students")} value={formatNumberLocale(stats?.students_total ?? data.students.length)} note={t("Only students from your school")} /><Stat label={t("Task progress")} value={formatPercentLocale(stats?.average_task_progress ?? 0)} note={t("Weighted completion")} /><Stat label={t("Roadmap progress")} value={formatPercentLocale(stats?.average_roadmap_progress ?? 0)} note={t("Mission completion")} /><Stat label={t("Need attention")} value={formatNumberLocale(stats?.students_at_risk ?? 0)} note={t("Late task or mission")} tone="danger" /></div>
     <Panel title={t("Student progress")} action={<button className="button primary" onClick={() => setPage('students')}>{t("Student profiles")} <ChevronRight size={17} /></button>}><StudentTable data={data} readOnly /></Panel>
   </>;
-  if (user.role === 'student') return <StudentDashboard user={user} data={data} stats={stats} setPage={setPage} />;
+  if (user.role === 'student') return <StudentDashboard user={user} data={data} stats={stats} setPage={setPage} onDirect={onDirect} />;
   return <>
     <div className="stat-grid"><Stat label={t("Students")} value={formatNumberLocale(stats?.students_total ?? data.students.length)} /><Stat label={t("Task progress")} value={formatPercentLocale(stats?.average_task_progress ?? 0)} /><Stat label={t("Roadmap progress")} value={formatPercentLocale(stats?.average_roadmap_progress ?? 0)} /><Stat label={t("Need attention")} value={formatNumberLocale(stats?.students_at_risk ?? stats?.tasks_late ?? 0)} tone="danger" /></div>
     <div className="split-grid wide-left"><Panel title={t("Student progress")} action={<button className="button quiet" onClick={() => setPage('students')}>{t("View all")} <ChevronRight size={16} /></button>}><StudentTable data={data} readOnly /></Panel><div className="section-stack"><Panel title={t("Deadline radar")}>{data.tasks.slice(0, 6).map((task) => <Record key={task.id} title={task.title} meta={`${studentName(data, task.student)} • ${dateText(task.due_date)}`} badge={task.status} />)}{!data.tasks.length && <Empty />}</Panel>{isCounselor(user) && <ProgramUsageSummary {...{ user, data, reload, notify }} />}</div></div>
   </>;
 }
 
-function StudentDashboard({ user, data, setPage }) {
-  const student = ownStudent(data);
-  const pendingTasks = data.tasks.filter((item) => item.status !== 'approved');
-  const nextBooking = [...data.bookings].filter((item) => new Date(item.starts_at) >= new Date() && !['rejected', 'completed'].includes(item.status)).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0];
-  const completed = data.tasks.filter((item) => item.status === 'approved').length;
-  const achievementTotal = data.achievements.length + data.honors.length;
-  return <div className="section-stack student-portal">
-    <section className="student-welcome">
-      <div><span className="eyebrow">{t("WELCOME BACK")}</span><h2>{fullName(user)}</h2><p>{t("Complete today’s priorities and strengthen your application profile.")}</p><div className="welcome-actions"><button className="button light" onClick={() => setPage('roadmap')}><Compass size={17} /> {t("Open roadmap")}</button><button className="button ghost-light" onClick={() => setPage('college_search')}><Search size={17} /> {t("Find universities")}</button></div></div>
-      <div className="readiness-ring" style={{ '--progress': `${student?.journey_progress_percent || 0}%` }}><strong>{formatPercentLocale(student?.journey_progress_percent || 0)}</strong><span>{t("Journey progress")}</span></div>
-    </section>
-    <div className="student-dashboard-overview">
-      <div className="student-dashboard-progress"><JourneyProgress student={student} /><LevelProgress student={student} /></div>
-      <DashboardDiscoveryCards setPage={setPage} />
-    </div>
-    <div className="stat-grid"><Stat label={t("Active tasks")} value={pendingTasks.length} note={tx`${completed} completed`} /><Stat label={t("Applications")} value={data.applications.length} note={tx`${data.applications.filter((item) => item.status === 'submitted').length} submitted`} /><Stat label={t("Essays")} value={data.essays.length} note={tx`${data.essays.filter((item) => item.status === 'approved').length} approved`} /><Stat label={t("Achievements")} value={achievementTotal} note={t("Honors included")} /></div>
-    <div className="student-dashboard-grid dashboard-workspace">
-      <Panel className="dashboard-priorities" title={t("Next priorities")} action={<button className="button quiet small" onClick={() => setPage('roadmap')}>{t("View roadmap")} <ChevronRight size={14} /></button>}>
-        <div className="dashboard-task-list">{pendingTasks.slice(0, 4).map((task, index) => <button type="button" key={task.id} className="dashboard-task" onClick={() => setPage('roadmap')}><span className="dashboard-task-number">{String(index + 1).padStart(2, '0')}</span><span className="dashboard-task-copy"><b>{task.title}</b><small>{dateText(task.due_date)} · {label(task.priority)}</small></span><Badge>{task.status}</Badge><ChevronRight size={16} /></button>)}{!pendingTasks.length && <Empty text={t("All tasks are complete.")} />}</div>
-      </Panel>
-      <div className="dashboard-usage"><ProgramUsageSummary user={user} data={data} /></div>
-      <Panel className="dashboard-shortcuts" title={t("Student Center quick access")}><div className="dashboard-shortcut-list">{[
-        ['Profile & academics', 'student_center', BookOpen], ['Essay Lab', 'essay_lab', PenLine], ['Applications', 'applications', Target]
-      ].map(([title, page, Icon]) => <button type="button" key={page} onClick={() => setPage(page)}><Icon size={20} /><b>{t(title)}</b><ChevronRight size={16} /></button>)}</div></Panel>
-      <Panel className="dashboard-team" title={t("My Naseeb team")} action={<button className="button quiet small" onClick={() => setPage('contacts')}>{t("All contacts")}</button>}><div className="team-mini-list">{data.team.slice(0, 3).map((member) => <div key={`${member.kind}-${member.id}`}><span className="avatar">{initials(member.name)}</span><div><b>{member.name}</b><small>{t(member.role)}</small></div><button className="icon-button" onClick={() => setPage('messages')} aria-label={tx`Message ${member.name}`}><MessageCircle size={16} /></button></div>)}{!data.team.length && <Empty text={t("No team members have been assigned yet.")} />}</div></Panel>
-    </div>
-  </div>;
+function StudentDashboard({ user, data, setPage, onDirect }) {
+  return <CompactDashboard key={user.id} user={user} student={ownStudent(data)} data={data} setPage={setPage} onDirect={onDirect} Modal={Modal} programUsage={<ProgramUsageSummary user={user} data={data} />} />;
 }
 
 function DashboardDiscoveryCards({ setPage }) {
@@ -1043,7 +1045,7 @@ function DocumentPreviewModal({ document: doc, onClose, notify }) {
 
 function ProfileCard({ student }) {
   if (!student) return <Panel title={t("Profile")}><Empty text={t("Student profile not found.")} /></Panel>;
-  return <Panel title={t("Profile overview")} className="profile-card" utility={<ExportPdfButton />}><div className="profile-identity"><StudentAvatar student={student} className="large" /><div><h3>{fullName(student.user_detail)}</h3><p>{student.user_detail?.email}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : student.grade ? tx`Grade ${student.grade}` : 'N/A'} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("IELTS")} value={student.ielts_score} /><Detail label={t("SAT")} value={student.sat_score} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div></Panel>;
+  return <Panel title={t("Profile overview")} className="profile-card" ><div className="profile-identity"><StudentAvatar student={student} className="large" /><div><h3>{fullName(student.user_detail)}</h3><p>{student.user_detail?.email}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : student.grade ? tx`Grade ${student.grade}` : 'N/A'} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("IELTS")} value={student.ielts_score} /><Detail label={t("SAT")} value={student.sat_score} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div></Panel>;
 }
 
 function StudentAvatar({ student, className = '' }) {
@@ -1093,11 +1095,6 @@ function exportNodePdf(node) {
   try { window.print(); } catch { restore(); }
 }
 
-function ExportPdfButton() {
-  const ref = useRef(null);
-  return <button type="button" ref={ref} className="button quiet small" onClick={() => exportNodePdf(ref.current?.closest('.panel, section'))} title={t("Export PDF")} aria-label={t("Export PDF")}><Download size={14} /> {t("PDF")}</button>;
-}
-
 function Detail({ label: title, value }) {
   const empty = value == null || value === '' || (typeof value === 'string' && !value.trim());
   return <div className={`detail ${empty ? 'is-empty' : ''}`.trim()}><span>{t(title)}</span><b>{empty ? t("Not provided") : value}</b></div>;
@@ -1122,23 +1119,23 @@ function studentItems(data, resource, studentId) {
 
 function StudentOverviewList({ title, resource, items, data }) {
   const [viewingGoogleDoc, setViewingGoogleDoc] = useState(null);
-  return <><Panel title={title} utility={<ExportPdfButton />}><div className="record-list">{items.map((item) => <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />} />)}{!items.length && <Empty />}</div></Panel>{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>;
+  return <><Panel title={title} ><div className="record-list">{items.map((item) => <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />} />)}{!items.length && <Empty />}</div></Panel>{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>;
 }
 
 function StudentTaskList({ items, onView }) {
-  return <Panel title={t("Assigned tasks & responses")} utility={<ExportPdfButton />}><div className="record-list">{items.map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} · ${label(task.priority)}${task.submitted_at ? ` · Submitted ${dateText(task.submitted_at)}` : ''}`} description={task.student_response || task.description} badge={task.status} actions={<button className="button quiet small" onClick={() => onView(task)}><Eye size={14} /> {t("View response")}</button>} />)}{!items.length && <Empty text={t("No assigned tasks found.")} />}</div></Panel>;
+  return <Panel title={t("Assigned tasks & responses")} ><div className="record-list">{items.map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} · ${label(task.priority)}${task.submitted_at ? ` · Submitted ${dateText(task.submitted_at)}` : ''}`} description={task.student_response || task.description} badge={task.status} actions={<button className="button quiet small" onClick={() => onView(task)}><Eye size={14} /> {t("View response")}</button>} />)}{!items.length && <Empty text={t("No assigned tasks found.")} />}</div></Panel>;
 }
 
 function StudentCollegeList({ items }) {
-  return <Panel title={t("College list")} utility={<ExportPdfButton />}><div className="record-list">{items.map((application) => <Record key={application.id} title={application.university_detail?.name || t("University")} meta={`${application.program} · ${label(application.tier)} · Deadline ${dateText(application.deadline)}`} description={application.notes} badge={application.status} actions={application.application_portal_url && <a className="button quiet small" href={application.application_portal_url} target="_blank" rel="noreferrer">{t("Application portal")} <ExternalLink size={14} /></a>} />)}{!items.length && <Empty text={t("The student has not added any universities to the college list yet.")} />}</div></Panel>;
+  return <Panel title={t("College list")} ><div className="record-list">{items.map((application) => <Record key={application.id} title={application.university_detail?.name || t("University")} meta={`${application.program} · ${label(application.tier)} · Deadline ${dateText(application.deadline)}`} description={application.notes} badge={application.status} actions={application.application_portal_url && <a className="button quiet small" href={application.application_portal_url} target="_blank" rel="noreferrer">{t("Application portal")} <ExternalLink size={14} /></a>} />)}{!items.length && <Empty text={t("The student has not added any universities to the college list yet.")} />}</div></Panel>;
 }
 
 function StudentEssayList({ items, onView }) {
-  return <Panel title={t("Essays & Google Docs")} utility={<ExportPdfButton />}><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={`Version ${essay.version} · ${essay.university_name || 'General essay'}`} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={t("No essays found.")} />}</div></Panel>;
+  return <Panel title={t("Essays & Google Docs")} ><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={`Version ${essay.version} · ${essay.university_name || 'General essay'}`} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={t("No essays found.")} />}</div></Panel>;
 }
 
 function StudentDocumentList({ title, items, onPreview, notify }) {
-  return <Panel title={title} utility={<ExportPdfButton />}><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={`${label(doc.document_type)}${doc.has_file ? ` · ${doc.file_name || 'File'} · ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} /></>} />)}{!items.length && <Empty />}</div></Panel>;
+  return <Panel title={title} ><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={`${label(doc.document_type)}${doc.has_file ? ` · ${doc.file_name || 'File'} · ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} /></>} />)}{!items.length && <Empty />}</div></Panel>;
 }
 
 
@@ -1231,8 +1228,8 @@ function StudentOverview({ student, data, onBack, user, notify }) {
     </section>
     <div className="stat-grid"><Stat label={t("Level")} value={student.level ?? 1} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : t("Teacher approved")} /><Stat label={t("Stars")} value={student.roadmap_stars ?? 0} note={t("One per approved step")} /><Stat label={t("Assigned tasks")} value={tasks.length} /><Stat label={t("Applications")} value={applications.length} /></div>
     <LevelProgress student={student} />
-    <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} utility={<ExportPdfButton />}><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget USD")} value={student.budget_usd} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? "Needed" : "Not needed"} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
-    <Panel title={t("My guardian")} utility={<ExportPdfButton />}><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
+    <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} ><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget USD")} value={student.budget_usd} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? "Needed" : "Not needed"} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
+    <Panel title={t("My guardian")} ><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
     <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} /></div>
     <div className="overview-grid">
       {STUDENT_RESOURCE_GROUPS.map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
@@ -1509,7 +1506,7 @@ function ResourceSection({ title, resource, data, user, query, reload, notify, c
     if (!window.confirm(t("Delete this record?"))) return;
     try {await api.remove(resource, item.id);notify(t("Record deleted."));reload();} catch (err) {notify(err.message, 'error');}
   }
-  return <><Panel title={title} utility={<ExportPdfButton />} action={<div className="panel-actions">{allowCreate && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}</div>}><div className="record-list">{filtered.map((item) => {
+  return <><Panel title={title} action={<div className="panel-actions">{allowCreate && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}</div>}><div className="record-list">{filtered.map((item) => {
           const lockedAfterApproval = item.status === 'approved';
           const allowDelete = !staffControlled ? allowCreate : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
           return <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{item.has_proof_file && <><button className="button quiet small" onClick={() => setViewingEvidence(item)}><Eye size={14} /> {t("Evidence")}</button><button className="button quiet small" onClick={() => downloadEvidenceFile(item, notify)}><Download size={14} /> {t("Download")}</button></>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
@@ -1585,7 +1582,7 @@ function DocumentsPage({ user, data, query, reload, notify, typeFilter = '', tit
   const [previewing, setPreviewing] = useState(null);
   const docs = data.documents.filter((item) => (!typeFilter || item.document_type === typeFilter) && JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
   async function approve(doc) {try {await api.update('documents', doc.id, { status: 'approved' });notify(t("Document approved."));reload();} catch (err) {notify(err.message, 'error');}}
-  return <><Panel title={title} utility={<ExportPdfButton />} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? t("Add certificate") : t("Add document")}</button>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${studentName(data, doc.student)} • ${label(doc.document_type)}${doc.has_file ? ` • ${doc.file_name || 'File'} • ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => setPreviewing(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} />{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> {t("Approve")}</button>}</>} />)}{!docs.length && <Empty />}</div></Panel>{open && <DocumentForm user={user} data={data} defaultType={typeFilter} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} notify={notify} />}</>;
+  return <><Panel title={title} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? t("Add certificate") : t("Add document")}</button>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${studentName(data, doc.student)} • ${label(doc.document_type)}${doc.has_file ? ` • ${doc.file_name || 'File'} • ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => setPreviewing(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} />{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> {t("Approve")}</button>}</>} />)}{!docs.length && <Empty />}</div></Panel>{open && <DocumentForm user={user} data={data} defaultType={typeFilter} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} notify={notify} />}</>;
 }
 
 function DocumentForm({ user, data, defaultType = '', onClose, onSaved, notify }) {
@@ -1622,28 +1619,11 @@ function PortalTabs({ items, active, onChange }) {
 
 function StudentCenterPage({ user, data, query, reload, notify, setPage }) {
   const [tab, setTab] = useState('overview');
-  const [printing, setPrinting] = useState(false);
-  useEffect(() => {
-    if (!printing) return;
-    // Paper is white in both themes, so the dark palette is swapped out for the print.
-    const root = document.documentElement;
-    const previous = root.getAttribute('data-theme');
-    const restore = () => {
-      if (previous) root.setAttribute('data-theme', previous);else
-      root.removeAttribute('data-theme');
-      setPrinting(false);
-    };
-    root.setAttribute('data-theme', 'light');
-    window.addEventListener('afterprint', restore, { once: true });
-    window.print();
-    restore();
-  }, [printing]);
   return <div className="section-stack student-portal">
     <div className="student-center-head">
       <PortalTabs active={tab} onChange={setTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
       <div className="student-center-actions">
         <button type="button" className="button quiet" onClick={() => setPage('profile')}><Pencil size={16} /> {t("Edit my data")}</button>
-        <button type="button" className="button quiet" onClick={() => {setTab('overview');setPrinting(true);}} aria-busy={printing}><Download size={16} /> {t("Export PDF")}</button>
       </div>
     </div>
     {tab === 'overview' && <StudentOverview student={ownStudent(data)} data={data} />}
@@ -1862,36 +1842,6 @@ function RoadmapPage({ user, data, query, reload, notify }) {
   </div>;
 }
 
-function CommunityPostForm({ onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);try {await api.create('community-posts', { title: values.get('title'), body: values.get('body'), post_type: values.get('post_type') });notify(t("Post published."));onSaved();} catch (err) {notify(err.message, 'error');} finally {setSaving(false);}}
-  return <Modal title={t("Create a community post")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Type")}><select name="post_type">{['discussion', 'question', 'update'].map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field><Field label={t("Title")}><input name="title" required /></Field><Field label={t("Post")}><textarea name="body" required /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Publishing…") : t("Publish")}</button></div></form></Modal>;
-}
-
-function CommunityPage({ data, reload, notify }) {
-  const [open, setOpen] = useState(false);
-  const [communityPosts, setCommunityPosts] = useState(data.communityPosts);
-  const [likingIds, setLikingIds] = useState([]);
-  useEffect(() => setCommunityPosts(data.communityPosts), [data.communityPosts]);
-  const posts = communityPosts;
-  async function like(item) {
-    if (likingIds.includes(item.id)) return;
-    const optimistic = { ...item, liked_by_me: !item.liked_by_me, likes_count: Math.max(0, item.likes_count + (item.liked_by_me ? -1 : 1)) };
-    setLikingIds((ids) => [...ids, item.id]);
-    setCommunityPosts((items) => items.map((post) => post.id === item.id ? optimistic : post));
-    try {
-      const saved = await api.likeCommunityPost(item.id);
-      setCommunityPosts((items) => items.map((post) => post.id === item.id ? saved : post));
-    } catch (err) {
-      setCommunityPosts((items) => items.map((post) => post.id === item.id ? item : post));
-      notify(err.message, 'error');
-    } finally {
-      setLikingIds((ids) => ids.filter((id) => id !== item.id));
-    }
-  }
-  return <div className="section-stack student-portal"><section className="portal-hero community-hero"><div><span className="eyebrow">{t("NASEEB COMMUNITY")}</span><h2>{t("Learn together. Grow together.")}</h2><p>{t("Ask questions, share useful resources, and learn from the application experience of other students.")}</p></div><button className="button light" onClick={() => setOpen(true)}><Plus size={17} /> {t("Create a post")}</button></section><div className="community-layout"><div><div className="community-feed">{posts.map((post) => {const liking = likingIds.includes(post.id);return <article className="community-card" key={post.id}><header><span className="avatar">{post.author_initials}</span><div><b>{post.author_name || t("Student")}</b><small>{dateTimeText(post.created_at)}</small></div><span className="community-tag">{label(post.post_type)}</span></header><h3>{t(post.title)}</h3><p>{t(post.body)}</p><footer><button className={post.liked_by_me ? "liked" : ''} onClick={() => like(post)} disabled={liking} aria-pressed={post.liked_by_me} aria-label={`${post.liked_by_me ? t("Unlike") : t("Like")} ${post.title}`} title={post.liked_by_me ? t("Remove your like") : t("Like this post")}><Heart size={15} fill={post.liked_by_me ? "currentColor" : "none"} /><b>{post.likes_count}</b></button></footer></article>;})}{!posts.length && <Empty text={t("No posts yet.")} />}</div></div><aside><Panel title={t("Community guidelines")}><ul className="guide-list"><li>{t("Keep every conversation useful and respectful.")}</li><li>{t("Do not share passwords or confidential documents.")}</li><li>{t("Check your sources and ask clear questions.")}</li></ul><p className="community-like-help"><Heart size={15} /> {t("Tap the heart to support a useful post. Each student counts once.")}</p></Panel></aside></div>{open && <CommunityPostForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}</div>;
-}
-
 function BookingForm({ onClose, onSaved, notify }) {
   const [participants, setParticipants] = useState([]);
   const [loadingParticipants, setLoadingParticipants] = useState(true);
@@ -1963,19 +1913,28 @@ function MessageChannelForm({ kind, user, onClose, onSaved, notify }) {
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [contactsLoading, setContactsLoading] = useState(true);
+  const [contactsError, setContactsError] = useState('');
+  const [contactsAttempt, setContactsAttempt] = useState(0);
+  const [recipient, setRecipient] = useState('');
   useEffect(() => {
     let active = true;
-    api.messageContacts().then((items) => active && setContacts(items || [])).catch((err) => notify(err.message, 'error'));
+    setContactsLoading(true);
+    setContactsError('');
+    api.messageContacts().then((items) => active && setContacts(items || []))
+      .catch((err) => active && setContactsError(err.message))
+      .finally(() => active && setContactsLoading(false));
     return () => {active = false;};
-  }, []);
+  }, [contactsAttempt]);
 
   async function submit(event) {
     event.preventDefault();
+    if (saving || kind === 'direct' && !recipient) return;
     setSaving(true);
     const values = new FormData(event.currentTarget);
     try {
       const channel = kind === 'direct' ?
-      await api.openDirectChannel(Number(values.get('contact'))) :
+      await api.openDirectChannel(Number(recipient)) :
       await api.create('message-channels', {
         kind,
         name: values.get('name')?.trim(),
@@ -2004,13 +1963,13 @@ function MessageChannelForm({ kind, user, onClose, onSaved, notify }) {
   }
 
   const title = kind === 'direct' ? 'Start a direct conversation' : kind === 'discussion' ? 'Start a discussion' : `Create a ${kind}`;
-  return <Modal title={title} onClose={onClose}><form className="form-grid" onSubmit={submit}>
+  return <Modal title={t(title)} onClose={onClose}><form className="form-grid" onSubmit={submit}>
     {kind === 'direct' ?
-      <Field label={user.role === 'counselor' ? t("Assigned student or school contact") : user.role === 'organization' ? t("Student, teacher or counselor") : t("Contact")}><select name="contact" required defaultValue=""><option value="" disabled>{t("Select a person")}</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{fullName(contact)} · {label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</option>)}</select></Field> :
+      <div className="direct-picker"><label className="channel-search"><Search size={16} /><input aria-label={t("Search contacts")} placeholder={t("Search contacts")} value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} /></label><div className="direct-contact-list">{contactsLoading ? <ChannelListSkeleton count={3} /> : contactsError ? <InlineLoadError message={contactsError} onRetry={() => setContactsAttempt((value) => value + 1)} /> : visibleContacts.length ? visibleContacts.map((contact) => <label className="direct-contact" key={contact.id}><input type="radio" name="contact" value={contact.id} checked={recipient === String(contact.id)} onChange={(event) => setRecipient(event.target.value)} /><span className="avatar">{initials(fullName(contact))}</span><span><b>{fullName(contact)}</b><small>{label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</small></span></label>) : <Empty text={t("No matching contacts.")} />}</div></div> :
       <><Field label={kind === 'discussion' ? t("Question or topic") : t("Channel name")}><input name="name" required maxLength="160" /></Field><Field label={t("Description")}><textarea name="description" maxLength="2000" /></Field></>}
-    {['group', 'community'].includes(kind) && <fieldset className="form-wide member-picker"><legend>{t("Initial members ·")} {selectedMembers.length} {t("selected")}</legend><p>{t("Add contacts now. People can also join a public Community later.")}</p>{staffInterface && <div className="audience-shortcuts"><button type="button" onClick={() => chooseAudience('students')}>{user.role === 'counselor' ? t("Assigned students") : t("School students")}</button><button type="button" onClick={() => chooseAudience('staff')}>{t("School staff")}</button><button type="button" onClick={() => chooseAudience('all')}>{t("All contacts")}</button><button type="button" onClick={() => chooseAudience('clear')}>{t("Clear")}</button></div>}<label className="member-search"><Search size={15} /><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={t("Search contacts")} /></label><div>{visibleContacts.map((contact) => <CheckboxControl key={contact.id} name="members" value={contact.id} checked={selectedMembers.includes(contact.id)} onChange={() => toggleMember(contact.id)}>{fullName(contact)} · {label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</CheckboxControl>)}</div>{!visibleContacts.length && <small>{t("No matching contacts.")}</small>}</fieldset>}
+    {['group', 'community'].includes(kind) && <fieldset className="form-wide member-picker"><legend>{t("Initial members ·")} {selectedMembers.length} {t("selected")}</legend><p>{t("Choose contacts to add to this group.")}</p>{staffInterface && <div className="audience-shortcuts"><button type="button" onClick={() => chooseAudience('students')}>{user.role === 'counselor' ? t("Assigned students") : t("School students")}</button><button type="button" onClick={() => chooseAudience('staff')}>{t("School staff")}</button><button type="button" onClick={() => chooseAudience('all')}>{t("All contacts")}</button><button type="button" onClick={() => chooseAudience('clear')}>{t("Clear")}</button></div>}<label className="member-search"><Search size={15} /><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={t("Search contacts")} /></label><div>{visibleContacts.map((contact) => <CheckboxControl key={contact.id} name="members" value={contact.id} checked={selectedMembers.includes(contact.id)} onChange={() => toggleMember(contact.id)}>{fullName(contact)} · {label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</CheckboxControl>)}</div>{!visibleContacts.length && <small>{t("No matching contacts.")}</small>}</fieldset>}
     {kind === 'discussion' && <div className="alert warning form-wide">{t("Discussions are public. A user must join before posting.")}</div>}
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || kind === 'direct' && !contacts.length} aria-busy={saving}>{saving ? t("Saving…") : t("Continue")}</button></div>
+    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || kind === 'direct' && (!recipient || contactsLoading || !!contactsError)} aria-busy={saving}>{saving ? t("Saving…") : t("Continue")}</button></div>
   </form></Modal>;
 }
 
@@ -2118,15 +2077,30 @@ function ModerationQueueModal({ onClose, onChanged, notify }) {
   return <Modal title={t("Anonymous moderation queue")} onClose={onClose}><div className="moderation-queue"><PortalTabs active={statusFilter} onChange={setStatusFilter} items={[["pending", "Pending"], ["reviewing", "Reviewing"], ["resolved", "Resolved"], ["dismissed", "Dismissed"]]} /><div className="moderation-list">{loading && <ChannelListSkeleton count={3} />}{!loading && reports.map((report) => <article className="moderation-card" key={report.id}><header><div><Badge>{report.reason}</Badge>{report.message_is_anonymous && <span className="anonymous-report-badge"><ShieldAlert size={13} /> {t("Anonymous post")}</span>}</div><time>{dateTimeText(report.created_at)}</time></header><blockquote>{report.message_body}</blockquote><div className="moderation-identities"><span>{t("Author")} <b>{report.sender_name}</b></span><span>{t("Reporter")} <b>{report.reporter_name}</b></span><span>{t("Channel")} <b>{report.channel_name}</b></span></div>{report.details && <p className="report-details"><b>{t("Report details:")}</b> {report.details}</p>}{openStatuses.includes(report.status) ? <><Field label={t("Moderator note")}><textarea value={notes[report.id] || ''} onChange={(event) => setNotes((current) => ({ ...current, [report.id]: event.target.value }))} maxLength="2000" rows="2" /></Field><footer>{report.status === 'pending' && <button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'review')}>{t("Start review")}</button>}<button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'dismiss')}>{t("Dismiss")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'none')}>{t("Resolve only")}</button><button className="button danger small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'content_removed')}>{t("Remove content")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'muted_24h')}>{t("Mute 24h")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'muted_7d')}>{t("Mute 7d")}</button></footer></> : <div className="moderation-result"><Badge>{report.status}</Badge><span>{label(report.action)}{report.reviewed_by_name ? ` · ${report.reviewed_by_name}` : ''}</span>{report.moderator_note && <p>{report.moderator_note}</p>}</div>}</article>)}{!loading && !reports.length && <Empty text={t("No reports with this status.")} />}</div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Done")}</button></div></div></Modal>;
 }
 
-const CHANNEL_TABS = [["direct", "Direct"], ["group", "Group"], ["community", "Community"], ["discussion", "Discussions"]];
+const CHANNEL_TABS = [["direct", "Private"], ["group", "Groups"], ["discussion", "Discussions"]];
+const CHANNEL_SPACES = {
+  direct: { icon: MessageCircle, placeholder: 'Write a message…', note: 'No messages yet. Say hello.' },
+  group: { icon: UsersRound, placeholder: 'Message your group…', description: 'Plan, share and make progress with your group.', note: 'No messages yet. Start your group off.' },
+  community: { icon: Globe2, placeholder: 'Share with the community…', description: 'Share a useful resource or an experience with your community.', note: 'Nothing posted here yet.' },
+  discussion: { icon: BookOpen, placeholder: 'Add to the discussion…', description: 'Ask a clear question. Reply to a message to add your answer.', note: 'No answers yet. Reply to open the thread.' },
+};
 const channelTabLabel = (tab) => t(Object.fromEntries(CHANNEL_TABS)[tab] || tab);
+// Consecutive ids must not land on neighbouring hues, or a short list comes
+// out in one colour family.
+const CHANNEL_TINTS = [0, 3, 1, 4, 2, 5];
+const channelTint = (id) => CHANNEL_TINTS[(id || 0) % CHANNEL_TINTS.length];
 
-function MessagesPage({ user, data, notify }) {
-  const [tab, setTab] = useState('direct');
-  const [channels, setChannels] = useState(data.messageChannels || []);
-  const [activeId, setActiveId] = useState(null);
+function MessagesPage({ user, data, notify, initialChannel }) {
+  const [tab, setTab] = useState(initialChannel?.kind || 'direct');
+  const [moreFolders, setMoreFolders] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [openingSaved, setOpeningSaved] = useState(false);
+  const [channels, setChannels] = useState(() => initialChannel ? [initialChannel, ...(data.messageChannels || []).filter((channel) => channel.id !== initialChannel.id)] : data.messageChannels || []);
+  const [activeId, setActiveId] = useState(initialChannel?.id || null);
   const [messages, setMessages] = useState([]);
-  const [body, setBody] = useState('');
+  const [drafts, setDrafts] = useState({});
+  const [sendError, setSendError] = useState('');
   const [anonymous, setAnonymous] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
   const [search, setSearch] = useState('');
@@ -2142,9 +2116,48 @@ function MessagesPage({ user, data, notify }) {
   const [overview, setOverview] = useState(null);
   const [overviewError, setOverviewError] = useState('');
   const messageListRef = useRef(null);
+  const composerRef = useRef(null);
+  const channelRequest = useRef(0);
+  const messageRequest = useRef(0);
+  const sendLock = useRef(false);
+  const lastLoad = useRef(0);
+  const lastReadMessage = useRef(null);
+  const activeChannelRef = useRef(null);
+  const stickToBottom = useRef(true);
 
-  const visibleChannels = channels.filter((channel) => channel.kind === tab);
-  const activeChannel = activeId === 'list' ? null : visibleChannels.find((channel) => channel.id === activeId) || visibleChannels[0] || null;
+  const visibleChannels = channels.filter((channel) => channel.kind === tab).sort((a, b) => Number(b.is_saved_messages) - Number(a.is_saved_messages) || new Date(b.last_message_at || b.created_at) - new Date(a.last_message_at || a.created_at));
+  const activeChannel = activeId === 'list' ? null : visibleChannels.find((channel) => channel.id === activeId) || null;
+  const body = drafts[activeChannel?.id] || '';
+  const setBody = (value) => setDrafts((current) => ({ ...current, [activeChannel.id]: value }));
+  const space = activeChannel?.is_saved_messages ? { icon: Bookmark, placeholder: 'Write a note…', note: 'Keep notes, links and ideas here. Only you are a member.' } : CHANNEL_SPACES[tab];
+  const SpaceIcon = space.icon;
+  const newChannelLabel = tab === 'direct' ? t("New message") : tab === 'discussion' ? t("New discussion") : t("New channel");
+  // Unread per folder: the bootstrap list covers every kind, the live list keeps
+  // the folder you are in exact.
+  const folderUnread = useMemo(() => {
+    const merged = new Map((data.messageChannels || []).map((channel) => [channel.id, channel]));
+    channels.forEach((channel) => merged.set(channel.id, channel));
+    const counts = {};
+    merged.forEach((channel) => {if (channel.unread_count > 0) counts[channel.kind] = (counts[channel.kind] || 0) + channel.unread_count;});
+    return counts;
+  }, [data.messageChannels, channels]);
+  useLayoutEffect(() => {
+    activeChannelRef.current = activeChannel?.id;
+    messageRequest.current += 1;
+    stickToBottom.current = true;
+    lastReadMessage.current = null;
+    setMessages([]);
+    setSendError('');
+    setReplyTo(null);
+    setAnonymous(false);
+    setEmojiOpen(false);
+    if (composerRef.current) composerRef.current.style.height = 'auto';
+  }, [activeChannel?.id]);
+  useLayoutEffect(() => {
+    channelRequest.current += 1;
+    return () => { channelRequest.current += 1; };
+  }, [tab, search]);
+  useEffect(() => () => { messageRequest.current += 1; activeChannelRef.current = null; }, []);
   const staffInterface = ['counselor', 'organization'].includes(user.role);
   const moderationEnabled = isTaskManager(user) || user.role === 'organization';
   const canCreate = tab === 'direct' || tab === 'discussion' || isTaskManager(user) || user.role === 'organization';
@@ -2166,81 +2179,116 @@ function MessagesPage({ user, data, notify }) {
   }, [moderationEnabled, staffInterface, notify]);
 
   const refreshChannels = useCallback(async (kind = tab, term = search, preferredId = activeId) => {
+    const requestId = ++channelRequest.current;
     setLoadingChannels(true);
     setChannelError('');
     try {
       const items = await api.messageChannels(kind, term);
-      setChannels(items || []);
+      if (requestId !== channelRequest.current) return [];
+      // Keep the other folders: dropping them loses the unread counts behind
+      // their tabs, and a folder you just read would light up again.
+      setChannels((current) => [...current.filter((item) => item.kind !== kind), ...(items || [])]);
       setActiveId((current) => {
         if (current === 'list' && preferredId === 'list') return 'list';
         if (items.some((item) => item.id === preferredId)) return preferredId;
         if (items.some((item) => item.id === current)) return current;
-        return items[0]?.id || null;
+        return null;
       });
       return items || [];
     } catch (err) {
-      notify(err.message, 'error');
+      if (requestId !== channelRequest.current) return [];
       setChannelError(err.message);
       return [];
     } finally {
-      setLoadingChannels(false);
+      if (requestId === channelRequest.current) setLoadingChannels(false);
     }
   }, [tab, search, activeId, notify]);
 
-  const loadMessages = useCallback(async (channel) => {
-    if (!channel?.is_member) {setMessages([]);setMessageError('');return;}
-    setLoadingMessages(true);
-    setMessageError('');
+  const loadMessages = useCallback(async (channel, quiet = false) => {
+    const requestId = ++messageRequest.current;
+    if (!channel?.is_member) {setMessages([]);setMessageError('');setLoadingMessages(false);return;}
+    if (!quiet) setLoadingMessages(true);
+    lastLoad.current = Date.now();
     try {
       const items = await api.channelMessages(channel.id);
-      setMessages([...(items || [])].reverse());
-      await api.markChannelRead(channel.id);
-      setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, unread_count: 0 } : item));
+      if (requestId !== messageRequest.current || activeChannelRef.current !== channel.id) return;
+      setMessages((current) => {
+        const next = [...(items || [])].reverse();
+        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+      });
+      setMessageError('');
+      // One read receipt per new message, not one per refresh: the poll and the
+      // focus listener both land here, and a receipt is a write.
+      const newest = items?.[0]?.id ?? null;
+      if (newest !== lastReadMessage.current) {
+        lastReadMessage.current = newest;
+        // A failed read receipt must never hide successfully loaded messages.
+        api.markChannelRead(channel.id).then(() => {
+          setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, unread_count: 0 } : item));
+        }).catch(() => {});
+      }
     } catch (err) {
-      notify(err.message, 'error');
-      setMessageError(err.message);
+      if (requestId === messageRequest.current && activeChannelRef.current === channel.id) setMessageError(err.message);
     } finally {
-      setLoadingMessages(false);
+      if (requestId === messageRequest.current) setLoadingMessages(false);
     }
-  }, [notify]);
+  }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => refreshChannels(tab, search, null), 220);
+    const timer = window.setTimeout(() => refreshChannels(tab, search, activeId), 220);
     return () => window.clearTimeout(timer);
   }, [tab, search]);
 
   useEffect(() => {refreshOverview();}, [refreshOverview]);
 
   useEffect(() => {
-    setReplyTo(null);
-    setAnonymous(false);
     loadMessages(activeChannel);
-  }, [activeChannel?.id, activeChannel?.is_member]);
+    const refresh = () => {
+      if (document.visibilityState !== 'visible' || sendLock.current) return;
+      // Refocusing the window a few times in a row is not a reason to refetch.
+      if (Date.now() - lastLoad.current < 3000) return;
+      loadMessages(activeChannel, true);
+    };
+    const timer = window.setInterval(refresh, 8000);
+    window.addEventListener('focus', refresh);
+    return () => {window.clearInterval(timer);window.removeEventListener('focus', refresh);messageRequest.current += 1;};
+  }, [activeChannel?.id, activeChannel?.is_member, loadMessages]);
 
   useEffect(() => {
     const list = messageListRef.current;
-    if (list) list.scrollTop = list.scrollHeight;
+    if (list && stickToBottom.current) list.scrollTop = list.scrollHeight;
   }, [messages, loadingMessages]);
 
   async function send(event) {
     event.preventDefault();
-    if (!activeChannel || !body.trim()) return;
+    if (sendLock.current || !activeChannel?.is_member || !body.trim()) return;
+    const channel = activeChannel;
+    sendLock.current = true;
     setSaving(true);
+    setSendError('');
     try {
-      await api.create('channel-messages', {
-        channel: activeChannel.id,
+      const sent = await api.create('channel-messages', {
+        channel: channel.id,
         body: body.trim(),
-        is_anonymous: anonymous,
-        ...(replyTo ? { parent: replyTo.id } : {})
+        is_anonymous: ['community', 'discussion'].includes(channel.kind) && anonymous,
+        ...(replyTo?.channel === channel.id ? { parent: replyTo.id } : {})
       });
-      setBody('');
-      setReplyTo(null);
-      await loadMessages(activeChannel);
-      await refreshChannels(tab, search, activeChannel.id);
-      await refreshOverview();
+      setDrafts((current) => ({ ...current, [channel.id]: '' }));
+      if (activeChannelRef.current === channel.id) {
+        messageRequest.current += 1;
+        setLoadingMessages(false);
+        setMessageError('');
+        stickToBottom.current = true;
+        setMessages((current) => [...current.filter((item) => item.id !== sent.id), sent]);
+        setReplyTo(null);
+        if (composerRef.current) {composerRef.current.style.height = 'auto';composerRef.current.focus();}
+      }
+      setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, last_message: { body: sent.body, created_at: sent.created_at, sender_name: sent.sender_name }, last_message_at: sent.created_at } : item));
     } catch (err) {
-      notify(err.message, 'error');
+      if (activeChannelRef.current === channel.id) setSendError(err.message);
+      else notify(err.message, 'error');
     } finally {
+      sendLock.current = false;
       setSaving(false);
     }
   }
@@ -2274,31 +2322,48 @@ function MessagesPage({ user, data, notify }) {
     } catch (err) {notify(err.message, 'error');}
   }
 
+  async function openSavedMessages() {
+    if (openingSaved) return;
+    setOpeningSaved(true);
+    try { await channelSaved(await api.savedMessages()); }
+    catch (err) { notify(err.message, 'error'); }
+    finally { setOpeningSaved(false); }
+  }
+
   async function channelSaved(channel) {
     setOpen(false);
     setTab(channel.kind);
     setSearch('');
-    const items = await refreshChannels(channel.kind, '', channel.id);
-    if (!items.some((item) => item.id === channel.id)) setChannels((current) => [channel, ...current]);
+    setChannels((current) => [channel, ...current.filter((item) => item.id !== channel.id)]);
     setActiveId(channel.id);
     await refreshOverview();
   }
 
-  return <div className={`messaging-page section-stack ${user.role === 'student' ? 'student-portal' : ''}`}>
+  return <div className={`messaging-page section-stack kind-${tab} ${user.role === 'student' ? 'student-portal' : ''}`}>
     {staffInterface && <section className="staff-messaging-overview"><div className="staff-messaging-copy"><span><MessageCircle size={22} /></span><div><small>{user.role === 'counselor' ? t("COUNSELOR INBOX") : t("SCHOOL COMMUNICATIONS")}</small><h2>{user.role === 'counselor' ? t("Student and school conversations") : t("Keep your school connected")}</h2><p>{user.role === 'counselor' ? t("Message assigned students, coordinate with school staff and moderate shared channels.") : t("Contact your students, teachers and assigned counselors from one secure inbox.")}</p></div></div>{overview ? <div className="staff-messaging-stats"><div><strong>{overview.unread_total || 0}</strong><span>{t("Unread")}</span></div><div><strong>{overview.students_total || 0}</strong><span>{user.role === 'counselor' ? t("Assigned students") : t("School students")}</span></div><div><strong>{overview.channel_counts?.direct || 0}</strong><span>{t("Direct chats")}</span></div><div><strong>{(overview.channel_counts?.group || 0) + (overview.channel_counts?.community || 0)}</strong><span>{t("Managed spaces")}</span></div><div className={overview.pending_reports ? "attention" : ''}><strong>{overview.pending_reports || 0}</strong><span>{t("Open reports")}</span></div></div> : overviewError ? <InlineLoadError message={overviewError} onRetry={refreshOverview} /> : <StaffStatsSkeleton />}<div className="staff-messaging-actions"><button className="button primary" onClick={() => {setTab('direct');setActiveId(null);setOpen(true);}}><MessageCircle size={16} /> {t("Message a student")}</button><button className="button quiet" onClick={() => {setTab('group');setActiveId(null);setOpen(true);}}><UsersRound size={16} /> {t("Create group")}</button><button className="button quiet" onClick={() => setModerationOpen(true)}><ShieldAlert size={16} /> {t("Moderation queue")}{overview?.pending_reports ? ` · ${overview.pending_reports}` : ''}</button></div></section>}
-    <div className="portal-toolbar messaging-toolbar"><PortalTabs active={tab} onChange={(next) => {setTab(next);setActiveId(null);}} items={CHANNEL_TABS} /><div className="messaging-toolbar-actions">{moderationEnabled && !staffInterface && <button className="button quiet" onClick={() => setModerationOpen(true)}><ShieldAlert size={17} /> {t("Moderation")}{overview?.pending_reports ? ` · ${overview.pending_reports}` : ''}</button>}{canCreate && <button className="button primary" onClick={() => setOpen(true)}><Plus size={17} /> {tab === 'direct' ? t("New message") : tab === 'discussion' ? t("New discussion") : t("New channel")}</button>}</div></div>
-    <div className={`messages-shell ${activeChannel ? 'has-active-channel' : ''}`}>
-      <aside className="channel-sidebar"><div className="channel-sidebar-heading"><b>{t("Conversations")}</b><span>{formatNumberLocale(visibleChannels.length)}</span></div><label className="channel-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tx`Search ${channelTabLabel(tab)}`} aria-label={tx`Search ${channelTabLabel(tab)} channels`} /></label><div className="channel-list" aria-busy={loadingChannels}>{loadingChannels ? <ChannelListSkeleton /> : channelError ? <InlineLoadError message={channelError} onRetry={() => refreshChannels(tab, search, activeId)} /> : <>{visibleChannels.map((channel) => <button type="button" key={channel.id} className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''}`} onClick={() => setActiveId(channel.id)}><span className="avatar">{initials(channel.display_name)}</span><span className="channel-item-copy"><span className="channel-item-top"><b>{channel.display_name}</b>{channel.last_message?.created_at && <time>{chatStampText(channel.last_message.created_at)}</time>}</span><span className="channel-item-bottom"><small>{channel.last_message?.body || channel.description || tx`${channel.members_count} members`}</small>{channel.unread_count > 0 && <strong aria-label={tx`${channel.unread_count} unread`}>{channel.unread_count > 99 ? '99+' : channel.unread_count}</strong>}</span></span></button>)}{!visibleChannels.length && <Empty text={t("No channels found in this section.")} />}</>}</div></aside>
-      {activeChannel ? <section className="message-thread"><header><div><button type="button" className="icon-button message-back" onClick={() => setActiveId('list')} aria-label={t("Back to conversations")}><ArrowLeft size={18} /></button><span className="avatar">{initials(activeChannel.display_name)}</span><div><b>{activeChannel.display_name}</b><small>{activeChannel.kind === 'direct' ? t("Direct conversation") : tx`${activeChannel.members_count} members`}</small></div></div><div className="channel-actions">{canManageMembers && <button className="button quiet small" onClick={() => setMembersOpen(true)}><UsersRound size={15} /> {t("Manage members")}</button>}{activeChannel.is_public && !activeChannel.is_member && <button className="button primary small" onClick={join}>{t("Join")}</button>}{activeChannel.is_member && activeChannel.kind !== 'direct' && activeChannel.my_role !== 'owner' && <button className="button quiet small" onClick={leave}>{t("Leave")}</button>}</div></header>
-        {activeChannel.is_member ? <><div className="message-list" ref={messageListRef} aria-busy={loadingMessages}>{loadingMessages ? <MessageListSkeleton /> : messageError ? <InlineLoadError message={messageError} onRetry={() => loadMessages(activeChannel)} /> : <>{messages.map((message, index) => {
+    <div className={`messages-shell ${activeChannel ? 'has-active-channel' : ''} ${activeChannel && detailsOpen ? 'has-details' : ''}`}>
+      <aside className="channel-sidebar">
+        <header className="chat-sidebar-header">
+          <span className="chat-brand-icon"><MessageSquareText size={23} /></span>
+          <div><h2>{t("Chat")}</h2><p>{Object.values(folderUnread).some(Boolean) ? t("Unread conversations") : t("All caught up")}</p></div>
+          <button type="button" className="chat-new-button" onClick={() => {setTab(staffInterface || isTaskManager(user) ? 'group' : 'direct');setOpen(true);}}><Plus size={15} />{staffInterface || isTaskManager(user) ? t("New group") : t("New message")}</button>
+        </header>
+        <div className="channel-folders" role="tablist" aria-label={t("Messages")}>{CHANNEL_TABS.filter(([kind]) => moreFolders || ['direct', 'group', tab].includes(kind)).map(([kind, title]) => <button key={kind} type="button" role="tab" aria-selected={tab === kind} className={`channel-folder folder-${kind} ${tab === kind ? 'active' : ''}`} onClick={() => {setTab(kind);setActiveId(null);setSearch('');}}>{t(title)}{folderUnread[kind] ? <em className="folder-count" aria-label={tx`${folderUnread[kind]} unread`}>{folderUnread[kind] > 99 ? '99+' : folderUnread[kind]}</em> : null}</button>)}<button type="button" className="channel-folder channel-more-folders" aria-expanded={moreFolders} aria-label={t("More folders")} title={t("More folders")} onClick={() => setMoreFolders(!moreFolders)}><FolderKanban size={17} /></button>{moderationEnabled && !staffInterface && <button type="button" className="channel-folder channel-moderation" onClick={() => setModerationOpen(true)} aria-label={t("Moderation")} title={t("Moderation")}><ShieldAlert size={16} />{overview?.pending_reports ? <em>{overview.pending_reports}</em> : null}</button>}</div>
+        <label className="channel-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search chats…")} aria-label={tx`Search ${channelTabLabel(tab)} channels`} /></label>
+        <div className="channel-list" aria-busy={loadingChannels}>{tab === 'direct' && !search && !visibleChannels.some((channel) => channel.is_saved_messages) && <button type="button" className="channel-item saved-messages" disabled={openingSaved} onClick={openSavedMessages}><span className="avatar saved-avatar"><Bookmark size={23} /></span><span className="channel-item-copy"><b>{t("Saved Messages")}</b><small>{openingSaved ? t("Opening…") : t("Your notes and links")}</small></span></button>}{loadingChannels ? <ChannelListSkeleton /> : channelError ? <InlineLoadError message={channelError} onRetry={() => refreshChannels(tab, search, activeId)} /> : <>{visibleChannels.map((channel) => <button type="button" key={channel.id} className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''} ${channel.unread_count > 0 ? 'unread' : ''} ${channel.is_saved_messages ? 'saved-messages' : ''}`} aria-current={activeChannel?.id === channel.id ? 'true' : undefined} onClick={() => setActiveId(channel.id)}><span className={`avatar ${channel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(channel.id)}`}`}>{channel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(channel.display_name) : <SpaceIcon size={20} />}</span><span className="channel-item-copy"><span className="channel-item-top"><b>{channel.is_saved_messages ? t("Saved Messages") : channel.display_name}</b>{channel.last_message?.created_at && <time>{chatStampText(channel.last_message.created_at)}</time>}</span><span className="channel-item-bottom"><small>{channel.last_message?.body || (channel.is_saved_messages ? t("Your notes and links") : tab === 'direct' ? t("No messages yet") : channel.description || tx`${channel.members_count} members`)}</small>{channel.unread_count > 0 && <strong aria-label={tx`${channel.unread_count} unread`}>{channel.unread_count > 99 ? '99+' : channel.unread_count}</strong>}</span></span></button>)}{!visibleChannels.length && <div className="channel-list-empty"><SpaceIcon size={26} /><p>{search ? t("No conversation matches your search.") : t("No conversations here yet.")}</p></div>}</>}</div>
+        {canCreate && <button type="button" className="channel-compose" onClick={() => setOpen(true)} aria-label={newChannelLabel} title={newChannelLabel}><Pencil size={19} /></button>}
+      </aside>
+      {activeChannel ? <section className="message-thread"><header><div><button type="button" className="icon-button message-back" onClick={() => setActiveId('list')} aria-label={t("Back to conversations")}><ArrowLeft size={18} /></button><span className={`avatar ${activeChannel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(activeChannel.id)}`}`}>{activeChannel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(activeChannel.display_name) : <SpaceIcon size={22} />}</span><div><b>{activeChannel.is_saved_messages ? t("Saved Messages") : activeChannel.display_name}</b><small>{activeChannel.is_saved_messages ? t("Your personal notebook") : activeChannel.kind === 'direct' ? t("Direct conversation") : tx`${activeChannel.members_count} members`}</small></div></div><div className="channel-actions"><button type="button" className="icon-button" onClick={() => setDetailsOpen(!detailsOpen)} aria-label={t("Contact info")} title={t("Contact info")} aria-expanded={detailsOpen}><Info size={19} /></button><button type="button" className="icon-button close-chat" onClick={() => setActiveId(null)} aria-label={t("Close chat")} title={t("Close chat")}><X size={18} /></button>{canManageMembers && <button className="button quiet small" onClick={() => setMembersOpen(true)}><UsersRound size={15} /> {t("Manage members")}</button>}{activeChannel.is_public && !activeChannel.is_member && <button className="button primary small" onClick={join}>{t("Join")}</button>}{activeChannel.is_member && activeChannel.kind !== 'direct' && activeChannel.my_role !== 'owner' && <button className="button quiet small" onClick={leave}>{t("Leave")}</button>}</div></header>
+        {activeChannel.is_member ? <><div className="message-list" ref={messageListRef} onScroll={(event) => {const list = event.currentTarget;stickToBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 90;}} aria-busy={loadingMessages}>{activeChannel.kind !== 'direct' && <div className="channel-context"><SpaceIcon size={24} /><div><b>{activeChannel.display_name}</b><p>{activeChannel.description || t(space.description)}</p></div></div>}{messageError && <InlineLoadError message={messageError} onRetry={() => loadMessages(activeChannel)} />}{loadingMessages ? <MessageListSkeleton /> : <>{messages.map((message, index) => {
               const mine = message.sender_id === user.id;
               const previous = messages[index - 1];
               const newDay = !previous || new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString();
-              const sameAuthor = !newDay && previous && previous.sender_id === message.sender_id && previous.is_anonymous === message.is_anonymous && !message.parent;
-              const showSender = activeChannel.kind !== 'direct' && !sameAuthor;
+              const sameAuthor = !newDay && previous && message.sender_id != null && previous.sender_id === message.sender_id && previous.is_anonymous === message.is_anonymous && !message.parent;
+              const showSender = ['community', 'discussion'].includes(activeChannel.kind) || activeChannel.kind === 'group' && !sameAuthor;
               const showAvatar = activeChannel.kind !== 'direct' && !mine;
-              return <Fragment key={message.id}>{newDay && <div className="message-day"><span>{dateText(message.created_at)}</span></div>}{showAvatar && <span className={`message-avatar avatar ${sameAuthor ? 'is-hidden' : ''}`}>{initials(message.is_anonymous ? '?' : message.sender_name)}</span>}<article className={`message-bubble ${mine ? 'mine' : ''} ${message.parent ? 'reply' : ''} ${message.is_accepted_answer ? 'accepted' : ''} ${sameAuthor ? 'stacked' : ''}`}>{message.parent_preview && <button type="button" className="parent-preview" onClick={() => document.getElementById(`message-${message.parent}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>{t("Reply to:")} {message.parent_preview.body}</button>}<div id={`message-${message.id}`} className={showSender || message.is_accepted_answer ? '' : 'is-hidden'}>{showSender && <b>{message.sender_name}{message.is_anonymous ? t("· Anonymous") : ''}</b>}{message.is_accepted_answer && <span className="accepted-label"><CheckCircle2 size={13} /> {t("Accepted answer")}</span>}</div><p>{message.deleted_at ? t("Message deleted") : message.body}<time>{clockText(message.created_at)}{message.is_edited ? t("· edited") : ''}</time></p><footer>{!message.deleted_at && <button type="button" onClick={() => setReplyTo(message)}>{t("Reply")}</button>}{!mine && !message.deleted_at && <button type="button" disabled={message.is_reported_by_me} onClick={() => setReportingMessage(message)}><Flag size={11} /> {message.is_reported_by_me ? t("Reported") : t("Report")}</button>}{canAccept && message.parent && !message.deleted_at && !message.is_accepted_answer && <button type="button" onClick={() => accept(message)}>{t("Accept answer")}</button>}</footer></article></Fragment>;})}{!messages.length && <Empty text={t("Start the conversation with the first message.")} />}</>}</div><form className="message-compose" onSubmit={send}><div>{replyTo && <div className="replying-to"><span>{t("Replying to")} <b>{replyTo.sender_name}</b></span><button type="button" className="icon-button" onClick={() => setReplyTo(null)} aria-label={t("Cancel reply")}><X size={15} /></button></div>}<textarea value={body} onChange={(event) => {setBody(event.target.value);event.target.style.height = 'auto';event.target.style.height = `${Math.min(132, event.target.scrollHeight)}px`;}} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault();send(event);}}} placeholder={t("Write a message…")} rows="1" />{['community', 'discussion'].includes(activeChannel.kind) && <CheckboxControl className="compact anonymous-toggle" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)}>{t("Post anonymously")}</CheckboxControl>}</div><button className="message-send" disabled={saving || !body.trim()} aria-busy={saving} aria-label={saving ? t("Sending…") : t("Send")} title={t("Send")}><Send size={18} /></button></form></> : <div className="message-join-state"><UsersRound size={42} /><h3>{activeChannel.display_name}</h3><p>{activeChannel.description || t("Join this channel to read and send messages.")}</p><button className="button primary" onClick={join}>{t("Join channel")}</button></div>}
-      </section> : <section className="message-empty-state"><MessageCircle size={44} /><h3>{t("Select a conversation")}</h3><p>{t("Select a channel or start a new conversation.")}</p></section>}
+              return <Fragment key={message.id}>{newDay && <div className="message-day"><span>{dateText(message.created_at)}</span></div>}{showAvatar && <span className={`message-avatar avatar ${sameAuthor ? 'is-hidden' : ''}`}>{initials(message.is_anonymous ? '?' : message.sender_name)}</span>}<article id={`message-${message.id}`} className={`message-bubble sender-${(message.sender_id || 0) % 6} ${mine ? 'mine' : ''} ${message.parent ? 'reply' : ''} ${message.is_accepted_answer ? 'accepted' : ''} ${sameAuthor ? 'stacked' : ''}`}>{message.parent_preview && <button type="button" className="parent-preview" onClick={() => document.getElementById(`message-${message.parent}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>{t("Reply to:")} {message.parent_preview.body}</button>}<div className={showSender || message.is_accepted_answer ? '' : 'is-hidden'}>{showSender && <b>{message.sender_name}{message.is_anonymous ? t("· Anonymous") : ''}</b>}{message.is_accepted_answer && <span className="accepted-label"><CheckCircle2 size={13} /> {t("Accepted answer")}</span>}</div><p>{message.deleted_at ? t("Message deleted") : message.body}<time>{clockText(message.created_at)}{message.is_edited ? t("· edited") : ''}{mine && <Check size={12} aria-label={t("Sent")} />}</time></p><footer>{!message.deleted_at && <button type="button" onClick={() => setReplyTo(message)}>{t("Reply")}</button>}{!mine && !message.deleted_at && <button type="button" disabled={message.is_reported_by_me} onClick={() => setReportingMessage(message)}><Flag size={11} /> {message.is_reported_by_me ? t("Reported") : t("Report")}</button>}{canAccept && message.parent && !message.deleted_at && !message.is_accepted_answer && <button type="button" onClick={() => accept(message)}>{t("Accept answer")}</button>}</footer></article></Fragment>;})}{!messages.length && <div className="thread-empty"><SpaceIcon size={26} /><p>{t(space.note)}</p></div>}</>}</div><form className="message-compose" onSubmit={send}><div className="composer-field"><button type="button" className="emoji-toggle icon-button" disabled={saving} aria-label={t("Choose emoji")} aria-expanded={emojiOpen} onClick={() => setEmojiOpen(!emojiOpen)}><Smile size={22} /></button>{emojiOpen && <div className="emoji-picker" role="group" aria-label={t("Choose emoji")}>{['😊', '👍', '❤️', '🎉', '🙌', '✅', '👋', '💡', '📚', '🚀', '🤝', '✨'].map((emoji) => <button key={emoji} type="button" aria-label={emoji} onClick={() => {setBody(body + emoji);setEmojiOpen(false);composerRef.current?.focus();}}>{emoji}</button>)}</div>}{sendError && <p className="compose-error" role="alert">{sendError}</p>}{replyTo && <div className="replying-to"><span>{t("Replying to")} <b>{replyTo.sender_name}</b></span><button type="button" className="icon-button" onClick={() => setReplyTo(null)} aria-label={t("Cancel reply")}><X size={15} /></button></div>}<textarea ref={composerRef} aria-label={t(space.placeholder)} readOnly={saving} value={body} onChange={(event) => {setBody(event.target.value);event.target.style.height = 'auto';event.target.style.height = `${Math.min(132, event.target.scrollHeight)}px`;}} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault();send(event);}}} placeholder={t(space.placeholder)} rows="1" />{['community', 'discussion'].includes(activeChannel.kind) && <CheckboxControl className="compact anonymous-toggle" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)}>{t("Post anonymously")}</CheckboxControl>}<small className="compose-hint">{saving ? t("Sending…") : t("Enter to send · Shift + Enter for a new line")}</small></div><button type="submit" className="message-send" disabled={saving || !body.trim()} aria-busy={saving} aria-label={saving ? t("Sending…") : t("Send")} title={t("Send")}><Send size={18} /></button></form></> : <div className="message-join-state"><UsersRound size={42} /><h3>{activeChannel.display_name}</h3><p>{activeChannel.description || t("Join this channel to read and send messages.")}</p><button className="button primary" onClick={join}>{t("Join channel")}</button></div>}
+      </section> : <section className="message-empty-state"><UsersRound size={44} strokeWidth={1.5} /><h3>{t("Select a chat")}</h3></section>}
+      {activeChannel && detailsOpen && <ChatDetails key={activeChannel.id} channel={activeChannel} messages={messages} onClose={() => setDetailsOpen(false)} />}
     </div>
     {open && <MessageChannelForm kind={tab} user={user} onClose={() => setOpen(false)} onSaved={channelSaved} notify={notify} />}
     {membersOpen && activeChannel && <ChannelMembersModal channel={activeChannel} user={user} onClose={() => setMembersOpen(false)} onChanged={async () => {await refreshChannels(tab, search, activeChannel.id);await refreshOverview();}} notify={notify} />}
@@ -2630,8 +2695,8 @@ function StorePage({ data, query, setPage }) {
     : item.price_amount != null ? formatCurrencyLocale(Number(item.price_amount), item.currency || 'UZS')
     : t("Ask your counselor");
   return <div className="section-stack student-portal">
-    <section className="store-hero"><div><span className="eyebrow">{t("NASEEB EDU SERVICES")}</span><h2>{t("Unlock your next step.")}</h2><p>{t("Explore education and counseling services that support your application journey.")}</p><button className="button light" onClick={() => setPage('contacts')}>{t("Talk to your team")} <ChevronRight size={17} /></button></div><PackageOpen size={104} /></section>
-    <div className="store-grid">{items.map((item) => <article key={item.id} className={item.is_featured ? "featured" : ''}><span>{t(item.category)}</span><h3>{t(item.title)}</h3><p>{t(item.description)}</p><footer><b>{price(item)}</b><button className="button quiet small" onClick={() => setPage('contacts')}>{t("Learn more")}</button></footer></article>)}{!items.length && <Empty />}</div>
+    <section className="store-hero"><div><span className="eyebrow">{t("NASEEB EDU SERVICES")}</span><h2>{t("Unlock your next step.")}</h2><p>{t("Explore education and counseling services that support your application journey.")}</p><button className="button light" onClick={() => setPage('messages')}>{t("Talk to your team")} <ChevronRight size={17} /></button></div><PackageOpen size={104} /></section>
+    <div className="store-grid">{items.map((item) => <article key={item.id} className={item.is_featured ? "featured" : ''}><span>{t(item.category)}</span><h3>{t(item.title)}</h3><p>{t(item.description)}</p><footer><b>{price(item)}</b><button className="button quiet small" onClick={() => setPage('messages')}>{t("Learn more")}</button></footer></article>)}{!items.length && <Empty />}</div>
   </div>;
 }
 
@@ -2837,10 +2902,6 @@ function ScreenTimePage({ user }) {
     {isStaff && <Panel title={t("Student activity")} action={<span className="privacy-chip"><ShieldCheck size={14} /> {t("Aggregate view")}</span>}><div className="time-team-list">{summary?.team?.map((student) => <article key={student.student}><div><span className="avatar">{initials(student.name)}</span><div><b>{student.name}</b><small>{student.school}</small></div></div><span><small>{t("Today")}</small><b>{formatDuration(student.today_seconds)}</b></span><span><small>{days} {t("days")}</small><b>{formatDuration(student.period_seconds)}</b></span></article>)}{!summary?.team?.length && <Empty text={t("No permitted student activity is available yet.")} />}</div></Panel>}
     <div className="screen-time-privacy"><ShieldCheck size={18} /><p><b>{t("Privacy by design.")}</b> {t("We store only aggregate seconds by user, day, and app page—never clicks, typed text, or browsing content. Offline totals retry for up to 7 days. Aggregate rows are retained for")} {summary?.retention_days || 365} {t("days.")}</p></div>
   </div>;
-}
-
-function ContactsPage({ data, setPage }) {
-  return <div className="section-stack student-portal"><section className="portal-hero contacts-hero"><div><span className="eyebrow">{t("YOUR SUPPORT NETWORK")}</span><h2>{t("My Naseeb Team")}</h2><p>{t("Quickly connect with your counselor and school coordinator.")}</p></div><ContactRound size={64} /></section><div className="contact-grid">{data.team.map((member) => <article key={`${member.kind}-${member.id}`}><span className="avatar large">{initials(member.name)}</span><div><span>{member.kind === 'counselor' ? t("Primary counselor") : t("School coordinator")}</span><h3>{member.name}</h3><p>{t(member.role)}</p><small>{member.email || t("Email not provided")}</small><small>{member.phone || t("Phone not provided")}</small></div><footer><button className="button primary" onClick={() => setPage('messages')}><MessageCircle size={16} /> {t("Message")}</button>{member.kind === 'counselor' && <button className="button quiet" onClick={() => setPage('bookings')}><CalendarClock size={16} /> {t("Book")}</button>}</footer></article>)}{!data.team.length && <Empty text={t("No team members have been assigned yet.")} />}</div></div>;
 }
 
 function AdminControlDashboard({ data, setPage }) {
@@ -3600,6 +3661,19 @@ function ProfileAssessmentPage({ notify, data, reload }) {
 }
 
 function PageRouter({ page, user, data, stats, query, reload, notify, setPage }) {
+  const [directChannel, setDirectChannel] = useState(null);
+  const openingDirect = useRef(false);
+  useEffect(() => {if (page !== 'messages') setDirectChannel(null);}, [page]);
+  async function onDirect(userId) {
+    if (openingDirect.current) return;
+    openingDirect.current = true;
+    try {
+      const channel = await api.openDirectChannel(userId);
+      setDirectChannel(channel);
+      setPage('messages');
+    } catch (err) {notify(err.message, 'error');}
+    finally {openingDirect.current = false;}
+  }
   if (user.role === 'parent') return <ParentPortalPage {...{ page, data, reload, notify }} />;
   if (user.role === 'admin' && page === 'admin_dashboard') return <AdminControlDashboard data={data} setPage={setPage} />;
   if (user.role === 'admin' && page === 'admin_schools') return <SchoolsPage user={user} data={data} reload={reload} notify={notify} />;
@@ -3607,14 +3681,13 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (user.role === 'admin' && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (['admin', 'counselor'].includes(user.role) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
   if (user.role === 'admin' && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
-  if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage }} />;
+  if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect }} />;
   if (user.role === 'student' && page === 'student_center') return <StudentCenterPage {...{ user, data, query, reload, notify, setPage }} />;
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage notify={notify} data={data} reload={reload} />;
-  if (user.role === 'student' && page === 'community') return <CommunityPage {...{ data, reload, notify }} />;
   if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />;
-  if (page === 'messages') return <MessagesPage {...{ user, data, notify }} />;
+  if (page === 'messages') return <MessagesPage {...{ user, data, notify }} initialChannel={directChannel} />;
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} />;
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query }} />;
@@ -3622,7 +3695,6 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
-  if (user.role === 'student' && page === 'contacts') return <ContactsPage {...{ data, setPage }} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} reload={reload} notify={notify} />;
   if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (page === 'profile') return user.role === 'student' ? <StudentOnboarding onSaved={() => { reload(); notify(t('Profile saved.')); setPage('student_center'); }} onPhotoChanged={reload} /> : <StudentOverview student={ownStudent(data)} data={data} />;
@@ -3709,7 +3781,7 @@ export default function App() {
     try {
       const studentResources = ['students', 'tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations'].map((key) => [key, key]);
       const portalResources = [
-      ['roadmapMissions', 'roadmap-missions'], ['communityPosts', 'community-posts'], ['bookings', 'bookings'],
+      ['roadmapMissions', 'roadmap-missions'], ['bookings', 'bookings'],
       ['messageChannels', 'message-channels'], ['programServices', 'program-services'],
       ['scholarships', 'scholarships'], ['opportunityPrograms', 'opportunity-programs'],
       ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets']];
@@ -3791,7 +3863,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const reachable = [...navigationFor(user), ...(user?.role === 'student' ? ['profile'] : [])];
+    const reachable = [...navigationFor(user), 'screen_time', ...(user?.role === 'student' ? ['profile'] : [])];
     if (user && !reachable.includes(page)) setPage(user.role === 'admin' ? 'admin_dashboard' : 'dashboard');
   }, [user, page]);
 

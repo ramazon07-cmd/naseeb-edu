@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from apps.users.models import User
 from apps.admissions.models import (
-    Achievement, Activity, Application, Booking, CommunityPost, Document, Essay,
+    Achievement, Activity, Application, Booking, Document, Essay,
     ChannelMembership, ChannelMessage, Honor, Internship, MeetingNote, MessageChannel,
     Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project,
     RecommendationLetter, Research, RoadmapMission, School,
@@ -511,15 +511,6 @@ class Command(BaseCommand):
                 sender=user,
                 recipient=counselor,
                 body='Thank you. I will update the essay draft and document checklist.',
-            )
-
-            CommunityPost.objects.get_or_create(
-                author=student,
-                title=f'{major} applicants: useful resources',
-                defaults={
-                    'post_type': CommunityPost.Type.DISCUSSION,
-                    'body': 'Share one reliable resource or planning method that helped your application progress.',
-                },
             )
 
         student_users = list(User.objects.filter(

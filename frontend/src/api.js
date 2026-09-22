@@ -334,6 +334,7 @@ export const api = {
   messageContacts: () => request('/message-channels/contacts/'),
   messagingOverview: () => request('/message-channels/overview/'),
   channelMembers: (id) => request(`/message-channels/${id}/members/`),
+  savedMessages: () => request('/message-channels/saved/', { method: 'POST' }),
   openDirectChannel: (userId) => request('/message-channels/direct/', {
     method: 'POST',
     body: JSON.stringify({ user: userId }),
@@ -370,6 +371,5 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ student }),
   }),
-  likeCommunityPost: (id) => request(`/community-posts/${id}/like/`, { method: 'POST' }),
   markStudentMessageRead: (id) => request(`/student-messages/${id}/read/`, { method: 'POST' }),
 }

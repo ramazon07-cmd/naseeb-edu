@@ -32,7 +32,6 @@ from .models import (
     ChallengeAttempt,
     ChannelMembership,
     ChannelMessage,
-    CommunityPost,
     Document,
     Essay,
     EssayRevision,
@@ -73,7 +72,6 @@ from .serializers import (
     ChallengeAttemptSerializer,
     ChannelMembershipSerializer,
     ChannelMessageSerializer,
-    CommunityPostSerializer,
     CollegeResearchProfileSerializer,
     EducationMatchAIRequestSerializer,
     DocumentSerializer,
@@ -1476,12 +1474,6 @@ class StudentPortalPermission(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         profile = request.user.student_profile
         owner = getattr(obj, 'student', None)
-        if isinstance(obj, CommunityPost):
-            return (
-                request.method in permissions.SAFE_METHODS
-                or view.action == 'like'
-                or obj.author_id == profile.id
-            )
         if owner is not None:
             return getattr(owner, 'id', None) == profile.id
         return request.method in permissions.SAFE_METHODS
@@ -1651,7 +1643,13 @@ class CounselorRoadmapTemplateViewSet(viewsets.ModelViewSet):
         if active in {'true', 'false'}:
             queryset = queryset.filter(is_active=active == 'true')
         if search:
-            queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
+            queryset = queryset.filter(
+                Q(name__icontains=search) | Q(description__icontains=search)
+                | (Q(kind=MessageChannel.Kind.DIRECT) & ~Q(memberships__user=self.request.user)
+                   & (Q(memberships__user__first_name__icontains=search)
+                      | Q(memberships__user__last_name__icontains=search)
+                      | Q(memberships__user__username__icontains=search)))
+            ).distinct()
         return queryset
 
     def create(self, request, *args, **kwargs):
@@ -1858,25 +1856,6 @@ class CounselorRoadmapViewSet(viewsets.ModelViewSet):
         )
         roadmap = self.queryset.get(pk=roadmap.pk)
         return Response(self.get_serializer(roadmap).data)
-
-
-class CommunityPostViewSet(viewsets.ModelViewSet):
-    serializer_class = CommunityPostSerializer
-    permission_classes = [StudentPortalPermission]
-    queryset = CommunityPost.objects.select_related('author__user').prefetch_related('liked_by').all()
-
-    def perform_create(self, serializer):
-        serializer.save(author=self.request.user.student_profile)
-
-    @action(detail=True, methods=['post'])
-    def like(self, request, pk=None):
-        post = self.get_object()
-        profile = request.user.student_profile
-        if post.liked_by.filter(id=profile.id).exists():
-            post.liked_by.remove(profile)
-        else:
-            post.liked_by.add(profile)
-        return Response(CommunityPostSerializer(post, context={'request': request}).data)
 
 
 def booking_participants_for(profile):
@@ -2091,7 +2070,14 @@ class MessageChannelViewSet(viewsets.ModelViewSet):
         if kind:
             queryset = queryset.filter(kind=kind)
         if search:
-            queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
+            matching_users = User.objects.filter(
+                Q(first_name__icontains=search) | Q(last_name__icontains=search)
+                | Q(username__icontains=search)
+            ).exclude(pk=self.request.user.pk)
+            queryset = queryset.filter(
+                Q(name__icontains=search) | Q(description__icontains=search)
+                | Q(kind=MessageChannel.Kind.DIRECT, memberships__user__in=matching_users)
+            ).distinct()
         return queryset
 
     def perform_create(self, serializer):
@@ -2165,6 +2151,24 @@ class MessageChannelViewSet(viewsets.ModelViewSet):
             'pending_reports': pending_reports,
             'can_moderate': can_moderate,
         })
+
+    @action(detail=False, methods=['post'])
+    def saved(self, request):
+        with transaction.atomic():
+            channel, created = MessageChannel.objects.get_or_create(
+                direct_key=f'saved:{request.user.pk}',
+                defaults={
+                    'kind': MessageChannel.Kind.DIRECT,
+                    'name': 'Saved Messages',
+                    'created_by': request.user,
+                    'is_public': False,
+                },
+            )
+            ChannelMembership.objects.get_or_create(
+                channel=channel, user=request.user,
+                defaults={'role': ChannelMembership.Role.OWNER},
+            )
+        return Response(self.get_serializer(channel).data, status=201 if created else 200)
 
     @action(detail=False, methods=['post'])
     def direct(self, request):

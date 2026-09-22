@@ -40,7 +40,6 @@ export const TRANSLATIONS = {
     "Essay Lab": "Insholar laboratoriyasi",
     "College Search": "Universitetlar qidiruvi",
     "Naseeb Store": "Naseeb do‘koni",
-    Contacts: "Kontaktlar",
     Support: "Yordam",
     "Screen Time": "Ekran vaqti",
     Progress: "Jarayon",
@@ -79,8 +78,6 @@ export const TRANSLATIONS = {
       "Universitetlarni qidiring, solishtiring va tanlang",
     "Additional education and application services":
       "Qo‘shimcha ta’lim va ariza xizmatlari",
-    "Contact your counselor and school coordinator":
-      "Counselor va maktab koordinatori bilan bog‘laning",
     "Contact support and track your requests":
       "Yordamga murojaat qiling va so‘rovlarni kuzating",
     "Active learning time without idle minutes":
@@ -220,7 +217,6 @@ export const TRANSLATIONS = {
     "Essay Lab": "Лаборатория эссе",
     "College Search": "Поиск университетов",
     "Naseeb Store": "Магазин Naseeb",
-    Contacts: "Контакты",
     Support: "Поддержка",
     "Screen Time": "Экранное время",
     Progress: "Прогресс",
@@ -257,8 +253,6 @@ export const TRANSLATIONS = {
       "Поиск, сравнение и выбор университетов",
     "Additional education and application services":
       "Дополнительные образовательные услуги",
-    "Contact your counselor and school coordinator":
-      "Связь с консультантом и координатором школы",
     "Contact support and track your requests":
       "Обращения в поддержку и их статус",
     "Active learning time without idle minutes":

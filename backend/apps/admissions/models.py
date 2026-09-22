@@ -697,25 +697,6 @@ class LevelApproval(models.Model):
         return f'{self.student}: Level {self.from_level} → {self.to_level}'
 
 
-class CommunityPost(TimeStampedModel):
-    class Type(models.TextChoices):
-        DISCUSSION = 'discussion', 'Discussion'
-        QUESTION = 'question', 'Q&A'
-        UPDATE = 'update', 'Update'
-
-    author = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='community_posts')
-    post_type = models.CharField(max_length=20, choices=Type.choices, default=Type.DISCUSSION)
-    title = models.CharField(max_length=220)
-    body = models.TextField()
-    liked_by = models.ManyToManyField(StudentProfile, blank=True, related_name='liked_community_posts')
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return self.title
-
-
 class Booking(TimeStampedModel):
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'

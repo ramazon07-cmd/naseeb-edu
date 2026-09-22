@@ -1,0 +1,76 @@
+/* Naseeb navigation, with separate utility and account areas. */
+.app-shell .sidebar { border-radius: 24px; padding: 20px 14px 14px; box-shadow: none; }
+.app-shell .sidebar-top { border-bottom: 0; padding-bottom: 20px; min-height: 56px; }
+.app-shell .sidebar-collapse svg { transform: none; }
+.sidebar-utilities { display: grid; gap: 3px; padding: 6px 0 15px; border-bottom: 1px solid var(--sidebar-divider); }
+.sidebar-utilities button { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--sidebar-text); font-size: 13px; text-align: left; }
+.sidebar-utilities button:hover { background: var(--sidebar-hover); }
+.sidebar-utilities kbd { margin-left: auto; font-size: 9px; border: 1px solid var(--border); border-radius: 5px; padding: 2px 4px; color: var(--muted); }
+.sidebar-unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: auto; }
+.app-shell .sidebar nav { padding: 13px 0; gap: 3px; align-content: start; flex: 1; min-height: 0; }
+.app-shell .sidebar nav button { border-radius: 10px; padding: 9px 12px; font-weight: 500; font-size: 12px; min-height: 36px; }
+.app-shell .sidebar nav button svg { flex: none; stroke-width: 1.8; }
+.app-shell .sidebar nav button.active { font-weight: 600; }
+.sidebar-account { position: relative; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--sidebar-divider); }
+.sidebar-account-trigger { display: flex; align-items: center; gap: 10px; padding: 7px 8px; width: 100%; border: 0; border-radius: 10px; background: transparent; color: var(--text); text-align: left; }
+.sidebar-account-trigger:hover { background: var(--sidebar-hover); }
+.sidebar-account-trigger .avatar { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; }
+.sidebar-account-copy { flex: 1; min-width: 0; }
+.sidebar-account-copy b { font-size: 13px; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-account-copy small { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; }
+.sidebar-account-trigger > svg { transform: rotate(-90deg); }
+.sidebar-account-trigger > svg.rotated { transform: rotate(90deg); }
+.sidebar-account-menu { position: absolute; bottom: calc(100% + 8px); left: 0; width: 210px; background: var(--surface); border: 1px solid var(--border-strong); padding: 7px; border-radius: 12px; box-shadow: var(--shadow-raised); z-index: 50; }
+.sidebar-account-menu button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px; background: transparent; color: var(--text); border: 0; border-radius: 7px; font-size: 12px; }
+.sidebar-account-menu button:hover { background: var(--surface-hover); }
+.sidebar-utility-panel { padding: 24px; }
+.sidebar-utility-panel > p { color: var(--muted); font-size: 12px; }
+.sidebar-search-results { margin-top: 12px; max-height: 50dvh; overflow: auto; }
+.sidebar-search-results button, .sidebar-notice { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 10px; background: transparent; border: 0; border-bottom: 1px solid var(--border-subtle); color: var(--text); text-align: left; }
+.sidebar-search-results button span, .sidebar-notice span { flex: 1; }
+.sidebar-search-results button:hover, .sidebar-notice:hover { background: var(--surface-hover); }
+.sidebar-notice b { font-size: 12px; display: block; }.sidebar-notice small { font-size: 10px; color: var(--muted); }
+@media (min-width: 821px) {
+  .app-shell.nav-collapsed { grid-template-columns: 86px minmax(0,1fr); }
+  .app-shell.nav-collapsed .sidebar { padding: 14px 10px; }
+  .app-shell.nav-collapsed .sidebar-top { min-height: 48px; padding-bottom: 10px; justify-content: center; }
+  .app-shell.nav-collapsed .sidebar-top .brand-lockup { display: none; }
+  .app-shell.nav-collapsed .sidebar-collapse { width: 34px; height: 34px; }
+  .nav-collapsed .sidebar-utilities { padding: 10px 0; }
+  .nav-collapsed .sidebar-utilities button { justify-content: center; padding: 10px 0; position: relative; }
+  .nav-collapsed .sidebar-utilities span, .nav-collapsed .sidebar-utilities kbd { display: none; }
+  .nav-collapsed .sidebar-unread-dot { position: absolute; top: 4px; right: 5px; }
+  .app-shell.nav-collapsed .sidebar nav { padding: 12px 0; gap: 4px; }
+  .app-shell.nav-collapsed .sidebar nav button { width: 42px; height: 38px; min-height: 38px; padding: 0; }
+  .nav-collapsed .sidebar-account-copy, .nav-collapsed .sidebar-account-trigger > svg { display: none; }
+  .nav-collapsed .sidebar-account-trigger { padding: 6px 0; justify-content: center; }
+}
+@media (max-height: 760px) and (min-width: 821px) {
+  .app-shell .sidebar { padding-top: 12px; }
+  .app-shell .sidebar-top { padding-bottom: 8px; min-height: 42px; }
+  .sidebar-utilities { padding: 3px 0 8px; }
+  .sidebar-utilities button { padding-top: 7px; padding-bottom: 7px; }
+  .app-shell .sidebar nav { gap: 1px; padding: 8px 0; }
+  .app-shell .sidebar nav button { min-height: 31px; padding-top: 6px; padding-bottom: 6px; }
+  .app-shell.nav-collapsed .sidebar nav { gap: 2px; padding: 8px 0; }
+  .app-shell.nav-collapsed .sidebar nav button { min-height: 31px; height: 31px; }
+}
+.app-shell .messages-shell.has-details { grid-template-columns: 250px minmax(240px,1fr) 260px; position: relative; }
+.chat-details { background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; }
+.chat-details > header { display:flex; align-items:center; justify-content:space-between; padding:18px; border-bottom:1px solid var(--border); font-size:12px; }
+.chat-contact { text-align:center; padding:24px 18px; }
+.chat-contact-avatar { width:66px; height:66px; display:grid; place-items:center; margin:0 auto 12px; border-radius:50%; background:var(--surface-soft); color:var(--accent); font-size:26px; }
+.chat-contact h3 { font-size:15px; margin:0 0 7px; overflow-wrap:anywhere; }.chat-contact p { font-size:11px; color:var(--muted); margin:6px 0; }
+.chat-detail-tabs { display:flex; margin:0 16px; border-bottom:1px solid var(--border); padding-bottom:10px; gap:4px; }
+.chat-detail-tabs button { flex:1; border:0; border-radius:20px; padding:9px 7px; background:transparent; color:var(--muted); font-size:11px; }
+.chat-detail-tabs button[aria-selected=true] { background:var(--selected-bg); color:var(--text); }
+.chat-detail-tabs small { margin-left:4px; font-size:9px; }
+.chat-shared-content { padding:16px; color:var(--muted); font-size:11px; }
+.shared-caption { font-size:10px; margin:0 0 12px; }.chat-shared-empty { text-align:center; padding:28px 0; }
+.chat-shared-item { display:flex; gap:10px; align-items:center; text-decoration:none; color:var(--text); padding:14px 0; border-bottom:1px solid var(--border-subtle); }
+.chat-shared-item > svg { flex:none; color:var(--muted); }.chat-shared-item span { min-width:0; flex:1; }.chat-shared-item b { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:500; }.chat-shared-item small { display:block; margin-top:5px; color:var(--muted); }
+@media (max-width: 1350px) {
+  .app-shell .messages-shell.has-details { grid-template-columns:250px minmax(0,1fr); }
+  .messages-shell.has-details .chat-details { position:absolute; right:0; top:0; bottom:0; width:min(320px,100%); z-index:10; box-shadow:-16px 0 40px #00000014; }
+}
+@media (max-width:700px) { .app-shell .messages-shell.has-details { grid-template-columns:minmax(0,1fr); }.messages-shell.has-details .chat-details { width:100%; } }

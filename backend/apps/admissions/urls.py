@@ -9,7 +9,6 @@ from .views import (
     BookingViewSet,
     ChallengeAttemptViewSet,
     ChannelMessageViewSet,
-    CommunityPostViewSet,
     CollegeResearchView,
     EducationMatchAIView,
     DashboardStatsView,
@@ -67,7 +66,6 @@ router.register('activity', ActivityLogViewSet, basename='activity')
 router.register('roadmap-missions', RoadmapMissionViewSet, basename='roadmap-missions')
 router.register('counselor-roadmap-templates', CounselorRoadmapTemplateViewSet, basename='counselor-roadmap-templates')
 router.register('counselor-roadmaps', CounselorRoadmapViewSet, basename='counselor-roadmaps')
-router.register('community-posts', CommunityPostViewSet, basename='community-posts')
 router.register('bookings', BookingViewSet, basename='bookings')
 router.register('student-messages', StudentMessageViewSet, basename='student-messages')
 router.register('message-channels', MessageChannelViewSet, basename='message-channels')

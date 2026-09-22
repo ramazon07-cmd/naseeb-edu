@@ -25,7 +25,6 @@ from .models import (
     ChallengeAttempt,
     ChannelMembership,
     ChannelMessage,
-    CommunityPost,
     Document,
     Essay,
     EssayRevision,
@@ -1420,28 +1419,6 @@ class LevelApprovalSerializer(serializers.ModelSerializer):
         return obj.approved_by.get_full_name() or obj.approved_by.username
 
 
-class CommunityPostSerializer(serializers.ModelSerializer):
-    author_name = serializers.CharField(source='author.user.get_full_name', read_only=True)
-    author_initials = serializers.SerializerMethodField()
-    likes_count = serializers.IntegerField(source='liked_by.count', read_only=True)
-    liked_by_me = serializers.SerializerMethodField()
-
-    class Meta:
-        model = CommunityPost
-        fields = '__all__'
-        read_only_fields = ('author', 'liked_by')
-
-    def get_author_initials(self, obj):
-        name = obj.author.user.get_full_name() or obj.author.user.username
-        return ''.join(part[0] for part in name.split()[:2]).upper()
-
-    def get_liked_by_me(self, obj):
-        request = self.context.get('request')
-        if not request or not hasattr(request.user, 'student_profile'):
-            return False
-        return obj.liked_by.filter(id=request.user.student_profile.id).exists()
-
-
 class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     participant = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.filter(
@@ -1524,6 +1501,7 @@ class ChannelMembershipSerializer(serializers.ModelSerializer):
 
 
 class MessageChannelSerializer(serializers.ModelSerializer):
+    is_saved_messages = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
     school_name = serializers.CharField(source='school.name', read_only=True)
     members_count = serializers.IntegerField(source='memberships.count', read_only=True)
@@ -1537,7 +1515,7 @@ class MessageChannelSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'kind', 'name', 'display_name', 'description', 'school', 'school_name',
             'created_by', 'is_public', 'is_archived', 'last_message_at', 'members_count',
-            'is_member', 'my_role', 'unread_count', 'last_message', 'created_at', 'updated_at',
+            'is_member', 'my_role', 'unread_count', 'last_message', 'created_at', 'updated_at', 'is_saved_messages',
         )
         read_only_fields = ('created_by', 'last_message_at')
 
@@ -1552,6 +1530,9 @@ class MessageChannelSerializer(serializers.ModelSerializer):
         if prefetched is not None:
             return next((membership for membership in prefetched if membership.user_id == request.user.id), None)
         return obj.memberships.filter(user=request.user).first()
+
+    def get_is_saved_messages(self, obj):
+        return obj.kind == MessageChannel.Kind.DIRECT and bool(obj.direct_key and obj.direct_key.startswith('saved:'))
 
     def get_display_name(self, obj):
         request = self.context.get('request')

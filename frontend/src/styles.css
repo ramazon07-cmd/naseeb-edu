@@ -164,14 +164,10 @@
   --progress-overall: #55705B;
   --hero-roadmap-mid: #62513F;
   --hero-roadmap-end: #806B50;
-  --hero-community-mid: #665845;
-  --hero-community-end: #7C6D55;
   --hero-essay-mid: #695243;
   --hero-essay-end: #85634E;
   --hero-application-mid: #5E5142;
   --hero-application-end: #75644F;
-  --hero-contacts-mid: #5C5043;
-  --hero-contacts-end: #7B6954;
   --hero-college-mid: #5F5445;
   --hero-college-end: #7D6D56;
   --hero-store-mid: #665443;
@@ -330,14 +326,10 @@
   --progress-overall: #89B492;
   --hero-roadmap-mid: #193241;
   --hero-roadmap-end: #294757;
-  --hero-community-mid: #1b3442;
-  --hero-community-end: #2d4855;
   --hero-essay-mid: #203644;
   --hero-essay-end: #354d58;
   --hero-application-mid: #17303e;
   --hero-application-end: #254555;
-  --hero-contacts-mid: #1a3341;
-  --hero-contacts-end: #2b4958;
   --hero-college-mid: #19323f;
   --hero-college-end: #294957;
   --hero-store-mid: #213844;
@@ -835,7 +827,7 @@ select option, select optgroup { color: var(--text); background: var(--control-o
   --student-card-shadow: var(--shadow-card);
 }
 .student-portal h2, .student-portal h3 { letter-spacing: -.02em; }
-.student-portal .panel, .student-portal .stat-card, .student-portal .mission-card, .student-portal .community-card, .student-portal .booking-card, .student-portal .college-table, .student-portal .store-grid article, .student-portal .contact-grid article { box-shadow: var(--student-card-shadow); }
+.student-portal .panel, .student-portal .stat-card, .student-portal .mission-card, .student-portal .booking-card, .student-portal .college-table, .student-portal .store-grid article { box-shadow: var(--student-card-shadow); }
 .student-welcome, .portal-hero, .college-banner, .store-hero { min-height: 210px; padding: clamp(26px, 4vw, 46px); display: flex; align-items: center; justify-content: space-between; gap: 32px; position: relative; overflow: hidden; color: var(--student-hero-text); background: linear-gradient(135deg, var(--student-hero-start) 0%, var(--student-hero-mid) 58%, var(--student-hero-end) 100%); border: 1px solid var(--student-hero-line); border-radius: 22px; box-shadow: 0 18px 55px var(--student-hero-shadow); }
 .student-welcome::before, .portal-hero::before, .college-banner::before, .store-hero::before { content: ''; position: absolute; width: 440px; height: 440px; right: -120px; bottom: -330px; background: radial-gradient(circle, var(--student-hero-decoration), transparent 64%); border-radius: 50%; pointer-events: none; }
 .student-welcome::after, .portal-hero::after, .college-banner::after, .store-hero::after { content: ''; position: absolute; width: 320px; height: 320px; right: -80px; top: -150px; border: 1px solid var(--student-hero-line); border-radius: 45% 55% 62% 38%; transform: rotate(25deg); pointer-events: none; }
@@ -1299,12 +1291,9 @@ select option, select optgroup { color: var(--text); background: var(--control-o
 .student-workspace-selector > .field { margin: 0; }
 .student-workspace-selector > .field > span { color: var(--text); }
 .roadmap-hero { --student-hero-mid: var(--hero-roadmap-mid); --student-hero-end: var(--hero-roadmap-end); }
-.community-hero { --student-hero-mid: var(--hero-community-mid); --student-hero-end: var(--hero-community-end); min-height: 0; padding: 24px clamp(22px,2.6vw,32px); }
-.community-hero h2 { font-size: clamp(22px,2.4vw,30px); }
-.community-hero p { max-width: 520px; font-size: 11px; }
+
 .essay-hero { --student-hero-mid: var(--hero-essay-mid); --student-hero-end: var(--hero-essay-end); }
 .application-hero { --student-hero-mid: var(--hero-application-mid); --student-hero-end: var(--hero-application-end); }
-.contacts-hero { --student-hero-mid: var(--hero-contacts-mid); --student-hero-end: var(--hero-contacts-end); }
 
 .mission-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .mission-card { padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
@@ -1387,21 +1376,6 @@ button.roadmap-step-card:focus-visible { outline: 3px solid var(--focus-ring); o
 .timeline-list { display: grid; }.timeline-list > div { min-height: 72px; display: grid; grid-template-columns: 14px 100px 1fr auto; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); }.timeline-list > div:last-child { border-bottom: 0; }.timeline-dot { width: 10px; height: 10px; background: var(--accent); border: 2px solid var(--surface); outline: 2px solid var(--focus-ring); border-radius: 50%; }.timeline-list time, .timeline-list small { color: var(--muted); font-size: 10px; }.timeline-list b, .timeline-list small { display: block; }.timeline-list small { margin-top: 4px; }
 .reflection-grid { display: grid; gap: 12px; }.reflection-grid article { display: grid; grid-template-columns: 42px 1fr auto; gap: 14px; align-items: start; padding: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }.reflection-grid article > svg { padding: 9px; width: 40px; height: 40px; color: var(--accent); background: var(--selected-bg); border-radius: 10px; }.reflection-grid span { color: var(--accent); font-size: 9px; font-weight: 800; text-transform: uppercase; }.reflection-grid h3 { margin: 5px 0 7px; font-size: 15px; }.reflection-grid p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
 
-.community-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }.community-layout aside { display: grid; gap: 12px; }.community-feed { display: grid; gap: 10px; }
-.community-card { padding: 15px 17px; display: grid; gap: 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; transition: border-color .15s ease, box-shadow .15s ease; }
-.community-card:hover { border-color: var(--border-interactive); }
-.community-card header { display: flex; align-items: center; gap: 9px; }
-.community-card header > div { min-width: 0; flex: 1; display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; }
-.community-card header .avatar { width: 30px; height: 30px; font-size: 9px; }
-.community-card header b { font-size: 11px; }
-.community-card header small { color: var(--muted); font-size: 9px; }
-.community-tag { flex: 0 0 auto; padding: 3px 8px; color: var(--muted); background: var(--surface-soft); border-radius: 99px; font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-.community-card h3 { margin: 0; font-family: 'Montserrat', system-ui, sans-serif; font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-.community-card p { display: -webkit-box; margin: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.community-card footer { display: flex; }
-.community-card footer button { min-height: 30px; padding: 4px 11px; display: flex; align-items: center; gap: 6px; color: var(--muted); background: var(--surface-soft); border: 1px solid transparent; border-radius: 99px; cursor: pointer; }.community-card footer button:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-interactive); }.community-card footer button:disabled { cursor: wait; opacity: .65; }.community-card footer button.liked { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-border); }.community-card footer button b { min-width: 9px; font-size: 10px; }.community-like-help { margin: 13px 0 0; padding-top: 12px; display: grid; grid-template-columns: 18px minmax(0,1fr); gap: 7px; color: var(--muted); border-top: 1px solid var(--border); font-size: 10px; line-height: 1.6; }.community-like-help svg { color: var(--danger); }.guide-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 11px; line-height: 1.65; }
-.guide-list li + li { margin-top: 7px; }
-
 .booking-grid { display: grid; gap: 13px; }.booking-card { min-height: 128px; display: grid; grid-template-columns: 72px 1fr auto; align-items: center; gap: 20px; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }.booking-date { width: 66px; height: 72px; display: grid; place-content: center; text-align: center; color: var(--accent-contrast); background: var(--accent); border-radius: 14px; }.booking-date strong { font: 600 28px/1 'Montserrat', system-ui, sans-serif; }.booking-date span { margin-top: 5px; font-size: 10px; text-transform: uppercase; }.booking-card h3 { margin: 0 0 8px; }.booking-card p, .booking-card small { color: var(--muted); font-size: 11px; }.booking-card p { display: flex; align-items: center; gap: 6px; margin: 5px 0; }.booking-card > div:last-child { display: grid; justify-items: end; gap: 10px; }
 .booking-student { margin-bottom: 7px; display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .booking-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
@@ -1471,7 +1445,6 @@ button.roadmap-step-card:focus-visible { outline: 3px solid var(--focus-ring); o
 .programs-hero { min-height: 190px; padding: clamp(26px,3vw,38px); display: flex; align-items: center; justify-content: space-between; gap: 30px; color: var(--student-hero-text); background: linear-gradient(135deg,var(--student-hero-start),var(--student-hero-mid) 58%,var(--student-hero-end)); border: 1px solid var(--student-hero-line); border-radius: 20px; box-shadow: 0 16px 40px var(--student-hero-shadow); }.programs-hero .eyebrow { color: var(--student-hero-eyebrow); }.programs-hero h2 { margin: 9px 0 10px; color: var(--student-hero-text); font-family: 'Montserrat', system-ui, sans-serif; font-size: clamp(28px,3.2vw,42px); font-weight: 700; line-height: 1.15; }.programs-hero p { max-width: 650px; margin: 0; color: var(--student-hero-muted); line-height: 1.65; }.program-filters { padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: end; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }.program-filters > span { align-self: center; margin-left: auto; color: var(--muted); font-size: 10px; }.program-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }.program-card { min-width: 0; min-height: 300px; padding: 20px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--student-card-shadow); }.program-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }.program-card > header > span { color: var(--student-accent); font-size: 9px; font-weight: 800; text-transform: uppercase; }.program-card h3 { margin: 18px 0 5px; font-family: 'Montserrat', system-ui, sans-serif; font-size: 17px; font-weight: 700; }.program-card .provider { margin: 0 0 12px; color: var(--student-accent); font-size: 9px; font-weight: 700; }.program-card > p:not(.provider) { color: var(--muted); font-size: 10px; line-height: 1.6; }.program-meta { display: grid; gap: 8px; padding: 13px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }.program-meta span { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; }.program-aid { margin: 12px 0; padding: 10px; display: flex; gap: 9px; color: var(--success); background: var(--success-bg); border: 1px solid var(--success-border); border-radius: 10px; }.program-aid span, .program-aid b { display: block; font-size: 9px; }.program-aid b { margin-bottom: 3px; }.program-card details { margin-bottom: 14px; color: var(--muted); font-size: 9px; }.program-card summary { color: var(--text); cursor: pointer; font-weight: 700; }.program-card details p { margin-top: 7px; line-height: 1.5; }.program-card > .button { width: max-content; margin-top: auto; }.program-card.is-closed { background: var(--surface-soft); }.program-card.is-closed :is(h3, .program-meta span) { color: var(--muted); }
 .store-hero .button { margin-top: 24px; }
 .store-hero { min-height: 260px; --student-hero-mid: var(--hero-store-mid); --student-hero-end: var(--hero-store-end); }.store-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }.store-grid article { min-height: 230px; display: flex; flex-direction: column; padding: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }.store-grid article.featured { border-color: var(--selected-border); box-shadow: var(--shadow-raised); }.store-grid article > span { color: var(--accent); font-size: 9px; font-weight: 800; text-transform: uppercase; }.store-grid h3 { margin: 15px 0 10px; }.store-grid p { color: var(--muted); font-size: 12px; line-height: 1.6; }.store-grid footer { margin-top: auto; padding-top: 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border); }.store-grid footer b { font-size: 11px; }
-.contact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }.contact-grid article { min-height: 300px; padding: 26px; display: grid; justify-items: start; background: var(--surface); border: 1px solid var(--border); border-radius: 17px; }.contact-grid article > div > span { display: block; margin-top: 18px; color: var(--accent); font-size: 9px; font-weight: 800; text-transform: uppercase; }.contact-grid h3 { margin: 6px 0; }.contact-grid p { margin: 0 0 12px; color: var(--muted); font-size: 12px; }.contact-grid small { display: block; margin-top: 5px; color: var(--muted); }.contact-grid footer { align-self: end; display: flex; gap: 8px; margin-top: 20px; }
 
 /* One student accent system keeps every student surface coherent in both themes. */
 .student-portal .quick-grid button > span,
@@ -1508,7 +1481,7 @@ button.roadmap-step-card:focus-visible { outline: 3px solid var(--focus-ring); o
 .student-portal .aid-intro,
 .student-portal .checklist-cards article { box-shadow: var(--student-card-shadow); }
 .student-portal :is(
-  .panel, .stat-card, .journey-progress, .mission-card, .community-card,
+  .panel, .stat-card, .journey-progress, .mission-card,
   .booking-card,
   .messages-shell, .message-contact, .message-thread > header, .message-compose,
   .message-bubble, .college-table, .college-row, .portal-tabs, .college-filter-bar,
@@ -1516,14 +1489,14 @@ button.roadmap-step-card:focus-visible { outline: 3px solid var(--focus-ring); o
   .scholarship-card, .aid-intro, .aid-profile-summary .detail,
   .checklist-cards article, .choice-card, .program-filters,
   .program-card, .program-meta, .store-grid article, .store-grid footer,
-  .contact-grid article, .college-research-state, .college-profile-questions,
+  .college-research-state, .college-profile-questions,
   .college-research-overview, .research-question-copy > span,
   .research-status-icon, .research-profile-chips > span, .research-breakdown,
   .research-details, select, input, textarea, .button.quiet, .icon-button
 ) { border-color: var(--student-border); }
 .student-portal :is(select, input, textarea):focus-visible { border-color: var(--student-accent); box-shadow: 0 0 0 3px var(--student-accent-wash); outline: 0; }
 .student-portal :is(.quick-grid button, .choice-card, .button.quiet, .icon-button):hover:not(:disabled) { border-color: var(--student-border-strong); }
-.student-portal :is(.mission-card footer, .community-card footer, .university-card > footer, .store-grid footer, .college-profile-questions form > footer) { border-top-color: var(--student-border); }
+.student-portal :is(.mission-card footer, .university-card > footer, .store-grid footer, .college-profile-questions form > footer) { border-top-color: var(--student-border); }
 .student-portal :is(.timeline-list > div, .college-row) { border-bottom-color: var(--student-border); }
 .student-portal .message-contact { border-right-color: var(--student-border); }
 .student-portal .message-thread > header { border-bottom-color: var(--student-border); }
@@ -1789,8 +1762,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .skeleton-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .split-grid.wide-left { grid-template-columns: 1fr; }
-  .community-layout { grid-template-columns: 1fr; }
-  .community-layout aside { display: none; }
+
   .store-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .program-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scholarship-grid { grid-template-columns: 1fr; }
@@ -1836,7 +1808,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .student-overview-title, .student-overview-actions, .overview-progress { grid-column: 1; grid-row: auto; width: 100%; }
   .student-welcome, .portal-hero, .college-banner, .store-hero { align-items: flex-start; flex-direction: column; }
   .readiness-ring { width: 126px; height: 126px; flex-basis: 126px; }
-  .student-dashboard-grid, .mission-grid, .contact-grid { grid-template-columns: 1fr; }
+  .student-dashboard-grid, .mission-grid { grid-template-columns: 1fr; }
   .dashboard-discovery-rail, .student-dashboard-overview .dashboard-discovery-rail { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .journey-progress, .aid-checklist { grid-template-columns: 1fr; }
   .aid-checklist > section { position: static; }
@@ -1977,7 +1949,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-color); o
   .student-workspace-metrics > span { min-width: 0; flex: 1; padding-inline: 10px; }
   .student-workspace-metrics small { white-space: normal; }
 }
-
 
 /* Student overview: compact cards and readable fields at every width. */
 .student-overview > .split-grid { align-items: start; }

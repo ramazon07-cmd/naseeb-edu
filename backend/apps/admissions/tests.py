@@ -19,7 +19,7 @@ from apps.users.models import User
 from .assistant import build_role_context, redact_pii
 from .education_ai import latest_assessment_scores
 from .models import (
-    Achievement, Activity, Application, Booking, ChallengeAttempt, ChannelMembership, ChannelMessage, CommunityPost, Document, Essay, Honor,
+    Achievement, Activity, Application, Booking, ChallengeAttempt, ChannelMembership, ChannelMessage, Document, Essay, Honor,
     Internship, MeetingNote, LevelApproval, Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project, RecommendationLetter,
     Research, MessageChannel, MessageReport, RoadmapMission, School, Scholarship, ScreenTimeDaily, StoreItem,
     StudentMessage, StudentProfile, SupportTicket, Task, University, UniversityProgram, XPTransaction,
@@ -1369,24 +1369,13 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(direct_mission.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(XPTransaction.objects.exists())
 
-    def test_student_community_can_post_and_toggle_like(self):
-        self.client.force_authenticate(self.student_a_user)
-        created = self.client.post(
-            '/api/community-posts/',
-            {'title': 'Application tip', 'body': 'Use a weekly checklist.', 'post_type': 'discussion'},
-            format='json',
-        )
-        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
-        self.client.force_authenticate(self.student_b_user)
-        liked = self.client.post(f"/api/community-posts/{created.data['id']}/like/", {}, format='json')
-        self.assertEqual(liked.status_code, status.HTTP_200_OK)
-        self.assertTrue(liked.data['liked_by_me'])
-        self.assertEqual(liked.data['likes_count'], 1)
-        unliked = self.client.post(f"/api/community-posts/{created.data['id']}/like/", {}, format='json')
-        self.assertEqual(unliked.status_code, status.HTTP_200_OK)
-        self.assertFalse(unliked.data['liked_by_me'])
-        self.assertEqual(unliked.data['likes_count'], 0)
-        self.assertEqual(CommunityPost.objects.get(pk=created.data['id']).liked_by.count(), 0)
+    def test_retired_community_feed_endpoints_are_unavailable(self):
+        for account in (self.student_a_user, self.counselor, self.organization):
+            self.client.force_authenticate(account)
+            for path in ('/api/community-posts/', '/api/community-posts/1/like/'):
+                with self.subTest(role=account.role, path=path):
+                    self.assertEqual(self.client.get(path).status_code, status.HTTP_404_NOT_FOUND)
+                    self.assertEqual(self.client.post(path, {}, format='json').status_code, status.HTTP_404_NOT_FOUND)
 
     def test_student_booking_participant_approval_and_notification(self):
         self.client.force_authenticate(self.student_a_user)
@@ -1492,6 +1481,42 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(rejected.status_code, status.HTTP_200_OK)
         self.assertEqual(rejected.data['status'], Booking.Status.REJECTED)
 
+    def test_saved_messages_are_persistent_unique_and_private(self):
+        self.client.force_authenticate(self.student_a_user)
+        opened = self.client.post('/api/message-channels/saved/', {}, format='json')
+        self.assertEqual(opened.status_code, status.HTTP_201_CREATED)
+        channel_id = opened.data['id']
+        self.assertTrue(opened.data['is_saved_messages'])
+        self.assertEqual(opened.data['members_count'], 1)
+        reopened = self.client.post('/api/message-channels/saved/', {}, format='json')
+        self.assertEqual(reopened.data['id'], channel_id)
+        saved = self.client.post('/api/channel-messages/', {
+            'channel': channel_id, 'body': 'Review my essay outline.',
+        }, format='json')
+        self.assertEqual(saved.status_code, status.HTTP_201_CREATED)
+        history = self.results(self.client.get(f'/api/channel-messages/?channel={channel_id}'))
+        self.assertEqual(history[0]['body'], 'Review my essay outline.')
+        self.client.force_authenticate(self.student_b_user)
+        other = self.client.post('/api/message-channels/saved/', {}, format='json')
+        self.assertNotEqual(other.data['id'], channel_id)
+        self.assertEqual(self.client.get(f'/api/message-channels/{channel_id}/').status_code, 404)
+        self.assertEqual(self.results(self.client.get(f'/api/channel-messages/?channel={channel_id}')), [])
+        self.assertEqual(self.client.post('/api/channel-messages/', {
+            'channel': channel_id, 'body': 'Not my notes.',
+        }, format='json').status_code, 400)
+
+    def test_direct_chat_search_finds_contact_names(self):
+        self.client.force_authenticate(self.student_a_user)
+        opened = self.client.post('/api/message-channels/direct/', {'user': self.counselor.id}, format='json')
+        self.assertIn('id', opened.data)
+        found = self.results(self.client.get('/api/message-channels/', {
+            'kind': 'direct', 'search': self.counselor.username,
+        }))
+        self.assertEqual([item['id'] for item in found], [opened.data['id']])
+        self.assertEqual(self.results(self.client.get('/api/message-channels/', {
+            'kind': 'direct', 'search': 'nonexistent-contact-xyz',
+        })), [])
+
     def test_direct_channel_is_unique_and_private_to_its_members(self):
         self.client.force_authenticate(self.student_a_user)
         first = self.client.post('/api/message-channels/direct/', {'user': self.counselor.id}, format='json')
@@ -1521,6 +1546,36 @@ class RoleIsolationTests(APITestCase):
         self.assertEqual(listed, [])
         messages = self.results(self.client.get(f'/api/channel-messages/?channel={channel.id}'))
         self.assertEqual(messages, [])
+
+    def test_direct_message_reply_round_trip_and_read_receipt(self):
+        self.client.force_authenticate(self.student_a_user)
+        opened = self.client.post('/api/message-channels/direct/', {'user': self.counselor.id}, format='json')
+        channel_id = opened.data['id']
+        sent = self.client.post('/api/channel-messages/', {
+            'channel': channel_id, 'body': 'Can you review my draft?', 'is_anonymous': False,
+        }, format='json')
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(sent.data['sender_id'], self.student_a_user.id)
+        self.assertEqual(sent.data['channel'], channel_id)
+
+        self.client.force_authenticate(self.counselor)
+        inbox = self.results(self.client.get('/api/message-channels/?kind=direct'))
+        self.assertEqual(inbox[0]['unread_count'], 1)
+        self.assertEqual(inbox[0]['last_message']['body'], sent.data['body'])
+        reply = self.client.post('/api/channel-messages/', {
+            'channel': channel_id, 'body': 'Send the draft here.',
+            'parent': sent.data['id'], 'is_anonymous': False,
+        }, format='json')
+        self.assertEqual(reply.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(reply.data['parent_preview']['body'], sent.data['body'])
+
+        self.client.force_authenticate(self.student_a_user)
+        history = self.results(self.client.get(f'/api/channel-messages/?channel={channel_id}&page_size=50'))
+        self.assertEqual([item['id'] for item in history], [reply.data['id'], sent.data['id']])
+        read = self.client.post(f'/api/message-channels/{channel_id}/mark-read/', {}, format='json')
+        self.assertEqual(read.status_code, status.HTTP_200_OK)
+        inbox = self.results(self.client.get('/api/message-channels/?kind=direct'))
+        self.assertEqual(inbox[0]['unread_count'], 0)
 
     def test_student_can_message_only_own_school_staff_when_user_school_is_empty(self):
         other_school_staff = User.objects.create_user(
@@ -1997,7 +2052,7 @@ class RoleIsolationTests(APITestCase):
             'dashboard/stats', 'students', 'tasks', 'applications', 'documents', 'essays',
             'achievements', 'researches', 'projects', 'internships', 'activities', 'honors',
             'recommendations', 'notifications', 'universities', 'roadmap-missions',
-            'community-posts', 'bookings', 'message-channels', 'program-services',
+            'bookings', 'message-channels', 'program-services',
             'scholarships', 'opportunity-programs', 'store-items',
             'student-team',
         )
@@ -2007,13 +2062,6 @@ class RoleIsolationTests(APITestCase):
                 self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
 
     def test_non_student_roles_cannot_open_student_only_portal_endpoints(self):
-        for account in (self.counselor, self.organization):
-            self.client.force_authenticate(account)
-            paths = ('community-posts',)
-            for path in paths:
-                with self.subTest(role=account.role, path=path):
-                    self.assertEqual(self.client.get(f'/api/{path}/').status_code, status.HTTP_403_FORBIDDEN)
-
         self.client.force_authenticate(self.organization)
         self.assertEqual(self.client.get('/api/roadmap-missions/').status_code, status.HTTP_200_OK)
         self.assertEqual(

@@ -54,7 +54,7 @@ if (!api.includes('extendLevelOneRoadmap') || !app.includes('function LevelOneSe
 if (app.includes('Progress %') || app.includes('item.progress_percent') || app.includes("values.get('progress_percent')")) throw new Error('Manual roadmap progress controls must not be rendered.');
 if (!app.includes("status: 'submitted', reflection: values.get('reflection')") || !app.includes('Submit mission') || !styles.includes('.mission-submit-status')) throw new Error('Student submit-only roadmap workflow is missing.');
 if (!app.includes('function LevelProgress(') || !api.includes('approveStudentLevel')) throw new Error('XP and teacher-approved leveling UI is missing.');
-for (const channelTab of ['Direct', 'Group', 'Community', 'Discussions']) {
+for (const channelTab of ['Private', 'Groups', 'Discussions']) {
   if (!app.includes(`\"${channelTab}\"`)) throw new Error(`Messaging tab missing: ${channelTab}`)
 }
 if (!app.includes('Post anonymously') || !app.includes('Accept answer')) throw new Error('Anonymous discussions or accepted-answer controls are missing.');
@@ -111,7 +111,7 @@ if (app.includes("title: 'AI Profile Analysis'")) throw new Error('AI Profile An
 if (!app.includes('challenge.scale.map(')) throw new Error('The runner must use each challenge\'s own response scale, not one shared scale.');
 if (app.includes('PERSONALITY_QUIZ_URL')) throw new Error('The personality challenges must run inside the platform, not link out.');
 if (!app.includes('of ${total} completed') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-step.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
-if (!app.includes("aria-pressed={post.liked_by_me}") || !app.includes('Each student counts once') || !styles.includes('.community-like-help')) throw new Error('Community like/unlike feedback is missing.');
+if (app.includes('CommunityPage') || app.includes('communityPosts') || api.includes('/community-posts/')) throw new Error('The retired Community feed must not be exposed.');
 if (!app.includes('Meet with') || !app.includes('Pending approval') || !app.includes('Mark completed') || !styles.includes('.booking-actions')) throw new Error('Booking participant and approval UI is missing.');
 if (!app.includes('participant_name') || !app.includes('participant_role')) throw new Error('Booking participant identity is not displayed.');
 if (app.includes("\n  meetings: { label: 'Meetings'") || app.includes("'meetings', 'bookings'")) throw new Error('Legacy meeting notes navigation must be removed.');
@@ -206,3 +206,5 @@ for (const color of ['#10202d', '#9fc6e2', '#f7f7f7']) {
 }
 
 console.log('Frontend smoke checks passed.');
+
+if (app.includes('function ContactsPage(') || app.includes("setPage('contacts')") || styles.includes('.contact-grid')) throw new Error('The retired Contacts page must not be exposed.');

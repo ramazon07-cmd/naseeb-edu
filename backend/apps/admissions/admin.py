@@ -8,7 +8,6 @@ from .models import (
     Booking,
     ChannelMembership,
     ChannelMessage,
-    CommunityPost,
     Document,
     Essay,
     EssayRevision,
@@ -162,7 +161,6 @@ admin.site.register(ActivityLog)
 admin.site.register(ApplicationStatusHistory)
 admin.site.register(EssayRevision)
 admin.site.register(RoadmapMission)
-admin.site.register(CommunityPost)
 admin.site.register(Booking)
 admin.site.register(StudentMessage)
 admin.site.register(ProgramService)
