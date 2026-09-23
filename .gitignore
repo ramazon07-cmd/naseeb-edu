@@ -32,3 +32,5 @@ outputs/
 CLAUDE.md
 PROJECT_CHECKLIST.md
 .impeccable/
+.agents/
+skills-lock.json
