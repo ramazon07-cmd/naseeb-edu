@@ -136,3 +136,21 @@
 }
 .customizer-grip { touch-action: none; user-select: none; }
 .dashboard-customize-modal > header { border-bottom: 0 !important; }
+.dashboard-screen-time { display:flex; flex-direction:column; flex:1; min-height:0; }
+.screen-time-toolbar { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.screen-time-toolbar strong { font-size:20px; font-weight:500; font-variant-numeric:tabular-nums; }
+.screen-time-toolbar select { width:auto; max-width:130px; padding:5px 7px; font-size:10px; border-radius:7px; }
+.dashboard-time-bars { display:flex; gap:4px; flex:1; min-height:48px; margin-top:10px; }
+.dashboard-time-bar { display:flex; flex-direction:column; flex:1; min-width:0; }
+.dashboard-time-bar > span { flex:1; display:flex; align-items:flex-end; border-bottom:1px solid var(--border); background:repeating-linear-gradient(to top,transparent 0,transparent calc(50% - 1px),var(--border-subtle) 50%); }
+.dashboard-time-bar i { display:block; width:75%; margin:auto auto 0; min-height:0; border-radius:3px 3px 0 0; background:var(--accent); }
+.dashboard-time-bar small { font-size:8px; text-align:center; color:var(--muted); height:14px; margin-top:5px; }
+.screen-time-error,.screen-time-empty { font-size:9px; color:var(--muted); margin-top:6px; }
+.screen-time-error button { margin-left:5px; }
+@media (min-width:901px) { .dashboard-column-main:has(> .dashboard-tile-screen_time):not(.has-wide-last) { grid-template-rows:repeat(var(--widget-rows),minmax(0,1fr)); }.dashboard-tile-team .dashboard-card-list > button { padding:7px 0; } }
+@media (min-width:901px) and (max-height:800px) {
+ .dashboard-column-main:has(> .dashboard-tile-screen_time) > .dashboard-tile { padding:12px; }
+ .dashboard-column-main:has(> .dashboard-tile-screen_time) .dashboard-number { font-size:28px; margin:0 0 6px; }
+ .dashboard-column-main:has(> .dashboard-tile-screen_time) .dashboard-application-stats { grid-template-columns:repeat(4,minmax(0,1fr)); padding-top:6px; margin-bottom:4px; }
+ .dashboard-column-main:has(> .dashboard-tile-screen_time) .dashboard-application-stats > span { font-size:8px; }
+}

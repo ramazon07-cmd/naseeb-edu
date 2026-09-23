@@ -4,6 +4,7 @@ import { t } from './i18n';
 import { moveDashboardWidget, normalizeDashboardPreferences } from './dashboardPreferences';
 
 const descriptions = {
+  screen_time: 'Your daily activity over the last 7 or 30 days.',
   roadmap: 'Your study goal, level, and overall progress.',
   journey: 'Your study goal, level, and overall progress.',
   tasks: 'Assignments and upcoming deadlines.',

@@ -1,4 +1,4 @@
-export const DASHBOARD_WIDGETS = ['journey', 'meetings', 'applications', 'tasks', 'team', 'roadmap', 'discovery'];
+export const DASHBOARD_WIDGETS = ['journey', 'meetings', 'applications', 'tasks', 'team', 'screen_time', 'roadmap', 'discovery'];
 export function normalizeDashboardPreferences(value) {
   const clean = (items) => Array.isArray(items) ? [...new Set(items.filter((id) => DASHBOARD_WIDGETS.includes(id)))] : [];
   // Upgrade the previous default arrangement, while retaining user-customized layouts.

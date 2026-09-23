@@ -1,4 +1,9 @@
 export const UI_TRANSLATIONS = {
+  "Screen Time period": ["Ekran vaqti davri", "Период экранного времени"],
+  "Last 7 days": ["Oxirgi 7 kun", "Последние 7 дней"],
+  "Last 30 days": ["Oxirgi 30 kun", "Последние 30 дней"],
+  "No activity in this period.": ["Bu davrda faollik yo‘q.", "Нет активности за этот период."],
+  "Your daily activity over the last 7 or 30 days.": ["Oxirgi 7 yoki 30 kundagi kunlik faolligingiz.", "Ваша ежедневная активность за последние 7 или 30 дней."],
   "Private, group, and discussion messages": ["Shaxsiy, guruh va muhokama xabarlari", "Личные, групповые сообщения и обсуждения"],
   "Choose contacts to add to this group.": ["Guruhga qo‘shish uchun kontaktlarni tanlang.", "Выберите контакты для добавления в группу."],
   "Study goal": ["Ta’lim maqsadi", "Учебная цель"],

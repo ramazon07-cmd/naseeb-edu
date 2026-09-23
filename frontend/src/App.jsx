@@ -849,7 +849,6 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
           <LanguageSelector language={language} onChange={changeLanguage} compact />
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
           {PDF_EXPORT_PAGES.has(page) && <button className="icon-button" onClick={() => exportNodePdf(document.querySelector('.page-content'))} title={t("Export PDF")} aria-label={t("Export PDF")}><Download size={19} /></button>}
-          <button className="icon-button" onClick={refresh} disabled={loading} aria-busy={loading} title={t('Refresh')}><RefreshCw className={loading ? "spin" : ''} size={19} /></button>
         </div>
       </header>
       {!isOnline && <div className="data-state offline" role="status"><WifiOff size={18} /><div><b>{t('You are offline')}</b><p>{t('Current information remains available. Reconnect before saving changes.')}</p></div></div>}
