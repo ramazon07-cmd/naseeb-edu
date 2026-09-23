@@ -57,6 +57,10 @@ COMMON_API_MESSAGES = {
         'uz': 'Ma’lumot topilmadi.',
         'ru': 'Данные не найдены.',
     },
+    'One or more selected students are not available for assignment.': {
+        'uz': 'Tanlangan o‘quvchilardan biri yoki bir nechtasi biriktirish uchun mavjud emas.',
+        'ru': 'Один или несколько выбранных учеников недоступны для назначения.',
+    },
 }
 
 API_STATUS_MESSAGES = {

@@ -503,6 +503,7 @@ export const UI_TRANSLATIONS = {
   'Document checklist and review status': ['Hujjatlar ro‘yxati va tekshiruv holati', 'Список документов и статус проверки'],
   'Document status': ['Hujjat holati', 'Статус документа'],
   'Done': ['Tayyor', 'Готово'],
+  'Download file': ['Faylni yuklab olish', 'Скачать файл'],
   'Due date': ['Topshirish muddati', 'Срок выполнения'],
   'Duration': ['Davomiylik', 'Продолжительность'],
   'Edit program service': ['Dastur xizmatini tahrirlash', 'Изменить услугу программы'],

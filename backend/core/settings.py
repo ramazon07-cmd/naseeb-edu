@@ -203,6 +203,7 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'Naseeb Edu API',
     'DESCRIPTION': 'Education counseling platform for international university applications.',
     'VERSION': '1.0.0',
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
     'ENUM_NAME_OVERRIDES': {
         'ApplicationStatusEnum': [
             ('researching', 'Researching'), ('shortlisted', 'Shortlisted'),

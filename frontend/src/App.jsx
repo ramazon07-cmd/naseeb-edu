@@ -965,8 +965,8 @@ function EssayDetailModal({ essay, onClose }) {
   return <Modal title={essay.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{essay.status}</Badge><span>{t("Version")} {essay.version} · {essay.university_name || t("General essay")}</span></div><GoogleDocsActions item={essay} /></div><section><span className="detail-label">{t("Essay prompt")}</span><p>{essay.prompt}</p></section>{essay.google_docs_preview_url ? <GoogleDocsPreview previewUrl={essay.google_docs_preview_url} title={essay.title} /> : <section><span className="detail-label">{t("Current draft")}</span><div className="essay-content-preview">{essay.content || t("No draft content has been added yet.")}</div></section>}{essay.counselor_comment && <section className="counselor-feedback"><span className="detail-label">{t("Counselor feedback")}</span><p>{essay.counselor_comment}</p></section>}{essay.revisions?.length > 0 && <section><span className="detail-label">{t("Revision history")}</span><div className="revision-chips">{essay.revisions.map((revision) => <span key={revision.id}>{t("v")}{revision.version} · {label(revision.status)} · {dateText(revision.created_at)}</span>)}</div></section>}</div></Modal>;
 }
 
-function TaskSubmissionModal({ task, onClose }) {
-  return <Modal title={tx`Task response · ${task.title}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{task.status}</Badge><span>{task.submitted_at ? tx`Submitted ${dateTimeText(task.submitted_at)}` : t("Not submitted yet")}</span></div><div className="detail-actions">{task.submission_file && <a className="button quiet" href={task.submission_file} target="_blank" rel="noreferrer">{t("Open file")} <ExternalLink size={15} /></a>}{task.submission_url && <a className="button primary" href={task.submission_url} target="_blank" rel="noreferrer">{t("Open submission")} <ExternalLink size={15} /></a>}</div></div><section><span className="detail-label">{t("Assigned task")}</span><p>{task.description || t("No additional instructions.")}</p></section><section><span className="detail-label">{t("Student response")}</span><div className="essay-content-preview">{task.student_response || t("The student has not submitted a written response yet.")}</div></section><GoogleDocsPreview previewUrl={task.submission_preview_url} title={task.title} /></div></Modal>;
+function TaskSubmissionModal({ task, onClose, notify }) {
+  return <Modal title={tx`Task response · ${task.title}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{task.status}</Badge><span>{task.submitted_at ? tx`Submitted ${dateTimeText(task.submitted_at)}` : t("Not submitted yet")}</span></div><div className="detail-actions">{task.has_submission_file && <button className="button quiet" onClick={() => downloadTaskSubmission(task, notify)}><Download size={15} /> {task.submission_file_name || t("Download file")}</button>}{task.submission_url && <a className="button primary" href={task.submission_url} target="_blank" rel="noreferrer">{t("Open submission")} <ExternalLink size={15} /></a>}</div></div><section><span className="detail-label">{t("Assigned task")}</span><p>{task.description || t("No additional instructions.")}</p></section><section><span className="detail-label">{t("Student response")}</span><div className="essay-content-preview">{task.student_response || t("The student has not submitted a written response yet.")}</div></section><GoogleDocsPreview previewUrl={task.submission_preview_url} title={task.title} /></div></Modal>;
 }
 
 const formatFileSize = (bytes = 0) => {
@@ -982,6 +982,22 @@ async function downloadDocumentFile(doc, notify) {
     const link = document.createElement('a');
     link.href = url;
     link.download = doc.file_name || result.fileName || 'document';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  } catch (error) {
+    notify?.(error.message, 'error');
+  }
+}
+
+async function downloadTaskSubmission(task, notify) {
+  try {
+    const result = await api.downloadTaskSubmission(task.id);
+    const url = URL.createObjectURL(result.blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = task.submission_file_name || result.fileName || 'submission';
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1234,7 +1250,7 @@ function StudentOverview({ student, data, onBack, user, notify }) {
       {STUDENT_RESOURCE_GROUPS.map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
       <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} />
     </div>
-    {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} />}
+    {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} notify={notify} />}
     {selectedEssay && <EssayDetailModal essay={selectedEssay} onClose={() => setSelectedEssay(null)} />}
     {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} />}
     {parentInviteOpen && <ParentInviteModal student={student} onClose={() => setParentInviteOpen(false)} notify={notify} />}
@@ -1509,7 +1525,7 @@ function ResourceSection({ title, resource, data, user, query, reload, notify, c
           const lockedAfterApproval = item.status === 'approved';
           const allowDelete = !staffControlled ? allowCreate : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
           return <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{item.has_proof_file && <><button className="button quiet small" onClick={() => setViewingEvidence(item)}><Eye size={14} /> {t("Evidence")}</button><button className="button quiet small" onClick={() => downloadEvidenceFile(item, notify)}><Download size={14} /> {t("Download")}</button></>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
-        })}{!filtered.length && <Empty />}</div></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} defaultStudentId={defaultStudentId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} />}{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}{viewingEvidence && <EvidencePreviewModal item={viewingEvidence} onClose={() => setViewingEvidence(null)} notify={notify} />}</>;
+        })}{!filtered.length && <Empty />}</div></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} defaultStudentId={defaultStudentId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} notify={notify} />}{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}{viewingEvidence && <EvidencePreviewModal item={viewingEvidence} onClose={() => setViewingEvidence(null)} notify={notify} />}</>;
 }
 
 function RecordRow({ resource, item, data, actions }) {

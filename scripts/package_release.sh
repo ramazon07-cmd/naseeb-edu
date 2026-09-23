@@ -25,6 +25,7 @@ rsync -a \
   --exclude '*.pyc' \
   --exclude 'staticfiles/' \
   --exclude 'media/' \
+  --exclude 'private_documents/' \
   --exclude '.DS_Store' \
   --exclude 'Naseeb-Edu-Production*.zip' \
   "$ROOT/" "$STAGE/Naseeb-Edu-Production/"
@@ -32,7 +33,7 @@ rsync -a \
 (cd "$STAGE" && zip -qr "$OUTPUT" Naseeb-Edu-Production)
 
 BAD_FILES="$(unzip -Z1 "$OUTPUT" \
-  | grep -E '(^|/)(node_modules|\.venv|\.audit-venv|dist|__pycache__|staticfiles|media)(/|$)|(^|/)\.env($|\.)|(^|/)(db\.)?[^/]*\.sqlite3$|\.pyc$' \
+  | grep -E '(^|/)(node_modules|\.venv|\.audit-venv|dist|__pycache__|staticfiles|media|private_documents)(/|$)|(^|/)\.env($|\.)|(^|/)(db\.)?[^/]*\.sqlite3$|\.pyc$' \
   | grep -Ev '/\.env(\.production)?\.example$' || true)"
 if [ -n "$BAD_FILES" ]; then
   echo 'Release validation failed: a private or generated file was included.' >&2

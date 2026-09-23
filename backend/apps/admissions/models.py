@@ -597,7 +597,15 @@ class Task(TimeStampedModel):
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.TODO)
     student_response = models.TextField(blank=True)
     submission_url = models.URLField(blank=True)
-    submission_file = models.FileField(upload_to='task_submissions/', blank=True, null=True)
+    submission_file = models.FileField(
+        upload_to=student_evidence_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    submission_file_name = models.CharField(max_length=255, blank=True)
+    submission_file_content_type = models.CharField(max_length=120, blank=True)
+    submission_file_size = models.PositiveBigIntegerField(default=0)
     submitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -1362,7 +1370,15 @@ class RecommendationLetter(TimeStampedModel):
     relationship = models.CharField(max_length=180, blank=True)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.REQUESTED)
     deadline = models.DateField(null=True, blank=True)
-    file = models.FileField(upload_to='recommendation_letters/', blank=True, null=True)
+    file = models.FileField(
+        upload_to=student_evidence_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    original_file_name = models.CharField(max_length=255, blank=True)
+    file_content_type = models.CharField(max_length=120, blank=True)
+    file_size = models.PositiveBigIntegerField(default=0)
     google_docs_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
 
