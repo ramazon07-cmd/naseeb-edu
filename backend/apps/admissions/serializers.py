@@ -513,11 +513,16 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     assigned_by_name = serializers.SerializerMethodField()
     is_overdue = serializers.BooleanField(read_only=True)
     submission_preview_url = serializers.SerializerMethodField()
+    submission_file = serializers.FileField(write_only=True, required=False, allow_null=True)
+    has_submission_file = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = '__all__'
-        read_only_fields = ('assigned_by', 'submitted_at', 'is_self_assigned')
+        read_only_fields = (
+            'assigned_by', 'submitted_at', 'is_self_assigned',
+            'submission_file_name', 'submission_file_content_type', 'submission_file_size',
+        )
 
     def validate_student(self, student):
         request = self.context.get('request')
@@ -526,6 +531,11 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
                 return student
             raise serializers.ValidationError('Teachers can only assign work to students in their school.')
         return super().validate_student(student)
+
+    def validate_submission_file(self, upload):
+        if upload is None:
+            return None
+        return validate_private_upload(upload)
 
     def validate_status(self, value):
         request = self.context.get('request')
@@ -561,11 +571,51 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     def get_submission_preview_url(self, obj):
         return google_docs_preview_url(obj.submission_url)
 
+    def get_has_submission_file(self, obj) -> bool:
+        return bool(obj.submission_file)
+
+    @staticmethod
+    def _submission_file_metadata(upload):
+        return {
+            'submission_file_name': Path(upload.name or 'submission').name[:255],
+            'submission_file_content_type': (mimetypes.guess_type(upload.name or '')[0] or 'application/octet-stream')[:120],
+            'submission_file_size': upload.size,
+        }
+
+    def create(self, validated_data):
+        upload = validated_data.get('submission_file')
+        if upload:
+            validated_data.update(self._submission_file_metadata(upload))
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        file_supplied = 'submission_file' in validated_data
+        upload = validated_data.get('submission_file')
+        old_name = instance.submission_file.name if file_supplied and instance.submission_file else ''
+        old_storage = instance.submission_file.storage if old_name else None
+        if upload:
+            validated_data.update(self._submission_file_metadata(upload))
+        elif file_supplied:
+            validated_data.update({
+                'submission_file_name': '',
+                'submission_file_content_type': '',
+                'submission_file_size': 0,
+            })
+        updated = super().update(instance, validated_data)
+        updated_name = updated.submission_file.name if updated.submission_file else ''
+        if old_name and old_name != updated_name:
+            transaction.on_commit(lambda: old_storage.delete(old_name))
+        return updated
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
         if request and request.user.is_organization:
-            for field in ('student_response', 'submission_url', 'submission_file', 'submission_preview_url'):
+            for field in (
+                'student_response', 'submission_url', 'submission_file', 'submission_preview_url',
+                'has_submission_file', 'submission_file_name', 'submission_file_content_type',
+                'submission_file_size',
+            ):
                 data.pop(field, None)
         return data
 
@@ -846,19 +896,67 @@ class HonorSerializer(PrivateEvidenceSerializerMixin, VerifiedStudentRecordMixin
 
 class RecommendationLetterSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
+    file = serializers.FileField(write_only=True, required=False, allow_null=True)
+    has_file = serializers.SerializerMethodField()
+    file_name = serializers.CharField(source='original_file_name', read_only=True)
 
     class Meta:
         model = RecommendationLetter
         fields = '__all__'
+        read_only_fields = ('original_file_name', 'file_content_type', 'file_size')
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
+
+    def validate_file(self, upload):
+        if upload is None:
+            return None
+        return validate_private_upload(upload)
+
+    def get_has_file(self, obj) -> bool:
+        return bool(obj.file)
+
+    @staticmethod
+    def _file_metadata(upload):
+        return {
+            'original_file_name': Path(upload.name or 'recommendation').name[:255],
+            'file_content_type': (mimetypes.guess_type(upload.name or '')[0] or 'application/octet-stream')[:120],
+            'file_size': upload.size,
+        }
+
+    def create(self, validated_data):
+        upload = validated_data.get('file')
+        if upload:
+            validated_data.update(self._file_metadata(upload))
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        file_supplied = 'file' in validated_data
+        upload = validated_data.get('file')
+        old_name = instance.file.name if file_supplied and instance.file else ''
+        old_storage = instance.file.storage if old_name else None
+        if upload:
+            validated_data.update(self._file_metadata(upload))
+        elif file_supplied:
+            validated_data.update({
+                'original_file_name': '',
+                'file_content_type': '',
+                'file_size': 0,
+            })
+        updated = super().update(instance, validated_data)
+        updated_name = updated.file.name if updated.file else ''
+        if old_name and old_name != updated_name:
+            transaction.on_commit(lambda: old_storage.delete(old_name))
+        return updated
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
         if request and request.user.is_organization:
-            for field in ('recommender_email', 'file', 'google_docs_url', 'google_docs_preview_url', 'notes'):
+            for field in (
+                'recommender_email', 'file', 'google_docs_url', 'google_docs_preview_url', 'notes',
+                'has_file', 'file_name', 'original_file_name', 'file_content_type', 'file_size',
+            ):
                 data.pop(field, None)
         return data
 

@@ -669,6 +669,19 @@ class RoleIsolationTests(APITestCase):
             format='json',
         )
         self.assertEqual(cross_school.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # A nonexistent id and a real cross-school id must be indistinguishable to
+        # the counselor — otherwise the error message leaks which StudentProfile ids
+        # belong to other schools.
+        missing_id = StudentProfile.objects.order_by('-id').first().id + 1000
+        nonexistent = self.client.post(
+            '/api/students/assign-counselor/',
+            {'students': [missing_id]},
+            format='json',
+        )
+        self.assertEqual(nonexistent.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(nonexistent.data, cross_school.data)
+
         direct_patch = self.client.patch(
             f'/api/students/{self.student_a.id}/',
             {'assigned_counselor': same_school_counselor.id},
@@ -2144,6 +2157,39 @@ class RoleIsolationTests(APITestCase):
         self.assertTrue(result['test_optional'])
         self.assertEqual(result['programs'][0]['canonical_major'], 'Computer Science')
         self.assertEqual(result['programs'][0]['verified_at'], '2026-09-12')
+
+    def test_only_product_admin_can_write_universities_others_stay_read_only(self):
+        university = University.objects.create(name='Write Scope University', country='Testland')
+        self.client.force_authenticate(self.counselor)
+
+        readable = self.client.get('/api/universities/')
+        self.assertEqual(readable.status_code, status.HTTP_200_OK)
+
+        blocked_patch = self.client.patch(
+            f'/api/universities/{university.id}/',
+            {'name': 'Renamed by counselor'},
+            format='json',
+        )
+        self.assertEqual(blocked_patch.status_code, status.HTTP_403_FORBIDDEN)
+
+        blocked_delete = self.client.delete(f'/api/universities/{university.id}/')
+        self.assertEqual(blocked_delete.status_code, status.HTTP_403_FORBIDDEN)
+        university.refresh_from_db()
+        self.assertEqual(university.name, 'Write Scope University')
+
+        admin = User.objects.create_user(
+            username='university-write-admin',
+            email='university-write-admin@example.com',
+            password='StrongPass123!',
+            role=User.Role.ADMIN,
+        )
+        self.client.force_authenticate(admin)
+        allowed_patch = self.client.patch(
+            f'/api/universities/{university.id}/',
+            {'name': 'Renamed by admin'},
+            format='json',
+        )
+        self.assertEqual(allowed_patch.status_code, status.HTTP_200_OK)
 
     def test_university_market_is_inferred_from_country(self):
         cases = [

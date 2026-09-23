@@ -90,6 +90,12 @@ const documentFileRequest = (id, download = false) =>
 const evidenceFileRequest = (resource, id, download = false) =>
   protectedFileRequest(`/${resource}/${id}/proof-file/`, download)
 
+const taskSubmissionFileRequest = (id, download = false) =>
+  protectedFileRequest(`/tasks/${id}/submission-file/`, download)
+
+const recommendationFileRequest = (id, download = false) =>
+  protectedFileRequest(`/recommendations/${id}/file/`, download)
+
 // Profile photos live in private storage, so they are fetched as blobs like
 // every other personal file rather than pointed at with a media URL.
 const studentPhotoRequest = (id) => protectedFileRequest(`/students/${id}/photo/`, false)
@@ -284,6 +290,10 @@ export const api = {
   downloadDocument: (id) => documentFileRequest(id, true),
   evidenceFile: (resource, id) => evidenceFileRequest(resource, id),
   downloadEvidence: (resource, id) => evidenceFileRequest(resource, id, true),
+  taskSubmissionFile: (id) => taskSubmissionFileRequest(id),
+  downloadTaskSubmission: (id) => taskSubmissionFileRequest(id, true),
+  recommendationFile: (id) => recommendationFileRequest(id),
+  downloadRecommendationFile: (id) => recommendationFileRequest(id, true),
   createIndividualCounselor: (payload) => request('/users/accounts/create-individual-counselor/', {
     method: 'POST',
     body: JSON.stringify(payload),

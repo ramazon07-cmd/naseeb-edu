@@ -517,14 +517,20 @@ class StudentProfileViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
                 .select_related('user')
                 .filter(pk__in=student_ids)
             )
+            # Both branches below return the identical generic message on purpose:
+            # a distinct "does not exist" vs "different school" message would let a
+            # counselor enumerate other schools' StudentProfile ids by observing
+            # which error comes back.
             if len(students) != len(student_ids):
-                return Response({'students': ['One or more students do not exist.']}, status=400)
+                return Response({
+                    'students': ['One or more selected students are not available for assignment.']
+                }, status=400)
             if any(
                 student.school_id != counselor.school_id or student.user.school_id != counselor.school_id
                 for student in students
             ):
                 return Response({
-                    'students': ['The counselor and every selected student must belong to the same school.']
+                    'students': ['One or more selected students are not available for assignment.']
                 }, status=400)
             if user.role == User.Role.COUNSELOR and any(
                 student.assigned_counselor_id is not None for student in students
@@ -783,7 +789,14 @@ class UniversityViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        return [CounselorOrOwnerPermission()]
+        # Universities are a shared catalog: any authenticated user may read,
+        # but only a product admin may create/update/delete — counselors are
+        # not scoped to a school here, so CounselorOrOwnerPermission's
+        # unconditional `is_counselor_like` pass would let any counselor at
+        # any school mutate or delete rows other schools' data depends on.
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+        return [ProductAdminPermission()]
 
 
 COLLEGE_RESEARCH_QUESTIONS = {
@@ -1191,6 +1204,43 @@ class TaskViewSet(StaffControlledWorkMixin, viewsets.ModelViewSet):
         data['student_leveling'] = StudentProfileSerializer(task.student, context={'request': request}).data
         return Response(data)
 
+    @action(detail=True, methods=['get'], url_path='submission-file')
+    def submission_file(self, request, pk=None):
+        task = self.get_object()
+        if request.user.is_organization:
+            # Task submission content is hidden from school organizations by
+            # policy (see TaskSerializer.to_representation) — keep this
+            # streaming endpoint from becoming a bypass of that.
+            raise Http404('This task has no submitted file.')
+        if not task.submission_file:
+            raise Http404('This task has no submitted file.')
+        try:
+            stream = task.submission_file.open('rb')
+        except (FileNotFoundError, OSError):
+            raise Http404('The uploaded file is unavailable. Contact support.')
+
+        file_name = task.submission_file_name or Path(task.submission_file.name).name
+        extension = Path(file_name).suffix.lower()
+        inline_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt', '.csv'}
+        force_download = request.query_params.get('download') == '1' or extension not in inline_extensions
+        content_type = task.submission_file_content_type or mimetypes.guess_type(file_name)[0] or 'application/octet-stream'
+        response = FileResponse(
+            stream,
+            as_attachment=force_download,
+            filename=file_name,
+            content_type=content_type,
+        )
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+    def perform_destroy(self, instance):
+        file_name = instance.submission_file.name if instance.submission_file else ''
+        storage = instance.submission_file.storage if file_name else None
+        super().perform_destroy(instance)
+        if file_name:
+            transaction.on_commit(lambda: storage.delete(file_name))
+
 
 class DocumentViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = DocumentSerializer
@@ -1330,6 +1380,43 @@ class RecommendationLetterViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.filter_for_user(self.queryset)
+
+    @action(detail=True, methods=['get'], url_path='file')
+    def file(self, request, pk=None):
+        letter = self.get_object()
+        if request.user.is_organization:
+            # The letter file is hidden from school organizations by policy
+            # (see RecommendationLetterSerializer.to_representation) — keep
+            # this streaming endpoint from becoming a bypass of that.
+            raise Http404('This recommendation letter has no uploaded file.')
+        if not letter.file:
+            raise Http404('This recommendation letter has no uploaded file.')
+        try:
+            stream = letter.file.open('rb')
+        except (FileNotFoundError, OSError):
+            raise Http404('The uploaded file is unavailable. Contact support.')
+
+        file_name = letter.original_file_name or Path(letter.file.name).name
+        extension = Path(file_name).suffix.lower()
+        inline_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt', '.csv'}
+        force_download = request.query_params.get('download') == '1' or extension not in inline_extensions
+        content_type = letter.file_content_type or mimetypes.guess_type(file_name)[0] or 'application/octet-stream'
+        response = FileResponse(
+            stream,
+            as_attachment=force_download,
+            filename=file_name,
+            content_type=content_type,
+        )
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+    def perform_destroy(self, instance):
+        file_name = instance.file.name if instance.file else ''
+        storage = instance.file.storage if file_name else None
+        super().perform_destroy(instance)
+        if file_name:
+            transaction.on_commit(lambda: storage.delete(file_name))
 
 
 class EssayViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
