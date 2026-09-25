@@ -15,10 +15,26 @@ Public registration is disabled. Students are created by a counselor or their sc
 
 ## Brand and themes
 
+This section is the single description of the palette; the tokens themselves
+live in `frontend/src/styles.css` (`:root` for light, `:root[data-theme='dark']`
+for dark), and components use the semantic tokens (`--canvas`, `--surface`,
+`--text`, `--accent`…), never raw colors.
+
 - Official identity: Naseeb Edu — “Bridging Uzbekistan to the World Through Education”.
-- Light mode uses the warm ivory/taupe Naseeb Edu system; dark mode uses the purple/silver logo.
-- The theme toggle is available on both login and authenticated pages, follows the first OS preference, and persists in local storage.
-- The student light interface uses warm ivory, taupe and brown surfaces; dark mode keeps the Deep Purple, Silver and Charcoal identity.
+- The theme toggle is available on both login and authenticated pages. The first visit follows the OS preference (`prefers-color-scheme`); the choice is then kept in local storage (`naseeb-edu-theme`).
+
+| Theme | Role | Token | Value |
+| --- | --- | --- | --- |
+| Light | Ivory Paper | `--ivory` | `#f5f0e6` |
+| Light | Warm Taupe (accent) | `--taupe`, `--accent` | `#b8a58a` |
+| Light | Deep Ink (text, active nav) | `--deep-ink`, `--text` | `#4a4036` |
+| Light | Soft Shadow | `--soft-shadow` | `#d8cec0` |
+| Light | Canvas / surface | `--canvas`, `--surface` | `#f7f7f7`, `#ffffff` |
+| Dark | Midnight canvas / surface | `--canvas`, `--surface` | `#10202d`, `#162936` |
+| Dark | Ice-blue accent | `--accent` | `#9fc6e2` |
+| Dark | Silver | `--silver` | `#c5d0d8` |
+| Dark | Charcoal | `--charcoal` | `#0c1923` |
+| Dark | Text | `--text` | `#f7f7f7` |
 
 ## Included modules
 
@@ -139,8 +155,12 @@ CORS_ALLOWED_ORIGINS=https://app.example.com
 CSRF_TRUSTED_ORIGINS=https://app.example.com
 DATABASE_URL=postgresql://user:password@host:5432/database
 ENABLE_DEMO_ACCOUNTS=False
-MEDIA_ROOT=/app/backend/media
-DOCUMENT_STORAGE_ROOT=/app/backend/private_documents
+STORAGE_BACKEND=s3
+AWS_STORAGE_BUCKET_NAME=naseeb-files
+AWS_S3_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+AWS_S3_REGION_NAME=auto
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
 DOCUMENT_MAX_UPLOAD_SIZE=26214400
 ```
 
@@ -148,9 +168,9 @@ Start from `backend/.env.production.example` and `frontend/.env.production.examp
 
 Production startup fails early when `DEBUG=True`, the secret key is missing/weak, `DATABASE_URL` is missing or points to SQLite, or demo accounts are enabled. When demo accounts are disabled, `seed_demo` safely exits without writing data and `reset_demo` remains blocked before any flush. Local `.env`, SQLite files, media, virtual environments, build output and dependencies are excluded from Git, Docker build context and release ZIP files.
 
-Production deployment must use PostgreSQL and persistent media storage. Mount `MEDIA_ROOT` and `DOCUMENT_STORAGE_ROOT` on durable volumes and include both locations in backups; production startup rejects missing values. `DOCUMENT_STORAGE_ROOT` is private: never expose it through Nginx, a public `/media/` route, CDN, or object-storage public ACL. Student documents and honor/achievement evidence are streamed only through their authenticated API file endpoints. The included Docker Compose configuration mounts separate `media_data` and `private_document_data` volumes; use equivalent persistent disks on the production server. The included `Procfile`, `build.sh`, `Dockerfile`, healthcheck and Gunicorn configuration support common container or PaaS deployments.
+Production deployment must use PostgreSQL and private object storage for uploads. With `STORAGE_BACKEND=s3` every upload goes to a private S3-compatible bucket (AWS S3 or Cloudflare R2); nothing is written to the instance disk, so the web service can run several instances. The bucket must block public access: student documents, evidence, photos and avatars reach users only through their authenticated API endpoints, which stream photos and avatars and hand out presigned URLs for everything else that expire after `PRIVATE_FILE_URL_EXPIRE_SECONDS` (60 by default). Production startup refuses local-disk storage unless `FILE_STORAGE_SINGLE_INSTANCE=True` acknowledges a single instance; then `MEDIA_ROOT` and `DOCUMENT_STORAGE_ROOT` must be persistent volumes, included in backups and never exposed through Nginx or a public `/media/` route. Bucket setup, CORS and the one-off copy of existing files (`migrate_files_to_object_storage`) are described in `docs/scaling.md` under "File storage". The included Docker Compose configuration (development) mounts separate `media_data` and `private_document_data` volumes. The included `Procfile`, `build.sh`, `Dockerfile`, healthcheck and Gunicorn configuration support common container or PaaS deployments.
 
-For Render, connect `DATABASE_URL` to one persistent Render PostgreSQL database and keep that same database attached across deploys. Set `APP_ENV=production`, `DEBUG=False`, and `ENABLE_DEMO_ACCOUNTS=False`; Render's hosted-runtime guard refuses to boot with the ephemeral development SQLite fallback. Use `./build.sh` as the build command and the `Procfile` web command (or its equivalent) as the start command. Never use `reset_and_start_backend.sh`, `reset_demo`, or `flush` in a Render build, pre-deploy, or start command. The Render persistent disk stores uploaded files only; it does not replace PostgreSQL. Take a PostgreSQL backup before changing `DATABASE_URL` or deleting/recreating the database service.
+For Render, connect `DATABASE_URL` to one persistent Render PostgreSQL database and keep that same database attached across deploys. Set `APP_ENV=production`, `DEBUG=False`, and `ENABLE_DEMO_ACCOUNTS=False`; Render's hosted-runtime guard refuses to boot with the ephemeral development SQLite fallback. Use `./build.sh` as the build command, `cd backend && python manage.py migrate_locked --noinput` as the pre-deploy command and the `Procfile` web command (or its equivalent) as the start command; `render.yaml` defines the scheduled jobs. See `docs/scaling.md` for the full Render checklist. Never use `reset_and_start_backend.sh`, `reset_demo`, or `flush` in a Render build, pre-deploy, or start command. The Render persistent disk stores uploaded files only; it does not replace PostgreSQL. Take a PostgreSQL backup before changing `DATABASE_URL` or deleting/recreating the database service.
 
 Create a clean handoff ZIP without `.env`, SQLite, uploaded media, virtual environments, dependencies or compiled output:
 

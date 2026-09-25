@@ -1,34 +1,18 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.files.storage import FileSystemStorage
 from django.db import models
 from django.utils import timezone
 from pathlib import Path
 from uuid import uuid4
-import os
+
+from core.storage import PrivateDocumentStorage
 
 
 def student_evidence_upload_path(instance, filename):
-    """Keep honor and achievement evidence private, grouped, and collision-free."""
+    """Keep student evidence private, grouped, and collision-free."""
     suffix = Path(filename or '').suffix.lower()[:12]
     resource = instance._meta.model_name
     return f'student_evidence/{instance.student_id}/{resource}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
-
-
-class PrivateDocumentStorage(FileSystemStorage):
-    """A filesystem location that is never exposed by Django's public media route."""
-
-    @property
-    def base_location(self):
-        return settings.DOCUMENT_STORAGE_ROOT
-
-    @property
-    def location(self):
-        return os.path.abspath(self.base_location)
-
-    @property
-    def base_url(self):
-        return None
 
 
 private_document_storage = PrivateDocumentStorage()
@@ -131,9 +115,43 @@ class StudentProfile(TimeStampedModel):
         blank=True,
         related_name='students',
     )
+    class GpaScale(models.IntegerChoices):
+        FOUR = 4, '4.0'
+        FIVE = 5, '5.0'
+        HUNDRED = 100, '100'
+
     gpa = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    # The scale the GPA was entered on (onboarding accepts 4, 5 or 100).
+    gpa_scale = models.PositiveSmallIntegerField(choices=GpaScale.choices, null=True, blank=True)
+    class TestStatus(models.TextChoices):
+        NOT_TAKEN = 'not_taken', 'Not taken yet'
+        PLANNING = 'planning', 'Planning to take'
+        SCHEDULED = 'scheduled', 'Test date booked'
+        TAKEN = 'taken', 'Score available'
+        NOT_REQUIRED = 'not_required', 'Not needed'
+
+    # One IELTS and one SAT result per student, so the detail lives on the
+    # profile row (no join) and ielts_score / sat_score stay the headline
+    # values every list, filter and match already reads.
+    ielts_status = models.CharField(max_length=20, choices=TestStatus.choices, default=TestStatus.NOT_TAKEN)
     ielts_score = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    ielts_listening = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    ielts_reading = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    ielts_writing = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    ielts_speaking = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    ielts_test_date = models.DateField(null=True, blank=True)
+    ielts_attempts = models.PositiveSmallIntegerField(null=True, blank=True)
+    sat_status = models.CharField(max_length=20, choices=TestStatus.choices, default=TestStatus.NOT_TAKEN)
+    # The total the student sends: the superscore when sat_superscore is true.
     sat_score = models.PositiveIntegerField(null=True, blank=True)
+    # Section scores from the student's best single test day.
+    sat_reading = models.PositiveSmallIntegerField(null=True, blank=True)
+    sat_math = models.PositiveSmallIntegerField(null=True, blank=True)
+    sat_test_date = models.DateField(null=True, blank=True)
+    sat_attempts = models.PositiveSmallIntegerField(null=True, blank=True)
+    sat_superscore = models.BooleanField(null=True, blank=True)
+    sat_superscore_reading = models.PositiveSmallIntegerField(null=True, blank=True)
+    sat_superscore_math = models.PositiveSmallIntegerField(null=True, blank=True)
     target_major = models.CharField(max_length=160, blank=True)
     target_countries = models.CharField(max_length=255, blank=True, help_text='Comma-separated countries')
     budget_usd = models.PositiveIntegerField(null=True, blank=True)
@@ -150,9 +168,58 @@ class StudentProfile(TimeStampedModel):
     notes = models.TextField(blank=True)
     xp_total = models.PositiveIntegerField(default=0)
     level = models.PositiveSmallIntegerField(default=1)
+    # Students are never hard-deleted: deactivation hides them and keeps data.
+    deactivated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            *[
+                models.CheckConstraint(
+                    condition=models.Q(**{f'{name}__isnull': True}) | models.Q(**{f'{name}__gte': 0, f'{name}__lte': 9}),
+                    name=f'student_{name}_band',
+                )
+                for name in ('ielts_score', 'ielts_listening', 'ielts_reading', 'ielts_writing', 'ielts_speaking')
+            ],
+            *[
+                models.CheckConstraint(
+                    condition=models.Q(**{f'{name}__isnull': True}) | models.Q(**{f'{name}__gte': 200, f'{name}__lte': 800}),
+                    name=f'student_{name}_range',
+                )
+                for name in ('sat_reading', 'sat_math', 'sat_superscore_reading', 'sat_superscore_math')
+            ],
+        ]
 
     def __str__(self):
         return self.user.get_full_name() or self.user.username
+
+    def save(self, *args, **kwargs):
+        from .exam_scores import EXAM_KEYS, reconcile
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None:
+            reconcile(self)
+        elif EXAM_KEYS.intersection(update_fields):
+            reconcile(self)
+            kwargs['update_fields'] = {*update_fields, *EXAM_KEYS}
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if not self.school_id:
+            raise ValidationError({'school': 'Students must belong to a school.'})
+
+    @staticmethod
+    def infer_gpa_scale(gpa):
+        """Best guess for legacy rows saved without a scale."""
+        if gpa is None:
+            return None
+        value = float(gpa)
+        if value > 5:
+            return StudentProfile.GpaScale.HUNDRED
+        return StudentProfile.GpaScale.FIVE if value > 4 else StudentProfile.GpaScale.FOUR
+
+    @property
+    def effective_gpa_scale(self):
+        return self.gpa_scale or self.infer_gpa_scale(self.gpa)
 
     @staticmethod
     def xp_required_for_level(level):
@@ -179,71 +246,59 @@ class StudentProfile(TimeStampedModel):
             return 100
         current_threshold = self.xp_required_for_level(self.level)
         next_threshold = self.next_level_xp
+        from .progress import percent
+
         span = max(1, next_threshold - current_threshold)
-        return min(100, round(((self.xp_total - current_threshold) / span) * 100))
+        return min(100, percent(self.xp_total - current_threshold, span))
 
     @property
     def level_up_pending(self):
         return self.eligible_level > self.level
 
     @property
+    def progress_stats(self):
+        """Batch-friendly progress numbers; see ``apps.admissions.progress``.
+
+        List views call ``attach_progress_stats`` so a page of students costs
+        a constant six queries; a lone instance loads its own stats once.
+        """
+        stats = getattr(self, '_progress_stats', None)
+        if stats is None:
+            from .progress import ProgressStats, load_progress_stats
+
+            stats = load_progress_stats([self.pk]).get(self.pk) or ProgressStats()
+            self._progress_stats = stats
+        return stats
+
+    def refresh_from_db(self, *args, **kwargs):
+        self.__dict__.pop('_progress_stats', None)
+        return super().refresh_from_db(*args, **kwargs)
+
+    @property
     def progress_percent(self):
-        total = self.tasks.count() + self.applications.count() + self.documents.count()
-        if total == 0:
-            return 0
-        done_tasks = self.tasks.filter(status=Task.Status.APPROVED).count()
-        done_apps = self.applications.filter(status__in=[Application.Status.SUBMITTED, Application.Status.ACCEPTED]).count()
-        done_docs = self.documents.filter(status=Document.Status.APPROVED).count()
-        return round(((done_tasks + done_apps + done_docs) / total) * 100)
+        return self.progress_stats.progress_percent
 
     @property
     def task_progress_percent(self):
         """Return a weighted task completion score instead of a binary done/not-done score."""
-        weights = {
-            Task.Status.TODO: 0,
-            Task.Status.LATE: 0,
-            Task.Status.IN_PROGRESS: 40,
-            Task.Status.SUBMITTED: 80,
-            Task.Status.APPROVED: 100,
-        }
-        statuses = list(self.tasks.values_list('status', flat=True))
-        if not statuses:
-            return 0
-        return round(sum(weights.get(status, 0) for status in statuses) / len(statuses))
+        return self.progress_stats.task_progress_percent
 
     @property
     def roadmap_progress_percent(self):
-        total = self.roadmap_missions.count()
-        if total == 0:
-            return 0
-        completed = self.roadmap_missions.filter(status=RoadmapMission.Status.COMPLETED).count()
-        return round((completed / total) * 100)
+        return self.progress_stats.roadmap_progress_percent
 
     @property
     def roadmap_stars(self):
         """One star per approved roadmap mission: the student-facing counterpart of XP."""
-        return self.roadmap_missions.filter(status=RoadmapMission.Status.COMPLETED).count()
+        return self.progress_stats.roadmap_stars
 
     @property
     def journey_progress_percent(self):
-        task_exists = self.tasks.exists()
-        roadmap_exists = self.roadmap_missions.exists()
-        if task_exists and roadmap_exists:
-            return round((self.task_progress_percent + self.roadmap_progress_percent) / 2)
-        if task_exists:
-            return self.task_progress_percent
-        if roadmap_exists:
-            return self.roadmap_progress_percent
-        return 0
+        return self.progress_stats.journey_progress_percent
 
     @property
     def is_at_risk(self):
-        today = timezone.localdate()
-        return self.tasks.filter(status=Task.Status.LATE).exists() or self.tasks.filter(
-            due_date__lt=today,
-        ).exclude(status=Task.Status.APPROVED).exists() or self.roadmap_missions.filter(
-            due_date__lt=today,
-        ).exclude(status=RoadmapMission.Status.COMPLETED).exists()
+        return self.progress_stats.is_at_risk
 
 
 class ParentStudentLink(TimeStampedModel):
@@ -550,6 +605,10 @@ class Application(TimeStampedModel):
 
     class Meta:
         ordering = ['deadline', 'university__name']
+        indexes = [
+            models.Index(fields=['student', 'status'], name='app_student_status_idx'),
+            models.Index(fields=['-created_at', '-id'], name='app_created_id_idx'),
+        ]
         unique_together = ('student', 'university', 'program')
 
     def __str__(self):
@@ -568,6 +627,18 @@ class ApplicationStatusHistory(models.Model):
 
     def __str__(self):
         return f'{self.application} — {self.status}'
+
+
+def task_priority_rank():
+    """0 = urgent … 3 = low, for ordering tasks by importance."""
+    return models.Case(
+        models.When(priority='urgent', then=models.Value(0)),
+        models.When(priority='high', then=models.Value(1)),
+        models.When(priority='medium', then=models.Value(2)),
+        models.When(priority='low', then=models.Value(3)),
+        default=models.Value(4),
+        output_field=models.IntegerField(),
+    )
 
 
 class Task(TimeStampedModel):
@@ -609,14 +680,26 @@ class Task(TimeStampedModel):
     submitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ['due_date', '-priority']
+        ordering = [
+            'due_date',
+            # Most urgent first; sorting the text column gave urgent, medium, low, high.
+            task_priority_rank().asc(),
+            'id',
+        ]
+        indexes = [
+            models.Index(fields=['student', 'status'], name='task_student_status_idx'),
+            models.Index(fields=['student', 'due_date'], name='task_student_due_idx'),
+            models.Index(fields=['due_date', 'id'], name='task_due_id_idx'),
+        ]
 
     def __str__(self):
         return self.title
 
     @property
     def is_overdue(self):
-        return self.status not in {self.Status.APPROVED} and self.due_date < timezone.localdate()
+        from .progress import OPEN_TASK_STATUSES
+
+        return self.status in OPEN_TASK_STATUSES and self.due_date < timezone.localdate()
 
 
 class RoadmapMission(TimeStampedModel):
@@ -653,6 +736,10 @@ class RoadmapMission(TimeStampedModel):
 
     class Meta:
         ordering = ['level', 'sequence', 'id']
+        indexes = [
+            models.Index(fields=['student', 'status'], name='mission_student_status_idx'),
+            models.Index(fields=['-created_at', '-id'], name='mission_created_id_idx'),
+        ]
 
     def __str__(self):
         return self.title
@@ -711,6 +798,10 @@ class Booking(TimeStampedModel):
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected'
         COMPLETED = 'completed', 'Completed'
+        CANCELLED = 'cancelled', 'Cancelled'
+
+    # Still open: the student can cancel or reschedule these before they start.
+    OPEN_STATUSES = (Status.PENDING, Status.APPROVED)
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='bookings')
     participant = models.ForeignKey(
@@ -728,9 +819,19 @@ class Booking(TimeStampedModel):
 
     class Meta:
         ordering = ['starts_at']
+        indexes = [models.Index(fields=['starts_at', 'id'], name='booking_starts_id_idx')]
 
     def __str__(self):
         return f'{self.student} — {self.topic}'
+
+    @property
+    def has_started(self):
+        return self.starts_at <= timezone.now()
+
+    @property
+    def is_expired(self):
+        """A request nobody confirmed before its start time; derived, never stored."""
+        return self.status == self.Status.PENDING and self.has_started
 
 
 class StudentMessage(TimeStampedModel):
@@ -772,11 +873,19 @@ class MessageChannel(TimeStampedModel):
     )
     direct_key = models.CharField(max_length=80, unique=True, null=True, blank=True)
     is_public = models.BooleanField(default=False)
+    # Set only by a product admin: a public channel open to every school.
+    is_global = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
     last_message_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-last_message_at', '-updated_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(is_global=False) | models.Q(school__isnull=True, is_public=True),
+                name='global_channel_is_public_without_school',
+            ),
+        ]
         indexes = [
             models.Index(fields=['kind', 'school', 'is_public'], name='msg_channel_discovery_idx'),
             models.Index(fields=['last_message_at'], name='msg_channel_recent_idx'),
@@ -1035,6 +1144,14 @@ class CounselorRoadmap(TimeStampedModel):
 
     class Meta:
         ordering = ['status', '-created_at', '-id']
+        constraints = [
+            # Enforced here, not only in the view, so concurrent creates cannot both win.
+            models.UniqueConstraint(
+                fields=['counselor', 'kind'],
+                condition=models.Q(status='active'),
+                name='unique_active_counselor_roadmap_kind',
+            ),
+        ]
 
     @property
     def progress_percent(self):
@@ -1042,7 +1159,9 @@ class CounselorRoadmap(TimeStampedModel):
         total = required.count()
         if not total:
             return 100
-        return round(required.filter(status=CounselorRoadmapMission.Status.APPROVED).count() / total * 100)
+        from .progress import percent
+
+        return percent(required.filter(status=CounselorRoadmapMission.Status.APPROVED).count(), total)
 
     def __str__(self):
         return f'{self.counselor}: {self.title}'
@@ -1129,6 +1248,7 @@ class SupportTicket(TimeStampedModel):
         indexes = [
             models.Index(fields=['requester', '-updated_at'], name='support_requester_updated_idx'),
             models.Index(fields=['status', '-updated_at'], name='support_status_updated_idx'),
+            models.Index(fields=['-updated_at', '-id'], name='support_updated_id_idx'),
         ]
 
     @property
@@ -1195,6 +1315,10 @@ class Document(TimeStampedModel):
 
     class Meta:
         ordering = ['student__user__first_name', 'document_type']
+        indexes = [
+            models.Index(fields=['student', 'status'], name='document_student_status_idx'),
+            models.Index(fields=['-created_at', '-id'], name='document_created_id_idx'),
+        ]
 
     def __str__(self):
         return self.title
@@ -1231,6 +1355,7 @@ class Achievement(TimeStampedModel):
 
     class Meta:
         ordering = ['-date', 'title']
+        indexes = [models.Index(fields=['-created_at', '-id'], name='achievement_created_id_idx')]
 
     def __str__(self):
         return self.title
@@ -1251,6 +1376,7 @@ class Research(TimeStampedModel):
 
     class Meta:
         ordering = ['-start_date', 'title']
+        indexes = [models.Index(fields=['-created_at', '-id'], name='research_created_id_idx')]
 
     def __str__(self):
         return self.title
@@ -1270,6 +1396,7 @@ class Project(TimeStampedModel):
 
     class Meta:
         ordering = ['-date', 'title']
+        indexes = [models.Index(fields=['-created_at', '-id'], name='project_created_id_idx')]
 
     def __str__(self):
         return self.title
@@ -1289,6 +1416,7 @@ class Internship(TimeStampedModel):
 
     class Meta:
         ordering = ['-start_date', 'organization']
+        indexes = [models.Index(fields=['-created_at', '-id'], name='internship_created_id_idx')]
 
     def __str__(self):
         return f'{self.position} — {self.organization}'
@@ -1314,11 +1442,21 @@ class Activity(TimeStampedModel):
     weeks_per_year = models.PositiveSmallIntegerField(null=True, blank=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
+    proof_file = models.FileField(
+        upload_to=student_evidence_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    proof_file_name = models.CharField(max_length=255, blank=True)
+    proof_file_content_type = models.CharField(max_length=120, blank=True)
+    proof_file_size = models.PositiveBigIntegerField(default=0)
     google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-start_date', 'name']
+        indexes = [models.Index(fields=['-created_at', '-id'], name='activity_created_id_idx')]
 
     def __str__(self):
         return self.name
@@ -1351,6 +1489,7 @@ class Honor(TimeStampedModel):
 
     class Meta:
         ordering = ['-award_date', 'title']
+        indexes = [models.Index(fields=['-created_at', '-id'], name='honor_created_id_idx')]
 
     def __str__(self):
         return self.title
@@ -1384,9 +1523,26 @@ class RecommendationLetter(TimeStampedModel):
 
     class Meta:
         ordering = ['deadline', 'recommender_name']
+        indexes = [models.Index(fields=['-created_at', '-id'], name='recommendation_created_id_idx')]
 
     def __str__(self):
         return f'{self.student} — {self.recommender_name}'
+
+
+class EssayFolder(TimeStampedModel):
+    """A student's own folder in the Essay Lab library (at most one level of nesting)."""
+
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='essay_folders')
+    name = models.CharField(max_length=120)
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['position', 'id']
+        indexes = [models.Index(fields=['student', 'parent', 'position'], name='essay_folder_order_idx')]
+
+    def __str__(self):
+        return self.name
 
 
 class Essay(TimeStampedModel):
@@ -1396,21 +1552,128 @@ class Essay(TimeStampedModel):
         REVIEWING = 'reviewing', 'Reviewing'
         APPROVED = 'approved', 'Approved'
 
+    class EssayType(models.TextChoices):
+        PERSONAL_STATEMENT = 'personal_statement', 'Personal statement'
+        SUPPLEMENT = 'supplement', 'Supplement'
+        SCHOLARSHIP = 'scholarship', 'Scholarship'
+        FREE_WRITING = 'free_writing', 'Free writing'
+
+    class PageSize(models.TextChoices):
+        A4 = 'a4', 'A4'
+        LETTER = 'letter', 'US Letter'
+
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='essays')
     application = models.ForeignKey(Application, on_delete=models.SET_NULL, null=True, blank=True, related_name='essays')
     title = models.CharField(max_length=220)
-    prompt = models.TextField()
+    prompt = models.TextField(blank=True)
     content = models.TextField(blank=True)
     version = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=40, choices=Status.choices, default=Status.DRAFT)
     counselor_comment = models.TextField(blank=True)
     google_docs_url = models.URLField(blank=True)
+    # Essay Lab. The student writes in ordered tabs (EssayTab), each with its own
+    # rich ProseMirror doc. `content` is the plain text of all tabs, derived in
+    # the same transaction as every tab write, for counselors, search and the
+    # legacy API. `word_count`/`preview` are derived from the tabs too.
+    essay_type = models.CharField(max_length=32, choices=EssayType.choices, default=EssayType.PERSONAL_STATEMENT)
+    folder = models.ForeignKey(EssayFolder, on_delete=models.SET_NULL, null=True, blank=True, related_name='essays')
+    university_name = models.CharField(max_length=220, blank=True)
+    word_limit = models.PositiveIntegerField(null=True, blank=True)
+    word_count = models.PositiveIntegerField(default=0)
+    preview = models.CharField(max_length=200, blank=True)
+    last_edited_at = models.DateTimeField(null=True, blank=True)
+    trashed_at = models.DateTimeField(null=True, blank=True)
+    page_size = models.CharField(max_length=10, choices=PageSize.choices, default=PageSize.A4)
+    # Private to the student until they share it; only shared essays are
+    # visible to anyone else (counselor, school, admins, parents).
+    shared_with_counselor = models.BooleanField(default=False)
+    shared_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['student__user__first_name', 'status', '-updated_at']
+        indexes = [
+            models.Index(fields=['student', 'trashed_at', '-updated_at'], name='essay_lab_library_idx'),
+            models.Index(fields=['student', 'shared_with_counselor'], name='essay_student_shared_idx'),
+            models.Index(fields=['-created_at', '-id'], name='essay_created_id_idx'),
+        ]
 
     def __str__(self):
         return self.title
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._remember_text()
+        return instance
+
+    def _remember_text(self):
+        loaded = self.__dict__
+        self._loaded_text = (
+            (loaded['content'], loaded['word_count'], loaded['preview'])
+            if {'content', 'word_count', 'preview'} <= loaded.keys() else None
+        )
+
+    def _needs_text_stats(self, update_fields):
+        """True when `content` was written as plain text without its derived columns.
+
+        With several tabs, `content` carries the tab titles, so recounting it would
+        be wrong: only a new row (no tabs yet) or an actual plain-text edit that left
+        word_count/preview alone is recounted. Tab writes set all three together.
+        """
+        if update_fields is not None:
+            return 'content' in update_fields and 'word_count' not in update_fields
+        if self._state.adding:
+            return True
+        loaded = getattr(self, '_loaded_text', None)
+        if loaded is None:  # loaded without its text: the stored columns stand
+            return False
+        content, word_count, preview = loaded
+        return self.content != content and (self.word_count, self.preview) == (word_count, preview)
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        if self._needs_text_stats(update_fields):
+            from .essay_lab.doc import count_words, make_preview
+
+            self.word_count = count_words(self.content)
+            self.preview = make_preview(self.content)
+            if update_fields is not None:
+                kwargs['update_fields'] = {*update_fields, 'word_count', 'preview'}
+        super().save(*args, **kwargs)
+        self._remember_text()
+
+
+class EssayTab(TimeStampedModel):
+    """One tab of an Essay Lab document. Tabs nest one level (a tab may have sub-tabs).
+
+    `doc` is the tab's ProseMirror JSON (`null` = rebuild from `content`, e.g.
+    after a legacy plain-text edit). `save_seq` is the tab's optimistic
+    concurrency counter for autosave.
+    """
+
+    essay = models.ForeignKey(Essay, on_delete=models.CASCADE, related_name='tabs')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    title = models.CharField(max_length=100)
+    position = models.PositiveIntegerField(default=0)
+    doc = models.JSONField(null=True, blank=True)
+    content = models.TextField(blank=True)
+    word_count = models.PositiveIntegerField(default=0)
+    char_count = models.PositiveIntegerField(default=0)
+    char_count_no_spaces = models.PositiveIntegerField(default=0)
+    save_seq = models.PositiveIntegerField(default=0)
+    last_client_save_id = models.CharField(max_length=64, blank=True)
+    last_cursor = models.PositiveIntegerField(null=True, blank=True)
+    last_edited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+        indexes = [models.Index(fields=['essay', 'parent', 'position'], name='essay_tab_order_idx')]
+        constraints = [
+            models.CheckConstraint(condition=~models.Q(parent=models.F('id')), name='essay_tab_not_own_parent'),
+        ]
+
+    def __str__(self):
+        return f'{self.essay_id}: {self.title}'
 
 
 class EssayRevision(models.Model):
@@ -1431,6 +1694,54 @@ class EssayRevision(models.Model):
         return f'{self.essay.title} v{self.version}'
 
 
+class EssayCheckpoint(models.Model):
+    """Student-only history snapshot. Separate from EssayRevision so counselor versions don't move."""
+
+    class Reason(models.TextChoices):
+        AUTO = 'auto', 'Automatic'
+        DEPTH_CHECK = 'depth_check', 'Depth check'
+        RESTORE = 'restore', 'Before restore'
+        MANUAL = 'manual', 'Manual'
+
+    essay = models.ForeignKey(Essay, on_delete=models.CASCADE, related_name='checkpoints')
+    tab = models.ForeignKey(EssayTab, on_delete=models.CASCADE, related_name='checkpoints')
+    doc = models.JSONField()
+    content = models.TextField(blank=True)
+    word_count = models.PositiveIntegerField(default=0)
+    reason = models.CharField(max_length=20, choices=Reason.choices, default=Reason.AUTO)
+    label = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['essay', '-created_at'], name='essay_checkpoint_recent_idx'),
+            models.Index(fields=['tab', '-created_at'], name='essay_checkpoint_tab_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.essay_id} {self.reason} {self.created_at:%Y-%m-%d %H:%M}'
+
+
+class EssayDepthCheck(models.Model):
+    essay = models.ForeignKey(Essay, on_delete=models.CASCADE, related_name='depth_checks')
+    tab = models.ForeignKey(EssayTab, on_delete=models.CASCADE, related_name='depth_checks')
+    save_seq = models.PositiveIntegerField()
+    result = models.JSONField(default=dict)
+    model = models.CharField(max_length=120)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['essay', '-created_at'], name='essay_depth_check_recent_idx'),
+            models.Index(fields=['tab', '-created_at'], name='essay_depth_check_tab_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.essay_id} depth check @{self.save_seq}'
+
+
 class MeetingNote(TimeStampedModel):
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='meeting_notes')
     counselor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='meeting_notes')
@@ -1441,6 +1752,7 @@ class MeetingNote(TimeStampedModel):
 
     class Meta:
         ordering = ['-meeting_date']
+        indexes = [models.Index(fields=['-created_at', '-id'], name='meeting_note_created_id_idx')]
 
     def __str__(self):
         return self.title
@@ -1452,14 +1764,29 @@ class Notification(TimeStampedModel):
         EMAIL = 'email', 'Email'
         TELEGRAM = 'telegram', 'Telegram'
 
+    class Kind(models.TextChoices):
+        # What the notice is about, so a client can open the matching page.
+        GENERAL = 'general', 'General'
+        TASK = 'task', 'Task'
+        DOCUMENT = 'document', 'Document'
+        DEADLINE = 'deadline', 'Deadline'
+        ESSAY = 'essay', 'Essay'
+        MEETING = 'meeting', 'Meeting'
+        MESSAGE = 'message', 'Message'
+
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='notifications')
     title = models.CharField(max_length=220)
     message = models.TextField()
     channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.SYSTEM)
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.GENERAL)
+    # The essay or chat a notice points at; kept as a bare id so the notice
+    # outlives the object it names.
+    target_id = models.PositiveBigIntegerField(null=True, blank=True)
     is_read = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['student', 'is_read', '-created_at'], name='notif_student_read_idx')]
 
     def __str__(self):
         return self.title
@@ -1473,6 +1800,10 @@ class ActivityLog(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['student', '-created_at'], name='activity_student_created_idx'),
+            models.Index(fields=['actor', '-created_at'], name='activity_actor_created_idx'),
+        ]
 
     def __str__(self):
         return self.action
@@ -1507,6 +1838,12 @@ class ChallengeAttempt(TimeStampedModel):
     class Meta:
         ordering = ['-completed_at', '-id']
         indexes = [models.Index(fields=['student', 'challenge', '-completed_at'])]
+        constraints = [
+            # A client retrying a save sends the same completed_at, so a retry
+            # whose first request did land cannot create a second attempt.
+            models.UniqueConstraint(fields=['student', 'challenge', 'completed_at'],
+                                    name='unique_challenge_attempt_completion'),
+        ]
 
     def __str__(self):
         return f'{self.student}: {self.challenge} ({self.completed_at:%Y-%m-%d})'

@@ -16,8 +16,9 @@ with the face centred — anything else gets cropped at the edges by
 
 Requirements:
 
-- Square (1:1). 480×480 or larger, so the 168px slot stays sharp on a 2x screen.
-- JPEG or WebP, under ~150 KB each. These load on the public landing page.
+- Square (1:1), 480×480 or larger. Then run `node scripts/optimize-images.mjs`
+  from `frontend/`: it resizes to 336×336 (the 168px slot at 2x) and CI fails
+  above 32 KB per portrait (`tests/imageBudget.test.mjs`).
 - The person's own photograph, used with their agreement. Never a stock or
   generated portrait — this band is a factual claim about who builds Naseeb Edu.
 

@@ -208,3 +208,49 @@ class AdminControlTests(APITestCase):
         response = self.client.get(f'/api/students/{profile.id}/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(ProductAuditEvent.objects.filter(action='student_360.viewed', target_id=str(profile.id)).exists())
+
+    def test_cancelled_roadmap_rejects_mission_submission_and_review(self):
+        """A cancelled roadmap must not accept missions or flip to completed."""
+        counselor = self.create_counselor(1)
+        roadmap = CounselorRoadmap.objects.create(
+            counselor=counselor, school=self.school, title='Cancelled', kind='school_management',
+            assigned_by=self.admin, status=CounselorRoadmap.Status.CANCELLED,
+        )
+        mission = CounselorRoadmapMission.objects.create(roadmap=roadmap, title='Only mission', sequence=1)
+        self.client.force_authenticate(counselor)
+        submitted = self.client.post(f'/api/counselor-roadmaps/{roadmap.id}/submit-mission/', {
+            'mission': mission.id, 'counselor_note': 'Done.',
+        }, format='json')
+        self.assertEqual(submitted.status_code, status.HTTP_409_CONFLICT)
+
+        mission.status = CounselorRoadmapMission.Status.SUBMITTED
+        mission.save()
+        self.client.force_authenticate(self.admin)
+        reviewed = self.client.post(f'/api/counselor-roadmaps/{roadmap.id}/review-mission/', {
+            'mission': mission.id, 'decision': 'approve',
+        }, format='json')
+        self.assertEqual(reviewed.status_code, status.HTTP_409_CONFLICT)
+        roadmap.refresh_from_db()
+        self.assertEqual(roadmap.status, CounselorRoadmap.Status.CANCELLED)
+        self.assertEqual(CounselorRoadmapMission.objects.get(pk=mission.pk).status, CounselorRoadmapMission.Status.SUBMITTED)
+
+    def test_database_rejects_a_second_active_roadmap_of_the_same_kind(self):
+        """One active roadmap per counselor and kind, enforced by the database."""
+        from django.db import IntegrityError, transaction
+        counselor = self.create_counselor(1)
+        CounselorRoadmap.objects.create(
+            counselor=counselor, school=self.school, title='A', kind='school_management', assigned_by=self.admin,
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CounselorRoadmap.objects.create(
+                counselor=counselor, school=self.school, title='B', kind='school_management', assigned_by=self.admin,
+            )
+        CounselorRoadmap.objects.create(
+            counselor=counselor, school=self.school, title='C', kind='school_management',
+            assigned_by=self.admin, status=CounselorRoadmap.Status.CANCELLED,
+        )
+        self.client.force_authenticate(counselor)
+        response = self.client.post('/api/counselor-roadmaps/', {
+            'kind': 'school_management', 'title': 'Dup', 'missions': ['One'],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)

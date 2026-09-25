@@ -3608,7 +3608,7 @@ export const REC_WEIGHTS = {
 // signal is treated as absent rather than weak.
 export const REC_MIN_SUBJECT_WEIGHT = 0.15;   // of an entry's subject weights, must be covered
 
-export function recKeys(o){ var k = [], x; for (x in o) if (o.hasOwnProperty(x)) k.push(x); return k; }
+export function recKeys(o){ var k = [], x; for (x in o) if (Object.prototype.hasOwnProperty.call(o, x)) k.push(x); return k; }
 
 /** Rescale a profile to 0..1 across the student's OWN range.
  *  Returns null when the student has no spread at all (liked everything the
@@ -3773,7 +3773,7 @@ export function recRankFamilies(families, signals, limit){
  *  less than one scoring 0.6 at weight 0.5, and the explanation must say so. */
 export function recDrivers(row, kind){
   var w = REC_WEIGHTS[kind], out = [], k;
-  for (k in row.parts) if (row.parts.hasOwnProperty(k))
+  for (k in row.parts) if (Object.prototype.hasOwnProperty.call(row.parts, k))
     out.push({ part: k, contribution: row.parts[k] * w[k], value: row.parts[k] });
   out.sort(function(a, b){ return b.contribution - a.contribution; });
   return out;
@@ -3787,22 +3787,11 @@ export function recConflicts(signals, subjectImplied){
   var a = signals.riasecRel, b = recRelative(subjectImplied || {});
   if (!a || !b) return out;
   var k, gap;
-  for (k in a) if (a.hasOwnProperty(k) && b.hasOwnProperty(k)){
+  for (k in a) if (Object.prototype.hasOwnProperty.call(a, k) && Object.prototype.hasOwnProperty.call(b, k)){
     gap = a[k] - b[k];
     if (gap >= 0.5) out.push({ scale: k, side: 'interest', gap: gap });
     else if (gap <= -0.5) out.push({ scale: k, side: 'marks', gap: -gap });
   }
   out.sort(function(x, y){ return y.gap - x.gap; });
   return out;
-}
-
-if (typeof module !== 'undefined' && module.exports){
-  module.exports = {
-    REC_WEIGHTS: REC_WEIGHTS, recRelative: recRelative, recOverlap: recOverlap,
-    recSubjectFit: recSubjectFit, recPersonalityTerm: recPersonalityTerm,
-    recScoreEntry: recScoreEntry, recSignals: recSignals, recBand: recBand,
-    REC_BAND_STRONG: REC_BAND_STRONG, REC_BAND_EXPLORE: REC_BAND_EXPLORE,
-    recRank: recRank, recRankFamilies: recRankFamilies,
-    recDrivers: recDrivers, recConflicts: recConflicts
-  };
 }

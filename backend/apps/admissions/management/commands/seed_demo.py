@@ -422,6 +422,8 @@ class Command(BaseCommand):
                     'content': 'Draft is being prepared by the student.',
                     'status': 'needs_revision',
                     'counselor_comment': 'Needs a stronger opening story and clearer impact metrics.',
+                    'shared_with_counselor': True,
+                    'shared_at': timezone.now(),
                 },
             )
 
@@ -439,7 +441,10 @@ class Command(BaseCommand):
             Notification.objects.get_or_create(
                 student=student,
                 title='Deadline alert',
-                defaults={'message': 'Recommendation letter request is late. Follow up today.', 'channel': 'system'},
+                defaults={
+                    'message': 'Recommendation letter request is late. Follow up today.', 'channel': 'system',
+                    'kind': Notification.Kind.TASK,
+                },
             )
 
             RoadmapMission.objects.get_or_create(
@@ -637,11 +642,10 @@ class Command(BaseCommand):
                 'first_name': 'Dilnoza',
                 'last_name': 'Ergasheva',
                 'role': User.Role.PARENT,
-                'school': school,
             },
         )
         parent.role = User.Role.PARENT
-        parent.school = school
+        parent.school = None
         parent.set_password(settings.DEMO_PARENT_PASSWORD)
         parent.save()
         ramazon_profile = StudentProfile.objects.get(user__username='ramazon')

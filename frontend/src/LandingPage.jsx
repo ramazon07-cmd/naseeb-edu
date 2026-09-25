@@ -31,7 +31,15 @@ import HeroParticleNetwork from "./HeroParticleNetwork";
 import MindSection from "./MindSection";
 import useStoryMarquee from "./useStoryMarquee";
 import { deferSvgImages } from "./deferSvgImages";
-import "./landing.css";
+
+// Responsive hero (WebP, 640/960/1448 px). index.html preloads the same set,
+// so keep HERO_WIDTHS, HERO_SIZES and the file names in sync with it.
+const HERO_WIDTHS = [640, 960, 1448];
+const HERO_SIZES = "(max-width: 820px) 100vw, 760px";
+const heroSource = (theme, width) =>
+  `/landing/hero-${theme === "dark" ? "cool" : "light"}-${width}.webp`;
+const heroSrcSet = (theme) =>
+  HERO_WIDTHS.map((width) => `${heroSource(theme, width)} ${width}w`).join(", ");
 
 /* ---------------------------------------------------------------------------
    TEAM — the real founding team. Empty the array and the whole band, plus its
@@ -851,11 +859,9 @@ export default function LandingPage({
             </div>
             <figure className="landing-hero-media">
               <img
-                src={
-                  theme === "dark"
-                    ? "/landing/naseeb-student-application-hero-cool.png"
-                    : "/landing/naseeb-student-application-hero-light.png"
-                }
+                src={heroSource(theme, 1448)}
+                srcSet={heroSrcSet(theme)}
+                sizes={HERO_SIZES}
                 alt={t(
                   "A student managing a university application in the Naseeb Edu platform.",
                 )}

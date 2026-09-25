@@ -136,3 +136,31 @@ def award_approval_xp(*, student, source_type, source_id, amount, reason, awarde
         locked_student.xp_total += amount
         locked_student.save(update_fields=['xp_total', 'updated_at'])
     return xp_transaction, created
+
+
+def student_profile_defaults(school):
+    """The tenant fields of a new profile: the school, and its name as displayed."""
+    fallback = StudentProfile._meta.get_field('school_name').default
+    return {'school': school, 'school_name': school.name if school else fallback}
+
+
+def ensure_student_profile(user, *, assigned_counselor=None, actor=None):
+    """Single entry point that guarantees every student account has a profile.
+
+    Used by the Django admin, /api/users/accounts/ and quick-create so that
+    onboarding, challenges and dashboards never meet a profile-less student.
+    An account whose school changed is moved with ``move_student`` so the
+    old school loses access.
+    """
+    if user.role != user.Role.STUDENT or user.is_superuser:
+        return None
+    school = user.school if user.school_id else None
+    profile, created = StudentProfile.objects.get_or_create(
+        user=user,
+        defaults={**student_profile_defaults(school), 'assigned_counselor': assigned_counselor},
+    )
+    if not created and school and profile.school_id != school.id:
+        from .tenancy import move_student
+
+        move_student(profile, school, actor)
+    return profile

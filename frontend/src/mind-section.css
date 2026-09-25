@@ -15,57 +15,264 @@
   --mind-ink: #f7f7f7;
   --mind-muted: #b5c3ce;
   --mind-accent: #9fc6e2;
-  --mind-line: rgba(181, 199, 211, .16);
+  --mind-line: rgba(181, 199, 211, 0.16);
 }
-.landing-mind-panel { display: grid; grid-template-columns: 1.15fr 1fr; overflow: hidden; border: 1px solid var(--mind-line); border-radius: 24px; background: var(--mind-surface); color: var(--mind-ink); }
-.landing-mind-copy { padding: clamp(28px, 4vw, 56px); align-self: center; }
-.landing-mind-brand { display: flex; align-items: center; gap: 12px; font-size: 21px; letter-spacing: -.04em; margin: 0 0 32px; }
-.landing-mind-brand b { color: var(--mind-accent); }
-.landing-mind-brand b { font-weight: 600; }
-.landing-mind h2 { max-width: 560px; font-size: clamp(28px, 3vw, 43px); line-height: 1.16; letter-spacing: -.045em; font-weight: 500; margin: 0; text-wrap: balance; }
-.landing-mind h2 span { display: block; margin-top: 5px; color: var(--mind-accent); }
-.landing-mind-description { max-width: 460px; color: var(--mind-muted); font-size: 14px; line-height: 1.85; margin: 24px 0; }
-.landing-mind .landing-mind-cta { display: inline-flex; align-items: center; justify-content: center; gap: 24px; min-height: 52px; padding: 15px 22px; border-radius: 10px; background: #403526; color: #fffaf1; font-size: 13px; font-weight: 600; text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
-[data-theme='dark'] .landing-mind .landing-mind-cta { background: #9fc6e2; color: #10202d; }
-.landing-mind-cta:hover { transform: translateY(-3px); box-shadow: 0 8px 20px #0002; }
-.landing-mind-cta:focus-visible { outline: 2px solid var(--mind-accent); outline-offset: 5px; }
-.landing-mind-art { margin: 0; min-width: 0; position: relative; }
-.landing-mind-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 60% center; }
+
+.landing-mind-panel {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  overflow: hidden;
+  border: 1px solid var(--mind-line);
+  border-radius: var(--radius-4xl);
+  background: var(--mind-surface);
+  color: var(--mind-ink);
+}
+
+.landing-mind-copy {
+  padding: clamp(28px, 4vw, 56px);
+  align-self: center;
+}
+
+.landing-mind-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 1.3125rem;
+  letter-spacing: -0.04em;
+  margin: 0 0 32px;
+}
+
+.landing-mind-brand b {
+  color: var(--mind-accent);
+}
+
+.landing-mind-brand b {
+  font-weight: 600;
+}
+
+.landing-mind h2 {
+  max-width: 560px;
+  font-size: clamp(1.75rem, 3vw, 2.6875rem);
+  line-height: 1.16;
+  letter-spacing: -0.045em;
+  font-weight: 500;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.landing-mind h2 span {
+  display: block;
+  margin-top: 5px;
+  color: var(--mind-accent);
+}
+
+.landing-mind-description {
+  max-width: 460px;
+  color: var(--mind-muted);
+  font-size: var(--text-md);
+  line-height: 1.85;
+  margin: 24px 0;
+}
+
+.landing-mind .landing-mind-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  min-height: 52px;
+  padding: 15px 22px;
+  border-radius: var(--radius-base);
+  background: #403526;
+  color: #fffaf1;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+[data-theme='dark'] .landing-mind .landing-mind-cta {
+  background: #9fc6e2;
+  color: #10202d;
+}
+
+.landing-mind-cta:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px #0002;
+}
+
+.landing-mind-cta:focus-visible {
+  outline: 2px solid var(--mind-accent);
+  outline-offset: 5px;
+}
+
+.landing-mind-art {
+  margin: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.landing-mind-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 60% center;
+}
 /* opacity, not display:none: a hidden lazy image is never fetched, so the
    first switch to dark would show an empty frame while it downloads. */
 /* Same 1536x1024 frame as the light image, head in the same place, so the two
    share one object-position and the head does not jump when the theme flips. */
-.landing-mind-art .landing-mind-art-dark { position: absolute; inset: 0; opacity: 0; transition: opacity .3s ease; }
-[data-theme='dark'] .landing-mind-art .landing-mind-art-dark { opacity: 1; }
-.landing-mind-facts { grid-column: 1 / -1; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 26px 40px; border-top: 1px solid var(--mind-line); }
-.landing-mind-facts > div { display: flex; align-items: center; justify-content: center; gap: 18px; }
-.landing-mind-facts > div + div { border-left: 1px solid var(--mind-line); }
-.landing-mind-facts dt { font-size: 32px; line-height: 1.1; font-weight: 500; letter-spacing: -.04em; }
-.landing-mind-facts dt span { color: var(--mind-accent); }
-.landing-mind-facts dd { margin: 0; max-width: 110px; font-size: 11px; color: var(--mind-muted); line-height: 1.6; }
-@media (prefers-reduced-motion: no-preference) { html:has(.landing-page) { scroll-behavior: smooth; } }
-@media (max-width: 1000px) {
-  .landing-mind { scroll-margin-top: 145px; }
-  .landing-mind-panel { grid-template-columns: 1.2fr 1fr; }
-  .landing-mind-copy { padding: 28px; }
-  .landing-mind-facts { padding: 24px; }
-  .landing-mind-facts > div { gap: 12px; }
+.landing-mind-art .landing-mind-art-dark {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
-@media (max-width: 640px) {
-  .landing-mind .lp-shell { width: calc(100% - 32px); }
-  .landing-mind-panel { grid-template-columns: 1fr; border-radius: 20px; }
-  .landing-mind-copy { padding: 28px 24px 32px; }
-  .landing-mind-brand { font-size: 20px; margin-bottom: 24px; }
-  .landing-mind h2 { font-size: clamp(27px, 6.8vw, 38px); }
-  .landing-mind-description { font-size: 13px; margin-block: 20px; }
-  .landing-mind-art { aspect-ratio: 1.5; }
-  .landing-mind-art img { object-position: center; }
-  .landing-mind-facts { padding: 22px 12px; }
-  .landing-mind-facts > div { flex-direction: column; text-align: center; gap: 8px; padding-inline: 5px; }
-  .landing-mind-facts dt { font-size: 24px; }
-  .landing-mind-facts dd { font-size: 9px; }
-}
-@media (prefers-reduced-motion: reduce) { .landing-mind-cta, .landing-mind-art-dark { transition: none; } }
 
-.landing-mind-logo { display: block; width: 32px; height: 48px; object-fit: contain; flex-shrink: 0; }
-[data-theme='dark'] .landing-mind-logo { filter: brightness(0) invert(1); }
+[data-theme='dark'] .landing-mind-art .landing-mind-art-dark {
+  opacity: 1;
+}
+
+.landing-mind-facts {
+  grid-column: 1 / -1;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 26px 40px;
+  border-top: 1px solid var(--mind-line);
+}
+
+.landing-mind-facts > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.landing-mind-facts > div + div {
+  border-left: 1px solid var(--mind-line);
+}
+
+.landing-mind-facts dt {
+  font-size: var(--text-3xl);
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+.landing-mind-facts dt span {
+  color: var(--mind-accent);
+}
+
+.landing-mind-facts dd {
+  margin: 0;
+  max-width: 110px;
+  font-size: var(--text-xs);
+  color: var(--mind-muted);
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.landing-page) {
+    scroll-behavior: smooth;
+  }
+}
+
+@media (max-width: 1100px) {
+  .landing-mind {
+    scroll-margin-top: 145px;
+  }
+
+  .landing-mind-panel {
+    grid-template-columns: 1.2fr 1fr;
+  }
+
+  .landing-mind-copy {
+    padding: 28px;
+  }
+
+  .landing-mind-facts {
+    padding: 24px;
+  }
+
+  .landing-mind-facts > div {
+    gap: var(--space-3);
+  }
+}
+
+@media (max-width: 560px) {
+  .landing-mind .lp-shell {
+    width: calc(100% - 32px);
+  }
+
+  .landing-mind-panel {
+    grid-template-columns: 1fr;
+    border-radius: var(--radius-3xl);
+  }
+
+  .landing-mind-copy {
+    padding: 28px 24px 32px;
+  }
+
+  .landing-mind-brand {
+    font-size: var(--text-xl);
+    margin-bottom: 24px;
+  }
+
+  .landing-mind h2 {
+    font-size: clamp(1.6875rem, 6.8vw, 2.375rem);
+  }
+
+  .landing-mind-description {
+    font-size: var(--text-sm);
+    margin-block: 20px;
+  }
+
+  .landing-mind-art {
+    aspect-ratio: 1.5;
+  }
+
+  .landing-mind-art img {
+    object-position: center;
+  }
+
+  .landing-mind-facts {
+    padding: 22px 12px;
+  }
+
+  .landing-mind-facts > div {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--space-2);
+    padding-inline: 5px;
+  }
+
+  .landing-mind-facts dt {
+    font-size: var(--text-2xl);
+  }
+
+  .landing-mind-facts dd {
+    font-size: var(--text-xs);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-mind-cta,
+  .landing-mind-art-dark {
+    transition: none;
+  }
+}
+
+.landing-mind-logo {
+  display: block;
+  width: 32px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .landing-mind-logo {
+  filter: brightness(0) invert(1);
+}

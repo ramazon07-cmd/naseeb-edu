@@ -6,14 +6,31 @@
     <meta id="theme-color" name="theme-color" content="#f7f7f7" />
     <meta name="description" content="Naseeb Edu o‘quvchilar, oilalar va maktablar uchun universitetga ariza jarayonini boshqaradigan ta’lim maslahat platformasi." />
     <link rel="canonical" href="https://naseebedu.com/" />
+    <link rel="alternate" hreflang="uz" href="https://naseebedu.com/?lang=uz" />
+    <link rel="alternate" hreflang="ru" href="https://naseebedu.com/?lang=ru" />
+    <link rel="alternate" hreflang="en" href="https://naseebedu.com/?lang=en" />
+    <link rel="alternate" hreflang="x-default" href="https://naseebedu.com/" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Naseeb Edu" />
+    <meta property="og:url" content="https://naseebedu.com/" />
+    <meta property="og:locale" content="uz_UZ" />
+    <meta property="og:locale:alternate" content="ru_RU" />
+    <meta property="og:locale:alternate" content="en_GB" />
     <meta property="og:title" content="Naseeb Edu - Global ta’lim uchun aniq yo‘l" />
     <meta property="og:description" content="Roadmap, universitet qidiruvi, esse, hujjatlar va counselor hamkorligi bitta ishonchli platformada." />
-    <meta property="og:image" content="/landing/naseeb-student-application-hero.jpg" />
+    <meta property="og:image" content="https://naseebedu.com/landing/naseeb-student-application-hero.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="900" />
+    <meta property="og:image:alt" content="Naseeb Edu" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Naseeb Edu - Global ta’lim uchun aniq yo‘l" />
+    <meta name="twitter:description" content="Roadmap, universitet qidiruvi, esse, hujjatlar va counselor hamkorligi bitta ishonchli platformada." />
+    <meta name="twitter:image" content="https://naseebedu.com/landing/naseeb-student-application-hero.jpg" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/montserrat-latin.woff2" crossorigin />
-    <link rel="preload" as="image" data-theme-hero fetchpriority="high" />
-    <link rel="icon" data-theme-icon href="/brand/naseeb-gold-shield.png" />
+    <link rel="preload" as="image" type="image/webp" data-theme-hero fetchpriority="high" imagesizes="(max-width: 820px) 100vw, 760px" />
+    <link rel="icon" type="image/png" sizes="32x32" data-theme-icon href="/brand/favicon-light-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png" />
     <title>Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi</title>
     <style>
       html { background: #f7f7f7; color-scheme: light; }
@@ -47,11 +64,10 @@
       (() => {
         try {
           const supportedLanguages = ['uz', 'ru', 'en']
+          const urlLanguage = new URLSearchParams(location.search).get('lang')
           const storedLanguage = localStorage.getItem('naseeb-edu-language-v1')
           const browserLanguage = navigator.language?.split('-')[0]
-          document.documentElement.lang = supportedLanguages.includes(storedLanguage)
-            ? storedLanguage
-            : supportedLanguages.includes(browserLanguage) ? browserLanguage : 'en'
+          document.documentElement.lang = [urlLanguage, storedLanguage, browserLanguage].find((value) => supportedLanguages.includes(value)) || 'en'
           const saved = localStorage.getItem('naseeb-edu-theme')
           const theme = saved === 'light' || saved === 'dark'
             ? saved
@@ -60,14 +76,36 @@
           document.documentElement.style.colorScheme = theme
           document.getElementById('theme-color').content = theme === 'dark' ? '#10202d' : '#f7f7f7'
           const favicon = document.querySelector('link[data-theme-icon]')
-          if (favicon) favicon.href = theme === 'dark' ? '/brand/naseeb-midnight-shield.svg' : '/brand/naseeb-gold-shield.png'
+          if (favicon) favicon.href = theme === 'dark' ? '/brand/favicon-dark-32.png' : '/brand/favicon-light-32.png'
         } catch {
           document.documentElement.dataset.theme = 'light'
           document.documentElement.style.colorScheme = 'light'
         }
-        // Match the rendered hero, including the storage-disabled fallback.
+        // The hero is only preloaded for visitors who will see the landing
+        // page: not for a stored session (the workspace opens) or #/login.
+        let signedIn = false
+        try {
+          signedIn = ['naseeb-access-token', 'naseeb-refresh-token', 'admitflow-access-token', 'admitflow-refresh-token']
+            .some((key) => localStorage.getItem(key))
+        } catch { /* storage disabled: treat as a visitor */ }
         const hero = document.querySelector('link[data-theme-hero]')
-        if (hero) hero.href = document.documentElement.dataset.theme === 'dark' ? '/landing/naseeb-student-application-hero-cool.png' : '/landing/naseeb-student-application-hero-light.png'
+        if (hero && (signedIn || location.hash === '#/login')) hero.remove()
+        else if (hero) {
+          // Match the rendered hero, including the storage-disabled fallback.
+          const variant = document.documentElement.dataset.theme === 'dark' ? 'cool' : 'light'
+          hero.setAttribute('imagesrcset', [640, 960, 1448].map((w) => '/landing/hero-' + variant + '-' + w + '.webp ' + w + 'w').join(', '))
+          hero.href = '/landing/hero-' + variant + '-1448.webp'
+        }
+        // The Latin subset is preloaded statically; Russian also needs Cyrillic.
+        if (document.documentElement.lang === 'ru') {
+          const font = document.createElement('link')
+          font.rel = 'preload'
+          font.as = 'font'
+          font.type = 'font/woff2'
+          font.href = '/fonts/montserrat-cyrillic.woff2'
+          font.crossOrigin = ''
+          document.head.appendChild(font)
+        }
       })()
     </script>
   </head>

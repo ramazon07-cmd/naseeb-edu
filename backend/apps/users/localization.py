@@ -21,6 +21,26 @@ MESSAGES = {
         'ru': 'Измените временный пароль, прежде чем продолжить.',
         'en': 'Change your temporary password before continuing.',
     },
+    'workspace_read_only': {
+        'uz': 'Ish maydoni faqat o‘qish rejimida. Obunani yangilash uchun administratorga murojaat qiling.',
+        'ru': 'Рабочее пространство доступно только для чтения. Обратитесь к администратору, чтобы продлить подписку.',
+        'en': 'This workspace is read-only. Contact an administrator to renew the subscription.',
+    },
+    'staff_tier_forbidden': {
+        'uz': 'Xodim darajangiz bu amalga ruxsat bermaydi.',
+        'ru': 'Ваш уровень доступа сотрудника не позволяет выполнить это действие.',
+        'en': 'Your staff access level does not allow this action.',
+    },
+    'feature_not_in_plan': {
+        'uz': 'Bu imkoniyat ish maydoningiz tarifiga kiritilmagan.',
+        'ru': 'Эта функция не входит в тариф вашего рабочего пространства.',
+        'en': 'This feature is not included in your workspace plan.',
+    },
+    'school_inactive': {
+        'uz': 'Maktabingiz hisobi faolsizlantirilgan. Administratorga murojaat qiling.',
+        'ru': 'Учётная запись вашей школы деактивирована. Обратитесь к администратору.',
+        'en': 'Your school’s workspace has been deactivated. Contact an administrator.',
+    },
     'session_revoked': {
         'uz': 'Sessiya bekor qilingan. Qayta kiring.',
         'ru': 'Сессия отозвана. Войдите снова.',

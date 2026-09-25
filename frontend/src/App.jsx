@@ -1,165 +1,79 @@
-import { cleanScreenTimeQueue } from './screenTimeQueue';
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  Activity, AlertTriangle, ArrowLeft, Award, Bell, ChevronsLeft, ChevronsRight, Info, BookOpen, Bookmark, BrainCircuit, Building2, CheckCircle2,
-  CalendarClock, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Compass,
-  DollarSign, Download, ExternalLink, Eye, FileText, Filter, Fingerprint, Flag, FolderKanban, Globe2, GraduationCap, HandCoins, Hexagon, LayoutDashboard,
-  LifeBuoy, Lock, LogOut, MapPin, Menu, MessageCircle, MessageSquareText, Moon,
-  PackageOpen, Pencil, PenLine, Plus, RefreshCw, School, Search, Send, Smile, ShieldAlert, ShieldCheck,
-  ShoppingCart, Sparkles, Square, Star, Sun, Target, Trash2, UserRound, Users, UsersRound, WifiOff, X } from
-'lucide-react';
+// Public-page styles first, in their original cascade position (before the
+// dashboard and onboarding sheets and before styles.css in main.jsx).
+import './landing.css';
+import './mind-section.css';
+import { Activity, Award, Bell, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
-import LandingPage from './LandingPage';
-import './workspaceRefinement.css';
-import ChatDetails from './ChatDetails';
-import CompactDashboard, { ScreenTimeShortcut } from './CompactDashboard';
-import StudentOnboarding from './StudentOnboarding';
-import {
-  LANGUAGE_OPTIONS,
-  formatCurrencyLocale,
-  formatDateLocale,
-  formatNumberLocale,
-  formatPercentLocale,
-  getLanguage,
-  locale,
-  setLanguage,
-  t,
-  tx } from
-'./i18n';
-import {
-  CHALLENGES, RIASEC_LEAD, RIASEC_NAME, RIASEC_ORDER,
-  INSTRUMENT_VERSION, SUBJECT_NAME, TRAIT_BLURB, TRAIT_LABEL, TRAIT_ORDER,
-  scoreChallenge } from
-'./challenges';
-import { TYPE_AXES, typeCodeOf } from './typecode';
-import { archetypeNameOf } from './archetype';
-import {
-  MAJOR_ENTRIES, NAMES, recRank, recSignals, subjectPerformance } from
-'./careers';
+import { AssistantCenter } from './components/AssistantCenter';
+import { ScreenTimeTracker, flushActiveScreenTime } from './components/ScreenTimeTracker';
+import { AppBootLoader, BootstrapError, BrandLockup, LanguageSelector, ThemeToggle } from './components/brand';
+import { ProfileCard, StudentAvatar } from './components/records';
+import { LazyBoundary, PageSkeleton } from './components/states';
+import { lazyWithRetry } from './lib/retryableLazy';
+import { pageLoadState } from './lib/pageLoadState';
+import { Empty, Modal } from './components/ui';
+import { NotificationPanel } from './components/NotificationPanel';
+import { formatNumberLocale, getLanguage, locale, setLanguage, siteTitle, t, tp, tx } from './i18n';
+import { exportNodePdf } from './lib/exportPdf';
+import { fullName, initials, label, ownStudent } from './lib/labels';
+import { isCounselor, isPlatformAdmin, isTaskManager } from './lib/roles';
+import { LANDING_PATH, LOGIN_PATH, buildPath, canOpenPage, isPageLocked, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
+import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchText } from './lib/searchIndex';
+import { usesPagedLists } from './lib/workspaceResources';
+import { useRemoteSearch } from './hooks/useRemoteSearch';
+import { useSupportCounts } from './hooks/useSupportCounts';
+import { useNotificationBell } from './hooks/useNotificationBell';
+import { invalidatePagedLists } from './hooks/usePagedList';
+import { bellTotal } from './lib/notifications';
+import { ForcedPasswordChange, Login } from './pages/Login';
+import { clearUserSessionStorage, clearUserStorage, dropLegacySharedKeys } from './userStorage';
+import { useTheme } from './hooks/useTheme';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { useToast } from './hooks/useToast';
+import { RELOAD_CHANGED, useWorkspaceData } from './hooks/useWorkspaceData';
+// Onboarding styles stay in the main stylesheet (after dashboard.css) so the
+// lazy onboarding chunk does not reorder the cascade.
+import './student-onboarding.css';
 
-const LABELS = {
-  admin: 'Admin', counselor: 'School Counselor', teacher: 'Teacher', organization: 'Organization School', student: 'Student',
-  parent: 'Parent', mother: 'Mother', father: 'Father', guardian: 'Guardian',
-  todo: 'To do', in_progress: 'In progress', submitted: 'Submitted', approved: 'Approved', late: 'Late',
-  low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent', researching: 'Researching',
-  shortlisted: 'Shortlisted', applying: 'Applying', accepted: 'Accepted', rejected: 'Rejected',
-  waitlisted: 'Waitlisted', dream: 'Dream', target: 'Target', safety: 'Safety', required: 'Required',
-  uploaded: 'Uploaded', reviewing: 'Reviewing', draft: 'Draft', needs_revision: 'Needs revision',
-  requested: 'Requested', drafting: 'Drafting', extracurricular: 'Extracurricular', volunteering: 'Volunteering',
-  leadership: 'Leadership', club: 'Club', competition: 'Competition', community: 'Community service',
-  school: 'School', regional: 'Regional', national: 'National', international: 'International',
-  project: 'Project', research: 'Research', olympiad: 'Olympiad', startup: 'Startup', sport: 'Sport', art: 'Art',
-  planned: 'Planned', completed: 'Completed', active: 'Active', pending: 'Pending', confirmed: 'Confirmed',
-  cancelled: 'Cancelled', discussion: 'Discussion', question: 'Q&A', update: 'Update',
-  direct: 'Direct', group: 'Group', public: 'Public', private: 'Private', urban: 'Urban', suburban: 'Suburban', rural: 'Rural',
-  four_year: '4-year', two_year: '2-year', merit: 'Merit', need_based: 'Need-based', athletic: 'Athletic',
-  full_ride: 'Full ride', full: 'Full funding', partial: 'Partial funding', fixed: 'Fixed amount',
-  onsite: 'On-site', online: 'Online', hybrid: 'Hybrid', reach: 'Reach',
-  academic: 'Academic', preferences: 'Preferences', financial: 'Financial', profile_strength: 'Profile strength',
-  harassment: 'Harassment or bullying', unsafe: 'Unsafe content', privacy: 'Privacy concern', misinformation: 'Misinformation',
-  open: 'Open', closed: 'Closed', technical: 'Technical', account: 'Account', application: 'Application', billing: 'Billing', other: 'Other',
-  resolved: 'Resolved', dismissed: 'Dismissed', none: 'No action', content_removed: 'Content removed',
-  muted_24h: 'Muted 24 hours', muted_7d: 'Muted 7 days'
-};
+// Route-level code splitting: landing visitors do not download the assessment
+// banks, and signed-in users do not download the landing page.
+const LandingPage = lazyWithRetry(() => import('./LandingPage'));
+const StudentOnboarding = lazyWithRetry(() => import('./StudentOnboarding'));
+const ProfileAssessmentPage = lazyWithRetry(() => import('./pages/ProfileAssessmentPage'));
+// Workspace pages are chunks of their own, loaded on first visit (PageRouter
+// renders inside a Suspense boundary), so landing visitors never download them.
+const lazyNamed = (load, name) => lazyWithRetry(() => load().then((module) => ({ default: module[name] })));
+const EssayLab = lazyWithRetry(() => import('./essayLab/EssayLab.jsx'));
+const AdminAuditPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminAuditPage');
+const AdminControlDashboard = lazyNamed(() => import('./pages/AdminPages'), 'AdminControlDashboard');
+const AdminCounselorsPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminCounselorsPage');
+const CounselorRoadmapPage = lazyNamed(() => import('./pages/AdminPages'), 'CounselorRoadmapPage');
+const ApplicationsPortalPage = lazyNamed(() => import('./pages/ApplicationsPortalPage'), 'ApplicationsPortalPage');
+const BookingsPage = lazyNamed(() => import('./pages/BookingsPage'), 'BookingsPage');
+const CollegeSearchPage = lazyNamed(() => import('./pages/CollegeSearchPage'), 'CollegeSearchPage');
+const Dashboard = lazyNamed(() => import('./pages/DashboardPage'), 'Dashboard');
+const DocumentsPage = lazyNamed(() => import('./pages/DocumentsPage'), 'DocumentsPage');
+const MessagesPage = lazyNamed(() => import('./pages/MessagesPage'), 'MessagesPage');
+const ParentPortalPage = lazyNamed(() => import('./pages/ParentPortalPage'), 'ParentPortalPage');
+const ProgramsPage = lazyNamed(() => import('./pages/ProgramsPage'), 'ProgramsPage');
+const ResourceSection = lazyNamed(() => import('./pages/ResourceSection'), 'ResourceSection');
+const RoadmapPage = lazyNamed(() => import('./pages/RoadmapPage'), 'RoadmapPage');
+const SchoolsPage = lazyNamed(() => import('./pages/SchoolsPage'), 'SchoolsPage');
+const ScreenTimePage = lazyNamed(() => import('./pages/ScreenTimePage'), 'ScreenTimePage');
+const StorePage = lazyNamed(() => import('./pages/StorePage'), 'StorePage');
+const StudentCenterPage = lazyNamed(() => import('./pages/StudentCenterPage'), 'StudentCenterPage');
+const StudentsPage = lazyNamed(() => import('./pages/StudentsPage'), 'StudentsPage');
+const SupportPage = lazyNamed(() => import('./pages/SupportPage'), 'SupportPage');
 
-const label = (value) => t(LABELS[value] || value || '—');
-const fullName = (user) => user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'User';
-const initials = (name) => String(name || 'U').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
-const dateText = (value) => formatDateLocale(value);
-const dateTimeText = (value) => formatDateLocale(value, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-const clockText = (value) => formatDateLocale(value, { hour: '2-digit', minute: '2-digit' });
-const chatStampText = (value) => {
-  if (!value) return '';
-  const moment = new Date(value);
-  return moment.toDateString() === new Date().toDateString() ? clockText(value) : formatDateLocale(value, { day: '2-digit', month: 'short' });
-};
-const isCounselor = (user) => ['admin', 'counselor'].includes(user?.role);
-const isTaskManager = (user) => ['admin', 'counselor', 'teacher'].includes(user?.role);
-const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
-const ownStudent = (data) => data.students?.[0];
-const studentName = (data, id) => fullName(data.students?.find((student) => student.id === Number(id))?.user_detail);
-const THEME_KEY = 'naseeb-edu-theme';
+// Kept equal to CHALLENGES.length by tests/codeSplitting.test.mjs, so the
+// navigation does not pull the question banks into the main bundle.
+export const ASSESSMENT_CHALLENGE_COUNT = 4;
+
 const SIDEBAR_KEY = 'naseeb-edu-sidebar';
-const TARGET_COUNTRIES_MAX_LENGTH = 255;
-const SCREEN_TIME_QUEUE_KEY = 'naseeb-screen-time-pending-v1';
-const formatDuration = (seconds = 0) => {
-  const totalMinutes = Math.round(Number(seconds) / 60);
-  if (totalMinutes < 1) return `< ${formatNumberLocale(1)} ${t("min")}`;
-  if (totalMinutes < 60) return `${formatNumberLocale(totalMinutes)} ${t("min")}`;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${formatNumberLocale(hours)} ${t("h")}${minutes ? ` ${formatNumberLocale(minutes)} ${t("min")}` : ''}`;
-};
-const localDateKey = () => {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 10);
-};
-const BRAND_LOGOS = {
-  light: '/brand/naseeb-gold-shield.png',
-  dark: '/brand/naseeb-midnight-shield.svg'
-};
-const THEME_ICONS = {
-  light: '/brand/naseeb-gold-shield.png',
-  dark: '/brand/naseeb-midnight-shield.svg',
-};
 
-function brandLogoFor(theme) {
-  return BRAND_LOGOS[theme] || BRAND_LOGOS.light;
-}
-
-function themeIconFor(theme) {
-  return THEME_ICONS[theme] || THEME_ICONS.light;
-}
-
-function normalizeCountries(value) {
-  const seen = new Set();
-  return String(value || '').
-  split(',').
-  map((country) => country.trim()).
-  filter((country) => {
-    const key = country.toLocaleLowerCase('en');
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).
-  join(', ');
-}
-
-function initialTheme() {
-  try {
-    const saved = window.localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark') return saved;
-  } catch {
-
-
-
-
-
-
-    // Storage can be unavailable in strict privacy modes; the OS preference still works.
-  }return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';}function BrandLogo({ className = '' }) {return <span className={`brand-logo ${className}`} role="img" aria-label={t("Naseeb Edu")} />;}
-
-function BrandLockup({ theme, subtitle = true }) {
-  return <div className="brand-lockup"><BrandLogo theme={theme} /><div><b>{t("Naseeb Edu")}</b>{subtitle && <small>{t('Education Counseling Platform')}</small>}</div></div>;
-}
-
-function LanguageSelector({ language, onChange, compact = false }) {
-  return <label className={`language-selector ${compact ? 'compact' : ''}`} aria-label={t('Language')}><Globe2 size={15} /><select value={language} onChange={(event) => onChange(event.target.value)}>{LANGUAGE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{compact ? option.short : option.label}</option>)}</select></label>;
-}
-
-function AppBootLoader({ message = 'Preparing your workspace…' }) {
-  return <main className="app-boot" role="status" aria-label={message}><div className="app-boot-card"><div className="app-boot-mark" aria-hidden="true"><i /></div><div className="app-boot-copy"><b>{t("Naseeb Edu")}</b><span>{message}</span></div><div className="app-boot-line" aria-hidden="true" /></div></main>;
-}
-
-function BootstrapError({ message, onRetry, onSignOut }) {
-  return <main className="app-boot"><section className="bootstrap-error" role="alert"><WifiOff size={30} /><span className="eyebrow">{t("CONNECTION INTERRUPTED")}</span><h1>{t("We could not open your workspace.")}</h1><p>{message}</p><div><button type="button" className="button primary" onClick={onRetry}><RefreshCw size={16} /> {t("Retry")}</button><button type="button" className="button quiet" onClick={onSignOut}>{t("Return to sign in")}</button></div></section></main>;
-}
-
-function ThemeToggle({ theme, onToggle }) {
-  const isDark = theme === 'dark';
-  return <button type="button" className="icon-button theme-toggle" onClick={onToggle} title={isDark ? t("Light mode") : t("Dark mode")} aria-label={isDark ? t("Switch to light mode") : t("Switch to dark mode")} aria-pressed={isDark}>{isDark ? <Sun size={18} /> : <Moon size={18} />}</button>;
-}
+const readLocation = () => ({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash });
 
 // Export belongs to the page, not to every panel on it. These are the pages
 // whose content is a record people print; student_center keeps its own button
@@ -167,14 +81,13 @@ function ThemeToggle({ theme, onToggle }) {
 const PDF_EXPORT_PAGES = new Set([
   'student_center',
   'students', 'admin_students', 'academics', 'portfolio', 'activities', 'recommendations',
-  'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays', 'essay_lab',
+  'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays',
 ]);
 
 const PAGE_META = {
   dashboard: { label: 'Dashboard', icon: LayoutDashboard, description: 'A complete view of the application journey' },
   schools: { label: 'Schools', icon: Building2, description: 'Schools and organization accounts' },
   students: { label: 'Students', icon: Users, description: 'Student profiles and progress' },
-  profile: { label: 'My profile', icon: UserRound, description: 'Your personal application profile' },
   academics: { label: 'Academics', icon: BookOpen, description: 'Academic results and research' },
   portfolio: { label: 'Portfolio', icon: FolderKanban, description: 'Projects and internship experience' },
   activities: { label: 'Activities', icon: Activity, description: 'Activities, honors, and achievements' },
@@ -185,7 +98,7 @@ const PAGE_META = {
   certificates: { label: 'Certificates', icon: Award, description: 'Certificates and supporting files' },
   essays: { label: 'Essays', icon: GraduationCap, description: 'Essay drafts and revision history' },
   student_center: { label: 'Student Center', icon: UsersRound, description: 'Academic profile, portfolio, activities, and documents' },
-  find_personality: { label: 'Profile Assessment', icon: Fingerprint, description: `${CHALLENGES.length} challenges that reveal your best-fit study directions` },
+  find_personality: { label: 'Profile Assessment', icon: Fingerprint, description: `${ASSESSMENT_CHALLENGE_COUNT} challenges that reveal your best-fit study directions` },
   roadmap: { label: 'Roadmap', icon: Compass, description: 'Level-linked missions, milestones, and reflections' },
   bookings: { label: 'Meetings', icon: CalendarClock, description: 'Schedule and manage meetings' },
   messages: { label: 'Messages', icon: MessageCircle, description: 'Private, group, and discussion messages' },
@@ -208,24 +121,6 @@ const PAGE_META = {
   admin_audit: { label: 'Audit Log', icon: ShieldAlert, description: 'Review product administration actions' }
 };
 
-function navigationFor(user) {
-  if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings'];
-  if (user?.role === 'admin') return ['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'counselor_roadmap', 'admin_audit', 'support'];
-  if (isCounselor(user)) return ['dashboard', 'students', 'counselor_roadmap', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages', 'screen_time', 'support'];
-  if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
-  if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
-}
-
-const EMPTY_DATA = {
-  schools: [], students: [], universities: [], tasks: [], applications: [], documents: [], essays: [],
-  achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
-  recommendations: [], roadmapMissions: [],
-  bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], storeItems: [], team: [], supportTickets: [],
-  accounts: [], counselorRoadmapTemplates: [], counselorRoadmaps: [], adminAuditEvents: [],
-  parentPortal: { children: [], pending_invitations: [], privacy: { hidden: [], read_only: true } }
-};
-
 const GLOBAL_SEARCH_RESOURCES = {
   schools: 'schools', students: 'students', tasks: 'tasks', applications: 'applications', documents: 'documents',
   essays: 'essays', achievements: 'activities', researches: 'academics', projects: 'portfolio', internships: 'portfolio',
@@ -233,7 +128,7 @@ const GLOBAL_SEARCH_RESOURCES = {
   bookings: 'bookings', messageChannels: 'messages', programServices: 'dashboard',
   universities: 'college_search', scholarships: 'college_search', opportunityPrograms: 'programs',
   storeItems: 'store', team: 'dashboard', supportTickets: 'support',
-  accounts: 'admin_counselors', counselorRoadmaps: 'counselor_roadmap', adminAuditEvents: 'admin_audit'
+  accounts: 'admin_counselors', counselorRoadmaps: 'counselor_roadmap'
 };
 
 function globalSearchTitle(resource, item) {
@@ -249,310 +144,63 @@ function globalSearchTitle(resource, item) {
   return item.title || item.name || item.organization || item.recommender_name || item.subject || item.program || item.category;
 }
 
-function globalSearchResults(user, data, query) {
-  const term = query.trim().toLocaleLowerCase(locale());
-  if (!term) return [];
-  const navigation = navigationFor(user);
+// Built once per (user, data, language) instead of JSON.stringify-ing every
+// record on every keystroke; typing only filters the prepared haystacks.
+function buildGlobalSearchIndex(user, data) {
+  const navigation = navigationFor(user).filter((page) => !isPageLocked(page, user));
   const allowedPages = new Set(navigation);
-  const pageResults = navigation.flatMap((destination) => {
+  const pages = navigation.map((destination) => {
     const meta = PAGE_META[destination];
-    const haystack = `${t(meta.label)} ${t(meta.description)} ${meta.label} ${meta.description}`.toLocaleLowerCase(locale());
-    return haystack.includes(term) ? [{ id: `page-${destination}`, kind: 'page', destination, title: t(meta.label), subtitle: t(meta.description) }] : [];
+    return { id: `page-${destination}`, kind: 'page', destination, title: t(meta.label), subtitle: t(meta.description), text: `${t(meta.label)} ${t(meta.description)} ${meta.label} ${meta.description}` };
   });
-  const recordResults = Object.entries(GLOBAL_SEARCH_RESOURCES).flatMap(([resource, destination]) => {
+  const records = Object.entries(GLOBAL_SEARCH_RESOURCES).flatMap(([resource, destination]) => {
     if (!allowedPages.has(destination)) return [];
-    const records = Array.isArray(data[resource]) ? data[resource] : [];
-    return records.flatMap((item, index) => {
+    const items = Array.isArray(data[resource]) ? data[resource] : [];
+    return items.flatMap((item, index) => {
       const title = globalSearchTitle(resource, item);
       if (!title) return [];
-      const haystack = `${title} ${JSON.stringify(item)}`.toLocaleLowerCase(locale());
-      if (!haystack.includes(term)) return [];
-      return [{
-        id: `${resource}-${item.id ?? index}`,
-        kind: 'record',
-        destination,
-        title: String(title),
-        subtitle: t(PAGE_META[destination].label),
-        filterQuery: String(title)
-      }];
+      return [{ id: `${resource}-${item.id ?? index}`, kind: 'record', destination, title: String(title), subtitle: t(PAGE_META[destination].label), filterQuery: String(title), text: `${title} ${searchText(item)}` }];
     });
   });
-  return [...pageResults, ...recordResults].slice(0, 10);
+  return buildIndex([...pages, ...records], (entry) => entry.text, locale());
 }
 
-const RESOURCE_FIELDS = {
-  researches: [
-  ['title', 'Research title', 'text', true], ['field', 'Field'], ['role', 'Role'],
-  ['summary', 'Summary', 'textarea', true], ['outcome', 'Outcome'], ['start_date', 'Start date', 'date'],
-  ['end_date', 'End date', 'date'], ['link', 'Link', 'url'], ['google_docs_url', 'Google Docs URL', 'url']],
-
-  projects: [
-  ['title', 'Project title', 'text', true], ['role', 'Role'], ['technologies', 'Technologies'],
-  ['description', 'Description', 'textarea', true], ['impact', 'Measurable impact'], ['date', 'Date', 'date'], ['link', 'Link', 'url'],
-  ['google_docs_url', 'Google Docs URL', 'url']],
-
-  internships: [
-  ['organization', 'Organization', 'text', true], ['position', 'Position', 'text', true], ['supervisor', 'Supervisor'],
-  ['description', 'Responsibilities and results', 'textarea'], ['start_date', 'Start date', 'date'], ['end_date', 'End date', 'date'],
-  ['is_current', 'Current internship', 'checkbox'], ['google_docs_url', 'Google Docs URL', 'url']],
-
-  activities: [
-  ['name', 'Activity name', 'text', true], ['activity_type', 'Type', 'select', true, ['extracurricular', 'volunteering', 'leadership', 'club', 'competition', 'community', 'other']],
-  ['role', 'Role'], ['description', 'Description', 'textarea'], ['impact', 'Impact'],
-  ['hours_per_week', 'Hours per week', 'number'], ['weeks_per_year', 'Weeks per year', 'number'],
-  ['start_date', 'Start date', 'date'], ['end_date', 'End date', 'date'],
-  ['google_docs_url', 'Google Docs URL', 'url']],
-
-  honors: [
-  ['title', 'Honor title', 'text', true], ['issuer', 'Issuer'], ['level', 'Level', 'select', true, ['school', 'regional', 'national', 'international']],
-  ['award_date', 'Award date', 'date'], ['description', 'Description', 'textarea'],
-  ['google_docs_url', 'Google Docs URL', 'url']],
-
-  achievements: [
-  ['title', 'Achievement title', 'text', true], ['category', 'Category', 'select', true, ['project', 'startup', 'olympiad', 'volunteering', 'leadership', 'research', 'sport', 'art', 'other']],
-  ['date', 'Date', 'date'], ['impact', 'Impact'], ['description', 'Description', 'textarea', true],
-  ['google_docs_url', 'Google Docs URL', 'url']],
-
-  recommendations: [
-  ['recommender_name', 'Recommender name', 'text', true], ['recommender_title', 'Position'], ['recommender_email', 'Email', 'email'],
-  ['relationship', 'Relationship'], ['status', 'Status', 'select', true, ['requested', 'drafting', 'submitted', 'approved']],
-  ['deadline', 'Deadline', 'date'], ['notes', 'Notes', 'textarea'], ['google_docs_url', 'Google Docs URL', 'url']],
-
-  tasks: [
-  ['title', 'Task title', 'text', true], ['description', 'Description', 'textarea'], ['due_date', 'Due date', 'date', true],
-  ['priority', 'Priority', 'select', true, ['low', 'medium', 'high', 'urgent']],
-  ['status', 'Status', 'select', true, ['todo', 'in_progress', 'submitted', 'late']],
-  ['student_response', 'Student response', 'textarea'], ['submission_url', 'Submission or Google Docs URL', 'url']],
-
-  applications: [
-  ['university', 'University', 'university', true], ['program', 'Program', 'text', true],
-  ['tier', 'Tier', 'select', true, ['dream', 'target', 'safety']],
-  ['status', 'Status', 'select', true, ['researching', 'shortlisted', 'applying', 'submitted', 'accepted', 'rejected', 'waitlisted']],
-  ['deadline', 'Deadline', 'date'], ['scholarship_deadline', 'Scholarship deadline', 'date'], ['application_portal_url', 'Portal URL', 'url'], ['notes', 'Notes', 'textarea']],
-
-  essays: [
-  ['application', 'Application', 'application'], ['title', 'Essay title', 'text', true], ['prompt', 'Prompt', 'textarea', true],
-  ['content', 'Draft content', 'textarea'], ['status', 'Status', 'select', true, ['draft', 'reviewing', 'needs_revision', 'approved']],
-  ['google_docs_url', 'Google Docs URL', 'url'], ['counselor_comment', 'Counselor comment', 'textarea']]
-
-};
-
-function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }) {
-  const [form, setForm] = useState(SHOW_DEMO_ACCOUNTS ?
-  { username: 'counselor', password: 'admin12345' } :
-  { username: '', password: '' });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  async function submit(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      await api.login(form.username, form.password);
-      await onLogin();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <main className="login-page">
-      <header className="login-bar">
-        <button type="button" className="login-return" onClick={onBack}>
-          <ArrowLeft size={17} /> {t("Home")}
-        </button>
-        <div className="login-preferences">
-          <LanguageSelector
-            language={language}
-            onChange={changeLanguage}
-            compact
-          />
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-        </div>
-      </header>
-      <section className="login-form-panel" aria-label={t("Sign in")}>
-        <form className="login-card" onSubmit={submit}>
-          <div className="login-card-head">
-            <BrandLogo theme={theme} className="login-emblem" />
-            <h1>{t("Naseeb Edu")}</h1>
-            <span className="brand-tagline">
-              {t("Connecting Students to the World Through Education")}
-            </span>
-          </div>
-          <Field label={t("Username")}>
-            <input
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-              autoComplete="username"
-              required
-            />
-          </Field>
-          <Field label={t("Password")}>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              autoComplete="current-password"
-              required
-            />
-          </Field>
-          {error && <div className="alert error">{error}</div>}
-          <button
-            className="button primary full"
-            disabled={loading}
-            aria-busy={loading}
-          >
-            {loading ? t("Signing in…") : t("Sign in")}
-            <ChevronRight size={18} />
-          </button>
-          {SHOW_DEMO_ACCOUNTS && (
-            <div className="demo-hint">{t("Demo: counselor / admin12345")}</div>
-          )}
-        </form>
-      </section>
-    </main>
-  );
+function globalSearchResults(index, query) {
+  return searchIndex(index, query, locale(), 10).map(({ text: _text, ...result }) => result);
 }
 
-function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, language, changeLanguage }) {
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  async function submit(event) {
-    event.preventDefault();
-    if (password !== confirmPassword) {setError(t('Passwords do not match.'));return;}
-    setSaving(true);setError('');
-    try {const result = await api.changePassword(password, confirmPassword);await onChanged(result.user);}
-    catch (requestError) {setError(requestError.message);} finally
-    {setSaving(false);}
-  }
-  return <main className="password-change-page"><section className="password-change-card"><header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div></header><div className="password-change-intro"><span className="password-change-icon"><Fingerprint size={24} /></span><span className="eyebrow">{t('Temporary login')}</span><h1>{t('Change temporary password')}</h1><p>{t('Create a permanent password before opening your cabinet.')}</p></div><form className="form-grid" onSubmit={submit}><Field label={t('New password')} hint={t('Use at least 8 characters with upper/lowercase letters and a number.')}><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" autoComplete="new-password" required /></Field><Field label={t('Confirm password')}><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="8" autoComplete="new-password" required /></Field>{error && <div className="alert error form-wide">{error}</div>}<div className="password-change-warning form-wide"><ShieldAlert size={17} /><p>{t('Your temporary password has already been consumed. If you leave now, an administrator must reissue it.')}</p></div><div className="form-actions form-wide"><button type="button" className="button quiet" onClick={onSignOut}>{t('Sign out')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving securely…") : t("Save new password")}</button></div></form><footer>{fullName(user)} · {user.school_name || label(user.role)}</footer></section></main>;
+// Server search result type -> the page that lists it, when this user has it.
+function remoteSearchDestinations(user) {
+  const allowed = new Set(navigationFor(user));
+  const admin = isPlatformAdmin(user);
+  const pick = (page) => allowed.has(page) ? page : null;
+  return {
+    students: pick(admin ? 'admin_students' : 'students'), tasks: pick('tasks'),
+    applications: pick('applications'), documents: pick('documents'), essays: pick('essays'), recommendations: pick('recommendations'),
+    roadmapMissions: pick('roadmap'), bookings: pick('bookings'), schools: pick(admin ? 'admin_schools' : 'schools'),
+    accounts: pick('admin_counselors'), supportTickets: pick('support'),
+  };
 }
 
 const PAGE_RESOURCE_KEYS = {
   dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'programServices', 'parentPortal'],
-  schools: ['schools'], students: ['students'], profile: ['students'], academics: ['students', 'researches'],
+  schools: ['schools'], students: ['students'], academics: ['students', 'researches'],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
   roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'universities', 'students'],
   documents: ['documents'], certificates: ['documents'], essays: ['essays'],
   student_center: ['students', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations', 'documents'],
   bookings: ['bookings'], messages: ['messageChannels'],
-  programs: ['opportunityPrograms', 'scholarships'], essay_lab: ['essays'],
+  programs: ['opportunityPrograms', 'scholarships'], essay_lab: [],
   college_search: ['students', 'universities', 'applications'], store: ['storeItems'], support: ['supportTickets'],
   screen_time: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal']
 };
 
-function Field({ label: title, children, error = '', hint = '' }) {
-  return <label className={`field ${error ? 'is-error' : ''}`.trim()}><span>{typeof title === 'string' ? t(title) : title}</span>{children}{error ? <small className="field-error">{error}</small> : hint ? <small className="field-hint">{hint}</small> : null}</label>;
-}
-
-function CheckboxControl({ children, className = '', ...props }) {
-  return <label className={`checkbox-card ${className}`.trim()}>
-    <input type="checkbox" {...props} />
-    <span className="checkbox-indicator" aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
-    <span>{children}</span>
-  </label>;
-}
-
-function ChoiceCards({ name, label: groupLabel, value, onChange, options }) {
-  function handleKeyDown(event, index) {
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
-    event.preventDefault();
-    const direction = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1;
-    const nextIndex = (index + direction + options.length) % options.length;
-    onChange(options[nextIndex].value);
-    event.currentTarget.closest('.choice-card-group')?.querySelectorAll('input')[nextIndex]?.focus();
-  }
-  return <div className="choice-card-group" role="radiogroup" aria-label={groupLabel} style={{ '--choice-columns': options.length }}>
-    {options.map((option, index) => {
-      const OptionIcon = option.icon || Target;
-      return <label className="choice-card" key={option.value}>
-        <input type="radio" name={name} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} onKeyDown={(event) => handleKeyDown(event, index)} />
-        <OptionIcon aria-hidden="true" />
-        <span className="choice-card-copy"><b>{t(option.label)}</b><small>{t(option.description)}</small></span>
-        <CheckCircle2 className="choice-card-check" size={19} aria-hidden="true" />
-      </label>;
-    })}
-  </div>;
-}
-
-function Badge({ children, tone = '' }) {
-  const normalized = String(children || '').toLowerCase().replaceAll(' ', '-');
-  return <span className={`badge ${tone || normalized}`}>{label(children)}</span>;
-}
-
-function Modal({ title, onClose, children, className = '' }) {
-  const modalRef = useRef(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  useEffect(() => {
-    const previous = document.activeElement;
-    const modal = modalRef.current;
-    const focusable = () => [...(modal?.querySelectorAll('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])') || [])];
-    focusable()[0]?.focus();
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {event.preventDefault();onCloseRef.current();return;}
-      if (event.key !== 'Tab') return;
-      const items = focusable();
-      if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {event.preventDefault();last.focus();} else
-      if (!event.shiftKey && document.activeElement === last) {event.preventDefault();first.focus();}
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {document.removeEventListener('keydown', handleKeyDown);previous?.focus?.();};
-  }, []);
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-    <section ref={modalRef} className={`modal ${className}`} role="dialog" aria-modal="true" aria-label={t(title)} tabIndex="-1">
-      <header><div><span className="eyebrow">{t("NASEEB EDU")}</span><h2>{t(title)}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('Close')}><X /></button></header>
-      {children}
-    </section>
-  </div>;
-}
-
-function Empty({ text = 'No information available yet.' }) {
-  return <div className="empty"><span>N/A</span><p>{t(text)}</p></div>;
-}
-
-function PageSkeleton() {
-  return <div className="page-skeleton" role="status" aria-label={t("Loading page data")}>
-    <div className="skeleton-stat-grid">{[0, 1, 2, 3].map((item) => <span className="skeleton-block" key={item} />)}</div>
-    <div className="skeleton-panel"><span className="skeleton-line title" />{[0, 1, 2, 3].map((item) => <span className="skeleton-line" key={item} />)}</div>
-    <span className="sr-only">{t("Loading page data…")}</span>
-  </div>;
-}
-
-function ChannelListSkeleton({ count = 4 }) {
-  return <div className="channel-skeleton" role="status" aria-label={t("Loading conversations")}>{Array.from({ length: count }, (_, index) => <span key={index}><i /><b /><small /></span>)}</div>;
-}
-
-function MessageListSkeleton() {
-  return <div className="message-skeleton" role="status" aria-label={t("Loading messages")}>{[58, 74, 46, 66].map((width, index) => <span className={index % 2 ? "mine" : ''} style={{ '--skeleton-width': `${width}%` }} key={`${width}-${index}`}><i /><b /><small /></span>)}</div>;
-}
-
-function StaffStatsSkeleton() {
-  return <div className="staff-stats-skeleton" role="status" aria-label={t("Loading messaging overview")}>{Array.from({ length: 5 }, (_, index) => <span key={index}><i /><b /></span>)}</div>;
-}
-
-function InlineLoadError({ message, onRetry }) {
-  return <div className="inline-load-error" role="alert"><WifiOff size={20} /><p>{message}</p><button type="button" className="button quiet small" onClick={onRetry}><RefreshCw size={14} /> {t("Retry")}</button></div>;
-}
-
 function PageDataBoundary({ page, data, stats, loading, resourceStatus, retry, children }) {
   const keys = PAGE_RESOURCE_KEYS[page] || [page];
-  const tracked = keys.filter((key) => resourceStatus[key]);
-  const loadingKeys = tracked.filter((key) => resourceStatus[key].status === 'loading');
-  const failedKeys = tracked.filter((key) => resourceStatus[key].status === 'error');
-  const hasVisibleData = keys.some((key) => key === 'dashboard' ? Boolean(stats) : Boolean(data[key]?.length));
-  const initialLoading = (loadingKeys.length > 0 || loading && tracked.length === 0) && !hasVisibleData;
+  const { loadingKeys, failedKeys, hasVisibleData, initialLoading } = pageLoadState({ keys, data, stats, loading, resourceStatus });
 
   if (initialLoading) return <PageSkeleton />;
   return <>
@@ -562,187 +210,7 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, retry, c
   </>;
 }
 
-function ScreenTimeTracker({ page }) {
-  const activeSeconds = useRef(0);
-  const lastInteraction = useRef(Date.now());
-  const sending = useRef(false);
-  const queued = useRef(null);
-
-  useEffect(() => {
-    const markInteraction = () => {lastInteraction.current = Date.now();};
-    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
-    events.forEach((eventName) => window.addEventListener(eventName, markInteraction, { passive: true }));
-
-    const persistAndSend = async () => {
-      const seconds = activeSeconds.current;
-      activeSeconds.current = 0;
-      if (!queued.current) {
-        try {queued.current = JSON.parse(localStorage.getItem(SCREEN_TIME_QUEUE_KEY) || '[]');} catch {queued.current = [];}
-      }
-      let queue = cleanScreenTimeQueue(queued.current, localDateKey());
-      queued.current = queue;
-      try {localStorage.setItem(SCREEN_TIME_QUEUE_KEY, JSON.stringify(queue));} catch {/* Keep the cleaned queue in memory. */}
-      if (seconds > 0) {
-        const date = localDateKey();
-        const existing = queue.find((entry) => entry.date === date && entry.page === page);
-        if (existing) existing.seconds += seconds;else
-        queue.push({ date, page, seconds });
-        try {localStorage.setItem(SCREEN_TIME_QUEUE_KEY, JSON.stringify(queue));} catch {/* Memory queue remains available in strict privacy modes. */}
-      }
-      if (!navigator.onLine || sending.current || !queue.length) return;
-      sending.current = true;
-      const batch = queue.slice(0, 50).map((entry) => ({ ...entry, seconds: Math.min(300, entry.seconds) }));
-      try {
-        await api.trackScreenTime(batch);
-        batch.forEach((sent) => {
-          const current = queue.find((entry) => entry.date === sent.date && entry.page === sent.page);
-          if (current) current.seconds -= sent.seconds;
-        });
-        queue = queue.filter((entry) => entry.seconds > 0);
-        queued.current = queue;
-        try {
-          if (queue.length) localStorage.setItem(SCREEN_TIME_QUEUE_KEY, JSON.stringify(queue));else
-          localStorage.removeItem(SCREEN_TIME_QUEUE_KEY);
-        } catch {/* The in-memory queue still holds any remaining aggregate. */}
-      } catch {
-
-
-
-
-
-
-        // Aggregate seconds stay queued locally and retry when the connection returns.
-      } finally {sending.current = false;}};const tick = window.setInterval(() => {if (document.visibilityState === 'visible' && Date.now() - lastInteraction.current < 60_000) activeSeconds.current += 1;
-      }, 1_000);
-    const flush = window.setInterval(persistAndSend, 30_000);
-    const onVisibility = () => {if (document.visibilityState === 'hidden') persistAndSend();};
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('online', persistAndSend);
-    persistAndSend();
-    return () => {
-      window.clearInterval(tick);
-      window.clearInterval(flush);
-      events.forEach((eventName) => window.removeEventListener(eventName, markInteraction));
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('online', persistAndSend);
-      persistAndSend();
-    };
-  }, [page]);
-  return null;
-}
-
-function AssistantCenter({ user, onOpenScreenTime }) {
-  const welcome = useMemo(() => ({
-    id: `welcome-${user.id}`,
-    role: 'assistant',
-    local: true,
-    content: user.role === 'counselor' ?
-    'Let’s plan your work with students.' :
-    'What would you like help with?'
-  }), [user.id, user.role]);
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([welcome]);
-  const [input, setInput] = useState('');
-  const [status, setStatus] = useState('ready');
-  const [error, setError] = useState('');
-  const abortRef = useRef(null);
-  const inputRef = useRef(null);
-  const listRef = useRef(null);
-  const busy = status === 'submitted' || status === 'streaming';
-
-  useEffect(() => setMessages([welcome]), [welcome]);
-  useEffect(() => {
-    if (!open) return undefined;
-    function closeOnEscape(event) {if (event.key === 'Escape') setOpen(false);}
-    document.addEventListener('keydown', closeOnEscape);
-    window.setTimeout(() => inputRef.current?.focus(), 0);
-    return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: status === 'streaming' ? 'auto' : 'smooth' });
-  }, [messages, open, status]);
-
-  function clearConversation() {
-    abortRef.current?.abort();
-    setMessages([welcome]);
-    setInput('');
-    setError('');
-    setStatus('ready');
-  }
-
-  async function sendMessage(value = input) {
-    const content = value.trim();
-    if (!content || busy) return;
-    const stamp = Date.now();
-    const userMessage = { id: `user-${stamp}`, role: 'user', content };
-    const assistantId = `assistant-${stamp}`;
-    const outbound = [...messages.filter((message) => !message.local && message.content), userMessage].
-    slice(-12).
-    map(({ role, content: text }) => ({ role, content: text }));
-    setMessages((current) => [...current, userMessage, { id: assistantId, role: 'assistant', content: '' }]);
-    setInput('');
-    setError('');
-    setStatus('submitted');
-    const controller = new AbortController();
-    abortRef.current = controller;
-    let received = '';
-    try {
-      const response = await api.streamAssistant(outbound, controller.signal);
-      if (!response.body) throw new Error('Streaming is not supported by this browser.');
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value: chunk } = await reader.read();
-        if (done) break;
-        received += decoder.decode(chunk, { stream: true });
-        setStatus('streaming');
-        setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: received } : message));
-      }
-      received += decoder.decode();
-      if (!received.trim()) throw new Error('The assistant returned an empty response.');
-      setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: received } : message));
-      setStatus('ready');
-    } catch (requestError) {
-      if (requestError?.name === 'AbortError') {
-        if (!received) setMessages((current) => current.filter((message) => message.id !== assistantId));
-        setStatus('ready');
-      } else {
-        setMessages((current) => current.filter((message) => message.id !== assistantId));
-        setError(requestError?.status === 429 ? t("You have reached the assistant limit. Please try again later.") : t("The assistant could not respond. Check your connection and try again."));
-        setStatus('error');
-      }
-    } finally {
-      abortRef.current = null;
-    }
-  }
-
-  const suggestions = user.role === 'counselor' ?
-  ['Plan student check-ins', 'Review overdue tasks', 'Plan a meeting'] :
-  ['Plan today’s tasks', 'Break down my next mission', 'Plan my essay'];
-
-  return <div className={`assistant-center ${open ? 'open' : ''}`}>
-    {open && <section className="assistant-drawer" role="dialog" aria-label={t("Naseeb AI assistant")}>
-      <header><div className="assistant-title"><span className="assistant-mark"><span className="assistant-title-mark" aria-hidden="true" /></span><div><h2>{t("Naseeb AI")}</h2></div></div><div className="assistant-header-actions"><button type="button" className="icon-button" onClick={clearConversation} aria-label={t("Clear conversation")} title={t("Clear conversation")}><Trash2 size={16} /></button><button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label={t("Close assistant")}><X size={18} /></button></div></header>
-      <div className="assistant-safety"><ShieldCheck size={15} /><span>{t("Keep personal data private.")}</span></div>
-      <div ref={listRef} className="assistant-messages" aria-live="polite" aria-busy={busy}>
-        {messages.map((message) => <article className={`assistant-message ${message.role}`} key={message.id}><span>{message.role === 'assistant' ? <span className="assistant-avatar-mark" aria-hidden="true" /> : initials(fullName(user))}</span><div><b>{message.role === 'assistant' ? t("Naseeb AI") : t("You")}</b><p>{(message.local ? t(message.content) : message.content) || <span className="assistant-typing" aria-label={t("Assistant is thinking")}><i /><i /><i /></span>}</p></div></article>)}
-        {status === 'submitted' && <span className="sr-only">{t("Assistant is preparing a response.")}</span>}
-        {error && <div className="assistant-error" role="alert"><WifiOff size={15} /><span>{error}</span></div>}
-      </div>
-      {messages.length === 1 && <div className="assistant-suggestions" aria-label={t("Suggested questions")}>{suggestions.map((suggestion) => <button type="button" key={suggestion} onClick={() => sendMessage(t(suggestion))}>{t(suggestion)}<ChevronRight size={14} /></button>)}</div>}
-      <form className="assistant-compose" onSubmit={(event) => {event.preventDefault();sendMessage();}}>
-        <textarea ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey) {event.preventDefault();sendMessage();}}} maxLength="2000" rows="2" placeholder={t("Ask a question…")} disabled={busy} aria-label={t("Message Naseeb AI")} />
-        <button type={busy ? "button" : "submit"} className="assistant-send" onClick={busy ? () => abortRef.current?.abort() : undefined} disabled={!busy && !input.trim()} aria-label={busy ? t("Stop response") : t("Send message")}>{busy ? <Square size={16} fill="currentColor" /> : <Send size={17} />}</button>
-        <details className="assistant-info"><summary>{t("AI can make mistakes.")}</summary><p>{t("Role-scoped context only. Do not share contact, passport, password, or payment details.")}</p><p>{t("AI can make mistakes. Verify important deadlines with your counselor. History is kept only while this page is open.")}</p></details>
-      </form>
-    </section>}
-    <div className="assistant-launchers"><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><span className="assistant-launcher-mark" aria-hidden="true" /></button></div>
-  </div>;
-}
-
-function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, isOnline, logout, theme, toggleTheme, language, changeLanguage, children }) {
+function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, isOnline, notify, logout, theme, toggleTheme, language, changeLanguage, children }) {
   const [utility, setUtility] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileMenuRef = useRef(null);
@@ -764,10 +232,33 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   const searchRef = useRef(null);
   const navigation = navigationFor(user).filter((item) => !['support', 'screen_time'].includes(item));
   const meta = PAGE_META[page];
-  const searchResults = useMemo(() => globalSearchResults(user, data, query), [user, data, query, language]);
-  const supportBadge = user.role === 'admin' ?
-  data.supportTickets.filter((ticket) => ['open', 'in_progress'].includes(ticket.status)).length :
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- language changes the translated labels
+  const searchIndexData = useMemo(() => buildGlobalSearchIndex(user, data), [user, data, language]);
+  // Staff lists are paged, so records beyond what is loaded come from the server.
+  const remoteSearch = useRemoteSearch(query, usesPagedLists(user));
+  const searchResults = useMemo(() => mergeSearchResults(
+    globalSearchResults(searchIndexData, query),
+    remoteSearchEntries(remoteSearch.results, remoteSearchDestinations(user)).map((entry) => ({ ...entry, subtitle: entry.subtitle || t(PAGE_META[entry.destination].label) })),
+  ), [searchIndexData, query, remoteSearch.results, user]);
+  const adminSupport = useSupportCounts(isPlatformAdmin(user), stats);
+  const supportBadge = isPlatformAdmin(user) ?
+  adminSupport.open + adminSupport.inProgress :
   data.supportTickets.filter((ticket) => ticket.has_unread_response).length;
+  // Students get server-side notices; staff keep the unread-chat dot.
+  const studentBell = user.role === 'student';
+  const bell = useNotificationBell(studentBell);
+  const bellCount = studentBell ? bellTotal(bell.summary) : data.messageChannels.filter((item) => item.unread_count > 0).length;
+  const bellLabel = bellCount > 0 ? tx`Notifications, ${bellCount > 99 ? '99+' : formatNumberLocale(bellCount)} unread` : t('Notifications');
+  function openNotifications() {
+    // Opening the bell always shows the newest notices, never a cached page.
+    invalidatePagedLists(['notifications']);
+    bell.refresh();
+    setUtility('notifications');
+  }
+  function openFromNotification(nextPage, params) {
+    setUtility(null);setMobileOpen(false);
+    setPage(nextPage, params);
+  }
   useEffect(() => {
     setActiveSearchIndex(0);
   }, [query]);
@@ -821,2861 +312,50 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
         <button className="icon-button sidebar-collapse desktop-only" onClick={toggleSidebar} title={collapseLabel} aria-label={collapseLabel} aria-expanded={!collapsed}>{collapsed ? <ChevronsRight size={19} /> : <ChevronsLeft size={19} />}</button>
         <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label={t("Close navigation")}><X /></button>
       </div>
-      <div className="sidebar-utilities"><button onClick={() => setUtility('notifications')} title={t('Notifications')} aria-label={t('Notifications')}><Bell size={20} /><span>{t('Notifications')}</span>{data.messageChannels.some((item) => item.unread_count > 0) && <i className="sidebar-unread-dot" />}</button></div>
+      <div className="sidebar-utilities"><button onClick={openNotifications} title={bellLabel} aria-label={bellLabel}><Bell size={20} /><span>{t('Notifications')}</span>{bellCount > 0 && <i className="sidebar-unread-dot" />}</button></div>
       <nav aria-label={t('Main navigation')}>{navigation.map((item) => {
           const ItemIcon = PAGE_META[item].icon;
           const itemLabel = t(PAGE_META[item].label);
+          // A locked page stays visible but cannot be opened or focused.
+          if (isPageLocked(item, user)) return <button key={item} type="button" className="nav-locked" disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${itemLabel} — ${t('Coming soon')}`}><ItemIcon size={18} aria-hidden="true" /><span>{itemLabel}</span><Lock size={13} className="nav-lock-icon" aria-hidden="true" /></button>;
           return <button key={item} className={page === item ? "active" : ''} title={collapsed ? itemLabel : undefined} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
         })}</nav>
 
-      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{user.role === 'student' && <button onClick={() => {setPage('profile');setProfileOpen(false);setMobileOpen(false);}}><UserRound size={17} />{t('My profile')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
+      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{user.role === 'student' && <button onClick={() => {setPage('student_center');setProfileOpen(false);setMobileOpen(false);}}><UserRound size={17} />{t('My profile')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
     </aside>
     <main className={`workspace ${page === 'messages' ? 'workspace-messages' : ''} ${page === 'dashboard' && user.role === 'student' ? 'workspace-dashboard' : ''}`}>
       <header className="top-header">
         <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label={t("Open navigation")}><Menu /></button>
-        <div className="page-heading"><span className="eyebrow">{t(meta.label).toUpperCase()}</span><h1>{t(meta.label)}</h1><p>{t(meta.description)}</p></div>
+        <div className="page-heading"><h1>{t(meta.label)}</h1><p>{t(meta.description)}</p></div>
         <div className="header-actions">
-          <div className="global-search" ref={searchRef}>
+          {page !== 'essay_lab' && <div className="global-search" ref={searchRef}>
             <div className={`search ${searchOpen && query.trim() ? 'is-open' : ''}`}><Search size={17} /><input role="combobox" aria-autocomplete="list" aria-controls="global-search-results" aria-expanded={searchOpen && Boolean(query.trim())} aria-activedescendant={searchResults[activeSearchIndex]?.id} aria-label={t("Search pages and records")} placeholder={t("Search pages and records…")} value={query} onFocus={() => setSearchOpen(true)} onChange={(event) => {setQuery(event.target.value);setSearchOpen(true);}} onKeyDown={handleSearchKeyDown} />{query && <button type="button" className="search-clear" onClick={() => {setQuery('');setSearchOpen(false);}} aria-label={t("Clear search")}><X size={14} /></button>}</div>
             {searchOpen && query.trim() && <div className="search-results" id="global-search-results" role="listbox" aria-label={t("Search results")}>
               {searchResults.map((result, index) => {
                 const ResultIcon = PAGE_META[result.destination].icon;
                 return <button type="button" id={result.id} role="option" aria-selected={index === activeSearchIndex} className={index === activeSearchIndex ? 'active' : ''} key={result.id} onMouseEnter={() => setActiveSearchIndex(index)} onMouseDown={(event) => event.preventDefault()} onClick={() => openSearchResult(result)}><span className="search-result-icon"><ResultIcon size={16} /></span><span><b>{result.title}</b><small>{result.kind === 'page' ? t("Page") : result.subtitle}</small></span><ChevronRight size={15} /></button>;
               })}
-              {!searchResults.length && <div className="search-empty"><Search size={18} /><span>{tx`No results for “${query.trim()}”`}</span></div>}
-              {searchResults.length > 0 && <footer><span>{tx`${searchResults.length} results`}</span><small>{t("Use ↑↓ and Enter")}</small></footer>}
+              {!searchResults.length && (remoteSearch.loading ? <div className="search-empty" role="status"><Search size={18} /><span>{t("Searching…")}</span></div> : <div className="search-empty"><Search size={18} /><span>{tx`No results for “${query.trim()}”`}</span></div>)}
+              {searchResults.length > 0 && <footer><span>{tp('{n} result|{n} results', searchResults.length, { n: searchResults.length })}</span><small>{t("Use ↑↓ and Enter")}</small></footer>}
             </div>}
-          </div>
+          </div>}
           <LanguageSelector language={language} onChange={changeLanguage} compact />
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
           {PDF_EXPORT_PAGES.has(page) && <button className="icon-button" onClick={() => exportNodePdf(document.querySelector('.page-content'))} title={t("Export PDF")} aria-label={t("Export PDF")}><Download size={19} /></button>}
         </div>
       </header>
+      {user.workspace?.read_only && <div className="data-state workspace-read-only" role="status"><ShieldAlert size={18} /><div><b>{t('This workspace is read-only')}</b><p>{t('You can view everything, but changes are paused until an administrator renews the workspace subscription.')}</p></div></div>}
       {!isOnline && <div className="data-state offline" role="status"><WifiOff size={18} /><div><b>{t('You are offline')}</b><p>{t('Current information remains available. Reconnect before saving changes.')}</p></div></div>}
       {error && <div className="alert error workspace-alert">{error}</div>}
-      <div className="page-content">{['dashboard', 'admin_dashboard'].includes(page) && user.role !== 'student' && <ScreenTimeShortcut userId={user.id} setPage={setPage} />}<PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} retry={retryResources}>{children}</PageDataBoundary></div>
+      <div className="page-content">{['dashboard', 'admin_dashboard'].includes(page) && user.role !== 'student' && canOpenPage('screen_time', user) && <ScreenTimeShortcut userId={user.id} setPage={setPage} />}<PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} retry={retryResources}>{children}</PageDataBoundary></div>
     </main>
-    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');}}><div className="sidebar-utility-panel">{utility === 'search' ? <><label className="search"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(query.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t(PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}</span><ChevronRight size={16} /></button>)}{query.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></> : <><p>{t('Unread conversations and upcoming work.')}</p>{data.messageChannels.filter((item) => item.unread_count > 0).map((item) => <button className="sidebar-notice" key={`message-${item.id}`} onClick={() => {setPage('messages');setUtility(null);setMobileOpen(false);}}><MessageCircle size={18} /><span><b>{item.display_name}</b><small>{item.unread_count} {t('Unread')}</small></span><ChevronRight size={16} /></button>)}{data.tasks.filter((item) => item.status !== 'approved').slice(0,5).map((item) => <button className="sidebar-notice" key={`task-${item.id}`} onClick={() => {setPage('roadmap');setUtility(null);setMobileOpen(false);}}><ClipboardCheck size={18} /><span><b>{item.title}</b><small>{dateText(item.due_date)}</small></span><ChevronRight size={16} /></button>)}{!data.messageChannels.some((item) => item.unread_count > 0) && !data.tasks.some((item) => item.status !== 'approved') && <Empty text={t('All caught up')} />}</>}</div></Modal>}
-    <ScreenTimeTracker page={page} />
+    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(query.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t(PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}</span><ChevronRight size={16} /></button>)}{query.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} />}</Modal>}
+    <ScreenTimeTracker page={page} userId={user.id} />
     {['counselor', 'student'].includes(user.role) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} />}
   </div>;
 }
 
-function Dashboard({ user, data, stats, reload, notify, setPage, onDirect }) {
-  const student = ownStudent(data);
-  if (user.role === 'organization') return <>
-    <div className="stat-grid"><Stat label={t("School students")} value={formatNumberLocale(stats?.students_total ?? data.students.length)} note={t("Only students from your school")} /><Stat label={t("Task progress")} value={formatPercentLocale(stats?.average_task_progress ?? 0)} note={t("Weighted completion")} /><Stat label={t("Roadmap progress")} value={formatPercentLocale(stats?.average_roadmap_progress ?? 0)} note={t("Mission completion")} /><Stat label={t("Need attention")} value={formatNumberLocale(stats?.students_at_risk ?? 0)} note={t("Late task or mission")} tone="danger" /></div>
-    <Panel title={t("Student progress")} action={<button className="button primary" onClick={() => setPage('students')}>{t("Student profiles")} <ChevronRight size={17} /></button>}><StudentTable data={data} readOnly /></Panel>
-  </>;
-  if (user.role === 'student') return <StudentDashboard user={user} data={data} stats={stats} setPage={setPage} onDirect={onDirect} />;
-  return <>
-    <div className="stat-grid"><Stat label={t("Students")} value={formatNumberLocale(stats?.students_total ?? data.students.length)} /><Stat label={t("Task progress")} value={formatPercentLocale(stats?.average_task_progress ?? 0)} /><Stat label={t("Roadmap progress")} value={formatPercentLocale(stats?.average_roadmap_progress ?? 0)} /><Stat label={t("Need attention")} value={formatNumberLocale(stats?.students_at_risk ?? stats?.tasks_late ?? 0)} tone="danger" /></div>
-    <div className="split-grid wide-left"><Panel title={t("Student progress")} action={<button className="button quiet" onClick={() => setPage('students')}>{t("View all")} <ChevronRight size={16} /></button>}><StudentTable data={data} readOnly /></Panel><div className="section-stack"><Panel title={t("Deadline radar")}>{data.tasks.slice(0, 6).map((task) => <Record key={task.id} title={task.title} meta={`${studentName(data, task.student)} • ${dateText(task.due_date)}`} badge={task.status} />)}{!data.tasks.length && <Empty />}</Panel>{isCounselor(user) && <ProgramUsageSummary {...{ user, data, reload, notify }} />}</div></div>
-  </>;
-}
-
-function StudentDashboard({ user, data, setPage, onDirect }) {
-  return <CompactDashboard key={user.id} user={user} student={ownStudent(data)} data={data} setPage={setPage} onDirect={onDirect} Modal={Modal} programUsage={<ProgramUsageSummary user={user} data={data} />} />;
-}
-
-function DashboardDiscoveryCards({ setPage }) {
-  return <section className="dashboard-discovery-rail" aria-label={t("Student discovery tools")}>
-    <article className="dashboard-discovery-card personality">
-      <Fingerprint className="discovery-card-art" size={118} strokeWidth={1.35} />
-      <div><span>{t("SELF DISCOVERY")}</span><h3>{t("Profile Assessment")}</h3><p>{t("Identify your personality, interests, subject strengths, and best-fit study direction.")}</p><button type="button" onClick={() => setPage('find_personality')}>{t("Open assessment")} <ChevronRight size={16} /></button></div>
-    </article>
-    <article className="dashboard-discovery-card university">
-      <GraduationCap className="discovery-card-art" size={122} strokeWidth={1.35} />
-      <div><span>{t("COLLEGE RESEARCH")}</span><h3>{t("University Match")}</h3><p>{t("Find universities that match your academic profile and goals.")}</p><button type="button" onClick={() => setPage('college_search')}>{t("Explore matches")} <ChevronRight size={16} /></button></div>
-    </article>
-  </section>;
-}
-
-function JourneyProgress({ student }) {
-  const rows = [
-  ['Tasks', student?.task_progress_percent || 0, tx`${student?.task_status_counts?.approved || 0} approved`],
-  ['Roadmap', student?.roadmap_progress_percent || 0, tx`${student?.roadmap_status_counts?.completed || 0} completed`],
-  ['Overall journey', student?.journey_progress_percent || 0, student?.is_at_risk ? 'A deadline needs your attention' : 'Progress is on track']];
-
-  return <section className="journey-progress"><div><span className="eyebrow">{t("LIVE PROGRESS")}</span><h3>{t("Tasks and roadmap progress")}</h3><p>{t("Every update is added to your overall progress automatically.")}</p></div><div className="journey-progress-bars">{rows.map(([title, value, note]) => <div key={title}><header><b>{t(title)}</b><strong>{formatPercentLocale(value)}</strong></header><div className="progress"><span style={{ width: `${value}%` }} /></div><small>{t(note)}</small></div>)}</div></section>;
-}
-
-function LevelProgress({ student }) {
-  if (!student) return null;
-  const stars = student.roadmap_stars ?? 0;
-  const roadmapPercent = student.roadmap_progress_percent ?? 0;
-  return <section className="roadmap-progress-card">
-    <span className="eyebrow">{t("YOUR LEVEL")}</span>
-    <h2>{t("Level")} {formatNumberLocale(student.level ?? 1)}</h2>
-    {student.level_up_pending && <p>{tx`Level ${student.eligible_level} is waiting for staff approval.`}</p>}
-    <div className="roadmap-star-count"><Star size={19} /><strong>{formatNumberLocale(stars)}</strong><small>{t("earned")}</small></div>
-    <div className="roadmap-progress-meter">
-      <span>{t("Roadmap approved by staff")}</span>
-      <b>{formatPercentLocale(roadmapPercent)}</b>
-      <div className="progress"><span style={{ width: `${roadmapPercent}%` }} /></div>
-    </div>
-  </section>;
-}
-
-function Stat({ label: title, value, note, tone = '' }) {
-  return <article className={`stat-card ${tone}`}><span>{t(title)}</span><strong>{value}</strong>{note && <small>{t(note)}</small>}</article>;
-}
-
-function Panel({ title, action, utility, children, footer, className = '' }) {
-  return <section className={`panel ${className}`}><header><h2>{t(title)}</h2>{utility ? <div className="panel-actions panel-header-actions">{utility}{action}</div> : action}</header><div className="panel-body">{children}</div>{footer && <div className="panel-footer">{footer}</div>}</section>;
-}
-
-function Record({ title, meta, description, badge, actions }) {
-  return <article className="record"><div className="record-main"><div><b>{title}</b>{meta && <small>{meta}</small>}</div>{badge && <Badge>{badge}</Badge>}</div>{description && <p>{description}</p>}{actions && <div className="record-actions">{actions}</div>}</article>;
-}
-
-function GoogleDocsPreview({ previewUrl, title }) {
-  const [frameState, setFrameState] = useState('loading');
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    setFrameState('loading');
-    const timer = window.setTimeout(() => setFrameState((current) => current === 'loading' ? 'slow' : current), 12_000);
-    return () => window.clearTimeout(timer);
-  }, [previewUrl, attempt]);
-  if (!previewUrl) return null;
-  return <div className="google-doc-preview"><div><FileText size={18} /><span><b>{t("Google Docs preview")}</b><small>{t("The document must allow Viewer access or “Anyone with the link” for the preview to load.")}</small></span></div><section className="embedded-preview-frame">
-    {frameState !== 'ready' && <div className={`embedded-preview-state ${frameState}`} role="status"><div className="document-skeleton"><span /><span /><span /><span /></div>{frameState === 'slow' && <div className="embedded-preview-slow"><Clock3 size={20} /><b>{t("The preview is taking longer than expected.")}</b><p>{t("Your connection may be slow. You can retry without closing this record.")}</p><button type="button" className="button quiet small" onClick={() => setAttempt((current) => current + 1)}><RefreshCw size={14} /> {t("Retry preview")}</button></div>}</div>}
-    <iframe key={`${previewUrl}-${attempt}`} className={frameState === 'ready' ? "is-ready" : ''} src={previewUrl} title={tx`${title} Google Docs preview`} loading="lazy" referrerPolicy="no-referrer" onLoad={() => setFrameState('ready')} onError={() => setFrameState('slow')} />
-  </section></div>;
-}
-
-function googleDocsTitle(item) {
-  return item.title || item.name || item.organization || item.recommender_name || 'Google Docs record';
-}
-
-function GoogleDocsActions({ item, onPreview }) {
-  if (!item?.google_docs_url) return null;
-  return <>
-    {item.google_docs_preview_url && onPreview && <button type="button" className="button quiet small" onClick={onPreview}><Eye size={14} /> {t("Preview")}</button>}
-    <a className="button quiet small" href={item.google_docs_url} target="_blank" rel="noreferrer">{t("Open in Google Docs")} <ExternalLink size={14} /></a>
-  </>;
-}
-
-function GoogleDocsRecordModal({ item, onClose }) {
-  const title = googleDocsTitle(item);
-  return <Modal title={title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><span>{t("Google Docs attachment")}</span><GoogleDocsActions item={item} /></div><GoogleDocsPreview previewUrl={item.google_docs_preview_url} title={title} /></div></Modal>;
-}
-
-function EssayDetailModal({ essay, onClose }) {
-  return <Modal title={essay.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{essay.status}</Badge><span>{t("Version")} {essay.version} · {essay.university_name || t("General essay")}</span></div><GoogleDocsActions item={essay} /></div><section><span className="detail-label">{t("Essay prompt")}</span><p>{essay.prompt}</p></section>{essay.google_docs_preview_url ? <GoogleDocsPreview previewUrl={essay.google_docs_preview_url} title={essay.title} /> : <section><span className="detail-label">{t("Current draft")}</span><div className="essay-content-preview">{essay.content || t("No draft content has been added yet.")}</div></section>}{essay.counselor_comment && <section className="counselor-feedback"><span className="detail-label">{t("Counselor feedback")}</span><p>{essay.counselor_comment}</p></section>}{essay.revisions?.length > 0 && <section><span className="detail-label">{t("Revision history")}</span><div className="revision-chips">{essay.revisions.map((revision) => <span key={revision.id}>{t("v")}{revision.version} · {label(revision.status)} · {dateText(revision.created_at)}</span>)}</div></section>}</div></Modal>;
-}
-
-function TaskSubmissionModal({ task, onClose, notify }) {
-  return <Modal title={tx`Task response · ${task.title}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{task.status}</Badge><span>{task.submitted_at ? tx`Submitted ${dateTimeText(task.submitted_at)}` : t("Not submitted yet")}</span></div><div className="detail-actions">{task.has_submission_file && <button className="button quiet" onClick={() => downloadTaskSubmission(task, notify)}><Download size={15} /> {task.submission_file_name || t("Download file")}</button>}{task.submission_url && <a className="button primary" href={task.submission_url} target="_blank" rel="noreferrer">{t("Open submission")} <ExternalLink size={15} /></a>}</div></div><section><span className="detail-label">{t("Assigned task")}</span><p>{task.description || t("No additional instructions.")}</p></section><section><span className="detail-label">{t("Student response")}</span><div className="essay-content-preview">{task.student_response || t("The student has not submitted a written response yet.")}</div></section><GoogleDocsPreview previewUrl={task.submission_preview_url} title={task.title} /></div></Modal>;
-}
-
-const formatFileSize = (bytes = 0) => {
-  if (!bytes) return '—';
-  if (bytes < 1024 * 1024) return `${formatNumberLocale(Math.max(1, Math.round(bytes / 1024)))} KB`;
-  return `${formatNumberLocale(bytes / (1024 * 1024), { maximumFractionDigits: 1 })} MB`;
-};
-
-async function downloadDocumentFile(doc, notify) {
-  try {
-    const result = await api.downloadDocument(doc.id);
-    const url = URL.createObjectURL(result.blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = doc.file_name || result.fileName || 'document';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  } catch (error) {
-    notify?.(error.message, 'error');
-  }
-}
-
-async function downloadTaskSubmission(task, notify) {
-  try {
-    const result = await api.downloadTaskSubmission(task.id);
-    const url = URL.createObjectURL(result.blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = task.submission_file_name || result.fileName || 'submission';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  } catch (error) {
-    notify?.(error.message, 'error');
-  }
-}
-
-async function downloadEvidenceFile(item, notify) {
-  try {
-    const result = await api.downloadEvidence(item.proof_resource, item.id);
-    const url = URL.createObjectURL(result.blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = item.proof_file_name || result.fileName || 'evidence';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  } catch (error) {
-    notify?.(error.message, 'error');
-  }
-}
-
-function DocumentFilePreview({ doc, evidenceResource = '' }) {
-  const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState({ loading: true, url: '', contentType: '', error: '' });
-  useEffect(() => {
-    let active = true;
-    let objectUrl = '';
-    setState({ loading: true, url: '', contentType: '', error: '' });
-    const request = evidenceResource ? api.evidenceFile(evidenceResource, doc.id) : api.documentFile(doc.id);
-    request.then((result) => {
-      if (!active) return;
-      objectUrl = URL.createObjectURL(result.blob);
-      setState({ loading: false, url: objectUrl, contentType: result.contentType, error: '' });
-    }).catch((error) => {
-      if (active) setState({ loading: false, url: '', contentType: '', error: error.message });
-    });
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [doc.id, evidenceResource, attempt]);
-
-  if (state.loading) return <div className="secure-document-state" role="status"><div className="document-skeleton"><span /><span /><span /><span /></div><p>{t("Secure preview is loading…")}</p></div>;
-  if (state.error) return <div className="secure-document-state error" role="alert"><ShieldAlert size={24} /><b>{t("Preview could not be loaded")}</b><p>{state.error}</p><button className="button quiet small" onClick={() => setAttempt((value) => value + 1)}><RefreshCw size={14} /> {t("Retry")}</button></div>;
-  if (state.contentType.startsWith('image/')) return <div className="secure-document-preview image"><img src={state.url} alt={doc.title} /></div>;
-  return <div className="secure-document-preview"><iframe src={state.url} title={tx`${doc.title} preview`} /></div>;
-}
-
-function EvidencePreviewModal({ item, onClose, notify }) {
-  return <Modal title={tx`Evidence · ${visibilityItemTitle(item)}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><ShieldCheck size={16} /><span>{item.proof_file_name} · {formatFileSize(item.proof_file_size)}</span></div><button className="button quiet" onClick={() => downloadEvidenceFile(item, notify)}><Download size={15} /> {t("Download")}</button></div>{item.proof_file_previewable ? <DocumentFilePreview doc={{ ...item, title: visibilityItemTitle(item) }} evidenceResource={item.proof_resource} /> : <Empty text={t("This evidence file is stored securely. Download it to open it in the appropriate application.")} />}</div></Modal>;
-}
-
-function DocumentPreviewModal({ document: doc, onClose, notify }) {
-  return <Modal title={doc.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{doc.status}</Badge><span>{label(doc.document_type)}{doc.has_file && ` · ${doc.file_name || t("Document")} · ${formatFileSize(doc.file_size)}`}</span></div><div className="detail-actions">{doc.has_file && <button className="button quiet" onClick={() => downloadDocumentFile(doc, notify)}><Download size={15} /> {t("Download")}</button>}<GoogleDocsActions item={doc} /></div></div>{doc.counselor_comment && <section><span className="detail-label">{t("Counselor comment")}</span><p>{doc.counselor_comment}</p></section>}{doc.google_docs_preview_url ? <GoogleDocsPreview previewUrl={doc.google_docs_preview_url} title={doc.title} /> : doc.has_file && doc.file_previewable ? <DocumentFilePreview doc={doc} /> : doc.has_file ? <Empty text={t("This Office document is stored securely. Download it to open it in the appropriate application.")} /> : <Empty text={t("No file or Google Docs link has been added for preview.")} />}</div></Modal>;
-}
-
-function ProfileCard({ student }) {
-  if (!student) return <Panel title={t("Profile")}><Empty text={t("Student profile not found.")} /></Panel>;
-  return <Panel title={t("Profile overview")} className="profile-card" ><div className="profile-identity"><StudentAvatar student={student} className="large" /><div><h3>{fullName(student.user_detail)}</h3><p>{student.user_detail?.email}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : student.grade ? tx`Grade ${student.grade}` : 'N/A'} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("IELTS")} value={student.ielts_score} /><Detail label={t("SAT")} value={student.sat_score} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div></Panel>;
-}
-
-function StudentAvatar({ student, className = '' }) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    if (!student?.id || !student.has_photo) {setSrc('');return;}
-    let active = true;
-    let objectUrl = '';
-    api.studentPhoto(student.id).
-    then((result) => {
-      if (!active) return;
-      objectUrl = URL.createObjectURL(result.blob);
-      setSrc(objectUrl);
-    }).
-    catch(() => {if (active) setSrc('');});
-    return () => {active = false;if (objectUrl) URL.revokeObjectURL(objectUrl);};
-  }, [student?.id, student?.has_photo, student?.updated_at]);
-  const name = fullName(student?.user_detail);
-  return <span className={`avatar ${src ? 'has-photo' : ''} ${className}`.trim()}>{src ? <img src={src} alt={name} /> : initials(name)}</span>;
-}
-
-// One section, printed on its own: the browser writes the PDF, so no records
-// leave the device and no PDF dependency enters the build.
-function exportNodePdf(node) {
-  if (!node) return;
-  const root = document.documentElement;
-  const previous = root.getAttribute('data-theme');
-  let restored = false;
-  let fallbackTimer;
-  const restore = () => {
-    if (restored) return;
-    restored = true;
-    window.clearTimeout(fallbackTimer);
-    window.removeEventListener('afterprint', restore);
-    document.body.classList.remove('printing-scope');
-    node.classList.remove('print-target');
-    if (previous) root.setAttribute('data-theme', previous);else
-    root.removeAttribute('data-theme');
-  };
-  document.body.classList.add('printing-scope');
-  node.classList.add('print-target');
-  root.setAttribute('data-theme', 'light');
-  window.addEventListener('afterprint', restore);
-  // Keep print() inside the click event so browsers that require a user
-  // gesture do not block it. Cleanup waits for the print lifecycle event.
-  fallbackTimer = window.setTimeout(restore, 60_000);
-  try { window.print(); } catch { restore(); }
-}
-
-function Detail({ label: title, value }) {
-  const empty = value == null || value === '' || (typeof value === 'string' && !value.trim());
-  return <div className={`detail ${empty ? 'is-empty' : ''}`.trim()}><span>{t(title)}</span><b>{empty ? t("Not provided") : value}</b></div>;
-}
-
-function StudentTable({ data, onView, onEdit, onDelete, onApproveLevel, readOnly = false, query = '' }) {
-  const rows = data.students.filter((student) => fullName(student.user_detail).toLowerCase().includes(query.toLowerCase()));
-  if (!rows.length) return <Empty text={t("No students found.")} />;
-  const hasActions = Boolean(onView || onApproveLevel || !readOnly && (onEdit || onDelete));
-  return <div className="table-wrap"><table><thead><tr><th>{t("Student")}</th><th>{t("School")}</th><th>{t("Target")}</th><th>{t("Scores")}</th><th>{t("XP / Level")}</th><th>{t("Task / Roadmap / Overall")}</th>{hasActions && <th />}</tr></thead><tbody>{rows.map((student) => <tr key={student.id} className={onView ? "clickable-row" : ''} onDoubleClick={() => onView?.(student)}><td><div className="person"><span className="avatar">{initials(fullName(student.user_detail))}</span><div><b>{fullName(student.user_detail)}</b><small>{student.user_detail?.email}</small>{student.is_at_risk && <span className="risk-note">{t("Needs attention")}</span>}</div></div></td><td>{student.school_name || '—'}</td><td className="student-target-cell"><b>{student.target_major || '—'}</b><small>{student.target_countries || '—'}</small></td><td>{t("GPA")} {student.gpa || '—'}<small>{t("IELTS")} {student.ielts_score || '—'} {t("• SAT")} {student.sat_score || '—'}</small></td><td><b>{t("Level")} {formatNumberLocale(student.level ?? 1)}</b><small>{formatNumberLocale(student.xp_total ?? 0)} {t("XP")}</small>{student.level_up_pending && <span className="risk-note">{t("Level")} {formatNumberLocale(student.eligible_level)} {t("pending")}</span>}</td><td><div className="student-progress-stack">{[['Task', student.task_progress_percent], ['Roadmap', student.roadmap_progress_percent], ['Overall', student.journey_progress_percent]].map(([title, value]) => <div key={title}><span>{t(title)}</span><div className="progress"><i style={{ width: `${value || 0}%` }} /></div><b>{formatPercentLocale(value || 0)}</b></div>)}</div></td>{hasActions && <td><div className="row-actions">{onApproveLevel && student.level_up_pending && <button className="button quiet small" onClick={() => onApproveLevel(student)}><CheckCircle2 size={15} /> {t("Approve level")}</button>}{onView && <button className="icon-button" onClick={() => onView(student)} title={t("Full profile")}><Eye size={16} /></button>}{!readOnly && onEdit && <button className="icon-button" onClick={() => onEdit(student)} title={t("Edit")}><Pencil size={16} /></button>}{!readOnly && onDelete && <button className="icon-button danger" onClick={() => onDelete(student)} title={t("Delete")}><Trash2 size={16} /></button>}</div></td>}</tr>)}</tbody></table></div>;
-}
-
-const STUDENT_RESOURCE_GROUPS = [
-['Research', 'researches'], ['Projects', 'projects'], ['Internships', 'internships'],
-['Activities', 'activities'], ['Honors', 'honors'], ['Achievements', 'achievements'],
-['Recommendation letters', 'recommendations']];
-
-
-function studentItems(data, resource, studentId) {
-  return (data[resource] || []).filter((item) => Number(item.student) === Number(studentId));
-}
-
-function StudentOverviewList({ title, resource, items, data }) {
-  const [viewingGoogleDoc, setViewingGoogleDoc] = useState(null);
-  return <><Panel title={title} ><div className="record-list">{items.map((item) => <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />} />)}{!items.length && <Empty />}</div></Panel>{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>;
-}
-
-function StudentTaskList({ items, onView }) {
-  return <Panel title={t("Assigned tasks & responses")} ><div className="record-list">{items.map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} · ${label(task.priority)}${task.submitted_at ? ` · Submitted ${dateText(task.submitted_at)}` : ''}`} description={task.student_response || task.description} badge={task.status} actions={<button className="button quiet small" onClick={() => onView(task)}><Eye size={14} /> {t("View response")}</button>} />)}{!items.length && <Empty text={t("No assigned tasks found.")} />}</div></Panel>;
-}
-
-function StudentCollegeList({ items }) {
-  return <Panel title={t("College list")} ><div className="record-list">{items.map((application) => <Record key={application.id} title={application.university_detail?.name || t("University")} meta={`${application.program} · ${label(application.tier)} · Deadline ${dateText(application.deadline)}`} description={application.notes} badge={application.status} actions={application.application_portal_url && <a className="button quiet small" href={application.application_portal_url} target="_blank" rel="noreferrer">{t("Application portal")} <ExternalLink size={14} /></a>} />)}{!items.length && <Empty text={t("The student has not added any universities to the college list yet.")} />}</div></Panel>;
-}
-
-function StudentEssayList({ items, onView }) {
-  return <Panel title={t("Essays & Google Docs")} ><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={`Version ${essay.version} · ${essay.university_name || 'General essay'}`} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={t("No essays found.")} />}</div></Panel>;
-}
-
-function StudentDocumentList({ title, items, onPreview, notify }) {
-  return <Panel title={title} ><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={`${label(doc.document_type)}${doc.has_file ? ` · ${doc.file_name || 'File'} · ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => onPreview(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} /></>} />)}{!items.length && <Empty />}</div></Panel>;
-}
-
-
-function ParentInviteModal({ student, onClose, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    const payload = {
-      student: student.id,
-      email: values.get('email'),
-      first_name: values.get('first_name'),
-      last_name: values.get('last_name'),
-      relationship: values.get('relationship'),
-      can_view_applications: values.get('can_view_applications') === 'on',
-      can_view_documents: values.get('can_view_documents') === 'on',
-      can_view_meetings: values.get('can_view_meetings') === 'on'
-    };
-    if (values.get('password')) payload.password = values.get('password');
-    try {
-      const result = await api.inviteParent(payload);
-      notify(tx`Parent invitation created. Login username: ${result.username}`);
-      onClose();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" /></Field><Field label={t("Parent last name")}><input name="last_name" /></Field><Field label={t("Parent email")}><input name="email" type="email" required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Required only when this email does not already have a parent account.")}><input name="password" type="password" minLength="8" autoComplete="new-password" /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
-}
-
-function TemporaryCredentialModal({ account, onClose, notify }) {
-  const [result, setResult] = useState(null);
-  const [saving, setSaving] = useState(false);
-
-  async function issue() {
-    setSaving(true);
-    try {
-      setResult(await api.issueTemporaryCredential(account.id));
-    } catch (err) {
-      notify(err.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function copyPassword() {
-    if (!result?.temporary_password) return;
-    try {
-      await navigator.clipboard.writeText(result.temporary_password);
-      notify(t('Copied'));
-    } catch {
-      notify(t('Copy password'), 'error');
-    }
-  }
-
-  return <Modal title={`${t('Reset login')} · ${fullName(account)}`} onClose={onClose}>
-    <div className="credential-modal">
-      <div className="credential-account"><Fingerprint size={21} /><div><b>{account.username}</b><small>{account.email || label(account.role)}</small></div></div>
-      {!result ? <>
-        <p>{t('This revokes existing sessions and any previous temporary password.')}</p>
-        <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button type="button" className="button primary" onClick={issue} disabled={saving} aria-busy={saving}><Fingerprint size={16} />{t('Generate temporary password')}</button></div>
-      </> : <>
-        <p className="credential-delivery"><ShieldAlert size={17} />{t('The password is shown once. Send it through an approved secure channel.')}</p>
-        <div className="credential-secret"><span>{t('Generated password')}</span><code>{result.temporary_password}</code><button type="button" className="button quiet" onClick={copyPassword}><ClipboardCheck size={16} />{t('Copy password')}</button></div>
-        <small>{t('expires')}: {dateTimeText(result.credential?.expires_at)}</small>
-        <div className="form-actions"><button type="button" className="button primary" onClick={onClose}>{t('Close')}</button></div>
-      </>}
-    </div>
-  </Modal>;
-}
-
-function StudentOverview({ student, data, onBack, user, notify }) {
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [selectedEssay, setSelectedEssay] = useState(null);
-  const [selectedDocument, setSelectedDocument] = useState(null);
-  const [parentInviteOpen, setParentInviteOpen] = useState(false);
-  const [credentialOpen, setCredentialOpen] = useState(false);
-  if (!student) return <Empty text={t("Student profile not found.")} />;
-  const documents = studentItems(data, 'documents', student.id);
-  const certificates = documents.filter((item) => item.document_type === 'certificate');
-  const regularDocuments = documents.filter((item) => item.document_type !== 'certificate');
-  const tasks = studentItems(data, 'tasks', student.id);
-  const applications = studentItems(data, 'applications', student.id);
-  const essays = studentItems(data, 'essays', student.id);
-
-  return <div className="section-stack student-overview">
-    <section className="student-overview-hero">
-      <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{student.user_detail?.email} • {student.school_name || t("No school assigned")}</p></div></div></div>
-      <div className="student-overview-actions">{['admin', 'counselor', 'organization'].includes(user?.role) && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{['admin', 'counselor'].includes(user?.role) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}</div>
-      <div className="overview-progress"><strong>{formatPercentLocale(student.progress_percent || 0)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${student.progress_percent || 0}%` }} /></div></div>
-    </section>
-    <div className="stat-grid"><Stat label={t("Level")} value={student.level ?? 1} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : t("Teacher approved")} /><Stat label={t("Stars")} value={student.roadmap_stars ?? 0} note={t("One per approved step")} /><Stat label={t("Assigned tasks")} value={tasks.length} /><Stat label={t("Applications")} value={applications.length} /></div>
-    <LevelProgress student={student} />
-    <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} ><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget USD")} value={student.budget_usd} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? "Needed" : "Not needed"} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
-    <Panel title={t("My guardian")} ><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
-    <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} /></div>
-    <div className="overview-grid">
-      {STUDENT_RESOURCE_GROUPS.map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
-      <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} />
-    </div>
-    {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} notify={notify} />}
-    {selectedEssay && <EssayDetailModal essay={selectedEssay} onClose={() => setSelectedEssay(null)} />}
-    {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} />}
-    {parentInviteOpen && <ParentInviteModal student={student} onClose={() => setParentInviteOpen(false)} notify={notify} />}
-    {credentialOpen && <TemporaryCredentialModal account={student.user_detail} onClose={() => setCredentialOpen(false)} notify={notify} />}
-  </div>;
-}
-
-function visibilityItemTitle(item) {
-  return item.title || item.name || item.organization || item.university_name || item.recommender_name || item.topic || t("Record");
-}
-
-const VISIBILITY_POLICY_LABELS = {
-  identity_and_contact: 'Identity & contact', academic_profile: 'Academic profile', progress_and_xp: 'Progress & XP',
-  task_metadata_and_status: 'Task metadata & status', roadmap_metadata_and_status: 'Roadmap metadata & status',
-  application_metadata_and_status: 'Application metadata & status', document_metadata_and_secure_file: 'Document metadata & secure file',
-  essay_metadata_and_status: 'Essay metadata & status', recommendation_metadata_and_status: 'Recommendation metadata & status',
-  portfolio_and_activities: 'Portfolio & activities', meeting_schedule_and_status: 'Meeting schedule & status', program_usage: 'Program usage',
-  private_messages: 'Private messages', message_moderation_reports: 'Moderation reports', credentials_and_password_state: 'Credentials & password state',
-  internal_counselor_notes: 'Internal counselor notes', meeting_notes: 'Meeting notes', application_portal_credentials: 'Application portal credentials',
-  essay_draft_content_and_feedback: 'Essay draft content & feedback', recommendation_files_and_private_notes: 'Recommendation files & private notes',
-  task_submission_content: 'Task submission content', roadmap_reflections: 'Roadmap reflections', screen_time_detail: 'Screen time detail', support_tickets: 'Support tickets',
-};
-
-function visibilityPolicyLabel(item) {
-  return t(VISIBILITY_POLICY_LABELS[item] || item.replaceAll('_', ' '));
-}
-
-function VisibilitySection({ title, items = [], onDocument, onEvidence }) {
-  return <Panel title={title}><div className="visibility-records">{items.slice(0, 8).map((item) => <article key={`${item.proof_resource || 'record'}-${item.id}`}><div><b>{visibilityItemTitle(item)}</b><small>{label(item.status || item.category || item.document_type || item.activity_type || item.level || '')}</small></div><div className="panel-actions">{onDocument && (item.has_file || item.google_docs_preview_url) && <button className="button quiet" onClick={() => onDocument(item)}><Eye size={15} /> {t("Preview")}</button>}{onEvidence && item.has_proof_file && <button className="button quiet" onClick={() => onEvidence(item)}><ShieldCheck size={15} /> {t("Evidence")}</button>}</div></article>)}{!items.length && <Empty />}</div></Panel>;
-}
-
-function SchoolStudent360({ visibility, student, loading, error, onBack, user, notify }) {
-  const [credentialOpen, setCredentialOpen] = useState(false);
-  const [document, setDocument] = useState(null);
-  const [evidence, setEvidence] = useState(null);
-  if (loading) return <PageSkeleton />;
-  if (error) return <div className="section-stack"><button className="button quiet back-button" onClick={onBack}>{t("← Students")}</button><div className="alert error">{error}</div></div>;
-  if (!visibility) return <Empty text={t("Student visibility data is unavailable.")} />;
-  const profile = visibility.student;
-  const identity = profile.user || student.user_detail;
-  const included = visibility.policy?.included || [];
-  const excluded = visibility.policy?.excluded || [];
-  const portfolio = [...visibility.achievements, ...visibility.researches, ...visibility.projects, ...visibility.internships, ...visibility.activities, ...visibility.honors];
-  return <div className="section-stack school-student-360"><section className="student-overview-hero"><div className="student-overview-title"><button className="button quiet" onClick={onBack}>{t("← Students")}</button><div className="profile-identity"><span className="avatar large">{initials(fullName(identity))}</span><div><span className="eyebrow">{t("PRIVACY-SAFE STUDENT 360")}</span><h2>{fullName(identity)}</h2><p>{identity.email} • {profile.school_name}</p></div></div><button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t("Reset login")}</button></div><div className="overview-progress"><strong>{formatPercentLocale(profile.journey_progress_percent || 0)}</strong><span>{t("Application journey")}</span><div className="progress wide"><span style={{ width: `${profile.journey_progress_percent || 0}%` }} /></div></div></section><section className="visibility-policy"><div><ShieldCheck size={22} /><div><span className="eyebrow">{t("DATA VISIBILITY POLICY")}</span><h3>{visibility.policy.access_scope === 'global' ? t("Global admin scope") : t("Own-school scope")}</h3><p>{t("Admissions data is read-only here. Sensitive communication, credentials, and internal notes require a separate authorized workflow.")}</p></div></div><Badge tone="success">{t("Read only")}</Badge><details><summary>{t("What is visible")}</summary><div className="visibility-tags included">{included.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details><details><summary>{t("What is protected")}</summary><div className="visibility-tags protected">{excluded.map((item) => <span key={item}>{visibilityPolicyLabel(item)}</span>)}</div></details></section><div className="stat-grid"><Stat label={t("Level")} value={profile.level} note={tx`${profile.xp_total} XP`} /><Stat label={t("Tasks")} value={visibility.tasks.length} note={formatPercentLocale(profile.task_progress_percent || 0)} /><Stat label={t("Roadmap")} value={visibility.roadmap.length} note={formatPercentLocale(profile.roadmap_progress_percent || 0)} /><Stat label={t("Applications")} value={visibility.applications.length} note={t("Metadata and status")}/></div><div className="split-grid"><Panel title={t("Academic & planning")}><div className="detail-grid"><Detail label={t("Grade")} value={profile.grade} /><Detail label={t("GPA")} value={profile.gpa} /><Detail label={t("IELTS")} value={profile.ielts_score} /><Detail label={t("SAT")} value={profile.sat_score} /><Detail label={t("Target major")} value={profile.target_major} /><Detail label={t("Target countries")} value={profile.target_countries} /><Detail label={t("Parent contact")} value={profile.parent_contact} /><Detail label={t("Counselor")} value={profile.counselor_name} /></div></Panel><VisibilitySection title={t("Meetings")} items={visibility.meetings} /></div><div className="overview-grid"><VisibilitySection title={t("Tasks")} items={visibility.tasks} /><VisibilitySection title={t("Roadmap")} items={visibility.roadmap} /><VisibilitySection title={t("Applications")} items={visibility.applications} /><VisibilitySection title={t("Documents")} items={visibility.documents} onDocument={setDocument} /><VisibilitySection title={t("Essays")} items={visibility.essays} /><VisibilitySection title={t("Recommendations")} items={visibility.recommendations} /><VisibilitySection title={t("Portfolio & activities")} items={portfolio} onEvidence={setEvidence} /><VisibilitySection title={t("Program Usage")} items={visibility.program_usage} /></div>{credentialOpen && <TemporaryCredentialModal account={{ ...identity, role: 'student' }} onClose={() => setCredentialOpen(false)} notify={notify} />}{document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}{evidence && <EvidencePreviewModal item={evidence} onClose={() => setEvidence(null)} notify={notify} />}</div>;
-}
-
-function StudentAssignmentModal({ user, data, onClose, onSaved, notify }) {
-  const admin = user.role === 'admin';
-  const counselors = (data.accounts || []).filter((account) => account.role === 'counselor' && account.is_active && account.school);
-  const [counselorId, setCounselorId] = useState(admin ? '' : String(user.id));
-  const [candidates, setCandidates] = useState([]);
-  const [selected, setSelected] = useState([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(!admin);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    if (admin && !counselorId) {
-      setCandidates([]);
-      setSelected([]);
-      setLoading(false);
-      return () => {cancelled = true;};
-    }
-    setLoading(true);
-    setError('');
-    setSelected([]);
-    api.studentAssignmentCandidates(admin ? counselorId : null).
-    then((items) => {if (!cancelled) setCandidates(items || []);}).
-    catch((requestError) => {if (!cancelled) setError(requestError.message);}).
-    finally(() => {if (!cancelled) setLoading(false);});
-    return () => {cancelled = true;};
-  }, [admin, counselorId]);
-
-  const visible = candidates.filter((student) => {
-    const haystack = `${fullName(student.user_detail)} ${student.user_detail?.email || ''}`.toLowerCase();
-    return haystack.includes(search.trim().toLowerCase());
-  });
-  const target = admin ? counselors.find((account) => String(account.id) === String(counselorId)) : user;
-  const targetRoleLabel = label(target?.role || user.role);
-  const toggle = (studentId) => setSelected((current) => current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]);
-
-  async function submit(event) {
-    event.preventDefault();
-    if (!selected.length) {setError(t("Select at least one student."));return;}
-    setSaving(true);
-    setError('');
-    try {
-      await api.assignCounselorStudents({ counselor: Number(counselorId), students: selected });
-      notify(t("Students connected."));
-      onSaved();
-    } catch (requestError) {setError(requestError.message);} finally {setSaving(false);}
-  }
-
-  return <Modal title={admin ? t("Assign counselor") : t("Connect students")} onClose={onClose}><form className="student-assignment-form" onSubmit={submit}>
-    {admin && <Field label={t("Counselor")}><select value={counselorId} onChange={(event) => setCounselorId(event.target.value)} required><option value="">{t("Select a counselor")}</option>{counselors.map((account) => <option key={account.id} value={account.id}>{fullName(account)} · {account.school_name}</option>)}</select></Field>}
-    <p className="form-note form-wide"><ShieldCheck size={16} />{admin ? t("Admins can reassign students only to an active counselor from the same school.") : t("You can connect only unassigned students from your own school.")}</p>
-    {target && <div className="assignment-target form-wide"><span className="avatar">{initials(fullName(target))}</span><div><b>{fullName(target)}</b><small>{target.school_name || targetRoleLabel}</small></div><Badge>{`${formatNumberLocale(candidates.length)} ${t("available")}`}</Badge></div>}
-    {(counselorId || !admin) && <fieldset className="member-picker assignment-picker form-wide"><legend>{formatNumberLocale(selected.length)} {t("selected")}</legend><div className="assignment-tools"><label className="member-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search students")} /></label><div className="audience-shortcuts"><button type="button" onClick={() => setSelected(visible.map((student) => student.id))}>{t("Select all")}</button><button type="button" onClick={() => setSelected([])}>{t("Clear")}</button></div></div><div className="assignment-candidate-list">{visible.map((student) => <CheckboxControl key={student.id} checked={selected.includes(student.id)} onChange={() => toggle(student.id)}><span className="assignment-candidate-copy"><b>{fullName(student.user_detail)}</b><small>{student.user_detail?.email || '—'} · {t("Grade")} {student.grade}</small></span><Badge>{student.counselor_name ? t("Reassign") : t("Unassigned")}</Badge></CheckboxControl>)}</div>{loading && <small>{t("Loading students…")}</small>}{!loading && !visible.length && <small>{admin && !counselorId ? t("Select a counselor first.") : t("No students are available for assignment in this school.")}</small>}</fieldset>}
-    {error && <div className="alert error form-wide">{error}</div>}
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || loading || !selected.length} aria-busy={saving}>{saving ? t("Connecting…") : t("Connect selected students")}</button></div>
-  </form></Modal>;
-}
-
-function StudentsPage({ user, data, query, reload, notify }) {
-  const [editing, setEditing] = useState(null);
-  const [open, setOpen] = useState(false);
-  const [assignmentOpen, setAssignmentOpen] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [visibility, setVisibility] = useState(null);
-  const [visibilityLoading, setVisibilityLoading] = useState(false);
-  const [visibilityError, setVisibilityError] = useState('');
-
-  async function openStudent(student) {
-    setSelected(student);
-    setVisibility(null);
-    setVisibilityError('');
-    if (!['admin', 'organization'].includes(user.role)) return;
-    setVisibilityLoading(true);
-    try {setVisibility(await api.studentDataVisibility(student.id));} catch (error) {setVisibilityError(error.message);} finally {setVisibilityLoading(false);}
-  }
-
-  async function remove(student) {
-    if (!window.confirm(tx`Delete ${fullName(student.user_detail)}’s profile?`)) return;
-    try {await api.remove('students', student.id);notify(t("Student deleted."));reload();} catch (err) {notify(err.message, 'error');}
-  }
-
-  async function approveLevel(student) {
-    try {
-      const result = await api.approveStudentLevel(student.id);
-      notify(tx`Level ${result.level} approved.`);
-      reload();
-    } catch (err) {notify(err.message, 'error');}
-  }
-
-  if (selected && ['admin', 'organization'].includes(user.role)) return <SchoolStudent360 visibility={visibility} student={selected} loading={visibilityLoading} error={visibilityError} onBack={() => setSelected(null)} user={user} notify={notify} />;
-  if (selected) return <StudentOverview student={data.students.find((item) => item.id === selected.id) || selected} data={data} onBack={() => setSelected(null)} user={user} notify={notify} />;
-
-  const actions = user.role !== 'teacher' && <div className="panel-actions">{['admin', 'counselor'].includes(user.role) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {user.role === 'admin' ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
-  return <>
-    <Panel title={t("Students")} action={actions}><StudentTable data={data} query={query} onView={openStudent} onApproveLevel={isTaskManager(user) ? approveLevel : undefined} onEdit={user.role !== 'teacher' ? (student) => {setEditing(student);setOpen(true);} : undefined} onDelete={user.role !== 'teacher' ? remove : undefined} /></Panel>
-    {open && <StudentForm user={user} data={data} student={editing} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
-    {assignmentOpen && <StudentAssignmentModal user={user} data={data} onClose={() => setAssignmentOpen(false)} onSaved={() => {setAssignmentOpen(false);reload();}} notify={notify} />}
-  </>;
-}
-
-function StudentForm({ user, data, student, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault(); setSaving(true);
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    try {
-      if (student) await api.update('students', student.id, { notes: values.notes });
-      else await api.quickCreateStudent(values);
-      onSaved();
-    } catch (error) { notify(error.message, 'error'); }
-    finally { setSaving(false); }
-  }
-  return <Modal title={student ? t('Student notes') : t('Add student account')} onClose={onClose}>
-    <form className="form-grid student-access-form" onSubmit={submit}>
-      {student ? <Field label={t('Notes')}><textarea name="notes" defaultValue={student.notes} /></Field> : <>
-        <Field label={t('Student name')}><input name="name" required autoComplete="off" /></Field>
-        <Field label={t('Email')}><input name="email" type="email" /></Field>
-        <Field label={t('Temporary password')} hint={t('Use at least 8 characters.')}><input name="password" type="password" minLength={8} required autoComplete="new-password" /></Field>
-        {user.role === 'admin' && <Field label={t('School')}><select name="school" required defaultValue=""><option value="">{t('Select school')}</option>{data.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>}
-        <p className="form-wide">{t('The student completes their profile after signing in.')}</p>
-      </>}
-      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving}>{saving ? t('Saving…') : t(student ? 'Save' : 'Create login')}</button></div>
-    </form>
-  </Modal>;
-}
-
-function SchoolsPage({ user, data, reload, notify }) {
-  const [open, setOpen] = useState('');
-  const [editingSchool, setEditingSchool] = useState(null);
-  const [transferTarget, setTransferTarget] = useState(null);
-  const [credentialTarget, setCredentialTarget] = useState(null);
-  async function remove(school) {
-    if (!window.confirm(tx`Deactivate ${school.name}?`)) return;
-    try {await api.remove('schools', school.id);notify(t("School deactivated."));reload();} catch (err) {notify(err.message, 'error');}
-  }
-  const isAdmin = user.role === 'admin';
-  const actions = isAdmin && <div className="panel-actions"><button className="button quiet" onClick={() => setOpen('counselor')}><UserRound size={17} /> {t("Individual counselor")}</button><button className="button primary" onClick={() => setOpen('school')}><Plus size={17} /> {t("Add school")}</button></div>;
-  return <>
-    <Panel title={t("Schools & counselor workspaces")} action={actions}><div className="card-grid">{data.schools.map((school) => <article className={`school-card ${school.workspace_type === 'individual' ? 'individual' : ''}`} key={school.id}>
-      <div className="school-number">{school.workspace_type === 'individual' ? <UserRound size={22} /> : String(school.id).padStart(2, '0')}</div>
-      <div><div className="school-card-title"><h3>{school.name}</h3><Badge>{school.workspace_type === 'individual' ? t("Individual workspace") : t("School")}</Badge></div><p>{school.workspace_type === 'individual' ? tx`Owner: ${school.owner_counselor_name || t("Not assigned")}` : `${school.contact_email || t("No email")} • ${school.contact_phone || t("No phone")}`}</p><span>{school.students_count || 0} {t("students")}{school.organization_account_username ? ` · ${school.organization_account_username}` : ''}</span></div>
-      {isAdmin && <div className="school-card-actions">
-        {school.workspace_type !== 'individual' && <button className="icon-button" onClick={() => setEditingSchool(school)} aria-label={tx`Edit ${school.name}`}><Pencil size={16} /></button>}
-        {school.workspace_type === 'individual' && school.owner_counselor && <button className="icon-button" onClick={() => setTransferTarget(school)} aria-label={tx`Transfer ${school.owner_counselor_name}`} title={t("Transfer to school")}><Building2 size={16} /></button>}
-        {school.organization_account_id && <button className="icon-button" onClick={() => setCredentialTarget({ id: school.organization_account_id, username: school.organization_account_username, full_name: school.name, role: 'organization' })} aria-label={`${t('Reset login')} · ${school.name}`} title={t('Reset login')}><Fingerprint size={16} /></button>}
-        {school.workspace_type !== 'individual' && school.is_active && <button className="icon-button danger" onClick={() => remove(school)} aria-label={tx`Deactivate ${school.name}`}><Trash2 size={16} /></button>}
-      </div>}
-    </article>)}{!data.schools.length && <Empty />}</div></Panel>
-    {open === 'school' && <SchoolForm onClose={() => setOpen('')} onSaved={() => {setOpen('');reload();}} notify={notify} />}
-    {editingSchool && <SchoolForm school={editingSchool} onClose={() => setEditingSchool(null)} onSaved={() => {setEditingSchool(null);reload();}} notify={notify} />}
-    {open === 'counselor' && <IndividualCounselorForm onClose={() => setOpen('')} onSaved={() => {setOpen('');reload();}} notify={notify} />}
-    {transferTarget && <CounselorTransferForm workspace={transferTarget} schools={data.schools.filter((school) => school.workspace_type === 'school' && school.is_active)} onClose={() => setTransferTarget(null)} onSaved={() => {setTransferTarget(null);reload();}} notify={notify} />}
-    {credentialTarget && <TemporaryCredentialModal account={credentialTarget} onClose={() => setCredentialTarget(null)} notify={notify} />}
-  </>;
-}
-
-function CounselorTransferForm({ workspace, schools, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    try {
-      const school = Number(new FormData(event.currentTarget).get('school'));
-      await api.transferCounselor(workspace.owner_counselor, school);
-      notify(t("Counselor transferred. The private workspace is now inactive."));
-      onSaved();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-  return <Modal title={tx`Transfer ${workspace.owner_counselor_name}`} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Organization school")}><select name="school" required defaultValue=""><option value="" disabled>{t("Select a school")}</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></Field><p className="form-note form-wide"><ShieldAlert size={16} /> {t("Every student assigned to this counselor must already belong to the selected school. The transfer is blocked otherwise.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || !schools.length}>{saving ? t("Transferring…") : t("Transfer counselor")}</button></div></form></Modal>;
-}
-
-function IndividualCounselorForm({ onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    try {
-      await api.createIndividualCounselor(Object.fromEntries(values.entries()));
-      notify(t("Individual counselor and private workspace created."));
-      onSaved();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-  return <Modal title={t("Add individual counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("First name")}><input name="first_name" required /></Field><Field label={t("Last name")}><input name="last_name" /></Field><Field label={t("Username")}><input name="username" autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" required /></Field><Field label={t("Phone")}><input name="phone" /></Field><Field label={t("Position")}><input name="position" placeholder={t("Independent counselor")} /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("A clearly labeled private workspace is created automatically. An admin can later transfer this counselor to an organization school after their students are reassigned.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
-}
-
-function SchoolForm({ school = null, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);
-    try {
-      const payload = { name: values.get('name'), code: values.get('code'), contact_email: values.get('contact_email'), contact_phone: values.get('contact_phone'), is_active: true };
-      if (school) {await api.update('schools', school.id, payload);notify(t("School updated."));} else {const createdSchool = await api.create('schools', payload);await api.createSchoolAccount(createdSchool.id, { username: values.get('username'), email: values.get('account_email'), password: values.get('password'), first_name: values.get('name'), last_name: 'Organization' });notify(t("School and organization account created."));}onSaved();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-  return <Modal title={school ? t("Edit school") : t("Add organization school")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("School name")}><input name="name" defaultValue={school?.name || ''} required /></Field><Field label={t("Unique code")}><input name="code" defaultValue={school?.code || ''} required /></Field><Field label={t("Contact email")}><input name="contact_email" type="email" defaultValue={school?.contact_email || ''} /></Field><Field label={t("Contact phone")}><input name="contact_phone" defaultValue={school?.contact_phone || ''} /></Field>{!school && <><Field label={t("Login username")}><input name="username" required /></Field><Field label={t("Login email")}><input name="account_email" type="email" required /></Field><Field label={t('Temporary password')} hint={t('The password is shown once. Send it through an approved secure channel.')}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field></>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : school ? t("Save") : t("Create school")}</button></div></form></Modal>;
-}
-
-function ResourceSection({ title, resource, data, user, query, reload, notify, canCreate = true, defaultStudentId = null }) {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [viewingEssay, setViewingEssay] = useState(null);
-  const [viewingTask, setViewingTask] = useState(null);
-  const [viewingGoogleDoc, setViewingGoogleDoc] = useState(null);
-  const [viewingEvidence, setViewingEvidence] = useState(null);
-  const records = data[resource] || [];
-  const filtered = records.filter((item) => JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
-  const staffControlled = resource === 'tasks';
-  const allowCreate = canCreate && (staffControlled ? isTaskManager(user) || user.role === 'student' : isCounselor(user) || user.role === 'student');
-  const allowEdit = staffControlled ? isTaskManager(user) || user.role === 'student' : allowCreate;
-
-  async function approve(item) {
-    try {
-      const result = await api.approveTask(item.id);
-      notify(result.xp_awarded ? tx`Task approved. +${result.xp_awarded} XP` : t("Self-task approved. No XP awarded."));
-      reload();
-    } catch (err) {notify(err.message, 'error');}
-  }
-
-  async function remove(item) {
-    if (!window.confirm(t("Delete this record?"))) return;
-    try {await api.remove(resource, item.id);notify(t("Record deleted."));reload();} catch (err) {notify(err.message, 'error');}
-  }
-  return <><Panel title={title} action={<div className="panel-actions">{allowCreate && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}</div>}><div className="record-list">{filtered.map((item) => {
-          const lockedAfterApproval = item.status === 'approved';
-          const allowDelete = !staffControlled ? allowCreate : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
-          return <RecordRow key={item.id} resource={resource} item={item} data={data} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{item.has_proof_file && <><button className="button quiet small" onClick={() => setViewingEvidence(item)}><Eye size={14} /> {t("Evidence")}</button><button className="button quiet small" onClick={() => downloadEvidenceFile(item, notify)}><Download size={14} /> {t("Download")}</button></>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
-        })}{!filtered.length && <Empty />}</div></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} defaultStudentId={defaultStudentId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} notify={notify} />}{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}{viewingEvidence && <EvidencePreviewModal item={viewingEvidence} onClose={() => setViewingEvidence(null)} notify={notify} />}</>;
-}
-
-function RecordRow({ resource, item, data, actions }) {
-  const student = studentName(data, item.student);
-  const map = {
-    researches: [item.title, `${student} • ${item.field || 'Research'} • ${item.role || '—'}`, item.summary, item.verified ? 'approved' : 'reviewing'],
-    projects: [item.title, `${student} • ${item.role || 'Project'} • ${item.technologies || '—'}`, item.description, item.verified ? 'approved' : 'reviewing'],
-    internships: [`${item.position} — ${item.organization}`, `${student} • ${dateText(item.start_date)} — ${item.is_current ? 'Current' : dateText(item.end_date)}`, item.description, item.verified ? 'approved' : 'reviewing'],
-    activities: [item.name, `${student} • ${label(item.activity_type)} • ${item.role || '—'}`, item.impact || item.description, item.verified ? 'approved' : 'reviewing'],
-    honors: [item.title, `${student} • ${item.issuer || '—'} • ${label(item.level)}`, item.description, item.verified ? 'approved' : 'reviewing'],
-    achievements: [item.title, `${student} • ${label(item.category)} • ${dateText(item.date)}`, item.impact || item.description, item.verified ? 'approved' : 'reviewing'],
-    recommendations: [item.recommender_name, `${student} • ${item.recommender_title || '—'} • ${item.relationship || '—'}`, `Deadline: ${dateText(item.deadline)}`, item.status],
-    tasks: [item.title, `${student} • ${dateText(item.due_date)} • ${label(item.priority)}${item.is_self_assigned ? ' • Self-task · no XP' : ''}${item.submitted_at ? ` • Submitted ${dateText(item.submitted_at)}` : ''}`, item.student_response || item.description, item.status],
-    applications: [item.university_detail?.name || 'University', `${student} • ${item.program} • ${label(item.tier)}`, `Deadline: ${dateText(item.deadline)}`, item.status],
-    essays: [item.title, `${student} • Version ${item.version} • ${item.university_name || 'General'}`, item.counselor_comment || item.prompt, item.status],
-    bookings: [item.topic, `${student} • ${dateTimeText(item.starts_at)} • ${item.participant_name || 'Meeting participant'}`, item.notes, item.status]
-  };
-  const [title, meta, description, badge] = map[resource] || ['Record', student, '', null];
-  return <Record title={title} meta={meta} description={description} badge={badge} actions={actions} />;
-}
-
-function ResourceForm({ resource, item, data, user, defaultStudentId = null, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  const allFields = RESOURCE_FIELDS[resource] || [];
-  const fields = resource === 'tasks' && user.role === 'student' ?
-  allFields.filter(([name]) =>
-  !item ?
-  ['title', 'description', 'due_date', 'priority'].includes(name) :
-  item.is_self_assigned || ['status', 'student_response', 'submission_url'].includes(name)
-  ) :
-  allFields;
-  async function submit(event) {
-    event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);
-    const payload = {};
-    for (const [name,, type] of fields) {
-      const raw = values.get(name);
-      const nullable = ['date', 'number', 'university', 'application'].includes(type);
-      payload[name] = type === 'checkbox' ? raw === 'on' : raw === '' && nullable ? null : raw;
-    }
-    if (!item) payload.student = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
-    try {
-      if (item) await api.update(resource, item.id, payload);else
-      await api.create(resource, payload);
-      notify(item ? t("Record updated.") : t("Record created."));onSaved();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-  const selfTask = resource === 'tasks' && user.role === 'student';
-  return <Modal title={selfTask ? item ? t("Edit self-task") : t("Create self-task") : resource === 'applications' ? (item ? t("Edit application") : t("Add application")) : `${item ? t("Edit") : t("Add")} ${t(resource[0].toUpperCase() + resource.slice(1))}`} onClose={onClose}><form className="form-grid" onSubmit={submit}>
-    {!item && isTaskManager(user) && <Field label={t("Student")} hint={t("Only students connected to your account are listed.")}><select name="student" required defaultValue={defaultStudentId || ''}><option value="" disabled>{t("Select student")}</option>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}
-    {selfTask && <div className="form-wide self-task-note"><Flag size={18} /><div><b>{t("Personal development task")}</b><p>{t("This task is for your own planning and never awards XP.")}</p></div></div>}
-    {fields.map(([name, title, type = 'text', required = false, choices = []]) => <DynamicField key={name} name={name} labelText={title} type={type} required={required} choices={choices} value={item?.[name]} data={data} user={user} />)}
-    {fields.some(([name]) => name === 'google_docs_url') && <div className="form-wide google-doc-sharing-hint"><ShieldCheck size={16} /><span>{t("Set Google Docs sharing to Viewer or “Anyone with the link” to enable the preview.")}</span></div>}
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save")}</button></div>
-  </form></Modal>;
-}
-
-function DynamicField({ name, labelText, type, required, choices, value, data, user }) {
-  if (name === 'status' && !isTaskManager(user)) choices = choices.filter((choice) => !['approved', 'late', 'rejected', 'waitlisted', 'accepted', 'needs_revision', 'completed'].includes(choice));
-  if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} /></Field>;
-  if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;
-  if (type === 'checkbox') return <CheckboxControl className="form-wide" name={name} defaultChecked={Boolean(value)}>{t(labelText)}</CheckboxControl>;
-  if (type === 'university') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''} required={required}><option value="">{t('Select university')}</option>{data.universities.map((uni) => <option key={uni.id} value={uni.id}>{uni.name} — {uni.country}</option>)}</select></Field>;
-  if (type === 'application') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''}><option value="">{t('General essay')}</option>{data.applications.map((app) => <option key={app.id} value={app.id}>{app.university_detail?.name} — {studentName(data, app.student)}</option>)}</select></Field>;
-  return <Field label={t(labelText)}><input name={name} type={type} defaultValue={value ?? ''} required={required} /></Field>;
-}
-
-function DocumentsPage({ user, data, query, reload, notify, typeFilter = '', title = 'Documents' }) {
-  const [open, setOpen] = useState(false);
-  const [previewing, setPreviewing] = useState(null);
-  const docs = data.documents.filter((item) => (!typeFilter || item.document_type === typeFilter) && JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
-  async function approve(doc) {try {await api.update('documents', doc.id, { status: 'approved' });notify(t("Document approved."));reload();} catch (err) {notify(err.message, 'error');}}
-  return <><Panel title={title} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? t("Add certificate") : t("Add document")}</button>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${studentName(data, doc.student)} • ${label(doc.document_type)}${doc.has_file ? ` • ${doc.file_name || 'File'} • ${formatFileSize(doc.file_size)}` : ''}`} description={doc.counselor_comment} badge={doc.status} actions={<>{(doc.google_docs_preview_url || doc.has_file && doc.file_previewable) && <button className="button quiet small" onClick={() => setPreviewing(doc)}><Eye size={14} /> {t("Preview")}</button>}{doc.has_file && <button className="button quiet small" onClick={() => downloadDocumentFile(doc, notify)}><Download size={14} /> {t("Download")}</button>}<GoogleDocsActions item={doc} />{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> {t("Approve")}</button>}</>} />)}{!docs.length && <Empty />}</div></Panel>{open && <DocumentForm user={user} data={data} defaultType={typeFilter} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} notify={notify} />}</>;
-}
-
-function DocumentForm({ user, data, defaultType = '', onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault();const values = new FormData(event.currentTarget);const payload = new FormData();
-    const status = values.get('status') || 'uploaded';
-    if (status !== 'required' && !values.get('google_docs_url')) {
-      notify(t("Add a Google Docs link."), 'error');
-      return;
-    }
-    setSaving(true);
-    payload.append('student', isCounselor(user) ? values.get('student') : ownStudent(data)?.id);
-    for (const name of ['title', 'document_type', 'status', 'google_docs_url']) payload.append(name, values.get(name) || '');
-    try {await api.uploadDocument(payload);notify(status === 'required' ? t("Document requirement created.") : t("Document link saved."));onSaved();} catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-  return <Modal title={defaultType === 'certificate' ? t("Add certificate") : t("Add document")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{isCounselor(user) && <Field label={t("Student")}><select name="student" required>{data.students.map((student) => <option value={student.id} key={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}<Field label={t("Title")}><input name="title" required /></Field><Field label={t("Type")}><select name="document_type" defaultValue={defaultType || 'passport'} disabled={Boolean(defaultType)}>{['passport', 'transcript', 'ielts', 'sat', 'cv', 'recommendation', 'essay', 'certificate', 'other'].map((item) => <option key={item} value={item}>{label(item)}</option>)}</select>{defaultType && <input type="hidden" name="document_type" value={defaultType} />}</Field>{isCounselor(user) ? <Field label={t("Status")}><select name="status" defaultValue="uploaded">{['required', 'uploaded', 'reviewing', 'approved', 'rejected'].map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field> : <input type="hidden" name="status" value="uploaded" />}<Field label={t("Google Docs URL")}><input name="google_docs_url" type="url" placeholder={t("https://docs.google.com/document/d/.../edit")} required={!isCounselor(user)} /></Field><div className="form-wide google-doc-sharing-hint"><ShieldCheck size={16} /><span>{t("Set Google Docs sharing to Viewer or “Anyone with the link” to enable the preview.")}</span></div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save")}</button></div></form></Modal>;
-}
-
-function FilterChip({ active, onClick, tone = '', children }) {
-  return <button type="button" className={`filter-chip ${tone}`.trim()} aria-pressed={active} onClick={onClick}>{children}</button>;
-}
-
-function PortalTabs({ items, active, onChange }) {
-  function handleKeyDown(event, index) {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
-    onChange(items[nextIndex][0]);
-    event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[nextIndex]?.focus();
-  }
-  return <div className="portal-tabs" role="tablist">{items.map(([key, title], index) => <button type="button" role="tab" aria-selected={active === key} tabIndex={active === key ? 0 : -1} key={key} className={active === key ? "active" : ''} onClick={() => onChange(key)} onKeyDown={(event) => handleKeyDown(event, index)}>{t(title)}</button>)}</div>;
-}
-
-function StudentCenterPage({ user, data, query, reload, notify, setPage }) {
-  const [tab, setTab] = useState('overview');
-  return <div className="section-stack student-portal">
-    <div className="student-center-head">
-      <PortalTabs active={tab} onChange={setTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
-      <div className="student-center-actions">
-        <button type="button" className="button quiet" onClick={() => setPage('profile')}><Pencil size={16} /> {t("Edit my data")}</button>
-      </div>
-    </div>
-    {tab === 'overview' && <StudentOverview student={ownStudent(data)} data={data} />}
-    {tab === 'academics' && <div className="section-stack"><ProfileCard student={ownStudent(data)} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}
-    {tab === 'portfolio' && <div className="split-grid"><ResourceSection title={t("Projects")} resource="projects" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Internships")} resource="internships" {...{ user, data, query, reload, notify }} /></div>}
-    {tab === 'activities' && <div className="section-stack"><div className="split-grid"><ResourceSection title={t("Activities")} resource="activities" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Honors")} resource="honors" {...{ user, data, query, reload, notify }} /></div><div className="split-grid"><ResourceSection title={t("Achievements")} resource="achievements" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Recommendation letters")} resource="recommendations" {...{ user, data, query, reload, notify }} /></div></div>}
-    {tab === 'documents' && <DocumentsPage {...{ user, data, query, reload, notify }} />}
-  </div>;
-}
-
-function StudentWorkspaceSelector({ students, value, onChange, metrics = [] }) {
-  const selected = students.find((student) => String(student.id) === String(value));
-  return <section className="student-workspace-selector">
-    <div className="student-workspace-identity"><span className="student-workspace-avatar">{selected ? initials(fullName(selected.user_detail)) : <UsersRound size={20} />}</span><div><span className="eyebrow">{t("STUDENT WORKSPACE")}</span><h3>{selected ? fullName(selected.user_detail) : t("All assigned students")}</h3><p>{selected ? tx`${selected.school_name || selected.school?.name || t("School")} · Grade ${selected.grade || '—'}` : tx`${students.length} students connected to your account`}</p></div></div>
-    <div className="student-workspace-metrics">{metrics.map(([metricLabel, value]) => <span key={metricLabel}><strong>{value}</strong><small>{metricLabel}</small></span>)}</div>
-    <Field label={t("Choose student")} hint={t("Assignments and lists follow this selection.")}><select value={value} onChange={(event) => onChange(event.target.value)}><option value="all">{t("All assigned students")}</option>{students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>
-  </section>;
-}
-
-function MissionForm({ mission, user, data, defaultStudentId = null, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  const manager = isTaskManager(user);
-  const studentSubmitted = !manager && mission?.status === 'submitted';
-  async function submit(event) {
-    event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);
-    const payload = manager ?
-    { title: values.get('title'), category: values.get('category'), description: values.get('description'), due_date: values.get('due_date') || null, status: values.get('status') } :
-    { status: 'submitted', reflection: values.get('reflection'), google_docs_url: values.get('google_docs_url') || '' };
-    if (manager && !mission) payload.student = Number(values.get('student'));
-    try {mission ? await api.update('roadmap-missions', mission.id, payload) : await api.create('roadmap-missions', payload);notify(manager ? mission ? t("Mission updated.") : t("Mission created.") : t("Mission submitted for approval."));onSaved();} catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-  const statuses = ['planned', 'in_progress', 'submitted'];
-  return <Modal title={manager ? mission ? t("Edit roadmap mission") : t("Assign roadmap mission") : studentSubmitted ? t("Mission submitted") : t("Submit roadmap mission")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{manager && !mission && <Field label={t("Student")} hint={t("The currently selected student is preselected.")}><select name="student" required defaultValue={defaultStudentId || ''}><option value="" disabled>{t("Select student")}</option>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>}{manager && <><Field label={t("Mission title")}><input name="title" defaultValue={mission?.title || ''} required /></Field><Field label={t("Category")}><input name="category" defaultValue={mission?.category || ''} placeholder={t("Applications, Essays...")} /></Field><Field label={t("Due date")}><input name="due_date" type="date" defaultValue={mission?.due_date || ''} /></Field><Field label={t("Status")}><select name="status" defaultValue={mission?.status || 'planned'}>{statuses.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></Field></>}{!manager && <div className={`form-wide mission-submit-status ${studentSubmitted ? 'submitted' : 'planned'}`}>{studentSubmitted ? <Clock3 size={21} /> : <Target size={21} />}<div><b>{studentSubmitted ? t("Submitted") : t("Planned mission")}</b><p>{studentSubmitted ? t("Your work is awaiting teacher or counselor approval.") : t("Complete the mission, write your reflection, then submit it for approval.")}</p></div></div>}{manager ? <Field label={t("Description")}><textarea name="description" defaultValue={mission?.description || ''} /></Field> : <><Field label={t("Reflection")}><textarea name="reflection" defaultValue={mission?.reflection || ''} placeholder={t("What did you learn while completing this mission?")} readOnly={studentSubmitted} /></Field><Field label={t("Google Docs URL")} hint={t("Add a note, a link, or both.")}><input name="google_docs_url" type="url" defaultValue={mission?.google_docs_url || ''} placeholder={t("https://docs.google.com/document/d/.../edit")} readOnly={studentSubmitted} /></Field></>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{studentSubmitted ? t("Close") : t("Cancel")}</button>{!studentSubmitted && <button className="button primary" disabled={saving} aria-busy={saving}>{saving ? manager ? t("Saving…") : t("Submitting…") : manager ? t("Save") : t("Submit mission")}</button>}</div></form></Modal>;
-}
-
-function LevelOneSetupModal({ data, defaultStudentId = null, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    try {
-      const result = await api.extendLevelOneRoadmap(Number(values.get('student')));
-      notify(result.created_count ? tx`${result.created_count} Level 1 missions added.` : t("Level 1 is already up to date."));
-      onSaved();
-    } catch (err) {
-      notify(err.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
-  return <Modal title={t("Extend Level 1 roadmap")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Student")}><select name="student" required defaultValue={defaultStudentId || ''}><option value="" disabled>{t("Select student")}</option>{data.students.map((student) => <option key={student.id} value={student.id}>{fullName(student.user_detail)}</option>)}</select></Field><div className="form-wide roadmap-setup-note"><Compass size={19} /><div><b>{t("8-step Level 1 path")}</b><p>{t("Missing missions will be added in the correct order. Existing statuses, reflections and approvals stay unchanged.")}</p></div></div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || !data.students.length} aria-busy={saving}>{saving ? t("Extending…") : t("Extend Level 1")}</button></div></form></Modal>;
-}
-
-function StudentRoadmapPath({ student, missions, onOpen }) {
-  const level = student?.level ?? 1;
-  const orderedMissions = [...missions].sort((a, b) => (a.level || 1) - (b.level || 1) || (a.sequence || 1) - (b.sequence || 1) || a.id - b.id);
-  const currentLevelMissions = orderedMissions.filter((item) => (item.level || 1) === level);
-  // Keep an assigned roadmap visible when leveling has moved ahead of the
-  // available mission template (production currently has a Level 1 path).
-  const levelMissions = currentLevelMissions.length ? currentLevelMissions : orderedMissions;
-  const missionById = new Map(orderedMissions.map((item) => [item.id, item]));
-  const completed = levelMissions.filter((item) => item.status === 'completed').length;
-  const activeIndex = levelMissions.findIndex((item) => item.status !== 'completed');
-  const currentIndex = activeIndex === -1 ? Math.max(0, levelMissions.length - 1) : activeIndex;
-  const nextLevel = student?.level_up_pending ? student.eligible_level : Math.min(50, level + 1);
-  const isLocked = (item) => item.prerequisite && missionById.get(item.prerequisite)?.status !== 'completed';
-  function missionState(item, index) {
-    if (item.status === 'completed') return 'complete';
-    if (item.status === 'submitted') return 'approval';
-    if (isLocked(item)) return 'locked';
-    if (item.status === 'in_progress' || index === currentIndex) return 'current';
-    return 'upcoming';
-  }
-  const total = levelMissions.length;
-  const percent = total ? Math.round(completed / total * 100) : 0;
-  return <section className="roadmap-track">
-    <header className="roadmap-progress-card">
-      <span className="eyebrow">{t("YOUR PROGRESS")}</span>
-      <h2>{t("Level")} {level}</h2>
-      {student?.level_up_pending && <p>{tx`Level ${student.eligible_level} is waiting for staff approval.`}</p>}
-      <div className="roadmap-star-count"><Star size={19} /><strong>{completed}</strong><small>{t("earned")}</small></div>
-      <div className="roadmap-progress-meter">
-        <span>{tx`${completed} of ${total} completed`}</span>
-        <b>{formatPercentLocale(percent)}</b>
-        <div className="progress"><span style={{ width: `${percent}%` }} /></div>
-      </div>
-    </header>
-    {levelMissions.length ? <ol className="roadmap-steps">{levelMissions.map((item, index) => {
-        const state = missionState(item, index);
-        const done = state === 'complete' || state === 'locked';
-        return <li className={`roadmap-step ${state}`} key={item.id}>
-        <span className="roadmap-step-badge" aria-hidden="true">{state === 'complete' ? <Star size={16} /> : state === 'locked' ? <Lock size={15} /> : state === 'approval' ? <Clock3 size={16} /> : item.sequence || index + 1}</span>
-        <button type="button" className="roadmap-step-card" onClick={() => onOpen(item)} disabled={done} aria-label={`${t(item.title)}, ${state === 'locked' ? t("locked") : label(item.status)}`}>
-          <span>{t(item.category) || t("Roadmap")}</span>
-          <h3>{t(item.title)}</h3>
-          <p>{state === 'complete' ? t("Approved") : state === 'approval' ? t("Awaiting approval") : state === 'locked' ? t("Locked") : state === 'current' ? t("Open task") : item.due_date ? tx`Due ${dateText(item.due_date)}` : t("Upcoming")}</p>
-        </button>
-      </li>;
-      })}<li className="roadmap-step checkpoint">
-        <span className="roadmap-step-badge" aria-hidden="true"><Award size={17} /></span>
-        <div className="roadmap-step-card"><span>{t("NEXT CHECKPOINT")}</span><h3>{t("Level")} {nextLevel}</h3><p>{student?.level_up_pending ? t("Ready for staff approval") : tx`${Math.max(0, total - completed)} steps left`}</p></div>
-      </li></ol> : <Empty text={t("Your counselor has not assigned any roadmap missions yet.")} />}
-  </section>;
-}
-
-function roadmapMissionState(item, missions) {
-  if (item.status === 'completed') return 'completed';
-  if (item.status === 'submitted') return 'submitted';
-  const prerequisite = item.prerequisite ?
-  missions.find((candidate) => candidate.id === item.prerequisite) :
-  null;
-  if (prerequisite && prerequisite.status !== 'completed') return 'locked';
-  const siblings = missions.
-  filter((candidate) => candidate.student === item.student && (candidate.level || 1) === (item.level || 1)).
-  sort((a, b) => (a.sequence || 1) - (b.sequence || 1));
-  const firstActionable = siblings.find((candidate) => {
-    if (['completed', 'submitted'].includes(candidate.status)) return false;
-    const required = candidate.prerequisite ?
-    missions.find((mission) => mission.id === candidate.prerequisite) :
-    null;
-    return !required || required.status === 'completed';
-  });
-  if (item.status === 'in_progress' || firstActionable?.id === item.id) return 'current';
-  return 'upcoming';
-}
-
-const MISSION_STATE_COPY = {
-  current: ['Current', 'Ready to continue'],
-  locked: ['Locked', 'Complete the prerequisite first'],
-  submitted: ['Submitted', 'Awaiting staff approval'],
-  completed: ['Completed', 'Approved and XP awarded'],
-  upcoming: ['Upcoming', 'Queued in your roadmap']
-};
-
-function MissionList({ user, data, query, onOpen, onApprove, onRemove }) {
-  const manager = isTaskManager(user);
-  const [filter, setFilter] = useState('all');
-  const [sort, setSort] = useState('sequence');
-  const missions = data.roadmapMissions.map((item) => ({
-    ...item,
-    displayState: roadmapMissionState(item, data.roadmapMissions)
-  }));
-  const normalizedQuery = query.trim().toLowerCase();
-  const visible = missions.
-  filter((item) => filter === 'all' || item.displayState === filter).
-  filter((item) => !normalizedQuery || JSON.stringify(item).toLowerCase().includes(normalizedQuery)).
-  sort((a, b) => {
-    if (sort === 'deadline') return String(a.due_date || '9999').localeCompare(String(b.due_date || '9999'));
-    if (sort === 'status') return a.displayState.localeCompare(b.displayState);
-    return (a.level || 1) - (b.level || 1) || (a.sequence || 1) - (b.sequence || 1);
-  });
-  const nextMission = !manager ? missions.find((item) => item.displayState === 'current') : null;
-
-  return <div className="mission-list-shell">
-    {nextMission && <section className="next-mission-callout"><div><span className="eyebrow">{t("NEXT MISSION")}</span><h3>{t(nextMission.title)}</h3><p>{t(nextMission.description) || t("Continue this mission and submit a reflection when you are ready.")}</p></div><div><span><CalendarDays size={15} /> {nextMission.due_date ? dateText(nextMission.due_date) : t("No deadline")}</span><span><Star size={15} /> {nextMission.xp_reward || 75} {t("XP after approval")}</span><button className="button primary" onClick={() => onOpen(nextMission)}>{t("Continue mission")} <ChevronRight size={16} /></button></div></section>}
-    <div className="mission-list-toolbar"><PortalTabs active={filter} onChange={setFilter} items={[["all", "All"], ["current", "Current"], ["locked", "Locked"], ["submitted", "Submitted"], ["completed", "Completed"], ["upcoming", "Upcoming"]]} /><label><Filter size={15} /><span>{t("Sort")}</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="sequence">{t("Roadmap order")}</option><option value="deadline">{t("Deadline")}</option><option value="status">{t("Status")}</option></select></label></div>
-    <div className="mission-grid">{visible.map((item) => {
-        const [stateLabel, stateDescription] = MISSION_STATE_COPY[item.displayState];
-        const canOpen = item.displayState !== 'locked';
-        return <article className={`mission-card mission-${item.displayState}`} key={item.id}>
-        <div className="mission-top"><span>{t("Level")} {item.level || 1} {t("· Step")} {item.sequence || 1} · {t(item.category) || t("Roadmap")}</span><Badge tone={item.displayState}>{stateLabel}</Badge></div>
-        <h3>{t(item.title)}</h3><p>{t(item.description) || t("No description provided.")}</p>
-        {manager && <small className="mission-owner">{item.student_name} {t("· Assigned by")} {item.assigned_by_name || t("staff")}</small>}
-        <div className="mission-details"><span><CalendarDays size={14} /><b>{t("Deadline")}</b>{item.due_date ? dateText(item.due_date) : t("No deadline")}</span><span><Star size={14} /><b>{t("Reward")}</b>{item.xp_reward || 75} {t("XP")}</span><span><ShieldCheck size={14} /><b>{t("Prerequisite")}</b>{t(item.prerequisite_title) || (item.prerequisite_sequence ? tx`Step ${item.prerequisite_sequence}` : t("None"))}</span><span><MessageSquareText size={14} /><b>{t("Reflection")}</b>{item.reflection ? t("Added") : t("Not written")}</span></div>
-        <div className="mission-approval"><span className={`mission-state-dot ${item.displayState}`} /> <b>{stateLabel}</b><small>{stateDescription}</small></div>
-        <footer><small>{item.reflection ? `${item.reflection.slice(0, 72)}${item.reflection.length > 72 ? '…' : ''}` : t("Reflection will appear here after submission.")}</small><div>{manager && item.status === 'submitted' && <button className="button quiet small" onClick={() => onApprove(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{canOpen && item.status !== 'completed' && <button className="button quiet small" onClick={() => onOpen(item)}>{!manager && item.status === 'submitted' ? <Eye size={15} /> : <Pencil size={15} />} {!manager && item.status === 'submitted' ? t("View") : manager ? t("Edit") : t("Open")}</button>}{manager && <button className="icon-button danger" onClick={() => onRemove(item)} aria-label={tx`Delete ${t(item.title)}`}><Trash2 size={15} /></button>}</div></footer>
-      </article>;
-      })}{!visible.length && <Empty text={data.roadmapMissions.length ? t("No missions match this filter.") : t("No missions have been assigned yet.")} />}</div>
-  </div>;
-}
-
-function RoadmapPage({ user, data, query, reload, notify }) {
-  const manager = isTaskManager(user);
-  const [tab, setTab] = useState(manager ? 'missions' : 'path');
-  const [selectedStudentId, setSelectedStudentId] = useState(() => manager && data.students[0] ? String(data.students[0].id) : 'all');
-  const [editing, setEditing] = useState(null);
-  const [open, setOpen] = useState(false);
-  const [setupOpen, setSetupOpen] = useState(false);
-  const student = ownStudent(data);
-  useEffect(() => {
-    if (!manager || !data.students.length) return;
-    if (selectedStudentId !== 'all' && !data.students.some((item) => String(item.id) === selectedStudentId)) {
-      setSelectedStudentId(String(data.students[0].id));
-    }
-  }, [data.students, manager, selectedStudentId]);
-  const selectedStudentNumericId = selectedStudentId === 'all' ? null : Number(selectedStudentId);
-  const scopedData = manager && selectedStudentNumericId ?
-  {
-    ...data,
-    tasks: data.tasks.filter((item) => item.student === selectedStudentNumericId),
-    roadmapMissions: data.roadmapMissions.filter((item) => item.student === selectedStudentNumericId)
-  } :
-  data;
-  const selectedStudent = data.students.find((item) => item.id === selectedStudentNumericId);
-  const workspaceTitle = selectedStudent ? fullName(selectedStudent.user_detail) : manager ? 'All students' : 'My';
-  async function remove(item) {if (!window.confirm(t("Delete this mission?"))) return;try {await api.remove('roadmap-missions', item.id);notify(t("Mission deleted."));reload();} catch (err) {notify(err.message, 'error');}}
-  async function approve(item) {try {const result = await api.approveRoadmapMission(item.id);notify(tx`Roadmap mission approved. +${result.xp_awarded || 0} XP`);reload();} catch (err) {notify(err.message, 'error');}}
-  const timeline = [
-  ...scopedData.tasks.map((item) => ({ id: `task-${item.id}`, title: item.title, date: item.due_date, status: item.status, kind: 'Task' })),
-  ...scopedData.roadmapMissions.map((item) => ({ id: `mission-${item.id}`, title: item.title, date: item.due_date, status: item.status, kind: 'Mission' }))].
-  filter((item) => item.date).sort((a, b) => new Date(a.date) - new Date(b.date));
-  return <div className="section-stack student-portal">
-    {manager && <section className="portal-hero roadmap-hero"><div><span className="eyebrow">{t("YOUR APPLICATION PLAN")}</span><h2>{t("Roadmap")}</h2><p>{t("Assign missions, review student submissions, and approve the work that earns XP.")}</p></div><div className="roadmap-hero-actions"><button className="button light" onClick={() => setSetupOpen(true)}><Compass size={17} /> {t("Extend Level 1")}</button><button className="button light" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Assign mission")}</button></div></section>}
-    {manager && <StudentWorkspaceSelector students={data.students} value={selectedStudentId} onChange={setSelectedStudentId} metrics={[["Missions", scopedData.roadmapMissions.length], ["Tasks", scopedData.tasks.length], ["Awaiting approval", scopedData.roadmapMissions.filter((item) => item.status === 'submitted').length + scopedData.tasks.filter((item) => item.status === 'submitted').length]]} />}
-    {manager && <PortalTabs active={tab} onChange={setTab} items={[["missions", "Mission list"], ["tasks", "Task list"], ["timeline", "Timeline view"], ["reflections", "Reflection view"]]} />}
-    {!manager && <PortalTabs active={tab} onChange={setTab} items={[["path", "Level path"], ["tasks", "Task list"]]} />}
-    {!manager && tab === 'path' && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} />}
-    {!manager && tab === 'tasks' && <ResourceSection title={t("Tasks")} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} />}
-    {manager && tab === 'tasks' && <ResourceSection title={tx`${workspaceTitle} tasks`} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} defaultStudentId={selectedStudentNumericId} />}
-    {manager && tab === 'missions' && <MissionList user={user} data={scopedData} query={query} onOpen={(item) => {setEditing(item);setOpen(true);}} onApprove={approve} onRemove={remove} />}
-    {manager && tab === 'timeline' && <Panel title={tx`${workspaceTitle} application timeline`}><div className="timeline-list">{timeline.map((item) => <div key={item.id}><span className="timeline-dot" /><time>{dateText(item.date)}</time><div><b>{t(item.title)}</b><small>{item.kind}</small></div><Badge>{item.status}</Badge></div>)}{!timeline.length && <Empty text={t("No dated tasks or missions for this student.")} />}</div></Panel>}
-    {manager && tab === 'reflections' && <div className="reflection-grid">{scopedData.roadmapMissions.map((item) => <article key={item.id}><MessageSquareText size={20} /><div><span>{t(item.category) || t("Mission")}</span><h3>{t(item.title)}</h3>{manager && <small>{item.student_name}</small>}<p>{item.reflection || t("No reflection has been written for this mission yet.")}</p></div>{!manager && item.status !== 'completed' && <button className="button quiet small" onClick={() => {setEditing(item);setOpen(true);}}>{item.status === 'submitted' ? t("View submission") : t("Write reflection")}</button>}</article>)}{!scopedData.roadmapMissions.length && <Empty text={t("No roadmap reflections for this student.")} />}</div>}
-    {open && <MissionForm mission={editing} user={user} data={data} defaultStudentId={selectedStudentNumericId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
-    {setupOpen && <LevelOneSetupModal data={data} defaultStudentId={selectedStudentNumericId} onClose={() => setSetupOpen(false)} onSaved={() => {setSetupOpen(false);reload();}} notify={notify} />}
-  </div>;
-}
-
-function BookingForm({ onClose, onSaved, notify }) {
-  const [participants, setParticipants] = useState([]);
-  const [loadingParticipants, setLoadingParticipants] = useState(true);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    let active = true;
-    api.bookingParticipants().
-    then((items) => active && setParticipants(items || [])).
-    catch((err) => notify(err.message, 'error')).
-    finally(() => active && setLoadingParticipants(false));
-    return () => {active = false;};
-  }, [notify]);
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    try {
-      await api.create('bookings', {
-        participant: Number(values.get('participant')),
-        topic: values.get('topic'),
-        starts_at: new Date(values.get('starts_at')).toISOString(),
-        duration_minutes: Number(values.get('duration_minutes')),
-        notes: values.get('notes')
-      });
-      notify(t("Meeting request sent for approval."));
-      onSaved();
-    } catch (err) {
-      notify(err.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
-  return <Modal title={t("Request a meeting")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Meet with")}><select name="participant" required defaultValue="" disabled={loadingParticipants}><option value="" disabled>{loadingParticipants ? t("Loading available staff…") : t("Select counselor, teacher, or school representative")}</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{fullName(participant)} · {label(participant.role)}{participant.position ? ` · ${participant.position}` : ''}</option>)}</select></Field><Field label={t("Topic")}><input name="topic" required placeholder={t("Essay review, university list...")} /></Field><Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required /></Field><Field label={t("Duration")}><select name="duration_minutes" defaultValue="45"><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field><Field label={t("Notes")}><textarea name="notes" /></Field>{!loadingParticipants && !participants.length && <div className="form-wide booking-participant-warning"><ShieldAlert size={18} /><span>{t("No counselor, teacher, or school representative is available for your account.")}</span></div>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || loadingParticipants || !participants.length} aria-busy={saving}>{saving ? t("Requesting…") : t("Request meeting")}</button></div></form></Modal>;
-}
-
-function BookingsPage({ user, data, reload, notify }) {
-  const staff = user.role !== 'student';
-  const [tab, setTab] = useState(staff ? 'pending' : 'upcoming');
-  const [open, setOpen] = useState(false);
-  const [savingId, setSavingId] = useState(null);
-  const now = new Date();
-  const tabs = staff ?
-  [['pending', 'Pending approval'], ['upcoming', 'Approved'], ['history', 'History']] :
-  [['upcoming', 'Upcoming'], ['history', 'History']];
-  const items = data.bookings.filter((item) => {
-    const future = new Date(item.starts_at) >= now;
-    if (tab === 'pending') return item.status === 'pending';
-    if (tab === 'upcoming') return future && (staff ? item.status === 'approved' : ['pending', 'approved'].includes(item.status));
-    return !future || ['rejected', 'completed'].includes(item.status);
-  });
-  async function transition(item, action) {
-    setSavingId(item.id);
-    try {
-      const methods = { approve: api.approveBooking, reject: api.rejectBooking, complete: api.completeBooking };
-      await methods[action](item.id);
-      notify(tx`Meeting ${label(action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'completed')}.`);
-      reload();
-    } catch (err) {
-      notify(err.message, 'error');
-    } finally {
-      setSavingId(null);
-    }
-  }
-  return <div className="section-stack student-portal"><div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} />{!staff && <button className="button primary" onClick={() => setOpen(true)}><Plus size={17} /> {t("Request meeting")}</button>}</div><div className="booking-grid">{items.map((item) => <article className="booking-card" key={item.id}><div className="booking-date"><strong>{new Date(item.starts_at).getDate()}</strong><span>{new Intl.DateTimeFormat(locale(), { month: 'short' }).format(new Date(item.starts_at))}</span></div><div><h3>{item.topic}</h3>{staff && <span className="booking-student"><UserRound size={14} /> {item.student_name}</span>}<p><Clock3 size={15} /> {dateTimeText(item.starts_at)} • {item.duration_minutes} {t("min")}</p><small>{t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") })} · {label(item.participant_role)}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{item.status}</Badge>{staff && item.status === 'pending' && <div className="booking-actions"><button className="button primary small" disabled={savingId === item.id} onClick={() => transition(item, 'approve')}><Check size={14} /> {t("Approve")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'reject')}><X size={14} /> {t("Reject")}</button></div>}{staff && item.status === 'approved' && <button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'complete')}><CheckCircle2 size={14} /> {t("Mark completed")}</button>}</div></article>)}{!items.length && <Empty text={tab === 'pending' ? t("No meetings need approval.") : tab === 'upcoming' ? t("No upcoming meetings.") : t("No meeting history yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}</div>;
-}
-
-function MessageChannelForm({ kind, user, onClose, onSaved, notify }) {
-  const [contacts, setContacts] = useState([]);
-  const [selectedMembers, setSelectedMembers] = useState([]);
-  const [memberSearch, setMemberSearch] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [contactsLoading, setContactsLoading] = useState(true);
-  const [contactsError, setContactsError] = useState('');
-  const [contactsAttempt, setContactsAttempt] = useState(0);
-  const [recipient, setRecipient] = useState('');
-  useEffect(() => {
-    let active = true;
-    setContactsLoading(true);
-    setContactsError('');
-    api.messageContacts().then((items) => active && setContacts(items || []))
-      .catch((err) => active && setContactsError(err.message))
-      .finally(() => active && setContactsLoading(false));
-    return () => {active = false;};
-  }, [contactsAttempt]);
-
-  async function submit(event) {
-    event.preventDefault();
-    if (saving || kind === 'direct' && !recipient) return;
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    try {
-      const channel = kind === 'direct' ?
-      await api.openDirectChannel(Number(recipient)) :
-      await api.create('message-channels', {
-        kind,
-        name: values.get('name')?.trim(),
-        description: values.get('description')?.trim(),
-        members: selectedMembers
-      });
-      notify(kind === 'direct' ? t("Direct conversation opened.") : tx`${label(kind)} created.`);
-      onSaved(channel);
-    } catch (err) {
-      notify(err.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const staffInterface = ['counselor', 'organization'].includes(user.role);
-  const normalizedSearch = memberSearch.trim().toLowerCase();
-  const visibleContacts = contacts.filter((contact) => !normalizedSearch || `${fullName(contact)} ${contact.role} ${contact.school_name || ''}`.toLowerCase().includes(normalizedSearch));
-  function chooseAudience(audience) {
-    if (audience === 'clear') {setSelectedMembers([]);return;}
-    const matches = contacts.filter((contact) => audience === 'all' || (audience === 'students' ? contact.role === 'student' : contact.role !== 'student'));
-    setSelectedMembers(matches.map((contact) => contact.id));
-  }
-  function toggleMember(contactId) {
-    setSelectedMembers((current) => current.includes(contactId) ? current.filter((id) => id !== contactId) : [...current, contactId]);
-  }
-
-  const title = kind === 'direct' ? 'Start a direct conversation' : kind === 'discussion' ? 'Start a discussion' : `Create a ${kind}`;
-  return <Modal title={t(title)} onClose={onClose}><form className="form-grid" onSubmit={submit}>
-    {kind === 'direct' ?
-      <div className="direct-picker"><label className="channel-search"><Search size={16} /><input aria-label={t("Search contacts")} placeholder={t("Search contacts")} value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} /></label><div className="direct-contact-list">{contactsLoading ? <ChannelListSkeleton count={3} /> : contactsError ? <InlineLoadError message={contactsError} onRetry={() => setContactsAttempt((value) => value + 1)} /> : visibleContacts.length ? visibleContacts.map((contact) => <label className="direct-contact" key={contact.id}><input type="radio" name="contact" value={contact.id} checked={recipient === String(contact.id)} onChange={(event) => setRecipient(event.target.value)} /><span className="avatar">{initials(fullName(contact))}</span><span><b>{fullName(contact)}</b><small>{label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</small></span></label>) : <Empty text={t("No matching contacts.")} />}</div></div> :
-      <><Field label={kind === 'discussion' ? t("Question or topic") : t("Channel name")}><input name="name" required maxLength="160" /></Field><Field label={t("Description")}><textarea name="description" maxLength="2000" /></Field></>}
-    {['group', 'community'].includes(kind) && <fieldset className="form-wide member-picker"><legend>{t("Initial members ·")} {selectedMembers.length} {t("selected")}</legend><p>{t("Choose contacts to add to this group.")}</p>{staffInterface && <div className="audience-shortcuts"><button type="button" onClick={() => chooseAudience('students')}>{user.role === 'counselor' ? t("Assigned students") : t("School students")}</button><button type="button" onClick={() => chooseAudience('staff')}>{t("School staff")}</button><button type="button" onClick={() => chooseAudience('all')}>{t("All contacts")}</button><button type="button" onClick={() => chooseAudience('clear')}>{t("Clear")}</button></div>}<label className="member-search"><Search size={15} /><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={t("Search contacts")} /></label><div>{visibleContacts.map((contact) => <CheckboxControl key={contact.id} name="members" value={contact.id} checked={selectedMembers.includes(contact.id)} onChange={() => toggleMember(contact.id)}>{fullName(contact)} · {label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</CheckboxControl>)}</div>{!visibleContacts.length && <small>{t("No matching contacts.")}</small>}</fieldset>}
-    {kind === 'discussion' && <div className="alert warning form-wide">{t("Discussions are public. A user must join before posting.")}</div>}
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || kind === 'direct' && (!recipient || contactsLoading || !!contactsError)} aria-busy={saving}>{saving ? t("Saving…") : t("Continue")}</button></div>
-  </form></Modal>;
-}
-
-function ChannelMembersModal({ channel, user, onClose, onChanged, notify }) {
-  const [members, setMembers] = useState([]);
-  const [contacts, setContacts] = useState([]);
-  const [selectedUser, setSelectedUser] = useState('');
-  const [selectedRole, setSelectedRole] = useState('member');
-  const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      const [memberItems, contactItems] = await Promise.all([api.channelMembers(channel.id), api.messageContacts()]);
-      setMembers(memberItems || []);
-      setContacts(contactItems || []);
-    } catch (err) {notify(err.message, 'error');}
-  }, [channel.id, notify]);
-
-  useEffect(() => {load();}, [load]);
-  const memberIds = new Set(members.map((membership) => membership.user));
-  const available = contacts.filter((contact) => !memberIds.has(contact.id));
-
-  async function addMember(event) {
-    event.preventDefault();
-    if (!selectedUser) return;
-    setSaving(true);
-    try {
-      await api.addChannelMember(channel.id, Number(selectedUser), selectedRole);
-      setSelectedUser('');
-      await load();
-      await onChanged();
-      notify(t("Channel member added."));
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-
-  async function changeRole(membership, role) {
-    setSaving(true);
-    try {
-      await api.addChannelMember(channel.id, membership.user, role);
-      await load();
-      notify(tx`Member role changed to ${role}.`);
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-
-  async function removeMember(membership) {
-    setSaving(true);
-    try {
-      await api.removeChannelMember(channel.id, membership.user);
-      await load();
-      await onChanged();
-      notify(t("Channel member removed."));
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-
-  return <Modal title={tx`Manage ${channel.display_name}`} onClose={onClose}><div className="member-manager"><form onSubmit={addMember}><Field label={t("Add a contact")}><select value={selectedUser} onChange={(event) => setSelectedUser(event.target.value)} required><option value="">{t("Select a contact")}</option>{available.map((contact) => <option key={contact.id} value={contact.id}>{fullName(contact)} · {label(contact.role)}</option>)}</select></Field><Field label={t("Channel role")}><select value={selectedRole} onChange={(event) => setSelectedRole(event.target.value)}><option value="member">{t("Member")}</option><option value="moderator">{t("Moderator")}</option></select></Field><button className="button primary" disabled={saving || !selectedUser}><Plus size={16} /> {t("Add")}</button></form><div className="member-manager-list">{members.map((membership) => <article key={membership.id}><span className="avatar">{initials(fullName(membership.user_detail))}</span><div><b>{fullName(membership.user_detail)}</b><small>{label(membership.user_detail?.role)}{membership.user_detail?.school_name ? ` · ${membership.user_detail.school_name}` : ''}</small></div><Badge>{membership.role}</Badge>{membership.role !== 'owner' && membership.user !== user.id && <div>{membership.role === 'member' ? <button type="button" className="button quiet small" disabled={saving} onClick={() => changeRole(membership, 'moderator')}>{t("Make moderator")}</button> : <button type="button" className="button quiet small" disabled={saving} onClick={() => changeRole(membership, 'member')}>{t("Make member")}</button>}<button type="button" className="icon-button danger" disabled={saving} onClick={() => removeMember(membership)} aria-label={tx`Remove ${fullName(membership.user_detail)}`}><Trash2 size={15} /></button></div>}</article>)}</div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Done")}</button></div></div></Modal>;
-}
-
-function ReportMessageModal({ message, onClose, onReported, notify }) {
-  const [reason, setReason] = useState('spam');
-  const [details, setDetails] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    try {
-      await api.reportChannelMessage(message.id, { reason, details: details.trim() });
-      notify(t("Report submitted. Moderators will review it confidentially."));
-      onReported();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-
-  return <Modal title={t("Report this message")} onClose={onClose}><form className="form-grid report-message-form" onSubmit={submit}><div className="report-privacy-note form-wide"><ShieldCheck size={19} /><div><b>{t("Your report is confidential")}</b><p>{t("Only trusted school moderators can see who submitted the report. Other users and the message author cannot see your identity.")}</p></div></div><Field label={t("Reason")}><select value={reason} onChange={(event) => setReason(event.target.value)}><option value="spam">{t("Spam")}</option><option value="harassment">{t("Harassment or bullying")}</option><option value="unsafe">{t("Unsafe content")}</option><option value="privacy">{t("Privacy concern")}</option><option value="misinformation">{t("Misinformation")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Additional details (optional)")}><textarea value={details} onChange={(event) => setDetails(event.target.value)} maxLength="2000" rows="4" placeholder={t("Briefly explain the issue to the moderator.")} /></Field><div className="reported-message-preview form-wide"><small>{t("Reported message")}</small><p>{message.body}</p></div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}><Flag size={16} /> {saving ? t("Sending…") : t("Submit report")}</button></div></form></Modal>;
-}
-
-function ModerationQueueModal({ onClose, onChanged, notify }) {
-  const [statusFilter, setStatusFilter] = useState('pending');
-  const [reports, setReports] = useState([]);
-  const [notes, setNotes] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState(null);
-
-  const load = useCallback(async (statusValue = statusFilter) => {
-    setLoading(true);
-    try {setReports((await api.messageReports(statusValue)) || []);}
-    catch (err) {notify(err.message, 'error');} finally
-    {setLoading(false);}
-  }, [statusFilter, notify]);
-
-  useEffect(() => {load(statusFilter);}, [statusFilter]);
-
-  async function moderate(report, mode, action = 'none') {
-    setSavingId(report.id);
-    try {
-      if (mode === 'review') await api.reviewMessageReport(report.id);else
-      if (mode === 'dismiss') await api.dismissMessageReport(report.id, { moderator_note: notes[report.id] || '' });else
-      await api.resolveMessageReport(report.id, { action, moderator_note: notes[report.id] || '' });
-      notify(mode === 'review' ? t("Report moved to review.") : mode === 'dismiss' ? t("Report dismissed.") : t("Moderation action applied."));
-      await load(statusFilter);
-      await onChanged();
-    } catch (err) {notify(err.message, 'error');} finally {setSavingId(null);}
-  }
-
-  const openStatuses = ['pending', 'reviewing'];
-  return <Modal title={t("Anonymous moderation queue")} onClose={onClose}><div className="moderation-queue"><PortalTabs active={statusFilter} onChange={setStatusFilter} items={[["pending", "Pending"], ["reviewing", "Reviewing"], ["resolved", "Resolved"], ["dismissed", "Dismissed"]]} /><div className="moderation-list">{loading && <ChannelListSkeleton count={3} />}{!loading && reports.map((report) => <article className="moderation-card" key={report.id}><header><div><Badge>{report.reason}</Badge>{report.message_is_anonymous && <span className="anonymous-report-badge"><ShieldAlert size={13} /> {t("Anonymous post")}</span>}</div><time>{dateTimeText(report.created_at)}</time></header><blockquote>{report.message_body}</blockquote><div className="moderation-identities"><span>{t("Author")} <b>{report.sender_name}</b></span><span>{t("Reporter")} <b>{report.reporter_name}</b></span><span>{t("Channel")} <b>{report.channel_name}</b></span></div>{report.details && <p className="report-details"><b>{t("Report details:")}</b> {report.details}</p>}{openStatuses.includes(report.status) ? <><Field label={t("Moderator note")}><textarea value={notes[report.id] || ''} onChange={(event) => setNotes((current) => ({ ...current, [report.id]: event.target.value }))} maxLength="2000" rows="2" /></Field><footer>{report.status === 'pending' && <button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'review')}>{t("Start review")}</button>}<button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'dismiss')}>{t("Dismiss")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'none')}>{t("Resolve only")}</button><button className="button danger small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'content_removed')}>{t("Remove content")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'muted_24h')}>{t("Mute 24h")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'muted_7d')}>{t("Mute 7d")}</button></footer></> : <div className="moderation-result"><Badge>{report.status}</Badge><span>{label(report.action)}{report.reviewed_by_name ? ` · ${report.reviewed_by_name}` : ''}</span>{report.moderator_note && <p>{report.moderator_note}</p>}</div>}</article>)}{!loading && !reports.length && <Empty text={t("No reports with this status.")} />}</div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Done")}</button></div></div></Modal>;
-}
-
-const CHANNEL_TABS = [["direct", "Private"], ["group", "Groups"], ["discussion", "Discussions"]];
-const CHANNEL_SPACES = {
-  direct: { icon: MessageCircle, placeholder: 'Write a message…', note: 'No messages yet. Say hello.' },
-  group: { icon: UsersRound, placeholder: 'Message your group…', description: 'Plan, share and make progress with your group.', note: 'No messages yet. Start your group off.' },
-  community: { icon: Globe2, placeholder: 'Share with the community…', description: 'Share a useful resource or an experience with your community.', note: 'Nothing posted here yet.' },
-  discussion: { icon: BookOpen, placeholder: 'Add to the discussion…', description: 'Ask a clear question. Reply to a message to add your answer.', note: 'No answers yet. Reply to open the thread.' },
-};
-const channelTabLabel = (tab) => t(Object.fromEntries(CHANNEL_TABS)[tab] || tab);
-// Consecutive ids must not land on neighbouring hues, or a short list comes
-// out in one colour family.
-const CHANNEL_TINTS = [0, 3, 1, 4, 2, 5];
-const channelTint = (id) => CHANNEL_TINTS[(id || 0) % CHANNEL_TINTS.length];
-
-function MessagesPage({ user, data, notify, initialChannel }) {
-  const [tab, setTab] = useState(initialChannel?.kind || 'direct');
-  const [moreFolders, setMoreFolders] = useState(false);
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [openingSaved, setOpeningSaved] = useState(false);
-  const [channels, setChannels] = useState(() => initialChannel ? [initialChannel, ...(data.messageChannels || []).filter((channel) => channel.id !== initialChannel.id)] : data.messageChannels || []);
-  const [activeId, setActiveId] = useState(initialChannel?.id || null);
-  const [messages, setMessages] = useState([]);
-  const [drafts, setDrafts] = useState({});
-  const [sendError, setSendError] = useState('');
-  const [anonymous, setAnonymous] = useState(false);
-  const [replyTo, setReplyTo] = useState(null);
-  const [search, setSearch] = useState('');
-  const [loadingChannels, setLoadingChannels] = useState(false);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [channelError, setChannelError] = useState('');
-  const [messageError, setMessageError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [membersOpen, setMembersOpen] = useState(false);
-  const [reportingMessage, setReportingMessage] = useState(null);
-  const [moderationOpen, setModerationOpen] = useState(false);
-  const [overview, setOverview] = useState(null);
-  const [overviewError, setOverviewError] = useState('');
-  const messageListRef = useRef(null);
-  const composerRef = useRef(null);
-  const channelRequest = useRef(0);
-  const messageRequest = useRef(0);
-  const sendLock = useRef(false);
-  const lastLoad = useRef(0);
-  const lastReadMessage = useRef(null);
-  const activeChannelRef = useRef(null);
-  const stickToBottom = useRef(true);
-
-  const visibleChannels = channels.filter((channel) => channel.kind === tab).sort((a, b) => Number(b.is_saved_messages) - Number(a.is_saved_messages) || new Date(b.last_message_at || b.created_at) - new Date(a.last_message_at || a.created_at));
-  const activeChannel = activeId === 'list' ? null : visibleChannels.find((channel) => channel.id === activeId) || null;
-  const body = drafts[activeChannel?.id] || '';
-  const setBody = (value) => setDrafts((current) => ({ ...current, [activeChannel.id]: value }));
-  const space = activeChannel?.is_saved_messages ? { icon: Bookmark, placeholder: 'Write a note…', note: 'Keep notes, links and ideas here. Only you are a member.' } : CHANNEL_SPACES[tab];
-  const SpaceIcon = space.icon;
-  const newChannelLabel = tab === 'direct' ? t("New message") : tab === 'discussion' ? t("New discussion") : t("New channel");
-  // Unread per folder: the bootstrap list covers every kind, the live list keeps
-  // the folder you are in exact.
-  const folderUnread = useMemo(() => {
-    const merged = new Map((data.messageChannels || []).map((channel) => [channel.id, channel]));
-    channels.forEach((channel) => merged.set(channel.id, channel));
-    const counts = {};
-    merged.forEach((channel) => {if (channel.unread_count > 0) counts[channel.kind] = (counts[channel.kind] || 0) + channel.unread_count;});
-    return counts;
-  }, [data.messageChannels, channels]);
-  useLayoutEffect(() => {
-    activeChannelRef.current = activeChannel?.id;
-    messageRequest.current += 1;
-    stickToBottom.current = true;
-    lastReadMessage.current = null;
-    setMessages([]);
-    setSendError('');
-    setReplyTo(null);
-    setAnonymous(false);
-    setEmojiOpen(false);
-    if (composerRef.current) composerRef.current.style.height = 'auto';
-  }, [activeChannel?.id]);
-  useLayoutEffect(() => {
-    channelRequest.current += 1;
-    return () => { channelRequest.current += 1; };
-  }, [tab, search]);
-  useEffect(() => () => { messageRequest.current += 1; activeChannelRef.current = null; }, []);
-  const staffInterface = ['counselor', 'organization'].includes(user.role);
-  const moderationEnabled = isTaskManager(user) || user.role === 'organization';
-  const canCreate = tab === 'direct' || tab === 'discussion' || isTaskManager(user) || user.role === 'organization';
-  const canAccept = activeChannel?.kind === 'discussion' && (isTaskManager(user) || ['owner', 'moderator'].includes(activeChannel?.my_role));
-  const canManageMembers = activeChannel?.kind !== 'direct' && activeChannel?.is_member && (isTaskManager(user) || user.role === 'organization' || ['owner', 'moderator'].includes(activeChannel?.my_role));
-
-  const refreshOverview = useCallback(async () => {
-    if (!moderationEnabled && !staffInterface) return null;
-    setOverviewError('');
-    try {
-      const nextOverview = await api.messagingOverview();
-      setOverview(nextOverview);
-      return nextOverview;
-    } catch (err) {
-      notify(err.message, 'error');
-      setOverviewError(err.message);
-      return null;
-    }
-  }, [moderationEnabled, staffInterface, notify]);
-
-  const refreshChannels = useCallback(async (kind = tab, term = search, preferredId = activeId) => {
-    const requestId = ++channelRequest.current;
-    setLoadingChannels(true);
-    setChannelError('');
-    try {
-      const items = await api.messageChannels(kind, term);
-      if (requestId !== channelRequest.current) return [];
-      // Keep the other folders: dropping them loses the unread counts behind
-      // their tabs, and a folder you just read would light up again.
-      setChannels((current) => [...current.filter((item) => item.kind !== kind), ...(items || [])]);
-      setActiveId((current) => {
-        if (current === 'list' && preferredId === 'list') return 'list';
-        if (items.some((item) => item.id === preferredId)) return preferredId;
-        if (items.some((item) => item.id === current)) return current;
-        return null;
-      });
-      return items || [];
-    } catch (err) {
-      if (requestId !== channelRequest.current) return [];
-      setChannelError(err.message);
-      return [];
-    } finally {
-      if (requestId === channelRequest.current) setLoadingChannels(false);
-    }
-  }, [tab, search, activeId, notify]);
-
-  const loadMessages = useCallback(async (channel, quiet = false) => {
-    const requestId = ++messageRequest.current;
-    if (!channel?.is_member) {setMessages([]);setMessageError('');setLoadingMessages(false);return;}
-    if (!quiet) setLoadingMessages(true);
-    lastLoad.current = Date.now();
-    try {
-      const items = await api.channelMessages(channel.id);
-      if (requestId !== messageRequest.current || activeChannelRef.current !== channel.id) return;
-      setMessages((current) => {
-        const next = [...(items || [])].reverse();
-        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
-      });
-      setMessageError('');
-      // One read receipt per new message, not one per refresh: the poll and the
-      // focus listener both land here, and a receipt is a write.
-      const newest = items?.[0]?.id ?? null;
-      if (newest !== lastReadMessage.current) {
-        lastReadMessage.current = newest;
-        // A failed read receipt must never hide successfully loaded messages.
-        api.markChannelRead(channel.id).then(() => {
-          setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, unread_count: 0 } : item));
-        }).catch(() => {});
-      }
-    } catch (err) {
-      if (requestId === messageRequest.current && activeChannelRef.current === channel.id) setMessageError(err.message);
-    } finally {
-      if (requestId === messageRequest.current) setLoadingMessages(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => refreshChannels(tab, search, activeId), 220);
-    return () => window.clearTimeout(timer);
-  }, [tab, search]);
-
-  useEffect(() => {refreshOverview();}, [refreshOverview]);
-
-  useEffect(() => {
-    loadMessages(activeChannel);
-    const refresh = () => {
-      if (document.visibilityState !== 'visible' || sendLock.current) return;
-      // Refocusing the window a few times in a row is not a reason to refetch.
-      if (Date.now() - lastLoad.current < 3000) return;
-      loadMessages(activeChannel, true);
-    };
-    const timer = window.setInterval(refresh, 8000);
-    window.addEventListener('focus', refresh);
-    return () => {window.clearInterval(timer);window.removeEventListener('focus', refresh);messageRequest.current += 1;};
-  }, [activeChannel?.id, activeChannel?.is_member, loadMessages]);
-
-  useEffect(() => {
-    const list = messageListRef.current;
-    if (list && stickToBottom.current) list.scrollTop = list.scrollHeight;
-  }, [messages, loadingMessages]);
-
-  async function send(event) {
-    event.preventDefault();
-    if (sendLock.current || !activeChannel?.is_member || !body.trim()) return;
-    const channel = activeChannel;
-    sendLock.current = true;
-    setSaving(true);
-    setSendError('');
-    try {
-      const sent = await api.create('channel-messages', {
-        channel: channel.id,
-        body: body.trim(),
-        is_anonymous: ['community', 'discussion'].includes(channel.kind) && anonymous,
-        ...(replyTo?.channel === channel.id ? { parent: replyTo.id } : {})
-      });
-      setDrafts((current) => ({ ...current, [channel.id]: '' }));
-      if (activeChannelRef.current === channel.id) {
-        messageRequest.current += 1;
-        setLoadingMessages(false);
-        setMessageError('');
-        stickToBottom.current = true;
-        setMessages((current) => [...current.filter((item) => item.id !== sent.id), sent]);
-        setReplyTo(null);
-        if (composerRef.current) {composerRef.current.style.height = 'auto';composerRef.current.focus();}
-      }
-      setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, last_message: { body: sent.body, created_at: sent.created_at, sender_name: sent.sender_name }, last_message_at: sent.created_at } : item));
-    } catch (err) {
-      if (activeChannelRef.current === channel.id) setSendError(err.message);
-      else notify(err.message, 'error');
-    } finally {
-      sendLock.current = false;
-      setSaving(false);
-    }
-  }
-
-  async function join() {
-    try {
-      await api.joinChannel(activeChannel.id);
-      const items = await refreshChannels(tab, search, activeChannel.id);
-      const joined = items.find((item) => item.id === activeChannel.id);
-      if (joined) await loadMessages(joined);
-      await refreshOverview();
-      notify(t("You joined the channel."));
-    } catch (err) {notify(err.message, 'error');}
-  }
-
-  async function leave() {
-    try {
-      await api.leaveChannel(activeChannel.id);
-      setMessages([]);
-      await refreshChannels(tab, search, null);
-      await refreshOverview();
-      notify(t("You left the channel."));
-    } catch (err) {notify(err.message, 'error');}
-  }
-
-  async function accept(message) {
-    try {
-      const accepted = await api.acceptChannelMessage(message.id);
-      setMessages((current) => current.map((item) => ({ ...item, is_accepted_answer: item.id === accepted.id })));
-      notify(t("Reply marked as the accepted answer."));
-    } catch (err) {notify(err.message, 'error');}
-  }
-
-  async function openSavedMessages() {
-    if (openingSaved) return;
-    setOpeningSaved(true);
-    try { await channelSaved(await api.savedMessages()); }
-    catch (err) { notify(err.message, 'error'); }
-    finally { setOpeningSaved(false); }
-  }
-
-  async function channelSaved(channel) {
-    setOpen(false);
-    setTab(channel.kind);
-    setSearch('');
-    setChannels((current) => [channel, ...current.filter((item) => item.id !== channel.id)]);
-    setActiveId(channel.id);
-    await refreshOverview();
-  }
-
-  return <div className={`messaging-page section-stack kind-${tab} ${user.role === 'student' ? 'student-portal' : ''}`}>
-    {staffInterface && <section className="staff-messaging-overview"><div className="staff-messaging-copy"><span><MessageCircle size={22} /></span><div><small>{user.role === 'counselor' ? t("COUNSELOR INBOX") : t("SCHOOL COMMUNICATIONS")}</small><h2>{user.role === 'counselor' ? t("Student and school conversations") : t("Keep your school connected")}</h2><p>{user.role === 'counselor' ? t("Message assigned students, coordinate with school staff and moderate shared channels.") : t("Contact your students, teachers and assigned counselors from one secure inbox.")}</p></div></div>{overview ? <div className="staff-messaging-stats"><div><strong>{overview.unread_total || 0}</strong><span>{t("Unread")}</span></div><div><strong>{overview.students_total || 0}</strong><span>{user.role === 'counselor' ? t("Assigned students") : t("School students")}</span></div><div><strong>{overview.channel_counts?.direct || 0}</strong><span>{t("Direct chats")}</span></div><div><strong>{(overview.channel_counts?.group || 0) + (overview.channel_counts?.community || 0)}</strong><span>{t("Managed spaces")}</span></div><div className={overview.pending_reports ? "attention" : ''}><strong>{overview.pending_reports || 0}</strong><span>{t("Open reports")}</span></div></div> : overviewError ? <InlineLoadError message={overviewError} onRetry={refreshOverview} /> : <StaffStatsSkeleton />}<div className="staff-messaging-actions"><button className="button primary" onClick={() => {setTab('direct');setActiveId(null);setOpen(true);}}><MessageCircle size={16} /> {t("Message a student")}</button><button className="button quiet" onClick={() => {setTab('group');setActiveId(null);setOpen(true);}}><UsersRound size={16} /> {t("Create group")}</button><button className="button quiet" onClick={() => setModerationOpen(true)}><ShieldAlert size={16} /> {t("Moderation queue")}{overview?.pending_reports ? ` · ${overview.pending_reports}` : ''}</button></div></section>}
-    <div className={`messages-shell ${activeChannel ? 'has-active-channel' : ''} ${activeChannel && detailsOpen ? 'has-details' : ''}`}>
-      <aside className="channel-sidebar">
-        <header className="chat-sidebar-header">
-          <span className="chat-brand-icon"><MessageSquareText size={23} /></span>
-          <div><h2>{t("Chat")}</h2><p>{Object.values(folderUnread).some(Boolean) ? t("Unread conversations") : t("All caught up")}</p></div>
-          <button type="button" className="chat-new-button" onClick={() => {setTab(staffInterface || isTaskManager(user) ? 'group' : 'direct');setOpen(true);}}><Plus size={15} />{staffInterface || isTaskManager(user) ? t("New group") : t("New message")}</button>
-        </header>
-        <div className="channel-folders" role="tablist" aria-label={t("Messages")}>{CHANNEL_TABS.filter(([kind]) => moreFolders || ['direct', 'group', tab].includes(kind)).map(([kind, title]) => <button key={kind} type="button" role="tab" aria-selected={tab === kind} className={`channel-folder folder-${kind} ${tab === kind ? 'active' : ''}`} onClick={() => {setTab(kind);setActiveId(null);setSearch('');}}>{t(title)}{folderUnread[kind] ? <em className="folder-count" aria-label={tx`${folderUnread[kind]} unread`}>{folderUnread[kind] > 99 ? '99+' : folderUnread[kind]}</em> : null}</button>)}<button type="button" className="channel-folder channel-more-folders" aria-expanded={moreFolders} aria-label={t("More folders")} title={t("More folders")} onClick={() => setMoreFolders(!moreFolders)}><FolderKanban size={17} /></button>{moderationEnabled && !staffInterface && <button type="button" className="channel-folder channel-moderation" onClick={() => setModerationOpen(true)} aria-label={t("Moderation")} title={t("Moderation")}><ShieldAlert size={16} />{overview?.pending_reports ? <em>{overview.pending_reports}</em> : null}</button>}</div>
-        <label className="channel-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search chats…")} aria-label={tx`Search ${channelTabLabel(tab)} channels`} /></label>
-        <div className="channel-list" aria-busy={loadingChannels}>{tab === 'direct' && !search && !visibleChannels.some((channel) => channel.is_saved_messages) && <button type="button" className="channel-item saved-messages" disabled={openingSaved} onClick={openSavedMessages}><span className="avatar saved-avatar"><Bookmark size={23} /></span><span className="channel-item-copy"><b>{t("Saved Messages")}</b><small>{openingSaved ? t("Opening…") : t("Your notes and links")}</small></span></button>}{loadingChannels ? <ChannelListSkeleton /> : channelError ? <InlineLoadError message={channelError} onRetry={() => refreshChannels(tab, search, activeId)} /> : <>{visibleChannels.map((channel) => <button type="button" key={channel.id} className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''} ${channel.unread_count > 0 ? 'unread' : ''} ${channel.is_saved_messages ? 'saved-messages' : ''}`} aria-current={activeChannel?.id === channel.id ? 'true' : undefined} onClick={() => setActiveId(channel.id)}><span className={`avatar ${channel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(channel.id)}`}`}>{channel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(channel.display_name) : <SpaceIcon size={20} />}</span><span className="channel-item-copy"><span className="channel-item-top"><b>{channel.is_saved_messages ? t("Saved Messages") : channel.display_name}</b>{channel.last_message?.created_at && <time>{chatStampText(channel.last_message.created_at)}</time>}</span><span className="channel-item-bottom"><small>{channel.last_message?.body || (channel.is_saved_messages ? t("Your notes and links") : tab === 'direct' ? t("No messages yet") : channel.description || tx`${channel.members_count} members`)}</small>{channel.unread_count > 0 && <strong aria-label={tx`${channel.unread_count} unread`}>{channel.unread_count > 99 ? '99+' : channel.unread_count}</strong>}</span></span></button>)}{!visibleChannels.length && <div className="channel-list-empty"><SpaceIcon size={26} /><p>{search ? t("No conversation matches your search.") : t("No conversations here yet.")}</p></div>}</>}</div>
-        {canCreate && <button type="button" className="channel-compose" onClick={() => setOpen(true)} aria-label={newChannelLabel} title={newChannelLabel}><Pencil size={19} /></button>}
-      </aside>
-      {activeChannel ? <section className="message-thread"><header><div><button type="button" className="icon-button message-back" onClick={() => setActiveId('list')} aria-label={t("Back to conversations")}><ArrowLeft size={18} /></button><span className={`avatar ${activeChannel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(activeChannel.id)}`}`}>{activeChannel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(activeChannel.display_name) : <SpaceIcon size={22} />}</span><div><b>{activeChannel.is_saved_messages ? t("Saved Messages") : activeChannel.display_name}</b><small>{activeChannel.is_saved_messages ? t("Your personal notebook") : activeChannel.kind === 'direct' ? t("Direct conversation") : tx`${activeChannel.members_count} members`}</small></div></div><div className="channel-actions"><button type="button" className="icon-button" onClick={() => setDetailsOpen(!detailsOpen)} aria-label={t("Contact info")} title={t("Contact info")} aria-expanded={detailsOpen}><Info size={19} /></button><button type="button" className="icon-button close-chat" onClick={() => setActiveId(null)} aria-label={t("Close chat")} title={t("Close chat")}><X size={18} /></button>{canManageMembers && <button className="button quiet small" onClick={() => setMembersOpen(true)}><UsersRound size={15} /> {t("Manage members")}</button>}{activeChannel.is_public && !activeChannel.is_member && <button className="button primary small" onClick={join}>{t("Join")}</button>}{activeChannel.is_member && activeChannel.kind !== 'direct' && activeChannel.my_role !== 'owner' && <button className="button quiet small" onClick={leave}>{t("Leave")}</button>}</div></header>
-        {activeChannel.is_member ? <><div className="message-list" ref={messageListRef} onScroll={(event) => {const list = event.currentTarget;stickToBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 90;}} aria-busy={loadingMessages}>{activeChannel.kind !== 'direct' && <div className="channel-context"><SpaceIcon size={24} /><div><b>{activeChannel.display_name}</b><p>{activeChannel.description || t(space.description)}</p></div></div>}{messageError && <InlineLoadError message={messageError} onRetry={() => loadMessages(activeChannel)} />}{loadingMessages ? <MessageListSkeleton /> : <>{messages.map((message, index) => {
-              const mine = message.sender_id === user.id;
-              const previous = messages[index - 1];
-              const newDay = !previous || new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString();
-              const sameAuthor = !newDay && previous && message.sender_id != null && previous.sender_id === message.sender_id && previous.is_anonymous === message.is_anonymous && !message.parent;
-              const showSender = ['community', 'discussion'].includes(activeChannel.kind) || activeChannel.kind === 'group' && !sameAuthor;
-              const showAvatar = activeChannel.kind !== 'direct' && !mine;
-              return <Fragment key={message.id}>{newDay && <div className="message-day"><span>{dateText(message.created_at)}</span></div>}{showAvatar && <span className={`message-avatar avatar ${sameAuthor ? 'is-hidden' : ''}`}>{initials(message.is_anonymous ? '?' : message.sender_name)}</span>}<article id={`message-${message.id}`} className={`message-bubble sender-${(message.sender_id || 0) % 6} ${mine ? 'mine' : ''} ${message.parent ? 'reply' : ''} ${message.is_accepted_answer ? 'accepted' : ''} ${sameAuthor ? 'stacked' : ''}`}>{message.parent_preview && <button type="button" className="parent-preview" onClick={() => document.getElementById(`message-${message.parent}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>{t("Reply to:")} {message.parent_preview.body}</button>}<div className={showSender || message.is_accepted_answer ? '' : 'is-hidden'}>{showSender && <b>{message.sender_name}{message.is_anonymous ? t("· Anonymous") : ''}</b>}{message.is_accepted_answer && <span className="accepted-label"><CheckCircle2 size={13} /> {t("Accepted answer")}</span>}</div><p>{message.deleted_at ? t("Message deleted") : message.body}<time>{clockText(message.created_at)}{message.is_edited ? t("· edited") : ''}{mine && <Check size={12} aria-label={t("Sent")} />}</time></p><footer>{!message.deleted_at && <button type="button" onClick={() => setReplyTo(message)}>{t("Reply")}</button>}{!mine && !message.deleted_at && <button type="button" disabled={message.is_reported_by_me} onClick={() => setReportingMessage(message)}><Flag size={11} /> {message.is_reported_by_me ? t("Reported") : t("Report")}</button>}{canAccept && message.parent && !message.deleted_at && !message.is_accepted_answer && <button type="button" onClick={() => accept(message)}>{t("Accept answer")}</button>}</footer></article></Fragment>;})}{!messages.length && <div className="thread-empty"><SpaceIcon size={26} /><p>{t(space.note)}</p></div>}</>}</div><form className="message-compose" onSubmit={send}><div className="composer-field"><button type="button" className="emoji-toggle icon-button" disabled={saving} aria-label={t("Choose emoji")} aria-expanded={emojiOpen} onClick={() => setEmojiOpen(!emojiOpen)}><Smile size={22} /></button>{emojiOpen && <div className="emoji-picker" role="group" aria-label={t("Choose emoji")}>{['😊', '👍', '❤️', '🎉', '🙌', '✅', '👋', '💡', '📚', '🚀', '🤝', '✨'].map((emoji) => <button key={emoji} type="button" aria-label={emoji} onClick={() => {setBody(body + emoji);setEmojiOpen(false);composerRef.current?.focus();}}>{emoji}</button>)}</div>}{sendError && <p className="compose-error" role="alert">{sendError}</p>}{replyTo && <div className="replying-to"><span>{t("Replying to")} <b>{replyTo.sender_name}</b></span><button type="button" className="icon-button" onClick={() => setReplyTo(null)} aria-label={t("Cancel reply")}><X size={15} /></button></div>}<textarea ref={composerRef} aria-label={t(space.placeholder)} readOnly={saving} value={body} onChange={(event) => {setBody(event.target.value);event.target.style.height = 'auto';event.target.style.height = `${Math.min(132, event.target.scrollHeight)}px`;}} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault();send(event);}}} placeholder={t(space.placeholder)} rows="1" />{['community', 'discussion'].includes(activeChannel.kind) && <CheckboxControl className="compact anonymous-toggle" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)}>{t("Post anonymously")}</CheckboxControl>}<small className="compose-hint">{saving ? t("Sending…") : t("Enter to send · Shift + Enter for a new line")}</small></div><button type="submit" className="message-send" disabled={saving || !body.trim()} aria-busy={saving} aria-label={saving ? t("Sending…") : t("Send")} title={t("Send")}><Send size={18} /></button></form></> : <div className="message-join-state"><UsersRound size={42} /><h3>{activeChannel.display_name}</h3><p>{activeChannel.description || t("Join this channel to read and send messages.")}</p><button className="button primary" onClick={join}>{t("Join channel")}</button></div>}
-      </section> : <section className="message-empty-state"><UsersRound size={44} strokeWidth={1.5} /><h3>{t("Select a chat")}</h3></section>}
-      {activeChannel && detailsOpen && <ChatDetails key={activeChannel.id} channel={activeChannel} messages={messages} onClose={() => setDetailsOpen(false)} />}
-    </div>
-    {open && <MessageChannelForm kind={tab} user={user} onClose={() => setOpen(false)} onSaved={channelSaved} notify={notify} />}
-    {membersOpen && activeChannel && <ChannelMembersModal channel={activeChannel} user={user} onClose={() => setMembersOpen(false)} onChanged={async () => {await refreshChannels(tab, search, activeChannel.id);await refreshOverview();}} notify={notify} />}
-    {reportingMessage && <ReportMessageModal message={reportingMessage} onClose={() => setReportingMessage(null)} onReported={async () => {setMessages((current) => current.map((item) => item.id === reportingMessage.id ? { ...item, is_reported_by_me: true } : item));setReportingMessage(null);await refreshOverview();}} notify={notify} />}
-    {moderationOpen && moderationEnabled && <ModerationQueueModal onClose={() => setModerationOpen(false)} onChanged={refreshOverview} notify={notify} />}
-  </div>;
-}
-
-function ProgramServiceForm({ service, user, data, defaultStudentId = null, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  const [unlimited, setUnlimited] = useState(Boolean(service?.unlimited));
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    const payload = {
-      student: service?.student || Number(values.get('student')),
-      name: values.get('name'),
-      category: values.get('category'),
-      status: values.get('status'),
-      unlimited,
-      total_hours: unlimited ? null : Number(values.get('total_hours')),
-      used_hours: Number(values.get('used_hours') || 0),
-      mentor: user.role === 'counselor' ? user.id : service?.mentor || null
-    };
-    try {
-      if (service) await api.update('program-services', service.id, payload);else
-      await api.create('program-services', payload);
-      notify(service ? t("Program service updated.") : t("Program service assigned."));
-      onSaved();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
-  }
-  return <Modal title={service ? t("Edit program service") : t("Assign program service")} onClose={onClose}><form className="form-grid" onSubmit={submit}>
-    <Field label={t("Student")} hint={t("The currently selected student is preselected.")}><select name="student" defaultValue={service?.student || defaultStudentId || ''} required disabled={Boolean(service)}><option value="" disabled>{t("Select student")}</option>{data.students.map((student) => <option value={student.id} key={student.id}>{fullName(student.user_detail)}</option>)}</select></Field>
-    <Field label={t("Service name")}><input name="name" defaultValue={service?.name || ''} required /></Field>
-    <Field label={t("Category")}><input name="category" defaultValue={service?.category || ''} placeholder={t("Essay, mentorship, admissions…")} /></Field>
-    <Field label={t("Status")}><select name="status" defaultValue={service?.status || 'active'}>{['active', 'pending', 'completed'].map((status) => <option value={status} key={status}>{label(status)}</option>)}</select></Field>
-    <Field label={t("Allocated hours")}><input name="total_hours" type="number" min="0.5" step="0.5" defaultValue={service?.total_hours || ''} required={!unlimited} disabled={unlimited} /></Field>
-    <Field label={t("Used hours")}><input name="used_hours" type="number" min="0" step="0.5" defaultValue={service?.used_hours || 0} /></Field>
-    <CheckboxControl className="form-wide" checked={unlimited} onChange={(event) => setUnlimited(event.target.checked)}>{t("Unlimited service access")}</CheckboxControl>
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Saving…") : t("Save service")}</button></div>
-  </form></Modal>;
-}
-
-function ProgramUsageSummary({ user, data, reload, notify }) {
-  const manager = isCounselor(user);
-  const [open, setOpen] = useState(false);
-  const services = data.programServices;
-  const finite = services.filter((item) => !item.unlimited);
-  const total = finite.reduce((sum, item) => sum + Number(item.total_hours || 0), 0);
-  const used = finite.reduce((sum, item) => sum + Number(item.used_hours || 0), 0);
-  const remaining = Math.max(total - used, 0);
-  const unlimited = services.filter((item) => item.unlimited).length;
-  const share = total ? Math.round(remaining / total * 100) : 100;
-  const hours = (value) => `${formatNumberLocale(value, { maximumFractionDigits: 1 })} ${t("h")}`;
-  const visible = [...services].sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1)).slice(0, 4);
-  if (!manager && !services.length) return null;
-  return <Panel title={t("Program usage")} action={manager ? <button className="button quiet small" onClick={() => setOpen(true)}><Plus size={14} /> {t("Assign service")}</button> : null}>
-    <div className="usage-headline">
-      <div className="usage-ring" style={{ '--progress': `${share}%` }} role="img" aria-label={`${formatPercentLocale(share)} ${t("Remaining")}`}><strong>{formatPercentLocale(share)}</strong></div>
-      <div className="usage-headline-copy">
-        <strong>{total ? hours(remaining) : '\u221e'}</strong>
-        <span>{total ? t("Remaining") : t("Unlimited access")}</span>
-        <small>{[total ? `${t("Used")} ${hours(used)}` : null, total ? `${t("Total allocated")} ${hours(total)}` : null, unlimited ? `${unlimited} ${t("Unlimited")}` : null].filter(Boolean).join(' · ')}</small>
-      </div>
-    </div>
-    <div className="record-list usage-service-list">{visible.map((service) => <article className="record" key={service.id}><div className="record-main">
-      <div><b>{service.name}</b><small>{manager && service.student_name ? `${service.student_name} \u00b7 ` : ''}{service.mentor_name || t("Mentor pending")}</small></div>
-      <span className={`usage-service-value${service.unlimited ? ' is-unlimited' : ''}`}>{service.unlimited ? '\u221e' : hours(service.remaining_hours ?? 0)}</span>
-    </div></article>)}{!visible.length && <Empty text={t("No program services have been assigned yet.")} />}</div>
-    {open && <ProgramServiceForm user={user} data={data} notify={notify} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} />}
-  </Panel>;
-}
-
-function EssayLabPage({ user, data, query, reload, notify }) {
-  const approved = data.essays.filter((item) => item.status === 'approved').length;
-  const active = data.essays.filter((item) => item.status !== 'approved').length;
-  return <div className="section-stack student-portal"><section className="portal-hero essay-hero"><div><span className="eyebrow">{t("NASEEB ESSAY LAB")}</span><h2>{t("Ideas into impact.")}</h2><p>{t("Manage drafts, revisions, and counselor feedback in one place.")}</p></div><div className="essay-progress"><div><strong>{data.essays.length}</strong><span>{t("Total")}</span></div><div><strong>{active}</strong><span>{t("Active")}</span></div><div><strong>{approved}</strong><span>{t("Approved")}</span></div></div></section><ResourceSection title={t("Active essays & supplements")} resource="essays" {...{ user, data, query, reload, notify }} /></div>;
-}
-
-function ApplicationsPortalPage({ user, data, query, reload, notify, setPage }) {
-  const submitted = data.applications.filter((item) => ['submitted', 'accepted'].includes(item.status)).length;
-  return <div className="section-stack student-portal"><section className="portal-hero application-hero"><div><span className="eyebrow">{t("APPLICATION TRACKER")}</span><h2>{t("Manage every application.")}</h2><p>{t("Track your university list, statuses, deadlines, and scholarship information.")}</p></div><button className="button light" onClick={() => setPage('college_search')}><Search size={17} /> {t("Add a university")}</button></section><div className="stat-grid"><Stat label={t("Universities")} value={data.applications.length} /><Stat label={t("Submitted")} value={submitted} /><Stat label={t("In progress")} value={data.applications.filter((item) => ['shortlisted', 'applying'].includes(item.status)).length} /><Stat label={t("Decisions")} value={data.applications.filter((item) => ['accepted', 'rejected', 'waitlisted'].includes(item.status)).length} /></div><ResourceSection title={t("My university list")} resource="applications" {...{ user, data, query, reload, notify }} /></div>;
-}
-
-const money = (value) => formatCurrencyLocale(value);
-
-const COLLEGE_REGIONS = [
-  { key: 'us', label: 'US', countries: ['usa', 'united states', 'united states of america'] },
-  { key: 'canada', label: 'Canada', countries: ['canada'] },
-  { key: 'china', label: 'China', countries: ['china', 'mainland china'] },
-  { key: 'hong_kong', label: 'Hong Kong', countries: ['hong kong', 'hong kong sar'] },
-];
-
-function universityRegion(university) {
-  const market = String(university?.market || '').trim().toLowerCase();
-  if (COLLEGE_REGIONS.some((region) => region.key === market)) return market;
-  const country = String(university?.country || '').trim().toLowerCase();
-  return COLLEGE_REGIONS.find((region) => region.countries.includes(country))?.key || null;
-}
-
-function universityFit(university, student) {
-  if (!student) return { score: 0, label: 'Profile needed' };
-  let score = 20;
-  const targets = String(student.target_countries || '').toLowerCase();
-  if (targets.includes(String(university.country || '').toLowerCase())) score += 25;
-  if (!university.sat_min || Number(student.sat_score || 0) >= Number(university.sat_min)) score += 25;
-  if (!university.net_price_usd || !student.budget_usd || Number(university.net_price_usd) <= Number(student.budget_usd)) score += 15;
-  if (!student.scholarship_needed || university.offers_international_aid || university.offers_merit_aid) score += 15;
-  const bounded = Math.min(score, 100);
-  return { score: bounded, label: bounded >= 80 ? 'Strong fit' : bounded >= 60 ? 'Good fit' : 'Explore' };
-}
-
-function scholarshipRequirements(item) {
-  return [
-  item.requires_transcript && 'Transcript', item.requires_essay && 'Essay',
-  item.requires_recommendation && 'Recommendation', item.requires_financial_documents && 'Financial documents',
-  item.requires_cv && 'CV', item.requires_portfolio && 'Portfolio'].
-  filter(Boolean);
-}
-
-function eligibleScholarship(item, student) {
-  if (!student) return false;
-  if (item.min_gpa && Number(student.gpa || 0) < Number(item.min_gpa)) return false;
-  if (item.min_ielts && Number(student.ielts_score || 0) < Number(item.min_ielts)) return false;
-  if (item.min_sat && Number(student.sat_score || 0) < Number(item.min_sat)) return false;
-  return !item.eligible_grades || String(item.eligible_grades).split(',').map((value) => value.trim()).includes(String(student.grade));
-}
-
-function CollegeSearchPage({ data, query, reload, notify }) {
-  const [tab, setTab] = useState('universities');
-  const [region, setRegion] = useState('us');
-  const [admissionBand, setAdmissionBand] = useState('all');
-  const [institutionType, setInstitutionType] = useState('all');
-  const [maxPrice, setMaxPrice] = useState('all');
-  const [minimumAcceptance, setMinimumAcceptance] = useState('0');
-  const [aid, setAid] = useState('all');
-  const [testOptional, setTestOptional] = useState(false);
-  const [scoreMatch, setScoreMatch] = useState(false);
-  const [scholarshipType, setScholarshipType] = useState('all');
-  const [funding, setFunding] = useState('all');
-  const [scope, setScope] = useState('all');
-  const [eligibleOnly, setEligibleOnly] = useState(false);
-  const [research, setResearch] = useState(null);
-  const [researchLoading, setResearchLoading] = useState(true);
-  const [researchSaving, setResearchSaving] = useState(false);
-  const [researchError, setResearchError] = useState('');
-  const student = ownStudent(data);
-  const researchMap = new Map((research?.recommendations || []).map((item) => [item.university.id, item]));
-  const added = new Set(data.applications.map((item) => item.university));
-
-  useEffect(() => {
-    let active = true;
-    setResearchLoading(true);
-    api.collegeResearch().then((result) => {if (active) {setResearch(result);setResearchError('');}}).catch((error) => {if (active) setResearchError(error.message);}).finally(() => {if (active) setResearchLoading(false);});
-    return () => {active = false;};
-  }, []);
-
-  async function refreshResearch() {
-    setResearchLoading(true);setResearchError('');
-    try {setResearch(await api.collegeResearch());} catch (error) {setResearchError(error.message);} finally {setResearchLoading(false);}
-  }
-
-  async function completeResearchProfile(payload) {
-    setResearchSaving(true);setResearchError('');
-    try {
-      const result = await api.updateCollegeResearchProfile(payload);
-      setResearch(result);
-      notify(t("Profile details saved and college research updated."));
-      reload();
-    } catch (error) {setResearchError(error.message);} finally {setResearchSaving(false);}
-  }
-  const items = data.universities.filter((item) => {
-    const aidMatch = aid === 'all' || aid === 'need' && item.offers_need_based_aid || aid === 'merit' && item.offers_merit_aid || aid === 'international' && item.offers_international_aid || aid === 'full_need' && item.meets_full_need;
-    const recommendation = researchMap.get(item.id);
-    return universityRegion(item) === region && (
-    admissionBand === 'all' || recommendation?.admission_band === admissionBand) && (
-    institutionType === 'all' || item.institution_type === institutionType) && (
-    maxPrice === 'all' || Number(item.net_price_usd || Infinity) <= Number(maxPrice)) &&
-    Number(item.acceptance_rate || 0) >= Number(minimumAcceptance) && (
-    !testOptional || item.test_optional) && (
-    !scoreMatch || !item.sat_min || Number(student?.sat_score || 0) >= Number(item.sat_min)) &&
-    aidMatch && JSON.stringify(item).toLowerCase().includes(query.toLowerCase());
-  }).sort((a, b) => (researchMap.get(b.id)?.match_score ?? universityFit(b, student).score) - (researchMap.get(a.id)?.match_score ?? universityFit(a, student).score));
-  const scholarships = data.scholarships.filter((item) => (scholarshipType === 'all' || item.scholarship_type === scholarshipType) && (
-  funding === 'all' || item.funding_level === funding) && (scope === 'all' || item.scope === scope) && (
-  !eligibleOnly || eligibleScholarship(item, student)) && JSON.stringify(item).toLowerCase().includes(query.toLowerCase()));
-  const universityFiltersActive = [institutionType !== 'all', maxPrice !== 'all', minimumAcceptance !== '0', aid !== 'all', testOptional, scoreMatch, admissionBand !== 'all'].filter(Boolean).length;
-  function resetUniversityFilters() {setAdmissionBand('all');setInstitutionType('all');setMaxPrice('all');setMinimumAcceptance('0');setAid('all');setTestOptional(false);setScoreMatch(false);}
-  async function shortlist(university) {const band = researchMap.get(university.id)?.admission_band;const tier = band === 'reach' ? 'dream' : band === 'safety' ? 'safety' : 'target';try {await api.create('applications', { student: student?.id, university: university.id, program: student?.target_major || 'Undeclared', tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });notify(tx`${university.name} added to your shortlist.`);reload();} catch (err) {notify(err.message, 'error');}}
-  return <div className="section-stack student-portal">
-    <section className="college-banner"><div><span className="eyebrow">{t("NASEEB COLLEGE & AID FINDER")}</span><h2>{t("Universities, scholarships & aid")}</h2><p>{t("Filter profile-matched options by price, acceptance, testing, and financial aid.")}</p></div><School size={80} /></section>
-    <div className="college-filter-bar">
-      <div className="filter-section-tabs"><PortalTabs active={tab} onChange={setTab} items={[["universities", "Universities"], ["scholarships", "Scholarships & Aid"], ["aid", "What you need"]]} /></div>
-      {tab === 'universities' && !researchLoading && research?.ready && <>
-        <div className="filter-control-row filter-scope-row">
-          <div className="filter-chip-row" role="group" aria-label={t("Country")}><Globe2 className="filter-group-icon" size={15} aria-hidden="true" />{COLLEGE_REGIONS.map(({ key, label: regionLabel }) => <FilterChip key={key} active={region === key} onClick={() => {setRegion(key);setAdmissionBand('all');}}>{t(regionLabel)}</FilterChip>)}</div>
-          <div className="filter-chip-row" role="group" aria-label={t("Admission band")}>{[["all", "All matches", ''], ["reach", "Reach", 'tone-reach'], ["target", "Target", 'tone-target'], ["safety", "Safety", 'tone-safety']].map(([value, chipLabel, tone]) => <FilterChip key={value} tone={tone} active={admissionBand === value} onClick={() => setAdmissionBand(value)}>{t(chipLabel)}</FilterChip>)}</div>
-          <p className="filter-count"><b>{formatNumberLocale(items.length)}</b> {t("universities found")}</p>
-        </div>
-        <div className="filter-control-row">
-          <select aria-label={t("Institution type")} value={institutionType} onChange={(event) => setInstitutionType(event.target.value)}><option value="all">{t("Public & private")}</option><option value="public">{t("Public")}</option><option value="private">{t("Private")}</option></select>
-          <select aria-label={t("Maximum net price")} value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)}><option value="all">{t("Any price")}</option><option value="15000">{t("Up to $15,000")}</option><option value="25000">{t("Up to $25,000")}</option><option value="40000">{t("Up to $40,000")}</option></select>
-          <select aria-label={t("Minimum acceptance")} value={minimumAcceptance} onChange={(event) => setMinimumAcceptance(event.target.value)}><option value="0">{t("Any rate")}</option><option value="10">10%+</option><option value="25">25%+</option><option value="50">50%+</option></select>
-          <select aria-label={t("Aid type")} value={aid} onChange={(event) => setAid(event.target.value)}><option value="all">{t("Any aid")}</option><option value="need">{t("Need-based")}</option><option value="merit">{t("Merit")}</option><option value="international">{t("International aid")}</option><option value="full_need">{t("Meets full need")}</option></select>
-          <FilterChip active={testOptional} onClick={() => setTestOptional(!testOptional)}>{t("Test optional only")}</FilterChip>
-          <FilterChip active={scoreMatch} onClick={() => setScoreMatch(!scoreMatch)}>{t("My SAT matches")}</FilterChip>
-          {universityFiltersActive > 0 && <button type="button" className="filter-reset" onClick={resetUniversityFilters}><X size={13} /> {t("Clear")} ({universityFiltersActive})</button>}
-        </div>
-      </>}
-      {tab === 'scholarships' && <div className="filter-control-row">
-        <select aria-label={t("Scholarship type")} value={scholarshipType} onChange={(event) => setScholarshipType(event.target.value)}><option value="all">{t("All types")}</option><option value="merit">{t("Merit")}</option><option value="need_based">{t("Need-based")}</option><option value="leadership">{t("Leadership")}</option><option value="research">{t("Research")}</option><option value="full_ride">{t("Full ride")}</option></select>
-        <select aria-label={t("Funding")} value={funding} onChange={(event) => setFunding(event.target.value)}><option value="all">{t("Any funding")}</option><option value="full">{t("Full funding")}</option><option value="partial">{t("Partial")}</option><option value="fixed">{t("Fixed amount")}</option></select>
-        <select aria-label={t("Scope")} value={scope} onChange={(event) => setScope(event.target.value)}><option value="all">{t("National & International")}</option><option value="national">{t("National")}</option><option value="international">{t("International")}</option></select>
-        <FilterChip active={eligibleOnly} onClick={() => setEligibleOnly(!eligibleOnly)}>{t("Eligible for my profile")}</FilterChip>
-        <p className="filter-count"><b>{formatNumberLocale(scholarships.length)}</b> {t("scholarships found")}</p>
-      </div>}
-    </div>
-    {tab === 'universities' && researchLoading && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, budget, and portfolio evidence.")}</p></div></div>}
-    {tab === 'universities' && researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("Research yuklanmadi")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
-    {tab === 'universities' && !researchLoading && research && !research.ready && <CollegeProfileQuestions research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
-    {tab === 'universities' && !researchLoading && research?.ready && <><CollegeResearchOverview research={research} onRefresh={refreshResearch} />
-      <section className="finder-results"><p className="finder-note">{t("The match score is not an admission probability; it measures profile, preference, and affordability fit.")}</p><div className="university-results">{items.map((uni) => {const result = researchMap.get(uni.id);const fit = result ? { score: result.match_score, label: result.match_label } : universityFit(uni, student);return <article className="university-card" key={uni.id}><header><span className="rank">#{uni.ranking ? formatNumberLocale(uni.ranking) : '—'}</span><div><h3>{uni.name}</h3><p><MapPin size={14} /> {uni.city}, {uni.country} · {label(uni.institution_type)}</p></div><div className="university-fit"><span className="fit-badge">{formatPercentLocale(fit.score)} {label(fit.label)}</span>{result && <Badge>{result.admission_band}</Badge>}</div></header><div className="university-metrics"><div><span>{t("Acceptance")}</span><b>{uni.acceptance_rate ? formatPercentLocale(uni.acceptance_rate) : '—'}</b></div><div><span>{t("Net price")}</span><b>{money(uni.net_price_usd)}</b></div><div><span>{t("Average aid")}</span><b>{money(uni.average_aid_usd)}</b></div><div><span>{t("SAT range")}</span><b>{uni.sat_min ? `${formatNumberLocale(uni.sat_min)}–${uni.sat_max ? formatNumberLocale(uni.sat_max) : '—'}` : t("Optional/—")}</b></div></div>{result && <div className="research-breakdown">{Object.entries(result.score_breakdown).map(([name, value]) => <div key={name}><span>{label(name)}</span><div className="progress"><i style={{ width: `${Math.min(100, Number(value) * (name === 'academic' ? 2 : name === 'preferences' ? 4.5 : name === 'financial' ? 5 : 10))}%` }} /></div><b>{formatNumberLocale(value)}</b></div>)}</div>}<div className="aid-badges">{uni.offers_need_based_aid && <span>{t("Need-based")}</span>}{uni.offers_merit_aid && <span>{t("Merit")}</span>}{uni.offers_international_aid && <span>{t("International aid")}</span>}{uni.meets_full_need && <span>{t("Meets full need")}</span>}{uni.test_optional && <span>{t("Test optional")}</span>}</div>{result && <details className="research-details"><summary>{t("Why this result?")}</summary><div><ul>{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={13} /> {reason}</li>)}</ul>{result.gaps.length > 0 && <ul className="gaps">{result.gaps.map((gap) => <li key={gap}><Clock3 size={13} /> {gap}</li>)}</ul>}</div></details>}<footer><div><span>{t("Application:")} {dateText(uni.application_deadline)}</span><span>{t("Aid:")} {dateText(uni.scholarship_deadline)}</span></div>{added.has(uni.id) ? <span className="added"><Check size={17} /> {t("Shortlisted")}</span> : <button className="button primary small" onClick={() => shortlist(uni)}><Plus size={16} /> {t("Shortlist")}</button>}</footer></article>;})}{!items.length && <Empty text={t("No universities match these filters.")} />}</div></section>
-    </>}
-    {tab === 'scholarships' && <><section className="finder-results"><p className="finder-note">{t("Eligibility is not a final decision; always verify the official requirements.")}</p><div className="scholarship-grid">{scholarships.map((item) => {const eligible = eligibleScholarship(item, student);return <article className="scholarship-card" key={item.id}><header><div><span>{label(item.scholarship_type)}</span><h3>{item.title}</h3><p>{item.provider}{item.university_name ? ` · ${item.university_name}` : ''}</p></div><Badge>{item.scope}</Badge></header><strong>{item.funding_level === 'fixed' ? money(item.amount_usd) : label(item.funding_level)}</strong><p>{item.coverage}</p><div className="eligibility-row"><span className={eligible ? "eligible" : "review"}>{eligible ? t("Profile match") : t("Review requirements")}</span><span>{t("Deadline")} {dateText(item.deadline)}</span></div><div className="score-requirements">{item.min_gpa && <span>{t("GPA")} {item.min_gpa}+</span>}{item.min_ielts && <span>{t("IELTS")} {item.min_ielts}+</span>}{item.min_sat && <span>{t("SAT")} {item.min_sat}+</span>}</div><div className="requirement-tags">{scholarshipRequirements(item).map((requirement) => <span key={requirement}>{requirement}</span>)}</div>{item.application_url && <a className="button quiet small" href={item.application_url} target="_blank" rel="noreferrer">{t("Application info")} <ExternalLink size={14} /></a>}</article>;})}{!scholarships.length && <Empty text={t("No matching scholarships found.")} />}</div></section></>}
-    {tab === 'aid' && <AidChecklist data={data} student={student} />}
-  </div>;
-}
-
-function CollegeProfileQuestions({ research, saving, onComplete }) {
-  const [answers, setAnswers] = useState(() => Object.fromEntries(research.questions.map((question) => [question.field, research.profile_snapshot?.[question.field] ?? ''])));
-  function submit(event) {
-    event.preventDefault();
-    onComplete(answers);
-  }
-  return <section className="college-profile-questions"><div className="research-question-copy"><span><ClipboardCheck size={20} /></span><div><span className="eyebrow">{t("PROFILE DATA REQUIRED")}</span><h2>{t("A few details are missing from your research profile")}</h2><p>{t("Your answers will be saved to your student profile and used to rank universities for you.")}</p></div></div><form onSubmit={submit}><div className="research-question-grid">{research.questions.map((question) => <label key={question.field}><span>{question.label}</span><input type={question.type} min={question.min} max={question.max} step={question.step || (question.type === 'number' ? '1' : undefined)} placeholder={question.placeholder} value={answers[question.field] ?? ''} onChange={(event) => setAnswers((current) => ({ ...current, [question.field]: event.target.value }))} required /></label>)}</div><footer><small>{research.questions.length} {t("answers required")}</small><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? <><RefreshCw className="spin" size={16} /> {t("Researching…")}</> : <><Search size={16} /> {t("Save & research")}</>}</button></footer></form></section>;
-}
-
-function CollegeResearchOverview({ research, onRefresh }) {
-  const profile = research.profile_snapshot || {};
-  const evidence = Object.values(profile.evidence || {}).reduce((total, value) => total + Number(value || 0), 0);
-  return <section className="college-research-overview"><div><span className="research-status-icon"><CheckCircle2 size={21} /></span><div><span className="eyebrow">{t("RESEARCH READY")}</span><h3>{t("Results calculated from your student profile")}</h3><p>{research.methodology}</p></div></div><div className="research-profile-chips"><span>{t("SAT")} <b>{profile.sat_score}</b></span><span>{t("GPA")} <b>{profile.gpa}</b></span><span>{t("IELTS")} <b>{profile.ielts_score}</b></span><span>{t("Major")} <b>{profile.target_major}</b></span><span>{t("Budget")} <b>{money(profile.budget_usd)}</b></span><span>{t("Evidence")} <b>{evidence}</b></span></div><button className="button quiet small" onClick={onRefresh}><RefreshCw size={15} /> {t("Refresh")}</button></section>;
-}
-
-function AidChecklist({ data, student }) {
-  const shortlisted = data.applications.map((item) => data.universities.find((uni) => uni.id === item.university)).filter(Boolean);
-  const needsCss = shortlisted.some((uni) => uni.css_profile_required);
-  const needsFafsa = shortlisted.some((uni) => uni.fafsa_required);
-  const checklist = [
-  ['Academic transcript', 'Official grades and school records', true],
-  ['Family financial documents', 'Income, tax or employer statements requested by the institution', student?.scholarship_needed],
-  ['Bank or sponsor statement', 'Proof of available funds for international study', true],
-  ['Scholarship essays', 'Motivation, impact and financial-need responses', true],
-  ['Recommendation letters', 'Teacher or counselor recommendations where requested', true],
-  ['CSS Profile', 'Only for shortlisted universities that require it', needsCss],
-  ['FAFSA', 'Only where eligibility and university requirements apply', needsFafsa]];
-
-  return <div className="aid-checklist"><section className="aid-intro"><div><span className="eyebrow">{t("AID PREPARATION")}</span><h2>{t("Prepare for financial aid")}</h2><p>{t("Core documents based on your shortlist and profile. Verify final requirements on each university’s official financial aid page.")}</p></div><div className="aid-profile-summary"><Detail label={t("Budget")} value={money(student?.budget_usd)} /><Detail label={t("Scholarship")} value={student?.scholarship_needed ? t("Needed") : t("Optional")} /><Detail label={t("Shortlisted")} value={data.applications.length} /></div></section><div className="checklist-cards">{checklist.map(([title, description, needed]) => <article key={title} className={needed ? "needed" : ''}><span className="checklist-icon" aria-hidden="true">{needed ? <CheckCircle2 size={20} /> : <Clock3 size={20} />}</span><div><h3>{t(title)}</h3><p>{t(description)}</p></div><span className="checklist-status">{needed ? t("Prepare") : t("If required")}</span></article>)}</div></div>;
-}
-
-const PROGRAM_GRADES = ['5', '6', '7', '8', '9', '10', '11'];
-const programGrades = (item) => String(item.eligible_grades || '').split(',').map((part) => part.trim()).filter(Boolean);
-
-// The catalog is a yearly list: only a few rows carry a real date, the rest keep the
-// counselor sheet's own deadline text and have to be confirmed on the official page.
-function ProgramDeadline({ item, closed }) {
-  if (item.deadline) return <>{closed ? t("Closed") : t("Deadline")} {dateText(item.deadline)}</>;
-  if (item.deadline_text) return <>{t("Usual deadline")} {item.deadline_text} · {t("confirm the date")}</>;
-  return <>{t("Deadline on the official page")}</>;
-}
-
-function ProgramsPage({ data, query }) {
-  const [type, setType] = useState('all');
-  const [category, setCategory] = useState('all');
-  const [delivery, setDelivery] = useState('all');
-  const [grade, setGrade] = useState('all');
-  const [aidOnly, setAidOnly] = useState(false);
-  const [openOnly, setOpenOnly] = useState(true);
-  const today = new Date().toISOString().slice(0, 10);
-  const isClosed = (item) => Boolean(item.deadline) && item.deadline < today;
-  const catalog = data.opportunityPrograms;
-  const nationalCount = catalog.filter((item) => item.program_type === 'national').length;
-  const internationalCount = catalog.filter((item) => item.program_type === 'international').length;
-  const closedCount = catalog.filter(isClosed).length;
-  const categories = [...new Set(catalog.filter((item) => (type === 'all' || item.program_type === type)).map((item) => item.category))].sort();
-  const programs = catalog.filter((item) => (type === 'all' || item.program_type === type)
-    && (category === 'all' || item.category === category)
-    && (delivery === 'all' || item.delivery_mode === delivery)
-    && (grade === 'all' || programGrades(item).includes(grade))
-    && (!aidOnly || item.scholarship_available)
-    && (!openOnly || !isClosed(item))
-    && JSON.stringify(item).toLocaleLowerCase(locale()).includes(query.toLocaleLowerCase(locale())))
-    .sort((first, second) => (isClosed(first) - isClosed(second))
-      || (first.deadline || '9999').localeCompare(second.deadline || '9999')
-      || first.title.localeCompare(second.title));
-  return <div className="section-stack student-portal">
-    <section className="programs-hero"><div><span className="eyebrow">{t("PROFILE-BUILDING OPPORTUNITIES")}</span><h2>{t("National & International Programs")}</h2><p>{t("Find research, leadership, competition, and summer programs in one catalog.")}</p></div><Globe2 size={76} /></section>
-    <ChoiceCards name="program-type" label={t("Program type")} value={type} onChange={(nextType) => {setType(nextType);setCategory('all');}} options={[{ value: 'all', label: `${t("All programs")} (${formatNumberLocale(catalog.length)})`, description: 'Explore current opportunities', icon: Compass }, { value: 'national', label: `${t("National")} (${formatNumberLocale(nationalCount)})`, description: 'Opportunities within Uzbekistan', icon: MapPin }, { value: 'international', label: `${t("International")} (${formatNumberLocale(internationalCount)})`, description: 'Global and overseas opportunities', icon: Globe2 }]} />
-    <div className="program-filters">
-      <label>{t("Grade")}<select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="all">{t("All grades")}</option>{PROGRAM_GRADES.map((item) => <option key={item} value={item}>{tx`Grade ${item}`}</option>)}</select></label>
-      <label>{t("Category")}<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">{t("All categories")}</option>{categories.map((item) => <option key={item} value={item}>{t(item)}</option>)}</select></label>
-      <label>{t("Delivery")}<select value={delivery} onChange={(event) => setDelivery(event.target.value)}><option value="all">{t("All formats")}</option><option value="onsite">{t("On-site")}</option><option value="online">{t("Online")}</option><option value="hybrid">{t("Hybrid")}</option></select></label>
-      <CheckboxControl className="compact" checked={aidOnly} onChange={(event) => setAidOnly(event.target.checked)}>{t("Scholarship available")}</CheckboxControl>
-      {closedCount > 0 && <CheckboxControl className="compact" checked={openOnly} onChange={(event) => setOpenOnly(event.target.checked)}>{tx`Hide ${formatNumberLocale(closedCount)} closed`}</CheckboxControl>}
-      <span>{formatNumberLocale(programs.length)} {t("programs")}</span>
-    </div>
-    <div className="program-grid">{programs.map((item) => {const closed = isClosed(item);const grades = programGrades(item);const place = [item.city, item.country].filter(Boolean).join(', ') || (item.delivery_mode === 'online' ? t("Online") : '');return <article className={`program-card ${closed ? 'is-closed' : ''}`} key={item.id}>
-      <header><span>{t(item.category)}</span><Badge>{label(item.program_type)}</Badge></header>
-      <h3>{item.title}</h3>
-      {item.provider && <p className="provider">{item.provider}</p>}
-      {item.description && <p>{t(item.description)}</p>}
-      <div className="program-meta">
-        {place && <span><MapPin size={15} /> {place}</span>}
-        <span><CalendarDays size={15} /> <ProgramDeadline item={item} closed={closed} /></span>
-        {item.fee_usd != null && <span><DollarSign size={15} /> {Number(item.fee_usd) === 0 ? t("Free") : money(item.fee_usd)}</span>}
-        {item.eligible_ages && <span><UsersRound size={15} /> {t("Ages")} {item.eligible_ages}</span>}
-        {grades.length > 0 && <span><GraduationCap size={15} /> {t("Grades")} {grades.join(', ')}</span>}
-      </div>
-      {item.scholarship_available && <div className="program-aid"><HandCoins size={16} /><span><b>{t("Financial aid available")}</b>{t(item.aid_details)}</span></div>}
-      {(item.requirements || !item.source_key) && <details><summary>{t("Requirements")}</summary><p>{t(item.requirements) || t("See official application page.")}</p></details>}
-      {item.application_url && <a className="button primary small" href={item.application_url} target="_blank" rel="noreferrer">{t("View program")} <ExternalLink size={14} /></a>}
-    </article>;})}{!programs.length && <Empty text={t("No programs match these filters.")} />}</div>
-  </div>;
-}
-
-function StorePage({ data, query, setPage }) {
-  const items = data.storeItems.filter((item) => JSON.stringify(item).toLocaleLowerCase(locale()).includes(query.toLocaleLowerCase(locale())));
-  const price = (item) => item.price_label ? t(item.price_label)
-    : item.price_amount != null ? formatCurrencyLocale(Number(item.price_amount), item.currency || 'UZS')
-    : t("Ask your counselor");
-  return <div className="section-stack student-portal">
-    <section className="store-hero"><div><span className="eyebrow">{t("NASEEB EDU SERVICES")}</span><h2>{t("Unlock your next step.")}</h2><p>{t("Explore education and counseling services that support your application journey.")}</p><button className="button light" onClick={() => setPage('messages')}>{t("Talk to your team")} <ChevronRight size={17} /></button></div><PackageOpen size={104} /></section>
-    <div className="store-grid">{items.map((item) => <article key={item.id} className={item.is_featured ? "featured" : ''}><span>{t(item.category)}</span><h3>{t(item.title)}</h3><p>{t(item.description)}</p><footer><b>{price(item)}</b><button className="button quiet small" onClick={() => setPage('messages')}>{t("Learn more")}</button></footer></article>)}{!items.length && <Empty />}</div>
-  </div>;
-}
-
-const SUPPORT_CATEGORIES = ['technical', 'account', 'academic', 'application', 'billing', 'other'];
-const SUPPORT_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
-
-function SupportTicketForm({ onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    try {
-      await api.create('support-tickets', {
-        category: values.get('category'),
-        subject: String(values.get('subject') || '').trim(),
-        message: String(values.get('message') || '').trim()
-      });
-      notify(t("Support request sent."));
-      onSaved();
-    } catch (error) {
-      notify(error.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
-  return <Modal title={t("New support request")} onClose={onClose}><form className="form-grid support-form" onSubmit={submit}>
-    <Field label={t("Category")}><select name="category" defaultValue="technical" required>{SUPPORT_CATEGORIES.map((category) => <option key={category} value={category}>{label(category)}</option>)}</select></Field>
-    <Field label={t("Subject")}><input name="subject" maxLength="180" placeholder={t("Briefly describe the issue")} required /></Field>
-    <Field label={t("Message")}><textarea name="message" maxLength="5000" rows="7" placeholder={t("What happened, where did it happen, and what did you expect?")} required /></Field>
-    <div className="support-privacy-note form-wide"><ShieldCheck size={18} /><span>{t("Do not include passwords, payment details, passport numbers, or other sensitive credentials.")}</span></div>
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Sending…") : <><Send size={16} /> {t("Send request")}</>}</button></div>
-  </form></Modal>;
-}
-
-function SupportResponseModal({ ticket, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    try {
-      await api.update('support-tickets', ticket.id, {
-        status: values.get('status'),
-        admin_response: String(values.get('admin_response') || '').trim()
-      });
-      notify(t("Support response saved."));
-      onSaved();
-    } catch (error) {
-      notify(error.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
-  return <Modal title={t("Respond to support request")} onClose={onClose}><form className="form-grid support-form" onSubmit={submit}>
-    <div className="support-request-preview form-wide"><span><Badge>{ticket.category}</Badge><Badge>{ticket.status}</Badge></span><h3>{ticket.subject}</h3><p>{ticket.message}</p><small>{ticket.requester_name} · {label(ticket.requester_role)} · {dateTimeText(ticket.created_at)}</small></div>
-    <Field label={t("Status")}><select name="status" defaultValue={ticket.status}>{SUPPORT_STATUSES.map((status) => <option key={status} value={status}>{label(status)}</option>)}</select></Field>
-    <Field label={t("Admin response")}><textarea name="admin_response" defaultValue={ticket.admin_response} maxLength="5000" rows="7" placeholder={t("Write a clear resolution or next step.")} required /></Field>
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : <><Send size={16} /> {t("Save response")}</>}</button></div>
-  </form></Modal>;
-}
-
-function SupportTicketDetail({ ticket, user, onClose, onRespond }) {
-  const admin = user.role === 'admin';
-  return <Modal title={ticket.subject} onClose={onClose}><div className="support-ticket-detail">
-    <header><div><Badge>{ticket.category}</Badge><Badge>{ticket.status}</Badge>{ticket.has_unread_response && !admin && <Badge tone="unread">{t("New response")}</Badge>}</div><small>{t("Created")} {dateTimeText(ticket.created_at)} {t("· Updated")} {dateTimeText(ticket.updated_at)}</small></header>
-    {admin && <div className="support-requester"><span className="avatar">{initials(ticket.requester_name)}</span><div><b>{ticket.requester_name}</b><small>{label(ticket.requester_role)}</small></div></div>}
-    <section><span className="eyebrow">{t("REQUEST")}</span><p>{ticket.message}</p></section>
-    <section className={`support-response ${ticket.admin_response ? 'answered' : ''}`}><span className="eyebrow">{t("SUPPORT RESPONSE")}</span>{ticket.admin_response ? <><p>{ticket.admin_response}</p><small>{ticket.responded_by_name || t("Naseeb Edu Support")} · {dateTimeText(ticket.responded_at)}</small></> : <p className="muted-copy">{t("Support has not responded yet. Return to this page later; a badge will appear in the Support menu when a response is ready.")}</p>}</section>
-    <footer><button className="button quiet" onClick={onClose}>{t("Close")}</button>{admin && <button className="button primary" onClick={onRespond}><MessageSquareText size={16} /> {t("Respond")}</button>}</footer>
-  </div></Modal>;
-}
-
-function SupportPage({ user, data, query, reload, notify }) {
-  const [tab, setTab] = useState('all');
-  const [creating, setCreating] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [responding, setResponding] = useState(null);
-  const admin = user.role === 'admin';
-  const search = query.trim().toLowerCase();
-  const tickets = data.supportTickets.filter((ticket) => (tab === 'all' || ticket.status === tab) && (!search || JSON.stringify(ticket).toLowerCase().includes(search)));
-  const activeCount = data.supportTickets.filter((ticket) => ['open', 'in_progress'].includes(ticket.status)).length;
-  const unreadCount = data.supportTickets.filter((ticket) => ticket.has_unread_response).length;
-
-  async function openTicket(ticket) {
-    setSelected(ticket);
-    if (!admin && ticket.has_unread_response) {
-      try {
-        await api.markSupportViewed(ticket.id);
-        setSelected((current) => current?.id === ticket.id ? { ...current, has_unread_response: false, requester_viewed_at: new Date().toISOString() } : current);
-        await reload();
-      } catch (error) {
-        notify(error.message, 'error');
-      }
-    }
-  }
-
-  function saved() {
-    setCreating(false);
-    setResponding(null);
-    setSelected(null);
-    reload();
-  }
-
-  return <div className="section-stack support-page">
-    <section className="support-hero"><div><span className="eyebrow">{t("NASEEB EDU SUPPORT")}</span><h2>{admin ? t("Support requests") : t("Ask the Naseeb team")}</h2><p>{admin ? t("Review requests from students, schools, and counselors in one focused queue.") : t("Tell us what you need, track its progress here, and return when the Naseeb team replies.")}</p></div>{!admin && <button className="button primary" onClick={() => setCreating(true)}><Plus size={17} /> {t("New request")}</button>}</section>
-    <div className="support-summary"><article><span>{admin ? t("All requests") : t("My requests")}</span><strong>{data.supportTickets.length}</strong></article><article><span>{t("Active")}</span><strong>{activeCount}</strong></article><article><span>{admin ? t("Resolved") : t("New responses")}</span><strong>{admin ? data.supportTickets.filter((ticket) => ticket.status === 'resolved').length : unreadCount}</strong></article></div>
-    <section className="support-list"><div className="support-toolbar"><PortalTabs active={tab} onChange={setTab} items={[["all", "All"], ["open", "Open"], ["in_progress", "In progress"], ["resolved", "Resolved"], ["closed", "Closed"]]} /><small>{tickets.length} {tickets.length === 1 ? t("request") : t("requests")}</small></div>
-      <div className="support-ticket-grid">{tickets.map((ticket) => <article className={`support-ticket-card ${ticket.has_unread_response && !admin ? 'has-new-response' : ''}`} key={ticket.id}><div className="support-ticket-copy"><header><div><Badge>{ticket.category}</Badge><Badge>{ticket.status}</Badge>{ticket.has_unread_response && !admin && <Badge tone="unread">{t("New response")}</Badge>}</div><time>{dateText(ticket.updated_at)}</time></header><h3>{ticket.subject}</h3><p>{ticket.message}</p>{admin && <div className="support-requester compact"><span className="avatar">{initials(ticket.requester_name)}</span><div><b>{ticket.requester_name}</b><small>{label(ticket.requester_role)}</small></div></div>}</div><footer><small>{ticket.admin_response ? tx`Answered by ${ticket.responded_by_name || t("Support")}` : t("Awaiting support response")}</small><div><button className="button quiet small" onClick={() => openTicket(ticket)}><Eye size={14} /> {ticket.has_unread_response && !admin ? t("Read response") : t("View")}</button>{admin && <button className="button primary small" onClick={() => setResponding(ticket)}><MessageSquareText size={14} /> {t("Respond")}</button>}</div></footer></article>)}{!tickets.length && <Empty text={data.supportTickets.length ? t("No requests match this filter.") : admin ? t("No support requests have been submitted.") : t("You have not sent a support request yet.")} />}</div>
-    </section>
-    {creating && <SupportTicketForm onClose={() => setCreating(false)} onSaved={saved} notify={notify} />}
-    {selected && <SupportTicketDetail ticket={selected} user={user} onClose={() => setSelected(null)} onRespond={() => {setResponding(selected);setSelected(null);}} />}
-    {responding && <SupportResponseModal ticket={responding} onClose={() => setResponding(null)} onSaved={saved} notify={notify} />}
-  </div>;
-}
-
-const PARENT_CHILD_KEY = 'naseeb-parent-selected-child-v1';
-
-function ParentChildSwitcher({ children, selectedId, onChange }) {
-  if (children.length <= 1) return children[0] ? <div className="parent-single-child"><span className="avatar">{initials(children[0].profile.name)}</span><div><b>{children[0].profile.name}</b><small>{children[0].profile.school}</small></div></div> : null;
-  return <label className="parent-child-switcher"><span>{t("Viewing child")}</span><select value={selectedId} onChange={(event) => onChange(Number(event.target.value))}>{children.map((child) => <option key={child.profile.id} value={child.profile.id}>{child.profile.name} · {child.profile.school}</option>)}</select></label>;
-}
-
-function ParentPortalPage({ page, data, reload, notify }) {
-  const portal = data.parentPortal || EMPTY_DATA.parentPortal;
-  const children = portal.children || [];
-  const [preferredId, setPreferredId] = useState(() => {
-    try {return Number(localStorage.getItem(PARENT_CHILD_KEY)) || null;} catch {return null;}
-  });
-  const child = children.find((item) => item.profile.id === preferredId) || children[0];
-
-  function chooseChild(id) {
-    setPreferredId(id);
-    try {localStorage.setItem(PARENT_CHILD_KEY, String(id));} catch {/* Selection remains available for this session. */}
-  }
-  async function acceptInvite(invitation) {
-    try {await api.acceptParentInvite(invitation.id);notify(tx`${invitation.student_name} is now connected.`);reload();} catch (err) {notify(err.message, 'error');}
-  }
-  async function revokeAccess() {
-    if (!child || !window.confirm(tx`Disconnect parent access to ${child.profile.name}?`)) return;
-    try {await api.revokeParentLink(child.link_id);notify(t("Parent access disconnected."));reload();} catch (err) {notify(err.message, 'error');}
-  }
-
-  const invitations = portal.pending_invitations || [];
-  if (!child) return <div className="parent-empty-workspace"><section><UsersRound size={42} /><span className="eyebrow">{t("PARENT WORKSPACE")}</span><h2>{t("Your family workspace is ready")}</h2><p>{t("A child appears here only after you accept an invitation from their assigned counselor or Naseeb Edu admin.")}</p></section>{invitations.map((invitation) => <article key={invitation.id}><div><b>{invitation.student_name}</b><small>{invitation.relationship_display} {t("invitation ·")} {dateText(invitation.invited_at)}</small></div><button className="button primary" onClick={() => acceptInvite(invitation)}><Check size={16} /> {t("Accept invitation")}</button></article>)}{!invitations.length && <div className="screen-time-privacy"><ShieldCheck size={18} /><p>{t("No pending invitation. Ask the student’s assigned counselor to invite your parent account.")}</p></div>}</div>;
-
-  const profile = child.profile;
-  const openTasks = child.tasks.filter((item) => item.status !== 'approved');
-  const activeApplications = child.applications.filter((item) => !['accepted', 'rejected'].includes(item.status));
-  const upcomingMeetings = child.meetings.filter((item) => new Date(item.starts_at) >= new Date() && !['rejected', 'completed'].includes(item.status));
-  const header = <section className="parent-family-hero"><div><span className="eyebrow">{t("FAMILY VIEW · READ ONLY")}</span><h2>{profile.name}</h2><p>{profile.school} · {profile.grade === 'gap' ? t("Gap year") : tx`Grade ${profile.grade}`} {t("· Counselor:")} {profile.counselor_name || t("Not assigned")}</p></div><ParentChildSwitcher children={children} selectedId={profile.id} onChange={chooseChild} /></section>;
-  const invitationsPanel = invitations.length > 0 && <section className="parent-invitations"><div><b>{t("New child invitation")}</b><p>{t("Accepting grants the exact read-only sections selected by the counselor.")}</p></div>{invitations.map((invitation) => <button key={invitation.id} className="button primary" onClick={() => acceptInvite(invitation)}><Check size={16} /> {t("Accept")} {invitation.student_name}</button>)}</section>;
-
-  let content;
-  if (page === 'dashboard') content = <>
-    <div className="stat-grid parent-stat-grid"><Stat label={t("Journey progress")} value={formatPercentLocale(profile.journey_progress_percent)} note={t("Tasks + roadmap")} /><Stat label={t("Open tasks")} value={formatNumberLocale(openTasks.length)} note={openTasks.filter((item) => item.is_overdue).length ? t("Deadline needs attention") : t("No overdue work")} /><Stat label={t("Active applications")} value={formatNumberLocale(activeApplications.length)} note={child.permissions.applications ? t("Permission granted") : t("Not shared")} /><Stat label={t("Upcoming meetings")} value={formatNumberLocale(upcomingMeetings.length)} note={child.permissions.meetings ? t("Permission granted") : t("Not shared")} /></div>
-    <div className="split-grid wide-left"><Panel title={t("Next priorities")}><div className="record-list">{openTasks.slice(0, 5).map((task) => <Record key={task.id} title={task.title} meta={`${dateText(task.due_date)} · ${label(task.priority)}`} badge={task.status} />)}{!openTasks.length && <Empty text={t("No open tasks for this child.")} />}</div></Panel><Panel title={t("Family access")}><div className="parent-access-list">{[['Progress & tasks', true], ['Applications', child.permissions.applications], ['Documents', child.permissions.documents], ['Meetings', child.permissions.meetings]].map(([title, allowed]) => <div key={title}><span>{title}</span><b className={allowed ? "allowed" : ''}>{allowed ? t("Visible") : t("Hidden")}</b></div>)}</div><button className="button quiet small parent-revoke" onClick={revokeAccess}>{t("Disconnect access")}</button></Panel></div>
-  </>;else
-  if (page === 'parent_progress') content = <><div className="stat-grid parent-stat-grid"><Stat label={t("Level")} value={formatNumberLocale(profile.level)} note={tx`${profile.xp_total} XP earned`} /><Stat label={t("Task progress")} value={formatPercentLocale(profile.task_progress_percent)} /><Stat label={t("Roadmap progress")} value={formatPercentLocale(profile.roadmap_progress_percent)} /><Stat label={t("Overall journey")} value={formatPercentLocale(profile.journey_progress_percent)} /></div><div className="split-grid"><Panel title={t("Academic snapshot")}><div className="detail-grid"><Detail label={t("GPA")} value={profile.gpa} /><Detail label={t("IELTS")} value={profile.ielts_score} /><Detail label={t("SAT")} value={profile.sat_score} /><Detail label={t("Target major")} value={profile.target_major} /><Detail label={t("Target countries")} value={profile.target_countries} /><Detail label={t("Next level")} value={`${formatNumberLocale(profile.next_level_xp)} XP`} /></div></Panel><Panel title={t("Progress by area")}><div className="parent-progress-list">{[['Tasks', profile.task_progress_percent], ['Roadmap', profile.roadmap_progress_percent], ['Journey', profile.journey_progress_percent]].map(([title, value]) => <div key={title}><span><b>{t(title)}</b><small>{formatPercentLocale(value)}</small></span><div className="progress wide"><i style={{ width: `${value}%` }} /></div></div>)}</div></Panel></div></>;else
-  if (page === 'parent_tasks') content = <Panel title={t("Assigned tasks")}><div className="parent-record-grid">{child.tasks.map((task) => <article key={task.id}><div><Badge>{task.status}</Badge>{task.is_self_assigned && <small>{t("Self-task · no XP")}</small>}</div><h3>{task.title}</h3><p>{dateText(task.due_date)} · {label(task.priority)} {t("priority")}</p>{task.is_overdue && <span className="risk-note">{t("Deadline passed")}</span>}</article>)}{!child.tasks.length && <Empty text={t("No assigned tasks yet.")} />}</div></Panel>;else
-  if (page === 'parent_applications') content = child.permissions.applications ? <Panel title={t("University applications")}><div className="parent-record-grid">{child.applications.map((application) => <article key={application.id}><div><Badge>{application.status}</Badge><small>{label(application.tier)}</small></div><h3>{application.university}</h3><p>{application.program} · {application.country}</p><span>{t("Deadline")} {dateText(application.deadline)}</span></article>)}{!child.applications.length && <Empty text={t("No university applications have been added.")} />}</div></Panel> : <ParentHiddenSection title={t("Applications")} />;else
-  if (page === 'parent_documents') content = child.permissions.documents ? <Panel title={t("Document checklist")}><div className="parent-record-grid">{child.documents.map((doc) => <article key={doc.id}><div><Badge>{doc.status}</Badge><small>{label(doc.document_type)}</small></div><h3>{doc.title}</h3><p>{t("Updated")} {dateText(doc.updated_at)}</p></article>)}{!child.documents.length && <Empty text={t("No document checklist items yet.")} />}</div></Panel> : <ParentHiddenSection title={t("Documents")} />;else
-  content = child.permissions.meetings ? <Panel title={t("Counselor meetings")}><div className="parent-record-grid">{child.meetings.map((meeting) => <article key={meeting.id}><div><Badge>{meeting.status}</Badge><small>{meeting.duration_minutes} {t("min")}</small></div><h3>{meeting.topic}</h3><p>{dateTimeText(meeting.starts_at)}</p><span>{meeting.participant_name || t("Staff member")} · {label(meeting.participant_role)}</span></article>)}{!child.meetings.length && <Empty text={t("No meetings are visible yet.")} />}</div></Panel> : <ParentHiddenSection title={t("Meetings")} />;
-
-  return <div className="section-stack parent-portal">{header}{invitationsPanel}{content}<div className="screen-time-privacy"><ShieldCheck size={18} /><p><b>{t("Private by default.")}</b> {t("This cabinet never shows essays, messages, counselor notes, task responses, document files, passwords, or application portal credentials. All shared information is read-only.")}</p></div></div>;
-}
-
-function ParentHiddenSection({ title }) {
-  return <section className="parent-hidden-section"><Fingerprint size={36} /><h2>{title} {t("are not shared")}</h2><p>{t("The counselor did not enable this section for the current parent-child connection.")}</p></section>;
-}
-
-function ScreenTimePage({ user }) {
-  const [days, setDays] = useState(7);
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {setSummary(await api.screenTimeSummary(days));} catch (err) {setError(err.message);} finally {setLoading(false);}
-  }, [days]);
-  useEffect(() => {load();}, [load]);
-
-  if (loading && !summary) return <PageSkeleton />;
-  if (error && !summary) return <InlineLoadError message={error} onRetry={load} />;
-  const own = summary?.own || { today_seconds: 0, period_seconds: 0, daily: [], pages: [] };
-  const dailyByDate = Object.fromEntries(own.daily.map((row) => [row.date, row.seconds]));
-  const dates = Array.from({ length: days }, (_, offset) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (days - offset - 1));
-    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-    return date.toISOString().slice(0, 10);
-  });
-  const daily = dates.map((date) => ({ date, seconds: dailyByDate[date] || 0 }));
-  const maxSeconds = Math.max(1, ...daily.map((row) => row.seconds));
-  const isStaff = ['admin', 'counselor', 'teacher', 'organization'].includes(user.role);
-  return <div className="section-stack screen-time-page">
-    <section className="screen-time-intro"><div><span className="eyebrow">{t("ACTIVE LEARNING ONLY")}</span><h2>{t("Time that reflects real work")}</h2><p>{t("Time counts only while this tab is visible and you have interacted in the last minute. Idle and background time are excluded.")}</p></div><label className="period-select"><span>{t("Period")}</span><span className="period-select-control"><CalendarDays size={17} aria-hidden="true" /><select value={days} onChange={(event) => setDays(Number(event.target.value))}><option value="7">{t("Last 7 days")}</option><option value="14">{t("Last 14 days")}</option><option value="30">{t("Last 30 days")}</option></select><ChevronRight className="period-select-chevron" size={16} aria-hidden="true" /></span></label></section>
-    {error && <div className="alert error">{error}</div>}
-    <div className="stat-grid screen-time-stats"><Stat label={t("Today")} value={formatDuration(own.today_seconds)} note={t("Active tab time")} /><Stat label={tx`${days}-day total`} value={formatDuration(own.period_seconds)} note={t("Idle time excluded")} /><Stat label={t("Daily average")} value={formatDuration(own.period_seconds / days)} note={tx`Timezone: ${summary?.timezone || t("Asia/Tashkent")}`} /></div>
-    <div className="split-grid wide-left"><Panel title={t("Daily activity")}><div className="time-chart" aria-label={t("Daily active time chart")}>{daily.map((row) => <div className="time-bar" key={row.date} title={`${dateText(row.date)}: ${formatDuration(row.seconds)}`}><span><i style={{ height: `${Math.max(row.seconds ? 8 : 2, row.seconds / maxSeconds * 100)}%` }} /></span><small>{new Date(`${row.date}T12:00:00`).toLocaleDateString(locale(), { weekday: 'short' })}</small></div>)}</div></Panel><Panel title={t("Pages")}><div className="page-time-list">{own.pages.slice(0, 8).map((row) => <div key={row.page}><span>{PAGE_META[row.page] ? t(PAGE_META[row.page].label) : label(row.page.replaceAll('_', ' '))}</span><b>{formatDuration(row.seconds)}</b></div>)}{!own.pages.length && <Empty text={t("Your active time will appear after the first 30-second sync.")} />}</div></Panel></div>
-    {isStaff && <Panel title={t("Student activity")} action={<span className="privacy-chip"><ShieldCheck size={14} /> {t("Aggregate view")}</span>}><div className="time-team-list">{summary?.team?.map((student) => <article key={student.student}><div><span className="avatar">{initials(student.name)}</span><div><b>{student.name}</b><small>{student.school}</small></div></div><span><small>{t("Today")}</small><b>{formatDuration(student.today_seconds)}</b></span><span><small>{days} {t("days")}</small><b>{formatDuration(student.period_seconds)}</b></span></article>)}{!summary?.team?.length && <Empty text={t("No permitted student activity is available yet.")} />}</div></Panel>}
-    <div className="screen-time-privacy"><ShieldCheck size={18} /><p><b>{t("Privacy by design.")}</b> {t("We store only aggregate seconds by user, day, and app page—never clicks, typed text, or browsing content. Offline totals retry for up to 7 days. Aggregate rows are retained for")} {summary?.retention_days || 365} {t("days.")}</p></div>
-  </div>;
-}
-
-function AdminControlDashboard({ data, setPage }) {
-  const counselors = data.accounts.filter((account) => account.role === 'counselor');
-  const activeCounselors = counselors.filter((account) => account.is_active);
-  const pendingReviews = data.counselorRoadmaps.flatMap((roadmap) => roadmap.missions || []).filter((mission) => mission.status === 'submitted').length;
-  return <div className="section-stack"><div className="stat-grid"><Stat label={t("Schools")} value={data.schools.filter((school) => school.workspace_type === 'school' && school.is_active).length} note={t("Active organization workspaces")} /><Stat label={t("Counselors")} value={activeCounselors.length} note={tx`${counselors.length - activeCounselors.length} inactive`} /><Stat label={t("Students")} value={data.students.length} note={t("Available in Student 360")} /><Stat label={t("Roadmap reviews")} value={pendingReviews} note={t("Submitted counselor missions")} /></div><Panel title={t("Platform administration")}><div className="quick-grid"><button onClick={() => setPage('admin_schools')}><Building2 /><span><b>{t("Manage schools")}</b><small>{t("Provision organization accounts")}</small></span></button><button onClick={() => setPage('admin_counselors')}><UserRound /><span><b>{t("Manage counselors")}</b><small>{t("Create, transfer, or deactivate")}</small></span></button><button onClick={() => setPage('counselor_roadmap')}><Compass /><span><b>{t("Review roadmaps")}</b><small>{t("Approve submitted milestones")}</small></span></button><button onClick={() => setPage('admin_audit')}><ShieldAlert /><span><b>{t("Open audit log")}</b><small>{t("Trace administration actions")}</small></span></button></div></Panel></div>;
-}
-
-function AdminCounselorsPage({ data, query, reload, notify }) {
-  const [open, setOpen] = useState(false);
-  const [transfer, setTransfer] = useState(null);
-  const [editing, setEditing] = useState(null);
-  const counselors = data.accounts.filter((account) => account.role === 'counselor' && JSON.stringify(account).toLowerCase().includes(query.toLowerCase()));
-  async function deactivate(account) {
-    if (!window.confirm(tx`Deactivate ${fullName(account)}? Their login will stop immediately.`)) return;
-    try {await api.deactivateAccount(account.id);notify(t("Counselor deactivated."));reload();} catch (error) {notify(error.message, 'error');}
-  }
-  return <><Panel title={t("Counselor provisioning")} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {t("Add counselor")}</button>}><div className="record-list">{counselors.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{account.email} · {account.school_name || t("No school")}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.school_workspace_type === 'individual' ? t("Individual workspace") : t("Organization school")}</span></div></div><div className="record-actions"><button className="icon-button" onClick={() => setEditing(account)} title={t("Edit counselor")}><Pencil size={16} /></button>{account.is_active && account.school_workspace_type !== 'individual' && <button className="button quiet" onClick={() => setTransfer(account)}><Building2 size={15} /> {t("Transfer")}</button>}{account.is_active && <button className="icon-button danger" onClick={() => deactivate(account)} title={t("Deactivate counselor")}><Trash2 size={16} /></button>}</div></article>)}{!counselors.length && <Empty text={t("No counselors found.")} />}</div></Panel>{open && <CounselorProvisionForm schools={data.schools} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{editing && <CounselorEditForm account={editing} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}{transfer && <AccountTransferForm account={transfer} schools={data.schools} onClose={() => setTransfer(null)} onSaved={() => {setTransfer(null);reload();}} notify={notify} />}</>;
-}
-
-function CounselorEditForm({ account, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);try {await api.update('users/accounts', account.id, { first_name: values.get('first_name'), last_name: values.get('last_name'), email: values.get('email'), phone: values.get('phone'), position: values.get('position'), is_active: values.get('is_active') === 'true' });notify(t("Counselor updated."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
-  return <Modal title={t("Edit counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("First name")}><input name="first_name" defaultValue={account.first_name} required /></Field><Field label={t("Last name")}><input name="last_name" defaultValue={account.last_name} /></Field><Field label={t("Email")}><input name="email" type="email" defaultValue={account.email} required /></Field><Field label={t("Phone")}><input name="phone" defaultValue={account.phone} /></Field><Field label={t("Position")}><input name="position" defaultValue={account.position} /></Field><Field label={t("Status")}><select name="is_active" defaultValue={String(account.is_active)}><option value="true">{t("Active")}</option><option value="false">{t("Inactive")}</option></select></Field><p className="form-note form-wide">{t("Reactivation is blocked when the destination school already has three active counselors.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Saving…") : t("Save")}</button></div></form></Modal>;
-}
-
-function CounselorProvisionForm({ schools, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);try {const payload = Object.fromEntries(new FormData(event.currentTarget).entries());payload.school = Number(payload.school);await api.createCounselor(payload);notify(t("Counselor account created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
-  const organizationSchools = schools.filter((school) => school.workspace_type === 'school' && school.is_active);
-  return <Modal title={t("Add school counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit} autoComplete="off"><Field label={t("First name")}><input name="first_name" required /></Field><Field label={t("Last name")}><input name="last_name" /></Field><Field label={t("Username")}><input name="username" autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" autoComplete="off" required /></Field><Field label={t("Organization school")}><select name="school" required><option value="">{t("Select a school")}</option>{organizationSchools.map((school) => <option value={school.id} key={school.id}>{school.name}</option>)}</select></Field><Field label={t("Position")}><input name="position" /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("Each organization school can have at most three active counselors.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
-}
-
-function AccountTransferForm({ account, schools, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();if (!window.confirm(t("Confirm counselor transfer?"))) return;setSaving(true);try {await api.transferCounselor(account.id, Number(new FormData(event.currentTarget).get('school')));notify(t("Counselor transferred."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
-  return <Modal title={t("Transfer counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Organization school")}><select name="school" required defaultValue=""><option value="" disabled>{t("Select a school")}</option>{schools.filter((school) => school.workspace_type === 'school' && school.is_active && school.id !== account.school).map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></Field><p className="form-note form-wide">{t("Transfer is blocked until assigned students belong to the destination school and a counselor slot is available.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{t("Transfer")}</button></div></form></Modal>;
-}
-
-function CounselorRoadmapPage({ user, data, reload, notify }) {
-  const [templateOpen, setTemplateOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [selfAssignOpen, setSelfAssignOpen] = useState(false);
-  async function submitMission(roadmap, mission) {const note = window.prompt(t("Add a completion note"), mission.counselor_note || '');if (!note?.trim()) return;try {await api.submitCounselorMission(roadmap.id, mission.id, note);notify(t("Mission submitted for review."));reload();} catch (error) {notify(error.message, 'error');}}
-  async function review(roadmap, mission, decision) {let feedback = '';if (decision === 'request_changes') {feedback = window.prompt(t("Explain the requested changes"), '') || '';if (!feedback.trim()) return;}if (!window.confirm(decision === 'approve' ? t("Approve this mission?") : t("Request changes for this mission?"))) return;try {await api.reviewCounselorMission(roadmap.id, mission.id, decision, feedback);notify(decision === 'approve' ? t("Mission approved.") : t("Changes requested."));reload();} catch (error) {notify(error.message, 'error');}}
-  const templates = data.counselorRoadmapTemplates.filter((template) => template.is_active);
-  const actions = user.role === 'admin' ? <div className="panel-actions"><button className="button quiet" onClick={() => setTemplateOpen(true)}><Plus size={16} /> {t("New template")}</button><button className="button primary" onClick={() => setAssignOpen(true)}><Compass size={16} /> {t("Assign roadmap")}</button></div> : <button className="button primary" onClick={() => setSelfAssignOpen(true)}><Compass size={16} /> {t("Start my roadmap")}</button>;
-  const emptyText = user.role === 'counselor' ? t("Create your own roadmap or begin from an active template.") : t("No counselor roadmaps assigned yet.");
-  return <><Panel title={user.role === 'admin' ? t("Counselor roadmap control") : t("My professional roadmap")} action={actions}><div className="record-list">{data.counselorRoadmaps.map((roadmap) => <article className="roadmap-admin-card" key={roadmap.id}><header><div><span className="eyebrow">{label(roadmap.kind)}</span><h3>{roadmap.title}</h3><p>{roadmap.counselor_name} · {roadmap.school_name}</p></div><div className="roadmap-progress"><b>{formatPercentLocale(roadmap.progress_percent)}</b><Badge tone={roadmap.status === 'completed' ? 'success' : ''}>{label(roadmap.status)}</Badge></div></header><div className="roadmap-admin-missions">{roadmap.missions.map((mission) => <div key={mission.id}><span className={`status-dot ${mission.status}`} /><div><b>{mission.sequence}. {mission.title}</b><small>{label(mission.status)} · {dateText(mission.due_date)}</small>{mission.counselor_note && <p>{mission.counselor_note}</p>}{mission.admin_feedback && <p className="form-note">{mission.admin_feedback}</p>}</div><div>{user.role === 'counselor' && mission.status !== 'approved' && <button className="button quiet" onClick={() => submitMission(roadmap, mission)}>{t("Submit")}</button>}{user.role === 'admin' && mission.status === 'submitted' && <><button className="button quiet" onClick={() => review(roadmap, mission, 'request_changes')}>{t("Request changes")}</button><button className="button primary" onClick={() => review(roadmap, mission, 'approve')}>{t("Approve")}</button></>}</div></div>)}</div></article>)}{!data.counselorRoadmaps.length && <Empty text={emptyText} />}</div></Panel>{templateOpen && <RoadmapTemplateForm onClose={() => setTemplateOpen(false)} onSaved={() => {setTemplateOpen(false);reload();}} notify={notify} />}{assignOpen && <RoadmapAssignForm data={data} onClose={() => setAssignOpen(false)} onSaved={() => {setAssignOpen(false);reload();}} notify={notify} />}{selfAssignOpen && <RoadmapSelfAssignForm templates={templates} onClose={() => setSelfAssignOpen(false)} onSaved={() => {setSelfAssignOpen(false);reload();}} notify={notify} />}</>;
-}
-
-function RoadmapSelfAssignForm({ templates, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  const [templateId, setTemplateId] = useState('');
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    const values = new FormData(event.currentTarget);
-    try {
-      const payload = templateId ? {
-        template: Number(templateId),
-        title: values.get('title'),
-      } : {
-        title: values.get('title'),
-        kind: values.get('kind'),
-        missions: String(values.get('missions')).split('\n').map((title) => title.trim()).filter(Boolean).map((title) => ({ title })),
-      };
-      await api.create('counselor-roadmaps', payload);
-      notify(t("Roadmap started."));
-      onSaved();
-    } catch (error) {
-      notify(error.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
-  return <Modal title={t("Start my roadmap")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field className="form-wide" label={t("Roadmap source")}><select name="template" value={templateId} onChange={(event) => setTemplateId(event.target.value)}><option value="">{t("Create my own roadmap")}</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name} · {label(template.kind)}</option>)}</select></Field><Field className="form-wide" label={templateId ? t("Custom title (optional)") : t("Roadmap title")}><input name="title" required={!templateId} /></Field>{!templateId && <><Field label={t("Roadmap type")}><select name="kind"><option value="professional_onboarding">{t("Professional onboarding")}</option><option value="school_management">{t("School management")}</option></select></Field><Field className="form-wide" label={t("Missions, one per line")}><textarea name="missions" rows="6" required /></Field></>}<p className="form-note form-wide"><Compass size={16} /> {t("You can start one active roadmap for each roadmap type.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Starting…") : t("Start roadmap")}</button></div></form></Modal>;
-}
-
-function RoadmapTemplateForm({ onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);const missions = String(values.get('missions')).split('\n').map((title) => title.trim()).filter(Boolean).map((title, index) => ({ title, description: '', sequence: index + 1, due_days: (index + 1) * 7, is_required: true }));try {await api.create('counselor-roadmap-templates', { name: values.get('name'), description: values.get('description'), kind: values.get('kind'), is_active: true, missions });notify(t("Roadmap template created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
-  return <Modal title={t("New counselor roadmap template")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Template name")}><input name="name" required /></Field><Field label={t("Roadmap type")}><select name="kind"><option value="professional_onboarding">{t("Professional onboarding")}</option><option value="school_management">{t("School management")}</option></select></Field><Field className="form-wide" label={t("Description")}><textarea name="description" /></Field><Field className="form-wide" label={t("Missions, one per line")}><textarea name="missions" required rows="6" /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{t("Create template")}</button></div></form></Modal>;
-}
-
-function RoadmapAssignForm({ data, onClose, onSaved, notify }) {
-  const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);try {await api.create('counselor-roadmaps', { counselor: Number(values.get('counselor')), template: Number(values.get('template')), title: values.get('title') });notify(t("Roadmap assigned."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
-  return <Modal title={t("Assign counselor roadmap")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Counselor")}><select name="counselor" required><option value="">{t("Select a counselor")}</option>{data.accounts.filter((account) => account.role === 'counselor' && account.is_active).map((account) => <option key={account.id} value={account.id}>{fullName(account)} · {account.school_name}</option>)}</select></Field><Field label={t("Template")}><select name="template" required><option value="">{t("Select a template")}</option>{data.counselorRoadmapTemplates.filter((template) => template.is_active).map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></Field><Field className="form-wide" label={t("Custom title (optional)")}><input name="title" /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{t("Assign roadmap")}</button></div></form></Modal>;
-}
-
-function AdminAuditPage({ data, query }) {
-  const events = data.adminAuditEvents.filter((event) => JSON.stringify(event).toLowerCase().includes(query.toLowerCase()));
-  return <Panel title={t("Product administration audit")}><div className="record-list audit-list">{events.map((event) => <article className="record" key={event.id}><ShieldCheck size={20} /><div className="record-main"><h3>{event.action}</h3><p>{event.target_label || event.target_type}</p><div className="record-meta"><span>{event.actor_name || t("System")}</span><span>{dateTimeText(event.created_at)}</span></div></div></article>)}{!events.length && <Empty text={t("No audit events found.")} />}</div></Panel>;
-}
-
-// One challenge per instrument: personality, interests, subjects, and the
-// public-domain ICAR-16 cognitive assessment. Each
-// bank has its own response scale and its own scoring, and a challenge is only
-// scored once its whole instrument is answered -- half an inventory is not a
-// result. Fifty questions at once is a wall, so a challenge is paged.
-const FP_STORAGE_KEY = 'naseeb-find-personality-v1'
-const FP_PAGE_SIZE = 10
-
-function loadChallengeAnswers() {
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(FP_STORAGE_KEY) || '{}')
-    return saved && typeof saved === 'object' ? saved : {}
-  } catch { return {} }
-}
-
-// The Work Importance Locator is a card sort: exactly four cards in each of five
-// columns. The constraint IS the instrument -- allowing everything to be "most
-// important" would flatten the ranking it exists to produce -- so a level stops
-// accepting cards once it holds four.
-function SortRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
-  const perColumn = [1, 2, 3, 4, 5].map((level) => challenge.items.filter((item) => answers[item.id] === level).length)
-  const placed = perColumn.reduce((a, b) => a + b, 0)
-  const legal = perColumn.every((n) => n === challenge.perColumn)
-  return <div className="section-stack student-portal">
-    <section className="portal-hero"><div><span className="eyebrow">CHALLENGE {challenge.number} · {challenge.instrument}</span><h2>{challenge.title}</h2><p>{challenge.blurb}</p></div><Fingerprint size={64} /></section>
-    <Panel title={`${placed} of ${challenge.items.length} placed`} action={<button className="button quiet small" onClick={onBack}>Back to challenges</button>}>
-      <div className="sort-tally">{challenge.scale.map((label, index) => <div key={label} className={perColumn[index] === challenge.perColumn ? 'full' : ''}>
-        <b>{perColumn[index]}/{challenge.perColumn}</b><span>{label}</span>
-      </div>)}</div>
-      <div className="challenge-items">{challenge.items.map((item) => <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
-        <legend>{item.text}</legend>
-        <div className="challenge-scale">
-          <span className="scale-pole left">{challenge.scale[0]}</span>
-          <div className="scale-dots">{challenge.scale.map((label, position) => {
-            const level = position + 1
-            const chosen = answers[item.id] === level
-            const full = perColumn[position] >= challenge.perColumn && !chosen
-            return <label key={label} className={`scale-opt s${level}${chosen ? ' sel' : ''}${full ? ' full' : ''}`} title={full ? `${label} is already full` : label}>
-              <input type="radio" name={`item-${item.id}`} checked={chosen} disabled={full} aria-label={label} onChange={() => onAnswer(item.id, level)} />
-              <span className="scale-dot" aria-hidden="true" />
-            </label>
-          })}</div>
-          <span className="scale-pole right">{challenge.scale[challenge.scale.length - 1]}</span>
-        </div>
-      </fieldset>)}</div>
-      <div className="challenge-actions">
-        <button className="button primary" disabled={!legal} onClick={onFinish}>{legal ? 'Finish challenge' : `Put exactly ${challenge.perColumn} in every level`}<ChevronRight size={17} /></button>
-      </div>
-    </Panel>
-  </div>
-}
-
-function ReasoningRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
-  const [page, setPage] = useState(0)
-  const pageSize = challenge.pageSize || 4
-  const pages = Math.ceil(challenge.items.length / pageSize)
-  const slice = challenge.items.slice(page * pageSize, (page + 1) * pageSize)
-  const answered = challenge.items.filter((item) => answers[item.id]).length
-  const pageDone = slice.every((item) => answers[item.id])
-  const last = page === pages - 1
-  const complete = answered === challenge.items.length
-
-  return <div className="section-stack student-portal reasoning-runner">
-    <section className="portal-hero"><div><span className="eyebrow">{t('CHALLENGE')} {challenge.number} · {challenge.instrument}</span><h2>{t(challenge.title)}</h2><p>{t(challenge.blurb)}</p></div><BrainCircuit size={64} /></section>
-    <Panel title={t('{answered} of {total} answered', { answered, total: challenge.items.length })} action={<button className="button quiet small" onClick={onBack}>{t('Back to challenges')}</button>}>
-      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>{t('Round {page} of {total}', { page: page + 1, total: pages })}</small></div>
-      <p className="reasoning-note"><BrainCircuit size={17} /> {t('ICAR-16 is a public-domain cognitive assessment. Complete it without a calculator or outside help for the most useful result.')}</p>
-      <div className="reasoning-items">{slice.map((item, index) => <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
-        <legend><span>{String(page * pageSize + index + 1).padStart(2, '0')}</span>{t(item.text)}</legend>
-        {item.image && <img className="reasoning-item-image" src={item.image} alt={t(item.imageAlt)} />}
-        <div className={`reasoning-options${item.image ? ' visual' : ''}`}>{item.options.map((option, position) => {
-          const value = position + 1
-          const chosen = answers[item.id] === value
-          return <label key={option} className={chosen ? 'selected' : ''}>
-            <input type="radio" name={`item-${item.id}`} checked={chosen} onChange={() => onAnswer(item.id, value)} />
-            <span>{String.fromCharCode(65 + position)}</span><b>{t(option)}</b>{chosen && <Check size={16} />}
-          </label>
-        })}</div>
-      </fieldset>)}</div>
-      <div className="challenge-actions">
-        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>{t('Back')}</button>}
-        {last
-          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? t('See my cognitive score') : t('Answer every question to finish')}<ChevronRight size={17} /></button>
-          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? t('Next round') : t('Answer these to continue')}<ChevronRight size={17} /></button>}
-      </div>
-    </Panel>
-  </div>
-}
-
-// On a bipolar challenge every item carries its own two ends, so the poles come
-// from the item rather than from one scale shared by the whole bank.
-const poleText = (challenge, item) => challenge.bipolar
-  ? item.poles
-  : [challenge.scale[0], challenge.scale[challenge.scale.length - 1]]
-
-// What a screen reader hears on each circle. A bipolar item has no wording of
-// its own for the middle three, so they are described by which end they lean
-// toward -- "3 of 5" alone would be a number with nothing attached to it.
-function optionLabel(challenge, item, position) {
-  if (!challenge.bipolar) return t(challenge.scale[position])
-  const [left, right] = item.poles
-  if (position === 0) return left
-  if (position === 4) return right
-  if (position === 2) return 'In between'
-  return position === 1 ? `Closer to “${left}”` : `Closer to “${right}”`
-}
-
-function ChallengeRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
-  if (challenge.interaction === 'sort') return <SortRunner {...{ challenge, answers, onAnswer, onFinish, onBack }} />
-  if (challenge.interaction === 'quiz') return <ReasoningRunner {...{ challenge, answers, onAnswer, onFinish, onBack }} />
-  return <RatingRunner {...{ challenge, answers, onAnswer, onFinish, onBack }} />
-}
-
-function RatingRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
-  const [page, setPage] = useState(0)
-  const pages = Math.ceil(challenge.items.length / FP_PAGE_SIZE)
-  const slice = challenge.items.slice(page * FP_PAGE_SIZE, (page + 1) * FP_PAGE_SIZE)
-  const answered = challenge.items.filter((item) => answers[item.id]).length
-  const pageDone = slice.every((item) => answers[item.id])
-  const last = page === pages - 1
-  const complete = answered === challenge.items.length
-  const listRef = useRef(null)
-
-  // Auto-advance, copied rule for rule from TestMind.
-  //
-  //  - POINTER ONLY. Chrome fires a synthetic click for arrow-key selection, and
-  //    those report detail 0. Advancing on an arrow press would carry the student
-  //    past the option they were still travelling towards.
-  //  - ONLY FROM THE CURRENT QUESTION. Going back to change an earlier answer
-  //    must not fling the page forward; that is the student re-reading, not
-  //    progressing.
-  //  - THE NEXT ROW LANDS WHERE THE LAST ONE WAS. Every row has identical
-  //    geometry, so matching the row of circles means the pointer is already on
-  //    the next question and never has to travel.
-  const advanceFrom = useCallback((itemId) => {
-    const list = listRef.current
-    if (!list) return
-    const sets = Array.from(list.querySelectorAll('fieldset'))
-    const fromIndex = sets.findIndex((f) => f.querySelector(`input[name="item-${itemId}"]`))
-    if (fromIndex < 0) return
-    // Only the question they were on. Anything earlier still unanswered means
-    // they skipped back, and we leave the scroll where they put it.
-    if (sets.slice(0, fromIndex).some((f) => !f.querySelector('input:checked'))) return
-    const anchorRow = sets[fromIndex].querySelector('.scale-dots')
-    const anchor = anchorRow ? anchorRow.getBoundingClientRect() : null
-    const anchorMid = anchor ? anchor.top + anchor.height / 2 : null
-
-    // After the re-render, so "unanswered" reflects the answer just given.
-    requestAnimationFrame(() => {
-      const fresh = Array.from(list.querySelectorAll('fieldset'))
-      const next = fresh.slice(fromIndex + 1).find((f) => !f.querySelector('input:checked'))
-      const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-      const behavior = smooth ? 'smooth' : 'auto'
-      if (!next) {
-        // Page finished. Bring the button that continues into view rather than
-        // leaving them at the bottom of a page with nothing obvious to do.
-        list.parentElement?.querySelector('.challenge-actions')
-          ?.scrollIntoView({ behavior, block: 'center' })
-        return
-      }
-      next.querySelector('input[type=radio]')?.focus({ preventScroll: true })
-      const nextRow = next.querySelector('.scale-dots')
-      if (anchorMid !== null && nextRow) {
-        const r = nextRow.getBoundingClientRect()
-        window.scrollBy({ top: (r.top + r.height / 2) - anchorMid, behavior })
-      } else {
-        next.scrollIntoView({ behavior, block: 'center' })
-      }
-    })
-  }, [])
-
-  return <div className="section-stack student-portal">
-    <section className="portal-hero"><div><span className="eyebrow">{t('CHALLENGE')} {challenge.number} · {challenge.instrument}</span><h2>{t(challenge.title)}</h2><p>{t(challenge.blurb)}</p></div><Fingerprint size={64} /></section>
-    <Panel title={t('{answered} of {total} answered', { answered, total: challenge.items.length })} action={<button className="button quiet small" onClick={onBack}>{t('Back to challenges')}</button>}>
-      <div className="challenge-progress"><div className="progress wide"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div><small>{t('Page {page} of {total}', { page: page + 1, total: pages })}</small></div>
-      {/* A challenge whose items carry a section shows it at the top of every page
-          and again wherever the block changes mid-page. Without it, a student who
-          turns the page into "…makes me anxious" has no idea they are being asked
-          a different question about the same eleven subjects.
-
-          The heading is a SIBLING of the fieldset, not a child: an answered
-          fieldset drops to .45 opacity, and opacity applies to the whole subtree,
-          so a heading inside it would fade exactly when someone scrolls back to
-          ask what this block was. */}
-      <div className="challenge-items" ref={listRef}>{slice.flatMap((item, index) => [
-        item.section && (index === 0 || item.section !== slice[index - 1].section)
-          ? <p key={`s-${item.id}`} className="challenge-section"><span className="eyebrow">{t(item.section)}</span></p>
-          : null,
-        <fieldset key={item.id} className={answers[item.id] ? 'answered' : ''}>
-        <legend className={challenge.bipolar ? 'sr-only' : undefined}>{t(item.text)}</legend>
-        <div className="challenge-scale">
-          <span className="scale-pole left" aria-hidden={challenge.bipolar || undefined}>{t(poleText(challenge, item)[0])}</span>
-          <div className="scale-dots">{challenge.scale.map((scaleLabel, position) => {
-            const chosen = answers[item.id] === position + 1
-            const label = optionLabel(challenge, item, position)
-            return <label key={scaleLabel} className={`scale-opt s${position + 1}${chosen ? ' sel' : ''}`} title={label}>
-              <input
-                type="radio"
-                name={`item-${item.id}`}
-                checked={chosen}
-                aria-label={label}
-                onChange={() => onAnswer(item.id, position + 1)}
-                // detail is 0 for a keyboard-generated click, so this fires only
-                // on a real tap. onChange above still records arrow-key answers.
-                onClick={(event) => { if (event.detail > 0) advanceFrom(item.id) }}
-              />
-              <span className="scale-dot" aria-hidden="true" />
-            </label>
-          })}</div>
-          <span className="scale-pole right" aria-hidden={challenge.bipolar || undefined}>{t(poleText(challenge, item)[1])}</span>
-        </div>
-      </fieldset>,
-      ].filter(Boolean))}</div>
-      <div className="challenge-actions">
-        {page > 0 && <button className="button quiet" onClick={() => { setPage(page - 1); window.scrollTo(0, 0) }}>{t('Back')}</button>}
-        {last
-          ? <button className="button primary" disabled={!complete} onClick={onFinish}>{complete ? t('Finish challenge') : t('Answer every question to finish')}<ChevronRight size={17} /></button>
-          : <button className="button primary" disabled={!pageDone} onClick={() => { setPage(page + 1); window.scrollTo(0, 0) }}>{pageDone ? t('Next') : t('Answer these to continue')}<ChevronRight size={17} /></button>}
-      </div>
-    </Panel>
-  </div>
-}
-
-// Ten items per trait cannot separate a 3.2 from a 3.4, so the wording stays
-// banded. No trait direction is described as the better one.
-const band = (value) => value >= 3.6 ? 'Higher' : value <= 2.4 ? 'Lower' : 'In the middle'
-
-// A profile shape: pentagon for the five traits, hexagon for the six interest
-// scales, and so on -- the polygon takes as many sides as the instrument has
-// scales, so each challenge has a recognisably different silhouette.
-//
-// Only used up to six axes. Past that the labels crowd the corners and the shape
-// stops being readable, so values (10) and subjects (11) stay as bars -- which is
-// also what the more-than-seven-classes rule says.
-//
-// Two things this shape gets wrong if you let it, and the guards against them:
-//  - AREA LIES. A radius twice as long draws four times the area, so a middling
-//    profile can look dramatic. Guarded by drawing the fill faint and the outline
-//    thin, keeping every ring visible so the scale is readable, and always
-//    shipping the numbers underneath rather than instead.
-//  - THE ORDER SHAPES THE SHAPE. Reordering the axes changes the silhouette
-//    without changing the data. For interests that order is not arbitrary -- it
-//    is Holland's own hexagon, where neighbours are the most alike -- but for the
-//    Big Five it IS arbitrary, so the shape is a picture of the profile and never
-//    evidence about it.
-const POLYGON_MAX_AXES = 6
-
-function ProfilePolygon({ axes, caption }) {
-  const [hover, setHover] = useState(null)
-  // Wider than tall on purpose: the left and right labels sit outside the shape
-  // and need room, and without it they overflow into whatever is beside the
-  // chart. Sized so the longest label fits inside the viewBox rather than
-  // relying on overflow.
-  const W = 360, H = 268
-  const cx = W / 2, cy = H / 2
-  const rMax = 84
-  const rings = [0.25, 0.5, 0.75, 1]
-
-  // Straight up for the first axis, then clockwise.
-  const pointAt = (index, t) => {
-    const angle = (Math.PI * 2 * index) / axes.length - Math.PI / 2
-    return [cx + Math.cos(angle) * rMax * t, cy + Math.sin(angle) * rMax * t]
-  }
-  const ringPath = (t) => axes.map((_, i) => pointAt(i, t).map((n) => n.toFixed(1)).join(',')).join(' ')
-  // 1..5 onto 0..1, so the centre is "lowest" rather than "none".
-  const norm = (value) => Math.max(0, Math.min(1, (value - 1) / 4))
-  const shape = axes.map((axis, i) => pointAt(i, norm(axis.value)).map((n) => n.toFixed(1)).join(',')).join(' ')
-
-  return <figure className="profile-polygon">
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={caption}>
-      {rings.map((t) => <polygon key={t} className="ring" points={ringPath(t)} />)}
-      {axes.map((_, i) => {
-        const [x, y] = pointAt(i, 1)
-        return <line key={i} className="spoke" x1={cx} y1={cy} x2={x} y2={y} />
-      })}
-      <polygon className="shape" points={shape} />
-      {axes.map((axis, i) => {
-        const [x, y] = pointAt(i, norm(axis.value))
-        const [lx, ly] = pointAt(i, 1.22)
-        const anchor = Math.abs(lx - cx) < 6 ? 'middle' : lx > cx ? 'start' : 'end'
-        return <g key={axis.key}>
-          <circle
-            className={`vertex ${hover === axis.key ? 'on' : ''}`} cx={x} cy={y} r={hover === axis.key ? 6 : 4.5}
-            onMouseEnter={() => setHover(axis.key)} onMouseLeave={() => setHover(null)}
-          />
-          <text className="axis-label" x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle">
-            {axis.short || axis.label}
-          </text>
-        </g>
-      })}
-    </svg>
-    <figcaption>{hover
-      ? <><strong>{axes.find((a) => a.key === hover).label}</strong> — {axes.find((a) => a.key === hover).value.toFixed(1)} of 5</>
-      : caption}</figcaption>
-  </figure>
-}
-
-function ResultRows({ rows }) {
-  return <div className="trait-list">{rows.map(([title, lead, value, tag]) => <div key={title} className="trait-row">
-    <div><b>{title}</b><small>{lead}</small></div>
-    <div className="progress wide"><span style={{ width: `${((value - 1) / 4) * 100}%` }} /></div>
-    <Badge>{tag}</Badge>
-  </div>)}</div>
-}
-
-function ChallengeResult({ challenge, result }) {
-  if (challenge.scoring === 'bigfive') {
-    return <>
-      <TypeResult scores={result} />
-      <Panel title="Your personality">
-        {/* No polygon here on purpose. The five traits have no fixed order, so the
-            silhouette changes with the axis order while the answers stay the same
-            -- a shape that looks like evidence and is not. Bars carry it honestly. */}
-        <ResultRows rows={TRAIT_ORDER.map((t) => [TRAIT_LABEL[t], TRAIT_BLURB[t], result[t], band(result[t])])} />
-        <p className="journey-disclaimer">This describes how you answered today, not what you are capable of. There is no better or worse direction on any of the five. Bring it to your counselor — it is a conversation starter, not a verdict.</p>
-      </Panel>
-    </>
-  }
-  if (challenge.scoring === 'riasec') {
-    const top = result.code.map((s) => RIASEC_NAME[s]).join(' · ')
-    return <Panel title="Your interests" action={<Badge>{result.code.join('')}</Badge>}>
-      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Your strongest three: <strong>{top}</strong>. Holland codes are used worldwide to group occupations, so this is the part a counselor can turn into a shortlist.</p>
-      {/* No hexagon here: the summary above already carries it, and drawing the
-          same shape twice on one page is noise, not emphasis. */}
-      <ResultRows rows={RIASEC_ORDER.map((s) => [RIASEC_NAME[s], RIASEC_LEAD[s], result.means[s], result.code.includes(s) ? 'Top three' : 'Lower'])} />
-    </Panel>
-  }
-  if (challenge.scoring === 'subjects') {
-    const top = result.ranked.slice(0, 3)
-    const names = (list) => list.map((s) => SUBJECT_NAME[s]).join(' · ')
-    // The patterns come first and the ranking second. A student who reads one
-    // thing on this page should read "you like biology but it frightens you",
-    // not their subjects in an order they could have written out themselves.
-    //
-    // Every one of these is PHRASED AS A QUESTION, and that is not modesty.
-    // Simulated over 12,000 students, "blocked" is right about two times in five
-    // when it fires -- three single items cannot pin down a three-way condition
-    // any harder than that. Two in five is a good reason to raise something with
-    // a fifteen-year-old and a bad reason to tell them what they are.
-    // The eyebrow names which question this is, so three cards in a row are not
-    // three identical labels; the sentence under it is what stays open-ended.
-    const NOTE = {
-      blocked: ['Able, keen, still anxious', 'You said you can handle these and that you look forward to them — and that they still make you anxious, more than your other subjects do. If that is right, it is the most fixable thing on this page. Nerves talk people out of subjects they are actually suited to.'],
-      aspiring: ['Keen, but not sure you can', 'You look forward to these but said you cannot handle the hard parts — a wider gap than you have on your other subjects. Is that really the subject, or is it one year and one teacher?'],
-      coasting: ['Able, but not keen', 'You can handle these but do not look forward to them. Marks alone would push you towards them, and that is how people end up on a course they did not want.'],
-      strength: ['Where to start', 'You can handle these, you look forward to them, and they take less out of you than your other subjects do.'],
-    }
-    const shown = Object.keys(NOTE).filter((k) => result.patterns[k].length)
-    return <Panel title="How school feels">
-      <p className="journey-disclaimer" style={{ marginBottom: 14 }}>Strongest overall: <strong>{names(top)}</strong>. Each subject was asked three ways — what you can do, what you enjoy, and what it costs you — because those three come apart, and the places they disagree are the useful part.</p>
-      {shown.length > 0 && <div className="subject-patterns">{shown.map((key) => <div key={key} className={`subject-pattern ${key}`}>
-        <span className="eyebrow">{NOTE[key][0]}</span>
-        <b>{names(result.patterns[key])}</b>
-        <small>{NOTE[key][1]}</small>
-      </div>)}
-      <p className="journey-disclaimer">These are questions raised by how you answered, not conclusions about you. Any of them can be wrong — say so, out loud, to your counselor.</p>
-      </div>}
-      <ResultRows rows={result.ranked.map((s) => [
-        SUBJECT_NAME[s],
-        `Can do ${result.byFacet.ability[s]}/5 · enjoys ${result.byFacet.interest[s]}/5 · costs ${result.byFacet.cost[s]}/5`,
-        result.bySubject[s],
-        top.includes(s) ? 'Strongest' : 'Lower',
-      ])} />
-      <p className="journey-disclaimer" style={{ marginTop: 12 }}>This is how the subjects feel to you, which is not the same as how you score in them — the gap between the two is worth a conversation with your counselor.</p>
-    </Panel>
-  }
-  return null
-}
-
-// The headline result: the four-letter code and how firmly each letter was
-// earned. Derived from challenge 1's fifty answers -- it asks which side of the
-// middle each trait sits on, so it is a reading of that result and not a second
-// test.
-//
-// The NAME is here; the historical figure is not. The figures are what make
-// TestMind feel made-for-you and they stay there -- this side gets the code and
-// a plain-language label for it.
-//
-// The part every other type site leaves out is the margin. A trait a hair from
-// the midpoint produced a letter that would flip if the student had answered
-// one item differently, and printing all five in the same confident type hides
-// that completely.
-function TypeResult({ scores }) {
-  const type = typeCodeOf(scores)
-  const name = archetypeNameOf(scores)
-
-  return <Panel title="Your type" action={<Badge>{type.code}</Badge>}>
-    <p className="type-code" aria-label={`Your type is ${type.code.replace('-', ', ').split('').join(' ')}`}>
-      {TYPE_AXES.map((axis) => <span key={axis.trait} className={type.borderline.includes(axis.trait) ? 'soft' : undefined}>
-        {axis.trait === 'ES' ? <small>-{type.letters.ES}</small> : type.letters[axis.trait]}
-      </span>)}
-    </p>
-    <p className="type-name">{name}</p>
-
-    <div className="type-axes">{TYPE_AXES.map((axis) => {
-      // Trait means run 1..5, so the midpoint is the middle of the track and a
-      // marker's distance from centre IS how settled that letter is.
-      const value = scores[axis.trait]
-      const pct = ((value - 1) / 4) * 100
-      const chosen = type.letters[axis.trait]
-      return <div key={axis.trait} className="type-axis">
-        <header><b>{axis.name}</b>{type.borderline.includes(axis.trait) && <small>could go either way</small>}</header>
-        <div className="type-track" role="img" aria-label={`${axis.name}: ${axis.lowName} to ${axis.highName}, you are ${chosen === axis.high ? axis.highName : axis.lowName}`}>
-          <span className="type-marker" style={{ left: `${pct}%` }} />
-        </div>
-        <footer>
-          <span className={chosen === axis.low ? 'on' : undefined}>{axis.lowName}</span>
-          <span className={chosen === axis.high ? 'on' : undefined}>{axis.highName}</span>
-        </footer>
-      </div>
-    })}</div>
-
-    {type.borderline.length > 0 && <p className="journey-disclaimer" style={{ marginTop: 14 }}>
-      {type.borderline.length === 1 ? 'One letter sits' : `${type.borderline.length} letters sit`} close to the middle and could read the other way on a different day. That is ordinary — the code is a nickname, and the spectrum above it is the honest version.
-    </p>}
-  </Panel>
-}
-
-// Major guidance starts once interests are complete. Personality and subjects
-// sharpen the deterministic ranking; AI explains that shortlist but does not
-// choose universities in this release.
-function AIEducationGuidance({ majors, subjects, locked, student, reload, notify }) {
-  const [guidance, setGuidance] = useState(null)
-  const [selectedMajor, setSelectedMajor] = useState(student?.target_major || '')
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  async function generate() {
-    if (locked) return
-    setLoading(true)
-    setError('')
-    try {
-      const nextGuidance = await api.educationMatchAI({ major_candidates: majors, subject_strengths: subjects })
-      setGuidance(nextGuidance)
-      setSelectedMajor('')
-    } catch (requestError) {
-      setError(requestError.message || t('AI guidance is unavailable right now.'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function confirmMajor() {
-    if (!selectedMajor || !student) return
-    setSaving(true)
-    setError('')
-    try {
-      await api.update('students', student.id, { target_major: selectedMajor })
-      notify?.(t('{major} saved as your current study direction.', { major: selectedMajor }))
-      reload?.()
-    } catch (requestError) {
-      setError(requestError.message || t('We could not save your selected major.'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const topFits = guidance?.major_guidance?.slice(0, 3) || []
-
-  return <section id="assessment-ai-panel" className={`assessment-ai-panel ${locked ? 'locked' : ''}`}>
-    <div className="assessment-ai-orbit" aria-hidden="true"><span className="assessment-ai-orbit-mark" /></div>
-    <span className="eyebrow">{t('AI MAJOR MATCH')}</span>
-    <h3>{guidance ? t('Choose your strongest fit') : t("Now let's find your direction")}</h3>
-    <p>{locked ? t('Complete all four challenges to unlock your recommendations.') : guidance ? t('These are your three strongest current matches. Select one to make it your study direction.') : t('AI will compare your interests, personality, subjects, and reasoning snapshot to return your three strongest major fits.')}</p>
-    <div className="assessment-ai-readiness">
-      <span>{locked ? t('Profile incomplete') : guidance ? t('Recommendations ready') : t('Profile ready')}</span>
-      {locked ? <Lock size={16} /> : <CheckCircle2 size={16} />}
-    </div>
-    <button type="button" className="assessment-ai-generate" onClick={generate} disabled={locked || loading}>
-      {loading ? <><RefreshCw className="spin" size={17} /> {t("Generating…")}</> : <><Sparkles size={17} /> {guidance ? t('Generate again') : t('Generate recommendations with AI')}</>}
-    </button>
-    {error && <p className="education-ai-error" role="alert">{error}</p>}
-    {topFits.length > 0 && <div className="assessment-ai-fits" role="radiogroup" aria-label={t('Top three major fits')}>
-      {topFits.map((item, index) => <button key={item.major} type="button" role="radio" aria-checked={selectedMajor === item.major} className={selectedMajor === item.major ? 'selected' : ''} onClick={() => setSelectedMajor(item.major)}>
-        <span>{String(index + 1).padStart(2, '0')}</span>
-        <div><b>{item.major}</b><small>{item.why_fit}</small></div>
-        <span className="assessment-ai-choice">{selectedMajor === item.major ? <Check size={15} /> : null}</span>
-      </button>)}
-      <button type="button" className="assessment-ai-confirm" onClick={confirmMajor} disabled={!selectedMajor || saving}>{saving ? t('Saving choice…') : selectedMajor ? t('Choose {major}', { major: selectedMajor }) : t('Select one major')}</button>
-      <small className="assessment-ai-disclaimer">{t('You can regenerate or change this choice later. AI guidance supports your decision; it does not limit it.')}</small>
-    </div>}
-  </section>
-}
-
-function MajorMatches({ results, locked, student, reload, notify }) {
-  const scored = Object.fromEntries(results.filter(([, r]) => r).map(([c, r]) => [c.scoring, r]))
-  if (!scored.riasec) return <AIEducationGuidance majors={[]} subjects={[]} locked student={student} reload={reload} notify={notify} />
-
-  const signals = recSignals(
-    scored.riasec.means,
-    // The ability/interest/cost composite, not a bare confidence rating -- still
-    // on 1..5, so this call is unchanged. The scorer wants {score 0..1, weight},
-    // and a self-report is discounted against a real mark either way.
-    scored.subjects ? subjectPerformance(scored.subjects.bySubject) : null,
-    scored.bigfive || null,
-  )
-  const majors = recRank(MAJOR_ENTRIES, signals, 'major', 5)
-  if (!majors.length) return null
-
-  return <AIEducationGuidance
-      majors={majors.map((row) => NAMES.majors[row.key])}
-      subjects={scored.subjects ? scored.subjects.ranked.slice(0, 6).map((subject) => SUBJECT_NAME[subject]) : []}
-      locked={locked}
-      student={student}
-      reload={reload}
-      notify={notify}
-    />
-}
-
-function ResultsSummary({ results }) {
-  const done = results.filter(([, r]) => r)
-  if (!done.length) return null
-  const personality = done.find(([c]) => c.scoring === 'bigfive')
-  const interests = done.find(([c]) => c.scoring === 'riasec')
-  const subjects = done.find(([c]) => c.scoring === 'subjects')
-  const numberColumns = [
-    personality && ['PERSONALITY', TRAIT_ORDER.slice(0, 6).map((trait) => [TRAIT_LABEL[trait], personality[1][trait]])],
-    interests && ['INTERESTS', RIASEC_ORDER.slice(0, 6).map((scale) => [RIASEC_NAME[scale], interests[1].means[scale]])],
-    subjects && ['STRONGEST SUBJECTS', subjects[1].ranked.slice(0, 6).map((subject) => [SUBJECT_NAME[subject], subjects[1].bySubject[subject]])],
-  ].filter(Boolean)
-
-  return <section className="assessment-number-summary">
-    <div className="assessment-number-hexagon">
-      {interests && <ProfilePolygon
-        caption={t('Your interest profile')}
-        axes={RIASEC_ORDER.map((s) => ({ key: s, label: t(RIASEC_NAME[s]), short: s, value: interests[1].means[s] }))}
-      />}
-      {!interests && <div className="assessment-number-placeholder"><Hexagon size={38} /><span>{t('Complete Interests to reveal your hexagon.')}</span></div>}
-    </div>
-    {numberColumns.length > 0 && <div className="assessment-number-breakdown" aria-label={t('Assessment score details')}>
-      {numberColumns.map(([title, rows]) => <article className="assessment-number-column" key={title}>
-        <h4>{t(title)}</h4>
-        <div>{rows.map(([label, value]) => <div key={label}><span>{t(label)}</span><strong>{Number(value).toFixed(1)}</strong></div>)}</div>
-      </article>)}
-    </div>}
-  </section>
-}
-
-const ASSESSMENT_CARD_META = {
-  personality: {
-    description: 'Understand how you think, learn, collaborate, and make decisions.',
-    visualClass: 'personality',
-  },
-  interests: {
-    description: 'Explore the activities and problems that naturally motivate you.',
-    visualClass: 'interests',
-  },
-  subjects: {
-    description: 'Identify the academic areas where ability and enjoyment meet.',
-    visualClass: 'subjects',
-  },
-  reasoning: {
-    description: 'Complete the research-backed ICAR-16 cognitive assessment.',
-    visualClass: 'reasoning',
-  },
-}
-
-const ASSESSMENT_CARD_ORDER = ['personality', 'interests', 'subjects', 'reasoning']
-
-function AssessmentChallengeCard({ challenge, result, answers, saved, onOpen }) {
-  const answered = challenge.items.filter((item) => answers[item.id]).length
-  const visual = ASSESSMENT_CARD_META[challenge.key]
-  return <article className={`assessment-card assessment-card-${visual.visualClass} ${result ? 'done' : answered ? 'active' : ''}`}>
-    <div className="assessment-card-copy">
-      <header><span>{t('STEP')} {String(challenge.number).padStart(2, '0')}</span>{result ? <CheckCircle2 size={21} /> : <span className="assessment-card-count">{answered}/{challenge.items.length}</span>}</header>
-      <h3>{t(challenge.title)}</h3>
-      <p>{t(visual.description)}</p>
-      {challenge.licencePending && <small className="licence-pending"><AlertTriangle size={11} /> {challenge.licencePending}</small>}
-      <div className="assessment-card-progress" aria-label={t('{answered} of {total} questions answered', { answered, total: challenge.items.length })}><strong>{answered} / {challenge.items.length}</strong><div className="progress"><span style={{ width: `${(answered / challenge.items.length) * 100}%` }} /></div></div>
-      <footer>
-        <span>{result ? (saved ? t('Completed and saved') : t('Completed')) : answered ? t('In progress') : t('{count} questions', { count: challenge.items.length })}</span>
-        <button type="button" className="assessment-card-action" onClick={onOpen}>{result ? t('Review') : answered ? t('Continue') : t('Start')}<ChevronRight size={15} /></button>
-      </footer>
-    </div>
-    <div className="assessment-card-visual" aria-hidden="true" />
-  </article>
-}
-
-function ProfileAssessmentPage({ notify, data, reload }) {
-  const [answers, setAnswers] = useState(loadChallengeAnswers)
-  const [openKey, setOpenKey] = useState(null)
-  // Completed attempts already on the server, newest per challenge.
-  const [saved, setSaved] = useState({})
-  const [syncing, setSyncing] = useState(true)
-
-  useEffect(() => {
-    let alive = true
-    api.challengeAttempts()
-      .then((rows) => {
-        if (!alive) return
-        // The API returns newest first, so the first row seen for a challenge is
-        // the current one; the older ones stay for the year-on-year comparison.
-        const latest = {}
-        for (const row of rows) if (!latest[row.challenge]) latest[row.challenge] = row
-        setSaved(latest)
-        // Server answers win over whatever is half-finished on this device.
-        setAnswers((prev) => Object.assign({}, prev, ...Object.values(latest).map((row) => row.answers)))
-      })
-      .catch(() => { /* offline: the device copy below still works */ })
-      .finally(() => { if (alive) setSyncing(false) })
-    return () => { alive = false }
-  }, [])
-
-  // The device copy is for a challenge left half-finished; the account holds the
-  // completed ones. Losing this is an inconvenience, losing those is the product.
-  useEffect(() => {
-    try { window.localStorage.setItem(FP_STORAGE_KEY, JSON.stringify(answers)) } catch { /* private mode */ }
-  }, [answers])
-
-  const answerItem = useCallback((id, value) => setAnswers((prev) => ({ ...prev, [id]: value })), [])
-
-  const finishChallenge = useCallback(async (challenge) => {
-    setOpenKey(null)
-    window.scrollTo(0, 0)
-    const result = scoreChallenge(challenge, answers)
-    if (!result) return
-    try {
-      const row = await api.saveChallengeAttempt({
-        challenge: challenge.key,
-        instrument_version: INSTRUMENT_VERSION[challenge.key] || '1',
-        answers: Object.fromEntries(challenge.items.map((item) => [item.id, answers[item.id]])),
-        scores: result,
-      })
-      setSaved((prev) => ({ ...prev, [challenge.key]: row }))
-      notify?.(t('Saved to your account.'))
-    } catch {
-      notify?.(t('Saved on this device only — we could not reach your account.'), 'error')
-    }
-  }, [answers, notify])
-  const results = CHALLENGES.map((challenge) => [challenge, scoreChallenge(challenge, answers)])
-  const doneCount = results.filter(([, result]) => result).length
-  const student = ownStudent(data)
-  const open = CHALLENGES.find((challenge) => challenge.key === openKey)
-  const resultByKey = Object.fromEntries(results.map(([challenge, result]) => [challenge.key, { challenge, result }]))
-
-  if (open) return <ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} />
-
-  return <div className="section-stack student-portal profile-assessment-page">
-    <div className="assessment-overview-layout">
-      <section className="assessment-card-grid" aria-label={t('Profile assessment challenges')}>{ASSESSMENT_CARD_ORDER.map((key) => {
-        const challengeEntry = resultByKey[key]
-        return <AssessmentChallengeCard
-          key={key}
-          challenge={challengeEntry.challenge}
-          result={challengeEntry.result}
-          answers={answers}
-          saved={saved[key]}
-          onOpen={() => { setOpenKey(key); window.scrollTo(0, 0) }}
-        />
-      })}</section>
-
-      <MajorMatches results={results} locked={doneCount !== CHALLENGES.length || syncing} student={student} reload={reload} notify={notify} />
-    </div>
-
-    {doneCount > 0 && <div id="assessment-results" className="assessment-results-stack">
-      <ResultsSummary results={results} />
-    </div>}
-  </div>
-}
-
-function PageRouter({ page, user, data, stats, query, reload, notify, setPage }) {
+function PageRouter({ page, params, user, data, stats, query, reload, notify, setPage, search, navigate }) {
   const [directChannel, setDirectChannel] = useState(null);
   const openingDirect = useRef(false);
   useEffect(() => {if (page !== 'messages') setDirectChannel(null);}, [page]);
@@ -3689,30 +369,33 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
     } catch (err) {notify(err.message, 'error');}
     finally {openingDirect.current = false;}
   }
-  if (user.role === 'parent') return <ParentPortalPage {...{ page, data, reload, notify }} />;
-  if (user.role === 'admin' && page === 'admin_dashboard') return <AdminControlDashboard data={data} setPage={setPage} />;
-  if (user.role === 'admin' && page === 'admin_schools') return <SchoolsPage user={user} data={data} reload={reload} notify={notify} />;
-  if (user.role === 'admin' && page === 'admin_counselors') return <AdminCounselorsPage data={data} query={query} reload={reload} notify={notify} />;
-  if (user.role === 'admin' && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
-  if (['admin', 'counselor'].includes(user.role) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
-  if (user.role === 'admin' && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
+  if (user.role === 'parent') return <ParentPortalPage {...{ page, user, data, reload, notify }} />;
+  if (isPlatformAdmin(user) && page === 'admin_dashboard') return <AdminControlDashboard data={data} stats={stats} setPage={setPage} />;
+  if (isPlatformAdmin(user) && page === 'admin_schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
+  if (isPlatformAdmin(user) && page === 'admin_counselors') return <AdminCounselorsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
+  if (isPlatformAdmin(user) && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
+  if (isCounselor(user) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
+  if (isPlatformAdmin(user) && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
   if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect }} />;
-  if (user.role === 'student' && page === 'student_center') return <StudentCenterPage {...{ user, data, query, reload, notify, setPage }} />;
+  if (user.role === 'student' && page === 'student_center') {
+    const editSection = new URLSearchParams(search).get('edit');
+    return <StudentCenterPage {...{ user, data, query, reload, notify, setPage }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} editSection={editSection}
+      onEditDone={() => { if (editSection) navigate(buildPath({ page, params }), { replace: true }); }} />;
+  }
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
-  if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
-  if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage notify={notify} data={data} reload={reload} />;
+  if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} />;
+  if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage user={user} notify={notify} data={data} reload={reload} />;
   if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />;
-  if (page === 'messages') return <MessagesPage {...{ user, data, notify }} initialChannel={directChannel} />;
+  if (page === 'messages') return <MessagesPage {...{ user, data, notify }} initialChannel={directChannel} channelId={params.channelId} openInbox={params.tab === 'counselor'} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} />;
-  if (page === 'screen_time') return <ScreenTimePage user={user} />;
-  if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query }} />;
-  if (user.role === 'student' && page === 'essay_lab') return <EssayLabPage {...{ user, data, query, reload, notify }} />;
+  if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;
+  if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query, search, navigate }} />;
+  if (user.role === 'student' && page === 'essay_lab') return <EssayLab user={user} notify={notify} essayId={params.essayId} onEssay={(essayId) => setPage(page, { essayId })} />;
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
-  if (page === 'schools') return <SchoolsPage user={user} data={data} reload={reload} notify={notify} />;
-  if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
-  if (page === 'profile') return user.role === 'student' ? <StudentOnboarding onSaved={() => { reload(); notify(t('Profile saved.')); setPage('student_center'); }} onPhotoChanged={reload} /> : <StudentOverview student={ownStudent(data)} data={data} />;
+  if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
+  if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (page === 'academics') return <div className="section-stack">{user.role === 'student' && <ProfileCard student={ownStudent(data)} />}<ResourceSection title={t("Research")} resource="researches" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'portfolio') return <div className="split-grid"><ResourceSection title={t("Projects")} resource="projects" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Internships")} resource="internships" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'activities') return <div className="section-stack"><div className="split-grid"><ResourceSection title={t("Activities")} resource="activities" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Honors")} resource="honors" {...{ user, data, query, reload, notify }} /></div><ResourceSection title={t("Achievements")} resource="achievements" {...{ user, data, query, reload, notify }} /></div>;
@@ -3724,133 +407,58 @@ function PageRouter({ page, user, data, stats, query, reload, notify, setPage })
 }
 
 export default function App() {
-  const [theme, setTheme] = useState(initialTheme);
+  const [theme, toggleTheme] = useTheme();
   const [language, setLanguageState] = useState(getLanguage);
-  const [publicPage, setPublicPage] = useState(() => window.location.hash === '#/login' ? 'login' : 'landing');
+  const [location, setLocation] = useState(readLocation);
   const [user, setUser] = useState(null);
-  const [data, setData] = useState(EMPTY_DATA);
-  const [stats, setStats] = useState(null);
-  const [page, setPage] = useState('dashboard');
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [resourceStatus, setResourceStatus] = useState({});
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const [toast, setToast] = useState(null);
+  const isOnline = useOnlineStatus();
+  const [toast, notify] = useToast();
   const [bootstrapping, setBootstrapping] = useState(() => api.hasSession());
   const [bootstrapError, setBootstrapError] = useState('');
   const bootstrapAttempted = useRef(false);
+  const [signOutPrompt, setSignOutPrompt] = useState(false);
+  const signingOut = useRef(false);
+  const handleUnauthorized = useCallback(() => {api.logout();setUser(null);}, []);
+  const { data, stats, loading, error, resourceStatus, loadData, reset: resetWorkspace } = useWorkspaceData(user, handleUnauthorized);
 
-  const notify = useCallback((message, type = 'success') => {
-    setToast({ message, type });
-    window.setTimeout(() => setToast(null), 3500);
-  }, []);
-
-  useLayoutEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
-    try {window.localStorage.setItem(THEME_KEY, theme);} catch {/* Keep the active theme for this session. */}
-    const favicon = document.querySelector('link[data-theme-icon]');
-    if (favicon) favicon.href = themeIconFor(theme);
-    const themeColor = document.getElementById('theme-color');
-    if (themeColor) themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => setTheme((current) => current === 'dark' ? 'light' : 'dark'), []);
   const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
 
+  // The URL is the source of truth for where the user is: a refresh, a
+  // reopened tab, a bookmark or back/forward lands on the same page.
+  const navigate = useCallback((to, { replace = false } = {}) => {
+    if (to !== `${window.location.pathname}${window.location.search}${window.location.hash}`) window.history[replace ? 'replaceState' : 'pushState'](null, '', to);
+    setLocation(readLocation());
+  }, []);
+
+  useEffect(() => {
+    const handleNavigation = () => setLocation(readLocation());
+    window.addEventListener('popstate', handleNavigation);
+    return () => window.removeEventListener('popstate', handleNavigation);
+  }, []);
+
   const showPublicPage = useCallback((nextPage, replace = false) => {
-    const url = new URL(window.location.href);
-    url.hash = nextPage === 'login' ? '/login' : '';
-    window.history[replace ? 'replaceState' : 'pushState']({ publicPage: nextPage }, '', url);
-    setPublicPage(nextPage);
+    navigate(nextPage === 'login' ? LOGIN_PATH : LANDING_PATH, { replace });
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, []);
+  }, [navigate]);
 
-  useEffect(() => {
-    const handlePublicNavigation = () => setPublicPage(window.location.hash === '#/login' ? 'login' : 'landing');
-    window.addEventListener('popstate', handlePublicNavigation);
-    return () => window.removeEventListener('popstate', handlePublicNavigation);
-  }, []);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+  const publicPage = publicPageFor(location.pathname, location.hash);
+  const requestedRoute = useMemo(() => parsePath(location.pathname), [location.pathname]);
+  const route = useMemo(() => resolveRoute(requestedRoute, user), [requestedRoute, user]);
+  const page = route.page;
+  // Opening a page the role cannot see does nothing: pushing its path would
+  // only be replaced by the home page, leaving a Back entry that bounces.
+  const setPage = useCallback((nextPage, params = {}) => {
+    const target = openablePage(nextPage, user);
+    if (target) navigate(buildPath({ page: target, params }));
+  }, [navigate, user]);
+  const inWorkspace = Boolean(user) && !user.must_change_password && !(user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete);
 
   const loadUser = useCallback(async () => {
     const current = await api.me();
     setUser(current);
     return current;
   }, []);
-
-  const loadData = useCallback(async (activeUser = user, requestedKeys = null) => {
-    if (!activeUser || activeUser.must_change_password || (activeUser.role === 'student' && !activeUser.student_profile_complete)) return;
-    setLoading(true);setError('');
-    try {
-      const studentResources = ['students', 'tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations'].map((key) => [key, key]);
-      const portalResources = [
-      ['roadmapMissions', 'roadmap-missions'], ['bookings', 'bookings'],
-      ['messageChannels', 'message-channels'], ['programServices', 'program-services'],
-      ['scholarships', 'scholarships'], ['opportunityPrograms', 'opportunity-programs'],
-      ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets']];
-
-      const resources = activeUser.role === 'parent' ?
-      [['parentPortal', 'parent-portal']] :
-      activeUser.role === 'organization' ?
-      [...studentResources, ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']] :
-      activeUser.role === 'teacher' ?
-      [['students', 'students'], ['tasks', 'tasks'], ['roadmapMissions', 'roadmap-missions'], ['bookings', 'bookings'], ['messageChannels', 'message-channels']] :
-      [...studentResources, ['universities', 'universities'], ...(activeUser.role === 'admin' ? [['schools', 'schools'], ['accounts', 'users/accounts'], ['counselorRoadmapTemplates', 'counselor-roadmap-templates'], ['counselorRoadmaps', 'counselor-roadmaps'], ['adminAuditEvents', 'users/audit-events'], ['supportTickets', 'support-tickets']] : isCounselor(activeUser) ? [['schools', 'schools'], ['roadmapMissions', 'roadmap-missions'], ['counselorRoadmapTemplates', 'counselor-roadmap-templates'], ['counselorRoadmaps', 'counselor-roadmaps'], ['programServices', 'program-services'], ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']] : portalResources)];
-      const requested = requestedKeys ? new Set(requestedKeys) : null;
-      const requests = [
-      ...(activeUser.role === 'parent' ? [] : [['dashboard', () => api.dashboard()]]),
-      ...resources.map(([key, endpoint]) => [key, () => api.list(endpoint)])].
-      filter(([key]) => !requested || requested.has(key));
-      setResourceStatus((current) => {
-        const next = { ...current };
-        requests.forEach(([key]) => {next[key] = { status: 'loading', error: '' };});
-        return next;
-      });
-      const settled = await Promise.allSettled(requests.map(([, request]) => request()));
-      const successfulResources = {};
-      const nextStatuses = {};
-      let dashboardStats;
-      let unauthorized = false;
-      settled.forEach((result, index) => {
-        const key = requests[index][0];
-        if (result.status === 'fulfilled') {
-          nextStatuses[key] = { status: 'success', error: '' };
-          if (key === 'dashboard') dashboardStats = result.value;else
-          successfulResources[key] = result.value || [];
-        } else {
-          unauthorized ||= result.reason?.status === 401;
-          nextStatuses[key] = { status: 'error', error: result.reason?.message || 'Unable to load this section.' };
-        }
-      });
-      if (unauthorized) {
-        api.logout();
-        setUser(null);
-        return;
-      }
-      if (dashboardStats !== undefined) setStats(dashboardStats);
-      if (Object.keys(successfulResources).length) {
-        setData((current) => ({ ...current, ...successfulResources }));
-      }
-      setResourceStatus((current) => ({ ...current, ...nextStatuses }));
-      if (settled.length > 0 && settled.every((result) => result.status === 'rejected')) {
-        setError(t("No new information could be loaded. Check your connection and retry."));
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {setLoading(false);}
-  }, [user]);
 
   const bootstrapSession = useCallback(async () => {
     if (!api.hasSession()) {setBootstrapping(false);return;}
@@ -3874,13 +482,32 @@ export default function App() {
   useEffect(() => {
     if (bootstrapAttempted.current) return;
     bootstrapAttempted.current = true;
+    dropLegacySharedKeys(() => window.localStorage);
     bootstrapSession();
   }, []);
 
+  // Signed out on a workspace link: sign in first, then come back to it.
   useEffect(() => {
-    const reachable = [...navigationFor(user), 'screen_time', ...(user?.role === 'student' ? ['profile'] : [])];
-    if (user && !reachable.includes(page)) setPage(user.role === 'admin' ? 'admin_dashboard' : 'dashboard');
-  }, [user, page]);
+    if (user || bootstrapping || bootstrapError || publicPage) return;
+    navigate(loginPath(`${location.pathname}${location.search}`), { replace: true });
+  }, [user, bootstrapping, bootstrapError, publicPage, location, navigate]);
+
+  // Signed in: show the requested page, or the role's home page for sign-in,
+  // unknown and forbidden paths. Waits until onboarding is done so a deep
+  // link survives it.
+  useEffect(() => {
+    if (!inWorkspace) return;
+    if (publicPage === 'login') {
+      const next = safeNextPath(new URLSearchParams(location.search).get('next'));
+      if (next) {navigate(next, { replace: true });return;}
+    }
+    const canonical = buildPath(route);
+    if (canonical !== location.pathname) navigate(`${canonical}${requestedRoute?.page === route.page ? location.search : ''}`, { replace: true });
+  }, [inWorkspace, publicPage, route, requestedRoute, location, navigate]);
+
+  useEffect(() => {
+    document.title = inWorkspace && PAGE_META[page] ? `${t(PAGE_META[page].label)} · Naseeb Edu` : siteTitle();
+  }, [inWorkspace, page, language]);
 
   async function afterLogin() {
     const current = await loadUser();
@@ -3890,26 +517,49 @@ export default function App() {
     setUser(current);
     await loadData(current);
   }
-  function logout() {api.logout();setUser(null);setData(EMPTY_DATA);setStats(null);setResourceStatus({});setBootstrapError('');setPage('dashboard');showPublicPage('landing', true);}
+  async function logout() {
+    // Upload this user's queued screen time and open essays while the session
+    // is still valid (up to a few seconds), then remove everything stored for
+    // them on this device. A second click while this runs does nothing.
+    if (signingOut.current) return;
+    signingOut.current = true;
+    notify(t('Saving your work before signing out…'));
+    try {
+      const screenTime = flushActiveScreenTime ? Promise.race([flushActiveScreenTime().catch(() => {}), new Promise((resolve) => window.setTimeout(resolve, 3000))]) : null;
+      const [, essaysSynced] = await Promise.all([screenTime, api.syncBeforeSignOut(user?.id)]);
+      if (!essaysSynced) {setSignOutPrompt(true);return;}
+      finishSignOut();
+    } finally {
+      signingOut.current = false;
+    }
+  }
+  // keepDrafts ("Sign in again"): end the session but keep this user's unsynced
+  // Essay Lab drafts on the device, and go straight to the sign-in form.
+  function finishSignOut({ keepDrafts = false } = {}) {
+    const signedOut = user?.id;
+    setSignOutPrompt(false);
+    resetWorkspace();
+    api.signOut(signedOut, { keepDrafts });clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
 
   if (bootstrapping) return <AppBootLoader message="Checking your secure session…" />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={bootstrapSession} onSignOut={logout} />;
-  if (!user) return publicPage === 'login' ?
+  if (!user) return publicPage !== 'landing' ?
   <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> :
-  <LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
+  <LazyBoundary fallback={<AppBootLoader />}><LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /></LazyBoundary>;
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
-  if (user.role === 'student' && !user.student_profile_complete) return <StudentOnboarding onSaved={afterPasswordChanged} onSignOut={logout} />;
+  if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
     <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
-      <PageRouter {...{ page, user, data, stats, query, reload: () => loadData(user), notify, setPage }} />
+      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate }} /></LazyBoundary>
     </AppShell>
+    {signOutPrompt && <Modal title="Sign out?" backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
+      <div className="sign-out-prompt" role="alert">
+        <p>{t("You have writing that isn't saved to your account yet. Sign in again to save it, or sign out and delete it from this device.")}</p>
+        <div className="form-actions"><button type="button" className="button danger" onClick={() => finishSignOut()}>{t('Sign out anyway')}</button><button type="button" className="button primary" onClick={() => finishSignOut({ keepDrafts: true })}>{t('Sign in again')}</button></div>
+      </div>
+    </Modal>}
     {toast && <div className={`toast ${toast.type}`}>{toast.type === 'success' ? <ShieldCheck size={18} /> : <X size={18} />}{toast.message}</div>}
   </>;
 }
-
-
-
-
-
 

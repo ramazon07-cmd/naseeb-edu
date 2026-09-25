@@ -5,8 +5,9 @@ Set `photo: 'file-name.jpg'` on an entry and drop the file here.
 
 Requirements:
 
-- Square (1:1). 200×200 or larger, so the 44px avatar stays sharp on a 2x screen.
-- JPEG or WebP, well under 100 KB each — nine of these load on one band.
+- Square (1:1), 200×200 or larger. Then run `node scripts/optimize-images.mjs`
+  from `frontend/` (add the file name to its portrait list): it resizes to a
+  112 px short side for the 52 px avatar, and CI fails above 16 KB.
 - The student's own photograph, supplied with the **same written consent as the
   quote**. A stock or generated face attached to a testimonial invents a person
   who then appears to endorse the product; that is not a placeholder, it is a
