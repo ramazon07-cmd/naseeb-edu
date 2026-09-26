@@ -1,23 +1,31 @@
 """Read-only, role-scoped streaming assistant for the H8 frontend chat."""
 
+import hashlib
+import http.client
+import itertools
 import json
 import logging
 import re
 import time
-import urllib.error
 import urllib.request
-from collections import Counter
 
 from django.conf import settings
+from django.db.models import Count
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
+from apps.users.cache_safety import cache_get, cache_set
+from apps.users.throttles import UserRateThrottle
 from rest_framework.views import APIView
 
+from apps.users.entitlements import require_feature
 from apps.users.models import User
+from . import ai_budget
+from .streaming import GuardedStream, acquire_stream_slot, release_db_connection
 from .models import Application, RoadmapMission, StudentProfile, Task
+from .progress import summarize_progress
+from .scoping import active_visible_students
 
 
 logger = logging.getLogger('naseeb.assistant')
@@ -36,6 +44,37 @@ class AssistantRateThrottle(UserRateThrottle):
     scope = 'assistant'
 
 
+# Network/provider failures that must degrade to local guidance, never a 500
+# or a broken stream. URLError/HTTPError/TimeoutError/ConnectionError are all
+# OSError subclasses; IncompleteRead and friends are HTTPException.
+PROVIDER_ERRORS = (OSError, http.client.HTTPException, RuntimeError, ValueError)
+TRUSTED_TURN_TTL_SECONDS = 24 * 60 * 60
+
+
+def _turn_key(user_id, content):
+    digest = hashlib.sha256(str(content).strip().encode('utf-8')).hexdigest()
+    return f'assistant-turn:{user_id}:{digest}'
+
+
+def remember_assistant_turn(user_id, content):
+    """Record a reply this server generated so it may be replayed as history."""
+    if str(content).strip():
+        cache_set(_turn_key(user_id, content), 1, TRUSTED_TURN_TTL_SECONDS)
+
+
+def is_trusted_assistant_turn(user_id, content):
+    return bool(cache_get(_turn_key(user_id, content)))
+
+
+def consume_provider_budget(user):
+    """Count one paid provider call against the daily caps (global, school, user).
+
+    Returns False once any cap is reached; the caller then serves the local
+    fallback instead of calling the paid gateway.
+    """
+    return ai_budget.consume('assistant', user)
+
+
 def redact_pii(value):
     """Remove common direct identifiers before content leaves the backend."""
     text = EMAIL_PATTERN.sub('[email removed]', str(value or ''))
@@ -48,7 +87,7 @@ def redact_pii(value):
 
 
 def _status_counts(queryset):
-    return dict(Counter(queryset.values_list('status', flat=True)))
+    return dict(queryset.order_by().values_list('status').annotate(total=Count('pk')))
 
 
 def build_role_context(user):
@@ -90,15 +129,16 @@ def build_role_context(user):
             'next_roadmap_missions': next_missions,
         }
 
-    students = StudentProfile.objects.filter(assigned_counselor=user)
-    tasks = Task.objects.filter(student__assigned_counselor=user)
-    roadmap = RoadmapMission.objects.filter(student__assigned_counselor=user)
-    applications = Application.objects.filter(student__assigned_counselor=user)
+    students = active_visible_students(user)
+    tasks = Task.objects.filter(student__in=students)
+    roadmap = RoadmapMission.objects.filter(student__in=students)
+    applications = Application.objects.filter(student__in=students)
+    summary = summarize_progress(students)
     return {
         'role': 'counselor',
         'school': user.school.name if user.school_id else None,
-        'assigned_student_count': students.count(),
-        'students_at_risk_count': sum(1 for student in students if student.is_at_risk),
+        'assigned_student_count': summary['students_total'],
+        'students_at_risk_count': summary['students_at_risk'],
         'task_status_counts': _status_counts(tasks),
         'roadmap_status_counts': _status_counts(roadmap),
         'application_status_counts': _status_counts(applications),
@@ -126,7 +166,7 @@ Role-scoped context:
 """
 
 
-def _validated_messages(payload):
+def _validated_messages(payload, user_id=None):
     if not isinstance(payload, dict) or not isinstance(payload.get('messages'), list):
         raise ValueError('Messages must be provided as a list.')
 
@@ -139,6 +179,10 @@ def _validated_messages(payload):
         content = item.get('content')
         if not isinstance(content, str) or not content.strip():
             raise ValueError('Empty chat messages are not allowed.')
+        if item['role'] == 'assistant' and user_id is not None and not is_trusted_assistant_turn(user_id, content):
+            # A client-written "assistant" turn could smuggle instructions in the
+            # model's own voice; only replay replies this server produced.
+            continue
         content = redact_pii(content.strip())
         if len(content) > 2000:
             raise ValueError('A single message cannot exceed 2,000 characters.')
@@ -219,8 +263,21 @@ def _gateway_stream(messages, system_prompt):
         },
         method='POST',
     )
-    with urllib.request.urlopen(request, timeout=settings.AI_ASSISTANT_TIMEOUT_SECONDS) as response:
-        for raw_line in response:
+    # AI_ASSISTANT_TIMEOUT_SECONDS bounds each read; AI_STREAM_MAX_SECONDS bounds
+    # the whole reply, so a provider trickling bytes cannot hold the thread forever.
+    deadline = time.monotonic() + settings.AI_STREAM_MAX_SECONDS
+    read_timeout = min(settings.AI_ASSISTANT_TIMEOUT_SECONDS, settings.AI_STREAM_MAX_SECONDS)
+    with urllib.request.urlopen(request, timeout=read_timeout) as response:
+        sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Assistant stream exceeded its total time limit.')
+            if sock is not None:
+                sock.settimeout(min(read_timeout, remaining))
+            raw_line = response.readline()
+            if not raw_line:
+                break
             line = raw_line.decode('utf-8', errors='ignore').strip()
             if not line.startswith('data:'):
                 continue
@@ -236,6 +293,12 @@ def _gateway_stream(messages, system_prompt):
                 yield content
 
 
+def _close(iterator):
+    close = getattr(iterator, 'close', None)
+    if close is not None:
+        close()
+
+
 class AssistantChatView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [AssistantRateThrottle]
@@ -249,38 +312,105 @@ class AssistantChatView(APIView):
                 {'detail': 'Assistant access is currently limited to students and counselors.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        require_feature(request, 'ai_assistant')
         try:
-            messages = _validated_messages(request.data)
+            messages = _validated_messages(request.data, user_id=user.id)
         except ValueError as error:
             return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
+        slot, refusal = acquire_stream_slot(user)
+        if refusal == 'busy':
+            response = Response({'detail': 'The assistant is busy right now. Please try again in a moment.'},
+                                status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            response['Retry-After'] = '5'
+            return response
+        if refusal == 'user_limit':
+            response = Response({'detail': 'Wait for your current answer to finish, then ask again.'},
+                                status=status.HTTP_429_TOO_MANY_REQUESTS)
+            response['Retry-After'] = '5'
+            return response
+        try:
+            return self._stream(user, messages, slot)
+        except BaseException:
+            slot.release()
+            raise
+
+    def _stream(self, user, messages, slot):
         context = build_role_context(user)
         system_prompt = _system_prompt(user, context)
         blocked = _blocked_reply(messages[-1]['content'])
         request_started = time.monotonic()
 
+        use_gateway = bool(not blocked and settings.AI_GATEWAY_API_KEY)
+        if use_gateway and not consume_provider_budget(user):
+            use_gateway = False
+            budget_exhausted = True
+        else:
+            budget_exhausted = False
+
+        # All database work is done: don't keep a pooled connection for the
+        # whole stream (or while waiting on the provider below).
+        release_db_connection()
+
+        # The first gateway chunk is read before the headers go out, so a
+        # provider that fails up front is reported as the local fallback it
+        # really is instead of being labelled as an AI answer.
+        gateway_chunks = None
+        first_chunk = ''
+        if use_gateway:
+            gateway_chunks = _gateway_stream(messages, system_prompt)
+            try:
+                first_chunk = next(gateway_chunks, '')
+            except PROVIDER_ERRORS:
+                logger.warning('assistant_provider_failure user_id=%s role=%s partial_chars=0',
+                               user.id, user.role, exc_info=True)
+            if not first_chunk:
+                _close(gateway_chunks)
+                gateway_chunks = None
+        source = (
+            'policy' if blocked else 'gateway' if gateway_chunks is not None
+            else 'budget-exhausted' if budget_exhausted else 'local-fallback'
+        )
+
         def stream_response():
-            mode = 'policy' if blocked else 'gateway' if settings.AI_GATEWAY_API_KEY else 'local-fallback'
+            mode = source
             response_chars = 0
+            parts = []
             try:
                 if blocked:
                     chunks = _text_chunks(blocked)
-                elif settings.AI_GATEWAY_API_KEY:
-                    chunks = _gateway_stream(messages, system_prompt)
+                elif gateway_chunks is not None:
+                    chunks = itertools.chain((first_chunk,), gateway_chunks)
                 else:
                     chunks = _text_chunks(_local_guidance(messages[-1]['content'], user.role))
                 for chunk in chunks:
                     response_chars += len(chunk)
+                    parts.append(chunk)
                     yield chunk
                 if response_chars == 0:
                     raise RuntimeError('Assistant provider returned an empty response.')
-            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, RuntimeError):
-                logger.warning('assistant_provider_failure user_id=%s role=%s', user.id, user.role)
-                fallback = _local_guidance(messages[-1]['content'], user.role)
-                for chunk in _text_chunks(fallback):
-                    response_chars += len(chunk)
-                    yield chunk
-                mode = 'local-fallback'
+                remember_assistant_turn(user.id, ''.join(parts))
+            except PROVIDER_ERRORS:
+                logger.warning(
+                    'assistant_provider_failure user_id=%s role=%s partial_chars=%s',
+                    user.id, user.role, response_chars, exc_info=True,
+                )
+                if response_chars:
+                    # Part of a real answer was already sent: don't glue canned
+                    # guidance onto it, just say it was cut off. A partial reply
+                    # is not remembered as trusted history.
+                    notice = '\n\n[The answer was interrupted. Please ask again.]'
+                    response_chars += len(notice)
+                    yield notice
+                    mode = 'interrupted'
+                else:
+                    fallback = _local_guidance(messages[-1]['content'], user.role)
+                    for chunk in _text_chunks(fallback):
+                        response_chars += len(chunk)
+                        parts.append(chunk)
+                        yield chunk
+                    remember_assistant_turn(user.id, ''.join(parts))
+                    mode = 'local-fallback'
             finally:
                 logger.info(
                     'assistant_request user_id=%s role=%s mode=%s messages=%s response_chars=%s duration_ms=%s date=%s',
@@ -293,9 +423,21 @@ class AssistantChatView(APIView):
                     timezone.localdate().isoformat(),
                 )
 
-        response = StreamingHttpResponse(stream_response(), content_type='text/plain; charset=utf-8')
+        def finish():
+            # A client that disconnects before the body starts never runs the
+            # generator's cleanup, so close the provider connection here too.
+            try:
+                _close(gateway_chunks)
+            finally:
+                slot.release()
+
+        response = StreamingHttpResponse(
+            GuardedStream(stream_response(), finish), content_type='text/plain; charset=utf-8',
+        )
         response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response['X-Accel-Buffering'] = 'no'
         response['X-Content-Type-Options'] = 'nosniff'
         response['X-Assistant-Mode'] = 'read-only'
+        # Where the answer comes from: gateway (AI), local-fallback, budget-exhausted or policy.
+        response['X-Assistant-Source'] = source
         return response

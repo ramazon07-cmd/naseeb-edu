@@ -1098,8 +1098,8 @@ export const CHALLENGES = [
 // four-part major assessment is complete and validated.
 export const PLANNED = []
 
-// Internal research backlog; not exported to the assessment UI.
-const RESEARCH_BACKLOG = [
+// Internal research backlog; not shown in the assessment UI.
+export const RESEARCH_BACKLOG = [
   {
     "number": 6,
     "title": "Career adaptability",

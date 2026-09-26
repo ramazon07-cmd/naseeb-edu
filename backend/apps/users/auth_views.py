@@ -1,12 +1,17 @@
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.db import OperationalError, ProgrammingError
-from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.exceptions import AuthenticationFailed, Throttled
+from apps.users.throttles import (
+    LoginAccountCeilingThrottle, LoginAccountThrottle, LoginIPThrottle, RefreshIPThrottle, RefreshTokenThrottle,
+)
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .credentials import mark_temporary_credential_used
 from .localization import localized_message
+from .security import (
+    client_ip, login_locked, note_account_failure, register_login_failure, remember_login_device, reset_login_failures,
+)
 
 
 class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
@@ -70,7 +75,29 @@ class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
             # a clean auth error instead of hiding the real setup mistake.
             pass
 
-        data = super().validate(attrs)
+        # Lockout keyed on (account, client IP): repeated failures lock that
+        # account *from that address* only, so an attacker cannot lock the real
+        # owner out from elsewhere.
+        request = self.context.get('request')
+        client = client_ip(request) if request is not None else ''
+        account = str(attrs.get(self.username_field) or login_value).strip().lower()
+        lockout_key = ('user-ip', f'{account}|{client}')
+        if login_locked(lockout_key):
+            raise Throttled(wait=settings.LOGIN_LOCKOUT_WINDOW_SECONDS)
+        try:
+            data = super().validate(attrs)
+        except AuthenticationFailed:
+            register_login_failure(lockout_key)
+            note_account_failure(account)
+            raise
+        reset_login_failures(lockout_key)
+        # Lets this address skip the account-wide login ceiling next time.
+        remember_login_device((login_value, self.user.get_username(), self.user.email), client)
+        from apps.admissions.scoping import is_locked_out_by_school
+        from .authentication import school_inactive_error
+
+        if is_locked_out_by_school(self.user):
+            raise school_inactive_error(request)
         if self.user.must_change_password:
             credential, error_key = mark_temporary_credential_used(user=self.user, request=self.context.get('request'))
             if error_key:
@@ -91,8 +118,9 @@ def token_pair_for_user(user):
 
 class DemoAwareTokenObtainPairView(TokenObtainPairView):
     serializer_class = EmailOrUsernameTokenSerializer
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'login'
+    # Per (account, IP) rather than per IP: a class signing in together from
+    # one school IP must not share a single allowance.
+    throttle_classes = [LoginIPThrottle, LoginAccountThrottle, LoginAccountCeilingThrottle]
 
 
 class SafeTokenRefreshSerializer(TokenRefreshSerializer):
@@ -110,3 +138,5 @@ class SafeTokenRefreshSerializer(TokenRefreshSerializer):
 
 class SafeTokenRefreshView(TokenRefreshView):
     serializer_class = SafeTokenRefreshSerializer
+    # Not the per-IP anonymous rate: every tab behind a shared IP refreshes.
+    throttle_classes = [RefreshIPThrottle, RefreshTokenThrottle]

@@ -20,10 +20,9 @@ The API client supports JWT login, automatic refresh, pagination unwrapping, JSO
 
 ## Palette
 
-- Ivory Paper: `#F5F0E6`
-- Warm Taupe: `#B8A58A`
-- Deep Ink: `#4A4036`
-- Soft Shadow: `#D8CEC0`
+The light and dark palettes are described once, in
+[Brand and themes](../README.md#brand-and-themes) in the root README. The
+tokens are defined in `src/styles.css`.
 
 ## Production build
 

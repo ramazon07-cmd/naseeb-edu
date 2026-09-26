@@ -212,7 +212,8 @@ class TemporaryCredentialLifecycleTests(APITestCase):
             {},
             format='json',
         )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # Unassigned students are not visible to the counselor at all.
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class ApiErrorLocalizationTests(APITestCase):

@@ -65,6 +65,10 @@ class PrivateStudentEvidenceTests(APITestCase):
                 'issuer': 'Evidence School',
                 'level': 'national',
             }),
+            ('activities', {
+                'name': 'Robotics club captain',
+                'activity_type': 'club',
+            }),
         )
         with tempfile.TemporaryDirectory() as private_root:
             with override_settings(DOCUMENT_STORAGE_ROOT=private_root):
@@ -86,7 +90,7 @@ class PrivateStudentEvidenceTests(APITestCase):
                         created.append((resource, response.data['id']))
 
                 stored_files = [path for path in Path(private_root).rglob('*') if path.is_file()]
-                self.assertEqual(len(stored_files), 2)
+                self.assertEqual(len(stored_files), len(cases))
                 self.assertTrue(all('student_evidence' in path.parts for path in stored_files))
 
                 for resource, record_id in created:
@@ -120,6 +124,9 @@ class PrivateStudentEvidenceTests(APITestCase):
                 self.assertEqual(visibility.status_code, status.HTTP_200_OK)
                 self.assertTrue(visibility.data['achievements'][0]['has_proof_file'])
                 self.assertTrue(visibility.data['honors'][0]['has_proof_file'])
+                self.assertTrue(visibility.data['activities'][0]['has_proof_file'])
+                self.assertEqual(visibility.data['activities'][0]['proof_resource'], 'activities')
+                self.assertNotIn('proof_file', visibility.data['activities'][0])
                 self.assertNotIn('proof_file', visibility.data['achievements'][0])
                 self.assertNotIn('proof_file', visibility.data['honors'][0])
 
@@ -317,6 +324,7 @@ class PrivateTaskAndRecommendationFileTests(APITestCase):
             self.assertNotIn('file', created.data)
             self.assertTrue(created.data['has_file'])
             self.assertEqual(created.data['file_name'], 'letter.pdf')
+            self.assertTrue(created.data['file_previewable'])
             letter_id = created.data['id']
 
             url = f'/api/recommendations/{letter_id}/file/'

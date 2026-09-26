@@ -1,18 +1,17 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from apps.users.auth_views import DemoAwareTokenObtainPairView, SafeTokenRefreshView
-
-
-def health_check(request):
-    return JsonResponse({'status': 'ok', 'service': 'naseeb-edu'})
+from apps.users.security import guarded_admin_login
+from core.health import health_check, readiness_check
 
 urlpatterns = [
+    path('admin/login/', guarded_admin_login(admin.site.login), name='admin-login-guarded'),
     path('admin/', admin.site.urls),
     path('api/health/', health_check, name='health-check'),
+    path('api/health/ready/', readiness_check, name='readiness-check'),
     path('api/auth/token/', DemoAwareTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', SafeTokenRefreshView.as_view(), name='token_refresh'),
     path('api/users/', include('apps.users.urls')),

@@ -10,37 +10,49 @@
 /* Sender name colours. Six is enough to tell a small study group apart, and each
    one is checked against --surface in both themes. */
 :root {
-  --chat-name-0: #8A6A3F;
-  --chat-name-1: #1F6E82;
-  --chat-name-2: #4F6B56;
-  --chat-name-3: #94524B;
-  --chat-name-4: #64568A;
-  --chat-name-5: #8A5B72;
-  --chat-wall-ink: rgba(74, 64, 54, .055);
-  --chat-wall-tint: rgba(184, 165, 138, .1);
-  --chat-tail-shadow: rgba(74, 64, 54, .1);
-  --avatar-ink: #FFFFFF;
+  --chat-name-0: #8a6a3f;
+  --chat-name-1: #1f6e82;
+  --chat-name-2: #4f6b56;
+  --chat-name-3: #94524b;
+  --chat-name-4: #64568a;
+  --chat-name-5: #8a5b72;
+  --chat-wall-ink: rgba(74, 64, 54, 0.055);
+  --chat-wall-tint: rgba(184, 165, 138, 0.1);
+  --chat-tail-shadow: rgba(74, 64, 54, 0.1);
+  --avatar-ink: #ffffff;
 }
 
 :root[data-theme='dark'] {
-  --chat-name-0: #DEBC83;
-  --chat-name-1: #8FC8DA;
-  --chat-name-2: #A3CBAC;
-  --chat-name-3: #E6A199;
-  --chat-name-4: #B9ABE0;
-  --chat-name-5: #E0A7C0;
-  --chat-wall-ink: rgba(199, 219, 232, .05);
-  --chat-wall-tint: rgba(159, 198, 226, .05);
-  --chat-tail-shadow: rgba(0, 0, 0, .3);
+  --chat-name-0: #debc83;
+  --chat-name-1: #8fc8da;
+  --chat-name-2: #a3cbac;
+  --chat-name-3: #e6a199;
+  --chat-name-4: #b9abe0;
+  --chat-name-5: #e0a7c0;
+  --chat-wall-ink: rgba(199, 219, 232, 0.05);
+  --chat-wall-tint: rgba(159, 198, 226, 0.05);
+  --chat-tail-shadow: rgba(0, 0, 0, 0.3);
   --avatar-ink: #10202d;
 }
 
 /* ================================================================== Messages */
 
-.messaging-page .messages-shell { height: min(760px, calc(100dvh - 232px)); min-height: 440px; border-radius: 16px; grid-template-columns: 312px minmax(0, 1fr); }
+.messaging-page .messages-shell {
+  height: min(760px, calc(100dvh - 232px));
+  min-height: 440px;
+  border-radius: var(--radius-2xl);
+  grid-template-columns: 312px minmax(0, 1fr);
+}
 /* Staff carry an inbox summary above the shell, so the shell gets less room. */
-.messaging-page:has(.staff-messaging-overview) .messages-shell { height: min(700px, calc(100dvh - 392px)); min-height: 420px; }
-.messaging-page .channel-sidebar { position: relative; grid-template-rows: auto auto minmax(0, 1fr); }
+.messaging-page:has(.staff-messaging-overview) .messages-shell {
+  height: min(700px, calc(100dvh - 392px));
+  min-height: 420px;
+}
+
+.messaging-page .channel-sidebar {
+  position: relative;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
 
 /* Folder tabs. Switching between a private chat and a Q&A board is navigation
    inside the inbox, so it belongs on the list, not above the whole page. */
@@ -50,234 +62,871 @@
 /* One line of words, left aligned and scrollable, the way a messenger lists its
    folders. Icons came off: four icons stacked over four labels made a toolbar
    out of what is really a row of names. */
-.channel-folders { display: flex; align-items: stretch; gap: 0; padding: 0 6px; overflow-x: auto; scrollbar-width: none; box-shadow: inset 0 -1px 0 var(--border); }
-.channel-folders::-webkit-scrollbar { display: none; }
-.channel-folder { position: relative; flex: 1 1 auto; margin-bottom: -1px; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 12px 6px 11px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font-size: 11.5px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+.channel-folders {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.channel-folders::-webkit-scrollbar {
+  display: none;
+}
+
+.channel-folder {
+  position: relative;
+  flex: 1 1 auto;
+  margin-bottom: -1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 12px 6px 11px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
 /* Spread to fill the column when they fit, never squeeze below their own
    width: a badge appearing must not mash the four labels together. */
-.channel-folder { min-width: fit-content; }
-.channel-folder .folder-count { flex: 0 0 auto; }
-.channel-folder:hover { color: var(--text); }
-.channel-folder.active { color: var(--social-accent); border-bottom-color: var(--social-accent); }
-.channel-folder:focus-visible { outline: 2px solid var(--focus-color); outline-offset: -3px; border-radius: 6px; }
-.folder-count { min-width: 17px; padding: 1px 5px; color: var(--text); background: var(--surface-active); border-radius: 99px; font-size: 9.5px; font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
-.channel-folder.active .folder-count { color: var(--social-accent-text); background: var(--social-accent); }
-.channel-moderation { flex: 0 0 auto; padding-inline: 8px; }
-.channel-moderation em { position: absolute; top: 4px; right: 0; min-width: 15px; padding: 1px 4px; color: var(--accent-contrast); background: var(--danger); border-radius: 99px; font-size: 8px; font-style: normal; font-weight: 700; }
+.channel-folder {
+  min-width: fit-content;
+}
 
-.messaging-page .channel-search { margin: 8px; min-height: 32px; padding: 0 10px; gap: 7px; color: var(--text-subtle); background: var(--surface-inset); border-color: transparent; border-radius: 9px; font-size: 11.5px; }
-.messaging-page .channel-search > svg { width: 14px; height: 14px; }
-.messaging-page .channel-list { border-top: 0; padding: 0 8px 76px; }
+.channel-folder .folder-count {
+  flex: 0 0 auto;
+}
+
+.channel-folder:hover {
+  color: var(--text);
+}
+
+.channel-folder.active {
+  color: var(--social-accent);
+  border-bottom-color: var(--social-accent);
+}
+
+.channel-folder:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: -3px;
+  border-radius: var(--radius-sm);
+}
+
+.folder-count {
+  min-width: 17px;
+  padding: 1px 5px;
+  color: var(--text);
+  background: var(--surface-active);
+  border-radius: 99px;
+  font-size: var(--text-xs);
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.channel-folder.active .folder-count {
+  color: var(--social-accent-text);
+  background: var(--social-accent);
+}
+
+.channel-moderation {
+  flex: 0 0 auto;
+  padding-inline: 8px;
+}
+
+.channel-moderation em {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  min-width: 15px;
+  padding: 1px 4px;
+  color: var(--accent-contrast);
+  background: var(--danger);
+  border-radius: 99px;
+  font-size: var(--text-xs);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.messaging-page .channel-search {
+  margin: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  gap: 7px;
+  color: var(--text-subtle);
+  background: var(--surface-inset);
+  border-color: transparent;
+  border-radius: var(--radius-base);
+  font-size: var(--text-xs);
+}
+
+.messaging-page .channel-search > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.messaging-page .channel-list {
+  border-top: 0;
+  padding: 0 8px 76px;
+}
 /* Rows are inset pills, not full-bleed bands: the selected conversation reads
    as one object in the list instead of a slab across it. */
-.messaging-page .channel-item { min-height: 58px; padding: 8px 9px; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; border-radius: 11px; }
-.messaging-page .channel-item + .channel-item { margin-top: 1px; }
-.messaging-page .channel-item .avatar { width: 40px; height: 40px; flex-basis: 40px; font-size: 12px; }
-.messaging-page .channel-item b { font-size: 12.5px; }
-.messaging-page .channel-item small { font-size: 10.5px; }
-.messaging-page .channel-item time { font-size: 9px; }
-.messaging-page .channel-item strong { min-width: 18px; height: 18px; color: var(--social-accent-text); background: var(--social-accent); font-size: 9px; font-weight: 700; }
+.messaging-page .channel-item {
+  min-height: 58px;
+  padding: 8px 9px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: var(--space-2-5);
+  border-radius: var(--radius-lg);
+}
+
+.messaging-page .channel-item + .channel-item {
+  margin-top: 1px;
+}
+
+.messaging-page .channel-item .avatar {
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
+  font-size: var(--text-xs);
+}
+
+.messaging-page .channel-item b {
+  font-size: 0.7813rem;
+}
+
+.messaging-page .channel-item small {
+  font-size: var(--text-xs);
+}
+
+.messaging-page .channel-item time {
+  font-size: var(--text-xs);
+}
+
+.messaging-page .channel-item strong {
+  min-width: 18px;
+  height: 18px;
+  color: var(--social-accent-text);
+  background: var(--social-accent);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
 
 /* Every conversation gets its own colour, keyed off its id. One taupe disc per
    row made the whole list read as a single grey block; a messenger is scanned
    by colour and shape long before the names are read. */
-.messaging-page .avatar:is(.tint-0, .tint-1, .tint-2, .tint-3, .tint-4, .tint-5) { color: var(--avatar-ink); border-color: transparent; }
-.messaging-page .avatar.tint-0 { background: var(--chat-name-0); }
-.messaging-page .avatar.tint-1 { background: var(--chat-name-1); }
-.messaging-page .avatar.tint-2 { background: var(--chat-name-2); }
-.messaging-page .avatar.tint-3 { background: var(--chat-name-3); }
-.messaging-page .avatar.tint-4 { background: var(--chat-name-4); }
-.messaging-page .avatar.tint-5 { background: var(--chat-name-5); }
+.messaging-page
+  .avatar:is(.tint-0, .tint-1, .tint-2, .tint-3, .tint-4, .tint-5) {
+  color: var(--avatar-ink);
+  border-color: transparent;
+}
+
+.messaging-page .avatar.tint-0 {
+  background: var(--chat-name-0);
+}
+
+.messaging-page .avatar.tint-1 {
+  background: var(--chat-name-1);
+}
+
+.messaging-page .avatar.tint-2 {
+  background: var(--chat-name-2);
+}
+
+.messaging-page .avatar.tint-3 {
+  background: var(--chat-name-3);
+}
+
+.messaging-page .avatar.tint-4 {
+  background: var(--chat-name-4);
+}
+
+.messaging-page .avatar.tint-5 {
+  background: var(--chat-name-5);
+}
 
 /* The open conversation is marked by a tint and a coloured name, not by a solid
    slab: filling the row turned the accent into a block of mud and forced the
    avatar to wash out to stay legible on it. */
-.messaging-page .channel-item.active { background: var(--social-accent-wash); }
-.messaging-page .channel-item.active b { color: var(--social-accent); font-weight: 700; }
-.messaging-page .channel-item:hover:not(.active) { background: var(--surface-hover); }
+.messaging-page .channel-item.active {
+  background: var(--social-accent-wash);
+}
+
+.messaging-page .channel-item.active b {
+  color: var(--social-accent);
+  font-weight: 700;
+}
+
+.messaging-page .channel-item:hover:not(.active) {
+  background: var(--surface-hover);
+}
 
 /* An unread row says so before you reach the badge. */
-.messaging-page .channel-item.unread b { font-weight: 700; }
-.messaging-page .channel-item.unread small { color: var(--text); }
-.messaging-page .channel-item.unread time { color: var(--social-accent); font-weight: 700; }
-.channel-list-empty { display: grid; justify-items: center; gap: 9px; padding: 46px 22px; color: var(--muted); text-align: center; }
-.channel-list-empty p { margin: 0; font-size: 11px; line-height: 1.65; }
+.messaging-page .channel-item.unread b {
+  font-weight: 700;
+}
+
+.messaging-page .channel-item.unread small {
+  color: var(--text);
+}
+
+.messaging-page .channel-item.unread time {
+  color: var(--social-accent);
+  font-weight: 700;
+}
+
+.channel-list-empty {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 46px 22px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.channel-list-empty p {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.65;
+}
 
 /* Compose lives where the list is, the way a messenger puts it. */
-.channel-compose { position: absolute; right: 16px; bottom: 16px; width: 48px; height: 48px; display: grid; place-items: center; color: var(--social-accent-text); background: var(--social-accent); border: 0; border-radius: 50%; box-shadow: var(--shadow-raised); cursor: pointer; transition: transform .16s ease; }
-.channel-compose:hover { transform: scale(1.06); }
-.channel-compose:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.channel-compose {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  color: var(--social-accent-text);
+  background: var(--social-accent);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: var(--shadow-raised);
+  cursor: pointer;
+  transition: transform 0.16s ease;
+}
 
-.messaging-page .message-thread { grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
-.messaging-page .message-thread > header { min-height: 68px; padding: 13px 20px; }
-.messaging-page .message-list { justify-content: flex-start; overscroll-behavior: contain; }
-.messaging-page .message-list > * { flex-shrink: 0; }
-.messaging-page .message-bubble footer button { font-size: 10px; cursor: pointer; }
+.channel-compose:hover {
+  transform: scale(1.06);
+}
+
+.channel-compose:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 3px;
+}
+
+.messaging-page .message-thread {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.messaging-page .message-thread > header {
+  min-height: 68px;
+  padding: 13px 20px;
+}
+
+.messaging-page .message-list {
+  justify-content: flex-start;
+  overscroll-behavior: contain;
+}
+
+.messaging-page .message-list > * {
+  flex-shrink: 0;
+}
+
+.messaging-page .message-bubble footer button {
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
 /* Chat actions stay out of the way; on a board, replying is the point. */
-.messaging-page:is(.kind-community, .kind-discussion) .message-bubble footer { max-height: none; margin-top: 6px; opacity: 1; }
-.messaging-page:is(.kind-direct, .kind-group) .message-bubble:is(:hover, :focus-within) footer { max-height: 24px; margin-top: 5px; opacity: 1; }
-/* Touch has no hover, so Reply and Report have to stay reachable there. */
-@media (hover: none) { .messaging-page .message-bubble footer { max-height: none; margin-top: 5px; opacity: 1; } }
-.messaging-page .message-bubble p > time { font-size: 9px; }
-.messaging-page .message-compose textarea { display: block; }
-.compose-error { margin: 0 0 8px; color: var(--danger); font-size: 12px; }
-.compose-hint { display: block; margin-top: 6px; color: var(--text-subtle); font-size: 9px; }
-.thread-empty { display: grid; justify-items: center; align-content: center; gap: 10px; margin: auto; padding: 40px 20px; color: var(--muted); text-align: center; }
-.thread-empty p { max-width: 280px; margin: 0; font-size: 12px; line-height: 1.7; }
-.messaging-page .message-empty-state { background: var(--surface-soft); }
-.messaging-page .message-empty-state > svg { color: var(--border-strong); }
+.messaging-page:is(.kind-community, .kind-discussion) .message-bubble footer {
+  max-height: none;
+  margin-top: 6px;
+  opacity: 1;
+}
 
-.messaging-page .message-bubble > div > b { font-size: 11px; font-weight: 700; }
-.sender-0 { --sender-color: var(--chat-name-0); }
-.sender-1 { --sender-color: var(--chat-name-1); }
-.sender-2 { --sender-color: var(--chat-name-2); }
-.sender-3 { --sender-color: var(--chat-name-3); }
-.sender-4 { --sender-color: var(--chat-name-4); }
-.sender-5 { --sender-color: var(--chat-name-5); }
-.messaging-page .message-bubble:not(.mine) > div > b { color: var(--sender-color); }
+.messaging-page:is(.kind-direct, .kind-group)
+  .message-bubble:is(:hover, :focus-within)
+  footer {
+  max-height: 24px;
+  margin-top: 5px;
+  opacity: 1;
+}
+/* Touch has no hover, so Reply and Report have to stay reachable there. */
+@media (hover: none) {
+  .messaging-page .message-bubble footer {
+    max-height: none;
+    margin-top: 5px;
+    opacity: 1;
+  }
+}
+
+.messaging-page .message-bubble p > time {
+  font-size: var(--text-xs);
+}
+
+.messaging-page .message-compose textarea {
+  display: block;
+}
+
+.compose-error {
+  margin: 0 0 8px;
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+.compose-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.thread-empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-2-5);
+  margin: auto;
+  padding: 40px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.thread-empty p {
+  max-width: 280px;
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+
+.messaging-page .message-empty-state {
+  background: var(--surface-soft);
+}
+
+.messaging-page .message-empty-state > svg {
+  color: var(--border-strong);
+}
+
+.messaging-page .message-bubble > div > b {
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.sender-0 {
+  --sender-color: var(--chat-name-0);
+}
+
+.sender-1 {
+  --sender-color: var(--chat-name-1);
+}
+
+.sender-2 {
+  --sender-color: var(--chat-name-2);
+}
+
+.sender-3 {
+  --sender-color: var(--chat-name-3);
+}
+
+.sender-4 {
+  --sender-color: var(--chat-name-4);
+}
+
+.sender-5 {
+  --sender-color: var(--chat-name-5);
+}
+
+.messaging-page .message-bubble:not(.mine) > div > b {
+  color: var(--sender-color);
+}
 /* On a board your own name sits on the page, not on a filled bubble, so it
    keeps its sender colour instead of the on-accent colour. */
-.messaging-page:is(.kind-community, .kind-discussion) .message-bubble > div > b { color: var(--sender-color); }
+.messaging-page:is(.kind-community, .kind-discussion)
+  .message-bubble
+  > div
+  > b {
+  color: var(--sender-color);
+}
 
-.channel-context { display: flex; gap: 14px; align-items: flex-start; padding: 17px 19px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; background: var(--surface); }
-.channel-context > svg { flex-shrink: 0; margin-top: 2px; color: var(--social-accent); }
-.channel-context b { font-size: 14px; }
-.channel-context p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.channel-context {
+  display: flex;
+  gap: var(--space-3-5);
+  align-items: flex-start;
+  padding: 17px 19px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  background: var(--surface);
+}
+
+.channel-context > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--social-accent);
+}
+
+.channel-context b {
+  font-size: var(--text-md);
+}
+
+.channel-context p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* ---------------------------------------------------- Direct: a private chat */
 
-.messaging-page.kind-direct .message-list { padding: 22px clamp(18px, 4vw, 64px); background: var(--chat-canvas); }
-.messaging-page.kind-direct .message-list::before { content: ''; margin-top: auto; }
-.messaging-page.kind-direct .message-bubble { max-width: min(520px, 68%); padding: 8px 12px 6px; border-radius: 15px 15px 15px 5px; }
-.messaging-page.kind-direct .message-bubble.mine { border-radius: 15px 15px 5px 15px; }
+.messaging-page.kind-direct .message-list {
+  padding: 22px clamp(18px, 4vw, 64px);
+  background: var(--chat-canvas);
+}
+
+.messaging-page.kind-direct .message-list::before {
+  content: '';
+  margin-top: auto;
+}
+
+.messaging-page.kind-direct .message-bubble {
+  max-width: min(520px, 68%);
+  padding: 8px 12px 6px;
+  border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-2xl) var(--radius-sm);
+}
+
+.messaging-page.kind-direct .message-bubble.mine {
+  border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-sm) var(--radius-2xl);
+}
 /* The tail is what makes a private chat read as a conversation and not a list. */
-.messaging-page.kind-direct .message-bubble:not(.stacked)::after { content: ''; position: absolute; bottom: 0; width: 9px; height: 13px; }
-.messaging-page.kind-direct .message-bubble { position: relative; }
-.messaging-page.kind-direct .message-bubble:not(.mine, .stacked)::after { left: -6px; background: var(--surface); clip-path: polygon(100% 0, 100% 100%, 0 100%); border-bottom-left-radius: 4px; }
-.messaging-page.kind-direct .message-bubble.mine:not(.stacked)::after { right: -6px; background: var(--social-accent); clip-path: polygon(0 0, 100% 100%, 0 100%); border-bottom-right-radius: 4px; }
-.messaging-page.kind-direct .message-day { margin: 14px 0 6px; }
+.messaging-page.kind-direct .message-bubble:not(.stacked)::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 9px;
+  height: 13px;
+}
+
+.messaging-page.kind-direct .message-bubble {
+  position: relative;
+}
+
+.messaging-page.kind-direct .message-bubble:not(.mine, .stacked)::after {
+  left: -6px;
+  background: var(--surface);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  border-bottom-left-radius: var(--radius-xs);
+}
+
+.messaging-page.kind-direct .message-bubble.mine:not(.stacked)::after {
+  right: -6px;
+  background: var(--social-accent);
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+  border-bottom-right-radius: var(--radius-xs);
+}
+
+.messaging-page.kind-direct .message-day {
+  margin: 14px 0 6px;
+}
 
 /* ------------------------------------------------ Group: a many-voice thread */
 
-.messaging-page.kind-group .message-list { padding: 22px clamp(18px, 4vw, 64px); background: var(--chat-canvas); }
-.messaging-page.kind-group .message-list::before { content: ''; margin-top: auto; }
+.messaging-page.kind-group .message-list {
+  padding: 22px clamp(18px, 4vw, 64px);
+  background: var(--chat-canvas);
+}
+
+.messaging-page.kind-group .message-list::before {
+  content: '';
+  margin-top: auto;
+}
 /* The avatar takes its place in the gutter by giving up its own height, not by
    dragging the bubble up over it: pulling the bubble made every message shorter
    than the avatar row overlap the one above it. */
 /* The gap between turns lives on the avatar, so avatar and bubble share a top
    edge and a run of messages tightens to 2px without either drifting. */
-.messaging-page.kind-group .message-avatar { width: 30px; height: 30px; margin: 10px 0 -30px; border-radius: 10px; font-size: 10px; }
-.messaging-page.kind-group .message-avatar.is-hidden { margin-top: 2px; }
-.messaging-page.kind-group .message-list:has(.message-avatar) .message-bubble:not(.mine) { margin-left: 40px; margin-top: 0; }
-.messaging-page.kind-group .message-bubble { max-width: min(560px, 74%); padding: 8px 13px 6px; border-radius: 5px 15px 15px 15px; }
-.messaging-page.kind-group .message-bubble.mine { border-radius: 15px 5px 15px 15px; }
-.messaging-page.kind-group .message-bubble.stacked { border-top-left-radius: 15px; }
-.messaging-page.kind-group .message-bubble.mine.stacked { border-top-right-radius: 15px; }
-.messaging-page.kind-group .message-bubble:not(.mine) { background: var(--surface); }
+.messaging-page.kind-group .message-avatar {
+  width: 30px;
+  height: 30px;
+  margin: 10px 0 -30px;
+  border-radius: var(--radius-base);
+  font-size: var(--text-xs);
+}
+
+.messaging-page.kind-group .message-avatar.is-hidden {
+  margin-top: 2px;
+}
+
+.messaging-page.kind-group
+  .message-list:has(.message-avatar)
+  .message-bubble:not(.mine) {
+  margin-left: 40px;
+  margin-top: 0;
+}
+
+.messaging-page.kind-group .message-bubble {
+  max-width: min(560px, 74%);
+  padding: 8px 13px 6px;
+  border-radius: var(--radius-sm) var(--radius-2xl) var(--radius-2xl) var(--radius-2xl);
+}
+
+.messaging-page.kind-group .message-bubble.mine {
+  border-radius: var(--radius-2xl) var(--radius-sm) var(--radius-2xl) var(--radius-2xl);
+}
+
+.messaging-page.kind-group .message-bubble.stacked {
+  border-top-left-radius: var(--radius-2xl);
+}
+
+.messaging-page.kind-group .message-bubble.mine.stacked {
+  border-top-right-radius: var(--radius-2xl);
+}
+
+.messaging-page.kind-group .message-bubble:not(.mine) {
+  background: var(--surface);
+}
 
 /* -------------------------------- Community: a broadcast channel, not a chat */
 /* A channel has no sides: every post is one full-width column entry, including
    your own, because nobody reads an announcement board as "me versus them". */
 
-.messaging-page.kind-community .message-list { padding: 20px clamp(14px, 4vw, 40px); background: var(--surface-soft); background-image: none; }
-.messaging-page.kind-community .message-avatar { display: none; }
-.messaging-page.kind-community .channel-context { max-width: 660px; margin-inline: auto; border: 0; border-radius: 14px; background: var(--social-accent-wash); }
+.messaging-page.kind-community .message-list {
+  padding: 20px clamp(14px, 4vw, 40px);
+  background: var(--surface-soft);
+  background-image: none;
+}
+
+.messaging-page.kind-community .message-avatar {
+  display: none;
+}
+
+.messaging-page.kind-community .channel-context {
+  max-width: 660px;
+  margin-inline: auto;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--social-accent-wash);
+}
+
 .messaging-page.kind-community .message-list .message-bubble,
 .messaging-page.kind-community .message-list .message-bubble.mine {
-  position: relative; width: 100%; max-width: 660px; margin: 0 auto 12px; align-self: center;
-  padding: 16px 19px 12px; color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); border-radius: 14px; box-shadow: none;
+  position: relative;
+  width: 100%;
+  max-width: 660px;
+  margin: 0 auto 12px;
+  align-self: center;
+  padding: 16px 19px 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: none;
 }
 /* Your own post is marked by a tint, never by a rule down its edge and never
    by position: a channel has no sides. */
-.messaging-page.kind-community .message-bubble.mine { background: var(--social-accent-wash); border-color: transparent; }
-.messaging-page.kind-community .message-bubble > div { display: flex; margin-bottom: 8px; }
-.messaging-page.kind-community .message-bubble > div > b { color: var(--text); font-size: 12px; }
-.messaging-page.kind-community .message-bubble p { font-size: 13.5px; line-height: 1.75; white-space: pre-wrap; }
+.messaging-page.kind-community .message-bubble.mine {
+  background: var(--social-accent-wash);
+  border-color: transparent;
+}
+
+.messaging-page.kind-community .message-bubble > div {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.messaging-page.kind-community .message-bubble > div > b {
+  color: var(--text);
+  font-size: var(--text-xs);
+}
+
+.messaging-page.kind-community .message-bubble p {
+  font-size: 0.8438rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
 .messaging-page.kind-community .message-bubble p > time,
-.messaging-page.kind-community .message-bubble.mine p > time { float: none; display: block; margin: 10px 0 0; color: var(--text-subtle); font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
-.messaging-page.kind-community .message-bubble footer { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+.messaging-page.kind-community .message-bubble.mine p > time {
+  float: none;
+  display: block;
+  margin: 10px 0 0;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.messaging-page.kind-community .message-bubble footer {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .messaging-page.kind-community .message-bubble footer button,
-.messaging-page.kind-community .message-bubble.mine footer button { color: var(--social-accent); }
-.messaging-page.kind-community .message-day { margin: 6px auto 14px; }
+.messaging-page.kind-community .message-bubble.mine footer button {
+  color: var(--social-accent);
+}
+
+.messaging-page.kind-community .message-day {
+  margin: 6px auto 14px;
+}
 
 /* ---------------------------------------- Discussion: a question and answers */
 /* A Q&A board is read top-down. Replies indent under what they answer, and the
    accepted answer is the one thing that must be findable without reading. */
 
-.messaging-page.kind-discussion .message-list { padding: 18px clamp(14px, 3vw, 34px); background: var(--surface); background-image: none; }
-.messaging-page.kind-discussion .message-avatar { display: none; }
-.messaging-page.kind-discussion .channel-context { background: var(--surface-inset); }
+.messaging-page.kind-discussion .message-list {
+  padding: 18px clamp(14px, 3vw, 34px);
+  background: var(--surface);
+  background-image: none;
+}
+
+.messaging-page.kind-discussion .message-avatar {
+  display: none;
+}
+
+.messaging-page.kind-discussion .channel-context {
+  background: var(--surface-inset);
+}
+
 .messaging-page.kind-discussion .message-list .message-bubble,
 .messaging-page.kind-discussion .message-list .message-bubble.mine {
-  width: 100%; max-width: none; margin: 0; align-self: stretch;
-  padding: 16px 0; color: var(--text); background: transparent;
-  border: 0; border-bottom: 1px solid var(--border-subtle); border-radius: 0; box-shadow: none;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  align-self: stretch;
+  padding: 16px 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  box-shadow: none;
 }
-.messaging-page.kind-discussion .message-list .message-bubble.reply { position: relative; width: auto; margin-left: 26px; padding-left: 16px; }
-.messaging-page.kind-discussion .message-bubble.reply::before { content: ''; position: absolute; top: 18px; bottom: 16px; left: 0; width: 2px; border-radius: 2px; background: var(--border-strong); }
+
+.messaging-page.kind-discussion .message-list .message-bubble.reply {
+  position: relative;
+  width: auto;
+  margin-left: 26px;
+  padding-left: 16px;
+}
+
+.messaging-page.kind-discussion .message-bubble.reply::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  bottom: 16px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
 /* The accepted answer is the one thing that must be findable without reading:
    a tint and a ring carry it, so the thread keeps its flat left edge. */
-.messaging-page.kind-discussion .message-bubble.accepted { padding: 16px; border-radius: 10px; border-bottom-color: transparent; background: var(--success-bg); box-shadow: inset 0 0 0 1px var(--success-border); }
-.messaging-page.kind-discussion .message-bubble.accepted::before { display: none; }
+.messaging-page.kind-discussion .message-bubble.accepted {
+  padding: 16px;
+  border-radius: var(--radius-base);
+  border-bottom-color: transparent;
+  background: var(--success-bg);
+  box-shadow: inset 0 0 0 1px var(--success-border);
+}
+
+.messaging-page.kind-discussion .message-bubble.accepted::before {
+  display: none;
+}
+
 .messaging-page.kind-discussion .message-bubble .accepted-label,
-.messaging-page.kind-discussion .message-bubble.mine .accepted-label { color: var(--success); }
-.messaging-page.kind-discussion .message-bubble > div { margin-bottom: 7px; }
-.messaging-page.kind-discussion .message-bubble p { font-size: 13px; line-height: 1.75; white-space: pre-wrap; }
+.messaging-page.kind-discussion .message-bubble.mine .accepted-label {
+  color: var(--success);
+}
+
+.messaging-page.kind-discussion .message-bubble > div {
+  margin-bottom: 7px;
+}
+
+.messaging-page.kind-discussion .message-bubble p {
+  font-size: var(--text-sm);
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
 .messaging-page.kind-discussion .message-bubble p > time,
-.messaging-page.kind-discussion .message-bubble.mine p > time { color: var(--text-subtle); }
+.messaging-page.kind-discussion .message-bubble.mine p > time {
+  color: var(--text-subtle);
+}
+
 .messaging-page.kind-discussion .message-bubble footer button,
-.messaging-page.kind-discussion .message-bubble.mine footer button { color: var(--social-accent); }
-.messaging-page.kind-discussion .message-bubble .parent-preview { color: var(--muted); background: var(--surface-inset); }
-.messaging-page.kind-discussion .message-day { margin: 16px 0 6px; }
+.messaging-page.kind-discussion .message-bubble.mine footer button {
+  color: var(--social-accent);
+}
+
+.messaging-page.kind-discussion .message-bubble .parent-preview {
+  color: var(--muted);
+  background: var(--surface-inset);
+}
+
+.messaging-page.kind-discussion .message-day {
+  margin: 16px 0 6px;
+}
 
 /* Broadcasting and answering are writing, not chatting: give them room. */
-.messaging-page:is(.kind-community, .kind-discussion) .message-compose textarea { min-height: 76px; border-radius: 14px; }
+.messaging-page:is(.kind-community, .kind-discussion)
+  .message-compose
+  textarea {
+  min-height: 76px;
+  border-radius: var(--radius-xl);
+}
 
 /* ------------------------------------------------- Start a direct conversation */
 
-.direct-picker { grid-column: 1 / -1; }
-.direct-contact-list { max-height: 300px; margin-top: 12px; display: grid; gap: 5px; overflow: auto; }
-.direct-contact { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid transparent; border-radius: 11px; cursor: pointer; }
-.direct-contact:hover { background: var(--surface-hover); }
-.direct-contact:has(input:checked) { background: var(--selected-bg); border-color: var(--selected-border); }
-.direct-contact > span:last-child { min-width: 0; display: grid; gap: 3px; }
-.direct-contact b { font-size: 12px; }
-.direct-contact small { color: var(--muted); font-size: 10px; }
+.direct-picker {
+  grid-column: 1 / -1;
+}
+
+.direct-contact-list {
+  max-height: 300px;
+  margin-top: 12px;
+  display: grid;
+  gap: 5px;
+  overflow: auto;
+}
+
+.direct-contact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+
+.direct-contact:hover {
+  background: var(--surface-hover);
+}
+
+.direct-contact:has(input:checked) {
+  background: var(--selected-bg);
+  border-color: var(--selected-border);
+}
+
+.direct-contact > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.direct-contact b {
+  font-size: var(--text-xs);
+}
+
+.direct-contact small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
 
 /* ================================================================ Responsive */
 
-@media (max-width: 1080px) {
-  .messaging-page .messages-shell { grid-template-columns: 268px minmax(0, 1fr); }
+@media (max-width: 1100px) {
+  .messaging-page .messages-shell {
+    grid-template-columns: 268px minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 820px) {
-  .messaging-page.kind-community .message-list, .messaging-page.kind-discussion .message-list { padding-inline: 14px; }
-  .messaging-page.kind-community .message-list .message-bubble { padding: 14px 15px 10px; }
+  .messaging-page.kind-community .message-list,
+  .messaging-page.kind-discussion .message-list {
+    padding-inline: 14px;
+  }
+
+  .messaging-page.kind-community .message-list .message-bubble {
+    padding: 14px 15px 10px;
+  }
 }
 
-@media (max-width: 700px) {
-  .messaging-page .messages-shell { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 210px); min-height: 400px; }
-  .messaging-page .message-thread > header { flex-wrap: wrap; gap: 8px; }
-  .messaging-page .channel-actions { flex-wrap: wrap; }
-  .messaging-page.kind-direct .message-bubble { max-width: 84%; }
-  .messaging-page.kind-group .message-bubble { max-width: 82%; }
-  .channel-compose { right: 14px; bottom: 14px; width: 44px; height: 44px; }
+@media (max-width: 820px) {
+  .messaging-page .messages-shell {
+    grid-template-columns: minmax(0, 1fr);
+    height: calc(100dvh - 210px);
+    min-height: 400px;
+  }
+
+  .messaging-page .message-thread > header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .messaging-page .channel-actions {
+    flex-wrap: wrap;
+  }
+
+  .messaging-page.kind-direct .message-bubble {
+    max-width: 84%;
+  }
+
+  .messaging-page.kind-group .message-bubble {
+    max-width: 82%;
+  }
+
+  .channel-compose {
+    right: 14px;
+    bottom: 14px;
+    width: 44px;
+    height: 44px;
+  }
 }
-
-
 
 @media (prefers-reduced-motion: reduce) {
-  .channel-compose:hover { transform: none; }
+  .channel-compose:hover {
+    transform: none;
+  }
 }
 
 /* Compact messenger workspace. The conversation owns the available height. */
-.workspace-messages { padding-top: 18px; padding-bottom: 18px; }
-.workspace-messages .top-header { min-height: 42px; padding-bottom: 14px; align-items: center; }
-.workspace-messages .page-heading .eyebrow, .workspace-messages .page-heading > p { display: none; }
-.workspace-messages .page-heading h1 { margin: 0; font-size: 21px; line-height: 1.3; letter-spacing: -.035em; }
-.workspace-messages .page-content { padding-top: 16px; }
-.workspace-messages .header-actions .search { min-height: 36px; }
+.workspace-messages {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.workspace-messages .top-header {
+  min-height: 42px;
+  padding-bottom: 14px;
+  align-items: center;
+}
+
+.workspace-messages .page-heading .eyebrow,
+.workspace-messages .page-heading > p {
+  display: none;
+}
+
+.workspace-messages .page-heading h1 {
+  margin: 0;
+  font-size: 1.3125rem;
+  line-height: 1.3;
+  letter-spacing: -0.035em;
+}
+
+.workspace-messages .page-content {
+  padding-top: 16px;
+}
+
+.workspace-messages .header-actions .search {
+  min-height: 36px;
+}
+
 .messaging-page {
   /* Follow the shared site palette in both themes. */
   --chat-panel: var(--surface);
@@ -293,118 +942,632 @@
   --chat-outgoing: color-mix(in srgb, var(--accent) 22%, var(--surface));
   --chat-control: var(--control-bg);
 }
+
 .messaging-page .messages-shell {
-  height: calc(100dvh - 112px); min-height: 460px; max-height: none;
+  height: calc(100dvh - 112px);
+  min-height: 460px;
+  max-height: none;
   grid-template-columns: clamp(290px, 29%, 380px) minmax(0, 1fr);
-  background: var(--chat-panel); border: 1px solid var(--chat-line); border-radius: 16px;
-  color: var(--chat-ink); box-shadow: none;
+  background: var(--chat-panel);
+  border: 1px solid var(--chat-line);
+  border-radius: var(--radius-2xl);
+  color: var(--chat-ink);
+  box-shadow: none;
 }
-.messaging-page:has(.staff-messaging-overview) .messages-shell { height: calc(100dvh - 320px); }
-.messaging-page .channel-sidebar { grid-template-rows: auto auto auto minmax(0, 1fr); border-color: var(--chat-line); background: var(--chat-panel); }
-.chat-sidebar-header { min-height: 88px; display: flex; align-items: center; gap: 12px; padding: 18px; border-bottom: 1px solid var(--chat-line); }
-.chat-brand-icon { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--social-accent) 24%, transparent); border-radius: 13px; color: var(--social-accent); background: var(--social-accent-wash); }
-.chat-sidebar-header > div { min-width: 0; flex: 1; }
-.chat-sidebar-header h2 { margin: 0 0 4px; color: var(--chat-ink); font: 650 18px/1.2 'Montserrat', sans-serif; letter-spacing: -.025em; }
-.chat-sidebar-header p { margin: 0; color: var(--chat-muted); font-size: 10px; line-height: 1.4; }
-.chat-new-button { display: flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 8px 10px; color: var(--social-accent); background: var(--social-accent-wash); border: 1px solid color-mix(in srgb, var(--social-accent) 20%, transparent); border-radius: 99px; font-size: 10px; font-weight: 600; cursor: pointer; }
-.chat-new-button:hover { border-color: var(--social-accent); }
-.messaging-page .channel-folders { align-items: center; justify-content: flex-start; gap: 5px; padding: 10px 14px; flex-wrap: wrap; box-shadow: none; border-bottom: 1px solid var(--chat-line); }
-.messaging-page .channel-folder { flex: 0 0 auto; padding: 8px 13px; margin: 0; min-height: 32px; border: 0; border-radius: 99px; color: var(--chat-muted); font-size: 11px; }
-.messaging-page .channel-folder.active { color: var(--social-accent); background: var(--social-accent-wash); }
-.messaging-page .channel-folder:hover { background: var(--chat-hover); color: var(--chat-ink); }
-.messaging-page .channel-folder.active:hover { background: var(--social-accent-wash); color: var(--social-accent); }
-.messaging-page .channel-more-folders { padding-inline: 9px; }
-.messaging-page .channel-search { min-height: 42px; margin: 14px 16px 8px; padding: 0 13px; background: var(--chat-control); border: 1px solid var(--chat-line); border-radius: 11px; color: var(--chat-muted); }
-.messaging-page .channel-search input { color: var(--chat-ink); font-size: 12px; }
-.messaging-page .channel-search input::placeholder { color: var(--chat-muted); }
-.messaging-page .channel-search:focus-within { border-color: var(--social-accent); }
-.messaging-page .channel-list { padding: 4px 8px 76px; overflow-y: auto; }
-.messaging-page .channel-item { min-height: 78px; gap: 12px; padding: 12px; margin: 0; border: 0; border-radius: 10px; color: var(--chat-ink); background: transparent; box-shadow: none; transition: background .18s ease; }
-.messaging-page .channel-item::before { display: none; }
-.messaging-page .channel-item:hover:not(.active) { background: var(--chat-hover); }
-.messaging-page .channel-item.active { background: var(--social-accent-wash); }
-.messaging-page .channel-item.active b { color: var(--chat-ink); }
-.messaging-page .channel-item .avatar { width: 44px; height: 44px; flex-basis: 44px; border-radius: 50%; font-size: 14px; }
-.messaging-page .channel-item b { color: var(--chat-ink); font-size: 12px; font-weight: 600; }
-.messaging-page .channel-item small { color: var(--chat-muted); font-size: 11px; line-height: 1.5; }
-.messaging-page .channel-item time { color: var(--chat-muted); font-size: 9px; }
-.messaging-page .avatar.saved-avatar { background: var(--social-accent-wash); color: var(--social-accent); border: 0; }
-.messaging-page .saved-messages.active .saved-avatar { background: color-mix(in srgb, var(--social-accent) 20%, var(--chat-panel)); }
-.messaging-page .saved-messages .channel-item-copy { display: grid; gap: 5px; }
-.messaging-page .channel-compose { width: 45px; height: 45px; box-shadow: 0 3px 14px #0002; }
-.messaging-page .message-empty-state { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; min-width: 0; padding: 30px; background: var(--chat-canvas); }
-.messaging-page .message-empty-state > svg { color: var(--chat-muted); }
-.messaging-page .message-empty-state h3 { margin: 0; color: var(--chat-muted); font: 500 13px/1.5 'Montserrat', sans-serif; }
-.messaging-page .message-thread { min-width: 0; background: var(--chat-canvas); }
-.messaging-page .message-thread > header { min-height: 74px; padding: 13px 22px; background: var(--chat-panel); border-color: var(--chat-line); }
-.messaging-page .message-thread > header b { color: var(--chat-ink); font-size: 13px; }
-.messaging-page .message-thread > header small { color: var(--chat-muted); font-size: 10px; }
-.messaging-page .message-thread > header .avatar { width: 40px; height: 40px; flex-basis: 40px; }
-.messaging-page .channel-actions .icon-button { color: var(--chat-muted); border: 0; }
-.messaging-page .message-list { min-height: 0; max-height: none; background: var(--chat-canvas); background-image: none; padding: 22px clamp(18px, 4vw, 64px); }
-.messaging-page .message-day { align-self: center; margin: 18px 0 12px; }
-.messaging-page .message-day span { color: var(--chat-muted); background: var(--chat-hover); border-radius: 99px; font-size: 9px; font-weight: 500; letter-spacing: 0; text-transform: none; }
-.messaging-page:is(.kind-direct, .kind-group) .message-bubble { background: var(--chat-incoming); border: 0; color: var(--chat-ink); box-shadow: 0 1px 2px #0000000a; padding: 9px 13px 7px; }
-.messaging-page:is(.kind-direct, .kind-group) .message-bubble.mine { background: var(--chat-outgoing); color: var(--chat-ink); }
-.messaging-page.kind-direct .message-bubble:not(.mine, .stacked)::after { background: var(--chat-incoming); }
-.messaging-page.kind-direct .message-bubble.mine:not(.stacked)::after { background: var(--chat-outgoing); }
-.messaging-page .message-bubble p { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
-.messaging-page .message-bubble p > time { color: var(--chat-muted); font-variant-numeric: tabular-nums; }
-.messaging-page .message-bubble.mine p > time { color: color-mix(in srgb, var(--chat-ink) 64%, transparent); }
-.messaging-page .message-bubble p > time svg { display: inline-block; vertical-align: -2px; margin-left: 4px; }
-.messaging-page .message-bubble footer button, .messaging-page .message-bubble.mine footer button { color: var(--chat-muted); }
-.messaging-page .parent-preview { background: var(--social-accent-wash); border-left: 2px solid var(--social-accent); color: var(--chat-ink); }
-.messaging-page .message-compose { position: relative; gap: 10px; align-items: end; padding: 12px clamp(16px, 3vw, 42px) 20px; border: 0; background: var(--chat-canvas); }
-.messaging-page .composer-field { position: relative; min-width: 0; padding: 4px 12px 4px 43px; border: 1px solid var(--chat-line); border-radius: 15px; background: var(--chat-panel); }
-.messaging-page .composer-field:focus-within { border-color: color-mix(in srgb, var(--social-accent) 60%, var(--chat-line)); }
-.messaging-page .message-compose textarea { min-height: 44px; max-height: 132px; padding: 12px 0 10px; background: transparent; border: 0; border-radius: 0; color: var(--chat-ink); font-size: 13px; line-height: 1.6; box-shadow: none; }
-.messaging-page .message-compose textarea:focus-visible { box-shadow: none; outline: none; }
-.messaging-page .message-compose textarea::placeholder { color: var(--chat-muted); }
-.messaging-page .message-send { width: 48px; height: 48px; margin-bottom: 2px; border: 0; border-radius: 50%; background: var(--social-accent); color: var(--social-accent-text); }
-.messaging-page .message-send:hover:not(:disabled) { filter: brightness(1.1); }
-.messaging-page .message-send:disabled { background: var(--chat-hover); color: var(--chat-muted); opacity: 1; }
-.messaging-page .compose-hint { display: none; }
-.messaging-page .emoji-toggle { position: absolute; left: 7px; bottom: 10px; width: 32px; height: 32px; border: 0; color: var(--chat-muted); background: transparent; }
-.messaging-page .emoji-toggle:hover { color: var(--social-accent); }
-.emoji-picker { position: absolute; z-index: 3; bottom: calc(100% + 10px); left: 0; display: grid; grid-template-columns: repeat(6, 34px); gap: 4px; padding: 10px; border: 1px solid var(--chat-line); border-radius: 14px; background: var(--chat-panel); box-shadow: 0 8px 28px #0002; }
-.emoji-picker button { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 7px; background: transparent; font-size: 21px; cursor: pointer; }
-.emoji-picker button:hover { background: var(--chat-hover); }
-.messaging-page .replying-to { padding: 8px 0; border-bottom: 1px solid var(--chat-line); color: var(--chat-muted); }
-.messaging-page .replying-to b { color: var(--social-accent); }
-.messaging-page .thread-empty, .messaging-page .channel-list-empty { color: var(--chat-muted); }
-.messaging-page .channel-context { background: var(--chat-panel); border-color: var(--chat-line); color: var(--chat-ink); }
-.messaging-page .channel-context p { color: var(--chat-muted); }
+
+.messaging-page:has(.staff-messaging-overview) .messages-shell {
+  height: calc(100dvh - 320px);
+}
+
+.messaging-page .channel-sidebar {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  border-color: var(--chat-line);
+  background: var(--chat-panel);
+}
+
+.chat-sidebar-header {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 18px;
+  border-bottom: 1px solid var(--chat-line);
+}
+
+.chat-brand-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--social-accent) 24%, transparent);
+  border-radius: var(--radius-lg);
+  color: var(--social-accent);
+  background: var(--social-accent-wash);
+}
+
+.chat-sidebar-header > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-sidebar-header h2 {
+  margin: 0 0 4px;
+  color: var(--chat-ink);
+  font:
+    650 var(--text-lg)/1.2 'Montserrat',
+    sans-serif;
+  letter-spacing: -0.025em;
+}
+
+.chat-sidebar-header p {
+  margin: 0;
+  color: var(--chat-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.chat-new-button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  padding: 8px 10px;
+  color: var(--social-accent);
+  background: var(--social-accent-wash);
+  border: 1px solid color-mix(in srgb, var(--social-accent) 20%, transparent);
+  border-radius: 99px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-new-button:hover {
+  border-color: var(--social-accent);
+}
+
+.messaging-page .channel-folders {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+  box-shadow: none;
+  border-bottom: 1px solid var(--chat-line);
+}
+
+.messaging-page .channel-folder {
+  flex: 0 0 auto;
+  padding: 8px 13px;
+  margin: 0;
+  min-height: 32px;
+  border: 0;
+  border-radius: 99px;
+  color: var(--chat-muted);
+  font-size: var(--text-xs);
+}
+
+.messaging-page .channel-folder.active {
+  color: var(--social-accent);
+  background: var(--social-accent-wash);
+}
+
+.messaging-page .channel-folder:hover {
+  background: var(--chat-hover);
+  color: var(--chat-ink);
+}
+
+.messaging-page .channel-folder.active:hover {
+  background: var(--social-accent-wash);
+  color: var(--social-accent);
+}
+
+.messaging-page .channel-more-folders {
+  padding-inline: 9px;
+}
+
+.messaging-page .channel-search {
+  min-height: 42px;
+  margin: 14px 16px 8px;
+  padding: 0 13px;
+  background: var(--chat-control);
+  border: 1px solid var(--chat-line);
+  border-radius: var(--radius-lg);
+  color: var(--chat-muted);
+}
+
+.messaging-page .channel-search input {
+  color: var(--chat-ink);
+  font-size: var(--text-xs);
+}
+
+.messaging-page .channel-search input::placeholder {
+  color: var(--chat-muted);
+}
+
+.messaging-page .channel-search:focus-within {
+  border-color: var(--social-accent);
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+.messaging-page .channel-list {
+  padding: 4px 8px 76px;
+  overflow-y: auto;
+}
+
+.messaging-page .channel-item {
+  min-height: 78px;
+  gap: var(--space-3);
+  padding: 12px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-base);
+  color: var(--chat-ink);
+  background: transparent;
+  box-shadow: none;
+  transition: background 0.18s ease;
+}
+
+.messaging-page .channel-item::before {
+  display: none;
+}
+
+.messaging-page .channel-item:hover:not(.active) {
+  background: var(--chat-hover);
+}
+
+.messaging-page .channel-item.active {
+  background: var(--social-accent-wash);
+}
+
+.messaging-page .channel-item.active b {
+  color: var(--chat-ink);
+}
+
+.messaging-page .channel-item .avatar {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+  border-radius: 50%;
+  font-size: var(--text-md);
+}
+
+.messaging-page .channel-item b {
+  color: var(--chat-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.messaging-page .channel-item small {
+  color: var(--chat-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.messaging-page .channel-item time {
+  color: var(--chat-muted);
+  font-size: var(--text-xs);
+}
+
+.messaging-page .avatar.saved-avatar {
+  background: var(--social-accent-wash);
+  color: var(--social-accent);
+  border: 0;
+}
+
+.messaging-page .saved-messages.active .saved-avatar {
+  background: color-mix(in srgb, var(--social-accent) 20%, var(--chat-panel));
+}
+
+.messaging-page .saved-messages .channel-item-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.messaging-page .channel-compose {
+  width: 45px;
+  height: 45px;
+  box-shadow: 0 3px 14px #0002;
+}
+
+.messaging-page .message-empty-state {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-3-5);
+  min-width: 0;
+  padding: 30px;
+  background: var(--chat-canvas);
+}
+
+.messaging-page .message-empty-state > svg {
+  color: var(--chat-muted);
+}
+
+.messaging-page .message-empty-state h3 {
+  margin: 0;
+  color: var(--chat-muted);
+  font:
+    500 var(--text-sm)/1.5 'Montserrat',
+    sans-serif;
+}
+
+.messaging-page .message-thread {
+  min-width: 0;
+  background: var(--chat-canvas);
+}
+
+.messaging-page .message-thread > header {
+  min-height: 74px;
+  padding: 13px 22px;
+  background: var(--chat-panel);
+  border-color: var(--chat-line);
+}
+
+.messaging-page .message-thread > header b {
+  color: var(--chat-ink);
+  font-size: var(--text-sm);
+}
+
+.messaging-page .message-thread > header small {
+  color: var(--chat-muted);
+  font-size: var(--text-xs);
+}
+
+.messaging-page .message-thread > header .avatar {
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
+}
+
+.messaging-page .channel-actions .icon-button {
+  color: var(--chat-muted);
+  border: 0;
+}
+
+.messaging-page .message-list {
+  min-height: 0;
+  max-height: none;
+  background: var(--chat-canvas);
+  background-image: none;
+  padding: 22px clamp(18px, 4vw, 64px);
+}
+
+.messaging-page .message-day {
+  align-self: center;
+  margin: 18px 0 12px;
+}
+
+.messaging-page .message-day span {
+  color: var(--chat-muted);
+  background: var(--chat-hover);
+  border-radius: 99px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.messaging-page:is(.kind-direct, .kind-group) .message-bubble {
+  background: var(--chat-incoming);
+  border: 0;
+  color: var(--chat-ink);
+  box-shadow: 0 1px 2px #0000000a;
+  padding: 9px 13px 7px;
+}
+
+.messaging-page:is(.kind-direct, .kind-group) .message-bubble.mine {
+  background: var(--chat-outgoing);
+  color: var(--chat-ink);
+}
+
+.messaging-page.kind-direct .message-bubble:not(.mine, .stacked)::after {
+  background: var(--chat-incoming);
+}
+
+.messaging-page.kind-direct .message-bubble.mine:not(.stacked)::after {
+  background: var(--chat-outgoing);
+}
+
+.messaging-page .message-bubble p {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.messaging-page .message-bubble p > time {
+  color: var(--chat-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.messaging-page .message-bubble.mine p > time {
+  color: color-mix(in srgb, var(--chat-ink) 64%, transparent);
+}
+
+.messaging-page .message-bubble p > time svg {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-left: 4px;
+}
+
+.messaging-page .message-bubble footer button,
+.messaging-page .message-bubble.mine footer button {
+  color: var(--chat-muted);
+}
+
+.messaging-page .parent-preview {
+  background: var(--social-accent-wash);
+  border-left: 2px solid var(--social-accent);
+  color: var(--chat-ink);
+}
+
+.messaging-page .message-compose {
+  position: relative;
+  gap: var(--space-2-5);
+  align-items: end;
+  padding: 12px clamp(16px, 3vw, 42px) 20px;
+  border: 0;
+  background: var(--chat-canvas);
+}
+
+.messaging-page .composer-field {
+  position: relative;
+  min-width: 0;
+  padding: 4px 12px 4px 43px;
+  border: 1px solid var(--chat-line);
+  border-radius: var(--radius-2xl);
+  background: var(--chat-panel);
+}
+
+.messaging-page .composer-field:focus-within {
+  border-color: color-mix(in srgb, var(--social-accent) 60%, var(--chat-line));
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+.messaging-page .message-compose textarea {
+  min-height: 44px;
+  max-height: 132px;
+  padding: 12px 0 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--chat-ink);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  box-shadow: none;
+}
+/* The surrounding .composer-field draws the (solid) focus outline. */
+.messaging-page .message-compose textarea:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.messaging-page .message-compose textarea::placeholder {
+  color: var(--chat-muted);
+}
+
+.messaging-page .message-send {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--social-accent);
+  color: var(--social-accent-text);
+}
+
+.messaging-page .message-send:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.messaging-page .message-send:disabled {
+  background: var(--chat-hover);
+  color: var(--chat-muted);
+  opacity: 1;
+}
+
+.messaging-page .compose-hint {
+  display: none;
+}
+
+.messaging-page .emoji-toggle {
+  position: absolute;
+  left: 7px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  color: var(--chat-muted);
+  background: transparent;
+}
+
+.messaging-page .emoji-toggle:hover {
+  color: var(--social-accent);
+}
+
+.emoji-picker {
+  position: absolute;
+  z-index: 3;
+  bottom: calc(100% + 10px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 34px);
+  gap: var(--space-1);
+  padding: 10px;
+  border: 1px solid var(--chat-line);
+  border-radius: var(--radius-xl);
+  background: var(--chat-panel);
+  box-shadow: 0 8px 28px #0002;
+}
+
+.emoji-picker button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-size: 1.3125rem;
+  cursor: pointer;
+}
+
+.emoji-picker button:hover {
+  background: var(--chat-hover);
+}
+
+.messaging-page .replying-to {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--chat-line);
+  color: var(--chat-muted);
+}
+
+.messaging-page .replying-to b {
+  color: var(--social-accent);
+}
+
+.messaging-page .thread-empty,
+.messaging-page .channel-list-empty {
+  color: var(--chat-muted);
+}
+
+.messaging-page .channel-context {
+  background: var(--chat-panel);
+  border-color: var(--chat-line);
+  color: var(--chat-ink);
+}
+
+.messaging-page .channel-context p {
+  color: var(--chat-muted);
+}
+
 @media (max-width: 1100px) {
-  .messaging-page .messages-shell { grid-template-columns: 290px minmax(0, 1fr); }
-  .chat-sidebar-header { gap: 9px; padding-inline: 14px; }
-  .chat-new-button { padding-inline: 8px; font-size: 9px; }
-  .chat-brand-icon { width: 36px; height: 36px; }
+  .messaging-page .messages-shell {
+    grid-template-columns: 290px minmax(0, 1fr);
+  }
+
+  .chat-sidebar-header {
+    gap: 9px;
+    padding-inline: 14px;
+  }
+
+  .chat-new-button {
+    padding-inline: 8px;
+    font-size: var(--text-xs);
+  }
+
+  .chat-brand-icon {
+    width: 36px;
+    height: 36px;
+  }
 }
-@media (max-width: 700px) {
-  .workspace-messages { padding-bottom: 10px; }
-  .workspace-messages .top-header { gap: 10px; }
-  .workspace-messages .page-heading h1 { font-size: 18px; }
-  .workspace-messages .header-actions .global-search { display: none; }
-  .workspace-messages .page-content { padding-top: 10px; }
-  .messaging-page .messages-shell { height: calc(100dvh - 112px); min-height: 360px; grid-template-columns: minmax(0, 1fr); border-radius: 12px; }
-  .messaging-page .message-thread > header { padding: 10px 14px; }
-  .messaging-page .message-empty-state { display: none; }
-  .messaging-page .message-list { padding: 16px; }
-  .messaging-page .message-compose { padding: 9px 10px 12px; gap: 8px; }
-  .messaging-page .message-send { width: 43px; height: 43px; margin-bottom: 5px; }
-  .messaging-page .close-chat { display: none; }
+
+@media (max-width: 820px) {
+  .workspace-messages {
+    padding-bottom: 10px;
+  }
+
+  .workspace-messages .top-header {
+    gap: var(--space-2-5);
+  }
+
+  .workspace-messages .page-heading h1 {
+    font-size: var(--text-lg);
+  }
+
+  .workspace-messages .header-actions .global-search {
+    display: none;
+  }
+
+  .workspace-messages .page-content {
+    padding-top: 10px;
+  }
+
+  .messaging-page .messages-shell {
+    height: calc(100dvh - 112px);
+    min-height: 360px;
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: var(--radius-lg);
+  }
+
+  .messaging-page .message-thread > header {
+    padding: 10px 14px;
+  }
+
+  .messaging-page .message-empty-state {
+    display: none;
+  }
+
+  .messaging-page .message-list {
+    padding: 16px;
+  }
+
+  .messaging-page .message-compose {
+    padding: 9px 10px 12px;
+    gap: var(--space-2);
+  }
+
+  .messaging-page .message-send {
+    width: 43px;
+    height: 43px;
+    margin-bottom: 5px;
+  }
+
+  .messaging-page .close-chat {
+    display: none;
+  }
 }
-@media (max-width: 700px) {
-  .workspace-messages { padding-top: 12px; }
-  .workspace-messages .top-header { flex-wrap: nowrap; gap: 8px; }
-  .workspace-messages .page-heading { flex: 1 1 auto; }
-  .workspace-messages .page-heading h1 { font-size: 15px; }
-  .workspace-messages .header-actions { gap: 5px; }
-  .workspace-messages .header-actions > .icon-button { display: none; }
-  .messaging-page .channel-sidebar { max-height: none; height: 100%; border-bottom: 0; }
-  .messaging-page .messages-shell { grid-template-rows: minmax(0, 1fr); height: calc(100dvh - 94px); }
-  .messaging-page .message-list { padding: 16px; }
-  .messaging-page .channel-search input:focus-visible { outline: none; box-shadow: none; }
+
+@media (max-width: 820px) {
+  .workspace-messages {
+    padding-top: 12px;
+  }
+
+  .workspace-messages .top-header {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+  }
+
+  .workspace-messages .page-heading {
+    flex: 1 1 auto;
+  }
+
+  .workspace-messages .page-heading h1 {
+    font-size: 0.9375rem;
+  }
+
+  .workspace-messages .header-actions {
+    gap: 5px;
+  }
+
+  /* Keep the theme toggle reachable on Messages; hide only the extras. */
+  .workspace-messages .header-actions > .icon-button:not(.theme-toggle) {
+    display: none;
+  }
+
+  .messaging-page .channel-sidebar {
+    max-height: none;
+    height: 100%;
+    border-bottom: 0;
+  }
+
+  .messaging-page .messages-shell {
+    grid-template-rows: minmax(0, 1fr);
+    height: calc(100dvh - 94px);
+  }
+
+  .messaging-page .message-list {
+    padding: 16px;
+  }
+
+  .messaging-page .channel-search input:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
 }
 /* Keep the floating assistant from covering chat compose controls. */
-.app-shell:has(.workspace-messages) .assistant-center { display: none; }
+.app-shell:has(.workspace-messages) .assistant-center {
+  display: none;
+}
