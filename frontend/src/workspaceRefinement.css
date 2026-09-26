@@ -6,7 +6,6 @@
 .sidebar-utilities button { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--sidebar-text); font-size: 13px; text-align: left; }
 .sidebar-utilities button:hover { background: var(--sidebar-hover); }
 .sidebar-utilities kbd { margin-left: auto; font-size: 9px; border: 1px solid var(--border); border-radius: 5px; padding: 2px 4px; color: var(--muted); }
-.sidebar-unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: auto; }
 .app-shell .sidebar nav { padding: 13px 0; gap: 3px; align-content: start; flex: 1; min-height: 0; }
 .app-shell .sidebar nav button { border-radius: 10px; padding: 9px 12px; font-weight: 500; font-size: 12px; min-height: 36px; }
 .app-shell .sidebar nav button svg { flex: none; stroke-width: 1.8; }
@@ -39,7 +38,6 @@
   .nav-collapsed .sidebar-utilities { padding: 10px 0; }
   .nav-collapsed .sidebar-utilities button { justify-content: center; padding: 10px 0; position: relative; }
   .nav-collapsed .sidebar-utilities span, .nav-collapsed .sidebar-utilities kbd { display: none; }
-  .nav-collapsed .sidebar-unread-dot { position: absolute; top: 4px; right: 5px; }
   .app-shell.nav-collapsed .sidebar nav { padding: 12px 0; gap: 4px; }
   .app-shell.nav-collapsed .sidebar nav button { width: 42px; height: 38px; min-height: 38px; padding: 0; }
   .nav-collapsed .sidebar-account-copy, .nav-collapsed .sidebar-account-trigger > svg { display: none; }
