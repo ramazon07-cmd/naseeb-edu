@@ -2678,7 +2678,6 @@ function ApplicationsPortalPage({ user, data, query, reload, notify, setPage, op
           </div>
         </section>;
       })}</div>
-    <p className="uni-note"><Info size={14} aria-hidden="true" /> {t("Drag a card to change its stage. You can move cards up to Submitted. Accepted, Waitlisted and Rejected are recorded by your counselor.")}</p>
     {editing && <ResourceForm resource="applications" item={editing} data={data} user={user} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}
   </div>;
 }
@@ -2867,11 +2866,6 @@ function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
 
 function CollegeRow({ university, result, student, application, expanded, busy, onToggle, onOpen, onAdd }) {
   const fit = result ? { score: result.match_score } : universityFit(university, student);
-  const budget = Number(student?.budget_usd) || 0;
-  const sat = Number(student?.sat_score) || 0;
-  const net = university.net_price_usd;
-  const overBudget = net != null && budget > 0 && net > budget;
-  const belowRange = sat > 0 && university.sat_min && sat < university.sat_min;
   const panelId = `college-details-${university.id}`;
   return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
     <div className="uni-fit" role="cell"><b>{formatNumberLocale(fit.score)}</b></div>
@@ -2879,8 +2873,8 @@ function CollegeRow({ university, result, student, application, expanded, busy, 
     <div className="uni-facts">
       <div className="uni-band" role="cell">{result ? <TierBand value={result.admission_band} /> : <span className="muted-copy">—</span>}</div>
       <div className="uni-value" role="cell" data-label={t("Acceptance")}><span className="v">{percentText(university.acceptance_rate)}</span></div>
-      <div className="uni-value" role="cell" data-label={t("SAT")}><span className={`v ${belowRange ? 'warn' : ''}`.trim()} title={belowRange ? tx`Your SAT is ${String(sat)}, ${university.sat_min - sat} below` : undefined}>{university.sat_min ? satText(university.sat_min, university.sat_max) : t("Optional")}</span></div>
-      <div className="uni-value" role="cell" data-label={t("Net price")}><span className={`v ${overBudget ? 'warn' : ''}`.trim()} title={overBudget ? tx`${money(net - budget)} above your ${money(budget)} budget` : undefined}>{money(net)}</span></div>
+      <div className="uni-value" role="cell" data-label={t("SAT")}><span className="v">{university.sat_min ? satText(university.sat_min, university.sat_max) : t("Optional")}</span></div>
+      <div className="uni-value" role="cell" data-label={t("Net price")}><span className="v">{money(university.net_price_usd)}</span></div>
       <div className="uni-value" role="cell" data-label={t("Deadline")}><span className="v">{university.application_deadline ? shortDate(university.application_deadline) : '—'}</span></div>
     </div>
     <div className="uni-action" role="cell">{application ? <span className="uni-added"><Check size={14} aria-hidden="true" /> {t("Added")}</span> : <button type="button" className="button quiet small" aria-label={t("Add to my list")} disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={14} aria-hidden="true" /> {t("Add")}</button>}</div>
