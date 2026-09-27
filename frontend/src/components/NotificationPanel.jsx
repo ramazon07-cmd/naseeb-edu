@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Bell, CalendarClock, CheckCheck, ChevronRight, ClipboardCheck, FileText, MessageCircle, PenLine, Target, UserRound } from 'lucide-react';
+import { Bell, CalendarClock, CheckCheck, ChevronRight, ClipboardCheck, FileText, ListChecks, MessageCircle, PenLine, Target, UserRound } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, t } from '../i18n';
-import { dateText, dateTimeText } from '../lib/format';
+import { dateText, dateTimeText, joinParts } from '../lib/format';
+import { sectionFromNotice } from '../lib/profileSections';
 import { isOpenTask, nextPriorities } from '../lib/metrics';
 import { announceNotificationsChanged, notificationTarget } from '../lib/notifications';
 import { usePagedList } from '../hooks/usePagedList';
 import { LoadMore, PagedListError, firstPageLoading } from './paged';
 import { Empty } from './ui';
 
-const KIND_ICONS = { task: ClipboardCheck, document: FileText, deadline: Target, essay: PenLine, meeting: CalendarClock, message: MessageCircle };
+const KIND_ICONS = { task: ClipboardCheck, document: FileText, deadline: Target, essay: PenLine, meeting: CalendarClock, message: MessageCircle, profile_review: ListChecks };
+
+// A section review notice names its section in the reader's language, then the counselor's note.
+function noticeMessage(item) {
+  if (item.kind !== 'profile_review') return item.message;
+  const section = sectionFromNotice(item.target_id);
+  return joinParts(section && t(section.title), item.message);
+}
 
 // `linkChat`: open that chat rather than the Messages page (student portal).
 function ChatNotices({ chats, onOpen, linkChat = false }) {
@@ -84,7 +92,7 @@ function StudentNotifications({ data, summary, onOpen, notify }) {
       const target = notificationTarget(item);
       return <button type="button" key={item.id} className={`sidebar-notice ${item.is_read ? '' : 'unread'}`} onClick={() => open(item)}>
         <Icon size={18} />{!item.is_read && <em className="sr-only">{t('Unread')}</em>}
-        <span><b>{t(item.title)}</b><small>{item.message}</small><small className="notice-time">{dateTimeText(item.created_at)}</small></span>
+        <span><b>{t(item.title)}</b><small>{noticeMessage(item)}</small><small className="notice-time">{dateTimeText(item.created_at)}</small></span>
         {target ? <ChevronRight size={16} /> : !item.is_read && <i className="sidebar-unread-dot" />}
       </button>;
     })}

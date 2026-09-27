@@ -12,6 +12,25 @@ export const PROFILE_SECTIONS = [
   { key: 'activities', title: 'Activities', step: 5 },
 ].map((section) => ({ ...section, fields: ONBOARDING_STEP_FIELDS[section.step].filter((name) => name !== 'photo') }));
 
+// A counselor's review of each section, as the profile payload's
+// section_reviews reports it. Saving a change sends a section back to waiting.
+export const REVIEW_STATUSES = {
+  not_reviewed: { label: 'Not reviewed', tone: '' },
+  waiting: { label: 'Waiting for review', tone: 'is-pending' },
+  approved: { label: 'Approved', tone: 'is-verified' },
+  changes_requested: { label: 'Needs changes', tone: 'is-changes' },
+};
+
+export function sectionReview(student, key) {
+  const review = student?.section_reviews?.[key];
+  const status = review && REVIEW_STATUSES[review.status] ? review.status : 'not_reviewed';
+  return { status, ...REVIEW_STATUSES[status], note: status === 'changes_requested' ? String(review?.note || '').trim() : '' };
+}
+
+// Review notices name their section by position (1-based), so the reader's
+// language can title it.
+export const sectionFromNotice = (targetId) => PROFILE_SECTIONS[Number(targetId) - 1] || null;
+
 export const sectionByKey = (key) => PROFILE_SECTIONS.find((section) => section.key === key) || null;
 
 export const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];

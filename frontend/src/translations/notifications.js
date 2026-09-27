@@ -17,6 +17,8 @@ export const NOTIFICATION_TRANSLATIONS = {
   'Meeting approved': ['Uchrashuv tasdiqlandi', 'Встреча подтверждена'],
   'Meeting rejected': ['Uchrashuv rad etildi', 'Встреча отклонена'],
   'Meeting completed': ['Uchrashuv yakunlandi', 'Встреча завершена'],
+  'Profile section approved': ['Profil bo‘limi tasdiqlandi', 'Раздел профиля одобрен'],
+  'Profile section needs changes': ['Profil bo‘limiga o‘zgartirish kerak', 'Раздел профиля нужно исправить'],
 }
 
 export function notificationMessages(language) {

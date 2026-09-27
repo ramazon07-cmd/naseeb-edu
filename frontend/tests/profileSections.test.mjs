@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PROFILE_SECTIONS, answersPayload, listText, profileAnswers, readinessHints, sectionByKey, validateSection } from '../src/lib/profileSections.js';
+import { PROFILE_SECTIONS, answersPayload, listText, profileAnswers, readinessHints, sectionByKey, sectionFromNotice, sectionReview, validateSection } from '../src/lib/profileSections.js';
 import { ONBOARDING_STEP_FIELDS } from '../src/lib/onboardingDraft.js';
 
 const profile = {
@@ -66,4 +66,22 @@ test('country lists read with a space after each comma', () => {
   assert.equal(listText(['UK', 'Canada']), 'UK, Canada');
   assert.equal(listText(''), '');
   assert.equal(listText(null), '');
+});
+
+test('section review badges read the payload and fall back to not reviewed', () => {
+  const student = { section_reviews: {
+    academics: { status: 'approved', note: 'Looks good.' },
+    tests: { status: 'changes_requested', note: '  Add your IELTS date.  ' },
+    goal: { status: 'waiting', note: 'old note' },
+    honors: { status: 'unknown' },
+  } };
+  assert.deepEqual(sectionReview(student, 'academics'), { status: 'approved', label: 'Approved', tone: 'is-verified', note: '' });
+  assert.deepEqual(sectionReview(student, 'tests'), { status: 'changes_requested', label: 'Needs changes', tone: 'is-changes', note: 'Add your IELTS date.' });
+  assert.equal(sectionReview(student, 'goal').label, 'Waiting for review');
+  assert.equal(sectionReview(student, 'goal').note, '', 'only a request for changes shows its note');
+  assert.equal(sectionReview(student, 'honors').status, 'not_reviewed');
+  assert.equal(sectionReview({}, 'personal').label, 'Not reviewed');
+  assert.equal(sectionFromNotice(1).key, 'personal');
+  assert.equal(sectionFromNotice(6).key, 'activities');
+  assert.equal(sectionFromNotice(0), null);
 });

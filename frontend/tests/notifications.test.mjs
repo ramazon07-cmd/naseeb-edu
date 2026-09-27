@@ -13,13 +13,16 @@ test('each notice kind opens the page that holds its work', () => {
     [{ kind: 'essay', target_id: null }, '/essay-lab'],
     [{ kind: 'meeting' }, '/meetings'],
     [{ kind: 'message', target_id: 9 }, '/messages/9'],
+    [{ kind: 'profile_review', target_id: 3, title: 'Profile section needs changes' }, '/student-center?edit=tests'],
+    [{ kind: 'profile_review', target_id: 2, title: 'Profile section approved' }, '/student-center'],
+    [{ kind: 'profile_review', target_id: 99, title: 'Profile section needs changes' }, '/student-center'],
     [{ kind: 'message', target_id: 'x' }, '/messages'],
   ];
   for (const [notice, path] of cases) {
     const target = notificationTarget(notice);
     assert.equal(buildPath(target), path, notice.kind);
     // The link survives a refresh: the path parses back to the same page.
-    assert.equal(parsePath(path).page, target.page);
+    assert.equal(parsePath(path.split('?')[0]).page, target.page);
   }
   // A task notice lands on the student's own Tasks tab, not the role default.
   assert.equal(roadmapTab(notificationTarget({ kind: 'task' }).params.tab, false), 'tasks');

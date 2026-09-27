@@ -1,6 +1,11 @@
 // The notification bell: where each notice leads, and the unread badge.
 // Framework-free so the mapping is unit tested.
 
+import { sectionFromNotice } from './profileSections.js';
+
+// The title the server gives a section that needs changes.
+export const PROFILE_CHANGES_TITLE = 'Profile section needs changes';
+
 // Other parts of the app fire this after they mark something read, so the
 // bell refreshes its count at once instead of on its next poll.
 export const NOTIFICATIONS_CHANGED = 'naseeb:notifications-changed';
@@ -20,6 +25,11 @@ export function notificationTarget(notification) {
     case 'essay': return { page: 'essay_lab', params: hasId ? { essayId: id } : {} };
     case 'meeting': return { page: 'bookings', params: {} };
     case 'message': return { page: 'messages', params: hasId ? { channelId: id } : {} };
+    case 'profile_review': {
+      // A section sent back opens in edit mode; an approval just shows the cards.
+      const section = sectionFromNotice(id);
+      return { page: 'student_center', params: section && notification.title === PROFILE_CHANGES_TITLE ? { edit: section.key } : {} };
+    }
     default: return null;
   }
 }

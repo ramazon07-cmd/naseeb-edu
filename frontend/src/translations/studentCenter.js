@@ -24,6 +24,11 @@ export const STUDENT_CENTER_TRANSLATIONS = {
   'What the labels mean': ['Belgilar nimani anglatadi', 'Что означают отметки'],
   'your counselor checked it': ['maslahatchingiz tekshirgan', 'консультант проверил'],
   'sent, not checked yet. Editing an approved entry sends it back for checking.': ['yuborilgan, hali tekshirilmagan. Tasdiqlangan yozuvni tahrirlasangiz, u qayta tekshiruvga yuboriladi.', 'отправлено, ещё не проверено. Если изменить одобренную запись, она снова уйдёт на проверку.'],
+  // A counselor's review of a whole profile section
+  'Not reviewed': ['Tekshirilmagan', 'Не проверено'],
+  'Waiting for review': ['Tekshiruv kutilmoqda', 'Ждёт проверки'],
+  'Needs changes': ['O‘zgartirish kerak', 'Нужны изменения'],
+  'Counselor note:': ['Maslahatchi izohi:', 'Комментарий консультанта:'],
   // Profile readiness
   'Profile ready': ['Profil tayyorligi', 'Готовность профиля'],
   'To raise it:': ['Oshirish uchun:', 'Чтобы повысить:'],
