@@ -497,6 +497,17 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+button.chat-shared-item {
+  width: 100%;
+  min-height: 44px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .chat-shared-item > svg {
   flex: none;
   color: var(--muted);

@@ -3,8 +3,10 @@ import { Bookmark, X, Image, FileText, Link2, ExternalLink } from 'lucide-react'
 import { api } from './api';
 import { t } from './i18n';
 import { collectSharedItems } from './chatSharedItems';
+import { messageAttachment } from './components/MessageAttachment';
+import { formatFileSize } from './lib/format';
 
-export default function ChatDetails({ channel, messages, onClose }) {
+export default function ChatDetails({ channel, messages, onClose, onOpenAttachment }) {
   const [tab, setTab] = useState('media');
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,11 +28,12 @@ export default function ChatDetails({ channel, messages, onClose }) {
     }).catch((err) => { if (current) setError(err.message); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [channel.id, retry]);
-  const items = useMemo(() => {
+  const [items, byId] = useMemo(() => {
     const merged = new Map(history.map((message) => [message.id, message]));
     messages.forEach((message) => merged.set(message.id, message));
-    return collectSharedItems([...merged.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+    return [collectSharedItems([...merged.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))), merged];
   }, [history, messages]);
+  const openAttachment = (item) => { const attachment = messageAttachment(byId.get(item.messageId)); if (attachment) onOpenAttachment?.(attachment); };
   const visible = items.filter((item) => item.kind === tab);
   const Icon = {media: Image, files: FileText, links: Link2}[tab];
   return <aside className="chat-details" aria-label={t('Contact info')}>
@@ -38,7 +41,7 @@ export default function ChatDetails({ channel, messages, onClose }) {
     <div className="chat-contact"><span className="chat-contact-avatar">{channel.is_saved_messages ? <Bookmark size={28} /> : (channel.display_name || '?').charAt(0)}</span><h3>{channel.is_saved_messages ? t('Saved Messages') : channel.display_name}</h3><p>{channel.is_saved_messages ? t('Only you can see this') : channel.kind === 'direct' ? t('Direct conversation') : `${channel.members_count || 0} ${t('Members')}`}</p>{channel.description && <p>{channel.description}</p>}</div>
     <div className="chat-detail-tabs" role="tablist" aria-label={t('Shared content')}>{['media', 'files', 'links'].map((kind) => <button type="button" key={kind} role="tab" id={`shared-${kind}`} aria-controls="shared-content" aria-selected={kind === tab} onClick={() => setTab(kind)}>{t({media:'Media', files:'Files', links:'Links'}[kind])}<small>{items.filter((item) => item.kind === kind).length || ''}</small></button>)}</div>
     <div className="chat-shared-content" id="shared-content" role="tabpanel" aria-labelledby={`shared-${tab}`} aria-busy={loading}>
-      {loading ? <p role="status">{t('Loading…')}</p> : error ? <div role="alert"><p>{error}</p><button className="button quiet small" onClick={() => setRetry((value) => value + 1)}>{t('Retry')}</button></div> : <><p className="shared-caption">{t('Links shared in this conversation')}</p>{visible.length ? visible.map((item) => <a key={item.url} href={item.url} target="_blank" rel="noopener noreferrer" className="chat-shared-item"><Icon size={20} /><span><b>{item.name}</b><small>{item.host}</small></span><ExternalLink size={13} /></a>) : <div className="chat-shared-empty"><Icon size={30} strokeWidth={1.3} /><p>{t({media:'No shared media yet.',files:'No shared files yet.',links:'No shared links yet.'}[tab])}</p></div>}</>}
+      {loading ? <p role="status">{t('Loading…')}</p> : error ? <div role="alert"><p>{error}</p><button className="button quiet small" onClick={() => setRetry((value) => value + 1)}>{t('Retry')}</button></div> : <><p className="shared-caption">{t('Files and links shared in this conversation')}</p>{visible.length ? visible.map((item) => item.attachment ? <button type="button" key={item.key} className="chat-shared-item" onClick={() => openAttachment(item)}><Icon size={20} /><span><b>{item.name}</b><small>{formatFileSize(item.size)}</small></span></button> : <a key={item.key} href={item.url} target="_blank" rel="noopener noreferrer" className="chat-shared-item"><Icon size={20} /><span><b>{item.name}</b><small>{item.host}</small></span><ExternalLink size={13} /></a>) : <div className="chat-shared-empty"><Icon size={30} strokeWidth={1.3} /><p>{t({media:'No shared media yet.',files:'No shared files yet.',links:'No shared links yet.'}[tab])}</p></div>}</>}
     </div>
   </aside>;
 }
