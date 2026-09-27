@@ -4,7 +4,7 @@ import { api } from '../api';
 import { t, tx, formatPercentLocale } from '../i18n';
 import { fieldErrorsFrom } from '../lib/onboardingDraft';
 import { answersPayload, listText, profileAnswers, readinessHints, sectionByKey, validateSection } from '../lib/profileSections';
-import { gradeText, joinParts } from '../lib/format';
+import { gradeText, joinParts, locationText } from '../lib/format';
 import { label } from '../lib/labels';
 import { Detail } from './records';
 import { ProfilePhotoField, ProfileSectionFields } from './profileFields';
@@ -28,7 +28,7 @@ function SectionSummary({ section, student }) {
   </div>;
   if (section === 'academics') return <div className="detail-grid">
     <Detail label={t('School')} value={student.school_name} />
-    <Detail label={t('Location')} value={joinParts(answers.city, answers.state, answers.country)} />
+    <Detail label={t('Location')} value={locationText(answers)} />
     <Detail label={t('GPA')} value={student.gpa != null && student.gpa !== '' ? `${Number(student.gpa)}${student.gpa_scale ? ` / ${student.gpa_scale}` : ''}` : null} />
     <Detail label={t('Class ranking')} value={answers.class_rank ? `${answers.class_rank}${answers.class_size ? ` / ${answers.class_size}` : ''}` : null} />
   </div>;
