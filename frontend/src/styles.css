@@ -13903,5 +13903,97 @@ a:focus-visible {
 
   .account-parent-heading .badge {
     margin-left: 0;
+/* Student portal on phones: every control is at least a 44px thumb target.
+   Scoped to .role-student (set on the shell for student accounts only), so
+   counselor, parent and admin layouts keep their denser controls. */
+@media (max-width: 560px) {
+  .app-shell.role-student .button,
+  .app-shell.role-student .button.small,
+  .app-shell.role-student .portal-tabs button,
+  .app-shell.role-student .support-toolbar .portal-tabs button,
+  .app-shell.role-student .assessment-card-action,
+  .app-shell.role-student .sidebar nav button,
+  .app-shell.role-student .sidebar-utilities button,
+  .app-shell.role-student .sidebar-account-menu button,
+  .app-shell.role-student .dashboard-link,
+  .app-shell.role-student .chat-new-button,
+  .app-shell.role-student .channel-folder,
+  .app-shell.role-student .messaging-page .channel-search,
+  .app-shell.role-student .program-search,
+  .app-shell.role-student .el-chip {
+    min-height: 44px;
+  }
+
+  .app-shell.role-student .portal-tabs button,
+  .app-shell.role-student .support-toolbar .portal-tabs button,
+  .app-shell.role-student .messaging-page .channel-more-folders {
+    min-width: 44px;
+  }
+
+  .app-shell.role-student .icon-button,
+  .app-shell.role-student .el-icon-btn,
+  .app-shell.role-student .el-card-menu .el-icon-btn,
+  .app-shell.role-student .messaging-page .message-send {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .app-shell.role-student .el-btn,
+  .app-shell.role-student .el-toggle button,
+  .app-shell.role-student .screen-time-toolbar select,
+  .app-shell.role-student .top-header .language-selector select {
+    height: 44px;
+  }
+
+  .app-shell.role-student .el-toggle button {
+    width: 44px;
+  }
+
+  .app-shell.role-student .top-header .language-selector {
+    min-height: 44px;
+  }
+
+  .app-shell.role-student .dashboard-link {
+    padding-top: 0;
+  }
+
+  .app-shell.role-student .el-compact-bar .el-tool {
+    min-width: 44px;
+  }
+
+  .app-shell.role-student .el-counter-btn {
+    height: 44px;
+  }
+
+  .app-shell.role-student .el-menu button {
+    min-height: 44px;
+  }
+
+  .app-shell.role-student .el-prompt {
+    padding-block: 0;
+  }
+
+  .app-shell.role-student .el-prompt summary,
+  .app-shell.role-student .el-prompt .el-link {
+    min-height: 44px;
+  }
+
+  .app-shell.role-student .el-prompt .el-link {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* A 44px drag handle that keeps the 20px icon where it was. */
+  .app-shell.role-student .customizer-grip {
+    width: 44px;
+    height: 44px;
+    margin-inline: -12px;
+  }
+
+  .app-shell.role-student .program-card summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
 }

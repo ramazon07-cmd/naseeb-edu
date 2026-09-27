@@ -5,6 +5,7 @@ import { formatNumberLocale, t } from '../i18n';
 import { dateText, dateTimeText } from '../lib/format';
 import { isOpenTask, nextPriorities } from '../lib/metrics';
 import { announceNotificationsChanged, notificationTarget } from '../lib/notifications';
+import { notificationMessage, notificationTitle } from '../lib/notificationText';
 import { usePagedList } from '../hooks/usePagedList';
 import { LoadMore, PagedListError, firstPageLoading } from './paged';
 import { Empty } from './ui';
@@ -84,7 +85,7 @@ function StudentNotifications({ data, summary, onOpen, notify }) {
       const target = notificationTarget(item);
       return <button type="button" key={item.id} className={`sidebar-notice ${item.is_read ? '' : 'unread'}`} onClick={() => open(item)}>
         <Icon size={18} />{!item.is_read && <em className="sr-only">{t('Unread')}</em>}
-        <span><b>{t(item.title)}</b><small>{item.message}</small><small className="notice-time">{dateTimeText(item.created_at)}</small></span>
+        <span><b>{notificationTitle(item)}</b><small>{notificationMessage(item)}</small><small className="notice-time">{dateTimeText(item.created_at)}</small></span>
         {target ? <ChevronRight size={16} /> : !item.is_read && <i className="sidebar-unread-dot" />}
       </button>;
     })}

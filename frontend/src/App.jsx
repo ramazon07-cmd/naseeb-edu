@@ -314,7 +314,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
     }
   }
   const collapseLabel = collapsed ? t("Expand navigation") : t("Collapse navigation");
-  return <div className={`app-shell ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
+  return <div className={`app-shell role-${user.role} ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="sidebar-top">
         <BrandLockup theme={theme} subtitle={false} />
@@ -574,7 +574,7 @@ export default function App() {
     <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
       <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser }} /></LazyBoundary>
     </AppShell>
-    {signOutPrompt && <Modal title="Sign out?" backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
+    {signOutPrompt && <Modal title={t("Sign out?")} backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
       <div className="sign-out-prompt" role="alert">
         <p>{t("You have writing that isn't saved to your account yet. Sign in again to save it, or sign out and delete it from this device.")}</p>
         <div className="form-actions"><button type="button" className="button danger" onClick={() => finishSignOut()}>{t('Sign out anyway')}</button><button type="button" className="button primary" onClick={() => finishSignOut({ keepDrafts: true })}>{t('Sign in again')}</button></div>

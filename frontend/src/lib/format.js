@@ -37,6 +37,21 @@ export const joinParts = (...parts) => parts.flat().filter((part) => {
   return text !== '' && text !== '—';
 }).join(' · ');
 
+// joinParts without repeats: "Yangiyer · Uzbekistan · Uzbekistan" (a state equal
+// to its country) reads as "Yangiyer · Uzbekistan". Compared trimmed, case-insensitive.
+export const joinUniqueParts = (...parts) => {
+  const seen = new Set();
+  return joinParts(parts.flat().filter((part) => {
+    if (part === null || part === undefined || part === false) return false;
+    const key = String(part).trim().toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map((part) => (typeof part === 'string' ? part.trim() : part)));
+};
+
+export const locationText = ({ city, state, country } = {}) => joinUniqueParts(city, state, country);
+
 // joinParts keeps a real 0, so optional counts must be gated explicitly.
 export const programUsageCaption = ({ total, used, unlimited, hours }) => joinParts(
   total > 0 && tx`${hours(used)} used of ${hours(total)}`,

@@ -37,3 +37,23 @@ test('phone header icons and the chat back button are at least 44px', () => {
     assert.match(rules, /flex: 0 0 44px;/, selector);
   }
 });
+
+test('student phone controls are at least 44px tall, scoped to the student shell', () => {
+  const scoped = (selector) => `.app-shell.role-student ${selector}`;
+  for (const selector of ['.dashboard-link', '.button', '.button.small', '.portal-tabs button', '.channel-folder', '.chat-new-button', '.sidebar nav button', '.sidebar-account-menu button', '.el-chip', '.el-menu button']) {
+    assert.match(mediaRules(560, scoped(selector)), /min-height: 44px;/, selector);
+  }
+  for (const selector of ['.icon-button', '.el-icon-btn', '.messaging-page .message-send', '.customizer-grip']) {
+    const rules = mediaRules(560, scoped(selector));
+    assert.match(rules, /width: 44px;/, selector);
+    assert.match(rules, /height: 44px;/, selector);
+  }
+  for (const selector of ['.el-btn', '.el-toggle button', '.top-header .language-selector select']) {
+    assert.match(mediaRules(560, scoped(selector)), /height: 44px;/, selector);
+  }
+});
+
+test('the workspace shell names the signed-in role so phone rules can target students only', () => {
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.match(app, /className=\{`app-shell role-\$\{user\.role\}/);
+});
