@@ -1,5 +1,5 @@
 {
- "_note": "Shared by backend test_essay_lab.py and frontend essayLabDelta tests (copied to frontend/tests/fixtures). Regenerate both copies together.",
+ "_note": "Shared by backend test_essay_lab.py and frontend essayLabDelta tests (copied to frontend/tests/fixtures). Regenerate both copies together. bid_cases: ensure_bids; v2_cases: ops by block id (client diff); merge_cases: those ops applied to a newer stored doc.",
  "hash_cases": [
   {
    "name": "empty_doc",
@@ -645,6 +645,320 @@
    },
    "canonical": "{\"content\":[{\"content\":[{\"text\":\"A\",\"type\":\"text\"},{\"marks\":[{\"attrs\":{\"color\":\"#aabbcc\",\"fontFamily\":\"Lora\"},\"type\":\"textStyle\"},{\"attrs\":{\"href\":\"mailto:me@example.com\"},\"type\":\"link\"}],\"text\":\"B\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"attrs\":{\"level\":2,\"textAlign\":\"right\"},\"content\":[{\"text\":\"H\",\"type\":\"text\"}],\"type\":\"heading\"},{\"type\":\"subtitle\"},{\"type\":\"pageBreak\"}],\"type\":\"doc\"}",
    "hash": "c644b8ee3cb158c7620c60846ad7723978b1fa4bc65537d877afc99361fc14f3"
+  },
+  {
+   "name": "bids_kept_dropped_and_deduplicated",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "a1",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Kept id."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "a1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "A copy loses it."
+       }
+      ]
+     },
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 2,
+       "bid": "bad id!"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Malformed id dropped"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": 5
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Number id dropped"
+       }
+      ]
+     },
+     {
+      "type": "bulletList",
+      "attrs": {
+       "bid": "list-1"
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "bid": "nested"
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "Nested id dropped"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "pageBreak",
+      "attrs": {
+       "bid": "pb_1"
+      }
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Too long"
+       }
+      ]
+     }
+    ]
+   },
+   "normalized": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "a1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Kept id."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "A copy loses it."
+       }
+      ]
+     },
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 2
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Malformed id dropped"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Number id dropped"
+       }
+      ]
+     },
+     {
+      "type": "bulletList",
+      "attrs": {
+       "bid": "list-1"
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "Nested id dropped"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "pageBreak",
+      "attrs": {
+       "bid": "pb_1"
+      }
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Too long"
+       }
+      ]
+     }
+    ]
+   },
+   "canonical": "{\"content\":[{\"attrs\":{\"bid\":\"a1\"},\"content\":[{\"text\":\"Kept id.\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"content\":[{\"text\":\"A copy loses it.\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"attrs\":{\"level\":2},\"content\":[{\"text\":\"Malformed id dropped\",\"type\":\"text\"}],\"type\":\"heading\"},{\"content\":[{\"text\":\"Number id dropped\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"attrs\":{\"bid\":\"list-1\"},\"content\":[{\"content\":[{\"content\":[{\"text\":\"Nested id dropped\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"listItem\"}],\"type\":\"bulletList\"},{\"attrs\":{\"bid\":\"pb_1\"},\"type\":\"pageBreak\"},{\"content\":[{\"text\":\"Too long\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"doc\"}",
+   "hash": "23029779c2068cfeaa76c5068ef25fff7ea5c37ad8e7d3e0e6b2880d09e78af3"
+  },
+  {
+   "name": "collab_marks",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "c1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Commented twice",
+        "marks": [
+         {
+          "type": "bold"
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 1
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 2
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 1
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": " new words",
+        "marks": [
+         {
+          "type": "suggestInsert",
+          "attrs": {
+           "id": 3
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": " old words",
+        "marks": [
+         {
+          "type": "suggestDelete",
+          "attrs": {
+           "id": 4
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "normalized": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "c1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Commented twice",
+        "marks": [
+         {
+          "type": "bold"
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 1
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 2
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": " new words",
+        "marks": [
+         {
+          "type": "suggestInsert",
+          "attrs": {
+           "id": 3
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": " old words",
+        "marks": [
+         {
+          "type": "suggestDelete",
+          "attrs": {
+           "id": 4
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "canonical": "{\"content\":[{\"attrs\":{\"bid\":\"c1\"},\"content\":[{\"marks\":[{\"type\":\"bold\"},{\"attrs\":{\"id\":1},\"type\":\"comment\"},{\"attrs\":{\"id\":2},\"type\":\"comment\"}],\"text\":\"Commented twice\",\"type\":\"text\"},{\"marks\":[{\"attrs\":{\"id\":3},\"type\":\"suggestInsert\"}],\"text\":\" new words\",\"type\":\"text\"},{\"marks\":[{\"attrs\":{\"id\":4},\"type\":\"suggestDelete\"}],\"text\":\" old words\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"doc\"}",
+   "hash": "6fcda62aaa4243510beb6514e1b76bbb7295d3d1ff383f0f4e53e718d8d14351"
   }
  ],
  "delta_cases": [
@@ -2476,6 +2790,2084 @@
      }
     ]
    }
+  },
+  {
+   "name": "comment_without_id",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "comment"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "suggestion_id_is_a_string",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "suggestInsert",
+          "attrs": {
+           "id": "3"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "suggestion_id_zero",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "suggestDelete",
+          "attrs": {
+           "id": 0
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "too_many_marks",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 1
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 2
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 3
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 4
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 5
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 6
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 7
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 8
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 9
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 10
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 11
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 12
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 13
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 14
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 15
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 16
+          }
+         },
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 17
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "bid_cases": [
+  {
+   "name": "legacy_doc_gets_n_ids",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "One"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Two"
+       }
+      ]
+     },
+     {
+      "type": "pageBreak"
+     }
+    ]
+   },
+   "output": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "One"
+       }
+      ],
+      "attrs": {
+       "bid": "n0"
+      }
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Two"
+       }
+      ],
+      "attrs": {
+       "bid": "n1"
+      }
+     },
+     {
+      "type": "pageBreak",
+      "attrs": {
+       "bid": "n2"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "existing_ids_are_skipped",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "n0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Has n0"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Gets n1"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "n2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Has n2"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Gets n3"
+       }
+      ]
+     }
+    ]
+   },
+   "output": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "n0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Has n0"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Gets n1"
+       }
+      ],
+      "attrs": {
+       "bid": "n1"
+      }
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "n2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Has n2"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Gets n3"
+       }
+      ],
+      "attrs": {
+       "bid": "n3"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "repeated_id_is_replaced",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "r1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "First"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "r1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Copy"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "None"
+       }
+      ]
+     }
+    ]
+   },
+   "output": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "r1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "First"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Copy"
+       }
+      ],
+      "attrs": {
+       "bid": "n0"
+      }
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "None"
+       }
+      ],
+      "attrs": {
+       "bid": "n1"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "complete_doc_is_unchanged",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "a"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "A"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "B"
+       }
+      ]
+     }
+    ]
+   },
+   "output": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "a"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "A"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "B"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "v2_cases": [
+  {
+   "name": "typing_in_one_paragraph",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "set": "b2",
+     "base": "a9810b15e59a8243063b5fc6dfe00f905c11911f91749249b37ceca3b16cdfb7",
+     "block": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     }
+    }
+   ],
+   "doc_hash": "91e207719d4f7e4b4a574435f8dd26d4ae0e7348bf5cdd828ab47bcabe495c8f"
+  },
+  {
+   "name": "insert_paragraph",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "new1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Inserted"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "ins": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "new1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Inserted"
+       }
+      ]
+     },
+     "after": "b2"
+    }
+   ],
+   "doc_hash": "b8851ec54215622cc1ff4cd74c6e5cf6294115dcb7fafe7fa9e8f9d562783895"
+  },
+  {
+   "name": "delete_paragraph",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "del": "b1",
+     "base": "b136f7bd70fc309c2bb2d0914fc282935cd349424a3a3057ce5b4157bb56d3ff"
+    }
+   ],
+   "doc_hash": "c71fd21b959c92565c59c3140168b5db951a70ecee2b587811033ab5d0fd077c"
+  },
+  {
+   "name": "move_paragraph",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "del": "b3",
+     "base": "b4a8398a9619c5982be8facdb2a09ad3fcebd3b1769413112be0cf0838241373"
+    },
+    {
+     "ins": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     "after": null
+    }
+   ],
+   "doc_hash": "ff22f53bd05a28912e96b7b27f8bdc865788b5bfd6f69a99aa359c593a7956a9"
+  },
+  {
+   "name": "split_paragraph",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "s1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "set": "b1",
+     "base": "b136f7bd70fc309c2bb2d0914fc282935cd349424a3a3057ce5b4157bb56d3ff",
+     "block": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1"
+       }
+      ]
+     }
+    },
+    {
+     "ins": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "s1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "about bread."
+       }
+      ]
+     },
+     "after": "b1"
+    }
+   ],
+   "doc_hash": "49d2f441a30bb4ff683076799ee95743b34c5aa7518b40b04630f369b4495a9f"
+  },
+  {
+   "name": "insert_at_start_and_edit_end",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "top"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "First!"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Last one changed."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "set": "b4",
+     "base": "cb1af096a9b7b31578cc6dc8ff3fb38616811d1aa6ea4106640efc84cad14b75",
+     "block": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Last one changed."
+       }
+      ]
+     }
+    },
+    {
+     "ins": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "top"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "First!"
+       }
+      ]
+     },
+     "after": null
+    }
+   ],
+   "doc_hash": "e143e4317666c05d2cbeedb56b2b69e6992c6721564fd0b1a655846d6c09241e"
+  },
+  {
+   "name": "no_change",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [],
+   "doc_hash": "82fc9c7f806f52564c299b9769a7a12f98b279bb5558810a5f2070fb63c4c3d1"
+  }
+ ],
+ "merge_cases": [
+  {
+   "name": "different_paragraphs_merge",
+   "stored": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 with a counselor comment."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "set": "b1",
+     "base": "b136f7bd70fc309c2bb2d0914fc282935cd349424a3a3057ce5b4157bb56d3ff",
+     "block": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Student rewrote paragraph 1."
+       }
+      ]
+     }
+    }
+   ],
+   "merged": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Student rewrote paragraph 1."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 with a counselor comment."
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "same_paragraph_conflicts",
+   "stored": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 with a counselor comment."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "set": "b4",
+     "base": "cb1af096a9b7b31578cc6dc8ff3fb38616811d1aa6ea4106640efc84cad14b75",
+     "block": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Student rewrote paragraph 4."
+       }
+      ]
+     }
+    }
+   ],
+   "conflicts": [
+    "b4"
+   ]
+  },
+  {
+   "name": "insert_after_changed_paragraph_merges",
+   "stored": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 with a counselor comment."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "ins": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "tail"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "A new ending."
+       }
+      ]
+     },
+     "after": "b4"
+    }
+   ],
+   "merged": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 with a counselor comment."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "tail"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "A new ending."
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "insert_after_deleted_paragraph_conflicts",
+   "stored": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b3"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "b4"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread."
+       }
+      ]
+     }
+    ]
+   },
+   "ops_v2": [
+    {
+     "ins": {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "mid"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "After three."
+       }
+      ]
+     },
+     "after": "b2"
+    }
+   ],
+   "conflicts": [
+    "b2"
+   ]
   }
  ]
 }

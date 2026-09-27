@@ -1,5 +1,6 @@
 """Admissions API views — records."""
 from django.db import transaction
+from django.db.models import Q
 from django.http import Http404
 from django.utils import timezone
 from rest_framework import viewsets
@@ -339,6 +340,16 @@ class MeetingNoteViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.M
         serializer.save(counselor=self.request.user)
 
 
+def audience_filter(user):
+    """Student notices (no recipient) for everyone who shares the student's feed; addressed ones for their recipient.
+
+    A student never sees a notice addressed to a staff member, even though it is filed under them.
+    """
+    if user.role == User.Role.STUDENT:
+        return Q(recipient__isnull=True)
+    return Q(recipient__isnull=True) | Q(recipient=user)
+
+
 class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     queryset = Notification.objects.select_related('student__user', 'student__assigned_counselor').all()
@@ -346,7 +357,8 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
     keyset_ordering = ('-created_at', '-id')
 
     def get_queryset(self):
-        queryset = self.filter_for_user(self.queryset).order_by(*self.keyset_ordering)
+        queryset = self.filter_for_user(self.queryset).filter(audience_filter(self.request.user))
+        queryset = queryset.order_by(*self.keyset_ordering)
         unread = self.request.query_params.get('unread')
         if unread in ['1', 'true', 'True']:
             queryset = queryset.filter(is_read=False)
@@ -366,7 +378,7 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='read-all')
     def read_all(self, request):
-        updated = Notification.objects.filter(student__user=request.user, is_read=False).update(
+        updated = Notification.objects.filter(student__user=request.user, recipient__isnull=True, is_read=False).update(
             is_read=True, updated_at=timezone.now(),
         )
         return Response({'updated': updated})
@@ -376,7 +388,7 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
         """Unread counts behind the notification bell, in three bounded queries."""
         user = request.user
         return Response({
-            'unread': bounded_count(Notification.objects.filter(student__user=user, is_read=False)),
+            'unread': bounded_count(Notification.objects.filter(student__user=user, recipient__isnull=True, is_read=False)),
             'counselor_messages_unread': bounded_count(
                 StudentMessage.objects.filter(recipient=user, student__user=user, is_read=False),
             ),

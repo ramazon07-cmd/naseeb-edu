@@ -11,7 +11,7 @@ tab's `save_seq` counter for optimistic concurrency.
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import BooleanField, Case, Count, ExpressionWrapper, IntegerField, Max, Q, Value, When
+from django.db.models import BooleanField, Count, ExpressionWrapper, Max, Q, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import exceptions, permissions, serializers, status, viewsets
@@ -23,12 +23,16 @@ from apps.users.audit import audit_product_action
 from apps.users.entitlements import require_feature
 from apps.users.models import User
 from ..models import (
-    ActivityLog, Essay, EssayCheckpoint, EssayDepthCheck, EssayFolder, EssayRevision, EssayTab, Notification,
-    StudentProfile,
+    ActivityLog, Essay, EssayCheckpoint, EssayDepthCheck, EssayFolder, EssayRevision, EssayTab, EssayTabEdit,
+    Notification, StudentProfile,
 )
 from ..streaming import release_db_connection
 from . import coach
-from .doc import DocError, apply_delta, doc_from_text, doc_hash, doc_stats, tab_doc, validate_doc
+from .collab_views import StudentCollabMixin
+from .doc import (
+    BlockConflict, DocError, apply_delta, apply_delta_v2, doc_from_text, doc_hash, doc_stats, ensure_bids, tab_doc,
+    validate_doc,
+)
 from .serializers import (
     SUMMARY_FIELDS,
     AutosaveSerializer,
@@ -44,6 +48,7 @@ from .serializers import (
     FolderOrderSerializer,
     FolderSerializer,
     FolderWriteSerializer,
+    ShareSerializer,
     TabCreateSerializer,
     TabDetailSerializer,
     TabMetaSerializer,
@@ -56,9 +61,9 @@ from .tabs import (
     tree_order,
 )
 from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, spend_coach_budget
+from .writes import CHECKPOINT_CAP, TEXT_FIELDS, make_checkpoint, set_text  # noqa: F401 (CHECKPOINT_CAP: tests)
 
 LIST_LIMIT = 500
-CHECKPOINT_CAP = 200
 CHECKPOINT_LIST_LIMIT = 200
 DEPTH_CHECK_KEEP = 20
 AUTO_CHECKPOINT_INTERVAL = timedelta(minutes=10)
@@ -143,34 +148,8 @@ def _essays_for(user):
     return Essay.objects.filter(student__user=user)
 
 
-def _prune_checkpoints(essay_id):
-    """Keep at most CHECKPOINT_CAP checkpoints per document, dropping the oldest automatic ones first.
-
-    One DELETE ... WHERE id IN (everything past the CAP newest-to-keep rows); checkpoints have no dependents.
-    """
-    beyond_cap = (
-        EssayCheckpoint.objects.filter(essay_id=essay_id)
-        .annotate(keep_rank=Case(When(reason=EssayCheckpoint.Reason.AUTO, then=Value(0)), default=Value(1),
-                                 output_field=IntegerField()))
-        .order_by('-keep_rank', '-created_at', '-id')
-        .values('id')[CHECKPOINT_CAP:]
-    )
-    EssayCheckpoint.objects.filter(id__in=beyond_cap).delete()
-
-
-def _make_checkpoint(essay, tab, reason, label=''):
-    """Snapshot the tab's current text."""
-    checkpoint = EssayCheckpoint.objects.create(
-        essay_id=essay.pk,
-        tab=tab,
-        doc=tab_doc(tab),
-        content=tab.content,
-        word_count=tab.word_count,
-        reason=reason,
-        label=label,
-    )
-    _prune_checkpoints(essay.pk)
-    return checkpoint
+def _make_checkpoint(essay, tab, reason, label='', author=None):
+    return make_checkpoint(essay, tab, reason, label, author=author)
 
 
 def _saved_at(tab):
@@ -189,6 +168,20 @@ def _conflict(tab):
     )
 
 
+def _block_conflict(tab, doc, bids):
+    """Someone else changed a paragraph this save also changed: nothing was saved."""
+    return error(
+        'Someone else changed a paragraph you are editing.',
+        'block_conflict',
+        status.HTTP_409_CONFLICT,
+        tab=tab.pk,
+        save_seq=tab.save_seq,
+        doc=doc,
+        bids=bids,
+        saved_at=_saved_at(tab),
+    )
+
+
 def _resync(tab, doc):
     """The delta didn't apply to the stored doc: the client resends the whole doc."""
     return error(
@@ -202,15 +195,7 @@ def _resync(tab, doc):
     )
 
 
-def _set_text(tab, doc, stats):
-    tab.doc = doc
-    tab.content = stats.content
-    tab.word_count = stats.word_count
-    tab.char_count = stats.char_count
-    tab.char_count_no_spaces = stats.char_count_no_spaces
-
-
-TEXT_FIELDS = ['doc', 'content', 'word_count', 'char_count', 'char_count_no_spaces']
+_set_text = set_text
 
 
 def _tab_metas(essay_id):
@@ -224,7 +209,7 @@ TAB_META_ONLY = (
 )
 
 
-class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
+class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.GenericViewSet):
     serializer_class = EssayDetailSerializer
     student_context_actions = {'create', 'partial_update', 'duplicate'}
     action_throttles = {
@@ -541,14 +526,21 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
 
     @action(detail=True, methods=['post'])
     def share(self, request, pk=None):
-        return self._set_shared(pk, True)
+        serializer = ShareSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self._set_shared(pk, True, serializer.validated_data.get('access'))
 
     @action(detail=True, methods=['post'])
     def unshare(self, request, pk=None):
+        # Threads and suggestions stay: staff lose sight of them until the next share.
         return self._set_shared(pk, False)
 
-    def _set_shared(self, pk, shared):
-        """Idempotent: repeating a share or unshare changes and records nothing."""
+    def _set_shared(self, pk, shared, access=None):
+        """Idempotent: repeating a share or unshare changes and records nothing.
+
+        Sharing may also say what the counselor may do (comment, suggest or
+        edit); sharing again with another choice only changes that choice.
+        """
         with transaction.atomic():
             essay = (
                 self.get_queryset().filter(pk=pk)
@@ -560,6 +552,12 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
             )
             if essay is None:
                 raise exceptions.NotFound('Essay not found.')
+            if shared and access and access != essay.counselor_access:
+                essay.counselor_access = access
+                Essay.objects.filter(pk=essay.pk).update(counselor_access=access)
+                if essay.shared_with_counselor:
+                    audit_product_action(actor=self.request.user, action='essay.share_access', target=essay.student,
+                                         metadata={'essay': essay.pk, 'access': access})
             if essay.shared_with_counselor != shared:
                 # Sharing is not an edit, so updated_at (the library order) stays put.
                 essay.shared_with_counselor = shared
@@ -579,12 +577,14 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
             action='Essay shared with counselor' if shared else 'Essay no longer shared with counselor',
             metadata={'event': event, 'essay': essay.pk},
         )
-        audit_product_action(actor=self.request.user, action=event, target=student, metadata={'essay': essay.pk})
+        audit_product_action(actor=self.request.user, action=event, target=student,
+                             metadata={'essay': essay.pk, **({'access': essay.counselor_access} if shared else {})})
         if shared and student.assigned_counselor_id:
+            # Addressed to the counselor: the student doesn't need a notice about their own share.
             name = student.user.get_full_name() or student.user.username
             Notification.objects.create(
-                student=student, title='Essay shared with counselor', message=f'{name} shared an essay for review.',
-                kind=Notification.Kind.ESSAY, target_id=essay.pk,
+                student=student, recipient_id=student.assigned_counselor_id, title='Essay shared with counselor',
+                message=f'{name} shared an essay for review.', kind=Notification.Kind.ESSAY, target_id=essay.pk,
             )
 
     # ----------------------------------------------------------------- autosave
@@ -594,7 +594,9 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
         serializer = AutosaveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
-        is_delta = 'ops' in values
+        is_v2 = 'ops_v2' in values
+        is_delta = 'ops' in values or is_v2
+        merged = False
         if not is_delta:
             # Validate and derive before taking the row locks, so they are held briefly.
             try:
@@ -615,8 +617,21 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
                 return Response({'tab': tab.pk, 'save_seq': tab.save_seq, 'saved_at': _saved_at(tab),
                                  'word_count': tab.word_count})
             if values['base_seq'] != tab.save_seq:
-                return _conflict(tab)
-            if is_delta:
+                # Only an id-addressed delta from an older version can be merged.
+                if not is_v2 or values['base_seq'] > tab.save_seq:
+                    return _conflict(tab)
+                merged = True
+            if is_v2:
+                stored = ensure_bids(tab_doc(tab))
+                try:
+                    doc, saved_hash = apply_delta_v2(stored, values['ops_v2'], None if merged else values['doc_hash'])
+                except BlockConflict as exc:
+                    return _block_conflict(tab, stored, exc.bids)
+                except DocError as exc:
+                    if exc.code == 'resync':
+                        return _resync(tab, stored)
+                    return error(exc.detail, exc.code, exc.status)
+            elif is_delta:
                 stored = tab_doc(tab)
                 try:
                     doc, saved_hash = apply_delta(stored, values['ops'], values['doc_hash'])
@@ -624,6 +639,12 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
                     if exc.code == 'resync':
                         return _resync(tab, stored)
                     return error(exc.detail, exc.code, exc.status)
+            if is_delta:
+                if doc == stored and merged:
+                    # Nothing of ours to add, but the client is behind: send it the current version.
+                    return Response({'tab': tab.pk, 'save_seq': tab.save_seq, 'saved_at': _saved_at(tab),
+                                     'word_count': tab.word_count, 'doc_hash': saved_hash, 'merged': True,
+                                     'doc': doc})
                 if doc == stored:
                     # Nothing changed: no write, no new seq.
                     return Response({'tab': tab.pk, 'save_seq': tab.save_seq, 'saved_at': _saved_at(tab),
@@ -647,6 +668,12 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
             if 'cursor' in values:
                 tab.last_cursor = values['cursor']
                 update_fields.append('last_cursor')
+            if tab.last_editor_id is not None:
+                # Someone else wrote last (feedback, a decision): the owner's run of edits starts here.
+                EssayTabEdit.objects.create(essay_id=essay.pk, tab=tab, author=request.user,
+                                            kind=EssayTabEdit.Kind.EDIT, save_seq=tab.save_seq)
+                tab.last_editor = None
+                update_fields.append('last_editor')
             tab.save(update_fields=update_fields)
             if text_changed:
                 refresh_essay_text(essay, now=now)
@@ -656,13 +683,17 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
 
             due = latest is None or (latest['created_at'] <= now - AUTO_CHECKPOINT_INTERVAL and not latest['same_text'])
             if due and stats.content.strip():
-                _make_checkpoint(essay, tab, EssayCheckpoint.Reason.AUTO)
+                _make_checkpoint(essay, tab, EssayCheckpoint.Reason.AUTO, author=request.user)
         # The client bases its next delta on this save only when this hash matches its own.
-        return Response({
+        data = {
             'tab': tab.pk, 'save_seq': tab.save_seq, 'saved_at': _saved_at(tab), 'word_count': stats.word_count,
             'char_count': stats.char_count, 'char_count_no_spaces': stats.char_count_no_spaces,
             'doc_hash': saved_hash, 'document_word_count': essay.word_count,
-        })
+        }
+        if merged:
+            # Other people's changes are in it: the client takes this doc as its new base.
+            data.update(merged=True, doc=doc)
+        return Response(data)
 
     # -------------------------------------------------------------- checkpoints
 
@@ -673,10 +704,12 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
             query.is_valid(raise_exception=True)
             essay = self.get_essay(pk, allow_trashed=True, defer=('content',))
             tab = self.resolve_tab(essay, query.validated_data.get('tab'), with_doc=False)
-            queryset = EssayCheckpoint.objects.filter(essay_id=essay.pk, tab_id=tab.pk).only(
-                'id', 'tab', 'reason', 'label', 'word_count', 'created_at',
+            queryset = EssayCheckpoint.objects.filter(essay_id=essay.pk, tab_id=tab.pk).select_related('author').only(
+                'id', 'tab', 'reason', 'label', 'word_count', 'created_at', 'kind', 'detail', 'author',
+                'author__first_name', 'author__last_name', 'author__username',
             )
-            return Response(CheckpointSummarySerializer(queryset[:CHECKPOINT_LIST_LIMIT], many=True).data)
+            return Response(CheckpointSummarySerializer(queryset[:CHECKPOINT_LIST_LIMIT], many=True,
+                                                        context={'viewer_id': request.user.pk}).data)
         serializer = CheckpointCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
@@ -684,8 +717,10 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
             tab = self.resolve_tab(essay, serializer.validated_data.get('tab'), lock=True)
             checkpoint = _make_checkpoint(
                 essay, tab, EssayCheckpoint.Reason.MANUAL, label=serializer.validated_data.get('label', ''),
+                author=request.user,
             )
-        return Response(CheckpointSummarySerializer(checkpoint).data, status=status.HTTP_201_CREATED)
+        return Response(CheckpointSummarySerializer(checkpoint, context={'viewer_id': request.user.pk}).data,
+                        status=status.HTTP_201_CREATED)
 
     def _checkpoint(self, essay, cid):
         checkpoint = EssayCheckpoint.objects.filter(essay_id=essay.pk, pk=cid).first()
@@ -696,7 +731,7 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
     @action(detail=True, methods=['get'], url_path=r'checkpoints/(?P<cid>[0-9]+)')
     def checkpoint_detail(self, request, pk=None, cid=None):
         essay = self.get_essay(pk, allow_trashed=True, defer=('content',))
-        return Response(CheckpointDetailSerializer(self._checkpoint(essay, cid)).data)
+        return Response(CheckpointDetailSerializer(self._checkpoint(essay, cid), context={'viewer_id': request.user.pk}).data)
 
     @action(detail=True, methods=['post'], url_path=r'checkpoints/(?P<cid>[0-9]+)/restore')
     def checkpoint_restore(self, request, pk=None, cid=None):
@@ -709,7 +744,8 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
             tab = self.resolve_tab(essay, checkpoint.tab_id, lock=True)
             if serializer.validated_data['base_seq'] != tab.save_seq:
                 return _conflict(tab)
-            _make_checkpoint(essay, tab, EssayCheckpoint.Reason.RESTORE, label=f'Before restoring #{checkpoint.pk}')
+            _make_checkpoint(essay, tab, EssayCheckpoint.Reason.RESTORE, label=f'Before restoring #{checkpoint.pk}',
+                             author=request.user)
             now = timezone.now()
             _set_text(tab, checkpoint.doc, doc_stats(checkpoint.doc))
             tab.save_seq += 1
@@ -765,7 +801,7 @@ class EssayLabEssayViewSet(EssayLabViewMixin, viewsets.GenericViewSet):
             )
             if stale_ids:
                 EssayDepthCheck.objects.filter(id__in=stale_ids).delete()
-            _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Coach check')
+            _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Coach check', author=request.user)
         return Response(DepthCheckSerializer(check).data)
 
     @action(detail=True, methods=['get'], url_path='depth-check/latest')

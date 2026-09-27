@@ -33,6 +33,10 @@ export const NOTIFICATION_TRANSLATIONS = {
   'your meeting participant': ['uchrashuv ishtirokchisi', 'участником встречи'],
   'Profile section approved': ['Profil bo‘limi tasdiqlandi', 'Раздел профиля одобрен'],
   'Profile section needs changes': ['Profil bo‘limiga o‘zgartirish kerak', 'Раздел профиля нужно исправить'],
+  'New feedback on your essay': ['Inshongiz bo‘yicha yangi fikr-mulohaza', 'Новый отзыв на ваше эссе'],
+  'New reply to your comment': ['Izohingizga yangi javob', 'Новый ответ на ваш комментарий'],
+  'Comment resolved': ['Izoh hal qilindi', 'Комментарий решён'],
+  'Suggestions reviewed': ['Takliflar ko‘rib chiqildi', 'Предложения рассмотрены'],
 }
 
 export function notificationMessages(language) {

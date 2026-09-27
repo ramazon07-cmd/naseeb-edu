@@ -6,14 +6,15 @@ import Placeholder from '@tiptap/extension-placeholder'
 import '@fontsource-variable/newsreader/wght.css'
 import '@fontsource-variable/newsreader/wght-italic.css'
 import {
-  AlertTriangle, ArrowLeft, Check, CloudOff, Eye, History as HistoryIcon, Maximize2, MoreHorizontal, PanelLeft, PenLine, RotateCcw,
-  Settings2, Sparkles,
+  AlertTriangle, ArrowLeft, Check, CloudOff, Eye, History as HistoryIcon, Maximize2, MessageSquare, MoreHorizontal, PanelLeft, PenLine,
+  RotateCcw, Settings2, Sparkles,
 } from 'lucide-react'
 import { t, tp } from '../i18n.js'
 import { registerBeforeLogout } from '../api.js'
 import Toolbar, { CompactToolbar } from './Toolbar.jsx'
 import NewEssay from './NewEssay.jsx'
 import CoachPanel from './CoachPanel.jsx'
+import CommentsPanel from './CommentsPanel.jsx'
 import History, { DocPreview } from './History.jsx'
 import { TabsRail, TabsSheet, TabsSheetButton } from './TabsRail.jsx'
 import Counter from './Counter.jsx'
@@ -27,7 +28,14 @@ import {
   CoachHighlights, DashBulletList, EssayShortcuts, FocusBlock, noteRange, setActiveNote, setBlockMode, setCoachNotes,
 } from './extensions.js'
 import { BlockFormat, EssayDocument, Highlight, PageBreak, Subtitle, TextStyle, Title } from './formatting.js'
-import { isAllowedHref } from './docDelta.js'
+import { ensureBids, isAllowedHref, normalizeDoc } from './docDelta.js'
+import { mergeBlocks } from './docMerge.js'
+import {
+  BlockIds, CollabFocus, CommentMark, SuggestDeleteMark, SuggestInsertMark, anchoredIds, itemRange, setCollabFocus,
+} from './collabMarks.js'
+import { applyDocChanges, editorDoc } from './editorMerge.js'
+import { acceptAllIds, collabPollDelay, feedbackItems, openCount, replaceById } from './collabModel.js'
+import { createPoller } from '../lib/poller.js'
 import { loadFontsIn } from './fonts.js'
 import { errorCode, essayLabApi, essayTypeName } from './essayLabApi.js'
 import { deriveText, docFromText } from './docText.js'
@@ -152,6 +160,7 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
   const [live, setLive] = useState(() => ({ tab: initial.tab.id, ...deriveText(initial.tab.doc) }))
   const [outline, setOutline] = useState([])
   const [coach, setCoach] = useState({ count: 0, checked: false })
+  const [collab, setCollab] = useState({ count: 0 })
   const [dialog, setDialog] = useState(null)
   const [tabsSheet, setTabsSheet] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -378,7 +387,9 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
     : <SaveBadge state={sessionState} onRetry={() => session?.queue.retryNow()} compact={phone} iconOnly={phone} />
   const coachLabel = panel === 'coach' ? t('Hide coach') : coach.checked ? t('Coach') : t('Check depth')
   const coachIdeas = panel !== 'coach' && coach.count > 0 ? (coach.count === 1 ? t('1 idea') : tp('{n} ideas', coach.count, { n: coach.count })) : null
+  const commentsLabel = panel === 'comments' ? t('Hide comments') : t('Comments')
   const moreItems = [
+    phone && { label: t('Comments · {n}', { n: collab.count }), icon: <MessageSquare size={15} />, onSelect: () => setPanel('comments') },
     phone && { label: t('Just write (focus mode)'), icon: <Maximize2 size={15} />, onSelect: () => setFocusMode(true) },
     phone && { label: t('Version history'), icon: <HistoryIcon size={15} />, onSelect: () => setPanel('history') },
     { label: t('Essay details'), icon: <Settings2 size={15} />, onSelect: () => setDialog('details') },
@@ -408,6 +419,11 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
         {!phone && <button type="button" className="el-icon-btn" aria-label={t('Just write')} title={t('Just write')} onClick={() => setFocusMode(true)}><Maximize2 size={18} /></button>}
         {!phone && <button type="button" className={`el-icon-btn${panel === 'history' ? ' is-on' : ''}`} aria-label={t('Version history')} title={t('Version history')}
           aria-pressed={panel === 'history'} onClick={() => setPanel((current) => (current === 'history' ? null : 'history'))}><HistoryIcon size={19} /></button>}
+        {!phone && <button type="button" className={`el-icon-btn el-comments-toggle${panel === 'comments' ? ' is-on' : ''}`} aria-pressed={panel === 'comments'}
+          aria-label={collab.count ? `${commentsLabel}, ${collab.count}` : commentsLabel} title={commentsLabel}
+          onClick={() => setPanel((current) => (current === 'comments' ? null : 'comments'))}>
+          <MessageSquare size={19} aria-hidden="true" />{collab.count > 0 && <span className="el-pill-count" aria-hidden="true">{collab.count}</span>}
+        </button>}
         <button type="button" className={`el-btn${panel === 'coach' ? '' : ' is-primary'} el-coach-toggle`} aria-pressed={panel === 'coach'}
           aria-label={coachIdeas ? `${coachLabel}, ${coachIdeas}` : coachLabel} title={coachLabel}
           onClick={() => setPanel((current) => (current === 'coach' ? null : 'coach'))}>
@@ -433,9 +449,12 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
           : <TabEditor key={session.id} session={session} essay={essay} tabTitle={activeTab?.title} tabWords={stats.tab.words} user={user} notify={notify}
           focusMode={focusMode} setFocusMode={setFocusMode} panel={panel} setPanel={setPanel} paged={pageMode.paged}
           welcomeBack={session === initialSession && !fresh} fresh={session === initialSession && fresh}
-          onEditor={setEditor} onStats={setLive} onOutline={setOutline} onCoach={setCoach} onPreview={setPreviewing} onEditDetails={() => setDialog('details')} />}
+          onEditor={setEditor} onStats={setLive} onOutline={setOutline} onCoach={setCoach} onCollab={setCollab} onPreview={setPreviewing} onEditDetails={() => setDialog('details')} />}
     </div>
 
+    {phone && !focusMode && collab.count > 0 && panel !== 'comments' && <button type="button" className="el-comments-pill" onClick={() => setPanel('comments')}>
+      <MessageSquare size={16} aria-hidden="true" />{t('Comments · {n}', { n: collab.count })}
+    </button>}
     {phone && !focusMode && <CompactToolbar editor={editor} disabled={locked} count={counterEl} />}
 
     {focusMode && <FocusChrome title={tabs.length > 1 && activeTab ? `${essay.title} · ${activeTab.title}` : essay.title} words={stats.tab.words}
@@ -460,7 +479,7 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
 
 // One tab's editor: Tiptap, banners and the Coach / history panels.
 function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode, setFocusMode, panel, setPanel, paged, welcomeBack, fresh,
-  onEditor, onStats, onOutline, onCoach, onPreview, onEditDetails }) {
+  onEditor, onStats, onOutline, onCoach, onCollab, onPreview, onEditDetails }) {
   const state = useSessionState(session)
   const [check, setCheck] = useState(null)
   const [checkStatus, setCheckStatus] = useState({ loading: false, error: null })
@@ -470,6 +489,11 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   const [historyVersion, setHistoryVersion] = useState(0)
   const [preview, setPreview] = useState(null) // { checkpoint, doc }
   const [welcome, setWelcome] = useState(null)
+  // Counselor feedback on this tab (polled) and the doc the cards were placed against.
+  const [feedback, setFeedback] = useState({ threads: [], suggestions: [], loaded: false, error: '' })
+  const [collabDoc, setCollabDoc] = useState(null)
+  const [activeItem, setActiveItem] = useState(null)
+  const [feedbackBusy, setFeedbackBusy] = useState(null)
   const activeNoteIdRef = useLatest(activeNoteId)
   const welcomeRef = useLatest(welcome)
   const focusModeRef = useLatest(focusMode)
@@ -489,6 +513,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
       if (text) headings.push({ pos: offset, kind, text: text.slice(0, 80) })
     })
     onOutline(headings)
+    setCollabDoc(current.state.doc)
     loadFontsIn(current.state.doc)
   }, [onOutline, onStats, session.id])
 
@@ -528,6 +553,11 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
         onAnchorsChange: (ids) => setAnchored(ids),
         onNoteClick: (id) => { setActiveNoteId(id); setPanel('coach') },
       }),
+      BlockIds,
+      CommentMark,
+      SuggestInsertMark,
+      SuggestDeleteMark,
+      CollabFocus.configure({ onSelect: (item) => { setActiveItem(item); setPanel('comments') } }),
     ],
     content: session.doc || docFromText(''),
     editable: !state.unsynced,
@@ -638,9 +668,10 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
 
   const closePanel = useCallback(() => setPanel(null), [setPanel])
 
-  const replaceDoc = useCallback((doc, seq) => {
+  const replaceDoc = useCallback((serverDoc, seq) => {
     const current = editorRef.current
     if (!current) return
+    const doc = serverDoc ? ensureBids(serverDoc) : serverDoc
     current.commands.setContent(doc || docFromText(''), { emitUpdate: false })
     queue.acceptServer(seq, doc)
     session.set({ conflict: null })
@@ -696,7 +727,9 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
 
   const keepMineOnConflict = () => {
     const seq = state.conflict?.save_seq
-    const serverDoc = state.conflict?.doc
+    const serverDoc = state.conflict?.doc ? ensureBids(state.conflict.doc) : state.conflict?.doc
+    // Keep other people's changes to other paragraphs; this device wins where both changed.
+    if (serverDoc) mergeIntoEditor(queue.getBaseDoc(), serverDoc)
     session.set({ conflict: null })
     if (Number.isInteger(seq)) queue.keepMine(seq, serverDoc)
     else essayLabApi.getTab(essay.id, session.id).then((fresh) => queue.keepMine(fresh.save_seq, fresh.doc), (error) => session.set({ error }))
@@ -716,6 +749,161 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
       notify(error?.message || t('Could not load the latest version.'), 'error')
     }
   }
+
+  // --- Counselor feedback -------------------------------------------------------
+  // Takes a newer server doc into the editor: paragraphs only the server
+  // changed are swapped in, the student's unsaved paragraphs stay.
+  const mergeIntoEditor = useCallback((baseDoc, serverDoc) => {
+    const current = editorRef.current
+    if (!current || current.isDestroyed) return false
+    const local = editorDoc(current)
+    const base = baseDoc ? normalizeDoc(baseDoc) : null
+    const merged = base && local ? mergeBlocks(base, local, serverDoc) : null
+    return applyDocChanges(current, merged ? merged.doc : serverDoc)
+  }, [])
+
+  const [poller] = useState(() => ({ current: null }))
+  useEffect(() => {
+    // A save that merged someone else's changes hands them to the open editor
+    // (and their comments or suggestions are fetched right away).
+    session.onRemoteDoc = (serverDoc, sentDoc) => { mergeIntoEditor(sentDoc, serverDoc); poller.current?.poke() }
+    return () => { session.onRemoteDoc = null }
+  }, [session, mergeIntoEditor, poller])
+
+  // A paragraph both sides changed: when the other side only added comment or
+  // suggestion marks, they move onto the student's text and the save goes on;
+  // anything else waits for the student's choice (the banner).
+  const conflict = state.conflict
+  useEffect(() => {
+    if (conflict?.code !== 'block_conflict' || !conflict.doc || !Number.isInteger(conflict.save_seq)) return
+    const current = editorRef.current
+    const base = queue.getBaseDoc()
+    const local = editorDoc(current)
+    if (!base || !local) return
+    const serverDoc = ensureBids(conflict.doc)
+    const merged = mergeBlocks(normalizeDoc(base), local, serverDoc)
+    if (!merged || merged.conflicts.length) return
+    applyDocChanges(current, merged.doc)
+    session.set({ conflict: null })
+    queue.keepMine(conflict.save_seq, serverDoc)
+    poller.current?.poke()
+  }, [conflict, queue, session, poller])
+
+  // A newer version seen by polling (a counselor's comment or suggestion).
+  const absorbRemote = useCallback((serverDoc, seq) => {
+    const saveState = queue.getState()
+    if (saveState.inFlight || saveState.conflict || !Number.isInteger(seq) || seq <= saveState.seq) return
+    const doc = ensureBids(serverDoc)
+    const base = queue.getBaseDoc()
+    if (!base && saveState.dirty) return // the next save gets a conflict and the student chooses
+    mergeIntoEditor(base, doc)
+    queue.adopt(seq, doc)
+  }, [queue, mergeIntoEditor])
+
+  const pollState = useRef({ etag: null, othersActive: false })
+  const loadFeedback = useCallback(async () => {
+    try {
+      const response = await essayLabApi.changes(essay.id, session.id, queue.getState().seq, pollState.current.etag)
+      if (response.notModified) return false
+      pollState.current.etag = response.etag
+      const data = response.data || {}
+      pollState.current.othersActive = Boolean(data.others_active)
+      setFeedback({ threads: data.threads || [], suggestions: data.suggestions || [], loaded: true, error: '' })
+      if (data.doc) absorbRemote(data.doc, data.save_seq)
+      return true
+    } catch (error) {
+      setFeedback((current) => ({ ...current, error: current.loaded ? '' : error?.message || t('Could not load comments.') }))
+      return null
+    }
+  }, [essay.id, session.id, queue, absorbRemote])
+
+  useEffect(() => {
+    const instance = createPoller({
+      run: loadFeedback,
+      min: collabPollDelay(true),
+      max: collabPollDelay(false),
+      nextDelay: () => collabPollDelay(pollState.current.othersActive),
+    })
+    poller.current = instance
+    instance.start({ immediate: true })
+    return () => { instance.stop(); poller.current = null }
+  }, [loadFeedback, poller])
+
+  const anchors = useMemo(() => (collabDoc ? anchoredIds(collabDoc) : { comment: new Set(), suggestion: new Set() }), [collabDoc])
+  const items = useMemo(() => {
+    const positions = new Map()
+    if (collabDoc) {
+      for (const item of feedback.threads) {
+        if (!anchors.comment.has(item.id)) continue
+        const range = itemRange(collabDoc, { kind: 'thread', id: item.id })
+        if (range) positions.set(`thread:${item.id}`, range.from)
+      }
+      for (const item of feedback.suggestions) {
+        if (!anchors.suggestion.has(item.id)) continue
+        const range = itemRange(collabDoc, { kind: 'suggestion', id: item.id })
+        if (range) positions.set(`suggestion:${item.id}`, range.from)
+      }
+    }
+    return feedbackItems(feedback.threads, feedback.suggestions, positions)
+  }, [feedback, collabDoc, anchors])
+  const feedbackCount = openCount(feedback.threads, feedback.suggestions)
+  useEffect(() => { onCollab({ count: feedbackCount }) }, [feedbackCount, onCollab])
+  const allIds = useMemo(() => acceptAllIds(feedback.suggestions, anchors.suggestion), [feedback.suggestions, anchors])
+
+  useEffect(() => { if (editor) setCollabFocus(editor, activeItem) }, [editor, activeItem])
+
+  const selectItem = useCallback((item) => {
+    const next = { kind: item.kind, id: item.id }
+    setActiveItem(next)
+    const current = editorRef.current
+    const range = current ? itemRange(current.state.doc, next) : null
+    if (range) window.requestAnimationFrame(() => scrollToPos(current, canvasRef.current, range.from))
+  }, [])
+
+  const withFeedbackBusy = useCallback(async (key, action, failure) => {
+    setFeedbackBusy(key)
+    try { return await action() } catch (error) { notify(error?.message || t(failure), 'error'); return false } finally { setFeedbackBusy(null) }
+  }, [notify])
+
+  const replyToThread = useCallback((item, body) => withFeedbackBusy(`thread:${item.id}`, async () => {
+    const thread = await essayLabApi.replyToThread(essay.id, item.id, body)
+    setFeedback((current) => ({ ...current, threads: replaceById(current.threads, thread) }))
+    return true
+  }, 'Could not send the reply.'), [essay.id, withFeedbackBusy])
+
+  const setThreadResolved = useCallback((item, resolved) => withFeedbackBusy(`thread:${item.id}`, async () => {
+    const thread = await (resolved ? essayLabApi.resolveThread(essay.id, item.id) : essayLabApi.reopenThread(essay.id, item.id))
+    setFeedback((current) => ({ ...current, threads: replaceById(current.threads, thread) }))
+    return true
+  }, 'Could not update the comment.'), [essay.id, withFeedbackBusy])
+
+  // Accept / reject: the server applies the decisions to the saved text in one
+  // step; the editor is paused meanwhile so nothing typed can be lost.
+  const decide = useCallback((decisions, key) => withFeedbackBusy(key || `suggestion:${decisions[0].id}`, async () => {
+    const current = editorRef.current
+    if (unsyncedRef.current) { notify(t('First choose which version to keep: yours from this device or the saved one.'), 'error'); return false }
+    current?.setEditable(false, false)
+    try {
+      await queue.flushAndWait()
+      const result = await essayLabApi.decideSuggestions(essay.id, session.id, decisions)
+      const doc = ensureBids(result.doc)
+      mergeIntoEditor(queue.getBaseDoc(), doc)
+      queue.adopt(result.save_seq, doc)
+      session.applySaved({ ...result, saved_at: new Date().toISOString() })
+      const decided = new Set((result.decided || []).map((item) => item.id))
+      setFeedback((state) => ({ ...state, suggestions: state.suggestions.filter((item) => !decided.has(item.id)) }))
+      setHistoryVersion((value) => value + 1)
+      const accepted = decisions.filter((item) => item.accept).length
+      notify(accepted === decisions.length
+        ? tp('Accepted {n} suggestions.', accepted, { n: accepted })
+        : accepted ? t('Suggestions updated.') : tp('Rejected {n} suggestions.', decisions.length, { n: decisions.length }))
+      return true
+    } finally {
+      if (current && !current.isDestroyed) current.setEditable(!unsyncedRef.current, false)
+    }
+  }, 'Could not apply your choice. Nothing was changed.'), [essay.id, session, queue, mergeIntoEditor, notify, unsyncedRef, withFeedbackBusy])
+
+  const closeComments = useCallback(() => { setPanel(null); setActiveItem(null) }, [setPanel])
 
   // Put the cursor back where the student left this tab ("welcome back" on a fresh open).
   const restored = useRef(false)
@@ -762,7 +950,9 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
         </div>}
         {state.conflict && <div className="el-banner is-warn" role="alert">
           <AlertTriangle size={18} aria-hidden="true" />
-          <span>{t('This essay was changed in another tab or device. Your text is safe here and has not been overwritten.')}</span>
+          <span>{state.conflict.code === 'block_conflict'
+            ? t('Someone else changed a paragraph you were editing. Your text is safe here and has not been overwritten.')
+            : t('This essay was changed in another tab or device. Your text is safe here and has not been overwritten.')}</span>
           <button type="button" className="el-btn is-small is-primary" onClick={keepMineOnConflict}>{t('Keep mine')}</button>
           <button type="button" className="el-btn is-small" onClick={loadLatest}>{t('Load latest')}</button>
         </div>}
@@ -804,6 +994,10 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     {panel === 'history' && !focusMode && <History essayId={essay.id} tabId={session.id} version={historyVersion} words={tabWords}
       savedAt={state.savedAt} previewId={preview?.checkpoint.id ?? null}
       onPreview={previewCheckpoint} onRestore={restoreCheckpoint} onBeforeName={flushBeforeName} onClose={closeHistory} />}
+    {panel === 'comments' && !focusMode && <CommentsPanel items={items} activeKey={activeItem ? `${activeItem.kind}:${activeItem.id}` : null}
+      busyKey={feedbackBusy} acceptAll={allIds} loaded={feedback.loaded} error={feedback.error}
+      onSelect={selectItem} onDecide={decide} onReply={replyToThread} onResolve={(item) => setThreadResolved(item, true)}
+      onReopen={(item) => setThreadResolved(item, false)} onRetry={() => poller.current?.poke()} onClose={closeComments} />}
     {panel === 'coach' && !focusMode && <CoachPanel check={check} status={checkStatus} anchored={anchored} activeId={activeNoteId} dismissed={dismissed}
       words={tabWords}
       onCheck={runCheck} onSelect={selectNote} onJump={jumpToNote} onDismiss={dismissNote} onClose={closePanel} />}

@@ -3,13 +3,13 @@
 from rest_framework import serializers
 
 from ..models import Essay, EssayCheckpoint, EssayDepthCheck, EssayFolder, EssayTab
-from .doc import tab_doc
+from .doc import BID_PATTERN, tab_doc
 from .tabs import MAX_TAB_TITLE
 
 SUMMARY_FIELDS = (
     'id', 'title', 'essay_type', 'prompt', 'university_name', 'word_limit', 'folder',
     'word_count', 'preview', 'last_edited_at', 'updated_at', 'trashed_at', 'status', 'page_size',
-    'shared_with_counselor', 'shared_at',
+    'shared_with_counselor', 'shared_at', 'counselor_access',
 )
 MAX_WORD_LIMIT = 20000
 
@@ -122,12 +122,42 @@ def _clean_op(op):
     raise serializers.ValidationError('Unknown op.')
 
 
+HASH = r'^[0-9a-f]{64}$'
+
+
+def _is_bid(value):
+    return isinstance(value, str) and BID_PATTERN.fullmatch(value) is not None
+
+
+def _is_hash(value):
+    return isinstance(value, str) and len(value) == 64 and all(char in '0123456789abcdef' for char in value)
+
+
+def _clean_op_v2(op):
+    """Shape check of an id-addressed op (see doc.apply_ops_v2)."""
+    if not isinstance(op, dict):
+        raise serializers.ValidationError('Every op must be an object.')
+    keys = set(op)
+    if keys == {'del', 'base'} and _is_bid(op['del']) and _is_hash(op['base']):
+        return {'del': op['del'], 'base': op['base']}
+    if keys == {'set', 'base', 'block'} and _is_bid(op['set']) and _is_hash(op['base']) and isinstance(op['block'], dict):
+        return {'set': op['set'], 'base': op['base'], 'block': op['block']}
+    if keys == {'ins', 'after'} and isinstance(op['ins'], dict) and (op['after'] is None or _is_bid(op['after'])):
+        return {'ins': op['ins'], 'after': op['after']}
+    raise serializers.ValidationError('Unknown op.')
+
+
 class AutosaveSerializer(serializers.Serializer):
-    """Either the whole `doc`, or `ops` over the saved doc's top-level blocks plus
-    the sha256 (`doc_hash`) of the resulting doc in canonical JSON."""
+    """The whole `doc`; or `ops` (v1: by block index) or `ops_v2` (by block id)
+    over the saved doc's top-level blocks, plus the sha256 (`doc_hash`) of the
+    resulting doc in canonical JSON.
+
+    v1 needs the saved version (`base_seq`) to be the latest. v2 may start
+    from an older one: changes to other paragraphs are merged."""
 
     doc = serializers.JSONField(required=False)
     ops = serializers.JSONField(required=False)
+    ops_v2 = serializers.JSONField(required=False)
     doc_hash = serializers.RegexField(r'^[0-9a-f]{64}$', required=False)
     base_seq = serializers.IntegerField(min_value=0)
     # Optional only for one-tab documents (older clients); see resolve_tab().
@@ -140,10 +170,15 @@ class AutosaveSerializer(serializers.Serializer):
             raise serializers.ValidationError(f'ops must be a list of at most {MAX_DELTA_OPS} edits.')
         return [_clean_op(op) for op in value]
 
+    def validate_ops_v2(self, value):
+        if not isinstance(value, list) or len(value) > MAX_DELTA_OPS:
+            raise serializers.ValidationError(f'ops must be a list of at most {MAX_DELTA_OPS} edits.')
+        return [_clean_op_v2(op) for op in value]
+
     def validate(self, attrs):
-        if ('doc' in attrs) == ('ops' in attrs):
+        if sum(key in attrs for key in ('doc', 'ops', 'ops_v2')) != 1:
             raise serializers.ValidationError({'doc': 'Send either the whole doc or ops.'})
-        if 'ops' in attrs and 'doc_hash' not in attrs:
+        if ('ops' in attrs or 'ops_v2' in attrs) and 'doc_hash' not in attrs:
             raise serializers.ValidationError({'doc_hash': 'ops need the hash of the resulting doc.'})
         return attrs
 
@@ -177,11 +212,28 @@ class TabOrderSerializer(serializers.Serializer):
     ids = serializers.ListField(child=serializers.IntegerField(min_value=1), max_length=200)
 
 
+def person_name(user):
+    if user is None:
+        return None
+    return user.get_full_name() or user.username
+
+
 class CheckpointSummarySerializer(serializers.ModelSerializer):
+    # Who made the version: null for the student's own older versions.
+    author_name = serializers.SerializerMethodField()
+    by_me = serializers.SerializerMethodField()
+
     class Meta:
         model = EssayCheckpoint
-        fields = ('id', 'tab', 'reason', 'label', 'word_count', 'created_at')
+        fields = ('id', 'tab', 'reason', 'label', 'word_count', 'created_at', 'kind', 'detail', 'author_name', 'by_me')
         read_only_fields = fields
+
+    def get_author_name(self, obj) -> str | None:
+        return person_name(obj.author) if obj.author_id else None
+
+    def get_by_me(self, obj) -> bool:
+        viewer = self.context.get('viewer_id')
+        return obj.author_id is None or obj.author_id == viewer
 
 
 class CheckpointDetailSerializer(CheckpointSummarySerializer):
@@ -214,3 +266,66 @@ class FolderWriteSerializer(serializers.Serializer):
 class FolderOrderSerializer(serializers.Serializer):
     parent = StudentFolderField(allow_null=True)
     ids = serializers.ListField(child=serializers.IntegerField(min_value=1), max_length=500)
+
+
+class ShareSerializer(serializers.Serializer):
+    access = serializers.ChoiceField(choices=Essay.CounselorAccess.choices, required=False)
+
+
+class ChangesQuerySerializer(serializers.Serializer):
+    tab = serializers.IntegerField(min_value=1)
+    # The save_seq the client already shows; the doc is sent only when it differs.
+    since = serializers.IntegerField(min_value=0, required=False)
+
+
+class CommentBodySerializer(serializers.Serializer):
+    body = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+
+class DecisionSerializer(serializers.Serializer):
+    id = serializers.IntegerField(min_value=1)
+    accept = serializers.BooleanField()
+
+
+class DecideSerializer(serializers.Serializer):
+    tab = serializers.IntegerField(min_value=1)
+    decisions = DecisionSerializer(many=True, allow_empty=False, max_length=200)
+
+    def validate_decisions(self, value):
+        ids = [item['id'] for item in value]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError('Decide each suggestion once.')
+        return value
+
+
+class BidField(serializers.RegexField):
+    def __init__(self, **kwargs):
+        super().__init__(BID_PATTERN.pattern, max_length=32, **kwargs)
+
+
+class ThreadCreateSerializer(serializers.Serializer):
+    tab = serializers.IntegerField(min_value=1)
+    bid = BidField()
+    start = serializers.IntegerField(min_value=0)
+    end = serializers.IntegerField(min_value=1)
+    body = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+
+class SuggestionItemSerializer(serializers.Serializer):
+    bid = BidField()
+    start = serializers.IntegerField(min_value=0)
+    end = serializers.IntegerField(min_value=0)
+    # Text to put after the range (empty: only delete the range).
+    text = serializers.CharField(max_length=2000, required=False, allow_blank=True, trim_whitespace=False, default='')
+
+    def validate(self, attrs):
+        if attrs['end'] < attrs['start']:
+            raise serializers.ValidationError('The range ends before it starts.')
+        if attrs['end'] == attrs['start'] and not attrs['text']:
+            raise serializers.ValidationError('Suggest new text, a deletion, or both.')
+        return attrs
+
+
+class SuggestionCreateSerializer(serializers.Serializer):
+    tab = serializers.IntegerField(min_value=1)
+    items = SuggestionItemSerializer(many=True, allow_empty=False, max_length=50)

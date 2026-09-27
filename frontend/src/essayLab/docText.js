@@ -12,6 +12,7 @@
 //     from attrs.start) goes on the item's first block only — even when that
 //     block turns out to be empty and is skipped, exactly like the backend;
 //   - hardBreak becomes "\n"; control characters are dropped;
+//   - text carrying a suggestInsert mark (a counselor's suggestion) is left out;
 //   - word_count counts \S+ runs in the block text, ignoring list markers;
 //   - char_count counts code points of the block text except line breaks, and
 //     char_count_no_spaces only the non-whitespace ones (markers never count).
@@ -22,7 +23,7 @@ export const TEXT_BLOCKS = new Set(['paragraph', 'heading', 'title', 'subtitle']
 export const ALLOWED_NODES = new Set([
   'doc', ...TEXT_BLOCKS, 'bulletList', 'orderedList', 'listItem', 'blockquote', 'pageBreak', 'text', 'hardBreak',
 ])
-export const ALLOWED_MARKS = new Set(['bold', 'italic', 'underline', 'strike', 'textStyle', 'highlight', 'link'])
+export const ALLOWED_MARKS = new Set(['bold', 'italic', 'underline', 'strike', 'textStyle', 'highlight', 'link', 'comment', 'suggestInsert', 'suggestDelete'])
 export const MAX_DOC_BYTES = 256 * 1024
 export const MAX_DEPTH = 12
 export const PREVIEW_CHARS = 160
@@ -40,10 +41,13 @@ export function cleanText(value) {
   return String(value ?? '').replace(CONTROL_CHARS, '')
 }
 
+// Suggested insertions are not the student's text until they accept them.
+export const isSuggestedInsert = (node) => Array.isArray(node?.marks) && node.marks.some((mark) => mark?.type === 'suggestInsert')
+
 function inlineText(node) {
   let out = ''
   for (const child of node.content || []) {
-    if (child?.type === 'text') out += cleanText(child.text)
+    if (child?.type === 'text') { if (!isSuggestedInsert(child)) out += cleanText(child.text) }
     else if (child?.type === 'hardBreak') out += '\n'
   }
   return out

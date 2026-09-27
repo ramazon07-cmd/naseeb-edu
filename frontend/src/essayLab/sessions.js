@@ -8,7 +8,8 @@
 // Framework-free apart from the injected send(); the editor attaches itself
 // with session.attach(editor) and detaches when the tab is switched.
 
-import { repairDoc } from './docDelta.js'
+import { ensureBids, normalizeDoc, repairDoc } from './docDelta.js'
+import { mergeBlocks } from './docMerge.js'
 import { createSaveQueue, draftKey, readDraft, reconcileDraft, removeDraft, writeDraft } from './saveQueue.js'
 
 export function createTabSession({ essayId, tab, userId, storage, send, adoptLegacyDraft = false, isOnline = () => true, onSaved = () => {} }) {
@@ -31,8 +32,9 @@ export function createTabSession({ essayId, tab, userId, storage, send, adoptLeg
     key,
     storage,
     decision,
-    // The latest text while no editor shows this tab.
-    doc: decision === 'push' ? draft.doc : tab.doc,
+    // The latest text while no editor shows this tab. Blocks without an id get
+    // the same ones the server gives them (ensureBids), so both sides agree.
+    doc: ensureBids((decision === 'push' ? draft.doc : tab.doc) || { type: 'doc', content: [{ type: 'paragraph' }] }),
     cursor: tab.last_cursor ?? null,
     editor: null,
     state: {
@@ -76,6 +78,20 @@ export function createTabSession({ essayId, tab, userId, storage, send, adoptLeg
       session.set({ savedAt: response.saved_at || new Date().toISOString() })
       onSaved(tab.id, response)
     },
+    // A newer server version (someone else's feedback or a merged save): the
+    // open editor takes it in (TabEditor sets onRemoteDoc); a tab without an
+    // editor merges it into its kept text.
+    onRemoteDoc: null,
+    absorb(serverDoc, baseDoc) {
+      const server = ensureBids(serverDoc)
+      if (session.editor && !session.editor.isDestroyed && session.onRemoteDoc) {
+        session.onRemoteDoc(server, baseDoc)
+        return
+      }
+      const local = normalizeDoc(session.doc)
+      const merged = baseDoc && local ? mergeBlocks(normalizeDoc(baseDoc), local, server) : null
+      session.doc = merged ? merged.doc : server
+    },
     // The tab was deleted: nothing more to save, no draft to keep.
     dispose() {
       session.disposed = true
@@ -90,10 +106,11 @@ export function createTabSession({ essayId, tab, userId, storage, send, adoptLeg
     storage,
     key,
     baseSeq: tab.save_seq ?? 0,
-    baseDoc: tab.doc,
+    baseDoc: tab.doc ? ensureBids(tab.doc) : tab.doc,
     isOnline,
     onStatus: (status) => session.set(status === 'saved' || status === 'saving' ? { status, error: null } : { status }),
     onSaved: (response) => session.applySaved(response),
+    onMerged: (serverDoc, sentDoc) => session.absorb(serverDoc, sentDoc),
     onConflict: (details) => session.set({ conflict: details || {} }),
     onStorageWarning: () => session.set({ storageWarning: true }),
     onError: (error) => session.set({ error }),
