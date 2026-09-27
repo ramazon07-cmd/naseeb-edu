@@ -123,3 +123,24 @@ def complete_password_change(*, user, new_password, request=None):
         metadata=request_audit_metadata(request),
     )
     return locked_user
+
+
+@transaction.atomic
+def change_own_password(*, user, new_password, request=None):
+    """A signed-in user replaces their own (already permanent) password.
+
+    Bumping ``password_version`` ends every other session: their tokens carry
+    the old version. The caller hands this session a fresh token pair.
+    """
+    locked_user = User.objects.select_for_update().get(pk=user.pk)
+    locked_user.set_password(new_password)
+    locked_user.password_version += 1
+    locked_user.password_changed_at = timezone.now()
+    locked_user.save(update_fields=['password', 'password_version', 'password_changed_at'])
+    CredentialAuditEvent.objects.create(
+        target_user=locked_user,
+        actor=locked_user,
+        event=CredentialAuditEvent.Event.PASSWORD_CHANGED,
+        metadata={**request_audit_metadata(request), 'voluntary': True},
+    )
+    return locked_user

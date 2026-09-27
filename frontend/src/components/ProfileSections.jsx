@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Pencil } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Pencil } from 'lucide-react';
 import { api } from '../api';
 import { t, tx, formatPercentLocale } from '../i18n';
 import { fieldErrorsFrom } from '../lib/onboardingDraft';
-import { answersPayload, listText, profileAnswers, readinessHints, sectionByKey, validateSection } from '../lib/profileSections';
-import { gradeText, joinParts } from '../lib/format';
+import { answersPayload, listText, profileAnswers, readinessHints, sectionByKey, sectionReview, validateSection } from '../lib/profileSections';
+import { gradeText, joinParts, locationText } from '../lib/format';
 import { label } from '../lib/labels';
 import { Detail } from './records';
 import { ProfilePhotoField, ProfileSectionFields } from './profileFields';
@@ -28,7 +28,7 @@ function SectionSummary({ section, student }) {
   </div>;
   if (section === 'academics') return <div className="detail-grid">
     <Detail label={t('School')} value={student.school_name} />
-    <Detail label={t('Location')} value={joinParts(answers.city, answers.state, answers.country)} />
+    <Detail label={t('Location')} value={locationText(answers)} />
     <Detail label={t('GPA')} value={student.gpa != null && student.gpa !== '' ? `${Number(student.gpa)}${student.gpa_scale ? ` / ${student.gpa_scale}` : ''}` : null} />
     <Detail label={t('Class ranking')} value={answers.class_rank ? `${answers.class_rank}${answers.class_size ? ` / ${answers.class_size}` : ''}` : null} />
   </div>;
@@ -96,12 +96,17 @@ function SectionCard({ section, student, editing, locked, onEdit, onClose, reloa
     } finally { setSaving(false); }
   }
   const headingId = `profile-section-${section.key}`;
+  const review = sectionReview(student, section.key);
   return <section ref={cardRef} className={`panel profile-section-card${editing ? ' is-editing' : ''}`} aria-labelledby={headingId} id={`section-${section.key}`}>
     <header>
       <h2 id={headingId}>{title}</h2>
-      {!editing && <button type="button" className="button quiet small profile-section-edit" onClick={onEdit} disabled={locked} title={locked ? t('Save or cancel the section you are editing first.') : undefined} aria-label={tx`Edit ${title}`}><Pencil size={15} /> {t('Edit')}</button>}
+      <span className="profile-section-tools">
+        <SectionReviewStatus review={review} />
+        {!editing && <button type="button" className="button quiet small profile-section-edit" onClick={onEdit} disabled={locked} title={locked ? t('Save or cancel the section you are editing first.') : undefined} aria-label={tx`Edit ${title}`}><Pencil size={15} /> {t('Edit')}</button>}
+      </span>
     </header>
     <div className="panel-body">
+      {review.note && <p className="profile-section-note"><b>{t('Counselor note:')}</b> {review.note}</p>}
       {!editing && <SectionSummary section={section.key} student={student} />}
       {editing && form && <form ref={formRef} className="profile-section-form" onSubmit={save} noValidate>
         {error && <p className="onboarding-message error" role="alert">{error}</p>}
@@ -114,6 +119,13 @@ function SectionCard({ section, student, editing, locked, onEdit, onClose, reloa
       </form>}
     </div>
   </section>;
+}
+
+// The counselor's review of a whole section (Not reviewed, Waiting for review,
+// Approved, Needs changes).
+function SectionReviewStatus({ review }) {
+  const Icon = review.status === 'approved' ? CheckCircle2 : review.status === 'changes_requested' ? AlertCircle : null;
+  return <span className={`profile-status ${review.tone}`.trim()}>{Icon && <Icon size={14} aria-hidden="true" />} {t(review.label)}</span>;
 }
 
 // A counselor's verification is the only review state these records have:

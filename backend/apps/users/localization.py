@@ -1,3 +1,5 @@
+from . import api_messages
+
 SUPPORTED_LANGUAGES = {'uz', 'ru', 'en'}
 
 MESSAGES = {
@@ -143,6 +145,10 @@ def localized_api_error(message, status_code, request=None, language=None):
     exact = COMMON_API_MESSAGES.get(text, {})
     if exact.get(selected):
         return exact[selected]
+
+    known = api_messages.translate(text, selected)
+    if known:
+        return known
 
     category = status_code if status_code in API_STATUS_MESSAGES else (500 if status_code >= 500 else 400)
     return API_STATUS_MESSAGES[category][selected]

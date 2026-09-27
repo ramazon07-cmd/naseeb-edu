@@ -90,6 +90,7 @@ from .parents import (  # noqa: F401
     ParentLinkPermission,
     ParentStudentLinkViewSet,
     ParentPortalView,
+    StudentParentAccessView,
 )
 from .dashboard import (  # noqa: F401
     PUBLIC_REACH_CACHE_KEY,

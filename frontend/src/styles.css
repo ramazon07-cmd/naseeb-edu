@@ -497,6 +497,17 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+button.chat-shared-item {
+  width: 100%;
+  min-height: 44px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .chat-shared-item > svg {
   flex: none;
   color: var(--muted);
@@ -13734,5 +13745,258 @@ a:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .file-progress-track span {
     transition: none;
+  }
+}
+
+/* Student account settings */
+.account-settings {
+  max-width: 880px;
+}
+
+.account-settings-panel > header svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.account-settings-muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.account-password-input {
+  position: relative;
+  display: block;
+}
+
+.account-password-input input {
+  width: 100%;
+  padding-right: 48px;
+}
+
+.account-password-input .icon-button {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 44px;
+  height: 44px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+}
+
+.account-settings .field :is(input, select) {
+  min-height: 44px;
+}
+
+.account-settings .field input[readonly] {
+  color: var(--muted);
+  background: var(--surface-inset);
+}
+
+.account-settings .form-actions .button {
+  min-height: 44px;
+}
+
+.account-language {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.account-language .language-selector {
+  min-height: 44px;
+}
+
+.account-language .language-selector select {
+  height: 42px;
+}
+
+.account-parent-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.account-parent-list > li {
+  display: grid;
+  gap: var(--space-2);
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.account-parent-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.account-parent-relationship {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.account-parent-heading .badge {
+  margin-left: auto;
+}
+
+.account-parent-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-parent-sections li {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.account-parent-sections li.is-visible {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: var(--success-border);
+}
+
+.account-parent-sections li.is-hidden {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.account-parent-never {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.account-parent-never svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--success);
+}
+
+@media (max-width: 560px) {
+  .account-settings .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-settings-spacer {
+    display: none;
+  }
+
+  .account-settings .form-actions .button {
+    width: 100%;
+  }
+
+  .account-parent-heading .badge {
+    margin-left: 0;
+  }
+}
+
+/* Student portal on phones: every control is at least a 44px thumb target.
+   Scoped to .role-student (set on the shell for student accounts only), so
+   counselor, parent and admin layouts keep their denser controls. */
+@media (max-width: 560px) {
+  .app-shell.role-student .button,
+  .app-shell.role-student .button.small,
+  .app-shell.role-student .portal-tabs button,
+  .app-shell.role-student .support-toolbar .portal-tabs button,
+  .app-shell.role-student .assessment-card-action,
+  .app-shell.role-student .sidebar nav button,
+  .app-shell.role-student .sidebar-utilities button,
+  .app-shell.role-student .sidebar-account-menu button,
+  .app-shell.role-student .dashboard-link,
+  .app-shell.role-student .chat-new-button,
+  .app-shell.role-student .channel-folder,
+  .app-shell.role-student .messaging-page .channel-search,
+  .app-shell.role-student .program-search,
+  .app-shell.role-student .el-chip {
+    min-height: 44px;
+  }
+
+  .app-shell.role-student .portal-tabs button,
+  .app-shell.role-student .support-toolbar .portal-tabs button,
+  .app-shell.role-student .messaging-page .channel-more-folders {
+    min-width: 44px;
+  }
+
+  .app-shell.role-student .icon-button,
+  .app-shell.role-student .el-icon-btn,
+  .app-shell.role-student .el-card-menu .el-icon-btn,
+  .app-shell.role-student .messaging-page .message-send {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .app-shell.role-student .el-btn,
+  .app-shell.role-student .el-toggle button,
+  .app-shell.role-student .screen-time-toolbar select,
+  .app-shell.role-student .top-header .language-selector select {
+    height: 44px;
+  }
+
+  .app-shell.role-student .el-toggle button {
+    width: 44px;
+  }
+
+  .app-shell.role-student .top-header .language-selector {
+    min-height: 44px;
+  }
+
+  .app-shell.role-student .dashboard-link {
+    padding-top: 0;
+  }
+
+  .app-shell.role-student .el-compact-bar .el-tool {
+    min-width: 44px;
+  }
+
+  .app-shell.role-student .el-counter-btn {
+    height: 44px;
+  }
+
+  .app-shell.role-student .el-menu button {
+    min-height: 44px;
+  }
+
+  .app-shell.role-student .el-prompt {
+    padding-block: 0;
+  }
+
+  .app-shell.role-student .el-prompt summary,
+  .app-shell.role-student .el-prompt .el-link {
+    min-height: 44px;
+  }
+
+  .app-shell.role-student .el-prompt .el-link {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* A 44px drag handle that keeps the 20px icon where it was. */
+  .app-shell.role-student .customizer-grip {
+    width: 44px;
+    height: 44px;
+    margin-inline: -12px;
+  }
+
+  .app-shell.role-student .program-card summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
 }

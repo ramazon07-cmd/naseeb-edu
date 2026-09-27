@@ -920,6 +920,12 @@ class ChannelMembership(models.Model):
         return f'{self.user} in {self.channel}'
 
 
+def message_attachment_upload_path(instance, filename):
+    """Chat attachments are private: UUID names, one folder per conversation."""
+    suffix = Path(filename or '').suffix.lower()[:12]
+    return f'message_attachments/{instance.channel_id}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
+
+
 class ChannelMessage(TimeStampedModel):
     channel = models.ForeignKey(MessageChannel, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(
@@ -934,6 +940,16 @@ class ChannelMessage(TimeStampedModel):
     is_edited = models.BooleanField(default=False)
     is_accepted_answer = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    # One private file per message, served only to the conversation's members.
+    attachment = models.FileField(
+        upload_to=message_attachment_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    attachment_name = models.CharField(max_length=255, blank=True)
+    attachment_content_type = models.CharField(max_length=120, blank=True)
+    attachment_size = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         ordering = ['created_at', 'id']
@@ -1773,6 +1789,7 @@ class Notification(TimeStampedModel):
         ESSAY = 'essay', 'Essay'
         MEETING = 'meeting', 'Meeting'
         MESSAGE = 'message', 'Message'
+        PROFILE_REVIEW = 'profile_review', 'Profile review'
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='notifications')
     title = models.CharField(max_length=220)
@@ -1790,6 +1807,41 @@ class Notification(TimeStampedModel):
 
     def __str__(self):
         return self.title
+
+
+class ProfileSectionReview(TimeStampedModel):
+    """The counselor's review of one Student Center section of a student's profile.
+
+    A section without a row has never been reviewed. Saving changes to a
+    section sends it back to "waiting for review".
+    """
+    class Section(models.TextChoices):
+        PERSONAL = 'personal', 'Personal & contact'
+        ACADEMICS = 'academics', 'Academics'
+        TESTS = 'tests', 'Test scores'
+        GOAL = 'goal', 'Study goal & targets'
+        HONORS = 'honors', 'Honors'
+        ACTIVITIES = 'activities', 'Activities'
+
+    class Status(models.TextChoices):
+        NOT_REVIEWED = 'not_reviewed', 'Not reviewed'
+        WAITING = 'waiting', 'Waiting for review'
+        APPROVED = 'approved', 'Approved'
+        CHANGES_REQUESTED = 'changes_requested', 'Needs changes'
+
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='section_reviews')
+    section = models.CharField(max_length=20, choices=Section.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_REVIEWED)
+    note = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['student', 'section']
+        constraints = [models.UniqueConstraint(fields=['student', 'section'], name='unique_profile_section_review')]
+
+    def __str__(self):
+        return f'{self.student_id} {self.section}: {self.status}'
 
 
 class ActivityLog(TimeStampedModel):

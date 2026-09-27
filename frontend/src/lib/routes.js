@@ -27,6 +27,7 @@ export const PAGE_PATHS = {
   store: '/store',
   support: '/support',
   screen_time: '/screen-time',
+  account_settings: '/account',
   parent_progress: '/family/progress',
   parent_tasks: '/family/tasks',
   parent_applications: '/family/applications',
@@ -138,9 +139,13 @@ export function lockedPages(user) {
 
 export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
+// Pages opened from the account menu rather than the sidebar list.
+const ACCOUNT_MENU_PAGES = { student: ['account_settings'] };
+
 export function reachablePages(user) {
   if (!user) return new Set();
   const extra = user.role === 'parent' && !isPlatformAdmin(user) ? [] : ['screen_time'];
+  if (!isPlatformAdmin(user)) extra.push(...(ACCOUNT_MENU_PAGES[user.role] || []));
   const locked = lockedPages(user);
   return new Set([...navigationFor(user), ...extra].filter((page) => !locked.has(page)));
 }

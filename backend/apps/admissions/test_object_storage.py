@@ -443,9 +443,9 @@ class MigrateFilesToObjectStorageTests(ObjectStorageFixture):
     @override_settings(STORAGES=in_memory_storages())
     def test_reads_rows_in_bounded_batches(self):
         # One keyset-paginated query per batch: Document.file has 4 rows
-        # (2 + 2 + an empty page); the seven other file fields hold at most one
+        # (2 + 2 + an empty page); the eight other file fields hold at most one
         # row each, which a single short page answers.
-        with self.assertNumQueries(3 + 7):
+        with self.assertNumQueries(3 + 8):
             self.migrate('--batch-size', '2', '--dry-run')
 
     def test_refuses_to_run_against_the_local_disk(self):

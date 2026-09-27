@@ -4,7 +4,7 @@ import { t } from '../i18n';
 import { EMPTY_DATA } from '../lib/emptyData';
 import { createKeyedLatest } from '../lib/latestRequest';
 import { planWorkspaceReload } from '../lib/reloadPlan';
-import { PAGED_ENDPOINTS, loadsDashboardStats, pagedListsAfter, resourcesFor, waitsBeforeLoading } from '../lib/workspaceResources';
+import { PAGED_ENDPOINTS, STUDENT_SHELL_KEYS, loadsLazily, missingKeys, pagedListsAfter, resourcesFor, selectWorkspaceLoad, waitsBeforeLoading } from '../lib/workspaceResources';
 import { clearPagedLists, invalidatePagedLists } from './usePagedList';
 
 // loadData(user, RELOAD_CHANGED): refetch what the last saves touched.
@@ -14,6 +14,11 @@ export const RELOAD_CHANGED = 'changed';
  * Workspace data for the signed-in user: every collection their role sees,
  * dashboard stats and per-resource loading state. `onUnauthorized` runs when
  * a load comes back 401 after the token refresh already failed.
+ *
+ * Students load lazily (lib/workspaceResources loadsLazily): `loadInitial`
+ * fetches only the shell's collections and `ensureLoaded` fetches a page's
+ * collections the first time it opens; reloads refetch only what was loaded.
+ * Every other role loads everything in `loadInitial`, exactly as `loadData`.
  */
 export function useWorkspaceData(user, onUnauthorized) {
   const [data, setData] = useState(EMPTY_DATA);
@@ -23,6 +28,9 @@ export function useWorkspaceData(user, onUnauthorized) {
   const [resourceStatus, setResourceStatus] = useState({});
   const latestLoads = useRef(createKeyedLatest());
   const inFlightLoads = useRef(0);
+  // Keys fetched (or being fetched) at least once since sign-in.
+  const requestedOnce = useRef(new Set());
+  const requestedFor = useRef(null);
 
   const loadData = useCallback(async (activeUser = user, requestedKeys = null) => {
     if (waitsBeforeLoading(activeUser)) return;
@@ -34,15 +42,15 @@ export function useWorkspaceData(user, onUnauthorized) {
       // student progress); unknown writes still trigger a full reload.
       const written = api.takeMutations();
       invalidatePagedLists(pagedListsAfter(written));
-      const planned = requestedKeys === RELOAD_CHANGED ? planWorkspaceReload(written, resources, ['dashboard', 'students'], PAGED_ENDPOINTS) : requestedKeys;
-      const requested = planned ? new Set(planned) : null;
-      const selected = [
-      ...(loadsDashboardStats(activeUser) ? [['dashboard']] : []),
-      ...resources].
-      filter(([key]) => !requested || requested.has(key));
+      const changed = requestedKeys === RELOAD_CHANGED;
+      const planned = changed ? planWorkspaceReload(written, resources, ['dashboard', 'students'], PAGED_ENDPOINTS) : requestedKeys;
+      const selected = selectWorkspaceLoad(activeUser, planned, requestedOnce.current, { changed });
+      selected.forEach(([key]) => requestedOnce.current.add(key));
+      // `loaded` stays true once a key has arrived, so a page can tell its
+      // first load (skeleton) from a background refresh (keep showing data).
       setResourceStatus((current) => {
         const next = { ...current };
-        selected.forEach(([key]) => {next[key] = { status: 'loading', error: '' };});
+        selected.forEach(([key]) => {next[key] = { status: 'loading', error: '', loaded: Boolean(current[key]?.loaded) };});
         return next;
       });
       // Only the newest request per key may write: an older, slower reload
@@ -66,12 +74,12 @@ export function useWorkspaceData(user, onUnauthorized) {
         const key = requests[index][0];
         if (!isCurrent(key)) return;
         if (result.status === 'fulfilled') {
-          nextStatuses[key] = { status: 'success', error: '' };
+          nextStatuses[key] = { status: 'success', error: '', loaded: true };
           if (key === 'dashboard') dashboardStats = result.value;else
           successfulResources[key] = result.value || [];
         } else {
           unauthorized ||= result.reason?.status === 401;
-          nextStatuses[key] = { status: 'error', error: result.reason?.message || 'Unable to load this section.' };
+          nextStatuses[key] = { status: 'error', error: result.reason?.message || 'Unable to load this section.', loaded: false };
         }
       });
       if (unauthorized) {
@@ -82,7 +90,11 @@ export function useWorkspaceData(user, onUnauthorized) {
       if (Object.keys(successfulResources).length) {
         setData((current) => ({ ...current, ...successfulResources }));
       }
-      setResourceStatus((current) => ({ ...current, ...nextStatuses }));
+      setResourceStatus((current) => {
+        const next = { ...current };
+        Object.entries(nextStatuses).forEach(([key, status]) => {next[key] = { ...status, loaded: status.loaded || Boolean(current[key]?.loaded) };});
+        return next;
+      });
       if (settled.length > 0 && settled.every((result) => result.status === 'rejected')) {
         setError(t("No new information could be loaded. Check your connection and retry."));
       }
@@ -94,14 +106,38 @@ export function useWorkspaceData(user, onUnauthorized) {
     }
   }, [user, onUnauthorized]);
 
+  // Fetch the keys this user's workspace has not requested yet (a student
+  // opening a page for the first time). Keys already loaded or in flight are
+  // never fetched twice.
+  const ensureLoaded = useCallback((activeUser, keys) => {
+    if (waitsBeforeLoading(activeUser)) return Promise.resolve();
+    const missing = missingKeys(activeUser, keys, requestedOnce.current);
+    return missing.length ? loadData(activeUser, missing) : Promise.resolve();
+  }, [loadData]);
+
   // Sign-out: drop in-flight responses and everything loaded for the user.
   const reset = useCallback(() => {
     latestLoads.current.cancelAll();
+    requestedOnce.current = new Set();
+    requestedFor.current = null;
     clearPagedLists();
     setData(EMPTY_DATA);
     setStats(null);
     setResourceStatus({});
   }, []);
 
-  return { data, stats, loading, error, resourceStatus, loadData, reset };
+  // Sign-in: students get the shell's collections (their current page asks
+  // for its own through ensureLoaded); other roles load everything. Signing
+  // in again after an expired session refetches what was already loaded.
+  const loadInitial = useCallback((activeUser) => {
+    if (!loadsLazily(activeUser)) return loadData(activeUser);
+    // Another account in this tab: nothing loaded for the last one may show.
+    if (requestedFor.current !== activeUser?.id) {
+      if (requestedFor.current !== null) reset();
+      requestedFor.current = activeUser?.id;
+    }
+    return requestedOnce.current.size ? loadData(activeUser) : ensureLoaded(activeUser, STUDENT_SHELL_KEYS);
+  }, [ensureLoaded, loadData, reset]);
+
+  return { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset };
 }

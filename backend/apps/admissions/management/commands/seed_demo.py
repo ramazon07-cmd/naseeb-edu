@@ -6,7 +6,7 @@ from apps.users.models import User
 from apps.admissions.models import (
     Achievement, Activity, Application, Booking, Document, Essay,
     ChannelMembership, ChannelMessage, Honor, Internship, MeetingNote, MessageChannel,
-    Notification, OpportunityProgram, ParentStudentLink, ProgramService, Project,
+    Notification, OpportunityProgram, ParentStudentLink, ProfileSectionReview, ProgramService, Project,
     RecommendationLetter, Research, RoadmapMission, School,
     Scholarship, StoreItem, StudentMessage, StudentProfile, Task, University,
 )
@@ -663,6 +663,17 @@ class Command(BaseCommand):
                 'revoked_at': None,
             },
         )
+
+        # Profile section reviews: one approved card and one sent back with a note.
+        for section, status, note in (
+            (ProfileSectionReview.Section.ACADEMICS, ProfileSectionReview.Status.APPROVED, ''),
+            (ProfileSectionReview.Section.TESTS, ProfileSectionReview.Status.CHANGES_REQUESTED,
+             'Please add your IELTS test date and the four section scores from your test report.'),
+        ):
+            ProfileSectionReview.objects.update_or_create(
+                student=ramazon_profile, section=section,
+                defaults={'status': status, 'note': note, 'reviewed_by': counselor, 'reviewed_at': timezone.now()},
+            )
 
         self.stdout.write(self.style.SUCCESS(
             'Demo data created. Credentials are configured through local DEMO_*_PASSWORD variables.'

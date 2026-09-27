@@ -123,6 +123,10 @@ const evidenceFileRequest = (resource, id, download = false) =>
 const taskSubmissionFileRequest = (id, download = false) =>
   protectedFileRequest(`/tasks/${id}/submission-file/`, { download })
 
+// Chat attachments are served only to members of the conversation.
+const messageAttachmentRequest = (id, download = false) =>
+  protectedFileRequest(`/channel-messages/${id}/attachment/`, { download })
+
 const recommendationFileRequest = (id, download = false) =>
   protectedFileRequest(`/recommendations/${id}/file/`, { download })
 
@@ -374,6 +378,26 @@ export const api = {
     body: JSON.stringify(password ? { password } : {}),
   }),
   me: () => request('/users/accounts/me/'),
+  // Account settings. A password change ends the other sessions and hands this
+  // one a new token pair, stored here so the user stays signed in.
+  changeOwnPassword: async (currentPassword, newPassword, confirmPassword) => {
+    const payload = await request('/users/accounts/me/password/', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword }),
+    })
+    saveTokens(payload)
+    return payload
+  },
+  changeOwnEmail: (currentPassword, email) => request('/users/accounts/me/email/', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, email }),
+  }),
+  dashboardLayout: () => request('/users/accounts/me/dashboard-layout/'),
+  saveDashboardLayout: (layout) => request('/users/accounts/me/dashboard-layout/', {
+    method: 'PUT',
+    body: JSON.stringify({ layout }),
+  }),
+  myParents: () => request('/my-parents/'),
   health: () => request('/health/'),
   dashboard: () => request('/dashboard/stats/'),
   collegeResearch: () => request('/college-research/'),
@@ -436,6 +460,8 @@ export const api = {
     return request(`/students/${id}/photo/`, { method: 'POST', body: payload, timeoutMs: 120_000 })
   },
   removeStudentPhoto: (id) => request(`/students/${id}/photo/`, { method: 'DELETE' }),
+  messageAttachment: (id) => messageAttachmentRequest(id),
+  downloadMessageAttachment: (id) => messageAttachmentRequest(id, true),
   documentFile: (id) => documentFileRequest(id),
   downloadDocument: (id) => documentFileRequest(id, true),
   evidenceFile: (resource, id) => evidenceFileRequest(resource, id),

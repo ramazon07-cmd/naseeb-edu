@@ -164,3 +164,14 @@ test('profile answers are edited on Student Center cards; /profile leads there',
   assert.equal(buildPath({ page: 'student_center', params: { edit: 'goal', tab: 'documents' } }), '/student-center?edit=goal');
   assert.equal(buildPath({ page: 'student_center', params: { edit: 'nope' } }), '/student-center');
 });
+
+test('account settings open from the account menu for students only', () => {
+  assert.equal(parsePath('/account').page, 'account_settings');
+  assert.equal(buildPath({ page: 'account_settings' }), '/account');
+  assert.equal(canOpenPage('account_settings', student), true);
+  assert.ok(!navigationFor(student).includes('account_settings'), 'not a sidebar item');
+  for (const user of [counselor, teacher, parent, organization, admin, { id: 9, role: 'student', is_superuser: true }]) {
+    assert.equal(canOpenPage('account_settings', user), false, user.role);
+  }
+  assert.deepEqual(resolveRoute(parsePath('/account'), counselor), { page: 'dashboard', params: {} });
+});

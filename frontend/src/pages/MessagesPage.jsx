@@ -3,7 +3,7 @@ import { api } from '../api';
 import { t, tp, tx } from '../i18n';
 import { label, fullName, initials } from '../lib/labels';
 import { Modal, Empty, Badge } from '../components/ui';
-import { Search, Plus, Trash2, ShieldCheck, Flag, ShieldAlert, MessageCircle, UsersRound, Globe2, BookOpen, Bookmark, MessageSquareText, FolderKanban, Pencil, ArrowLeft, Info, X, CheckCircle2, Check, Smile, Send } from 'lucide-react';
+import { Search, Plus, Trash2, ShieldCheck, Flag, ShieldAlert, MessageCircle, UsersRound, Globe2, BookOpen, Bookmark, MessageSquareText, FolderKanban, Pencil, ArrowLeft, Info, X, CheckCircle2, Check, Smile, Send, Paperclip } from 'lucide-react';
 import { ChannelListSkeleton, InlineLoadError, StaffStatsSkeleton, MessageListSkeleton } from '../components/states';
 import { Field, CheckboxControl, PortalTabs } from '../components/forms';
 import { dateTimeText, chatStampText, dateText, clockText } from '../lib/format';
@@ -17,6 +17,11 @@ import ChatDetails from '../ChatDetails';
 import { CounselorInboxItem, CounselorInboxThread, useCounselorInbox } from '../components/CounselorInbox';
 import { COUNSELOR_INBOX } from '../lib/counselorInbox';
 import { channelListEmpty } from '../lib/channelList';
+import { MessageAttachment } from '../components/MessageAttachment';
+import { AttachmentPreviewModal } from '../components/documents';
+import { uploadProblemMessage, FileTypeIcon } from '../components/files';
+import { UPLOAD_ACCEPT, toFormData, uploadProblem } from '../lib/fileUpload';
+import { formatFileSize } from '../lib/format';
 
 export function MessageChannelForm({ kind, user, onClose, onSaved, notify }) {
   const [contacts, setContacts] = useState([]);
@@ -215,6 +220,11 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, op
   const [messages, setMessages] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [sendError, setSendError] = useState('');
+  // One file per message; students send files to their counselor in direct chats.
+  const [pendingFile, setPendingFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [previewing, setPreviewing] = useState(null);
+  const fileInputRef = useRef(null);
   const [anonymous, setAnonymous] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
   const [search, setSearch] = useState('');
@@ -280,6 +290,7 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, op
     setHasOlder(false);
     setMessages([]);
     setSendError('');
+    setPendingFile(null);
     setReplyTo(null);
     setAnonymous(false);
     setEmojiOpen(false);
@@ -293,6 +304,7 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, op
   const staffInterface = ['counselor', 'organization'].includes(user.role);
   const moderationEnabled = isTaskManager(user) || user.role === 'organization';
   const canCreate = tab === 'direct' || tab === 'discussion' || isTaskManager(user) || user.role === 'organization';
+  const canAttach = user.role === 'student' && activeChannel?.kind === 'direct';
   const canAccept = activeChannel?.kind === 'discussion' && (isTaskManager(user) || ['owner', 'moderator'].includes(activeChannel?.my_role));
   const canManageMembers = activeChannel?.kind !== 'direct' && activeChannel?.is_member && (isTaskManager(user) || user.role === 'organization' || ['owner', 'moderator'].includes(activeChannel?.my_role));
 
@@ -477,19 +489,28 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, op
 
   async function send(event) {
     event.preventDefault();
-    if (sendLock.current || !activeChannel?.is_member || !body.trim()) return;
+    const file = canAttach ? pendingFile : null;
+    if (sendLock.current || !activeChannel?.is_member || (!body.trim() && !file)) return;
     const channel = activeChannel;
     sendLock.current = true;
     setSaving(true);
     setSendError('');
     try {
-      const sent = await api.create('channel-messages', {
+      const payload = {
         channel: channel.id,
         body: body.trim(),
         is_anonymous: ['community', 'discussion'].includes(channel.kind) && anonymous,
         ...(replyTo?.channel === channel.id ? { parent: replyTo.id } : {})
-      });
+      };
+      let sent;
+      if (file) {
+        setUploadProgress(0);
+        sent = await api.saveWithFiles('channel-messages', null, toFormData({ ...payload, attachment: file }), { onProgress: setUploadProgress });
+      } else {
+        sent = await api.create('channel-messages', payload);
+      }
       setDrafts((current) => ({ ...current, [channel.id]: '' }));
+      if (activeChannelRef.current === channel.id) setPendingFile(null);
       poller.current?.reset();
       if (activeChannelRef.current === channel.id) {
         messageRequest.current += 1;
@@ -500,14 +521,30 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, op
         setReplyTo(null);
         if (composerRef.current) {composerRef.current.style.height = 'auto';composerRef.current.focus();}
       }
-      setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, last_message: { body: sent.body, created_at: sent.created_at, sender_name: sent.sender_name }, last_message_at: sent.created_at } : item));
+      setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, last_message: { body: sent.body, attachment_name: sent.attachment_file?.name || '', created_at: sent.created_at, sender_name: sent.sender_name }, last_message_at: sent.created_at } : item));
     } catch (err) {
       if (activeChannelRef.current === channel.id) setSendError(err.message);
       else notify(err.message, 'error');
     } finally {
       sendLock.current = false;
       setSaving(false);
+      setUploadProgress(null);
     }
+  }
+
+  function chooseFile(files) {
+    const next = files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!next) return;
+    const problem = uploadProblem(next);
+    if (problem) {
+      setPendingFile(null);
+      setSendError(uploadProblemMessage(problem));
+      return;
+    }
+    setSendError('');
+    setPendingFile(next);
+    composerRef.current?.focus();
   }
 
   async function join() {
@@ -567,7 +604,7 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, op
         </header>
         <div className="channel-folders" role="tablist" aria-label={t("Messages")}>{CHANNEL_TABS.filter(([kind]) => moreFolders || ['direct', 'group', tab].includes(kind)).map(([kind, title]) => <button key={kind} type="button" role="tab" aria-selected={tab === kind} className={`channel-folder folder-${kind} ${tab === kind ? 'active' : ''}`} onClick={() => {setTab(kind);setActiveId(null);setSearch('');}}>{t(title)}{folderUnread[kind] ? <em className="folder-count" aria-label={tx`${folderUnread[kind]} unread`}>{folderUnread[kind] > 99 ? '99+' : folderUnread[kind]}</em> : null}</button>)}<button type="button" className="channel-folder channel-more-folders" aria-expanded={moreFolders} aria-label={t("More folders")} title={t("More folders")} onClick={() => setMoreFolders(!moreFolders)}><FolderKanban size={17} /></button>{moderationEnabled && !staffInterface && <button type="button" className="channel-folder channel-moderation" onClick={() => setModerationOpen(true)} aria-label={t("Moderation")} title={t("Moderation")}><ShieldAlert size={16} />{overview?.pending_reports ? <em>{overview.pending_reports}</em> : null}</button>}</div>
         <label className="channel-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search chats…")} aria-label={tx`Search ${channelTabLabel(tab)} channels`} /></label>
-        <div className="channel-list" aria-busy={loadingChannels}>{tab === 'direct' && !search && !visibleChannels.some((channel) => channel.is_saved_messages) && <button type="button" className="channel-item saved-messages" disabled={openingSaved} onClick={openSavedMessages}><span className="avatar saved-avatar"><Bookmark size={23} /></span><span className="channel-item-copy"><b>{t("Saved Messages")}</b><small>{openingSaved ? t("Opening…") : t("Your notes and links")}</small></span></button>}{tab === 'direct' && !search && <CounselorInboxItem inbox={inbox} user={user} active={inboxOpen} onOpen={() => setActiveId(COUNSELOR_INBOX)} />}{loadingChannels ? <ChannelListSkeleton /> : channelError ? <InlineLoadError message={channelError} onRetry={() => refreshChannels(tab, search, activeId)} /> : <>{visibleChannels.map((channel) => <button type="button" key={channel.id} className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''} ${channel.unread_count > 0 ? 'unread' : ''} ${channel.is_saved_messages ? 'saved-messages' : ''}`} aria-current={activeChannel?.id === channel.id ? 'true' : undefined} onClick={() => setActiveId(channel.id)}><span className={`avatar ${channel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(channel.id)}`}`}>{channel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(channel.display_name) : <SpaceIcon size={20} />}</span><span className="channel-item-copy"><span className="channel-item-top"><b>{channel.is_saved_messages ? t("Saved Messages") : channel.display_name}</b>{channel.last_message?.created_at && <time>{chatStampText(channel.last_message.created_at)}</time>}</span><span className="channel-item-bottom"><small>{channel.last_message?.body || (channel.is_saved_messages ? t("Your notes and links") : tab === 'direct' ? t("No messages yet") : channel.description || tp('{n} member|{n} members', channel.members_count, { n: channel.members_count }))}</small>{channel.unread_count > 0 && <strong aria-label={tx`${channel.unread_count} unread`}>{channel.unread_count > 99 ? '99+' : channel.unread_count}</strong>}</span></span></button>)}{listEmpty && <div className="channel-list-empty"><SpaceIcon size={26} /><p>{listEmpty === 'search' ? t("No conversation matches your search.") : t("No conversations here yet.")}</p></div>}</>}</div>
+        <div className="channel-list" aria-busy={loadingChannels}>{tab === 'direct' && !search && !visibleChannels.some((channel) => channel.is_saved_messages) && <button type="button" className="channel-item saved-messages" disabled={openingSaved} onClick={openSavedMessages}><span className="avatar saved-avatar"><Bookmark size={23} /></span><span className="channel-item-copy"><b>{t("Saved Messages")}</b><small>{openingSaved ? t("Opening…") : t("Your notes and links")}</small></span></button>}{tab === 'direct' && !search && <CounselorInboxItem inbox={inbox} user={user} active={inboxOpen} onOpen={() => setActiveId(COUNSELOR_INBOX)} />}{loadingChannels ? <ChannelListSkeleton /> : channelError ? <InlineLoadError message={channelError} onRetry={() => refreshChannels(tab, search, activeId)} /> : <>{visibleChannels.map((channel) => <button type="button" key={channel.id} className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''} ${channel.unread_count > 0 ? 'unread' : ''} ${channel.is_saved_messages ? 'saved-messages' : ''}`} aria-current={activeChannel?.id === channel.id ? 'true' : undefined} onClick={() => setActiveId(channel.id)}><span className={`avatar ${channel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(channel.id)}`}`}>{channel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(channel.display_name) : <SpaceIcon size={20} />}</span><span className="channel-item-copy"><span className="channel-item-top"><b>{channel.is_saved_messages ? t("Saved Messages") : channel.display_name}</b>{channel.last_message?.created_at && <time>{chatStampText(channel.last_message.created_at)}</time>}</span><span className="channel-item-bottom"><small>{channel.last_message?.body || channel.last_message?.attachment_name || (channel.is_saved_messages ? t("Your notes and links") : tab === 'direct' ? t("No messages yet") : channel.description || tp('{n} member|{n} members', channel.members_count, { n: channel.members_count }))}</small>{channel.unread_count > 0 && <strong aria-label={tx`${channel.unread_count} unread`}>{channel.unread_count > 99 ? '99+' : channel.unread_count}</strong>}</span></span></button>)}{listEmpty && <div className="channel-list-empty"><SpaceIcon size={26} /><p>{listEmpty === 'search' ? t("No conversation matches your search.") : t("No conversations here yet.")}</p></div>}</>}</div>
         {canCreate && <button type="button" className="channel-compose" onClick={() => setOpen(true)} aria-label={newChannelLabel} title={newChannelLabel}><Pencil size={19} /></button>}
       </aside>
       {inboxOpen ? <CounselorInboxThread inbox={inbox} user={user} onBack={() => setActiveId('list')} onClose={() => setActiveId(null)} onContinue={continueWithCounselor} /> : activeChannel ? <section className="message-thread"><header><div><button type="button" className="icon-button message-back" onClick={() => setActiveId('list')} aria-label={t("Back to conversations")}><ArrowLeft size={18} /></button><span className={`avatar ${activeChannel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(activeChannel.id)}`}`}>{activeChannel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(activeChannel.display_name) : <SpaceIcon size={22} />}</span><div><b>{activeChannel.is_saved_messages ? t("Saved Messages") : activeChannel.display_name}</b><small>{activeChannel.is_saved_messages ? t("Your personal notebook") : activeChannel.kind === 'direct' ? t("Direct conversation") : tp('{n} member|{n} members', activeChannel.members_count, { n: activeChannel.members_count })}</small></div></div><div className="channel-actions"><button type="button" className="icon-button" onClick={() => setDetailsOpen(!detailsOpen)} aria-label={t("Contact info")} title={t("Contact info")} aria-expanded={detailsOpen}><Info size={19} /></button><button type="button" className="icon-button close-chat" onClick={() => setActiveId(null)} aria-label={t("Close chat")} title={t("Close chat")}><X size={18} /></button>{canManageMembers && <button className="button quiet small" onClick={() => setMembersOpen(true)}><UsersRound size={15} /> {t("Manage members")}</button>}{activeChannel.is_public && !activeChannel.is_member && <button className="button primary small" onClick={join}>{t("Join")}</button>}{activeChannel.is_member && activeChannel.kind !== 'direct' && activeChannel.my_role !== 'owner' && <button className="button quiet small" onClick={leave}>{t("Leave")}</button>}</div></header>
@@ -578,9 +615,10 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, op
               const sameAuthor = !newDay && previous && message.sender_id != null && previous.sender_id === message.sender_id && previous.is_anonymous === message.is_anonymous && !message.parent;
               const showSender = ['community', 'discussion'].includes(activeChannel.kind) || activeChannel.kind === 'group' && !sameAuthor;
               const showAvatar = activeChannel.kind !== 'direct' && !mine;
-              return <Fragment key={message.id}>{newDay && <div className="message-day"><span>{dateText(message.created_at)}</span></div>}{showAvatar && <span className={`message-avatar avatar ${sameAuthor ? 'is-hidden' : ''}`}>{initials(message.is_anonymous ? '?' : message.sender_name)}</span>}<article id={`message-${message.id}`} className={`message-bubble sender-${(message.sender_id || 0) % 6} ${mine ? 'mine' : ''} ${message.parent ? 'reply' : ''} ${message.is_accepted_answer ? 'accepted' : ''} ${sameAuthor ? 'stacked' : ''}`}>{message.parent_preview && <button type="button" className="parent-preview" onClick={() => document.getElementById(`message-${message.parent}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>{t("Reply to:")} {message.parent_preview.body}</button>}<div className={showSender || message.is_accepted_answer ? '' : 'is-hidden'}>{showSender && <b>{message.sender_name}{message.is_anonymous ? ` ${t("· Anonymous")}` : ''}</b>}{message.is_accepted_answer && <span className="accepted-label"><CheckCircle2 size={13} /> {t("Accepted answer")}</span>}</div><p>{message.deleted_at ? t("Message deleted") : message.body}<time>{clockText(message.created_at)}{message.is_edited ? ` ${t("· edited")}` : ''}{mine && <Check size={12} aria-label={t("Sent")} />}</time></p><footer>{!message.deleted_at && <button type="button" onClick={() => setReplyTo(message)}>{t("Reply")}</button>}{!mine && !message.deleted_at && <button type="button" disabled={message.is_reported_by_me} onClick={() => setReportingMessage(message)}><Flag size={11} /> {message.is_reported_by_me ? t("Reported") : t("Report")}</button>}{canAccept && message.parent && !message.deleted_at && !message.is_accepted_answer && <button type="button" onClick={() => accept(message)}>{t("Accept answer")}</button>}</footer></article></Fragment>;})}{!messages.length && <div className="thread-empty"><SpaceIcon size={26} /><p>{t(space.note)}</p></div>}</>}</div><form className="message-compose" onSubmit={send}><div className="composer-field"><button type="button" className="emoji-toggle icon-button" disabled={saving} aria-label={t("Choose emoji")} aria-expanded={emojiOpen} onClick={() => setEmojiOpen(!emojiOpen)}><Smile size={22} /></button>{emojiOpen && <div className="emoji-picker" role="group" aria-label={t("Choose emoji")}>{['😊', '👍', '❤️', '🎉', '🙌', '✅', '👋', '💡', '📚', '🚀', '🤝', '✨'].map((emoji) => <button key={emoji} type="button" aria-label={emoji} onClick={() => {setBody(body + emoji);setEmojiOpen(false);composerRef.current?.focus();}}>{emoji}</button>)}</div>}{sendError && <p className="compose-error" role="alert">{sendError}</p>}{replyTo && <div className="replying-to"><span>{t("Replying to")} <b>{replyTo.sender_name}</b></span><button type="button" className="icon-button" onClick={() => setReplyTo(null)} aria-label={t("Cancel reply")}><X size={15} /></button></div>}<textarea ref={composerRef} aria-label={t(space.placeholder)} readOnly={saving} value={body} onChange={(event) => {setBody(event.target.value);event.target.style.height = 'auto';event.target.style.height = `${Math.min(132, event.target.scrollHeight)}px`;}} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault();send(event);}}} placeholder={t(space.placeholder)} rows="1" />{['community', 'discussion'].includes(activeChannel.kind) && <CheckboxControl className="compact anonymous-toggle" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)}>{t("Post anonymously")}</CheckboxControl>}<small className="compose-hint">{saving ? t("Sending…") : t("Enter to send · Shift + Enter for a new line")}</small></div><button type="submit" className="message-send" disabled={saving || !body.trim()} aria-busy={saving} aria-label={saving ? t("Sending…") : t("Send")} title={t("Send")}><Send size={18} /></button></form></> : <div className="message-join-state"><UsersRound size={42} /><h3>{activeChannel.display_name}</h3><p>{activeChannel.description || t("Join this channel to read and send messages.")}</p><button className="button primary" onClick={join}>{t("Join channel")}</button></div>}
+              return <Fragment key={message.id}>{newDay && <div className="message-day"><span>{dateText(message.created_at)}</span></div>}{showAvatar && <span className={`message-avatar avatar ${sameAuthor ? 'is-hidden' : ''}`}>{initials(message.is_anonymous ? '?' : message.sender_name)}</span>}<article id={`message-${message.id}`} className={`message-bubble sender-${(message.sender_id || 0) % 6} ${mine ? 'mine' : ''} ${message.parent ? 'reply' : ''} ${message.is_accepted_answer ? 'accepted' : ''} ${sameAuthor ? 'stacked' : ''}`}>{message.parent_preview && <button type="button" className="parent-preview" onClick={() => document.getElementById(`message-${message.parent}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>{t("Reply to:")} {message.parent_preview.body}</button>}<div className={showSender || message.is_accepted_answer ? '' : 'is-hidden'}>{showSender && <b>{message.sender_name}{message.is_anonymous ? ` ${t("· Anonymous")}` : ''}</b>}{message.is_accepted_answer && <span className="accepted-label"><CheckCircle2 size={13} /> {t("Accepted answer")}</span>}</div>{!message.deleted_at && <MessageAttachment message={message} onOpen={setPreviewing} />}<p>{message.deleted_at ? t("Message deleted") : message.body}<time>{clockText(message.created_at)}{message.is_edited ? ` ${t("· edited")}` : ''}{mine && <Check size={12} aria-label={t("Sent")} />}</time></p><footer>{!message.deleted_at && <button type="button" onClick={() => setReplyTo(message)}>{t("Reply")}</button>}{!mine && !message.deleted_at && <button type="button" disabled={message.is_reported_by_me} onClick={() => setReportingMessage(message)}><Flag size={11} /> {message.is_reported_by_me ? t("Reported") : t("Report")}</button>}{canAccept && message.parent && !message.deleted_at && !message.is_accepted_answer && <button type="button" onClick={() => accept(message)}>{t("Accept answer")}</button>}</footer></article></Fragment>;})}{!messages.length && <div className="thread-empty"><SpaceIcon size={26} /><p>{t(space.note)}</p></div>}</>}</div><form className="message-compose" onSubmit={send}><div className={`composer-field ${canAttach ? 'can-attach' : ''}`}><button type="button" className="emoji-toggle icon-button" disabled={saving} aria-label={t("Choose emoji")} aria-expanded={emojiOpen} onClick={() => setEmojiOpen(!emojiOpen)}><Smile size={22} /></button>{emojiOpen && <div className="emoji-picker" role="group" aria-label={t("Choose emoji")}>{['😊', '👍', '❤️', '🎉', '🙌', '✅', '👋', '💡', '📚', '🚀', '🤝', '✨'].map((emoji) => <button key={emoji} type="button" aria-label={emoji} onClick={() => {setBody(body + emoji);setEmojiOpen(false);composerRef.current?.focus();}}>{emoji}</button>)}</div>}{sendError && <p className="compose-error" role="alert">{sendError}</p>}{replyTo && <div className="replying-to"><span>{t("Replying to")} <b>{replyTo.sender_name}</b></span><button type="button" className="icon-button" onClick={() => setReplyTo(null)} aria-label={t("Cancel reply")}><X size={15} /></button></div>}{canAttach && pendingFile && <div className="composer-attachment"><FileTypeIcon name={pendingFile.name} contentType={pendingFile.type} size={20} /><span><b title={pendingFile.name}>{pendingFile.name}</b><small>{uploadProgress != null ? `${t("Uploading…")} ${uploadProgress}%` : formatFileSize(pendingFile.size)}</small></span>{!saving && <button type="button" className="icon-button" onClick={() => setPendingFile(null)} aria-label={t("Remove selected file")}><X size={16} /></button>}</div>}<textarea ref={composerRef} aria-label={t(space.placeholder)} readOnly={saving} value={body} onChange={(event) => {setBody(event.target.value);event.target.style.height = 'auto';event.target.style.height = `${Math.min(132, event.target.scrollHeight)}px`;}} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault();send(event);}}} placeholder={t(space.placeholder)} rows="1" />{['community', 'discussion'].includes(activeChannel.kind) && <CheckboxControl className="compact anonymous-toggle" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)}>{t("Post anonymously")}</CheckboxControl>}{canAttach && <><button type="button" className="attach-toggle icon-button" disabled={saving} aria-label={t("Attach a file")} title={t("Attach a file")} onClick={() => fileInputRef.current?.click()}><Paperclip size={20} /></button><input ref={fileInputRef} className="file-input" type="file" accept={UPLOAD_ACCEPT} tabIndex={-1} aria-hidden="true" onChange={(event) => chooseFile(event.target.files)} /></>}<small className="compose-hint">{saving ? t("Sending…") : t("Enter to send · Shift + Enter for a new line")}</small></div><button type="submit" className="message-send" disabled={saving || !body.trim() && !(canAttach && pendingFile)} aria-busy={saving} aria-label={saving ? t("Sending…") : t("Send")} title={t("Send")}><Send size={18} /></button></form></> : <div className="message-join-state"><UsersRound size={42} /><h3>{activeChannel.display_name}</h3><p>{activeChannel.description || t("Join this channel to read and send messages.")}</p><button className="button primary" onClick={join}>{t("Join channel")}</button></div>}
       </section> : <section className="message-empty-state"><UsersRound size={44} strokeWidth={1.5} /><h3>{t("Select a chat")}</h3></section>}
-      {activeChannel && detailsOpen && <ChatDetails key={activeChannel.id} channel={activeChannel} messages={messages} onClose={() => setDetailsOpen(false)} />}
+      {activeChannel && detailsOpen && <ChatDetails key={activeChannel.id} channel={activeChannel} messages={messages} onClose={() => setDetailsOpen(false)} onOpenAttachment={setPreviewing} />}
+    {previewing && <AttachmentPreviewModal title={previewing.name} attachment={previewing} onClose={() => setPreviewing(null)} notify={notify} />}
     </div>
     {open && <MessageChannelForm kind={tab} user={user} onClose={() => setOpen(false)} onSaved={channelSaved} notify={notify} />}
     {membersOpen && activeChannel && <ChannelMembersModal channel={activeChannel} user={user} onClose={() => setMembersOpen(false)} onChanged={async () => {await refreshChannels(tab, search, activeChannel.id);await refreshOverview();}} notify={notify} />}

@@ -2,7 +2,7 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import './mind-section.css';
-import { Activity, Award, Bell, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
+import { Activity, Award, Bell, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
@@ -21,7 +21,7 @@ import { fullName, initials, label, ownStudent } from './lib/labels';
 import { isCounselor, isPlatformAdmin, isTaskManager } from './lib/roles';
 import { LANDING_PATH, LOGIN_PATH, buildPath, canOpenPage, isPageLocked, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
 import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchText } from './lib/searchIndex';
-import { usesPagedLists } from './lib/workspaceResources';
+import { loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
 import { useNotificationBell } from './hooks/useNotificationBell';
@@ -29,6 +29,7 @@ import { invalidatePagedLists } from './hooks/usePagedList';
 import { bellTotal } from './lib/notifications';
 import { ForcedPasswordChange, Login } from './pages/Login';
 import { clearUserSessionStorage, clearUserStorage, dropLegacySharedKeys } from './userStorage';
+import { forgetAccountDashboardLayout, loadAccountDashboardLayout } from './dashboardLayout';
 import { useTheme } from './hooks/useTheme';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { useToast } from './hooks/useToast';
@@ -66,6 +67,7 @@ const StorePage = lazyNamed(() => import('./pages/StorePage'), 'StorePage');
 const StudentCenterPage = lazyNamed(() => import('./pages/StudentCenterPage'), 'StudentCenterPage');
 const StudentsPage = lazyNamed(() => import('./pages/StudentsPage'), 'StudentsPage');
 const SupportPage = lazyNamed(() => import('./pages/SupportPage'), 'SupportPage');
+const AccountSettingsPage = lazyNamed(() => import('./pages/AccountSettingsPage'), 'AccountSettingsPage');
 
 // Kept equal to CHALLENGES.length by tests/codeSplitting.test.mjs, so the
 // navigation does not pull the question banks into the main bundle.
@@ -108,6 +110,7 @@ const PAGE_META = {
   store: { label: 'Naseeb Store', icon: ShoppingCart, description: 'Additional education and application services' },
   support: { label: 'Support', icon: LifeBuoy, description: 'Contact support and track your requests' },
   screen_time: { label: 'Screen Time', icon: Clock3, description: 'Active learning time without idle minutes' },
+  account_settings: { label: 'Account settings', icon: Settings, description: 'Password, email, language, and who can see your data' },
   parent_progress: { label: 'Progress', icon: Activity, description: 'Academic profile and application journey' },
   parent_tasks: { label: 'Tasks', icon: ClipboardCheck, description: 'Assigned work and upcoming deadlines' },
   parent_applications: { label: 'Applications', icon: Target, description: 'University application status' },
@@ -193,14 +196,15 @@ const PAGE_RESOURCE_KEYS = {
   bookings: ['bookings'], messages: ['messageChannels'],
   programs: ['opportunityPrograms', 'scholarships'], essay_lab: [],
   college_search: ['students', 'universities', 'applications'], store: ['storeItems'], support: ['supportTickets'],
-  screen_time: [],
+  screen_time: [], account_settings: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal']
 };
 
-function PageDataBoundary({ page, data, stats, loading, resourceStatus, retry, children }) {
-  const keys = PAGE_RESOURCE_KEYS[page] || [page];
-  const { loadingKeys, failedKeys, hasVisibleData, initialLoading } = pageLoadState({ keys, data, stats, loading, resourceStatus });
+// `lazy`: a student's page waits for exactly the collections it fetches.
+function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, retry, children }) {
+  const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
+  const { loadingKeys, failedKeys, hasVisibleData, initialLoading } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy });
 
   if (initialLoading) return <PageSkeleton />;
   return <>
@@ -210,7 +214,7 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, retry, c
   </>;
 }
 
-function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, isOnline, notify, logout, theme, toggleTheme, language, changeLanguage, children }) {
+function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, onSearchOpen, isOnline, notify, logout, theme, toggleTheme, language, changeLanguage, children }) {
   const [utility, setUtility] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileMenuRef = useRef(null);
@@ -262,6 +266,11 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   useEffect(() => {
     setActiveSearchIndex(0);
   }, [query]);
+  // Search covers every record, so opening it loads what pages have not yet.
+  const searching = searchOpen || utility === 'search';
+  useEffect(() => {
+    if (searching) onSearchOpen();
+  }, [searching, onSearchOpen]);
   useEffect(() => {
     const closeSearch = (event) => {
       if (!searchRef.current?.contains(event.target)) setSearchOpen(false);
@@ -305,7 +314,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
     }
   }
   const collapseLabel = collapsed ? t("Expand navigation") : t("Collapse navigation");
-  return <div className={`app-shell ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
+  return <div className={`app-shell role-${user.role} ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="sidebar-top">
         <BrandLockup theme={theme} subtitle={false} />
@@ -321,7 +330,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
           return <button key={item} className={page === item ? "active" : ''} title={collapsed ? itemLabel : undefined} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
         })}</nav>
 
-      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{user.role === 'student' && <button onClick={() => {setPage('student_center');setProfileOpen(false);setMobileOpen(false);}}><UserRound size={17} />{t('My profile')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
+      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{user.role === 'student' && <button onClick={() => {setPage('student_center');setProfileOpen(false);setMobileOpen(false);}}><UserRound size={17} />{t('My profile')}</button>}{canOpenPage('account_settings', user) && <button onClick={() => {setPage('account_settings');setProfileOpen(false);setMobileOpen(false);}}><Settings size={17} />{t('Account settings')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
     </aside>
     <main className={`workspace ${page === 'messages' ? 'workspace-messages' : ''} ${page === 'dashboard' && user.role === 'student' ? 'workspace-dashboard' : ''}`}>
       <header className="top-header">
@@ -347,7 +356,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
       {user.workspace?.read_only && <div className="data-state workspace-read-only" role="status"><ShieldAlert size={18} /><div><b>{t('This workspace is read-only')}</b><p>{t('You can view everything, but changes are paused until an administrator renews the workspace subscription.')}</p></div></div>}
       {!isOnline && <div className="data-state offline" role="status"><WifiOff size={18} /><div><b>{t('You are offline')}</b><p>{t('Current information remains available. Reconnect before saving changes.')}</p></div></div>}
       {error && <div className="alert error workspace-alert">{error}</div>}
-      <div className="page-content">{['dashboard', 'admin_dashboard'].includes(page) && user.role !== 'student' && canOpenPage('screen_time', user) && <ScreenTimeShortcut userId={user.id} setPage={setPage} />}<PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} retry={retryResources}>{children}</PageDataBoundary></div>
+      <div className="page-content">{['dashboard', 'admin_dashboard'].includes(page) && user.role !== 'student' && canOpenPage('screen_time', user) && <ScreenTimeShortcut userId={user.id} setPage={setPage} />}<PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} lazy={loadsLazily(user)} retry={retryResources}>{children}</PageDataBoundary></div>
     </main>
     {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(query.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t(PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}</span><ChevronRight size={16} /></button>)}{query.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} />}</Modal>}
     <ScreenTimeTracker page={page} userId={user.id} />
@@ -355,7 +364,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   </div>;
 }
 
-function PageRouter({ page, params, user, data, stats, query, reload, notify, setPage, search, navigate }) {
+function PageRouter({ page, params, user, data, stats, query, reload, notify, setPage, search, navigate, language, changeLanguage, updateUser }) {
   const [directChannel, setDirectChannel] = useState(null);
   const openingDirect = useRef(false);
   useEffect(() => {if (page !== 'messages') setDirectChannel(null);}, [page]);
@@ -394,6 +403,7 @@ function PageRouter({ page, params, user, data, stats, query, reload, notify, se
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
+  if (user.role === 'student' && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (page === 'academics') return <div className="section-stack">{user.role === 'student' && <ProfileCard student={ownStudent(data)} />}<ResourceSection title={t("Research")} resource="researches" {...{ user, data, query, reload, notify }} /></div>;
@@ -420,7 +430,7 @@ export default function App() {
   const [signOutPrompt, setSignOutPrompt] = useState(false);
   const signingOut = useRef(false);
   const handleUnauthorized = useCallback(() => {api.logout();setUser(null);}, []);
-  const { data, stats, loading, error, resourceStatus, loadData, reset: resetWorkspace } = useWorkspaceData(user, handleUnauthorized);
+  const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace } = useWorkspaceData(user, handleUnauthorized);
 
   const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
 
@@ -457,8 +467,12 @@ export default function App() {
   const loadUser = useCallback(async () => {
     const current = await api.me();
     setUser(current);
+    // The dashboard layout follows the account: fetch it while the workspace loads.
+    if (current.role === 'student' && !current.must_change_password) loadAccountDashboardLayout(current.id);
     return current;
   }, []);
+  // Account settings changes (email, a password change's refreshed account).
+  const updateUser = useCallback((changes) => setUser((current) => (current ? { ...current, ...changes } : current)), []);
 
   const bootstrapSession = useCallback(async () => {
     if (!api.hasSession()) {setBootstrapping(false);return;}
@@ -467,7 +481,7 @@ export default function App() {
     try {
       const current = await loadUser();
       setBootstrapping(false);
-      if (!current.must_change_password) await loadData(current);
+      if (!current.must_change_password) await loadInitial(current);
     } catch (err) {
       if (err.status === 401) {
         api.logout();
@@ -477,7 +491,7 @@ export default function App() {
       }
       setBootstrapping(false);
     }
-  }, [loadUser, loadData]);
+  }, [loadUser, loadInitial]);
 
   useEffect(() => {
     if (bootstrapAttempted.current) return;
@@ -505,17 +519,24 @@ export default function App() {
     if (canonical !== location.pathname) navigate(`${canonical}${requestedRoute?.page === route.page ? location.search : ''}`, { replace: true });
   }, [inWorkspace, publicPage, route, requestedRoute, location, navigate]);
 
+  // Students fetch a page's collections the first time it opens (see
+  // useWorkspaceData); a page already loaded is not fetched again.
+  useEffect(() => {
+    if (inWorkspace && !publicPage && loadsLazily(user)) ensureLoaded(user, studentPageKeys(page));
+  }, [inWorkspace, publicPage, user, page, ensureLoaded]);
+  const loadSearchable = useCallback(() => ensureLoaded(user, resourcesFor(user).map(([key]) => key)), [ensureLoaded, user]);
+
   useEffect(() => {
     document.title = inWorkspace && PAGE_META[page] ? `${t(PAGE_META[page].label)} · Naseeb Edu` : siteTitle();
   }, [inWorkspace, page, language]);
 
   async function afterLogin() {
     const current = await loadUser();
-    if (!current.must_change_password) await loadData(current);
+    if (!current.must_change_password) await loadInitial(current);
   }
   async function afterPasswordChanged(current) {
     setUser(current);
-    await loadData(current);
+    await loadInitial(current);
   }
   async function logout() {
     // Upload this user's queued screen time and open essays while the session
@@ -539,7 +560,7 @@ export default function App() {
     const signedOut = user?.id;
     setSignOutPrompt(false);
     resetWorkspace();
-    api.signOut(signedOut, { keepDrafts });clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
+    api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
 
   if (bootstrapping) return <AppBootLoader message="Checking your secure session…" />;
@@ -550,10 +571,10 @@ export default function App() {
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
-    <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
-      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate }} /></LazyBoundary>
+    <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
+      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser }} /></LazyBoundary>
     </AppShell>
-    {signOutPrompt && <Modal title="Sign out?" backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
+    {signOutPrompt && <Modal title={t("Sign out?")} backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
       <div className="sign-out-prompt" role="alert">
         <p>{t("You have writing that isn't saved to your account yet. Sign in again to save it, or sign out and delete it from this device.")}</p>
         <div className="form-actions"><button type="button" className="button danger" onClick={() => finishSignOut()}>{t('Sign out anyway')}</button><button type="button" className="button primary" onClick={() => finishSignOut({ keepDrafts: true })}>{t('Sign in again')}</button></div>

@@ -54,5 +54,72 @@ export function pagedListsAfter(written) {
 export const waitsBeforeLoading = (user) => !user || Boolean(user.must_change_password)
   || (workspaceRole(user) === 'student' && !user.student_profile_complete);
 
-// The dashboard stats endpoint is loaded for everyone except parents.
-export const loadsDashboardStats = (user) => workspaceRole(user) !== 'parent';
+// The dashboard stats endpoint is loaded for everyone except parents and
+// students: the student dashboard reads its numbers from the student record.
+export const loadsDashboardStats = (user) => !['parent', 'student'].includes(workspaceRole(user));
+
+// Students load their collections page by page: sign-in fetches only what the
+// dashboard shows, and every other page fetches its own collections the first
+// time it opens (then keeps them like before). Other roles load everything at
+// sign-in, as they always have.
+export const loadsLazily = (user) => workspaceRole(user) === 'student';
+
+// Collections every student page needs: the own student record (avatar,
+// progress) and the support tickets behind the sidebar's unread badge (the
+// API has no unread-count endpoint for tickets yet).
+export const STUDENT_SHELL_KEYS = ['students', 'supportTickets'];
+
+// The workspace collections each student page renders.
+export const STUDENT_PAGE_KEYS = {
+  dashboard: ['tasks', 'bookings', 'essays', 'team', 'programServices'],
+  student_center: ['tasks', 'applications', 'essays', 'documents', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations'],
+  find_personality: [],
+  roadmap: ['roadmapMissions', 'tasks'],
+  bookings: ['bookings'],
+  messages: ['messageChannels'],
+  programs: ['opportunityPrograms'],
+  essay_lab: [],
+  applications: ['applications', 'universities'],
+  college_search: ['universities', 'applications', 'scholarships'],
+  store: ['storeItems'],
+  screen_time: [],
+  support: ['supportTickets'],
+};
+
+// Keys a student page renders (and waits for): the own student record plus
+// the page's collections. The shell's support tickets only feed a badge.
+export function studentPageKeys(page) {
+  return [...new Set(['students', ...(STUDENT_PAGE_KEYS[page] || [])])];
+}
+
+// Keys to fetch when a student opens a page: the wanted collections of this
+// role that were never requested before. Other roles loaded everything.
+export function missingKeys(user, wanted, requested) {
+  if (!loadsLazily(user)) return [];
+  const available = new Set(resourcesFor(user).map(([key]) => key));
+  return [...new Set(wanted)].filter((key) => available.has(key) && !requested.has(key));
+}
+
+/**
+ * Keys a student's loadData call refetches. `requestedKeys` is the caller's
+ * explicit list, or null for "everything" (a refresh, or a save the reload
+ * plan could not map); `requested` holds the keys fetched so far. Collections
+ * that were never opened stay unloaded: their page fetches them fresh.
+ */
+export function lazyReloadKeys(requestedKeys, requested, { explicit = false } = {}) {
+  if (!requestedKeys) return [...new Set([...STUDENT_SHELL_KEYS, ...requested])];
+  if (explicit) return [...new Set(requestedKeys)];
+  return [...new Set(requestedKeys)].filter((key) => requested.has(key));
+}
+
+/**
+ * The [key, endpoint] pairs one workspace load fetches ('dashboard' = stats).
+ * `planned`: explicit keys, a reload plan's keys (`changed`), or null for all.
+ * `requested`: keys this session already fetched (lazy students only).
+ */
+export function selectWorkspaceLoad(user, planned, requested = new Set(), { changed = false } = {}) {
+  const lazyKeys = loadsLazily(user) ? lazyReloadKeys(planned, requested, { explicit: !changed }) : null;
+  const wanted = lazyKeys ? new Set(lazyKeys) : planned ? new Set(planned) : null;
+  return [...(loadsDashboardStats(user) ? [['dashboard']] : []), ...resourcesFor(user)]
+    .filter(([key]) => !wanted || wanted.has(key));
+}

@@ -17,6 +17,20 @@ export const STUDENT_CENTER_TRANSLATIONS = {
   'Save or cancel the section you are editing first.': ['Avval tahrirlayotgan bo‘limingizni saqlang yoki bekor qiling.', 'Сначала сохраните или отмените раздел, который вы редактируете.'],
   'Complete your profile': ['Profilingizni to‘ldiring', 'Заполните профиль'],
   'Save profile': ['Profilni saqlash', 'Сохранить профиль'],
+  'Profile steps': ['Profil bosqichlari', 'Шаги профиля'],
+  // Field names the server's validation errors are labelled with (lib/apiErrors.js).
+  'Participant': ['Ishtirokchi', 'Участник'],
+  'Starts at': ['Boshlanish vaqti', 'Время начала'],
+  'Duration minutes': ['Davomiylik (daqiqa)', 'Длительность (мин)'],
+  'Photo': ['Rasm', 'Фото'],
+  'Document type': ['Hujjat turi', 'Тип документа'],
+  'Google doc url': ['Google Docs havolasi', 'Ссылка на Google Docs'],
+  'Body': ['Matn', 'Текст'],
+  'Content': ['Matn', 'Содержание'],
+  'Gpa': ['GPA', 'GPA'],
+  'Class rank': ['Sinfdagi o‘rin', 'Место в классе'],
+  'Ielts score': ['IELTS bali', 'Балл IELTS'],
+  'Sat score': ['SAT bali', 'Балл SAT'],
   // Review labels (a counselor's verification of a record)
   'Waiting for counselor': ['Maslahatchi tekshiruvida', 'Ждёт проверки консультанта'],
   '{0} of {1} approved': ['{1} tadan {0} tasi tasdiqlangan', 'Одобрено {0} из {1}'],
@@ -24,6 +38,11 @@ export const STUDENT_CENTER_TRANSLATIONS = {
   'What the labels mean': ['Belgilar nimani anglatadi', 'Что означают отметки'],
   'your counselor checked it': ['maslahatchingiz tekshirgan', 'консультант проверил'],
   'sent, not checked yet. Editing an approved entry sends it back for checking.': ['yuborilgan, hali tekshirilmagan. Tasdiqlangan yozuvni tahrirlasangiz, u qayta tekshiruvga yuboriladi.', 'отправлено, ещё не проверено. Если изменить одобренную запись, она снова уйдёт на проверку.'],
+  // A counselor's review of a whole profile section
+  'Not reviewed': ['Tekshirilmagan', 'Не проверено'],
+  'Waiting for review': ['Tekshiruv kutilmoqda', 'Ждёт проверки'],
+  'Needs changes': ['O‘zgartirish kerak', 'Нужны изменения'],
+  'Counselor note:': ['Maslahatchi izohi:', 'Комментарий консультанта:'],
   // Profile readiness
   'Profile ready': ['Profil tayyorligi', 'Готовность профиля'],
   'To raise it:': ['Oshirish uchun:', 'Чтобы повысить:'],

@@ -17,6 +17,22 @@ export const NOTIFICATION_TRANSLATIONS = {
   'Meeting approved': ['Uchrashuv tasdiqlandi', 'Встреча подтверждена'],
   'Meeting rejected': ['Uchrashuv rad etildi', 'Встреча отклонена'],
   'Meeting completed': ['Uchrashuv yakunlandi', 'Встреча завершена'],
+  'Meeting cancelled': ['Uchrashuv bekor qilindi', 'Встреча отменена'],
+  'Meeting reschedule requested': ['Uchrashuvni ko‘chirish so‘raldi', 'Запрошен перенос встречи'],
+  // Bodies of the notices the server writes (see lib/notificationText.js).
+  '{n} task is past its deadline.|{n} tasks are past their deadline.': ['{n} ta vazifaning muddati o‘tib ketgan.', '{n} задача просрочена.|{n} задачи просрочены.|{n} задач просрочено.'],
+  '{n} required document still needs to be uploaded.|{n} required documents still need to be uploaded.': ['{n} ta majburiy hujjat hali yuklanmagan.', 'Нужно загрузить ещё {n} обязательный документ.|Нужно загрузить ещё {n} обязательных документа.|Нужно загрузить ещё {n} обязательных документов.'],
+  'The {university} deadline is {date}.': ['{university} uchun topshirish muddati: {date}.', 'Срок подачи в {university}: {date}'],
+  '{name} shared an essay for review.': ['{name} inshoni tekshirish uchun ulashdi.', '{name} отправил(а) эссе на проверку.'],
+  'Your meeting with {name} on {time} was approved.': ['{name} bilan uchrashuvingiz ({time}) tasdiqlandi.', 'Ваша встреча с {name} ({time}) подтверждена.'],
+  'Your meeting with {name} on {time} was declined.': ['{name} bilan uchrashuvingiz ({time}) rad etildi.', 'Ваша встреча с {name} ({time}) отклонена.'],
+  'Your meeting with {name} on {time} is marked as completed.': ['{name} bilan uchrashuvingiz ({time}) yakunlangan deb belgilandi.', 'Ваша встреча с {name} ({time}) отмечена как завершённая.'],
+  'Your meeting with {name} on {time} was cancelled.': ['{name} bilan uchrashuvingiz ({time}) bekor qilindi.', 'Ваша встреча с {name} ({time}) отменена.'],
+  '{name} cancelled the meeting “{topic}” on {time}.': ['{name} “{topic}” uchrashuvini ({time}) bekor qildi.', '{name} отменил(а) встречу «{topic}» ({time}).'],
+  '{name} asked to move “{topic}” to {time}.': ['{name} “{topic}” uchrashuvini {time} vaqtiga ko‘chirishni so‘radi.', '{name} просит перенести встречу «{topic}» на {time}.'],
+  'your meeting participant': ['uchrashuv ishtirokchisi', 'участником встречи'],
+  'Profile section approved': ['Profil bo‘limi tasdiqlandi', 'Раздел профиля одобрен'],
+  'Profile section needs changes': ['Profil bo‘limiga o‘zgartirish kerak', 'Раздел профиля нужно исправить'],
 }
 
 export function notificationMessages(language) {

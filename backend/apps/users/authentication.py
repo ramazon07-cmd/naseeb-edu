@@ -23,6 +23,8 @@ class VersionedJWTAuthentication(JWTAuthentication):
         '/api/users/accounts/me/',
         '/api/users/accounts/change-password/',
     }
+    # A read-only workspace still lets people secure their own account.
+    own_security_paths = password_change_paths | {'/api/users/accounts/me/password/'}
 
     def get_user(self, validated_token):
         # Same checks as simplejwt, but the tenant school and its subscription
@@ -74,7 +76,7 @@ class VersionedJWTAuthentication(JWTAuthentication):
     def enforce_write_access(self, request, user, school):
         # Every JWT-authenticated write passes here, so staff tiers and
         # read-only workspaces are enforced once instead of in every view.
-        if request.path_info in self.password_change_paths:
+        if request.path_info in self.own_security_paths:
             return
         enforce_staff_write_scope(request, user)
         if school is not None and not user.is_product_admin and loaded_school_is_read_only(school):
