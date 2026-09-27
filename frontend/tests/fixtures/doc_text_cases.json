@@ -515,6 +515,106 @@
    "preview": "Big bright link 😀 emoji and tab",
    "char_count": 31,
    "char_count_no_spaces": 25
+  },
+  {
+   "name": "suggested_insertions_do_not_count",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "n0"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "I learned "
+       },
+       {
+        "type": "text",
+        "text": "slowly ",
+        "marks": [
+         {
+          "type": "suggestDelete",
+          "attrs": {
+           "id": 7
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": "quickly ",
+        "marks": [
+         {
+          "type": "suggestInsert",
+          "attrs": {
+           "id": 8
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": "that patience ",
+        "marks": [
+         {
+          "type": "comment",
+          "attrs": {
+           "id": 2
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": "really ",
+        "marks": [
+         {
+          "type": "suggestInsert",
+          "attrs": {
+           "id": 9
+          }
+         },
+         {
+          "type": "bold"
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": "matters."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "bid": "n1"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Only suggested text here.",
+        "marks": [
+         {
+          "type": "suggestInsert",
+          "attrs": {
+           "id": 10
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "content": "I learned slowly that patience matters.",
+   "word_count": 6,
+   "preview": "I learned slowly that patience matters.",
+   "char_count": 39,
+   "char_count_no_spaces": 34
   }
  ]
 }

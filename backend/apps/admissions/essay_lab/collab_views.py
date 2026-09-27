@@ -349,6 +349,8 @@ class ReviewEssayViewSet(viewsets.GenericViewSet):
             raise exceptions.NotFound('Essay not found.')
         if need not in caps:
             raise exceptions.PermissionDenied('Your access to this essay does not allow that.')
+        # Any staff request means someone is in the essay: the student's editor polls faster.
+        self.seen(essay)
         return essay, caps
 
     def tab_of(self, essay, tab_id):
@@ -376,7 +378,6 @@ class ReviewEssayViewSet(viewsets.GenericViewSet):
         if request.user.is_product_admin:
             audit_product_action(actor=request.user, action='essay.review_read', target=essay.student,
                                  metadata={'essay': essay.pk})
-        self.seen(essay)
         return Response({
             'id': essay.pk, 'title': essay.title, 'prompt': essay.prompt, 'essay_type': essay.essay_type,
             'counselor_access': essay.counselor_access, 'capabilities': sorted(caps),
@@ -392,7 +393,6 @@ class ReviewEssayViewSet(viewsets.GenericViewSet):
         query.is_valid(raise_exception=True)
         essay, _caps = self.essay_with_access(pk, access.VIEW)
         tab = self.tab_of(essay, query.validated_data['tab'])
-        self.seen(essay)
         # The student counts as present while their saves keep arriving.
         row = {'save_seq': tab.save_seq, 'collab_seq': essay.collab_seq}
         return changes_response(request, essay.pk, tab.pk, query.validated_data.get('since'), row,

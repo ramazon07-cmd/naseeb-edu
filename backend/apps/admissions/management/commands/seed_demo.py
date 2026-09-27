@@ -664,6 +664,82 @@ class Command(BaseCommand):
             },
         )
 
+        self.seed_essay_feedback(ramazon_profile, counselor)
+
         self.stdout.write(self.style.SUCCESS(
             'Demo data created. Credentials are configured through local DEMO_*_PASSWORD variables.'
         ))
+
+    DEMO_FEEDBACK_ESSAY = 'Why I rebuild radios'
+    DEMO_FEEDBACK_TEXT = (
+        'My grandmother never wasted bread. Every evening she folded the leftover crust into a cloth.',
+        'I learned that patience matters more than speed.',
+        'When I was 14, I rebuilt the school radio with two friends and a borrowed soldering iron.',
+    )
+
+    def seed_essay_feedback(self, student, counselor):
+        """A shared Essay Lab essay with one comment thread and two suggested edits from the counselor.
+
+        Idempotent: once the essay has feedback it is left as it is (the student may have answered it).
+        """
+        from django.db import transaction
+        from apps.admissions.essay_lab.collab import insert_text, mark_range
+        from apps.admissions.essay_lab.doc import doc_stats, validate_doc
+        from apps.admissions.essay_lab.tabs import refresh_essay_text
+        from apps.admissions.models import (
+            EssayCheckpoint, EssayComment, EssayCommentThread, EssaySuggestion, EssayTab, EssayTabEdit,
+        )
+
+        now = timezone.now()
+        with transaction.atomic():
+            essay, _ = Essay.objects.get_or_create(
+                student=student, title=self.DEMO_FEEDBACK_ESSAY,
+                defaults={
+                    'prompt': 'Describe a challenge that shaped who you are.', 'content': '',
+                    'essay_type': Essay.EssayType.PERSONAL_STATEMENT, 'shared_with_counselor': True,
+                    'shared_at': now, 'counselor_access': Essay.CounselorAccess.SUGGEST, 'last_edited_at': now,
+                },
+            )
+            if EssayCommentThread.objects.filter(essay=essay).exists():
+                return
+            tab = EssayTab.objects.filter(essay=essay).order_by('position', 'id').first()
+            if tab is None:
+                tab = EssayTab.objects.create(essay=essay, title='Tab 1', position=0, last_edited_at=now)
+            blocks = [
+                {'type': 'paragraph', 'attrs': {'bid': f'd{index}'}, 'content': [{'type': 'text', 'text': text}]}
+                for index, text in enumerate(self.DEMO_FEEDBACK_TEXT)
+            ]
+            thread = EssayCommentThread.objects.create(essay=essay, tab=tab, author=counselor)
+            blocks[1], quote = mark_range(blocks[1], 15, 23, {'type': 'comment', 'attrs': {'id': thread.pk}})
+            thread.quote = quote
+            thread.save(update_fields=['quote'])
+            EssayComment.objects.create(thread=thread, author=counselor,
+                                        body='Show this with one moment from your own life instead of saying it.')
+            replace = EssaySuggestion.objects.create(essay=essay, tab=tab, author=counselor, insert_text='rescued',
+                                                     delete_text='rebuilt')
+            blocks[2], _ = mark_range(blocks[2], 17, 24, {'type': 'suggestDelete', 'attrs': {'id': replace.pk}})
+            blocks[2] = insert_text(blocks[2], 24, 'rescued', {'type': 'suggestInsert', 'attrs': {'id': replace.pk}})
+            add = EssaySuggestion.objects.create(essay=essay, tab=tab, author=counselor,
+                                                 insert_text=' She called it respect.')
+            blocks[0] = insert_text(blocks[0], 34, ' She called it respect.', {'type': 'suggestInsert', 'attrs': {'id': add.pk}})
+            doc = validate_doc({'type': 'doc', 'content': blocks})
+            stats = doc_stats(doc)
+            tab.doc = doc
+            tab.content = stats.content
+            tab.word_count = stats.word_count
+            tab.char_count = stats.char_count
+            tab.char_count_no_spaces = stats.char_count_no_spaces
+            tab.save_seq += 1
+            tab.last_editor = counselor
+            tab.save()
+            refresh_essay_text(essay)
+            for kind, detail in ((EssayCheckpoint.Kind.COMMENT, {'comments': 1}), (EssayCheckpoint.Kind.SUGGEST, {'suggestions': 2})):
+                EssayCheckpoint.objects.create(essay=essay, tab=tab, doc=doc, content=stats.content,
+                                               word_count=stats.word_count, author=counselor, kind=kind, detail=detail)
+                EssayTabEdit.objects.create(essay=essay, tab=tab, author=counselor, kind=kind, save_seq=tab.save_seq,
+                                            detail=detail)
+            Essay.objects.filter(pk=essay.pk).update(collab_seq=3)
+            Notification.objects.create(
+                student=student, title='New feedback on your essay', kind=Notification.Kind.ESSAY, target_id=essay.pk,
+                message=f'{counselor.get_full_name() or counselor.username} suggested 2 edits to your essay.',
+            )
