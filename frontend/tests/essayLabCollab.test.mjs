@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ensureBids, normalizeDoc, prepareDoc } from '../src/essayLab/docDelta.js';
-import { BlockConflict, applyOpsV2, blockHash, changedRange, diffBlocksV2, mergeBlocks } from '../src/essayLab/docMerge.js';
+import { BlockConflict, applyOpsV2, blockHash, changedRange, diffBlocksV2, mergeBlocks, transplantMarks } from '../src/essayLab/docMerge.js';
 import { deriveText } from '../src/essayLab/docText.js';
 import { createSaveQueue } from '../src/essayLab/saveQueue.js';
 import {
@@ -179,4 +179,27 @@ test('sharing sends the chosen counselor access and keeps it from the answer', a
   assert.deepEqual(calls, [[1, 'comment']]);
   assert.equal(sharingFields(saved).counselor_access, 'comment');
   assert.equal(accessOf({counselor_access: 'edit'}), 'suggest', 'the dialog offers comment or suggest; anything else shows the default');
+});
+
+test('a comment added to the paragraph the student is typing in moves onto the new text', () => {
+  const base = para('a', 'I learned patience slowly.');
+  const local = para('a', 'Honestly, I learned patience slowly.');
+  const server = {type: 'paragraph', attrs: {bid: 'a'}, content: [
+    text('I learned '), text('patience', [{type: 'comment', attrs: {id: 4}}]), text(' slowly.'),
+  ]};
+  const moved = transplantMarks(base, local, server);
+  assert.deepEqual(moved.content, [
+    text('Honestly, I learned '), text('patience', [{type: 'comment', attrs: {id: 4}}]), text(' slowly.'),
+  ]);
+  const {doc, conflicts} = mergeBlocks(docOf(base), docOf(local), docOf(server));
+  assert.deepEqual(conflicts, []);
+  assert.deepEqual(doc.content[0], moved);
+  // Commented words the student replaced: the highlight covers the replacement; other server edits stay conflicts.
+  assert.deepEqual(transplantMarks(base, para('a', 'I learned calm slowly.'), server).content,
+    [text('I learned '), text('calm', [{type: 'comment', attrs: {id: 4}}]), text(' slowly.')]);
+  assert.deepEqual(transplantMarks(base, para('a', 'I learned patienc'), server).content, [text('I learned patienc')],
+    'an end inside the rewritten part drops the mark');
+  assert.equal(transplantMarks(base, local, para('a', 'Server rewrote it.')), null);
+  const bold = {type: 'paragraph', attrs: {bid: 'a'}, content: [text('I learned patience slowly.', [{type: 'bold'}])]};
+  assert.equal(transplantMarks(base, local, bold), null, 'formatting changes are not feedback marks');
 });

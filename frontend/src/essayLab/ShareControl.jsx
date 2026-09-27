@@ -54,12 +54,12 @@ export default function ShareControl({ essay, notify, onSaved }) {
   // One button either way; narrow headers show only its icon.
   return <>
     <button type="button" className={`el-btn is-ghost el-share${shared ? ' is-shared' : ''}`} disabled={busy} aria-busy={busy}
-      aria-label={shared ? `${t('Shared with counselor')}. ${t('Unshare')}` : t('Share with counselor')}
+      aria-label={shared ? `${t('Shared with counselor')}. ${t('Sharing settings')}` : t('Share with counselor')}
       title={shared ? t('Your counselor can read this essay.') : t('Your counselor will be able to read this essay and leave feedback.')}
       onClick={() => sharing.share(essay)}>
       {shared ? <UserCheck size={16} aria-hidden="true" /> : <Users size={16} aria-hidden="true" />}
       <span className="el-share-label" aria-hidden="true">{shared ? t('Shared with counselor') : t('Share with counselor')}</span>
-      {shared && <span className="el-share-action" aria-hidden="true">{t('Unshare')}</span>}
+      {shared && <span className="el-share-action" aria-hidden="true">{t('Change')}</span>}
     </button>
     {sharing.dialog}
   </>

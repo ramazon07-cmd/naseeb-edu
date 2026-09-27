@@ -762,11 +762,32 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     return applyDocChanges(current, merged ? merged.doc : serverDoc)
   }, [])
 
+  const [poller] = useState(() => ({ current: null }))
   useEffect(() => {
-    // A save that merged someone else's changes hands them to the open editor.
-    session.onRemoteDoc = (serverDoc, sentDoc) => { mergeIntoEditor(sentDoc, serverDoc) }
+    // A save that merged someone else's changes hands them to the open editor
+    // (and their comments or suggestions are fetched right away).
+    session.onRemoteDoc = (serverDoc, sentDoc) => { mergeIntoEditor(sentDoc, serverDoc); poller.current?.poke() }
     return () => { session.onRemoteDoc = null }
-  }, [session, mergeIntoEditor])
+  }, [session, mergeIntoEditor, poller])
+
+  // A paragraph both sides changed: when the other side only added comment or
+  // suggestion marks, they move onto the student's text and the save goes on;
+  // anything else waits for the student's choice (the banner).
+  const conflict = state.conflict
+  useEffect(() => {
+    if (conflict?.code !== 'block_conflict' || !conflict.doc || !Number.isInteger(conflict.save_seq)) return
+    const current = editorRef.current
+    const base = queue.getBaseDoc()
+    const local = editorDoc(current)
+    if (!base || !local) return
+    const serverDoc = ensureBids(conflict.doc)
+    const merged = mergeBlocks(normalizeDoc(base), local, serverDoc)
+    if (!merged || merged.conflicts.length) return
+    applyDocChanges(current, merged.doc)
+    session.set({ conflict: null })
+    queue.keepMine(conflict.save_seq, serverDoc)
+    poller.current?.poke()
+  }, [conflict, queue, session, poller])
 
   // A newer version seen by polling (a counselor's comment or suggestion).
   const absorbRemote = useCallback((serverDoc, seq) => {
@@ -780,7 +801,6 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   }, [queue, mergeIntoEditor])
 
   const pollState = useRef({ etag: null, othersActive: false })
-  const [poller] = useState(() => ({ current: null }))
   const loadFeedback = useCallback(async () => {
     try {
       const response = await essayLabApi.changes(essay.id, session.id, queue.getState().seq, pollState.current.etag)

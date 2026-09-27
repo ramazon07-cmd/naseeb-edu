@@ -141,7 +141,12 @@ export function mergeBlocks(base, local, server) {
     const l = L.get(id)
     if (l === b || l === s) content.push(l === b ? serverBlocks[index] : localById.get(id))
     else if (s === b) content.push(localById.get(id))
-    else { conflicts.push(id); content.push(localById.get(id)) }
+    else {
+      // Both changed. When the server only added comment / suggestion marks, they move onto the local text.
+      const moved = transplantMarks(baseBlocks[baseIds.indexOf(id)], localById.get(id), serverBlocks[index])
+      if (moved) content.push(moved)
+      else { conflicts.push(id); content.push(localById.get(id)) }
+    }
   }
   // Changed here but deleted on the server: kept (the local edit wins).
   const placed = new Set(content.map(blockId))
@@ -176,4 +181,112 @@ export function changedRange(current, next) {
   let endB = b.length
   while (endA > from && endB > from && a[endA - 1] === b[endB - 1]) { endA -= 1; endB -= 1 }
   return { from, currentTo: endA, nextTo: endB }
+}
+
+// --- moving feedback marks onto edited text ------------------------------------
+
+const TEXT_BLOCK_TYPES = new Set(['paragraph', 'heading', 'title', 'subtitle'])
+const COLLAB = ['comment', 'suggestInsert', 'suggestDelete']
+const collabRank = (mark) => COLLAB.indexOf(mark?.type) + 1
+const isCollab = (mark) => COLLAB.includes(mark?.type)
+
+// Text of a plain text block (a hard break counts as one character), or null for anything else.
+function flatText(block) {
+  if (!block || !TEXT_BLOCK_TYPES.has(block.type)) return null
+  let text = ''
+  for (const node of block.content || []) {
+    if (node.type === 'text') text += node.text
+    else if (node.type === 'hardBreak') text += '\n'
+    else return null
+  }
+  return text
+}
+
+const withoutCollab = (block) => joinText({
+  ...block,
+  content: (block.content || []).map((node) => {
+    if (node.type !== 'text' || !node.marks?.some(isCollab)) return node
+    const marks = node.marks.filter((mark) => !isCollab(mark))
+    const { marks: _marks, ...rest } = node
+    return marks.length ? { ...rest, marks } : rest
+  }),
+})
+
+// Neighbouring text with the same marks is one node (as the editor keeps it).
+function joinText(block) {
+  const joined = []
+  for (const node of block.content || []) {
+    const last = joined[joined.length - 1]
+    if (last && last.type === 'text' && node.type === 'text' && canonicalJson(last.marks || null) === canonicalJson(node.marks || null)) {
+      joined[joined.length - 1] = { ...last, text: last.text + node.text }
+    } else joined.push(node)
+  }
+  return { ...block, content: joined }
+}
+
+// [{ from, to, mark }] of the collaboration marks in a text block.
+function collabRanges(block) {
+  const ranges = []
+  let at = 0
+  for (const node of block.content || []) {
+    const length = node.type === 'text' ? node.text.length : 1
+    for (const mark of node.marks || []) if (isCollab(mark)) ranges.push({ from: at, to: at + length, mark })
+    at += length
+  }
+  return ranges
+}
+
+function addMark(block, from, to, mark) {
+  const content = []
+  let at = 0
+  for (const node of block.content || []) {
+    const length = node.type === 'text' ? node.text.length : 1
+    const start = at
+    at += length
+    if (node.type !== 'text' || at <= from || start >= to) { content.push(node); continue }
+    const cutFrom = Math.max(from, start) - start
+    const cutTo = Math.min(to, at) - start
+    const piece = (text, marks) => (marks?.length ? { ...node, text, marks } : (({ marks: _m, ...rest }) => ({ ...rest, text }))(node))
+    if (cutFrom > 0) content.push(piece(node.text.slice(0, cutFrom), node.marks))
+    const key = (item) => (item.type === 'comment' ? `comment:${item.attrs?.id}` : item.type)
+    const marks = [...(node.marks || []).filter((item) => key(item) !== key(mark)), mark]
+      .map((item, order) => ({ item, order }))
+      .sort((a, b) => collabRank(a.item) - collabRank(b.item) || a.order - b.order)
+      .map(({ item }) => item)
+    content.push(piece(node.text.slice(cutFrom, cutTo), marks))
+    if (cutTo < length) content.push(piece(node.text.slice(cutTo), node.marks))
+  }
+  return joinText({ ...block, content })
+}
+
+// When the server's version of a block is the base plus comment / suggestion
+// marks only (a counselor commented on the paragraph the student is editing),
+// the local block with those marks moved onto the edited text. Null when the
+// server changed anything else (then the paragraph is a real conflict).
+export function transplantMarks(base, local, server) {
+  const baseText = flatText(base)
+  const localText = flatText(local)
+  if (baseText == null || localText == null || flatText(server) !== baseText) return null
+  if (canonicalJson(withoutCollab(server)) !== canonicalJson(withoutCollab(base))) return null
+  const known = new Set(collabRanges(base).map((range) => canonicalJson(range.mark)))
+  const added = collabRanges(server).filter((range) => !known.has(canonicalJson(range.mark)))
+  // Map base offsets onto the local text through the common prefix and suffix.
+  let prefix = 0
+  while (prefix < baseText.length && prefix < localText.length && baseText[prefix] === localText[prefix]) prefix += 1
+  let suffix = 0
+  while (suffix < baseText.length - prefix && suffix < localText.length - prefix
+    && baseText[baseText.length - 1 - suffix] === localText[localText.length - 1 - suffix]) suffix += 1
+  const map = (offset) => {
+    if (offset <= prefix) return offset
+    if (offset >= baseText.length - suffix) return offset + localText.length - baseText.length
+    return null // inside the rewritten part
+  }
+  let result = local
+  for (const range of added) {
+    const from = map(range.from)
+    const to = map(range.to)
+    if (from == null || to == null || to <= from) continue
+    result = addMark(result, from, to, range.mark)
+  }
+  return result
 }

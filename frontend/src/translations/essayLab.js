@@ -452,6 +452,8 @@ export const ESSAY_LAB_TRANSLATIONS = {
   'Sharing “{title}”': ['“{title}” ulashilgan', 'Доступ к «{title}»'],
   'Share “{title}” with your counselor': ['“{title}” ni maslahatchingiz bilan ulashish', 'Поделиться «{title}» с консультантом'],
   'What can your counselor do?': ['Maslahatchingiz nima qila oladi?', 'Что может делать консультант?'],
+  'Sharing settings': ['Ulashish sozlamalari', 'Настройки доступа'],
+  Change: ['O‘zgartirish', 'Изменить'],
 }
 
 export function essayLabMessages(language) {
