@@ -3803,6 +3803,12 @@ select optgroup {
   z-index: 180;
 }
 
+/* The launcher sits above page content, so hide it while a dialog is open;
+   on phones it would otherwise cover the dialog's Save button. */
+body:has(.modal-backdrop) .assistant-launchers {
+  display: none;
+}
+
 .assistant-launchers {
   display: flex;
   align-items: center;
@@ -13175,6 +13181,14 @@ a:focus-visible {
   .top-header .header-actions {
     flex: none;
     gap: var(--space-1-5);
+  }
+
+  /* Thumb-sized header icons and chat back button. */
+  .top-header .icon-button,
+  .message-back {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
   }
 }
 
