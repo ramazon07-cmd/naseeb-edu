@@ -553,7 +553,7 @@ export default function App() {
     <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
       <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate }} /></LazyBoundary>
     </AppShell>
-    {signOutPrompt && <Modal title="Sign out?" backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
+    {signOutPrompt && <Modal title={t("Sign out?")} backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
       <div className="sign-out-prompt" role="alert">
         <p>{t("You have writing that isn't saved to your account yet. Sign in again to save it, or sign out and delete it from this device.")}</p>
         <div className="form-actions"><button type="button" className="button danger" onClick={() => finishSignOut()}>{t('Sign out anyway')}</button><button type="button" className="button primary" onClick={() => finishSignOut({ keepDrafts: true })}>{t('Sign in again')}</button></div>

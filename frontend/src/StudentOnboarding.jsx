@@ -86,7 +86,7 @@ export default function StudentOnboarding({ userId, onSaved, onSignOut }) {
     {error && <p className="onboarding-message error" role="alert">{error}</p>}
     {!error && notice && <p className="onboarding-message" role="status">{notice}</p>}
     {!form ? <p>{error ? t('Reload the page to try again.') : t('Loading…')}</p> : <>
-      <nav aria-label="Profile steps">{steps.map((name, i) => <button key={name} type="button" aria-current={step === i ? 'step' : undefined} disabled={saving || i > step + 1} onClick={() => navigate(i)}><span>{String(i + 1).padStart(2, '0')}</span>{t(name)}</button>)}</nav>
+      <nav aria-label={t('Profile steps')}>{steps.map((name, i) => <button key={name} type="button" aria-current={step === i ? 'step' : undefined} disabled={saving || i > step + 1} onClick={() => navigate(i)}><span>{String(i + 1).padStart(2, '0')}</span>{t(name)}</button>)}</nav>
       <form ref={ref} onSubmit={submit} noValidate><div className="onboarding-section-heading"><h2>{t(steps[step])}</h2><span>{step + 1} / 6</span></div>
         <ProfileSectionFields section={PROFILE_SECTIONS[step].key} form={form} update={update} errors={fieldErrors} idPrefix="onboarding" photo={photo} />
         <footer><button className="button quiet" type="button" disabled={step === 0 || saving} onClick={() => navigate(step - 1)}>{t('Back')}</button><button className="button primary" disabled={saving}>{t(saving ? 'Saving…' : step === 5 ? 'Save profile' : 'Continue')}</button></footer>

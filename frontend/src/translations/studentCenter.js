@@ -17,6 +17,7 @@ export const STUDENT_CENTER_TRANSLATIONS = {
   'Save or cancel the section you are editing first.': ['Avval tahrirlayotgan bo‘limingizni saqlang yoki bekor qiling.', 'Сначала сохраните или отмените раздел, который вы редактируете.'],
   'Complete your profile': ['Profilingizni to‘ldiring', 'Заполните профиль'],
   'Save profile': ['Profilni saqlash', 'Сохранить профиль'],
+  'Profile steps': ['Profil bosqichlari', 'Шаги профиля'],
   // Review labels (a counselor's verification of a record)
   'Waiting for counselor': ['Maslahatchi tekshiruvida', 'Ждёт проверки консультанта'],
   '{0} of {1} approved': ['{1} tadan {0} tasi tasdiqlangan', 'Одобрено {0} из {1}'],
