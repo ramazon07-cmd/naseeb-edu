@@ -31,6 +31,8 @@ export const NOTIFICATION_TRANSLATIONS = {
   '{name} cancelled the meeting “{topic}” on {time}.': ['{name} “{topic}” uchrashuvini ({time}) bekor qildi.', '{name} отменил(а) встречу «{topic}» ({time}).'],
   '{name} asked to move “{topic}” to {time}.': ['{name} “{topic}” uchrashuvini {time} vaqtiga ko‘chirishni so‘radi.', '{name} просит перенести встречу «{topic}» на {time}.'],
   'your meeting participant': ['uchrashuv ishtirokchisi', 'участником встречи'],
+  'Profile section approved': ['Profil bo‘limi tasdiqlandi', 'Раздел профиля одобрен'],
+  'Profile section needs changes': ['Profil bo‘limiga o‘zgartirish kerak', 'Раздел профиля нужно исправить'],
 }
 
 export function notificationMessages(language) {
