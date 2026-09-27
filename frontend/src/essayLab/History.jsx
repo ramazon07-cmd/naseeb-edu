@@ -4,6 +4,7 @@ import { t, tp } from '../i18n.js'
 import { essayLabApi } from './essayLabApi.js'
 import { checkpointDate, dayGroup, relativeTime } from './format.js'
 import { fontStack, loadFontsInJson } from './fonts.js'
+import { historyLine } from './collabModel.js'
 
 const REASONS = {
   auto: { title: 'Autosaved version', note: 'kept automatically' },
@@ -12,7 +13,13 @@ const REASONS = {
   manual: { title: 'Saved by you', note: 'named by you' },
 }
 
+// "Madina suggested 2 edits", "You accepted 1 suggestion": versions made by feedback name the person.
 function checkpointTitle(checkpoint) {
+  const line = historyLine(checkpoint)
+  if (line) {
+    const name = checkpoint.by_me ? t('You') : checkpoint.author_name || t('Your counselor')
+    return tp(line.key, line.n, { name, n: line.n, a: line.a, r: line.r })
+  }
   if (checkpoint.label) return checkpoint.reason === 'manual' ? t('“{label}”', { label: checkpoint.label }) : checkpoint.label
   return t(REASONS[checkpoint.reason]?.title || 'Saved version')
 }
@@ -85,7 +92,8 @@ function History({ essayId, tabId, version, words, savedAt, previewId, onPreview
           {header}
           <div className={`el-version${selected ? ' is-selected' : ''}`}>
             <strong>{checkpointTitle(checkpoint)}</strong>
-            <span>{checkpointDate(checkpoint.created_at)} · {tp('{n} words', checkpoint.word_count ?? 0, { n: checkpoint.word_count ?? 0 })} · {t(REASONS[checkpoint.reason]?.note || 'saved')}</span>
+            <span>{checkpointDate(checkpoint.created_at)} · {tp('{n} words', checkpoint.word_count ?? 0, { n: checkpoint.word_count ?? 0 })} · {historyLine(checkpoint)
+              ? t('feedback') : checkpoint.by_me === false && checkpoint.author_name ? t('by {name}', { name: checkpoint.author_name }) : t(REASONS[checkpoint.reason]?.note || 'saved')}</span>
             <div className="el-version-actions">
               <button type="button" className="el-btn is-small" aria-pressed={selected} disabled={busy === `p${checkpoint.id}`}
                 onClick={() => (selected ? onPreview(null) : run('p', checkpoint, onPreview))}>
@@ -139,6 +147,9 @@ function renderInline(nodes = []) {
       else if (mark.type === 'textStyle') content = <span style={markStyle(mark)}>{content}</span>
       else if (mark.type === 'highlight') content = <mark className="el-highlight" style={{ backgroundColor: mark.attrs?.color }}>{content}</mark>
       else if (mark.type === 'link') content = <u className="el-preview-link">{content}</u>
+      else if (mark.type === 'comment') content = <span className="el-comment">{content}</span>
+      else if (mark.type === 'suggestInsert') content = <ins className="el-suggest-ins">{content}</ins>
+      else if (mark.type === 'suggestDelete') content = <del className="el-suggest-del">{content}</del>
     }
     return <Fragment key={index}>{content}</Fragment>
   })

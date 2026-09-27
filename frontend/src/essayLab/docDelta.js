@@ -37,7 +37,14 @@ const ALLOWED_CHILDREN = {
   title: INLINE,
   subtitle: INLINE,
 }
-const MARKS = new Set(['bold', 'italic', 'underline', 'strike', 'textStyle', 'highlight', 'link'])
+// Collaboration marks carry only the id of their thread / suggestion (see collabMarks.js).
+export const COLLAB_MARKS = ['comment', 'suggestInsert', 'suggestDelete']
+const MARKS = new Set(['bold', 'italic', 'underline', 'strike', 'textStyle', 'highlight', 'link', ...COLLAB_MARKS])
+// Several comments may cover the same words; any other mark appears once per text node.
+const MAX_MARKS = 16
+const MAX_MARK_ID = 2 ** 53 - 1
+// Stable ids of top-level blocks (attrs.bid); same pattern as doc.py BID_PATTERN.
+export const BID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 const DROP_WHEN_EMPTY = new Set(['bulletList', 'orderedList', 'listItem', 'blockquote'])
 export const TEXT_ALIGN = new Set(['center', 'right', 'justify'])
 export const LINE_HEIGHTS = ['1', '1.15', '1.5', '2']
@@ -93,19 +100,26 @@ function markAttrs(type, attrs) {
     if (typeof href !== 'string' || [...href].length > MAX_HREF || !LINK_HREF.test(href)) throw new Invalid()
     return { href }
   }
+  if (COLLAB_MARKS.includes(type)) {
+    const { id } = values
+    if (!isInt(id) || id < 1 || id > MAX_MARK_ID) throw new Invalid()
+    return { id }
+  }
   return {}
 }
 
+const markKey = (type, attrs) => (type === 'comment' ? `comment:${attrs.id}` : type)
+
 function cleanMarks(marks) {
   if (marks == null) return null
-  if (!Array.isArray(marks) || marks.length > MARKS.size) throw new Invalid()
+  if (!Array.isArray(marks) || marks.length > MAX_MARKS) throw new Invalid()
   const cleaned = []
   const seen = new Set()
   for (const mark of marks) {
     if (!isObject(mark) || !MARKS.has(mark.type)) throw new Invalid()
     const attrs = markAttrs(mark.type, mark.attrs)
-    if (seen.has(mark.type) || attrs === null) continue
-    seen.add(mark.type)
+    if (attrs === null || seen.has(markKey(mark.type, attrs))) continue
+    seen.add(markKey(mark.type, attrs))
     cleaned.push(Object.keys(attrs).length ? { type: mark.type, attrs } : { type: mark.type })
   }
   return cleaned.length ? cleaned : null
@@ -129,9 +143,16 @@ function blockFormat(values, cleaned) {
   return cleaned
 }
 
-function cleanAttrs(type, attrs) {
+// A top-level block keeps a well-formed bid; a malformed one, or one on a nested block, is dropped.
+function cleanAttrs(type, attrs, topLevel = false) {
   if (attrs != null && !isObject(attrs)) throw new Invalid()
   const values = attrs || {}
+  const cleaned = formatAttrs(type, values) || {}
+  if (topLevel && typeof values.bid === 'string' && BID_PATTERN.test(values.bid)) cleaned.bid = values.bid
+  return Object.keys(cleaned).length ? cleaned : null
+}
+
+function formatAttrs(type, values) {
   if (type === 'heading') {
     if (values.level !== 1 && values.level !== 2 && values.level !== 3) throw new Invalid()
     return blockFormat(values, { level: values.level })
@@ -167,9 +188,13 @@ function cleanNode(node, depth, allowed) {
     return cleaned
   }
   if (truthy(node.marks)) throw new Invalid()
-  if (type === 'hardBreak' || type === 'pageBreak') return { type }
+  if (type === 'hardBreak') return { type }
+  if (type === 'pageBreak') {
+    const attrs = cleanAttrs(type, node.attrs, depth === 2)
+    return attrs ? { type, attrs } : { type }
+  }
   const cleaned = { type }
-  const attrs = cleanAttrs(type, node.attrs)
+  const attrs = cleanAttrs(type, node.attrs, depth === 2)
   if (attrs) cleaned.attrs = attrs
   const content = node.content == null ? [] : node.content
   if (!Array.isArray(content)) throw new Invalid()
@@ -239,11 +264,57 @@ export function normalizeDoc(doc) {
   try {
     const cleaned = cleanNode(doc, 1, new Set(['doc']))
     if (!cleaned.content) cleaned.content = [{ type: 'paragraph' }]
+    dropDuplicateBids(cleaned.content)
     return cleaned
   } catch (error) {
     if (error instanceof Invalid || error instanceof RangeError) return null
     throw error
   }
+}
+
+export const blockId = (block) => (isObject(block?.attrs) ? block.attrs.bid ?? null : null)
+
+export function withBid(block, bid) {
+  const { bid: _old, ...rest } = isObject(block.attrs) ? block.attrs : {}
+  const attrs = bid == null ? rest : { ...rest, bid }
+  const { attrs: _attrs, ...node } = block
+  return Object.keys(attrs).length ? { ...node, attrs } : node
+}
+
+// A copied block keeps its id; the later copy loses it (in place, like doc.py).
+function dropDuplicateBids(blocks) {
+  const seen = new Set()
+  blocks.forEach((block, index) => {
+    const bid = blockId(block)
+    if (bid == null) return
+    if (seen.has(bid)) blocks[index] = withBid(block, null)
+    seen.add(bid)
+  })
+}
+
+// `doc` with a bid on every top-level block (the same object when all have one).
+// Missing or repeated ids become "n0", "n1", … in reading order, skipping ids
+// in use: exactly doc.py ensure_bids, so a legacy doc gets the same ids here
+// and on the server.
+export function ensureBids(doc) {
+  const blocks = isObject(doc) && Array.isArray(doc.content) ? doc.content : []
+  const seen = new Set()
+  const missing = []
+  blocks.forEach((block, index) => {
+    const bid = blockId(block)
+    if (typeof bid === 'string' && BID_PATTERN.test(bid) && !seen.has(bid)) seen.add(bid)
+    else missing.push(index)
+  })
+  if (!missing.length) return doc
+  const content = [...blocks]
+  let counter = 0
+  for (const index of missing) {
+    while (seen.has(`n${counter}`)) counter += 1
+    content[index] = withBid(content[index], `n${counter}`)
+    seen.add(`n${counter}`)
+    counter += 1
+  }
+  return { ...doc, content }
 }
 
 // --- canonical JSON + sha256 ------------------------------------------------------

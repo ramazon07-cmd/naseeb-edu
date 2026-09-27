@@ -41,7 +41,8 @@ export const essayLabApi = {
   deleteEssay: (id) => request(`${BASE}/essays/${id}/`, { method: 'DELETE' }),
   duplicateEssay: (id, payload = {}) => request(`${BASE}/essays/${id}/duplicate/`, json('POST', payload)),
   // Idempotent; the answer is the essay summary with its new sharing state.
-  shareEssay: (id) => request(`${BASE}/essays/${id}/share/`, { method: 'POST' }),
+  // access: what the counselor may do ('comment' | 'suggest'); sharing again only changes it.
+  shareEssay: (id, access) => request(`${BASE}/essays/${id}/share/`, json('POST', access ? { access } : {})),
   unshareEssay: (id) => request(`${BASE}/essays/${id}/unshare/`, { method: 'POST' }),
 
   checkpoints: (id, tab) => request(`${BASE}/essays/${id}/checkpoints/${query({ tab })}`),
@@ -55,6 +56,16 @@ export const essayLabApi = {
   depthCheck: (id, tab, baseSeq) => request(`${BASE}/essays/${id}/depth-check/`, json('POST', { tab, base_seq: baseSeq }, { timeoutMs: 60_000 })),
   // Without a tab: the document's latest check (the library card).
   latestDepthCheck: (id, tab) => request(`${BASE}/essays/${id}/depth-check/latest/${query({ tab })}`),
+
+  // Comments and suggestions. changes() answers { notModified } while nothing changed
+  // (ETag); otherwise the tab's threads, pending suggestions and, when newer
+  // than `since`, its doc.
+  changes: (id, tab, since, etag = null) => request(`${BASE}/essays/${id}/changes/${query({ tab, since })}`, { etag: etag || null, retries: 0 }),
+  replyToThread: (id, threadId, body) => request(`${BASE}/essays/${id}/threads/${threadId}/reply/`, json('POST', { body })),
+  resolveThread: (id, threadId) => request(`${BASE}/essays/${id}/threads/${threadId}/resolve/`, { method: 'POST' }),
+  reopenThread: (id, threadId) => request(`${BASE}/essays/${id}/threads/${threadId}/reopen/`, { method: 'POST' }),
+  // decisions: [{ id, accept }]; all are applied together or none.
+  decideSuggestions: (id, tab, decisions) => request(`${BASE}/essays/${id}/suggestions/decide/`, json('POST', { tab, decisions })),
 
   folders: () => request(`${BASE}/folders/`),
   createFolder: (payload) => request(`${BASE}/folders/`, json('POST', payload)),

@@ -17,6 +17,10 @@ export const NOTIFICATION_TRANSLATIONS = {
   'Meeting approved': ['Uchrashuv tasdiqlandi', 'Встреча подтверждена'],
   'Meeting rejected': ['Uchrashuv rad etildi', 'Встреча отклонена'],
   'Meeting completed': ['Uchrashuv yakunlandi', 'Встреча завершена'],
+  'New feedback on your essay': ['Inshongiz bo‘yicha yangi fikr-mulohaza', 'Новый отзыв на ваше эссе'],
+  'New reply to your comment': ['Izohingizga yangi javob', 'Новый ответ на ваш комментарий'],
+  'Comment resolved': ['Izoh hal qilindi', 'Комментарий решён'],
+  'Suggestions reviewed': ['Takliflar ko‘rib chiqildi', 'Предложения рассмотрены'],
 }
 
 export function notificationMessages(language) {
