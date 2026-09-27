@@ -24,9 +24,20 @@ TEXT_BLOCKS = {'paragraph', 'heading', 'title', 'subtitle'}
 BLOCK_NODES = TEXT_BLOCKS | {'bulletList', 'orderedList', 'listItem', 'blockquote', 'pageBreak'}
 INLINE_NODES = {'text', 'hardBreak'}
 ALLOWED_NODES = {'doc'} | BLOCK_NODES | INLINE_NODES
-ALLOWED_MARKS = {'bold', 'italic', 'underline', 'strike', 'textStyle', 'highlight', 'link'}
+FORMAT_MARKS = {'bold', 'italic', 'underline', 'strike', 'textStyle', 'highlight', 'link'}
+# Collaboration marks: a comment thread, and suggested text to insert or delete.
+# Their only attribute is the id of the EssayCommentThread / EssaySuggestion row.
+COLLAB_MARKS = ('comment', 'suggestInsert', 'suggestDelete')
+ALLOWED_MARKS = FORMAT_MARKS | set(COLLAB_MARKS)
+# Several comments may cover the same words; every other mark appears once per text node.
+MAX_MARKS = 16
+MAX_MARK_ID = 2 ** 53 - 1
+# Stable ids of top-level blocks (attrs.bid). The editor makes them; blocks that
+# arrive without one get a predictable one (ensure_bids), the same on both sides.
+BID_PATTERN = re.compile(r'[A-Za-z0-9_-]{1,32}')
 BULLET_STYLES = {'bullet', 'dash'}
 FLOW = TEXT_BLOCKS | {'bulletList', 'orderedList', 'blockquote'}
+TOP_LEVEL = FLOW | {'pageBreak'}
 # Children each container may hold. Anything else is an invalid document.
 # A page break only sits between top-level blocks.
 ALLOWED_CHILDREN = {
@@ -128,13 +139,23 @@ def _mark_attrs(mark_type, attrs):
         if not isinstance(href, str) or len(href) > MAX_HREF or not LINK_HREF.fullmatch(href):
             raise _invalid('Links must be http, https or mailto addresses.')
         return {'href': href}
+    if mark_type in COLLAB_MARKS:
+        mark_id = attrs.get('id')
+        if not _is_int(mark_id) or not 1 <= mark_id <= MAX_MARK_ID:
+            raise _invalid('Comment and suggestion marks need an id.')
+        return {'id': mark_id}
     return {}
+
+
+def _mark_key(mark_type, attrs):
+    # Comments stack (one mark per thread); any other mark type appears once.
+    return (mark_type, attrs['id']) if mark_type == 'comment' else mark_type
 
 
 def _clean_marks(marks):
     if marks is None:
         return None
-    if not isinstance(marks, list) or len(marks) > len(ALLOWED_MARKS):
+    if not isinstance(marks, list) or len(marks) > MAX_MARKS:
         raise _invalid('Text marks must be a short list.')
     cleaned = []
     seen = set()
@@ -143,9 +164,9 @@ def _clean_marks(marks):
             raise _invalid('That text formatting is not allowed.')
         mark_type = mark['type']
         attrs = _mark_attrs(mark_type, mark.get('attrs'))
-        if mark_type in seen or attrs is None:
+        if attrs is None or _mark_key(mark_type, attrs) in seen:
             continue
-        seen.add(mark_type)
+        seen.add(_mark_key(mark_type, attrs))
         cleaned.append({'type': mark_type, 'attrs': attrs} if attrs else {'type': mark_type})
     return cleaned or None
 
@@ -170,11 +191,23 @@ def _block_format(attrs, cleaned):
     return cleaned
 
 
-def _clean_attrs(node_type, attrs):
-    """Keep only the attributes the editor schema defines; reject bad values."""
+def _clean_attrs(node_type, attrs, top_level=False):
+    """Keep only the attributes the editor schema defines; reject bad values.
+
+    A top-level block keeps a well-formed `bid`; a malformed one, or a bid on a
+    nested block, is dropped (never an error: ids are bookkeeping, not text).
+    """
     if attrs is not None and not isinstance(attrs, dict):
         raise _invalid('Node attrs must be an object.')
     attrs = attrs or {}
+    cleaned = _format_attrs(node_type, attrs) or {}
+    bid = attrs.get('bid')
+    if top_level and isinstance(bid, str) and BID_PATTERN.fullmatch(bid):
+        cleaned['bid'] = bid
+    return cleaned or None
+
+
+def _format_attrs(node_type, attrs):
     if node_type == 'heading':
         level = attrs.get('level')
         if level not in HEADING_LEVELS or isinstance(level, bool):
@@ -223,11 +256,14 @@ def _clean_node(node, depth, allowed_types):
         return cleaned
     if node.get('marks'):
         raise _invalid('Only text nodes can carry marks.')
-    if node_type in {'hardBreak', 'pageBreak'}:
+    if node_type == 'hardBreak':
         return {'type': node_type}
+    if node_type == 'pageBreak':
+        attrs = _clean_attrs(node_type, node.get('attrs'), top_level=depth == 2)
+        return {'type': node_type, 'attrs': attrs} if attrs else {'type': node_type}
 
     cleaned = {'type': node_type}
-    attrs = _clean_attrs(node_type, node.get('attrs'))
+    attrs = _clean_attrs(node_type, node.get('attrs'), top_level=depth == 2)
     if attrs:
         cleaned['attrs'] = attrs
     content = node.get('content')
@@ -261,14 +297,76 @@ def validate_doc(doc):
     cleaned = _clean_node(doc, 1, {'doc'})
     if not cleaned.get('content'):
         cleaned['content'] = [{'type': 'paragraph'}]
+    _drop_duplicate_bids(cleaned['content'])
     return cleaned
 
 
+def block_id(block):
+    attrs = block.get('attrs')
+    return attrs.get('bid') if isinstance(attrs, dict) else None
+
+
+def _set_bid(block, bid):
+    attrs = {key: value for key, value in (block.get('attrs') or {}).items() if key != 'bid'}
+    if bid is not None:
+        attrs['bid'] = bid
+    updated = {key: value for key, value in block.items() if key != 'attrs'}
+    if attrs:
+        updated['attrs'] = attrs
+    return updated
+
+
+def _drop_duplicate_bids(blocks):
+    """A copied block keeps its bid; the later copy loses it (in place)."""
+    seen = set()
+    for index, block in enumerate(blocks):
+        bid = block_id(block)
+        if bid is None:
+            continue
+        if bid in seen:
+            blocks[index] = _set_bid(block, None)
+        seen.add(bid)
+
+
+def ensure_bids(doc):
+    """`doc` with a bid on every top-level block (the same object when all have one).
+
+    Missing (or repeated) ids become "n0", "n1", … in reading order, skipping
+    ids already used, so the server and the editor give a legacy doc the same ids.
+    """
+    blocks = doc.get('content') or []
+    seen = set()
+    missing = []
+    for index, block in enumerate(blocks):
+        bid = block_id(block)
+        if isinstance(bid, str) and BID_PATTERN.fullmatch(bid) and bid not in seen:
+            seen.add(bid)
+        else:
+            missing.append(index)
+    if not missing:
+        return doc
+    content = list(blocks)
+    counter = 0
+    for index in missing:
+        while f'n{counter}' in seen:
+            counter += 1
+        content[index] = _set_bid(content[index], f'n{counter}')
+        seen.add(f'n{counter}')
+        counter += 1
+    return {**doc, 'content': content}
+
+
+def is_suggested_insert(node):
+    return any(mark.get('type') == 'suggestInsert' for mark in node.get('marks') or ())
+
+
 def _inline_text(node):
+    # Suggested insertions are not the student's text until accepted.
     parts = []
     for child in node.get('content') or []:
         if child.get('type') == 'text':
-            parts.append(child.get('text', ''))
+            if not is_suggested_insert(child):
+                parts.append(child.get('text', ''))
         elif child.get('type') == 'hardBreak':
             parts.append('\n')
     return ''.join(parts)
@@ -448,3 +546,93 @@ def apply_delta(base_doc, ops, expected_hash):
     doc = validate_doc(candidate)
     # Validation only rewrites what the client's normaliser missed; then the stored hash differs.
     return doc, (expected_hash if doc == candidate else doc_hash(doc))
+
+
+# --- ops v2: blocks addressed by id, merged per paragraph --------------------------
+
+
+class BlockConflict(DocError):
+    def __init__(self, bids):
+        super().__init__('block_conflict', 'Someone else changed the same paragraph.', status=409)
+        self.bids = bids
+
+
+def block_hash(block):
+    return hashlib.sha256(canonical_json(block).encode('ascii')).hexdigest()
+
+
+def apply_ops_v2(blocks, ops):
+    """Apply id-addressed ops to top-level `blocks` (which all carry a bid).
+
+      {"del": bid, "base": h}              remove the block
+      {"set": bid, "base": h, "block": b}  replace the block (b keeps the bid)
+      {"ins": b, "after": bid | null}      insert b after that block (null: first)
+
+    `base` is the sha256 of the block the client started from. A block that
+    changed since (or disappeared), or an insert whose anchor is gone, is a
+    conflict: BlockConflict lists every such bid. Ops run in the order given.
+    """
+    result = list(blocks)
+    conflicts = []
+
+    def find(bid):
+        return next((index for index, block in enumerate(result) if block_id(block) == bid), None)
+
+    for op in ops:
+        if 'ins' in op:
+            block = op['ins']
+            bid = block_id(block)
+            if bid is None or find(bid) is not None:
+                raise _resync('An inserted block needs a new id.')
+            if op['after'] is None:
+                result.insert(0, block)
+                continue
+            anchor = find(op['after'])
+            if anchor is None:
+                conflicts.append(op['after'])
+                continue
+            result.insert(anchor + 1, block)
+            continue
+        bid = op['del'] if 'del' in op else op['set']
+        index = find(bid)
+        if index is None or block_hash(result[index]) != op['base']:
+            conflicts.append(bid)
+            continue
+        if 'del' in op:
+            del result[index]
+        else:
+            if block_id(op['block']) != bid:
+                raise _resync('A changed block must keep its id.')
+            result[index] = op['block']
+    if conflicts:
+        raise BlockConflict(sorted(set(conflicts)))
+    return result
+
+
+def apply_delta_v2(stored_doc, ops, expected_hash=None):
+    """Ops v2 over a stored doc -> (validated doc, its hash).
+
+    With `expected_hash` (the client's base is the stored version) the result
+    must be exactly the client's doc, as with v1 deltas; any mismatch is a
+    resync. Without it (the client's base is older: a merge) conflicts are
+    reported per block and the merged doc is returned as it is.
+    """
+    base = ensure_bids(stored_doc)
+    try:
+        blocks = apply_ops_v2(base.get('content') or [], ops)
+    except BlockConflict:
+        if expected_hash is not None:
+            raise _resync('The document does not match the saved version.')
+        raise
+    candidate = {'type': 'doc', 'content': blocks}
+    if expected_hash is not None:
+        try:
+            matches = doc_hash(candidate) == expected_hash
+        except (TypeError, ValueError, RecursionError):
+            matches = False
+        if not matches:
+            raise _resync('The document does not match the saved version.')
+    doc = validate_doc(candidate)
+    if expected_hash is not None and doc == candidate:
+        return doc, expected_hash
+    return doc, doc_hash(doc)

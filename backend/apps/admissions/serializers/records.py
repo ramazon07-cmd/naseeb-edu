@@ -525,8 +525,8 @@ class NotificationSerializer(StudentRecordSerializerMixin, serializers.ModelSeri
     class Meta:
         model = Notification
         fields = '__all__'
-        # Set by the server, which knows what the notice points at.
-        read_only_fields = ('kind', 'target_id')
+        # Set by the server, which knows what the notice points at and whom it is for.
+        read_only_fields = ('kind', 'target_id', 'recipient')
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username

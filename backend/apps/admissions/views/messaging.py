@@ -547,7 +547,9 @@ class ChannelMessageViewSet(viewsets.ModelViewSet):
 
     def _etag(self, rows, bounds):
         before = self.request.query_params.get('before', '')
-        digest = hashlib.sha256(f'{self.request.user.pk}:{get_language()}:{bounds}:{before}'.encode())
+        # The request's own language: API views run under English (ApiErrorLocalizationMiddleware).
+        language = getattr(self.request, 'LANGUAGE_CODE', None) or get_language()
+        digest = hashlib.sha256(f'{self.request.user.pk}:{language}:{bounds}:{before}'.encode())
         for row in rows:
             digest.update(repr(tuple(row)).encode())
         return f'W/"{digest.hexdigest()[:32]}"'

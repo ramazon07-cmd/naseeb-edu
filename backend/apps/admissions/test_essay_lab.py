@@ -291,7 +291,7 @@ class EssayLabCrudTests(EssayLabTestCase):
                 self.assertEqual(set(data), {
                     'id', 'title', 'essay_type', 'prompt', 'university_name', 'word_limit', 'folder', 'word_count',
                     'preview', 'last_edited_at', 'updated_at', 'trashed_at', 'status', 'page_size', 'tabs', 'tab',
-                    'shared_with_counselor', 'shared_at',
+                    'shared_with_counselor', 'shared_at', 'counselor_access',
                 })
                 self.assertFalse(data['shared_with_counselor'])
                 essay = Essay.objects.get(pk=data['id'])
@@ -502,7 +502,7 @@ class EssayLabAutosaveTests(EssayLabTestCase):
 
         listing = self.client.get(f'{BASE}/essays/{essay.pk}/checkpoints/').data
         self.assertEqual([item['id'] for item in listing], [first.pk])
-        self.assertEqual(set(listing[0]), {'id', 'tab', 'reason', 'label', 'word_count', 'created_at'})
+        self.assertEqual(set(listing[0]), {'id', 'tab', 'reason', 'label', 'word_count', 'created_at', 'kind', 'detail', 'author_name', 'by_me'})
         detail = self.client.get(f'{BASE}/essays/{essay.pk}/checkpoints/{first.pk}/').data
         self.assertEqual(detail['doc'], make_doc('Version one'))
 

@@ -7,9 +7,14 @@
 //    typing continues, and on blur / page hide / leaving (callers call flush/hide).
 //  - One save in flight per essay; changes made meanwhile become one follow-up.
 //  - Once the server has acknowledged a document, later saves send only the
-//    changed top-level blocks (docDelta.js); a document identical to the
-//    acknowledged one is not sent at all. A 409 "resync" (the server's copy
-//    differs from that base) is answered with an immediate full save.
+//    changed top-level blocks: by block id (ops v2, docMerge.js) when every
+//    block has one, else by index (ops v1, docDelta.js); a document identical
+//    to the acknowledged one is not sent at all. A 409 "resync" (the server's
+//    copy differs from that base) is answered with an immediate full save.
+//  - A v2 save merges with other people's changes to other paragraphs: the
+//    answer then carries the merged doc, which becomes the new base, and
+//    onMerged(serverDoc, sentDoc) lets the editor take in their changes. The
+//    same paragraph changed by both is a 409 "block_conflict".
 //  - A failed save is retried with the same client_save_id after a random
 //    wait of up to 1, 2, 5, 10, 30 s (full jitter, so clients that failed
 //    together don't retry together).
@@ -21,6 +26,7 @@
 // injected, so it runs under plain `node` in tests.
 
 import { diffDocs, prepareDoc } from './docDelta.js'
+import { diffBlocksV2 } from './docMerge.js'
 import { DRAFT_PREFIX } from './drafts.js'
 import { fullJitter } from '../lib/backoff.js'
 
@@ -128,6 +134,7 @@ export function createSaveQueue(options) {
     onStatus = () => {},
     onConflict = () => {},
     onSaved = () => {},
+    onMerged = () => {},
     onStorageWarning = () => {},
     onError = () => {},
   } = options
@@ -217,9 +224,17 @@ export function createSaveQueue(options) {
     attempt = 0
     lastError = null
     if (Number.isInteger(response?.save_seq)) seq = response.save_seq
+    const sentDoc = prepared.get(payload) || null
+    if (delta && response?.merged && response.doc) {
+      // Other people's changes are in the saved version: it is the new base.
+      base = prepareDoc(response.doc)
+      onSaved(response || {}, payload)
+      onMerged(response.doc, sentDoc ? sentDoc.doc : null)
+      settleClean()
+      return
+    }
     if (delta) {
       // An idempotent replay carries no hash; the save it replays sent this doc.
-      const sentDoc = prepared.get(payload) || null
       base = sentDoc && (response?.doc_hash == null || response.doc_hash === sentDoc.hash) ? sentDoc : null
     }
     onSaved(response || {}, payload)
@@ -319,7 +334,11 @@ export function createSaveQueue(options) {
       return
     }
     const payload = { base_seq: seq, client_save_id: makeId() }
-    if (next && base) {
+    const byId = next && base ? diffBlocksV2(base, next) : null
+    if (byId) {
+      payload.ops_v2 = byId
+      payload.doc_hash = next.hash
+    } else if (next && base) {
       payload.ops = diffDocs(base, next)
       payload.doc_hash = next.hash
     } else {
@@ -384,6 +403,16 @@ export function createSaveQueue(options) {
       firstDirtyAt = now()
       flush('keep-mine')
     },
+    // A newer server version was merged into the editor (someone else's
+    // change, seen by polling): it is the base of the next save. Unsaved
+    // local changes stay pending.
+    adopt(serverSeq, serverDoc) {
+      if (forgotten || inFlight) return false
+      rebase(serverSeq, serverDoc)
+      return true
+    },
+    // The document the next delta is computed from (null: the next save is full).
+    getBaseDoc: () => base?.doc ?? null,
     // The editor now shows the server version (load latest / restore / reload).
     acceptServer(serverSeq, serverDoc) {
       conflict = null
