@@ -55,7 +55,17 @@ class ApiErrorLocalizationMiddleware:
         status_code = getattr(response, 'status_code', 200)
         language = request_language(request)
         data = getattr(response, 'data', None)
-        if status_code < 400 or language == 'en' or data is None:
+        if status_code < 400 or data is None:
+            return
+        if language == 'en':
+            # Every error body carries a human-readable top-level
+            # "detail" (field errors stay alongside it), so clients never have
+            # to stitch raw field names into a message.
+            if isinstance(data, Mapping) and 'detail' not in data:
+                response.data = {'detail': _first_error(data), **data}
+            elif not isinstance(data, Mapping):
+                response.data = {'detail': _first_error(data), 'errors': data}
+            response._naseeb_error_localized = True
             return
 
         detail = localized_api_error(_first_error(data), status_code, request=request, language=language)
@@ -65,3 +75,23 @@ class ApiErrorLocalizationMiddleware:
         else:
             response.data = {'detail': detail, 'errors': localized}
         response._naseeb_error_localized = True
+
+
+class StripNulQueryParamsMiddleware:
+    """Drop NUL bytes from query-string values.
+
+    PostgreSQL text columns cannot hold NUL (0x00), so `?search=a%00b` would fail
+    with DataError (500). Request bodies are covered by DRF's ProhibitNullCharacters.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if '\x00' in request.META.get('QUERY_STRING', '') or '%00' in request.META.get('QUERY_STRING', ''):
+            cleaned = request.GET.copy()
+            for key in list(cleaned.keys()):
+                cleaned.setlist(key, [value.replace('\x00', '') for value in cleaned.getlist(key)])
+            cleaned._mutable = False
+            request.GET = cleaned
+        return self.get_response(request)

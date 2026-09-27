@@ -1,13 +1,20 @@
 import { getLanguage, t } from './i18n'
+import { browserLock, createRefresher, createTokenStore } from './authTokens'
+import { UNTRACKED_ENDPOINTS, createMutationTracker } from './lib/reloadPlan'
+import { errorPayloadMessage } from './lib/apiErrors'
+import { firstListPath } from './lib/listPath.js'
+import { requestRetryDelay } from './lib/backoff.js'
+import { protectedFileUrl, readProtectedFile } from './lib/protectedFile.js'
+import { sendWithProgress } from './lib/fileUpload.js'
+import { hasUserDrafts, removeUserDrafts } from './essayLab/drafts.js'
 
 const DEFAULT_API_URL = 'http://127.0.0.1:8000/api'
 const API_URL = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '')
 const REQUEST_TIMEOUT_MS = 15_000
 
-const TOKEN_KEYS = {
-  access: 'admitflow-access-token',
-  refresh: 'admitflow-refresh-token',
-}
+const tokens = createTokenStore(() => window.localStorage)
+// Successful writes are recorded so the app can reload only what changed.
+const mutations = createMutationTracker(UNTRACKED_ENDPOINTS)
 
 export class ApiError extends Error {
   constructor(message, status, details) {
@@ -18,17 +25,11 @@ export class ApiError extends Error {
   }
 }
 
-function getToken(key) {
-  return localStorage.getItem(TOKEN_KEYS[key])
-}
-
-function saveTokens(tokens) {
-  if (tokens.access) localStorage.setItem(TOKEN_KEYS.access, tokens.access)
-  if (tokens.refresh) localStorage.setItem(TOKEN_KEYS.refresh, tokens.refresh)
-}
+const getToken = (key) => tokens.get(key)
+const saveTokens = (payload) => tokens.save(payload)
 
 async function fetchWithTimeout(url, options = {}) {
-  const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options
+  const { timeoutMs = REQUEST_TIMEOUT_MS, localize = true, ...fetchOptions } = options
   const controller = new AbortController()
   const callerSignal = fetchOptions.signal
   let timedOut = false
@@ -41,7 +42,7 @@ async function fetchWithTimeout(url, options = {}) {
   }, timeoutMs)
   try {
     const headers = new Headers(fetchOptions.headers || {})
-    headers.set('Accept-Language', getLanguage())
+    if (localize) headers.set('Accept-Language', getLanguage())
     return await fetch(url, { ...fetchOptions, headers, signal: controller.signal })
   } catch (error) {
     if (timedOut) throw new ApiError(t('The server is taking too long to respond. Check your connection and retry.'), 408, null)
@@ -54,55 +55,137 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
-function responseFileName(response, fallback = 'document') {
-  const disposition = response.headers.get('Content-Disposition') || ''
-  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
-  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
-  try { return decodeURIComponent(encoded || plain || fallback) } catch { return plain || fallback }
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const abort = () => { window.clearTimeout(id); reject(new DOMException('Aborted', 'AbortError')) }
+    const id = window.setTimeout(() => { signal?.removeEventListener('abort', abort); resolve() }, ms)
+    signal?.addEventListener('abort', abort, { once: true })
+  })
 }
 
-async function protectedFileRequest(path, download = false, retry = true) {
+// GETs are retried on transient failures with jittered backoff (lib/backoff.js);
+// writes never are, since a write that timed out may still have landed.
+async function fetchWithRetry(url, options) {
+  const { retries, ...fetchOptions } = options
+  const method = (fetchOptions.method || 'GET').toUpperCase()
+  const limit = method === 'GET' ? retries : 0
+  for (let attempt = 0; ; attempt += 1) {
+    let response
+    try {
+      response = await fetchWithTimeout(url, fetchOptions)
+    } catch (error) {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+      const delay = error instanceof ApiError && !offline ? requestRetryDelay(attempt, error.status, null, { retries: limit }) : null
+      if (delay == null) throw error
+      await sleep(delay, fetchOptions.signal)
+      continue
+    }
+    const delay = requestRetryDelay(attempt, response.status, response.headers.get('Retry-After'), { retries: limit })
+    if (delay == null) return response
+    await sleep(delay, fetchOptions.signal)
+  }
+}
+
+// A presigned bucket URL: no API headers, no cookies, no referrer.
+const fetchStoredFile = (url) => fetchWithTimeout(url, {
+  timeoutMs: 120_000,
+  localize: false,
+  credentials: 'omit',
+  cache: 'no-store',
+  referrerPolicy: 'no-referrer',
+})
+
+async function protectedFileRequest(path, { download = false, query } = {}, retry = true) {
   const headers = new Headers()
   const access = getToken('access')
   if (access) headers.set('Authorization', `Bearer ${access}`)
-  const response = await fetchWithTimeout(
-    `${API_URL}${path}${download ? '?download=1' : ''}`,
-    { headers, timeoutMs: 120_000 },
-  )
+  const response = await fetchWithTimeout(protectedFileUrl(API_URL, path, download, query), { headers, timeoutMs: 120_000 })
   if (response.status === 401 && retry && getToken('refresh')) {
-    await refreshAccessToken()
-    return protectedFileRequest(path, download, false)
+    await refreshAccessToken(access)
+    return protectedFileRequest(path, { download, query }, false)
   }
   if (!response.ok) {
     const payload = await parseResponse(response)
     throw new ApiError(errorMessage(payload), response.status, payload)
   }
-  return {
-    blob: await response.blob(),
-    contentType: response.headers.get('Content-Type') || 'application/octet-stream',
-    fileName: responseFileName(response),
-  }
+  return readProtectedFile(response, {
+    fetchFile: fetchStoredFile,
+    fileError: (status) => new ApiError(t('The file could not be downloaded. Retry.'), status, null),
+  })
 }
 
 const documentFileRequest = (id, download = false) =>
-  protectedFileRequest(`/documents/${id}/file/`, download)
+  protectedFileRequest(`/documents/${id}/file/`, { download })
 
 const evidenceFileRequest = (resource, id, download = false) =>
-  protectedFileRequest(`/${resource}/${id}/proof-file/`, download)
+  protectedFileRequest(`/${resource}/${id}/proof-file/`, { download })
 
 const taskSubmissionFileRequest = (id, download = false) =>
-  protectedFileRequest(`/tasks/${id}/submission-file/`, download)
+  protectedFileRequest(`/tasks/${id}/submission-file/`, { download })
 
 const recommendationFileRequest = (id, download = false) =>
-  protectedFileRequest(`/recommendations/${id}/file/`, download)
+  protectedFileRequest(`/recommendations/${id}/file/`, { download })
 
 // Profile photos live in private storage, so they are fetched as blobs like
-// every other personal file rather than pointed at with a media URL.
-const studentPhotoRequest = (id) => protectedFileRequest(`/students/${id}/photo/`, false)
+// every other personal file rather than pointed at with a media URL. With the
+// photo's version the response is cacheable for a day.
+const studentPhotoRequest = (id, version) =>
+  protectedFileRequest(`/students/${id}/photo/`, { query: version ? { v: version } : {} })
+
+// Essay Lab keeps unsynced text in local drafts under
+// `naseeb-essay-draft:<userId>:<essayId>`. Before signing out, every open
+// editor gets a real save attempt (up to SIGN_OUT_SYNC_MS). Only when all text
+// reached the server — or the student chose to delete it — are the signing-out
+// user's drafts removed; other accounts' drafts on this device are untouched.
+// An expired session keeps them: the same student gets the text back after
+// signing in again.
+const SIGN_OUT_SYNC_MS = 4000
+const beforeSignOut = new Set()
+
+// entry: { save: () => Promise<boolean> (true = all text on the server), forget: () => void }
+export function registerBeforeLogout(entry) {
+  beforeSignOut.add(entry)
+  return () => beforeSignOut.delete(entry)
+}
+
+// -> true when every open editor has synced and the user has no drafts left,
+// false when some text would only survive in this device's drafts (offline,
+// session expired, timed out, or left in an essay that is no longer open).
+export async function syncBeforeSignOut(userId, timeoutMs = SIGN_OUT_SYNC_MS) {
+  const synced = await saveOpenEditors(timeoutMs)
+  if (!synced) return false
+  try { return userId == null || !hasUserDrafts(window.localStorage, userId) } catch { return true }
+}
+
+async function saveOpenEditors(timeoutMs) {
+  const entries = [...beforeSignOut]
+  if (!entries.length) return true
+  const attempts = entries.map((entry) => Promise.resolve().then(() => entry.save()).then((ok) => ok !== false, () => false))
+  let timer
+  const timeout = new Promise((resolve) => { timer = window.setTimeout(() => resolve(false), timeoutMs) })
+  try {
+    return await Promise.race([Promise.all(attempts).then((results) => results.every(Boolean)), timeout])
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
 
 export function clearTokens() {
-  localStorage.removeItem(TOKEN_KEYS.access)
-  localStorage.removeItem(TOKEN_KEYS.refresh)
+  tokens.clear()
+}
+
+// keepDrafts: "Sign in again" — end the session but leave this user's
+// unsynced drafts on the device for the next sign-in.
+function signOut(userId, { keepDrafts = false } = {}) {
+  if (!keepDrafts) {
+    for (const entry of [...beforeSignOut]) {
+      try { entry.forget() } catch { /* best effort */ }
+    }
+  }
+  clearTokens()
+  if (!keepDrafts && userId != null) {
+    try { removeUserDrafts(window.localStorage, userId) } catch { /* storage unavailable */ }
+  }
 }
 
 async function parseResponse(response) {
@@ -121,45 +204,91 @@ function errorMessage(payload) {
     const isHtmlErrorPage = /<!doctype html>|<html[\s>]|<title>server error/i.test(payload)
     return isHtmlErrorPage ? t('The server could not complete this request. Please retry.') : payload
   }
-  if (payload.detail) return payload.detail
-  return Object.entries(payload)
-    .map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(', ') : value}`)
-    .join(' • ')
+  return errorPayloadMessage(payload, t) || t('The server could not complete this request. Please retry.')
 }
 
-async function refreshAccessToken() {
-  const refresh = getToken('refresh')
-  if (!refresh) throw new ApiError(t('Your session has expired.'), 401)
-  const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh }),
-  })
-  const payload = await parseResponse(response)
-  if (!response.ok) {
-    clearTokens()
-    throw new ApiError(t('Your session has expired. Sign in again.'), response.status, payload)
-  }
-  saveTokens(payload)
-  return payload.access
-}
+// One shared refresh for every caller: parallel 401s must not each spend the
+// (rotating, blacklisted-after-use) refresh token and then wipe the new pair.
+const refreshAccessToken = createRefresher({
+  store: tokens,
+  lock: browserLock('naseeb-token-refresh'),
+  jitterMs: 300,
+  send: async (refresh) => {
+    const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh }),
+    })
+    return { ok: response.ok, status: response.status, payload: await parseResponse(response) }
+  },
+  expired: (status, payload) => new ApiError(t('Your session has expired. Sign in again.'), status, payload),
+  failed: (status, payload) => new ApiError(errorMessage(payload), status, payload),
+})
 
+// `retries`: automatic retries for a GET on transient failures (0 turns them off).
+// `etag` (a string, or null for none yet): revalidate; resolves to
+// { notModified: true } on 304, else { notModified: false, etag, data }.
 export async function request(path, options = {}, retry = true, unwrapPagination = true) {
-  const { auth = true, ...fetchOptions } = options
+  const { auth = true, retries = 2, etag, ...fetchOptions } = options
   const headers = new Headers(fetchOptions.headers || {})
+  if (etag) headers.set('If-None-Match', etag)
   const isFormData = fetchOptions.body instanceof FormData
   if (!isFormData && fetchOptions.body !== undefined) headers.set('Content-Type', 'application/json')
   const access = auth ? getToken('access') : null
   if (access) headers.set('Authorization', `Bearer ${access}`)
 
-  const response = await fetchWithTimeout(`${API_URL}${path}`, { ...fetchOptions, headers })
+  const response = await fetchWithRetry(`${API_URL}${path}`, { ...fetchOptions, headers, retries })
   if (auth && response.status === 401 && retry && getToken('refresh')) {
-    await refreshAccessToken()
+    await refreshAccessToken(access)
     return request(path, options, false, unwrapPagination)
   }
+  if (etag !== undefined && response.status === 304) return { notModified: true }
   const payload = await parseResponse(response)
   if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
-  return unwrapPagination ? payload?.results ?? payload : payload
+  if (fetchOptions.method && fetchOptions.method !== 'GET') mutations.note(path)
+  const data = unwrapPagination ? payload?.results ?? payload : payload
+  return etag !== undefined ? { notModified: false, etag: response.headers.get('ETag'), data } : data
+}
+
+const UPLOAD_TIMEOUT_MS = 10 * 60_000
+
+// A multipart write that reports upload progress (0-100) through onProgress.
+// Like request(): one token refresh on 401, API errors as ApiError; an
+// aborted upload rejects with an AbortError.
+async function uploadRequest(method, path, body, { onProgress, signal } = {}, retry = true) {
+  const headers = { 'Accept-Language': getLanguage() }
+  const access = getToken('access')
+  if (access) headers.Authorization = `Bearer ${access}`
+  let response
+  try {
+    response = await sendWithProgress({
+      createRequest: () => new XMLHttpRequest(),
+      method,
+      url: `${API_URL}${path}`,
+      headers,
+      body,
+      onProgress,
+      signal,
+      timeoutMs: UPLOAD_TIMEOUT_MS,
+    })
+  } catch (error) {
+    if (error.name === 'AbortError') throw error
+    if (error.name === 'TimeoutError') throw new ApiError(t('The server is taking too long to respond. Check your connection and retry.'), 408, null)
+    if (typeof navigator !== 'undefined' && !navigator.onLine) throw new ApiError(t('You appear to be offline. Reconnect and retry.'), 0, null)
+    throw new ApiError(t('Unable to connect to the server. Check your connection and retry.'), 0, null)
+  }
+  if (response.status === 401 && retry && getToken('refresh')) {
+    await refreshAccessToken(access)
+    onProgress?.(0)
+    return uploadRequest(method, path, body, { onProgress, signal }, false)
+  }
+  let payload = null
+  if (response.text) {
+    try { payload = JSON.parse(response.text) } catch { payload = response.text }
+  }
+  if (response.status < 200 || response.status >= 300) throw new ApiError(errorMessage(payload), response.status, payload)
+  mutations.note(path)
+  return payload
 }
 
 async function streamRequest(path, payload, signal, retry = true) {
@@ -173,7 +302,7 @@ async function streamRequest(path, payload, signal, retry = true) {
     signal,
   })
   if (response.status === 401 && retry && getToken('refresh')) {
-    await refreshAccessToken()
+    await refreshAccessToken(access)
     return streamRequest(path, payload, signal, false)
   }
   if (!response.ok) {
@@ -192,23 +321,31 @@ function nextApiPath(url) {
   return `${pathname.startsWith('/') ? pathname : `/${pathname}`}${parsed.search}`
 }
 
-async function listAll(resource, query = '') {
-  let path = `/${resource}/${query}`
+// Loads a whole (bounded) collection page by page. `onPage(itemsSoFar)` runs
+// after every page so callers can render the first page while the rest
+// arrives; only the workspace's own small collections use this — large staff
+// lists are server-paged (hooks/usePagedList).
+async function listAll(resource, query = '', { onPage } = {}) {
+  let path = firstListPath(resource, query)
   const items = []
-  let pages = 0
-  while (path) {
+  const visited = new Set()
+  while (path && !visited.has(path)) {
+    visited.add(path)
     const payload = await request(path, {}, true, false)
     if (!payload || !Array.isArray(payload.results)) return payload ?? []
     items.push(...payload.results)
     path = nextApiPath(payload.next)
-    pages += 1
-    if (pages >= 100) throw new ApiError(t('Too many paginated API results.'), 500, null)
+    if (path) onPage?.([...items])
   }
   return items
 }
 
+// One page of the keyset-cursor list contract: { results, next, has_more }.
+const listPage = (resource, query, signal) => request(`/${resource}/${query}`, { signal }, true, false)
+
 export const api = {
   baseUrl: API_URL,
+  takeMutations: () => mutations.take(),
   hasSession: () => Boolean(getToken('access') || getToken('refresh')),
   login: async (username, password) => {
     const response = await fetchWithTimeout(`${API_URL}/auth/token/`, {
@@ -222,6 +359,8 @@ export const api = {
     return payload
   },
   logout: clearTokens,
+  signOut,
+  syncBeforeSignOut,
   changePassword: async (newPassword, confirmPassword) => {
     const payload = await request('/users/accounts/change-password/', {
       method: 'POST',
@@ -246,8 +385,15 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  publicReach: () => request('/public/reach/', { auth: false }),
   list: listAll,
+  page: listPage,
+  count: async (resource, query = '') => {
+    const params = new URLSearchParams(query.replace(/^\?/, ''))
+    params.set('page_size', '1')
+    return (await request(`/${resource}/?${params}`, {}, true, false))?.count ?? 0
+  },
+  search: (query, signal) => request(`/search/?q=${encodeURIComponent(query)}`, { signal }, true, false),
+  retrieve: (resource, id) => request(`/${resource}/${encodeURIComponent(id)}/`),
   create: (resource, payload) => request(`/${resource}/`, {
     method: 'POST',
     body: payload instanceof FormData ? payload : JSON.stringify(payload),
@@ -259,13 +405,18 @@ export const api = {
   remove: (resource, id) => request(`/${resource}/${id}/`, { method: 'DELETE' }),
   studentOnboarding: () => request('/students/onboarding/'),
   saveStudentOnboarding: (payload) => request('/students/onboarding/', { method: 'POST', body: JSON.stringify(payload) }),
+  // Some answers only (one Student Center section); the rest stay as saved.
+  updateStudentAnswers: (payload) => request('/students/onboarding/', { method: 'PATCH', body: JSON.stringify(payload) }),
   quickCreateStudent: (payload) => request('/students/quick-create/', {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  studentAssignmentCandidates: (counselor = null) => request(
-    `/students/assignment-candidates/${counselor ? `?counselor=${encodeURIComponent(counselor)}` : ''}`,
-  ),
+  studentAssignmentCandidates: (counselor = null, search = '', signal) => {
+    const query = new URLSearchParams()
+    if (counselor) query.set('counselor', counselor)
+    if (search.trim()) query.set('search', search.trim())
+    return request(`/students/assignment-candidates/${query.size ? `?${query}` : ''}`, { signal })
+  },
   assignCounselorStudents: (payload) => request('/students/assign-counselor/', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -274,12 +425,11 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  uploadDocument: (payload) => request('/documents/', {
-    method: 'POST',
-    body: payload,
-    timeoutMs: 120_000,
-  }),
-  studentPhoto: (id) => studentPhotoRequest(id),
+  // Create (id null) or update a record from FormData with upload progress.
+  saveWithFiles: (resource, id, payload, options) => (id
+    ? uploadRequest('PATCH', `/${resource}/${id}/`, payload, options)
+    : uploadRequest('POST', `/${resource}/`, payload, options)),
+  studentPhoto: (id, version) => studentPhotoRequest(id, version),
   uploadStudentPhoto: (id, file) => {
     const payload = new FormData()
     payload.append('photo', file)
@@ -304,6 +454,15 @@ export const api = {
   }),
   createCounselor: (payload) => request('/users/accounts/create-counselor/', { method: 'POST', body: JSON.stringify(payload) }),
   deactivateAccount: (id) => request(`/users/accounts/${id}/deactivate/`, { method: 'POST' }),
+  plans: () => request('/users/plans/'),
+  updateSubscription: (schoolId, payload) => request(`/users/workspace-subscriptions/${schoolId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  }),
+  supportView: (id, reason) => request(`/users/accounts/${id}/support-view/`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
   submitCounselorMission: (roadmapId, mission, counselorNote) => request(`/counselor-roadmaps/${roadmapId}/submit-mission/`, { method: 'POST', body: JSON.stringify({ mission, counselor_note: counselorNote }) }),
   reviewCounselorMission: (roadmapId, mission, decision, adminFeedback = '') => request(`/counselor-roadmaps/${roadmapId}/review-mission/`, { method: 'POST', body: JSON.stringify({ mission, decision, admin_feedback: adminFeedback }) }),
   trackScreenTime: (entries) => request('/screen-time/track/', {
@@ -334,6 +493,8 @@ export const api = {
   approveBooking: (id) => request(`/bookings/${id}/approve/`, { method: 'POST' }),
   rejectBooking: (id) => request(`/bookings/${id}/reject/`, { method: 'POST' }),
   completeBooking: (id) => request(`/bookings/${id}/complete/`, { method: 'POST' }),
+  cancelBooking: (id) => request(`/bookings/${id}/cancel/`, { method: 'POST' }),
+  rescheduleBooking: (id, payload) => request(`/bookings/${id}/reschedule/`, { method: 'POST', body: JSON.stringify(payload) }),
   messageChannels: (kind = '', search = '') => {
     const query = new URLSearchParams()
     if (kind) query.set('kind', kind)
@@ -341,6 +502,11 @@ export const api = {
     return request(`/message-channels/${query.size ? `?${query}` : ''}`)
   },
   channelMessages: (channelId) => request(`/channel-messages/?channel=${encodeURIComponent(channelId)}&page_size=50`),
+  // Polling: pass the ETag of the last load; { notModified: true } when nothing changed.
+  // Resolves to { notModified } or { etag, data: { results, next } }.
+  channelMessagesSince: (channelId, etag) => request(`/channel-messages/?channel=${encodeURIComponent(channelId)}&page_size=50`, { etag: etag || null }, true, false),
+  // The page before message `beforeId`: { results (newest first), next }.
+  channelMessagesBefore: (channelId, beforeId) => request(`/channel-messages/?channel=${encodeURIComponent(channelId)}&page_size=50&before=${encodeURIComponent(beforeId)}`, {}, true, false),
   messageContacts: () => request('/message-channels/contacts/'),
   messagingOverview: () => request('/message-channels/overview/'),
   channelMembers: (id) => request(`/message-channels/${id}/members/`),
@@ -382,4 +548,10 @@ export const api = {
     body: JSON.stringify({ student }),
   }),
   markStudentMessageRead: (id) => request(`/student-messages/${id}/read/`, { method: 'POST' }),
+  // Earlier counselor messages, newest first: { results, next, has_more }.
+  counselorMessages: (next) => request(nextApiPath(next) || '/student-messages/?cursor=&page_size=30', {}, true, false),
+  markCounselorMessagesRead: () => request('/student-messages/read-all/', { method: 'POST' }),
+  notificationSummary: () => request('/notifications/summary/'),
+  markNotificationRead: (id) => request(`/notifications/${id}/read/`, { method: 'POST' }),
+  markAllNotificationsRead: () => request('/notifications/read-all/', { method: 'POST' }),
 }

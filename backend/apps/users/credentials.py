@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import CredentialAuditEvent, TemporaryCredential, User
+from .security import client_ip
 
 
 def generate_temporary_password(length=16):
@@ -22,7 +23,7 @@ def generate_temporary_password(length=16):
 def request_audit_metadata(request):
     if not request:
         return {}
-    address = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+    address = client_ip(request)
     digest = hashlib.sha256(f'{settings.SECRET_KEY}:{address}'.encode()).hexdigest()[:20] if address else ''
     return {'ip_hash': digest, 'user_agent': request.META.get('HTTP_USER_AGENT', '')[:160]}
 

@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 
 from django.conf import settings
-from django.core.cache import cache
+from apps.users.cache_safety import cache_get, cache_set
 
 
 logger = logging.getLogger('naseeb.education_ai')
@@ -145,7 +145,7 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
     }
     fingerprint = hashlib.sha256(json.dumps(context, sort_keys=True, default=str).encode('utf-8')).hexdigest()
     cache_key = f'education-guidance:{profile.pk}:{fingerprint}'
-    cached = cache.get(cache_key)
+    cached = cache_get(cache_key)
     if cached:
         return cached
     try:
@@ -155,5 +155,5 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
         logger.warning('education_ai_provider_failure student_id=%s', profile.pk)
         return fallback
-    cache.set(cache_key, result, timeout=24 * 60 * 60)
+    cache_set(cache_key, result, timeout=24 * 60 * 60)
     return result

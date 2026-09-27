@@ -970,9 +970,37 @@ export const ASSESSMENT_TRANSLATIONS = {
     "Hisobingizga saqlandi.",
     "Сохранено в вашем аккаунте."
   ],
-  "Saved on this device only — we could not reach your account.": [
-    "Faqat shu qurilmada saqlandi — hisobingiz bilan bog‘lanib bo‘lmadi.",
-    "Сохранено только на этом устройстве — не удалось связаться с вашим аккаунтом."
+  "Not saved yet — we’ll keep trying to reach your account.": [
+    "Hali saqlanmadi — hisobingizga ulanishga urinishda davom etamiz.",
+    "Пока не сохранено — мы продолжим попытки связаться с вашим аккаунтом."
+  ],
+  "Not saved yet — retrying": [
+    "Hali saqlanmadi — qayta urinilmoqda",
+    "Пока не сохранено — повторяем попытку"
+  ],
+  "We couldn’t load the results saved to your account.": [
+    "Hisobingizda saqlangan natijalarni yuklab bo‘lmadi.",
+    "Не удалось загрузить результаты, сохранённые в вашем аккаунте."
+  ],
+  "Checking the results saved to your account…": [
+    "Hisobingizda saqlangan natijalar tekshirilmoqda…",
+    "Проверяем результаты, сохранённые в вашем аккаунте…"
+  ],
+  "Checking": [
+    "Tekshirilmoqda",
+    "Проверка"
+  ],
+  "Your results are still being saved. Recommendations unlock once your account has them.": [
+    "Natijalaringiz hali saqlanmoqda. Tavsiyalar ular hisobingizga saqlangach ochiladi.",
+    "Ваши результаты ещё сохраняются. Рекомендации откроются, когда они появятся в вашем аккаунте."
+  ],
+  "Your account doesn’t have all four results yet. Load your saved results to unlock recommendations.": [
+    "Hisobingizda hali to‘rtala natija ham yo‘q. Tavsiyalarni ochish uchun saqlangan natijalaringizni yuklang.",
+    "В вашем аккаунте пока нет всех четырёх результатов. Загрузите сохранённые результаты, чтобы открыть рекомендации."
+  ],
+  "Not saved yet": [
+    "Hali saqlanmagan",
+    "Пока не сохранено"
   ],
   "Profile assessment challenges": [
     "Shaxsiy profilni baholash testlari",

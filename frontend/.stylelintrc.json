@@ -1,0 +1,66 @@
+{
+  "extends": [
+    "stylelint-config-standard"
+  ],
+  "rules": {
+    "declaration-property-unit-disallowed-list": [
+      {
+        "font-size": [
+          "px"
+        ]
+      },
+      {
+        "message": "Use the rem type scale (var(--text-*)) for font sizes."
+      }
+    ],
+    "declaration-no-important": [
+      true,
+      {
+        "severity": "warning"
+      }
+    ],
+    "no-duplicate-selectors": [
+      true,
+      {
+        "severity": "warning"
+      }
+    ],
+    "no-descending-specificity": null,
+    "alpha-value-notation": null,
+    "color-function-notation": null,
+    "color-function-alias-notation": null,
+    "media-feature-range-notation": null,
+    "font-family-name-quotes": null,
+    "selector-class-pattern": null,
+    "selector-not-notation": null,
+    "property-no-vendor-prefix": null,
+    "value-keyword-case": null,
+    "color-hex-length": null,
+    "comment-empty-line-before": null,
+    "declaration-block-no-redundant-longhand-properties": null,
+    "shorthand-property-no-redundant-values": null,
+    "declaration-empty-line-before": null,
+    "custom-property-empty-line-before": null,
+    "property-no-deprecated": [
+      true,
+      {
+        "severity": "warning"
+      }
+    ],
+    "media-feature-name-value-allowed-list": {
+      "max-width": [
+        "380px",
+        "560px",
+        "820px",
+        "1100px",
+        "1200px"
+      ],
+      "min-width": [
+        "561px",
+        "821px",
+        "1101px",
+        "1201px"
+      ]
+    }
+  }
+}

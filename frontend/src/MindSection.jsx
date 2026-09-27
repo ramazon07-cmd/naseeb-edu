@@ -1,5 +1,4 @@
 import { ArrowUpRight } from 'lucide-react';
-import './mind-section.css';
 
 const CONTENT = {
   uz: {

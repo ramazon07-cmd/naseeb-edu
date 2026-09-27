@@ -28,6 +28,7 @@ services:
       DATABASE_URL: postgres://rbis:rbis-local-password@db:5432/rbis
       MEDIA_ROOT: /app/backend/media
       DOCUMENT_STORAGE_ROOT: /app/backend/private_documents
+      MIGRATE_ON_START: "1"
     ports:
       - "8000:8000"
     depends_on:

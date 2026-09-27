@@ -1,42 +1,14 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from .models import ProductAuditEvent, User
-
-
-ORGANIZATION_SCHOOL_COUNSELOR_LIMIT = 3
-
-
-def audit_product_action(*, actor, action, target, metadata=None):
-    return ProductAuditEvent.objects.create(
-        actor=actor if getattr(actor, 'is_authenticated', False) else None,
-        action=action,
-        target_type=target._meta.label_lower,
-        target_id=str(target.pk or ''),
-        target_label=str(target),
-        metadata=metadata or {},
-    )
+from . import entitlements
+from .audit import audit_product_action  # noqa: F401  (re-exported for existing callers)
+from .models import User
 
 
 def validate_counselor_capacity(*, school, exclude_user_id=None):
-    """Lock the school row so concurrent API provisioning cannot exceed the limit."""
-    from apps.admissions.models import School
-
-    locked_school = School.objects.select_for_update().get(pk=school.pk)
-    if locked_school.workspace_type == School.WorkspaceType.INDIVIDUAL:
-        return locked_school
-    active = User.objects.filter(
-        school=locked_school,
-        role=User.Role.COUNSELOR,
-        is_active=True,
-    )
-    if exclude_user_id:
-        active = active.exclude(pk=exclude_user_id)
-    if active.count() >= ORGANIZATION_SCHOOL_COUNSELOR_LIMIT:
-        raise ValidationError({
-            'school': f'An organization school can have at most {ORGANIZATION_SCHOOL_COUNSELOR_LIMIT} active counselors.'
-        })
-    return locked_school
+    """Lock the school row so concurrent API provisioning cannot exceed the plan."""
+    return entitlements.check(school, 'max_counselors', 1, exclude_user_id=exclude_user_id)
 
 
 @transaction.atomic
@@ -53,10 +25,35 @@ def transfer_counselor(*, counselor, school, actor):
     ):
         previous_school.is_active = False
         previous_school.save(update_fields=['is_active', 'updated_at'])
+    left = {}
+    if previous_school and previous_school.pk != locked_school.pk:
+        from apps.admissions.tenancy import user_left_school
+
+        left = user_left_school(counselor, previous_school)
     audit_product_action(
         actor=actor,
         action='counselor.transferred',
         target=counselor,
-        metadata={'from_school': previous_school.pk if previous_school else None, 'to_school': locked_school.pk},
+        metadata={
+            'from_school': previous_school.pk if previous_school else None,
+            'to_school': locked_school.pk,
+            **left,
+        },
     )
     return counselor, previous_school
+
+
+def validate_workspace_membership(*, role, school, user=None):
+    """An individual workspace holds only its owner counselor and their students.
+
+    Kept apart from the counselor-capacity rules on purpose: it depends only
+    on the workspace type, not on plan limits.
+    """
+    from apps.admissions.models import School
+
+    if school is None or school.workspace_type != School.WorkspaceType.INDIVIDUAL:
+        return
+    if role in {User.Role.ORGANIZATION, User.Role.TEACHER}:
+        raise ValidationError({'school': 'An individual counselor workspace has no school or teacher accounts.'})
+    if role == User.Role.COUNSELOR and (user is None or user.pk is None or school.owner_counselor_id != user.pk):
+        raise ValidationError({'school': 'An individual counselor workspace belongs to its owner counselor only.'})

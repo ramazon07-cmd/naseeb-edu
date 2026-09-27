@@ -1,60 +1,106 @@
 from datetime import timedelta
 
-from django.core.management.base import BaseCommand
+from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 
 from apps.admissions.models import Application, Document, Notification, StudentProfile, Task
+from apps.admissions.progress import APPLICATION_DONE, late_tasks
+from core.jobs import ScheduledJobCommand
+
+LATE_TASKS = 'Late tasks require attention'
+MISSING_DOCUMENTS = 'Required documents are missing'
+DEADLINE = 'University deadline approaching'
+TITLES = (LATE_TASKS, MISSING_DOCUMENTS, DEADLINE)
+KINDS = {
+    LATE_TASKS: Notification.Kind.TASK,
+    MISSING_DOCUMENTS: Notification.Kind.DOCUMENT,
+    DEADLINE: Notification.Kind.DEADLINE,
+}
 
 
-class Command(BaseCommand):
-    help = 'Generate deadline, late-task and missing-document notifications.'
+class Command(ScheduledJobCommand):
+    help = 'Generate deadline, late-task and missing-document notifications (daily cron).'
 
-    def handle(self, *args, **options):
+    def run(self, *, batch_size, **options):
         today = timezone.localdate()
         created_or_updated = 0
-
-        for student in StudentProfile.objects.select_related('user').all():
-            late_tasks = Task.objects.filter(student=student, due_date__lt=today).exclude(status=Task.Status.APPROVED)
-            if late_tasks.exists():
-                Notification.objects.update_or_create(
-                    student=student,
-                    title='Late tasks require attention',
-                    defaults={
-                        'message': f'{late_tasks.count()} task(s) are past their deadline.',
-                        'channel': Notification.Channel.SYSTEM,
-                        'is_read': False,
-                    },
-                )
-                created_or_updated += 1
-
-            missing_docs = Document.objects.filter(student=student, status=Document.Status.REQUIRED)
-            if missing_docs.exists():
-                Notification.objects.update_or_create(
-                    student=student,
-                    title='Required documents are missing',
-                    defaults={
-                        'message': f'{missing_docs.count()} required document(s) still need to be uploaded.',
-                        'channel': Notification.Channel.SYSTEM,
-                        'is_read': False,
-                    },
-                )
-                created_or_updated += 1
-
-            upcoming = Application.objects.filter(
-                student=student,
-                deadline__range=(today, today + timedelta(days=14)),
-            ).exclude(status__in=[Application.Status.SUBMITTED, Application.Status.ACCEPTED, Application.Status.REJECTED])
-            if upcoming.exists():
-                nearest = upcoming.order_by('deadline').first()
-                Notification.objects.update_or_create(
-                    student=student,
-                    title='University deadline approaching',
-                    defaults={
-                        'message': f'{nearest.university.name} deadline is {nearest.deadline:%Y-%m-%d}.',
-                        'channel': Notification.Channel.SYSTEM,
-                        'is_read': False,
-                    },
-                )
-                created_or_updated += 1
-
+        last_id = 0
+        while True:
+            student_ids = list(
+                StudentProfile.objects.filter(pk__gt=last_id).order_by('pk').values_list('pk', flat=True)[:batch_size]
+            )
+            if not student_ids:
+                break
+            last_id = student_ids[-1]
+            created_or_updated += self.refresh(student_ids, today)
         self.stdout.write(self.style.SUCCESS(f'Generated or refreshed {created_or_updated} notifications.'))
+
+    def wanted(self, student_ids, today):
+        """{(student_id, title): message} for one batch, in a fixed number of queries."""
+        wanted = {}
+        late = (
+            Task.objects.filter(late_tasks(today), student_id__in=student_ids)
+            .values('student_id').annotate(n=Count('id')).order_by()
+        )
+        for row in late:
+            wanted[row['student_id'], LATE_TASKS] = f"{row['n']} task(s) are past their deadline."
+        missing = (
+            # A rejected document needs a new upload just like a missing one.
+            Document.objects.filter(
+                student_id__in=student_ids, status__in=[Document.Status.REQUIRED, Document.Status.REJECTED],
+            )
+            .values('student_id').annotate(n=Count('id')).order_by()
+        )
+        for row in missing:
+            wanted[row['student_id'], MISSING_DOCUMENTS] = (
+                f"{row['n']} required document(s) still need to be uploaded."
+            )
+        upcoming = (
+            Application.objects.filter(student_id__in=student_ids, deadline__range=(today, today + timedelta(days=14)))
+            .exclude(status__in=APPLICATION_DONE)
+            .order_by('student_id', 'deadline', 'id')
+            .values_list('student_id', 'deadline', 'university__name')
+        )
+        for student_id, deadline, university in upcoming:
+            # Rows are ordered by deadline, so the first one per student is the nearest.
+            wanted.setdefault((student_id, DEADLINE), f'{university} deadline is {deadline:%Y-%m-%d}.')
+        return wanted
+
+    def refresh(self, student_ids, today):
+        wanted = self.wanted(student_ids, today)
+        now = timezone.now()
+        with transaction.atomic():
+            existing = Notification.objects.filter(student_id__in=student_ids, title__in=TITLES)
+            to_update, seen, resolved = [], set(), []
+            for notification in existing:
+                key = (notification.student_id, notification.title)
+                if key not in wanted:
+                    # The condition is gone: an unread alert would now be false.
+                    if not notification.is_read:
+                        resolved.append(notification.pk)
+                    continue
+                seen.add(key)
+                if notification.is_read:
+                    # Raised again after being read or resolved: a fresh alert,
+                    # so it goes back to the top of a newest-first list.
+                    notification.created_at = now
+                notification.message = wanted[key]
+                notification.channel = Notification.Channel.SYSTEM
+                notification.kind = KINDS[notification.title]
+                notification.is_read = False
+                notification.updated_at = now
+                to_update.append(notification)
+            if resolved:
+                Notification.objects.filter(pk__in=resolved).update(is_read=True, updated_at=now)
+            Notification.objects.bulk_update(
+                to_update, ['message', 'channel', 'kind', 'is_read', 'created_at', 'updated_at'], batch_size=500,
+            )
+            Notification.objects.bulk_create([
+                Notification(
+                    student_id=student_id, title=title, message=message,
+                    channel=Notification.Channel.SYSTEM, kind=KINDS[title],
+                )
+                for (student_id, title), message in wanted.items() if (student_id, title) not in seen
+            ], batch_size=500)
+        return len(wanted)

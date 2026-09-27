@@ -37,6 +37,8 @@ password: student12345
 
 These accounts are only available when `ENABLE_DEMO_ACCOUNTS=True`. Production must use `APP_ENV=production`, `DEBUG=False`, `ENABLE_DEMO_ACCOUNTS=False`, a unique `SECRET_KEY`, and an external PostgreSQL `DATABASE_URL`; see `.env.production.example`.
 
+If `APP_ENV` is not set, the backend fails closed to production (it refuses to start without real secrets) unless `DEBUG=True` is set explicitly on a non-hosted machine or the test runner is used. There is no built-in default `SECRET_KEY`; development without one gets a random per-process key.
+
 ## API Docs
 
 ```text
@@ -97,3 +99,13 @@ names**; the UI labels them as samples. Edit `StoreItem` in Django admin to set 
 real provider, price, currency, duration and deliverables, then clear `is_sample` once
 the details are confirmed. Keyed records are never overwritten by a re-run, real offers
 are preserved, and the reverse migration does not delete catalog records.
+
+## Migrations
+
+- Deploys run `python manage.py migrate_locked --noinput` (Procfile, Dockerfile, `build.sh`). On PostgreSQL it takes an advisory lock, so several instances booting at once apply migrations one at a time instead of racing; on SQLite it is plain `migrate`. On Render you can also move it to a pre-deploy command and drop it from the start command.
+- The admissions history (`0001`–`0037`) is intentionally **not** squashed: several migrations move private files on disk and cannot be reversed, and a squash would have to be verified against every production database first. New migrations should stay reversible where possible and must never move files without a documented manual rollback.
+
+## API error conventions
+
+- Every error response is JSON with a top-level human-readable `detail`; field validation errors are kept alongside it (`{"detail": "...", "email": ["..."]}`). Errors are localized from `Accept-Language` (uz/ru/en).
+- `400` invalid input (including non-numeric id parameters), `401` not authenticated, `403` authenticated but not allowed to perform the action, `404` the object does not exist *or is outside your scope* (the API does not reveal which), `409` the request conflicts with the current state (e.g. roadmap not active, duplicate active roadmap), `413` request body too large, `429` throttled or locked out.

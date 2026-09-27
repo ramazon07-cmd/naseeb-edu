@@ -90,7 +90,7 @@ class SchoolStudentVisibilityTests(APITestCase):
         )
         Essay.objects.create(
             student=self.student, application=application, title='Essay metadata', prompt='PRIVATE ESSAY PROMPT',
-            content='PRIVATE ESSAY CONTENT', counselor_comment='PRIVATE ESSAY FEEDBACK',
+            content='PRIVATE ESSAY CONTENT', counselor_comment='PRIVATE ESSAY FEEDBACK', shared_with_counselor=True,
         )
         RecommendationLetter.objects.create(
             student=self.student, recommender_name='Teacher One', recommender_email='private-recommender@example.com',

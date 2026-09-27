@@ -1,0 +1,520 @@
+{
+ "_note": "Shared by backend test_essay_lab.py and frontend essayLab docText tests. Word counts ignore list markers.",
+ "cases": [
+  {
+   "name": "empty",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph"
+     }
+    ]
+   },
+   "content": "",
+   "word_count": 0,
+   "preview": "",
+   "char_count": 0,
+   "char_count_no_spaces": 0
+  },
+  {
+   "name": "paragraphs_and_marks",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "My grandmother "
+       },
+       {
+        "type": "text",
+        "text": "never",
+        "marks": [
+         {
+          "type": "bold"
+         },
+         {
+          "type": "italic"
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": " wasted bread."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Second paragraph."
+       }
+      ]
+     }
+    ]
+   },
+   "content": "My grandmother never wasted bread.\n\nSecond paragraph.",
+   "word_count": 7,
+   "preview": "My grandmother never wasted bread. Second paragraph.",
+   "char_count": 51,
+   "char_count_no_spaces": 46
+  },
+  {
+   "name": "heading_and_hard_break",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 1
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Title"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Line one"
+       },
+       {
+        "type": "hardBreak"
+       },
+       {
+        "type": "text",
+        "text": "line two"
+       }
+      ]
+     }
+    ]
+   },
+   "content": "Title\n\nLine one\nline two",
+   "word_count": 5,
+   "preview": "Title Line one line two",
+   "char_count": 21,
+   "char_count_no_spaces": 19
+  },
+  {
+   "name": "bullet_list",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "bulletList",
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "first item"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "second item"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "content": "• first item\n\n• second item",
+   "word_count": 4,
+   "preview": "• first item • second item",
+   "char_count": 21,
+   "char_count_no_spaces": 19
+  },
+  {
+   "name": "dash_list",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "bulletList",
+      "attrs": {
+       "style": "dash"
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "dash one"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "dash two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "content": "– dash one\n\n– dash two",
+   "word_count": 4,
+   "preview": "– dash one – dash two",
+   "char_count": 16,
+   "char_count_no_spaces": 14
+  },
+  {
+   "name": "ordered_list_with_start",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "orderedList",
+      "attrs": {
+       "start": 3
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "three"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "four"
+           }
+          ]
+         },
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "more on four"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "content": "3. three\n\n4. four\n\nmore on four",
+   "word_count": 5,
+   "preview": "3. three 4. four more on four",
+   "char_count": 21,
+   "char_count_no_spaces": 19
+  },
+  {
+   "name": "nested_list",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "orderedList",
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "outer"
+           }
+          ]
+         },
+         {
+          "type": "bulletList",
+          "content": [
+           {
+            "type": "listItem",
+            "content": [
+             {
+              "type": "paragraph",
+              "content": [
+               {
+                "type": "text",
+                "text": "inner"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "content": "1. outer\n\n• inner",
+   "word_count": 2,
+   "preview": "1. outer • inner",
+   "char_count": 10,
+   "char_count_no_spaces": 10
+  },
+  {
+   "name": "blockquote_and_empty_blocks",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": []
+     },
+     {
+      "type": "blockquote",
+      "content": [
+       {
+        "type": "paragraph",
+        "content": [
+         {
+          "type": "text",
+          "text": "Quoted words here."
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "   "
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "After."
+       }
+      ]
+     }
+    ]
+   },
+   "content": "Quoted words here.\n\nAfter.",
+   "word_count": 4,
+   "preview": "Quoted words here. After.",
+   "char_count": 24,
+   "char_count_no_spaces": 22
+  },
+  {
+   "name": "long_preview",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "word0 word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24 word25 word26 word27 word28 word29 word30 word31 word32 word33 word34 word35 word36 word37 word38 word39 word40 word41 word42 word43 word44 word45 word46 word47 word48 word49 word50 word51 word52 word53 word54 word55 word56 word57 word58 word59"
+       }
+      ]
+     }
+    ]
+   },
+   "content": "word0 word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24 word25 word26 word27 word28 word29 word30 word31 word32 word33 word34 word35 word36 word37 word38 word39 word40 word41 word42 word43 word44 word45 word46 word47 word48 word49 word50 word51 word52 word53 word54 word55 word56 word57 word58 word59",
+   "word_count": 60,
+   "preview": "word0 word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23…",
+   "char_count": 409,
+   "char_count_no_spaces": 350
+  },
+  {
+   "name": "formatting_blocks",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "title",
+      "content": [
+       {
+        "type": "text",
+        "text": "My application notebook"
+       }
+      ]
+     },
+     {
+      "type": "subtitle",
+      "attrs": {
+       "textAlign": "center"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Everything for 2027"
+       }
+      ]
+     },
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 3,
+       "lineHeight": "1.5"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Deadlines"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "indent": 2,
+       "textAlign": "justify",
+       "lineHeight": "2"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Early Action: 1 November."
+       }
+      ]
+     },
+     {
+      "type": "pageBreak"
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Next page."
+       }
+      ]
+     }
+    ]
+   },
+   "content": "My application notebook\n\nEverything for 2027\n\nDeadlines\n\nEarly Action: 1 November.\n\nNext page.",
+   "word_count": 13,
+   "preview": "My application notebook Everything for 2027 Deadlines Early Action: 1 November. Next page.",
+   "char_count": 86,
+   "char_count_no_spaces": 78
+  },
+  {
+   "name": "formatted_text_marks",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Big ",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontFamily": "Georgia",
+           "fontSize": 18,
+           "color": "#1e3a6e"
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": "bright",
+        "marks": [
+         {
+          "type": "bold"
+         },
+         {
+          "type": "highlight",
+          "attrs": {
+           "color": "#fef08a"
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": " link",
+        "marks": [
+         {
+          "type": "link",
+          "attrs": {
+           "href": "https://example.com/a?b=1"
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": " 😀 emoji and\ttab"
+       }
+      ]
+     }
+    ]
+   },
+   "content": "Big bright link 😀 emoji and\ttab",
+   "word_count": 7,
+   "preview": "Big bright link 😀 emoji and tab",
+   "char_count": 31,
+   "char_count_no_spaces": 25
+  }
+ ]
+}

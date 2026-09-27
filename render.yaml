@@ -1,0 +1,41 @@
+# Render Blueprint: the backend's scheduled jobs.
+#
+# Every job reads the same variables as the web service from the environment
+# group `naseeb-backend` (create it first: APP_ENV, SECRET_KEY, DATABASE_URL,
+# DIRECT_DATABASE_URL when DATABASE_URL points at PgBouncer, REDIS_URL,
+# MEDIA_ROOT, DOCUMENT_STORAGE_ROOT, ...). The web service itself is managed
+# in the dashboard; see docs/scaling.md for its pre-deploy command.
+#
+# Each command takes its own PostgreSQL advisory lock, so an overlapping run
+# exits immediately, and deletes in batches of 5,000 rows. Schedules are UTC
+# (Tashkent is UTC+5).
+services:
+  - type: cron
+    name: naseeb-flush-expired-tokens
+    runtime: python
+    plan: starter
+    schedule: "30 21 * * *"  # 02:30 Tashkent
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && python manage.py flush_expired_tokens
+    envVars:
+      - fromGroup: naseeb-backend
+
+  - type: cron
+    name: naseeb-purge-screen-time
+    runtime: python
+    plan: starter
+    schedule: "0 22 * * *"  # 03:00 Tashkent
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && python manage.py purge_screen_time
+    envVars:
+      - fromGroup: naseeb-backend
+
+  - type: cron
+    name: naseeb-generate-notifications
+    runtime: python
+    plan: starter
+    schedule: "0 2 * * *"  # 07:00 Tashkent, before the school day
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && python manage.py generate_notifications
+    envVars:
+      - fromGroup: naseeb-backend

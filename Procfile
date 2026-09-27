@@ -1,1 +1,1 @@
-web: cd backend && python manage.py migrate --noinput && gunicorn core.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3 --timeout 120
+web: cd backend && if [ "${MIGRATE_ON_START:-0}" = "1" ]; then python manage.py migrate_locked --noinput || exit 1; fi && exec gunicorn core.wsgi:application --bind 0.0.0.0:${PORT:-8000} --worker-class gthread --workers ${WEB_CONCURRENCY:-2} --threads ${GUNICORN_THREADS:-8} --timeout 120 --graceful-timeout 30 --keep-alive 5 --max-requests ${GUNICORN_MAX_REQUESTS:-20000} --max-requests-jitter 2000 --access-logfile -

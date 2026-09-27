@@ -1,0 +1,14 @@
+# Build context for frontend/Dockerfile. `npm ci` runs inside the image, and
+# VITE_* values come from build args, so none of these belong in it.
+node_modules
+dist
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.local
+npm-debug.log*
+coverage
+.DS_Store
+.vscode
+.idea

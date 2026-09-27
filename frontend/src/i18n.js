@@ -1,4 +1,10 @@
 import { uiMessages } from "./translations/ui.js";
+import { essayLabMessages } from "./translations/essayLab.js";
+import { copyMessages } from "./translations/copy.js";
+import { fileMessages } from "./translations/files.js";
+import { notificationMessages } from "./translations/notifications.js";
+import { studentCenterMessages } from "./translations/studentCenter.js";
+import { essayLabPagesMessages } from "./translations/essayLabPages.js";
 
 import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
 
@@ -14,7 +20,13 @@ const LOCALES = { uz: "uz-UZ", ru: "ru-RU", en: "en-GB" };
 
 export const TRANSLATIONS = {
   uz: {
+    ...essayLabMessages("uz"),
     ...uiMessages("uz"),
+    ...copyMessages("uz"),
+    ...fileMessages("uz"),
+    ...notificationMessages("uz"),
+    ...studentCenterMessages("uz"),
+    ...essayLabPagesMessages("uz"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
@@ -29,7 +41,7 @@ export const TRANSLATIONS = {
     Applications: "Arizalar",
     Documents: "Hujjatlar",
     Certificates: "Sertifikatlar",
-    Essays: "Esselar",
+    Essays: "Insholar",
     "Student Center": "O‘quvchi markazi",
     Roadmap: "Yo‘l xaritasi",
     Community: "Hamjamiyat",
@@ -57,7 +69,7 @@ export const TRANSLATIONS = {
     "University application pipeline": "Universitet arizalari jarayoni",
     "Documents, uploads, and review": "Hujjatlar, yuklash va tekshiruv",
     "Certificates and supporting files": "Sertifikatlar va qo‘shimcha fayllar",
-    "Essay drafts and revision history": "Esse qoralamalari va tahrir tarixi",
+    "Essay drafts and revision history": "Insho qoralamalari va tahrir tarixi",
     "Academic profile, portfolio, activities, and documents":
       "Akademik profil, portfolio, faoliyat va hujjatlar",
     "Level-linked missions, milestones, and reflections":
@@ -73,7 +85,7 @@ export const TRANSLATIONS = {
     "National and international opportunity catalog":
       "Mahalliy va xalqaro imkoniyatlar katalogi",
     "Essay drafts, feedback, and revision history":
-      "Esse qoralamalari, fikrlar va tahrir tarixi",
+      "Insho qoralamalari, fikrlar va tahrir tarixi",
     "Find, compare, and shortlist universities":
       "Universitetlarni qidiring, solishtiring va tanlang",
     "Additional education and application services":
@@ -137,7 +149,6 @@ export const TRANSLATIONS = {
     "School Counselor": "Maktab maslahatchisi",
     Teacher: "O‘qituvchi",
     "Organization School": "Maktab tashkiloti",
-    Student: "O‘quvchi",
     Parent: "Ota-ona",
     "To do": "Bajarish kerak",
     "In progress": "Jarayonda",
@@ -188,10 +199,16 @@ export const TRANSLATIONS = {
     Urgent: "Shoshilinch",
     Draft: "Qoralama",
     "Select university": "Universitetni tanlang",
-    "General essay": "Umumiy esse",
+    "General essay": "Umumiy insho",
   },
   ru: {
+    ...essayLabMessages("ru"),
     ...uiMessages("ru"),
+    ...copyMessages("ru"),
+    ...fileMessages("ru"),
+    ...notificationMessages("ru"),
+    ...studentCenterMessages("ru"),
+    ...essayLabPagesMessages("ru"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",
@@ -208,7 +225,7 @@ export const TRANSLATIONS = {
     Certificates: "Сертификаты",
     Essays: "Эссе",
     "Student Center": "Центр ученика",
-    Roadmap: "Дорожная карта",
+    Roadmap: "План",
     Community: "Сообщество",
     Meetings: "Встречи",
     Messages: "Сообщения",
@@ -312,7 +329,6 @@ export const TRANSLATIONS = {
     "School Counselor": "Школьный консультант",
     Teacher: "Учитель",
     "Organization School": "Школа",
-    Student: "Ученик",
     Parent: "Родитель",
     "To do": "К выполнению",
     "In progress": "В процессе",
@@ -370,8 +386,60 @@ export const TRANSLATIONS = {
 
 let activeLanguage = "en";
 
+const isSupported = (value) => LANGUAGE_OPTIONS.some((option) => option.value === value);
+
+// ?lang=uz|ru|en makes each language addressable (hreflang alternates).
+function urlLanguage() {
+  try {
+    const value = new URLSearchParams(window.location.search).get("lang");
+    return isSupported(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+const DOCUMENT_META = {
+  uz: {
+    title: "Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi",
+    description: "Naseeb Edu o‘quvchilar, oilalar va maktablar uchun universitetga ariza jarayonini boshqaradigan ta’lim maslahat platformasi.",
+  },
+  ru: {
+    title: "Naseeb Edu — платформа образовательного консалтинга",
+    description: "Naseeb Edu — платформа образовательного консалтинга, которая помогает ученикам, семьям и школам вести процесс поступления в университеты.",
+  },
+  en: {
+    title: "Naseeb Edu - Education counseling platform",
+    description: "Naseeb Edu is an education counseling platform that helps students, families and schools manage the university application process.",
+  },
+};
+
+function applyDocumentLanguage(language) {
+  if (typeof document === "undefined") return;
+  document.documentElement.lang = language;
+  const meta = DOCUMENT_META[language] || DOCUMENT_META.en;
+  document.title = meta.title;
+  document.querySelector('meta[name="description"]')?.setAttribute("content", meta.description);
+  if (urlLanguage()) {
+    document.querySelector('link[rel="canonical"]')?.setAttribute("href", `https://naseebedu.com/?lang=${language}`);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("lang", language);
+      window.history.replaceState(window.history.state, "", url);
+    } catch {
+      /* URL stays as it is. */
+    }
+  }
+}
+
+// The public (landing/sign-in) tab title; workspace pages set their own.
+export function siteTitle() {
+  return (DOCUMENT_META[activeLanguage] || DOCUMENT_META.en).title;
+}
+
 export function getLanguage() {
   if (typeof window === "undefined") return activeLanguage;
+  const fromUrl = urlLanguage();
+  if (fromUrl) return fromUrl;
   try {
     const stored = window.localStorage.getItem(LANGUAGE_KEY);
     if (LANGUAGE_OPTIONS.some((option) => option.value === stored))
@@ -386,11 +454,8 @@ export function getLanguage() {
 }
 
 export function setLanguage(language) {
-  activeLanguage = LANGUAGE_OPTIONS.some((option) => option.value === language)
-    ? language
-    : "en";
-  if (typeof document !== "undefined")
-    document.documentElement.lang = activeLanguage;
+  activeLanguage = isSupported(language) ? language : "en";
+  applyDocumentLanguage(activeLanguage);
   try {
     window.localStorage.setItem(LANGUAGE_KEY, activeLanguage);
   } catch {
@@ -400,6 +465,7 @@ export function setLanguage(language) {
 }
 
 activeLanguage = getLanguage();
+applyDocumentLanguage(activeLanguage);
 
 export function t(key, variables = {}) {
   const source = String(key ?? "");
@@ -425,6 +491,17 @@ export function tx(strings, ...values) {
   return t(key, variables);
 }
 
+// Plural-aware t(): a translation may hold "one|few|many" forms (Russian),
+// picked for `count` by the active language's plural rules.
+export function tp(key, count, variables = {}) {
+  const text = t(key, variables);
+  if (!text.includes("|")) return text;
+  const forms = text.split("|");
+  const rule = new Intl.PluralRules(locale()).select(Number(count) || 0);
+  const index = { one: 0, few: 1, many: 2 }[rule] ?? forms.length - 1;
+  return forms[Math.min(index, forms.length - 1)];
+}
+
 export const locale = () => LOCALES[activeLanguage] || LOCALES.en;
 const UZ_MONTHS = [
   "yanvar", "fevral", "mart", "aprel", "may", "iyun",
@@ -446,12 +523,20 @@ const formatUzbekDate = (date, options) => {
   return stamp ? `${stamp}, ${time}` : time;
 };
 
+// A calendar date ("2026-09-25", e.g. a due date) is a day, not an instant:
+// new Date() would read it as UTC midnight and show the previous day west of UTC.
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+export const parseDateValue = (value) => {
+  const match = typeof value === "string" && DATE_ONLY.exec(value);
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
+};
+
 export const formatDateLocale = (
   value,
   options = { day: "2-digit", month: "short", year: "numeric" },
 ) => {
   if (!value) return "—";
-  const date = new Date(value);
+  const date = parseDateValue(value);
   const formatted = new Intl.DateTimeFormat(locale(), options).format(date);
   return /\bM\d{2}\b/.test(formatted) ? formatUzbekDate(date, options) : formatted;
 };
@@ -471,3 +556,21 @@ export const formatCurrencyLocale = (value, currency = "USD") =>
         currency,
         maximumFractionDigits: 0,
       }).format(Number(value));
+
+// "1 h 5 min" in the active language (keys "h"/"min" are translated).
+export const formatDurationLocale = (seconds = 0) => {
+  const totalMinutes = Math.round(Number(seconds) / 60);
+  if (!(totalMinutes >= 1)) return `< ${formatNumberLocale(1)} ${t("min")}`;
+  if (totalMinutes < 60) return `${formatNumberLocale(totalMinutes)} ${t("min")}`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${formatNumberLocale(hours)} ${t("h")}${minutes ? ` ${formatNumberLocale(minutes)} ${t("min")}` : ""}`;
+};
+
+// Hours and minutes only, e.g. for a live counter: "0 min", "2 h 5 min".
+export const formatClockDurationLocale = (seconds = 0) => {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return hours ? `${formatNumberLocale(hours)} ${t("h")} ${formatNumberLocale(minutes)} ${t("min")}` : `${formatNumberLocale(minutes)} ${t("min")}`;
+};

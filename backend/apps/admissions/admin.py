@@ -39,6 +39,29 @@ from .models import (
 )
 
 
+class ScaledModelAdmin(admin.ModelAdmin):
+    """Admin defaults that stay fast with tens of thousands of students.
+
+    Foreign keys render as raw id inputs instead of <select> boxes listing
+    every user/student, and change lists join their foreign keys instead of
+    running one query per row.
+    """
+
+    list_select_related = True
+
+    def __init__(self, model, admin_site):
+        if not self.raw_id_fields:
+            self.raw_id_fields = tuple(
+                field.name for field in model._meta.fields
+                if field.many_to_one and not field.auto_created
+            )
+        super().__init__(model, admin_site)
+
+
+class StudentRecordAdmin(ScaledModelAdmin):
+    list_select_related = ('student__user',)
+
+
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
     list_display = ('name', 'code', 'region', 'workspace_type', 'owner_counselor', 'contact_email', 'is_active')
@@ -47,10 +70,21 @@ class SchoolAdmin(admin.ModelAdmin):
 
 
 @admin.register(StudentProfile)
-class StudentProfileAdmin(admin.ModelAdmin):
+class StudentProfileAdmin(ScaledModelAdmin):
+    list_select_related = ('user', 'school', 'assigned_counselor')
     list_display = ('user', 'school', 'level', 'xp_total', 'grade', 'gpa', 'ielts_score', 'sat_score', 'target_major', 'assigned_counselor')
     search_fields = ('user__first_name', 'user__last_name', 'user__email', 'target_major')
     list_filter = ('school', 'grade', 'scholarship_needed', 'assigned_counselor')
+
+    def save_model(self, request, obj, form, change):
+        if not (change and 'school' in form.changed_data):
+            return super().save_model(request, obj, form, change)
+        from .tenancy import move_student
+
+        new_school = obj.school
+        obj.school_id = form.initial.get('school')
+        super().save_model(request, obj, form, change)
+        move_student(obj, new_school, request.user)
 
 
 @admin.register(University)
@@ -82,68 +116,68 @@ class OpportunityProgramAdmin(admin.ModelAdmin):
 
 
 @admin.register(Application)
-class ApplicationAdmin(admin.ModelAdmin):
+class ApplicationAdmin(StudentRecordAdmin):
     list_display = ('student', 'university', 'program', 'tier', 'status', 'deadline')
     search_fields = ('student__user__first_name', 'student__user__last_name', 'university__name', 'program')
     list_filter = ('status', 'tier', 'university__country')
 
 
 @admin.register(Task)
-class TaskAdmin(admin.ModelAdmin):
+class TaskAdmin(StudentRecordAdmin):
     list_display = ('title', 'student', 'due_date', 'priority', 'status')
     search_fields = ('title', 'student__user__first_name', 'student__user__last_name')
     list_filter = ('status', 'priority', 'due_date')
 
 
 @admin.register(Document)
-class DocumentAdmin(admin.ModelAdmin):
+class DocumentAdmin(StudentRecordAdmin):
     list_display = ('title', 'student', 'document_type', 'status')
     list_filter = ('document_type', 'status')
 
 
 @admin.register(Achievement)
-class AchievementAdmin(admin.ModelAdmin):
+class AchievementAdmin(StudentRecordAdmin):
     list_display = ('title', 'student', 'category', 'date', 'verified')
     list_filter = ('category', 'verified')
 
 
 @admin.register(Research)
-class ResearchAdmin(admin.ModelAdmin):
+class ResearchAdmin(StudentRecordAdmin):
     list_display = ('title', 'student', 'field', 'role', 'start_date', 'verified')
     search_fields = ('title', 'student__user__first_name', 'field')
     list_filter = ('verified',)
 
 
 @admin.register(Project)
-class ProjectAdmin(admin.ModelAdmin):
+class ProjectAdmin(StudentRecordAdmin):
     list_display = ('title', 'student', 'role', 'date', 'verified')
     search_fields = ('title', 'student__user__first_name', 'technologies')
     list_filter = ('verified',)
 
 
 @admin.register(Internship)
-class InternshipAdmin(admin.ModelAdmin):
+class InternshipAdmin(StudentRecordAdmin):
     list_display = ('organization', 'position', 'student', 'start_date', 'is_current', 'verified')
     search_fields = ('organization', 'position', 'student__user__first_name')
     list_filter = ('is_current', 'verified')
 
 
 @admin.register(Activity)
-class ActivityAdmin(admin.ModelAdmin):
+class ActivityAdmin(StudentRecordAdmin):
     list_display = ('name', 'student', 'activity_type', 'role', 'hours_per_week', 'verified')
     search_fields = ('name', 'student__user__first_name', 'role')
     list_filter = ('activity_type', 'verified')
 
 
 @admin.register(Honor)
-class HonorAdmin(admin.ModelAdmin):
+class HonorAdmin(StudentRecordAdmin):
     list_display = ('title', 'student', 'issuer', 'level', 'award_date', 'verified')
     search_fields = ('title', 'issuer', 'student__user__first_name')
     list_filter = ('level', 'verified')
 
 
 @admin.register(RecommendationLetter)
-class RecommendationLetterAdmin(admin.ModelAdmin):
+class RecommendationLetterAdmin(StudentRecordAdmin):
     list_display = ('student', 'recommender_name', 'recommender_title', 'status', 'deadline')
     search_fields = ('student__user__first_name', 'recommender_name', 'recommender_email')
     list_filter = ('status',)
@@ -151,19 +185,26 @@ class RecommendationLetterAdmin(admin.ModelAdmin):
 
 @admin.register(Essay)
 class EssayAdmin(admin.ModelAdmin):
-    list_display = ('title', 'student', 'application', 'version', 'status')
-    list_filter = ('status',)
+    list_display = ('title', 'student', 'application', 'version', 'status', 'shared_with_counselor')
+    list_filter = ('status', 'shared_with_counselor')
+
+    def get_readonly_fields(self, request, obj=None):
+        # The text lives in the document's tabs; `content` and its counts are
+        # derived from them, so an edit here would be overwritten by the next
+        # tab save. A new essay's text becomes its first tab when opened.
+        derived = ('word_count', 'preview') if obj is None else ('content', 'word_count', 'preview')
+        return (*super().get_readonly_fields(request, obj), *derived)
 
 
-admin.site.register(MeetingNote)
-admin.site.register(Notification)
-admin.site.register(ActivityLog)
-admin.site.register(ApplicationStatusHistory)
+admin.site.register(MeetingNote, ScaledModelAdmin)
+admin.site.register(Notification, ScaledModelAdmin)
+admin.site.register(ActivityLog, ScaledModelAdmin)
+admin.site.register(ApplicationStatusHistory, ScaledModelAdmin)
 admin.site.register(EssayRevision)
-admin.site.register(RoadmapMission)
-admin.site.register(Booking)
-admin.site.register(StudentMessage)
-admin.site.register(ProgramService)
+admin.site.register(RoadmapMission, ScaledModelAdmin)
+admin.site.register(Booking, ScaledModelAdmin)
+admin.site.register(StudentMessage, ScaledModelAdmin)
+admin.site.register(ProgramService, ScaledModelAdmin)
 @admin.register(StoreItem)
 class StoreItemAdmin(admin.ModelAdmin):
     list_display = ('title', 'provider_name', 'price_amount', 'currency', 'is_sample', 'is_active')
@@ -172,16 +213,16 @@ class StoreItemAdmin(admin.ModelAdmin):
     readonly_fields = ('catalog_key',)
 
 
-admin.site.register(XPTransaction)
-admin.site.register(LevelApproval)
-admin.site.register(MessageChannel)
-admin.site.register(ChannelMembership)
-admin.site.register(ChannelMessage)
-admin.site.register(MessageReport)
+admin.site.register(XPTransaction, ScaledModelAdmin)
+admin.site.register(LevelApproval, ScaledModelAdmin)
+admin.site.register(MessageChannel, ScaledModelAdmin)
+admin.site.register(ChannelMembership, ScaledModelAdmin)
+admin.site.register(ChannelMessage, ScaledModelAdmin)
+admin.site.register(MessageReport, ScaledModelAdmin)
 
 
 @admin.register(SupportTicket)
-class SupportTicketAdmin(admin.ModelAdmin):
+class SupportTicketAdmin(ScaledModelAdmin):
     list_display = ('id', 'subject', 'category', 'requester', 'status', 'responded_by', 'updated_at')
     search_fields = ('subject', 'message', 'requester__username', 'requester__email')
     list_filter = ('status', 'category', 'created_at')
@@ -189,7 +230,7 @@ class SupportTicketAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScreenTimeDaily)
-class ScreenTimeDailyAdmin(admin.ModelAdmin):
+class ScreenTimeDailyAdmin(ScaledModelAdmin):
     list_display = ('user', 'date', 'page', 'active_seconds', 'sessions', 'last_seen_at')
     search_fields = ('user__username', 'user__email', 'page')
     list_filter = ('date', 'page')
@@ -197,7 +238,7 @@ class ScreenTimeDailyAdmin(admin.ModelAdmin):
 
 
 @admin.register(ParentStudentLink)
-class ParentStudentLinkAdmin(admin.ModelAdmin):
+class ParentStudentLinkAdmin(ScaledModelAdmin):
     list_display = ('parent', 'student', 'relationship', 'status', 'can_view_applications', 'can_view_documents', 'can_view_meetings')
     search_fields = ('parent__username', 'parent__email', 'student__user__username', 'student__user__email')
     list_filter = ('status', 'relationship', 'can_view_applications', 'can_view_documents', 'can_view_meetings')

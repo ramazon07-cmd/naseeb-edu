@@ -34,3 +34,5 @@ PROJECT_CHECKLIST.md
 .impeccable/
 .agents/
 skills-lock.json
+scripts/loadtest/.accounts/
+scripts/loadtest/results/

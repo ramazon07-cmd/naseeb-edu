@@ -1,0 +1,2481 @@
+{
+ "_note": "Shared by backend test_essay_lab.py and frontend essayLabDelta tests (copied to frontend/tests/fixtures). Regenerate both copies together.",
+ "hash_cases": [
+  {
+   "name": "empty_doc",
+   "input": {
+    "type": "doc"
+   },
+   "normalized": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph"
+     }
+    ]
+   },
+   "canonical": "{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"}",
+   "hash": "af3eb6738adbda042982affc7bd51a9bb9b85fb726c026816142a8034b55b591"
+  },
+  {
+   "name": "empty_paragraph",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph"
+     }
+    ]
+   },
+   "normalized": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph"
+     }
+    ]
+   },
+   "canonical": "{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"}",
+   "hash": "af3eb6738adbda042982affc7bd51a9bb9b85fb726c026816142a8034b55b591"
+  },
+  {
+   "name": "tiptap_attrs_are_dropped",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 2,
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Why this college"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "attrs": {
+       "textAlign": "left"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Plain "
+       },
+       {
+        "type": "text",
+        "text": "bold",
+        "marks": [
+         {
+          "type": "bold"
+         },
+         {
+          "type": "bold"
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": "",
+        "marks": [
+         {
+          "type": "italic"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "orderedList",
+      "attrs": {
+       "start": 1,
+       "type": null
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "one"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "orderedList",
+      "attrs": {
+       "start": 3
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "bulletList",
+      "attrs": {
+       "style": "dash"
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "dash"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "bulletList",
+      "attrs": {
+       "style": null
+      },
+      "content": []
+     }
+    ]
+   },
+   "normalized": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 2
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Why this college"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Plain "
+       },
+       {
+        "type": "text",
+        "text": "bold",
+        "marks": [
+         {
+          "type": "bold"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "orderedList",
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "one"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "orderedList",
+      "attrs": {
+       "start": 3
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "bulletList",
+      "attrs": {
+       "style": "dash"
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "dash"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "canonical": "{\"content\":[{\"attrs\":{\"level\":2},\"content\":[{\"text\":\"Why this college\",\"type\":\"text\"}],\"type\":\"heading\"},{\"content\":[{\"text\":\"Plain \",\"type\":\"text\"},{\"marks\":[{\"type\":\"bold\"}],\"text\":\"bold\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"content\":[{\"content\":[{\"content\":[{\"text\":\"one\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"listItem\"}],\"type\":\"orderedList\"},{\"attrs\":{\"start\":3},\"content\":[{\"content\":[{\"content\":[{\"text\":\"three\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"listItem\"}],\"type\":\"orderedList\"},{\"attrs\":{\"style\":\"dash\"},\"content\":[{\"content\":[{\"content\":[{\"text\":\"dash\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"listItem\"}],\"type\":\"bulletList\"}],\"type\":\"doc\"}",
+   "hash": "1bf5f8448e92975a392486768e3cc62e06a31957b020dc285ab48ee116b99074"
+  },
+  {
+   "name": "unicode_and_escapes",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Toshkent — “bozor” ‘non’ Ўзбекистон 😀 🇺🇿"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "quote \" backslash \\ slash / tab\tDEL bell\u0007 nul\u0000 line sep"
+       },
+       {
+        "type": "hardBreak"
+       },
+       {
+        "type": "text",
+        "text": "after break",
+        "marks": [
+         {
+          "type": "underline"
+         },
+         {
+          "type": "strike"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "normalized": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Toshkent — “bozor” ‘non’ Ўзбекистон 😀 🇺🇿"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "quote \" backslash \\ slash / tab\tDEL bell nul line sep"
+       },
+       {
+        "type": "hardBreak"
+       },
+       {
+        "type": "text",
+        "text": "after break",
+        "marks": [
+         {
+          "type": "underline"
+         },
+         {
+          "type": "strike"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "canonical": "{\"content\":[{\"content\":[{\"text\":\"Toshkent\\u00a0\\u2014 \\u201cbozor\\u201d \\u2018non\\u2019 \\u040e\\u0437\\u0431\\u0435\\u043a\\u0438\\u0441\\u0442\\u043e\\u043d \\ud83d\\ude00 \\ud83c\\uddfa\\ud83c\\uddff\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"content\":[{\"text\":\"quote \\\" backslash \\\\ slash / tab\\tDEL bell nul line\\u2028sep\",\"type\":\"text\"},{\"type\":\"hardBreak\"},{\"marks\":[{\"type\":\"underline\"},{\"type\":\"strike\"}],\"text\":\"after break\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"doc\"}",
+   "hash": "ed2309d84ddcadef9c1a02fbe8e6b362efd388bd1fb76cb30a5b737469739860"
+  },
+  {
+   "name": "nested_blocks",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "blockquote",
+      "content": [
+       {
+        "type": "paragraph",
+        "content": [
+         {
+          "type": "text",
+          "text": "quoted"
+         }
+        ]
+       },
+       {
+        "type": "blockquote",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "deeper"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "bulletList",
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "item"
+           }
+          ]
+         },
+         {
+          "type": "orderedList",
+          "content": [
+           {
+            "type": "listItem",
+            "content": [
+             {
+              "type": "paragraph",
+              "content": [
+               {
+                "type": "text",
+                "text": "sub"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "blockquote",
+      "content": []
+     }
+    ]
+   },
+   "normalized": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "blockquote",
+      "content": [
+       {
+        "type": "paragraph",
+        "content": [
+         {
+          "type": "text",
+          "text": "quoted"
+         }
+        ]
+       },
+       {
+        "type": "blockquote",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "deeper"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "bulletList",
+      "content": [
+       {
+        "type": "listItem",
+        "content": [
+         {
+          "type": "paragraph",
+          "content": [
+           {
+            "type": "text",
+            "text": "item"
+           }
+          ]
+         },
+         {
+          "type": "orderedList",
+          "content": [
+           {
+            "type": "listItem",
+            "content": [
+             {
+              "type": "paragraph",
+              "content": [
+               {
+                "type": "text",
+                "text": "sub"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "canonical": "{\"content\":[{\"content\":[{\"content\":[{\"text\":\"quoted\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"content\":[{\"content\":[{\"text\":\"deeper\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"blockquote\"}],\"type\":\"blockquote\"},{\"content\":[{\"content\":[{\"content\":[{\"text\":\"item\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"content\":[{\"content\":[{\"content\":[{\"text\":\"sub\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"listItem\"}],\"type\":\"orderedList\"}],\"type\":\"listItem\"}],\"type\":\"bulletList\"}],\"type\":\"doc\"}",
+   "hash": "8c088a0f8859609941f9490b7476820361c376561a6bbf7588ec7e95d10dde38"
+  },
+  {
+   "name": "formatting_defaults_and_unknown_attrs_are_dropped",
+   "input": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "textAlign": "left",
+       "lineHeight": null,
+       "indent": 0
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "A",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontFamily": null,
+           "fontSize": null,
+           "color": null
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": "B",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontFamily": "Lora",
+           "fontSize": null,
+           "color": "#AABBCC",
+           "extra": 1
+          }
+         },
+         {
+          "type": "highlight",
+          "attrs": {
+           "color": null
+          }
+         },
+         {
+          "type": "link",
+          "attrs": {
+           "href": "mailto:me@example.com",
+           "target": "_blank",
+           "rel": "noopener",
+           "class": null
+          }
+         },
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontSize": 12
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 2,
+       "textAlign": "right",
+       "id": "x"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "H"
+       }
+      ]
+     },
+     {
+      "type": "subtitle",
+      "attrs": {
+       "textAlign": null
+      }
+     },
+     {
+      "type": "pageBreak",
+      "attrs": {
+       "foo": 1
+      }
+     }
+    ]
+   },
+   "normalized": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "A"
+       },
+       {
+        "type": "text",
+        "text": "B",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontFamily": "Lora",
+           "color": "#aabbcc"
+          }
+         },
+         {
+          "type": "link",
+          "attrs": {
+           "href": "mailto:me@example.com"
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 2,
+       "textAlign": "right"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "H"
+       }
+      ]
+     },
+     {
+      "type": "subtitle"
+     },
+     {
+      "type": "pageBreak"
+     }
+    ]
+   },
+   "canonical": "{\"content\":[{\"content\":[{\"text\":\"A\",\"type\":\"text\"},{\"marks\":[{\"attrs\":{\"color\":\"#aabbcc\",\"fontFamily\":\"Lora\"},\"type\":\"textStyle\"},{\"attrs\":{\"href\":\"mailto:me@example.com\"},\"type\":\"link\"}],\"text\":\"B\",\"type\":\"text\"}],\"type\":\"paragraph\"},{\"attrs\":{\"level\":2,\"textAlign\":\"right\"},\"content\":[{\"text\":\"H\",\"type\":\"text\"}],\"type\":\"heading\"},{\"type\":\"subtitle\"},{\"type\":\"pageBreak\"}],\"type\":\"doc\"}",
+   "hash": "c644b8ee3cb158c7620c60846ad7723978b1fa4bc65537d877afc99361fc14f3"
+  }
+ ],
+ "delta_cases": [
+  {
+   "name": "typing_in_one_paragraph",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience. And more words."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "ops": [
+    {
+     "at": 3,
+     "patch": [
+      58,
+      37,
+      " And more words."
+     ]
+    }
+   ],
+   "doc_hash": "51d7f5e0e0f4945cc86d473c73700c166a2fe737add21e81945281a47bd85f58"
+  },
+  {
+   "name": "insert_paragraph",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "A new thought."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "ops": [
+    {
+     "at": 2,
+     "delete": 0,
+     "insert": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "A new thought."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "doc_hash": "3cf1cb3507ada42ec2e8caa3be5b87f83ceb25e64ff2f052a06b7d0bdc24012d"
+  },
+  {
+   "name": "delete_two_paragraphs",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "ops": [
+    {
+     "at": 5,
+     "delete": 2,
+     "insert": []
+    }
+   ],
+   "doc_hash": "bddecb09e93dea7d3bd65c4c7c0eb18559e6bb56b12fc0962c2eb1682525ad4e"
+  },
+  {
+   "name": "move_paragraph",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "ops": [
+    {
+     "at": 1,
+     "delete": 1,
+     "insert": []
+    },
+    {
+     "at": 7,
+     "delete": 0,
+     "insert": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Paragraph 1 about bread and patience."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "doc_hash": "cf3353122fd38fcecd6849e2e06d1cee70c26c7fad87472e891d17681a428995"
+  },
+  {
+   "name": "replace_all",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Everything new."
+       }
+      ]
+     }
+    ]
+   },
+   "ops": [
+    {
+     "at": 0,
+     "delete": 8,
+     "insert": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Everything new."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "doc_hash": "b5f3997e4b5aa84d436f1781740c08124ae00be9350e69546083d01575b9d513"
+  },
+  {
+   "name": "format_and_unicode",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 "
+       },
+       {
+        "type": "text",
+        "text": "bold 😀",
+        "marks": [
+         {
+          "type": "bold"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 1
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Ўзбек"
+       }
+      ]
+     }
+    ]
+   },
+   "ops": [
+    {
+     "at": 0,
+     "patch": [
+      33,
+      37,
+      "\",\"type\":\"text\"},{\"marks\":[{\"type\":\"bold\"}],\"text\":\"bold \\ud83d\\ude00"
+     ]
+    },
+    {
+     "at": 7,
+     "delete": 1,
+     "insert": [
+      {
+       "type": "heading",
+       "attrs": {
+        "level": 1
+       },
+       "content": [
+        {
+         "type": "text",
+         "text": "Ўзбек"
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "doc_hash": "e2e835d33475a2b8dbbb517542ecdb653068a74b5680a414849943891fef84c6"
+  },
+  {
+   "name": "append_at_end",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "The end."
+       }
+      ]
+     }
+    ]
+   },
+   "ops": [
+    {
+     "at": 8,
+     "delete": 0,
+     "insert": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "The end."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "doc_hash": "f738bf5c8a1d03a53a2f14b1a475f97465ce83cbebbc2f4a101c66dcec392e7d"
+  },
+  {
+   "name": "no_change",
+   "base": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "result": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 0 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 1 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 2 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 3 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 4 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 5 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 6 about bread and patience."
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "Paragraph 7 about bread and patience."
+       }
+      ]
+     }
+    ]
+   },
+   "ops": [],
+   "doc_hash": "b1aa1e7c248f79211cc8233120dcf015f07b8f1c20d93832316668672fe35687"
+  }
+ ],
+ "invalid_cases": [
+  {
+   "name": "heading_level_4",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "heading",
+      "attrs": {
+       "level": 4
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "x"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "unknown_font",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontFamily": "Comic Sans MS"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "font_size_too_big",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontSize": 97
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "font_size_too_small",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontSize": 7
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "font_size_not_integer",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "fontSize": "12"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "color_not_hex",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "textStyle",
+          "attrs": {
+           "color": "red"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "color_css_injection",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "highlight",
+          "attrs": {
+           "color": "#fff;background:url(x)"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "short_hex",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "highlight",
+          "attrs": {
+           "color": "#fff"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "javascript_link",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "link",
+          "attrs": {
+           "href": "javascript:alert(1)"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "relative_link",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "link",
+          "attrs": {
+           "href": "/admin"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "link_with_space",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "link",
+          "attrs": {
+           "href": "https://a b"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "link_without_href",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "link",
+          "attrs": {}
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "unknown_align",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "textAlign": "start"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "align_not_string",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "textAlign": [
+        "center"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "unknown_line_height",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "lineHeight": "3"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "numeric_line_height",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "lineHeight": 1.5
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "indent_too_deep",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "indent": 9
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "indent_boolean",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "indent": false
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "page_break_inside_a_quote",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "blockquote",
+      "content": [
+       {
+        "type": "pageBreak"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "page_break_with_text",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "pageBreak"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "unknown_mark",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": "code"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "mark_type_is_a_list",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "paragraph",
+      "content": [
+       {
+        "type": "text",
+        "text": "x",
+        "marks": [
+         {
+          "type": [
+           "bold"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "node_type_is_a_list",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": [
+       "paragraph"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "horizontal_rule",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "horizontalRule"
+     }
+    ]
+   }
+  },
+  {
+   "name": "image",
+   "doc": {
+    "type": "doc",
+    "content": [
+     {
+      "type": "image",
+      "attrs": {
+       "src": "https://x/y.png"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

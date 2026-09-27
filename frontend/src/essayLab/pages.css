@@ -1,0 +1,176 @@
+/* Essay Lab — the Pages view (sheets of paper), page breaks and page setup. */
+
+.el-pages-frame {
+  position: relative;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* Pageless: the frame steps aside and the page is the column's own item. */
+.el-pages-frame.is-pageless {
+  display: contents;
+}
+
+.el-pages-frame[hidden] {
+  display: none;
+}
+
+/* The column widens to the paper; the sheets shrink to fit narrower windows. */
+.el-column:has(> .el-pages-frame:not(.is-pageless)) {
+  width: calc(100% - 32px);
+  max-width: 816px;
+}
+
+.el-page.is-paged {
+  position: relative;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  transform-origin: 0 0;
+}
+
+.el-paper-sheets {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.el-paper-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--el-paper);
+  border-radius: 2px;
+  box-shadow:
+    0 1px 3px rgba(46, 39, 33, 0.12),
+    0 8px 24px rgba(46, 39, 33, 0.06);
+}
+
+.el-paper-number {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--el-page-margin, 96px) * 0.4);
+  text-align: center;
+  font: 500 0.75rem/1 var(--el-sans);
+  color: var(--el-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Text on paper: sizes in real points (see --el-pt in essayLab.css). */
+.el-page.is-paged .el-prose {
+  --el-pt: 1pt;
+
+  position: relative;
+  box-sizing: border-box;
+  min-height: var(--el-pages-height, 0);
+  padding: var(--el-page-margin, 96px) var(--el-page-margin, 96px) 0;
+  line-height: 1.5;
+}
+
+/* Gaps push the next block or line onto the next sheet. */
+.el-page-gap {
+  display: block;
+  margin: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.el-prose > .el-page-gap {
+  margin: 0;
+}
+
+.el-page-gap.is-inline {
+  width: 100%;
+}
+
+/* Pageless: a page break is a quiet dashed divider, labelled. */
+.el-prose .el-page-break::after {
+  content: var(--el-break-label, '');
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  padding: 0 10px;
+  background: var(--el-paper);
+  font: 500 0.6875rem/1.6 var(--el-sans);
+  letter-spacing: 0.04em;
+  color: var(--el-faint);
+  white-space: nowrap;
+}
+
+.el-prose .el-page-break.ProseMirror-selectednode::after {
+  color: var(--el-focus);
+}
+
+/* Pages: the next sheet shows the break. 1px tall so margins can't collapse through it. */
+.el-page.is-paged .el-prose > .el-page-break {
+  height: 1px;
+  margin: 0;
+  border: 0;
+}
+
+.el-page.is-paged .el-prose > .el-page-break::after {
+  display: none;
+}
+
+.el-page.is-paged .el-prose > .el-page-break.ProseMirror-selectednode {
+  background: var(--el-focus);
+}
+
+/* Header: Pages / Pageless and the page menu. */
+.el-page-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.el-page-mode {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--el-hover);
+}
+
+.el-page-mode button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--el-muted);
+  font: 600 0.8125rem var(--el-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.el-page-mode button.is-on {
+  background: var(--el-surface);
+  color: var(--el-ink);
+  box-shadow: 0 1px 2px rgba(46, 39, 33, 0.12);
+}
+
+.el-page-mode button:focus-visible {
+  outline: 2px solid var(--el-focus);
+  outline-offset: 1px;
+}
+
+.el-page-setup-hint {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--el-muted);
+}
+
+.el-page-setup-note {
+  margin: 12px 0 0;
+  font-size: 0.8125rem;
+  color: var(--el-muted);
+}
+
+@media (max-width: 1100px) {
+  .el-page-mode button {
+    padding: 0 8px;
+  }
+}
