@@ -37,6 +37,7 @@ from .views import (
     ScholarshipViewSet,
     StudentProfileViewSet,
     StudentMessageViewSet,
+    StudentParentAccessView,
     StudentTeamView,
     StoreItemViewSet,
     SupportTicketViewSet,
@@ -88,6 +89,7 @@ urlpatterns = [
     path('education-matches/ai/', EducationMatchAIView.as_view(), name='education-match-ai'),
     path('student-team/', StudentTeamView.as_view(), name='student-team'),
     path('parent-portal/', ParentPortalView.as_view(), name='parent-portal'),
+    path('my-parents/', StudentParentAccessView.as_view(), name='student-parent-access'),
     path('essay-lab/', include('apps.admissions.essay_lab.urls')),
     path('', include(router.urls)),
 ]
