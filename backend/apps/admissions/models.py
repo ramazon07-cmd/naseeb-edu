@@ -920,6 +920,12 @@ class ChannelMembership(models.Model):
         return f'{self.user} in {self.channel}'
 
 
+def message_attachment_upload_path(instance, filename):
+    """Chat attachments are private: UUID names, one folder per conversation."""
+    suffix = Path(filename or '').suffix.lower()[:12]
+    return f'message_attachments/{instance.channel_id}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
+
+
 class ChannelMessage(TimeStampedModel):
     channel = models.ForeignKey(MessageChannel, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(
@@ -934,6 +940,16 @@ class ChannelMessage(TimeStampedModel):
     is_edited = models.BooleanField(default=False)
     is_accepted_answer = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    # One private file per message, served only to the conversation's members.
+    attachment = models.FileField(
+        upload_to=message_attachment_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    attachment_name = models.CharField(max_length=255, blank=True)
+    attachment_content_type = models.CharField(max_length=120, blank=True)
+    attachment_size = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         ordering = ['created_at', 'id']

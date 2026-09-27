@@ -12,7 +12,14 @@ export const isOpenMeeting = (item, now = new Date()) => OPEN_STATUSES.includes(
 // covers a page left open past the start time.
 export const isExpiredMeeting = (item, now = new Date()) => Boolean(item?.is_expired) || (item?.status === 'pending' && !startsAfter(item, now));
 
-export const meetingStatus = (item, now = new Date()) => (isExpiredMeeting(item, now) ? 'expired_unconfirmed' : item.status);
+// `student: true` is the student's Meetings page only: an approved meeting
+// whose time has passed was never marked completed by staff, so it reads as
+// past rather than "Approved". Other callers keep the stored status.
+export const meetingStatus = (item, now = new Date(), { student = false } = {}) => {
+  if (isExpiredMeeting(item, now)) return 'expired_unconfirmed';
+  if (student && item.status === 'approved' && !startsAfter(item, now)) return 'past_unmarked';
+  return item.status;
+};
 
 export const upcomingMeetings = (items = [], now = new Date()) => items.filter((item) => isOpenMeeting(item, now)).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
 
@@ -23,4 +30,11 @@ export function meetingsForTab(items = [], tab, staff, now = new Date()) {
     if (tab === 'upcoming') return open && (!staff || item.status === 'approved');
     return !open;
   });
+}
+
+// Student Meetings page: Upcoming soonest first, Past newest first.
+export function studentMeetingsForTab(items = [], tab, now = new Date()) {
+  const time = (item) => new Date(item.starts_at).getTime();
+  const order = tab === 'upcoming' ? (a, b) => time(a) - time(b) : (a, b) => time(b) - time(a);
+  return meetingsForTab(items, tab, false, now).sort(order);
 }

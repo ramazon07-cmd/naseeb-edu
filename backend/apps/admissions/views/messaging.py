@@ -12,6 +12,7 @@ from django.db.models import (
     Subquery,
 )
 from django.db.models.functions import Coalesce
+from django.http import Http404
 from django.utils import timezone
 from django.utils.translation import get_language
 from rest_framework import permissions, status, viewsets
@@ -23,6 +24,7 @@ from rest_framework import serializers as drf_serializers
 from apps.users.models import User
 from apps.users.serializers import ContactSerializer
 from core.pagination import BoundedCountPaginator, keyset_filter
+from core.storage import delete_file_on_commit
 from ..models import (
     ChannelMembership,
     ChannelMessage,
@@ -39,7 +41,7 @@ from ..serializers import (
 )
 from ..params import int_list_param, int_param
 from ..scoping import scope_students, student_lookups, tenant_school, tenant_school_id
-from .common import CONTACT_LIST_LIMIT
+from .common import CONTACT_LIST_LIMIT, serve_private_file
 
 
 STAFF_ROLES = (User.Role.ORGANIZATION, User.Role.TEACHER, User.Role.COUNSELOR)
@@ -590,7 +592,35 @@ class ChannelMessageViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         instance.body = ''
         instance.deleted_at = timezone.now()
-        instance.save(update_fields=['body', 'deleted_at', 'updated_at'])
+        fields = ['body', 'deleted_at', 'updated_at']
+        if instance.attachment:
+            # A deleted message keeps no file behind.
+            delete_file_on_commit(instance.attachment.storage, instance.attachment.name)
+            instance.attachment = None
+            instance.attachment_name = ''
+            instance.attachment_content_type = ''
+            instance.attachment_size = 0
+            fields += ['attachment', 'attachment_name', 'attachment_content_type', 'attachment_size']
+        instance.save(update_fields=fields)
+
+    @action(detail=True, methods=['get'])
+    def attachment(self, request, pk=None):
+        """The message's file, for members of its conversation only.
+
+        Public channels let non-members read messages; their files still stay
+        with the people in the conversation, and anyone else gets a 404.
+        """
+        message = self.get_object()
+        is_member = ChannelMembership.objects.filter(channel_id=message.channel_id, user=request.user).exists()
+        if not is_member or message.deleted_at or not message.attachment:
+            raise Http404('This message has no attachment.')
+        return serve_private_file(
+            request,
+            message.attachment,
+            original_name=message.attachment_name,
+            content_type=message.attachment_content_type,
+            missing_message='The attached file is unavailable. Contact support.',
+        )
 
     @action(detail=True, methods=['post'])
     def report(self, request, pk=None):

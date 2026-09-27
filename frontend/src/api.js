@@ -123,6 +123,10 @@ const evidenceFileRequest = (resource, id, download = false) =>
 const taskSubmissionFileRequest = (id, download = false) =>
   protectedFileRequest(`/tasks/${id}/submission-file/`, { download })
 
+// Chat attachments are served only to members of the conversation.
+const messageAttachmentRequest = (id, download = false) =>
+  protectedFileRequest(`/channel-messages/${id}/attachment/`, { download })
+
 const recommendationFileRequest = (id, download = false) =>
   protectedFileRequest(`/recommendations/${id}/file/`, { download })
 
@@ -456,6 +460,8 @@ export const api = {
     return request(`/students/${id}/photo/`, { method: 'POST', body: payload, timeoutMs: 120_000 })
   },
   removeStudentPhoto: (id) => request(`/students/${id}/photo/`, { method: 'DELETE' }),
+  messageAttachment: (id) => messageAttachmentRequest(id),
+  downloadMessageAttachment: (id) => messageAttachmentRequest(id, true),
   documentFile: (id) => documentFileRequest(id),
   downloadDocument: (id) => documentFileRequest(id, true),
   evidenceFile: (resource, id) => evidenceFileRequest(resource, id),
