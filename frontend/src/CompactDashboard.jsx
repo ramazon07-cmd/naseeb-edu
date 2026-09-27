@@ -12,6 +12,7 @@ import { SCREEN_TIME_REFRESH_MS } from './screenTimeQueue';
 import { createPoller } from './lib/poller';
 import { listText } from './lib/profileSections';
 import DashboardCustomizer from './DashboardCustomizer';
+import { cachedDashboardLayout, loadAccountDashboardLayout, saveAccountDashboardLayout } from './dashboardLayout';
 
 const widgetMeta = {
   screen_time: ['Screen Time', Clock3],
@@ -36,10 +37,13 @@ export function ScreenTimeShortcut({ setPage, userId }) {
 }
 
 export default function CompactDashboard({ user, student, data, setPage, onDirect, Modal, programUsage }) {
-  const storageKey = `naseeb-dashboard-v1:${user.id}`;
-  const [preferences, setPreferences] = useState(() => {
-    try { return normalizeDashboardPreferences(JSON.parse(localStorage.getItem(storageKey))); } catch { return normalizeDashboardPreferences(); }
-  });
+  // This browser's copy first, then the account's layout (see dashboardLayout.js).
+  const [preferences, setPreferences] = useState(() => normalizeDashboardPreferences(cachedDashboardLayout(user.id)));
+  useEffect(() => {
+    let active = true;
+    loadAccountDashboardLayout(user.id).then((layout) => { if (active) setPreferences(layout); });
+    return () => { active = false; };
+  }, [user.id]);
   const [usageOpen, setUsageOpen] = useState(false);
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState(preferences);
@@ -53,9 +57,11 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   const editGoal = () => setPage('student_center', { edit: 'goal' });
   const name = user.first_name || user.username;
   function save() {
-    try { localStorage.setItem(storageKey, JSON.stringify(draft)); setSaveError(false); } catch { setSaveError(true); }
-    setPreferences(draft);
+    const layout = draft;
+    setPreferences(layout);
     setCustomizing(false);
+    setSaveError(false);
+    saveAccountDashboardLayout(user.id, layout).then(({ synced }) => setSaveError(!synced));
   }
   const open = (page, text, params) => <button className="dashboard-link" onClick={() => setPage(page, params)}>{t(text)}<ChevronRight size={15} /></button>;
   const empty = (text) => <p className="dashboard-empty">{t(text)}</p>;
@@ -71,7 +77,7 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   };
   return <section className="compact-dashboard reference-dashboard">
     <header className="dashboard-heading"><div className="dashboard-greeting"><span className="dashboard-wave" aria-hidden="true">👋</span><h2>{t('Hello')}, {name}</h2></div><div className="dashboard-heading-actions"><button className="button quiet small" onClick={() => { setDraft(preferences); setCustomizing(true); }}><SlidersHorizontal size={16} />{t('Customize')}</button></div></header>
-    {saveError && <p role="status">{t('Changes apply now, but could not be saved in this browser.')}</p>}
+    {saveError && <p role="status">{t('Layout saved on this device. It will be saved to your account when you are back online.')}</p>}
     <div className={`dashboard-board dashboard-board-columns ${preferences.order.some((id) => !preferences.hidden.includes(id) && preferences.rail.includes(id)) ? 'has-rail' : ''} ${preferences.order.some((id) => !preferences.hidden.includes(id) && !preferences.rail.includes(id)) ? 'has-main' : ''}`}>{['main', 'rail'].map((column) => { const ids = preferences.order.filter((id) => !preferences.hidden.includes(id) && (column === 'rail' ? preferences.rail.includes(id) : !preferences.rail.includes(id))); return ids.length > 0 && <div key={column} className={`dashboard-column dashboard-column-${column} ${ids.length > (column === 'rail' ? 2 : 6) ? 'dense' : ''} ${column === 'main' && ids.length % 2 === 1 ? 'has-wide-last' : ''} ${column === 'main' && ids.length >= 3 && ids.length % 2 === 1 && ids.at(-1) === 'team' ? 'has-team-footer' : ''} ${column === 'rail' && ids.length === 2 && ids[0] === 'roadmap' ? 'roadmap-first' : ''} ${column === 'rail' && ids.length > 3 ? 'crowded' : ''}`} style={{'--widget-rows': Math.ceil(ids.length / (column === 'main' || ids.length > 3 ? 2 : 1))}}>{ids.map((id, index) => { const [title, Icon] = widgetMeta[id]; return <article key={id} className={`dashboard-tile dashboard-tile-${id} dashboard-position-${column === 'rail' ? index + 2 : index}`}><header><Icon size={18} /><h3>{t(title)}</h3></header>{content[id]}</article>; })}</div>; })}</div>
     {usageOpen && <Modal title={t('Program usage')} onClose={() => setUsageOpen(false)}>{data.programServices.length ? programUsage : <p className="dashboard-empty">{t('No program services have been assigned yet.')}</p>}</Modal>}
     {customizing && <DashboardCustomizer draft={draft} setDraft={setDraft} metadata={widgetMeta} Modal={Modal} onClose={() => setCustomizing(false)} onSave={save} />}
