@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { documentContentFields } from '../src/lib/documentFields.js';
+import { canDeleteDocument, documentContentFields } from '../src/lib/documentFields.js';
 
 const link = 'https://docs.google.com/document/d/abc/edit';
 const linkDoc = { id: 3, google_docs_url: link, has_file: false };
@@ -19,4 +19,16 @@ test('a new file replaces a stored link; keeping the file sends nothing', () => 
   const file = { name: 'cv.pdf' };
   assert.deepEqual(documentContentFields({ doc: linkDoc, source: 'file', file }), { file, google_docs_url: '' });
   assert.deepEqual(documentContentFields({ doc: { id: 5, has_file: true }, source: 'file' }), {});
+});
+
+test('a student can delete their own document until it is approved', () => {
+  const student = { role: 'student' };
+  for (const status of ['required', 'uploaded', 'reviewing', 'rejected']) assert.equal(canDeleteDocument(student, { status }), true, status);
+  assert.equal(canDeleteDocument(student, { status: 'approved' }), false);
+});
+
+test('only students get the delete action on the documents list', () => {
+  for (const role of ['counselor', 'admin', 'parent', 'teacher']) assert.equal(canDeleteDocument({ role }, { status: 'uploaded' }), false, role);
+  assert.equal(canDeleteDocument(null, { status: 'uploaded' }), false);
+  assert.equal(canDeleteDocument({ role: 'student' }, null), false);
 });

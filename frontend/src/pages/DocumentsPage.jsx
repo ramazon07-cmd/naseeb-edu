@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { api } from '../api';
 import { t } from '../i18n';
 import { Panel, Empty, Modal } from '../components/ui';
-import { Plus, CheckCircle2, ShieldCheck, Pencil, UploadCloud, Link2 } from 'lucide-react';
+import { Plus, CheckCircle2, ShieldCheck, Pencil, Trash2, UploadCloud, Link2 } from 'lucide-react';
 import { Record } from '../components/records';
 import { studentName } from '../lib/format';
 import { label, ownStudent } from '../lib/labels';
@@ -13,7 +13,7 @@ import { ChoiceCards, Field } from '../components/forms';
 import { useRecordList } from '../hooks/useRecordList';
 import { LoadMore, PagedListError, StudentPicker, firstPageLoading } from '../components/paged';
 import { titleFromFileName, toFormData } from '../lib/fileUpload';
-import { documentContentFields } from '../lib/documentFields';
+import { canDeleteDocument, documentContentFields } from '../lib/documentFields';
 
 const DOCUMENT_TYPES = ['passport', 'transcript', 'ielts', 'sat', 'cv', 'recommendation', 'essay', 'certificate', 'other'];
 const DOCUMENT_STATUSES = ['required', 'uploaded', 'reviewing', 'approved', 'rejected'];
@@ -34,8 +34,12 @@ export function DocumentsPage({ user, data, query, reload, notify, typeFilter = 
   });
   const docs = list.items;
   async function approve(doc) {try {await api.update('documents', doc.id, { status: 'approved' });notify(t("Document approved."));reload();} catch (err) {notify(err.message, 'error');}}
+  async function remove(doc) {
+    if (!window.confirm(t("Delete this document?"))) return;
+    try {await api.remove('documents', doc.id);notify(t("Document deleted."));reload();} catch (err) {notify(err.message, 'error');}
+  }
   function closeForm() {setOpen(false);setEditing(null);}
-  return <><Panel title={title} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? t("Add certificate") : t("Add document")}</button>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${doc.student_name || studentName(data, doc.student)} • ${label(doc.document_type)}`} description={doc.counselor_comment} badge={doc.status} attachment={<AttachmentRow attachment={documentAttachment(doc)} onPreview={() => setPreviewing(doc)} notify={notify} />} actions={<><GoogleDocsActions item={doc} onPreview={doc.has_file ? undefined : () => setPreviewing(doc)} />{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{canEditDocument(user, doc) && <button type="button" className="icon-button" onClick={() => {setEditing(doc);setOpen(true);}} aria-label={t("Edit document")} title={t("Edit document")}><Pencil size={15} /></button>}</>} />)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !docs.length && <Empty />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{open && <DocumentForm user={user} data={data} document={editing} defaultType={typeFilter} onClose={closeForm} onSaved={() => {closeForm();reload();}} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} notify={notify} />}</>;
+  return <><Panel title={title} action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {typeFilter === 'certificate' ? t("Add certificate") : t("Add document")}</button>}><div className="record-list">{docs.map((doc) => <Record key={doc.id} title={doc.title} meta={`${doc.student_name || studentName(data, doc.student)} • ${label(doc.document_type)}`} description={doc.counselor_comment} badge={doc.status} attachment={<AttachmentRow attachment={documentAttachment(doc)} onPreview={() => setPreviewing(doc)} notify={notify} />} actions={<><GoogleDocsActions item={doc} onPreview={doc.has_file ? undefined : () => setPreviewing(doc)} />{isCounselor(user) && doc.status !== 'approved' && <button className="button quiet small" onClick={() => approve(doc)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{canEditDocument(user, doc) && <button type="button" className="icon-button" onClick={() => {setEditing(doc);setOpen(true);}} aria-label={t("Edit document")} title={t("Edit document")}><Pencil size={15} /></button>}{canDeleteDocument(user, doc) && <button type="button" className="icon-button danger" onClick={() => remove(doc)} aria-label={t("Delete document")} title={t("Delete document")}><Trash2 size={15} /></button>}</>} />)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !docs.length && <Empty />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{open && <DocumentForm user={user} data={data} document={editing} defaultType={typeFilter} onClose={closeForm} onSaved={() => {closeForm();reload();}} notify={notify} />}{previewing && <DocumentPreviewModal document={previewing} onClose={() => setPreviewing(null)} notify={notify} />}</>;
 }
 
 const SOURCE_OPTIONS = [
