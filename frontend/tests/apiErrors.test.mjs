@@ -38,3 +38,12 @@ test('without field errors the detail is shown; metadata is never listed', () =>
   assert.equal(errorPayloadMessage({ email: ['Taken.'] }, (text) => ({ Email: 'Pochta' }[text] || text)), 'Pochta: Taken.');
   assert.equal(errorPayloadMessage(null), '');
 });
+
+test('student form fields in a server error are named in the reader language', async () => {
+  globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
+  const { setLanguage, t } = await import('../src/i18n.js');
+  setLanguage('ru');
+  const payload = { detail: 'Это поле обязательно.', starts_at: ['Это поле обязательно.'], duration_minutes: ['Введите целое число.'] };
+  assert.equal(errorPayloadMessage(payload, t), 'Время начала: Это поле обязательно. • Длительность (мин): Введите целое число.');
+  setLanguage('en');
+});
