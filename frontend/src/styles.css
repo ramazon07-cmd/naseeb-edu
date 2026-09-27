@@ -13903,6 +13903,9 @@ a:focus-visible {
 
   .account-parent-heading .badge {
     margin-left: 0;
+  }
+}
+
 /* Student portal on phones: every control is at least a 44px thumb target.
    Scoped to .role-student (set on the shell for student accounts only), so
    counselor, parent and admin layouts keep their denser controls. */
