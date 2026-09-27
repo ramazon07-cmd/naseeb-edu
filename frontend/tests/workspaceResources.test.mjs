@@ -35,9 +35,12 @@ test('a superuser with a student role gets the paged admin workspace', () => {
   assert.deepEqual(resourcesFor(superuser), resourcesFor({ role: 'admin' }));
 });
 
-test('dashboard stats load for everyone but parents', () => {
+test('dashboard stats load for staff only', () => {
   assert.equal(loadsDashboardStats({ role: 'parent' }), false);
-  assert.equal(loadsDashboardStats({ role: 'student' }), true);
+  // The student dashboard reads its numbers from the student record.
+  assert.equal(loadsDashboardStats({ role: 'student' }), false);
+  assert.equal(loadsDashboardStats({ role: 'student', is_superuser: true }), true);
+  for (const role of ['counselor', 'teacher', 'organization', 'admin']) assert.equal(loadsDashboardStats({ role }), true, role);
 });
 
 test('a save to a paged-only endpoint refreshes stats, not the whole workspace', () => {

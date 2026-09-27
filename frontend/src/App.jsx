@@ -21,7 +21,7 @@ import { fullName, initials, label, ownStudent } from './lib/labels';
 import { isCounselor, isPlatformAdmin, isTaskManager } from './lib/roles';
 import { LANDING_PATH, LOGIN_PATH, buildPath, canOpenPage, isPageLocked, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
 import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchText } from './lib/searchIndex';
-import { usesPagedLists } from './lib/workspaceResources';
+import { loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
 import { useNotificationBell } from './hooks/useNotificationBell';
@@ -198,9 +198,10 @@ const PAGE_RESOURCE_KEYS = {
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal']
 };
 
-function PageDataBoundary({ page, data, stats, loading, resourceStatus, retry, children }) {
-  const keys = PAGE_RESOURCE_KEYS[page] || [page];
-  const { loadingKeys, failedKeys, hasVisibleData, initialLoading } = pageLoadState({ keys, data, stats, loading, resourceStatus });
+// `lazy`: a student's page waits for exactly the collections it fetches.
+function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, retry, children }) {
+  const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
+  const { loadingKeys, failedKeys, hasVisibleData, initialLoading } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy });
 
   if (initialLoading) return <PageSkeleton />;
   return <>
@@ -210,7 +211,7 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, retry, c
   </>;
 }
 
-function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, isOnline, notify, logout, theme, toggleTheme, language, changeLanguage, children }) {
+function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, onSearchOpen, isOnline, notify, logout, theme, toggleTheme, language, changeLanguage, children }) {
   const [utility, setUtility] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileMenuRef = useRef(null);
@@ -262,6 +263,11 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   useEffect(() => {
     setActiveSearchIndex(0);
   }, [query]);
+  // Search covers every record, so opening it loads what pages have not yet.
+  const searching = searchOpen || utility === 'search';
+  useEffect(() => {
+    if (searching) onSearchOpen();
+  }, [searching, onSearchOpen]);
   useEffect(() => {
     const closeSearch = (event) => {
       if (!searchRef.current?.contains(event.target)) setSearchOpen(false);
@@ -347,7 +353,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
       {user.workspace?.read_only && <div className="data-state workspace-read-only" role="status"><ShieldAlert size={18} /><div><b>{t('This workspace is read-only')}</b><p>{t('You can view everything, but changes are paused until an administrator renews the workspace subscription.')}</p></div></div>}
       {!isOnline && <div className="data-state offline" role="status"><WifiOff size={18} /><div><b>{t('You are offline')}</b><p>{t('Current information remains available. Reconnect before saving changes.')}</p></div></div>}
       {error && <div className="alert error workspace-alert">{error}</div>}
-      <div className="page-content">{['dashboard', 'admin_dashboard'].includes(page) && user.role !== 'student' && canOpenPage('screen_time', user) && <ScreenTimeShortcut userId={user.id} setPage={setPage} />}<PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} retry={retryResources}>{children}</PageDataBoundary></div>
+      <div className="page-content">{['dashboard', 'admin_dashboard'].includes(page) && user.role !== 'student' && canOpenPage('screen_time', user) && <ScreenTimeShortcut userId={user.id} setPage={setPage} />}<PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} lazy={loadsLazily(user)} retry={retryResources}>{children}</PageDataBoundary></div>
     </main>
     {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(query.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t(PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}</span><ChevronRight size={16} /></button>)}{query.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} />}</Modal>}
     <ScreenTimeTracker page={page} userId={user.id} />
@@ -420,7 +426,7 @@ export default function App() {
   const [signOutPrompt, setSignOutPrompt] = useState(false);
   const signingOut = useRef(false);
   const handleUnauthorized = useCallback(() => {api.logout();setUser(null);}, []);
-  const { data, stats, loading, error, resourceStatus, loadData, reset: resetWorkspace } = useWorkspaceData(user, handleUnauthorized);
+  const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace } = useWorkspaceData(user, handleUnauthorized);
 
   const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
 
@@ -467,7 +473,7 @@ export default function App() {
     try {
       const current = await loadUser();
       setBootstrapping(false);
-      if (!current.must_change_password) await loadData(current);
+      if (!current.must_change_password) await loadInitial(current);
     } catch (err) {
       if (err.status === 401) {
         api.logout();
@@ -477,7 +483,7 @@ export default function App() {
       }
       setBootstrapping(false);
     }
-  }, [loadUser, loadData]);
+  }, [loadUser, loadInitial]);
 
   useEffect(() => {
     if (bootstrapAttempted.current) return;
@@ -505,17 +511,24 @@ export default function App() {
     if (canonical !== location.pathname) navigate(`${canonical}${requestedRoute?.page === route.page ? location.search : ''}`, { replace: true });
   }, [inWorkspace, publicPage, route, requestedRoute, location, navigate]);
 
+  // Students fetch a page's collections the first time it opens (see
+  // useWorkspaceData); a page already loaded is not fetched again.
+  useEffect(() => {
+    if (inWorkspace && !publicPage && loadsLazily(user)) ensureLoaded(user, studentPageKeys(page));
+  }, [inWorkspace, publicPage, user, page, ensureLoaded]);
+  const loadSearchable = useCallback(() => ensureLoaded(user, resourcesFor(user).map(([key]) => key)), [ensureLoaded, user]);
+
   useEffect(() => {
     document.title = inWorkspace && PAGE_META[page] ? `${t(PAGE_META[page].label)} · Naseeb Edu` : siteTitle();
   }, [inWorkspace, page, language]);
 
   async function afterLogin() {
     const current = await loadUser();
-    if (!current.must_change_password) await loadData(current);
+    if (!current.must_change_password) await loadInitial(current);
   }
   async function afterPasswordChanged(current) {
     setUser(current);
-    await loadData(current);
+    await loadInitial(current);
   }
   async function logout() {
     // Upload this user's queued screen time and open essays while the session
@@ -550,7 +563,7 @@ export default function App() {
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
-    <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
+    <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
       <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate }} /></LazyBoundary>
     </AppShell>
     {signOutPrompt && <Modal title="Sign out?" backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
