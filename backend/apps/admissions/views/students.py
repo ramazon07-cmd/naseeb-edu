@@ -15,6 +15,7 @@ from apps.users.uploads import limit_upload_size, verify_image
 from ..models import (
     ActivityLog,
     LevelApproval,
+    ProfileSectionReview,
     School,
     StudentProfile,
 )
@@ -44,6 +45,7 @@ from apps.users import entitlements
 from apps.users.audit import audit_staff_read
 from apps.users.services import audit_product_action
 from ..params import int_param
+from ..section_review import SECTION_KEYS, changed_sections, mark_waiting, set_review
 from ..listing import STUDENT_SEARCH_FIELDS, ListQueryMixin
 from ..progress import attach_progress_stats
 from .common import ScopedQuerysetMixin
@@ -53,11 +55,17 @@ from core.storage import delete_file_on_commit
 ASSIGNMENT_CANDIDATE_LIMIT = 200
 
 
+class SectionReviewSerializer(drf_serializers.Serializer):
+    section = drf_serializers.ChoiceField(choices=SECTION_KEYS)
+    status = drf_serializers.ChoiceField(choices=ProfileSectionReview.Status.choices)
+    note = drf_serializers.CharField(max_length=2000, required=False, allow_blank=True, trim_whitespace=True)
+
+
 class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = StudentProfileSerializer
     queryset = StudentProfile.objects.select_related(
         'user', 'user__school', 'assigned_counselor', 'school',
-    ).prefetch_related('user__temporary_credentials').order_by('user__first_name', 'user__last_name', 'id')
+    ).prefetch_related('user__temporary_credentials', 'section_reviews').order_by('user__first_name', 'user__last_name', 'id')
     search_fields = STUDENT_SEARCH_FIELDS
     int_filters = {'school': 'school_id', 'counselor': 'assigned_counselor_id'}
     choice_filters = {'grade': ('grade', StudentProfile.Grade.choices)}
@@ -93,7 +101,11 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         """
         if request.user.role != User.Role.STUDENT:
             return Response({'detail': 'Only students can complete their profile.'}, status=403)
-        profile = self.get_queryset().filter(user=request.user).first()
+        queryset = self.get_queryset().filter(user=request.user)
+        if request.method == 'PATCH':
+            # The edit re-reads the profile under a row lock; nothing prefetched here is used.
+            queryset = queryset.prefetch_related(None)
+        profile = queryset.first()
         if not profile:
             return Response({'detail': 'Student profile not found.'}, status=404)
         if request.method == 'GET':
@@ -111,7 +123,10 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
                 context={'current': current_answers(profile)} if partial else {},
             )
             serializer.is_valid(raise_exception=True)
+            before = current_answers(profile) if partial else None
             self._save_answers(request.user, profile, serializer, partial)
+            if partial:
+                mark_waiting(profile, changed_sections(before, current_answers(profile)))
         return Response({'profile': self.get_serializer(profile).data, 'user': UserSerializer(request.user, context={'request': request}).data})
 
     @staticmethod
@@ -144,6 +159,32 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
             profile.profile_completed_at = timezone.now()
         profile.save()
         user.student_profile = profile
+
+    @action(detail=True, methods=['post'], url_path='section-review')
+    def section_review(self, request, pk=None):
+        """Staff set the review status (and an optional note) of one profile section.
+
+        Only the student's assigned counselor (same school), the school's
+        organization account and product admins reach a student here; the
+        scoped queryset turns everyone else away with a 404.
+        """
+        if not (request.user.is_counselor_like or request.user.is_organization):
+            return Response({'detail': 'Only staff can review profile sections.'}, status=403)
+        student = self.get_object()
+        serializer = SectionReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        with transaction.atomic():
+            review = set_review(student, values['section'], values['status'], values.get('note', ''), request.user)
+            ActivityLog.objects.create(
+                actor=request.user, student=student, action='Profile section reviewed',
+                metadata={'event': 'profile.section_reviewed', 'section': review.section, 'status': review.status},
+            )
+        audit_product_action(actor=request.user, action='profile.section_reviewed', target=student, metadata={'section': review.section, 'status': review.status})
+        return Response({
+            'section': review.section, 'status': review.status, 'note': review.note,
+            'reviewed_at': review.reviewed_at.isoformat() if review.reviewed_at else None,
+        })
 
     PHOTO_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
     PHOTO_MAX_BYTES = 5 * 1024 * 1024

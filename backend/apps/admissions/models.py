@@ -1773,6 +1773,7 @@ class Notification(TimeStampedModel):
         ESSAY = 'essay', 'Essay'
         MEETING = 'meeting', 'Meeting'
         MESSAGE = 'message', 'Message'
+        PROFILE_REVIEW = 'profile_review', 'Profile review'
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='notifications')
     title = models.CharField(max_length=220)
@@ -1790,6 +1791,41 @@ class Notification(TimeStampedModel):
 
     def __str__(self):
         return self.title
+
+
+class ProfileSectionReview(TimeStampedModel):
+    """The counselor's review of one Student Center section of a student's profile.
+
+    A section without a row has never been reviewed. Saving changes to a
+    section sends it back to "waiting for review".
+    """
+    class Section(models.TextChoices):
+        PERSONAL = 'personal', 'Personal & contact'
+        ACADEMICS = 'academics', 'Academics'
+        TESTS = 'tests', 'Test scores'
+        GOAL = 'goal', 'Study goal & targets'
+        HONORS = 'honors', 'Honors'
+        ACTIVITIES = 'activities', 'Activities'
+
+    class Status(models.TextChoices):
+        NOT_REVIEWED = 'not_reviewed', 'Not reviewed'
+        WAITING = 'waiting', 'Waiting for review'
+        APPROVED = 'approved', 'Approved'
+        CHANGES_REQUESTED = 'changes_requested', 'Needs changes'
+
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='section_reviews')
+    section = models.CharField(max_length=20, choices=Section.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_REVIEWED)
+    note = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['student', 'section']
+        constraints = [models.UniqueConstraint(fields=['student', 'section'], name='unique_profile_section_review')]
+
+    def __str__(self):
+        return f'{self.student_id} {self.section}: {self.status}'
 
 
 class ActivityLog(TimeStampedModel):
