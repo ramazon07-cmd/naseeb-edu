@@ -49,6 +49,9 @@ class User(AbstractUser):
         blank=True,
         help_text='Product staff permission level. Only meaningful for admin accounts.',
     )
+    # The student dashboard arrangement ({order, hidden, rail}); null until
+    # the student first saves one. Shape is checked by DashboardLayoutSerializer.
+    dashboard_layout = models.JSONField(null=True, blank=True)
 
     objects = UserManager()
 

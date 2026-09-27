@@ -374,6 +374,26 @@ export const api = {
     body: JSON.stringify(password ? { password } : {}),
   }),
   me: () => request('/users/accounts/me/'),
+  // Account settings. A password change ends the other sessions and hands this
+  // one a new token pair, stored here so the user stays signed in.
+  changeOwnPassword: async (currentPassword, newPassword, confirmPassword) => {
+    const payload = await request('/users/accounts/me/password/', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword }),
+    })
+    saveTokens(payload)
+    return payload
+  },
+  changeOwnEmail: (currentPassword, email) => request('/users/accounts/me/email/', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, email }),
+  }),
+  dashboardLayout: () => request('/users/accounts/me/dashboard-layout/'),
+  saveDashboardLayout: (layout) => request('/users/accounts/me/dashboard-layout/', {
+    method: 'PUT',
+    body: JSON.stringify({ layout }),
+  }),
+  myParents: () => request('/my-parents/'),
   health: () => request('/health/'),
   dashboard: () => request('/dashboard/stats/'),
   collegeResearch: () => request('/college-research/'),

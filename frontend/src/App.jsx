@@ -2,7 +2,7 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import './mind-section.css';
-import { Activity, Award, Bell, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
+import { Activity, Award, Bell, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
@@ -29,6 +29,7 @@ import { invalidatePagedLists } from './hooks/usePagedList';
 import { bellTotal } from './lib/notifications';
 import { ForcedPasswordChange, Login } from './pages/Login';
 import { clearUserSessionStorage, clearUserStorage, dropLegacySharedKeys } from './userStorage';
+import { forgetAccountDashboardLayout, loadAccountDashboardLayout } from './dashboardLayout';
 import { useTheme } from './hooks/useTheme';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { useToast } from './hooks/useToast';
@@ -66,6 +67,7 @@ const StorePage = lazyNamed(() => import('./pages/StorePage'), 'StorePage');
 const StudentCenterPage = lazyNamed(() => import('./pages/StudentCenterPage'), 'StudentCenterPage');
 const StudentsPage = lazyNamed(() => import('./pages/StudentsPage'), 'StudentsPage');
 const SupportPage = lazyNamed(() => import('./pages/SupportPage'), 'SupportPage');
+const AccountSettingsPage = lazyNamed(() => import('./pages/AccountSettingsPage'), 'AccountSettingsPage');
 
 // Kept equal to CHALLENGES.length by tests/codeSplitting.test.mjs, so the
 // navigation does not pull the question banks into the main bundle.
@@ -108,6 +110,7 @@ const PAGE_META = {
   store: { label: 'Naseeb Store', icon: ShoppingCart, description: 'Additional education and application services' },
   support: { label: 'Support', icon: LifeBuoy, description: 'Contact support and track your requests' },
   screen_time: { label: 'Screen Time', icon: Clock3, description: 'Active learning time without idle minutes' },
+  account_settings: { label: 'Account settings', icon: Settings, description: 'Password, email, language, and who can see your data' },
   parent_progress: { label: 'Progress', icon: Activity, description: 'Academic profile and application journey' },
   parent_tasks: { label: 'Tasks', icon: ClipboardCheck, description: 'Assigned work and upcoming deadlines' },
   parent_applications: { label: 'Applications', icon: Target, description: 'University application status' },
@@ -193,7 +196,7 @@ const PAGE_RESOURCE_KEYS = {
   bookings: ['bookings'], messages: ['messageChannels'],
   programs: ['opportunityPrograms', 'scholarships'], essay_lab: [],
   college_search: ['students', 'universities', 'applications'], store: ['storeItems'], support: ['supportTickets'],
-  screen_time: [],
+  screen_time: [], account_settings: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal']
 };
@@ -327,7 +330,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
           return <button key={item} className={page === item ? "active" : ''} title={collapsed ? itemLabel : undefined} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
         })}</nav>
 
-      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{user.role === 'student' && <button onClick={() => {setPage('student_center');setProfileOpen(false);setMobileOpen(false);}}><UserRound size={17} />{t('My profile')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
+      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{user.role === 'student' && <button onClick={() => {setPage('student_center');setProfileOpen(false);setMobileOpen(false);}}><UserRound size={17} />{t('My profile')}</button>}{canOpenPage('account_settings', user) && <button onClick={() => {setPage('account_settings');setProfileOpen(false);setMobileOpen(false);}}><Settings size={17} />{t('Account settings')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
     </aside>
     <main className={`workspace ${page === 'messages' ? 'workspace-messages' : ''} ${page === 'dashboard' && user.role === 'student' ? 'workspace-dashboard' : ''}`}>
       <header className="top-header">
@@ -361,7 +364,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   </div>;
 }
 
-function PageRouter({ page, params, user, data, stats, query, reload, notify, setPage, search, navigate }) {
+function PageRouter({ page, params, user, data, stats, query, reload, notify, setPage, search, navigate, language, changeLanguage, updateUser }) {
   const [directChannel, setDirectChannel] = useState(null);
   const openingDirect = useRef(false);
   useEffect(() => {if (page !== 'messages') setDirectChannel(null);}, [page]);
@@ -400,6 +403,7 @@ function PageRouter({ page, params, user, data, stats, query, reload, notify, se
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
+  if (user.role === 'student' && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (page === 'academics') return <div className="section-stack">{user.role === 'student' && <ProfileCard student={ownStudent(data)} />}<ResourceSection title={t("Research")} resource="researches" {...{ user, data, query, reload, notify }} /></div>;
@@ -463,8 +467,12 @@ export default function App() {
   const loadUser = useCallback(async () => {
     const current = await api.me();
     setUser(current);
+    // The dashboard layout follows the account: fetch it while the workspace loads.
+    if (current.role === 'student' && !current.must_change_password) loadAccountDashboardLayout(current.id);
     return current;
   }, []);
+  // Account settings changes (email, a password change's refreshed account).
+  const updateUser = useCallback((changes) => setUser((current) => (current ? { ...current, ...changes } : current)), []);
 
   const bootstrapSession = useCallback(async () => {
     if (!api.hasSession()) {setBootstrapping(false);return;}
@@ -552,7 +560,7 @@ export default function App() {
     const signedOut = user?.id;
     setSignOutPrompt(false);
     resetWorkspace();
-    api.signOut(signedOut, { keepDrafts });clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
+    api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
 
   if (bootstrapping) return <AppBootLoader message="Checking your secure session…" />;
@@ -564,7 +572,7 @@ export default function App() {
   if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
     <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
-      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate }} /></LazyBoundary>
+      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser }} /></LazyBoundary>
     </AppShell>
     {signOutPrompt && <Modal title="Sign out?" backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
       <div className="sign-out-prompt" role="alert">
