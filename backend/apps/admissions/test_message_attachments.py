@@ -155,3 +155,11 @@ class MessageAttachmentTests(PrivateStorageTestCase):
         self.client.force_authenticate(self.counselor)
         listed = self.client.get(f'/api/channel-messages/?channel={self.channel_id}')
         self.assertIsNone(listed.data['results'][0]['attachment_file'])
+
+    def test_message_list_etag_follows_the_request_language(self):
+        self.send('transcript.pdf', PDF, body='Hello')
+        url = f'/api/channel-messages/?channel={self.channel_id}'
+        english = self.client.get(url, HTTP_ACCEPT_LANGUAGE='en')
+        russian = self.client.get(url, HTTP_ACCEPT_LANGUAGE='ru')
+        self.assertTrue(english.has_header('ETag'))
+        self.assertNotEqual(english['ETag'], russian['ETag'])

@@ -218,11 +218,13 @@ def insert_text(block, at, text, mark):
     return block
 
 
-def resolve_suggestions(doc, decisions):
+def resolve_suggestions(doc, decisions, keep_comments=None):
     """A copy of `doc` with the suggestions in `decisions` ({id: accepted?}) applied.
 
     Accepting an insertion keeps its text, rejecting removes it; accepting a
-    deletion removes the text, rejecting keeps it. Every other mark stays.
+    deletion removes the text, rejecting keeps it. With `keep_comments` (a set
+    of thread ids), comment marks of other threads are dropped (their words
+    stay). Every other mark stays.
     """
     doc = copy.deepcopy(doc)
 
@@ -231,7 +233,7 @@ def resolve_suggestions(doc, decisions):
             content = []
             for child in node.get('content') or []:
                 if child.get('type') == 'text':
-                    child = _decide(child, decisions)
+                    child = _decide(child, decisions, keep_comments)
                     if child is None:
                         continue
                 content.append(child)
@@ -245,10 +247,12 @@ def resolve_suggestions(doc, decisions):
     return doc
 
 
-def _decide(node, decisions):
+def _decide(node, decisions, keep_comments=None):
     marks = []
     for mark in node.get('marks') or ():
         mark_id = (mark.get('attrs') or {}).get('id')
+        if mark.get('type') == 'comment' and keep_comments is not None and mark_id not in keep_comments:
+            continue
         if mark.get('type') in {'suggestInsert', 'suggestDelete'} and mark_id in decisions:
             accepted = decisions[mark_id]
             removes_text = accepted if mark['type'] == 'suggestDelete' else not accepted
@@ -277,3 +281,48 @@ def mark_ids(doc, mark_type):
 
     visit(doc)
     return found
+
+
+def suggestion_mark_ids(doc):
+    return mark_ids(doc, 'suggestInsert') | mark_ids(doc, 'suggestDelete')
+
+
+def strip_feedback(doc):
+    """`doc` without any comment or suggestion (pending insertions dropped, pending deletions kept).
+
+    For copies: a duplicated tab or document starts with no feedback of its own.
+    """
+    if not doc:
+        return doc
+    ids = suggestion_mark_ids(doc)
+    if not ids and not mark_ids(doc, 'comment'):
+        return doc
+    return resolve_suggestions(doc, {mark_id: False for mark_id in ids}, keep_comments=set())
+
+
+def reconcile_feedback(doc, tab_id):
+    """`doc` (an older version coming back) with only the feedback that is still open in this tab.
+
+    Suggestions decided since are applied as they were decided (a missing one
+    counts as rejected); comment marks of threads that no longer exist go.
+    """
+    from ..models import EssayCommentThread, EssaySuggestion
+
+    if not doc:
+        return doc
+    ids = suggestion_mark_ids(doc)
+    comment_ids = mark_ids(doc, 'comment')
+    if not ids and not comment_ids:
+        return doc
+    rows = dict(EssaySuggestion.objects.filter(tab_id=tab_id, pk__in=[i for i in ids if isinstance(i, int)])
+                .values_list('pk', 'status'))
+    decisions = {
+        mark_id: rows.get(mark_id) == EssaySuggestion.Status.ACCEPTED
+        for mark_id in ids if rows.get(mark_id) != EssaySuggestion.Status.PENDING
+    }
+    keep = set(EssayCommentThread.objects.filter(
+        tab_id=tab_id, pk__in=[i for i in comment_ids if isinstance(i, int)],
+    ).values_list('pk', flat=True))
+    if not decisions and keep == comment_ids:
+        return doc
+    return resolve_suggestions(doc, decisions, keep_comments=keep)

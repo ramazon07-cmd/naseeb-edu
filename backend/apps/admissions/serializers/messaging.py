@@ -151,7 +151,8 @@ class ChannelMessageSerializer(serializers.ModelSerializer):
     replies_count = serializers.SerializerMethodField()
     is_reported_by_me = serializers.SerializerMethodField()
     # A message may be only a file, so the text is optional when one is attached.
-    body = serializers.CharField(required=False, allow_blank=True, default='')
+    # No default: an update without `body` leaves the text alone (create fills it in validate).
+    body = serializers.CharField(required=False, allow_blank=True)
     attachment = serializers.FileField(write_only=True, required=False, allow_null=True)
     attachment_file = serializers.SerializerMethodField()
 

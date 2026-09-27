@@ -13,7 +13,7 @@ from rest_framework.test import APITestCase
 
 from apps.users.models import User
 from .essay_lab.access import resolve_access
-from .essay_lab.collab import insert_text, mark_range, resolve_suggestions
+from .essay_lab.collab import insert_text, mark_ids, mark_range, resolve_suggestions
 from .essay_lab.doc import (
     BlockConflict, apply_ops_v2, block_hash, doc_hash, doc_stats, ensure_bids, validate_doc,
 )
@@ -505,3 +505,94 @@ class SeedDemoFeedbackTests(APITestCase):
         tab.refresh_from_db()
         self.assertIn('She called it respect. Every evening', tab.content)
         self.assertIn('I rescued the school radio', tab.content)
+
+
+class FeedbackLifecycleTests(CollabTestCase):
+    """Copies, restored versions, history pruning and who hears about the student's answers."""
+
+    def make_two(self):
+        response = self.suggest([
+            {'bid': 'p1', 'start': 3, 'end': 14, 'text': 'nana'},
+            {'bid': 'p3', 'start': 28, 'end': 28, 'text': ' again'},
+        ])
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        return response.data['suggestions']
+
+    def decide(self, decisions):
+        self.as_user(self.student_user)
+        return self.client.post(f'{LAB}/{self.essay.pk}/suggestions/decide/', {'tab': self.tab.pk, 'decisions': decisions},
+                                format='json')
+
+    def feedback_marks(self, value):
+        return mark_ids(value, 'comment') | mark_ids(value, 'suggestInsert') | mark_ids(value, 'suggestDelete')
+
+    def test_duplicates_start_without_feedback(self):
+        self.comment()
+        self.make_two()
+        self.as_user(self.student_user)
+        response = self.client.post(f'{LAB}/{self.essay.pk}/tabs/{self.tab.pk}/duplicate/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        copy_tab = EssayTab.objects.get(pk=response.data['tab']['id'])
+        self.assertEqual(self.feedback_marks(copy_tab.doc), set())
+        self.assertEqual(doc_stats(copy_tab.doc).content, doc_stats(BASE_DOC).content,
+                         'pending insertions go, the words proposed for deletion stay')
+        response = self.client.post(f'{LAB}/{self.essay.pk}/duplicate/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        for tab in EssayTab.objects.filter(essay_id=response.data['id']):
+            self.assertEqual(self.feedback_marks(tab.doc), set())
+        self.assertNotEqual(self.feedback_marks(self.stored()), set(), 'the original keeps its feedback')
+
+    def test_restoring_a_version_applies_decisions_made_since(self):
+        thread = self.comment().data
+        first, second = self.make_two()
+        with_feedback = EssayCheckpoint.objects.filter(tab=self.tab).order_by('-id').first()
+        self.assertEqual(self.decide([{'id': first['id'], 'accept': True}, {'id': second['id'], 'accept': False}]).status_code,
+                         status.HTTP_200_OK)
+        EssayCommentThread.objects.filter(pk=thread['id']).delete()
+        self.tab.refresh_from_db()
+        self.as_user(self.student_user)
+        response = self.client.post(f'{LAB}/{self.essay.pk}/checkpoints/{with_feedback.pk}/restore/',
+                                    {'base_seq': self.tab.save_seq}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        restored = self.stored()
+        self.assertEqual(self.feedback_marks(restored), set())
+        self.assertIn('My nana never wasted bread.', doc_stats(restored).content)
+        self.assertNotIn('again', doc_stats(restored).content)
+
+    def test_restoring_keeps_feedback_that_is_still_open(self):
+        first, _second = self.make_two()
+        with_feedback = EssayCheckpoint.objects.filter(tab=self.tab).order_by('-id').first()
+        self.tab.refresh_from_db()
+        self.as_user(self.student_user)
+        response = self.client.post(f'{LAB}/{self.essay.pk}/checkpoints/{with_feedback.pk}/restore/',
+                                    {'base_seq': self.tab.save_seq}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertIn(first['id'], mark_ids(self.stored(), 'suggestInsert'))
+        self.assertEqual(self.decide([{'id': first['id'], 'accept': True}]).status_code, status.HTTP_200_OK)
+
+    def test_feedback_versions_are_pruned_before_the_students_own(self):
+        from .essay_lab.writes import CHECKPOINT_CAP, prune_checkpoints
+        own = EssayCheckpoint.objects.create(essay=self.essay, tab=self.tab, doc=BASE_DOC, content='x',
+                                             reason=EssayCheckpoint.Reason.AUTO)
+        EssayCheckpoint.objects.bulk_create([
+            EssayCheckpoint(essay=self.essay, tab=self.tab, doc=BASE_DOC, content='x', reason=EssayCheckpoint.Reason.AUTO,
+                            kind=EssayCheckpoint.Kind.COMMENT, author=self.counselor)
+            for _ in range(CHECKPOINT_CAP)
+        ])
+        prune_checkpoints(self.essay.pk)
+        self.assertTrue(EssayCheckpoint.objects.filter(pk=own.pk).exists())
+        self.assertEqual(EssayCheckpoint.objects.filter(essay=self.essay).count(), CHECKPOINT_CAP)
+
+    def test_counselors_who_lost_access_hear_nothing(self):
+        thread = self.comment().data
+        self.as_user(self.student_user)
+        self.client.post(f'{LAB}/{self.essay.pk}/unshare/')
+        before = Notification.objects.filter(recipient=self.counselor).count()
+        response = self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/reply/', {'body': 'Thanks!'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/resolve/')
+        self.assertEqual(Notification.objects.filter(recipient=self.counselor).count(), before)
+        self.client.post(f'{LAB}/{self.essay.pk}/share/', {}, format='json')
+        self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/reopen/')
+        self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/reply/', {'body': 'One more'}, format='json')
+        self.assertEqual(Notification.objects.filter(recipient=self.counselor, title='New reply to your comment').count(), 1)

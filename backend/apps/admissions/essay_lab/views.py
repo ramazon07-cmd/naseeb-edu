@@ -28,6 +28,7 @@ from ..models import (
 )
 from ..streaming import release_db_connection
 from . import coach
+from .collab import reconcile_feedback, strip_feedback
 from .collab_views import StudentCollabMixin
 from .doc import (
     BlockConflict, DocError, apply_delta, apply_delta_v2, doc_from_text, doc_hash, doc_stats, ensure_bids, tab_doc,
@@ -747,7 +748,9 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             _make_checkpoint(essay, tab, EssayCheckpoint.Reason.RESTORE, label=f'Before restoring #{checkpoint.pk}',
                              author=request.user)
             now = timezone.now()
-            _set_text(tab, checkpoint.doc, doc_stats(checkpoint.doc))
+            # Feedback decided or deleted since that version must not come back undecidable.
+            restored = reconcile_feedback(checkpoint.doc, tab.pk)
+            _set_text(tab, restored, doc_stats(restored))
             tab.save_seq += 1
             tab.last_edited_at = now
             tab.save(update_fields=[*TEXT_FIELDS, 'save_seq', 'last_edited_at', 'updated_at'])
@@ -835,7 +838,7 @@ def _copy_tabs(essay, originals, now, *, position=None, first_title=None):
             essay_id=essay.pk, parent_id=tab.parent_id if position is not None else None,
             title=first_title if index == 0 and first_title else tab.title,
             position=position if position is not None and index == 0 else tab.position,
-            doc=tab.doc, content=tab.content, word_count=tab.word_count, char_count=tab.char_count,
+            doc=strip_feedback(tab.doc), content=tab.content, word_count=tab.word_count, char_count=tab.char_count,
             char_count_no_spaces=tab.char_count_no_spaces, last_edited_at=now,
         ))
     created = EssayTab.objects.bulk_create(copies)
@@ -844,7 +847,7 @@ def _copy_tabs(essay, originals, now, *, position=None, first_title=None):
     children = [
         EssayTab(
             essay_id=essay.pk, parent_id=new_parent[tab.parent_id], title=tab.title, position=tab.position,
-            doc=tab.doc, content=tab.content, word_count=tab.word_count, char_count=tab.char_count,
+            doc=strip_feedback(tab.doc), content=tab.content, word_count=tab.word_count, char_count=tab.char_count,
             char_count_no_spaces=tab.char_count_no_spaces, last_edited_at=now,
         )
         for tab in originals if tab.parent_id in new_parent

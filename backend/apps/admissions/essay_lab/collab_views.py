@@ -323,9 +323,17 @@ class StudentCollabMixin:
         })
 
     def _tell_counselors(self, essay, author_ids, title, message):
-        """Tell the staff authors of the feedback (never the student themself)."""
-        for author_id in {author_id for author_id in author_ids if author_id and author_id != self.request.user.pk}:
-            notify(essay, title=title, message=message, recipient_id=author_id)
+        """Tell the staff authors of the feedback (never the student themself).
+
+        Only those who can still open the essay: after an unshare or a change of
+        counselor, the essay's activity is none of their business.
+        """
+        wanted = {author_id for author_id in author_ids if author_id and author_id != self.request.user.pk}
+        if not wanted:
+            return
+        for author in User.objects.filter(pk__in=wanted):
+            if access.VIEW in access.resolve_access(author, essay):
+                notify(essay, title=title, message=message, recipient_id=author.pk)
 
 
 # -------------------------------------------------------------------- the staff
