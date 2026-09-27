@@ -305,7 +305,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
     }
   }
   const collapseLabel = collapsed ? t("Expand navigation") : t("Collapse navigation");
-  return <div className={`app-shell ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
+  return <div className={`app-shell role-${user.role} ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="sidebar-top">
         <BrandLockup theme={theme} subtitle={false} />
