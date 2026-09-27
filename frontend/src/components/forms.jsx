@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { formatNumberLocale, t } from '../i18n';
 import { Check, Target, CheckCircle2 } from 'lucide-react';
 
 export function Field({ label: title, children, error = '', hint = '' }) {
@@ -47,5 +47,5 @@ export function PortalTabs({ items, active, onChange }) {
     onChange(items[nextIndex][0]);
     event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[nextIndex]?.focus();
   }
-  return <div className="portal-tabs" role="tablist">{items.map(([key, title], index) => <button type="button" role="tab" aria-selected={active === key} tabIndex={active === key ? 0 : -1} key={key} className={active === key ? "active" : ''} onClick={() => onChange(key)} onKeyDown={(event) => handleKeyDown(event, index)}>{t(title)}</button>)}</div>;
+  return <div className="portal-tabs" role="tablist">{items.map(([key, title, count], index) => <button type="button" role="tab" aria-selected={active === key} tabIndex={active === key ? 0 : -1} key={key} className={active === key ? "active" : ''} onClick={() => onChange(key)} onKeyDown={(event) => handleKeyDown(event, index)}>{t(title)}{count != null && <span className="tab-count">{formatNumberLocale(count)}</span>}</button>)}</div>;
 }

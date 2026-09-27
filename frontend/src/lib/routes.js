@@ -73,6 +73,7 @@ const RECORD_ROUTES = {
   students: { segment: '', param: 'studentId' },
   admin_students: { segment: '', param: 'studentId' },
   messages: { segment: '', param: 'channelId' },
+  college_search: { segment: '', param: 'universityId' },
 };
 
 const ID_PATTERN = /^[1-9]\d{0,9}$/;

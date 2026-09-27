@@ -1,77 +1,119 @@
-import { useState, useEffect } from 'react';
-import { ownStudent, label } from '../lib/labels';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Filter, List, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
-import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
-import { School, Globe2, X, RefreshCw, MapPin, CheckCircle2, Clock3, Check, Plus, ExternalLink, ClipboardCheck, Search } from 'lucide-react';
-import { PortalTabs, FilterChip } from '../components/forms';
-import { Badge, Empty } from '../components/ui';
-import { money, dateText, joinParts } from '../lib/format';
-import { Detail } from '../components/records';
-import { matchesQuery } from '../lib/searchIndex';
+import { formatNumberLocale, parseDateValue, t, tp, tx } from '../i18n';
+import { Empty, Modal } from '../components/ui';
+import { ScoreBreakdown, TierBand } from '../components/college';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { clockText, money } from '../lib/format';
+import { ownStudent } from '../lib/labels';
+import { COLLEGE_AID_FLAGS, COLLEGE_PRICE_CAPS, COLLEGE_REGIONS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFacetCounts, collegeFilterChips, collegeMatches, collegeSorter, matchingPrograms, percentText, priceCapLabel, satText, shortDate, toggleIn, universityFit } from '../lib/college';
+import { UniversityPage } from './UniversityPage';
 
-export const COLLEGE_REGIONS = [
-  { key: 'us', label: 'US', countries: ['usa', 'united states', 'united states of america'] },
-  { key: 'canada', label: 'Canada', countries: ['canada'] },
-  { key: 'china', label: 'China', countries: ['china', 'mainland china'] },
-  { key: 'hong_kong', label: 'Hong Kong', countries: ['hong kong', 'hong kong sar'] },
-];
-
-export function universityRegion(university) {
-  const market = String(university?.market || '').trim().toLowerCase();
-  if (COLLEGE_REGIONS.some((region) => region.key === market)) return market;
-  const country = String(university?.country || '').trim().toLowerCase();
-  return COLLEGE_REGIONS.find((region) => region.countries.includes(country))?.key || null;
+function FilterOption({ type = 'checkbox', name, checked, disabled = false, onChange, count, children }) {
+  return <label className="filter-option"><input type={type} name={name} checked={checked} disabled={disabled} onChange={onChange} /><span>{children}</span>{count != null && <em>{typeof count === 'number' ? formatNumberLocale(count) : count}</em>}</label>;
 }
 
-export function universityFit(university, student) {
-  if (!student) return { score: 0, label: 'Profile needed' };
-  let score = 20;
-  const targets = String(student.target_countries || '').toLowerCase();
-  if (targets.includes(String(university.country || '').toLowerCase())) score += 25;
-  if (!university.sat_min || Number(student.sat_score || 0) >= Number(university.sat_min)) score += 25;
-  if (!university.net_price_usd || !student.budget_usd || Number(university.net_price_usd) <= Number(student.budget_usd)) score += 15;
-  if (!student.scholarship_needed || university.offers_international_aid || university.offers_merit_aid) score += 15;
-  const bounded = Math.min(score, 100);
-  return { score: bounded, label: bounded >= 80 ? 'Strong fit' : bounded >= 60 ? 'Good fit' : 'Explore' };
+function CollegeFilters({ filters, setFilters, counts, budget, showBands, chips, wide }) {
+  const patch = (change) => setFilters((current) => ({ ...current, ...change }));
+  const clear = chips.length > 0 && <button type="button" className="link-button" onClick={() => setFilters(DEFAULT_COLLEGE_FILTERS)}>{t("Clear")}</button>;
+  const groups = <>
+    <fieldset className="filter-set"><legend className="sr-only">{t("Where")}</legend>{COLLEGE_REGIONS.map(({ key, label: regionLabel }) => <FilterOption key={key} checked={filters.regions.includes(key)} onChange={() => patch({ regions: toggleIn(filters.regions, key) })} count={counts.regions[key] || 0}>{t(regionLabel)}</FilterOption>)}</fieldset>
+    {showBands && <fieldset className="filter-set"><legend className="sr-only">{t("Admission band")}</legend>{['reach', 'target', 'safety'].map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={counts.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
+    <fieldset className="filter-set"><legend className="sr-only">{t("Net price per year")}</legend>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} disabled={cap === 'budget' && !budget} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
+    <fieldset className="filter-set"><legend className="sr-only">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={counts.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
+    <fieldset className="filter-set"><legend className="sr-only">{t("Testing & type")}</legend>
+      <FilterOption checked={filters.testOptional} onChange={() => patch({ testOptional: !filters.testOptional })} count={counts.testOptional}>{t("Test optional")}</FilterOption>
+      <FilterOption checked={filters.satFit} onChange={() => patch({ satFit: !filters.satFit })} count={counts.satFit}>{t("My SAT is in range")}</FilterOption>
+      <FilterOption checked={filters.publicOnly} onChange={() => patch({ publicOnly: !filters.publicOnly })} count={counts.publicOnly}>{t("Public only")}</FilterOption>
+    </fieldset>
+  </>;
+  if (wide) return <aside className="college-filters" aria-label={t("Filters")}><header><b>{t("Filters")}</b>{clear}</header>{groups}</aside>;
+  return <details className="filters-inline"><summary><Filter size={15} aria-hidden="true" /><b>{t("Filters")}</b>{chips.length > 0 && <span className="tab-count">{formatNumberLocale(chips.length)}</span>}<ChevronDown size={15} aria-hidden="true" /></summary><div className="filters-inline-body">{clear && <header>{clear}</header>}{groups}</div></details>;
 }
 
-export function scholarshipRequirements(item) {
-  return [
-  item.requires_transcript && 'Transcript', item.requires_essay && 'Essay',
-  item.requires_recommendation && 'Recommendation', item.requires_financial_documents && 'Financial documents',
-  item.requires_cv && 'CV', item.requires_portfolio && 'Portfolio'].
-  filter(Boolean);
+function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
+  const profile = research.profile_snapshot || {};
+  const updated = research.generated_at ? `${t("Updated")} ${clockText(research.generated_at)}` : t("Refresh");
+  return <section className="profile-strip" aria-label={t("Ranked for your profile")}>
+    <div className="tag-row"><span className="tag">{t("SAT")} {profile.sat_score}</span><span className="tag">{t("GPA")} {profile.gpa}</span><span className="tag">{t("IELTS")} {profile.ielts_score}</span><span className="tag">{profile.target_major}</span><span className="tag">{t("Budget")} {money(profile.budget_usd)}</span></div>
+    <div className="profile-strip-actions">
+      <button type="button" className="icon-button" title={t("Edit profile")} aria-label={t("Edit profile")} onClick={onEdit}><Pencil size={15} /></button>
+      <button type="button" className="icon-button" title={updated} aria-label={t("Refresh")} disabled={refreshing} aria-busy={refreshing} onClick={onRefresh}><RefreshCw className={refreshing ? 'spin' : ''} size={15} /></button>
+    </div>
+  </section>;
 }
 
-export function eligibleScholarship(item, student) {
-  if (!student) return false;
-  if (item.min_gpa && Number(student.gpa || 0) < Number(item.min_gpa)) return false;
-  if (item.min_ielts && Number(student.ielts_score || 0) < Number(item.min_ielts)) return false;
-  if (item.min_sat && Number(student.sat_score || 0) < Number(item.min_sat)) return false;
-  return !item.eligible_grades || String(item.eligible_grades).split(',').map((value) => value.trim()).includes(String(student.grade));
+function CollegeRow({ university, result, student, application, expanded, busy, onToggle, onOpen, onAdd }) {
+  const fit = result ? { score: result.match_score } : universityFit(university, student);
+  const panelId = `college-details-${university.id}`;
+  return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
+    <div className="uni-fit" role="cell"><b>{formatNumberLocale(fit.score)}</b></div>
+    <div className="uni-name" role="cell"><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}</small></div>
+    <div className="uni-facts">
+      <div className="uni-band" role="cell">{result ? <TierBand value={result.admission_band} /> : <span className="muted-copy">—</span>}</div>
+      <div className="uni-value" role="cell" data-label={t("Acceptance")}><span className="v">{percentText(university.acceptance_rate)}</span></div>
+      <div className="uni-value" role="cell" data-label={t("SAT")}><span className="v">{university.sat_min ? satText(university.sat_min, university.sat_max) : t("Optional")}</span></div>
+      <div className="uni-value" role="cell" data-label={t("Net price")}><span className="v">{money(university.net_price_usd)}</span></div>
+      <div className="uni-value" role="cell" data-label={t("Deadline")}><span className="v">{university.application_deadline ? shortDate(university.application_deadline) : '—'}</span></div>
+    </div>
+    <div className="uni-action" role="cell">{application ? <span className="uni-added"><Check size={14} aria-hidden="true" /> {t("Added")}</span> : <button type="button" className="button quiet small" aria-label={t("Add to my list")} disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={14} aria-hidden="true" /> {t("Add")}</button>}</div>
+    <div className="uni-chevron" role="cell"><button type="button" aria-expanded={expanded} aria-controls={panelId} aria-label={t("Show why this result")} onClick={onToggle}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button></div>
+    {expanded && <div className="uni-expand" id={panelId} role="cell">
+      {result && <div className="uni-expand-grid">
+        <ScoreBreakdown breakdown={result.score_breakdown} />
+        <ul className="note-list ok" aria-label={t("Why it fits")}>{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={14} aria-hidden="true" /><span>{reason}</span></li>)}</ul>
+        <ul className="note-list gap" aria-label={t("Watch-outs")}>{result.gaps.map((gap) => <li key={gap}><Clock3 size={14} aria-hidden="true" /><span>{gap}</span></li>)}</ul>
+      </div>}
+      <button type="button" className="button quiet small uni-open" onClick={onOpen}>{t("Open university")} <ArrowRight size={13} aria-hidden="true" /></button>
+    </div>}
+  </div>;
 }
 
-export function CollegeSearchPage({ data, query, reload, notify }) {
-  const [tab, setTab] = useState('universities');
-  const [region, setRegion] = useState('us');
-  const [admissionBand, setAdmissionBand] = useState('all');
-  const [institutionType, setInstitutionType] = useState('all');
-  const [maxPrice, setMaxPrice] = useState('all');
-  const [minimumAcceptance, setMinimumAcceptance] = useState('0');
-  const [aid, setAid] = useState('all');
-  const [testOptional, setTestOptional] = useState(false);
-  const [scoreMatch, setScoreMatch] = useState(false);
-  const [scholarshipType, setScholarshipType] = useState('all');
-  const [funding, setFunding] = useState('all');
-  const [scope, setScope] = useState('all');
-  const [eligibleOnly, setEligibleOnly] = useState(false);
+function CollegeListDrawer({ applications, universities, researchMap, busyId, onClose, onOpen, onRemove, onApplications }) {
+  const deadlineOf = (application) => application.deadline || universities.get(application.university)?.application_deadline;
+  const sorted = [...applications].sort((a, b) => (deadlineOf(a) ? parseDateValue(deadlineOf(a)).getTime() : Infinity) - (deadlineOf(b) ? parseDateValue(deadlineOf(b)).getTime() : Infinity));
+  const bandOf = (application) => application.tier === 'dream' ? 'reach' : application.tier;
+  return <Modal title="My college list" className="drawer-modal" backdropClassName="drawer-backdrop" onClose={onClose}>
+    <div className="drawer-body">
+      <div className="drawer-summary"><h3>{tp('{n} university|{n} universities', applications.length, { n: applications.length })}</h3>
+        <div className="drawer-tiers">{['reach', 'target', 'safety'].map((band) => <span key={band}><b>{formatNumberLocale(applications.filter((application) => bandOf(application) === band).length)}</b><TierBand value={band} /></span>)}</div></div>
+      <div className="drawer-list">{sorted.map((application) => {
+          const university = universities.get(application.university);
+          const name = university?.name || application.university_detail?.name || t("University");
+          const score = researchMap.get(application.university)?.match_score;
+          return <article className="drawer-row" key={application.id} onClick={() => onOpen(application.university)}>
+            <div className="drawer-copy"><button type="button" className="drawer-name" onClick={(event) => {event.stopPropagation();onOpen(application.university);}}>{name}</button><div className="drawer-sub"><TierBand value={bandOf(application)} /><span>{[university?.city, university?.country].filter(Boolean).join(', ')}</span></div></div>
+            {score != null && <div className="drawer-score"><b>{formatNumberLocale(score)}</b><small>{t("fit")}</small></div>}
+            <div className="drawer-row-footer"><small>{money(university?.net_price_usd)} · {deadlineOf(application) ? shortDate(deadlineOf(application)) : '—'}</small><button type="button" className="drawer-remove" aria-label={tx`Remove ${name} from my list`} disabled={busyId === application.university} aria-busy={busyId === application.university} onClick={(event) => {event.stopPropagation();onRemove(application);}}><Trash2 size={13} aria-hidden="true" />{t("Remove")}</button></div>
+          </article>;
+        })}{!sorted.length && <Empty text={t("Your list is empty. Add universities from the results.")} />}</div>
+    </div>
+    <footer className="drawer-foot"><button type="button" className="button primary" onClick={onApplications}>{t("Open in Applications")} <ArrowRight size={14} aria-hidden="true" /></button></footer>
+  </Modal>;
+}
+
+export function CollegeSearchPage({ data, query, reload, notify, setPage, universityId }) {
+  const [filters, setFilters] = useState(DEFAULT_COLLEGE_FILTERS);
+  const [sort, setSort] = useState('fit');
+  const [expandedId, setExpandedId] = useState(null);
+  const [listOpen, setListOpen] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const [research, setResearch] = useState(null);
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchSaving, setResearchSaving] = useState(false);
   const [researchError, setResearchError] = useState('');
+  const previousQuery = useRef(query);
+  const wide = useMediaQuery('(min-width: 1201px)');
+  const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
+  const closeUniversity = useCallback(() => setPage('college_search'), [setPage]);
   const student = ownStudent(data);
-  const researchMap = new Map((research?.recommendations || []).map((item) => [item.university.id, item]));
-  const added = new Set(data.applications.map((item) => item.university));
+  const budget = Number(student?.budget_usd) || 0;
+  const researchMap = useMemo(() => new Map((research?.recommendations || []).map((item) => [item.university.id, item])), [research]);
+  const universities = useMemo(() => new Map(data.universities.map((item) => [item.id, item])), [data.universities]);
+  const listed = useMemo(() => new Map(data.applications.map((item) => [item.university, item])), [data.applications]);
+  const counts = useMemo(() => collegeFacetCounts(data.universities, researchMap, student), [data.universities, researchMap, student]);
+  const rows = useMemo(() => data.universities.filter((item) => collegeMatches(item, researchMap.get(item.id), filters, student, query)).sort(collegeSorter(sort, researchMap, student)), [data.universities, researchMap, filters, student, query, sort]);
 
   useEffect(() => {
     let active = true;
@@ -79,6 +121,14 @@ export function CollegeSearchPage({ data, query, reload, notify }) {
     api.collegeResearch().then((result) => {if (active) {setResearch(result);setResearchError('');}}).catch((error) => {if (active) setResearchError(error.message);}).finally(() => {if (active) setResearchLoading(false);});
     return () => {active = false;};
   }, []);
+
+  // Searching from a university page returns to the results.
+  useEffect(() => {
+    if (previousQuery.current !== query && query.trim() && universityId != null) closeUniversity();
+    previousQuery.current = query;
+  }, [query, universityId, closeUniversity]);
+
+  useEffect(() => {window.scrollTo({ top: 0, left: 0, behavior: 'auto' });}, [universityId]);
 
   async function refreshResearch() {
     setResearchLoading(true);setResearchError('');
@@ -94,59 +144,61 @@ export function CollegeSearchPage({ data, query, reload, notify }) {
       reload();
     } catch (error) {setResearchError(error.message);} finally {setResearchSaving(false);}
   }
-  const items = data.universities.filter((item) => {
-    const aidMatch = aid === 'all' || aid === 'need' && item.offers_need_based_aid || aid === 'merit' && item.offers_merit_aid || aid === 'international' && item.offers_international_aid || aid === 'full_need' && item.meets_full_need;
-    const recommendation = researchMap.get(item.id);
-    return universityRegion(item) === region && (
-    admissionBand === 'all' || recommendation?.admission_band === admissionBand) && (
-    institutionType === 'all' || item.institution_type === institutionType) && (
-    maxPrice === 'all' || Number(item.net_price_usd || Infinity) <= Number(maxPrice)) &&
-    Number(item.acceptance_rate || 0) >= Number(minimumAcceptance) && (
-    !testOptional || item.test_optional) && (
-    !scoreMatch || !item.sat_min || Number(student?.sat_score || 0) >= Number(item.sat_min)) &&
-    aidMatch && matchesQuery(item, query);
-  }).sort((a, b) => (researchMap.get(b.id)?.match_score ?? universityFit(b, student).score) - (researchMap.get(a.id)?.match_score ?? universityFit(a, student).score));
-  const scholarships = data.scholarships.filter((item) => (scholarshipType === 'all' || item.scholarship_type === scholarshipType) && (
-  funding === 'all' || item.funding_level === funding) && (scope === 'all' || item.scope === scope) && (
-  !eligibleOnly || eligibleScholarship(item, student)) && matchesQuery(item, query));
-  const universityFiltersActive = [institutionType !== 'all', maxPrice !== 'all', minimumAcceptance !== '0', aid !== 'all', testOptional, scoreMatch, admissionBand !== 'all'].filter(Boolean).length;
-  function resetUniversityFilters() {setAdmissionBand('all');setInstitutionType('all');setMaxPrice('all');setMinimumAcceptance('0');setAid('all');setTestOptional(false);setScoreMatch(false);}
-  async function shortlist(university) {const band = researchMap.get(university.id)?.admission_band;const tier = band === 'reach' ? 'dream' : band === 'safety' ? 'safety' : 'target';try {await api.create('applications', { student: student?.id, university: university.id, program: student?.target_major || 'Undeclared', tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });notify(tx`${university.name} added to your shortlist.`);reload();} catch (err) {notify(err.message, 'error');}}
-  return <div className="section-stack student-portal">
-    <div className="college-filter-bar">
-      <div className="filter-section-tabs"><PortalTabs active={tab} onChange={setTab} items={[["universities", "Universities"], ["scholarships", "Scholarships & Aid"], ["aid", "What you need"]]} /></div>
-      {tab === 'universities' && !researchLoading && research?.ready && <>
-        <div className="filter-control-row filter-scope-row">
-          <div className="filter-chip-row" role="group" aria-label={t("Country")}><Globe2 className="filter-group-icon" size={15} aria-hidden="true" />{COLLEGE_REGIONS.map(({ key, label: regionLabel }) => <FilterChip key={key} active={region === key} onClick={() => {setRegion(key);setAdmissionBand('all');}}>{t(regionLabel)}</FilterChip>)}</div>
-          <div className="filter-chip-row" role="group" aria-label={t("Admission band")}>{[["all", "All matches", ''], ["reach", "Reach", 'tone-reach'], ["target", "Target", 'tone-target'], ["safety", "Safety", 'tone-safety']].map(([value, chipLabel, tone]) => <FilterChip key={value} tone={tone} active={admissionBand === value} onClick={() => setAdmissionBand(value)}>{t(chipLabel)}</FilterChip>)}</div>
-          <p className="filter-count"><b>{formatNumberLocale(items.length)}</b> {t("universities found")}</p>
+
+  async function addToList(university) {
+    const band = researchMap.get(university.id)?.admission_band;
+    const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
+    setBusyId(university.id);
+    try {
+      await api.create('applications', { student: student?.id, university: university.id, program, tier: band === 'reach' ? 'dream' : band === 'safety' ? 'safety' : 'target', status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
+      await reload();
+      notify(tx`${university.name} added to your list.`);
+    } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
+  }
+
+  async function removeFromList(application) {
+    if (!window.confirm(t("Remove this university from your list?"))) return;
+    const name = universities.get(application.university)?.name || t("University");
+    setBusyId(application.university);
+    try {
+      await api.remove('applications', application.id);
+      await reload();
+      notify(tx`${name} removed from your list.`);
+    } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
+  }
+
+  const university = universityId == null ? null : universities.get(universityId);
+  if (university) return <UniversityPage {...{ data, university, research, researchLoading, setPage }} result={researchMap.get(university.id)} application={listed.get(university.id)} busy={busyId === university.id} onAdd={() => addToList(university)} onRemove={() => removeFromList(listed.get(university.id))} onBack={closeUniversity} />;
+
+  const chips = collegeFilterChips(filters, setFilters, budget);
+  const ready = Boolean(research?.ready);
+  const filtersPanel = <CollegeFilters {...{ filters, setFilters, counts, budget, chips, wide }} showBands />;
+  return <div className="section-stack student-portal college-page">
+    {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, budget, and portfolio evidence.")}</p></div></div>}
+    {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
+    {research && !research.ready && <CollegeProfileQuestions research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
+    {ready && <div className={`college-layout ${wide ? 'with-filters' : ''}`.trim()}>
+      <div className="college-main">
+      {!wide && filtersPanel}
+      <CollegeProfileStrip research={research} refreshing={researchLoading} onRefresh={refreshResearch} onEdit={() => setPage('student_center')} />
+      <div className="uni-meta">
+        <p className="filter-count" aria-live="polite"><b>{formatNumberLocale(rows.length)}</b> {t("Universities")}</p>
+        {chips.map((chip) => <span className="filter-token" key={chip.key}>{chip.text}<button type="button" aria-label={tx`Remove ${chip.text} filter`} onClick={chip.clear}><X size={13} aria-hidden="true" /></button></span>)}
+        <div className="uni-meta-actions">
+          <div className="sort-control"><select aria-label={t("Sort by")} value={sort} onChange={(event) => setSort(event.target.value)}>{COLLEGE_SORTS.map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
+          <button type="button" className="button primary" onClick={() => setListOpen(true)}><List size={16} aria-hidden="true" /> {t("View list")}<span className="count-pill">{formatNumberLocale(data.applications.length)}</span></button>
         </div>
-        <div className="filter-control-row">
-          <select aria-label={t("Institution type")} value={institutionType} onChange={(event) => setInstitutionType(event.target.value)}><option value="all">{t("Public & private")}</option><option value="public">{t("Public")}</option><option value="private">{t("Private")}</option></select>
-          <select aria-label={t("Maximum net price")} value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)}><option value="all">{t("Any price")}</option><option value="15000">{t("Up to $15,000")}</option><option value="25000">{t("Up to $25,000")}</option><option value="40000">{t("Up to $40,000")}</option></select>
-          <select aria-label={t("Minimum acceptance")} value={minimumAcceptance} onChange={(event) => setMinimumAcceptance(event.target.value)}><option value="0">{t("Any rate")}</option><option value="10">10%+</option><option value="25">25%+</option><option value="50">50%+</option></select>
-          <select aria-label={t("Aid type")} value={aid} onChange={(event) => setAid(event.target.value)}><option value="all">{t("Any aid")}</option><option value="need">{t("Need-based")}</option><option value="merit">{t("Merit")}</option><option value="international">{t("International aid")}</option><option value="full_need">{t("Meets full need")}</option></select>
-          <FilterChip active={testOptional} onClick={() => setTestOptional(!testOptional)}>{t("Test optional only")}</FilterChip>
-          <FilterChip active={scoreMatch} onClick={() => setScoreMatch(!scoreMatch)}>{t("My SAT matches")}</FilterChip>
-          {universityFiltersActive > 0 && <button type="button" className="filter-reset" onClick={resetUniversityFilters}><X size={13} /> {t("Clear")} ({universityFiltersActive})</button>}
-        </div>
-      </>}
-      {tab === 'scholarships' && <div className="filter-control-row">
-        <select aria-label={t("Scholarship type")} value={scholarshipType} onChange={(event) => setScholarshipType(event.target.value)}><option value="all">{t("All types")}</option><option value="merit">{t("Merit")}</option><option value="need_based">{t("Need-based")}</option><option value="leadership">{t("Leadership")}</option><option value="research">{t("Research")}</option><option value="full_ride">{t("Full ride")}</option></select>
-        <select aria-label={t("Funding")} value={funding} onChange={(event) => setFunding(event.target.value)}><option value="all">{t("Any funding")}</option><option value="full">{t("Full funding")}</option><option value="partial">{t("Partial")}</option><option value="fixed">{t("Fixed amount")}</option></select>
-        <select aria-label={t("Scope")} value={scope} onChange={(event) => setScope(event.target.value)}><option value="all">{t("National & International")}</option><option value="national">{t("National")}</option><option value="international">{t("International")}</option></select>
-        <FilterChip active={eligibleOnly} onClick={() => setEligibleOnly(!eligibleOnly)}>{t("Eligible for my profile")}</FilterChip>
-        <p className="filter-count"><b>{formatNumberLocale(scholarships.length)}</b> {t("scholarships found")}</p>
-      </div>}
-    </div>
-    {tab === 'universities' && researchLoading && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, budget, and portfolio evidence.")}</p></div></div>}
-    {tab === 'universities' && researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
-    {tab === 'universities' && !researchLoading && research && !research.ready && <CollegeProfileQuestions research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
-    {tab === 'universities' && !researchLoading && research?.ready && <><CollegeResearchOverview research={research} onRefresh={refreshResearch} />
-      <section className="finder-results"><p className="finder-note">{t("The match score is not an admission probability; it measures profile, preference, and affordability fit.")}</p><div className="university-results">{items.map((uni) => {const result = researchMap.get(uni.id);const fit = result ? { score: result.match_score, label: result.match_label } : universityFit(uni, student);return <article className="university-card" key={uni.id}><header><span className="rank" title={uni.ranking ? t("Ranking") : undefined}>{uni.ranking ? `#${formatNumberLocale(uni.ranking)}` : <School size={18} aria-hidden="true" />}</span><div><h3>{uni.name}</h3><p><MapPin size={14} /> {joinParts([uni.city, uni.country].filter(Boolean).join(', '), label(uni.institution_type))}</p></div><div className="university-fit"><span className="fit-badge">{formatPercentLocale(fit.score)} {label(fit.label)}</span>{result && <Badge>{result.admission_band}</Badge>}</div></header><div className="university-metrics"><div><span>{t("Acceptance")}</span><b>{uni.acceptance_rate ? formatPercentLocale(uni.acceptance_rate) : '—'}</b></div><div><span>{t("Net price")}</span><b>{money(uni.net_price_usd)}</b></div><div><span>{t("Average aid")}</span><b>{money(uni.average_aid_usd)}</b></div><div><span>{t("SAT range")}</span><b>{uni.sat_min ? `${formatNumberLocale(uni.sat_min)}–${uni.sat_max ? formatNumberLocale(uni.sat_max) : '—'}` : uni.test_optional ? t("Test optional") : t("Not published")}</b></div></div>{result && <div className="research-breakdown">{Object.entries(result.score_breakdown).map(([name, value]) => <div key={name}><span>{label(name)}</span><div className="progress"><i style={{ width: `${Math.min(100, Number(value) * (name === 'academic' ? 2 : name === 'preferences' ? 4.5 : name === 'financial' ? 5 : 10))}%` }} /></div><b>{formatNumberLocale(value)}</b></div>)}</div>}<div className="aid-badges">{uni.offers_need_based_aid && <span>{t("Need-based")}</span>}{uni.offers_merit_aid && <span>{t("Merit")}</span>}{uni.offers_international_aid && <span>{t("International aid")}</span>}{uni.meets_full_need && <span>{t("Meets full need")}</span>}{uni.test_optional && <span>{t("Test optional")}</span>}</div>{result && <details className="research-details"><summary>{t("Why this result?")}</summary><div><ul>{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={13} /> {reason}</li>)}</ul>{result.gaps.length > 0 && <ul className="gaps">{result.gaps.map((gap) => <li key={gap}><Clock3 size={13} /> {gap}</li>)}</ul>}</div></details>}<footer><div>{uni.application_deadline && <span>{tx`Application deadline: ${dateText(uni.application_deadline)}`}</span>}{uni.scholarship_deadline && <span>{tx`Aid deadline: ${dateText(uni.scholarship_deadline)}`}</span>}</div>{added.has(uni.id) ? <span className="added"><Check size={17} /> {t("Shortlisted")}</span> : <button className="button primary small" onClick={() => shortlist(uni)}><Plus size={16} /> {t("Shortlist")}</button>}</footer></article>;})}{!items.length && <Empty text={t("No universities match these filters.")} />}</div></section>
-    </>}
-    {tab === 'scholarships' && <><section className="finder-results"><p className="finder-note">{t("Eligibility is not a final decision; always verify the official requirements.")}</p><div className="scholarship-grid">{scholarships.map((item) => {const eligible = eligibleScholarship(item, student);return <article className="scholarship-card" key={item.id}><header><div><span>{label(item.scholarship_type)}</span><h3>{item.title}</h3><p>{item.provider}{item.university_name ? ` · ${item.university_name}` : ''}</p></div><Badge>{item.scope}</Badge></header><strong>{item.funding_level === 'fixed' ? money(item.amount_usd) : label(item.funding_level)}</strong><p>{item.coverage}</p><div className="eligibility-row"><span className={eligible ? "eligible" : "review"}>{eligible ? t("Profile match") : t("Review requirements")}</span>{item.deadline && <span>{tx`Deadline: ${dateText(item.deadline)}`}</span>}</div><div className="score-requirements">{item.min_gpa && <span>{t("GPA")} {item.min_gpa}+</span>}{item.min_ielts && <span>{t("IELTS")} {item.min_ielts}+</span>}{item.min_sat && <span>{t("SAT")} {item.min_sat}+</span>}</div><div className="requirement-tags">{scholarshipRequirements(item).map((requirement) => <span key={requirement}>{t(requirement)}</span>)}</div>{item.application_url && <a className="button quiet small" href={item.application_url} target="_blank" rel="noreferrer">{t("Application info")} <ExternalLink size={14} /></a>}</article>;})}{!scholarships.length && <Empty text={t("No matching scholarships found.")} />}</div></section></>}
-    {tab === 'aid' && <AidChecklist data={data} student={student} />}
+      </div>
+      <div className="uni-table" role="table" aria-label={t("Universities")}>
+        <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts"><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Net price")}</span><span role="columnheader">{t("Deadline")}</span></div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t("Show why this result")}</span></div>
+        {rows.map((item) => <CollegeRow key={item.id} university={item} result={researchMap.get(item.id)} student={student} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item)} />)}
+        {!rows.length && <Empty text={t("No universities match these filters.")} />}
+      </div>
+      <p className="uni-note">{t("Fit is not an admission probability.")}</p>
+      </div>
+      {wide && filtersPanel}
+    </div>}
+    {listOpen && <CollegeListDrawer applications={data.applications} universities={universities} researchMap={researchMap} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onApplications={() => setPage('applications')} />}
   </div>;
 }
 
@@ -157,26 +209,4 @@ export function CollegeProfileQuestions({ research, saving, onComplete }) {
     onComplete(answers);
   }
   return <section className="college-profile-questions"><div className="research-question-copy"><span><ClipboardCheck size={20} /></span><div><span className="eyebrow">{t("PROFILE DATA REQUIRED")}</span><h2>{t("A few details are missing from your research profile")}</h2><p>{t("Your answers will be saved to your student profile and used to rank universities for you.")}</p></div></div><form onSubmit={submit}><div className="research-question-grid">{research.questions.map((question) => <label key={question.field}><span>{question.label}</span><input type={question.type} min={question.min} max={question.max} step={question.step || (question.type === 'number' ? '1' : undefined)} placeholder={question.placeholder} value={answers[question.field] ?? ''} onChange={(event) => setAnswers((current) => ({ ...current, [question.field]: event.target.value }))} required /></label>)}</div><footer><small>{tp('{n} answer required|{n} answers required', research.questions.length, { n: research.questions.length })}</small><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? <><RefreshCw className="spin" size={16} /> {t("Researching…")}</> : <><Search size={16} /> {t("Save & research")}</>}</button></footer></form></section>;
-}
-
-export function CollegeResearchOverview({ research, onRefresh }) {
-  const profile = research.profile_snapshot || {};
-  const evidence = Object.values(profile.evidence || {}).reduce((total, value) => total + Number(value || 0), 0);
-  return <section className="college-research-overview"><div><span className="research-status-icon"><CheckCircle2 size={21} /></span><div><span className="eyebrow">{t("RESEARCH READY")}</span><h3>{t("Results calculated from your student profile")}</h3><p>{research.methodology}</p></div></div><div className="research-profile-chips">{[[t("SAT"), profile.sat_score], [t("GPA"), profile.gpa], [t("IELTS"), profile.ielts_score], [t("Major"), profile.target_major], [t("Budget"), profile.budget_usd == null ? null : money(profile.budget_usd)], [t("Portfolio items"), evidence]].filter(([, value]) => value !== null && value !== undefined && value !== '').map(([name, value]) => <span key={name}>{name} <b>{value}</b></span>)}</div><button className="button quiet small" onClick={onRefresh}><RefreshCw size={15} /> {t("Refresh")}</button></section>;
-}
-
-export function AidChecklist({ data, student }) {
-  const shortlisted = data.applications.map((item) => data.universities.find((uni) => uni.id === item.university)).filter(Boolean);
-  const needsCss = shortlisted.some((uni) => uni.css_profile_required);
-  const needsFafsa = shortlisted.some((uni) => uni.fafsa_required);
-  const checklist = [
-  ['Academic transcript', 'Official grades and school records', true],
-  ['Family financial documents', 'Income, tax or employer statements requested by the institution', student?.scholarship_needed],
-  ['Bank or sponsor statement', 'Proof of available funds for international study', true],
-  ['Scholarship essays', 'Motivation, impact and financial-need responses', true],
-  ['Recommendation letters', 'Teacher or counselor recommendations where requested', true],
-  ['CSS Profile', 'Only for shortlisted universities that require it', needsCss],
-  ['FAFSA', 'Only where eligibility and university requirements apply', needsFafsa]];
-
-  return <div className="aid-checklist"><section className="aid-intro"><div><span className="eyebrow">{t("AID PREPARATION")}</span><h2>{t("Prepare for financial aid")}</h2><p>{t("Core documents based on your shortlist and profile. Verify final requirements on each university’s official financial aid page.")}</p></div><div className="aid-profile-summary"><Detail label={t("Budget")} value={money(student?.budget_usd)} /><Detail label={t("Scholarship")} value={student?.scholarship_needed ? t("Needed") : t("Optional")} /><Detail label={t("Shortlisted")} value={data.applications.length} /></div></section><div className="checklist-cards">{checklist.map(([title, description, needed]) => <article key={title} className={needed ? "needed" : ''}><span className="checklist-icon" aria-hidden="true">{needed ? <CheckCircle2 size={20} /> : <Clock3 size={20} />}</span><div><h3>{t(title)}</h3><p>{t(description)}</p></div><span className="checklist-status">{needed ? t("Prepare") : t("If required")}</span></article>)}</div></div>;
 }

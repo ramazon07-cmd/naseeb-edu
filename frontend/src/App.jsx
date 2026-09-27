@@ -190,12 +190,12 @@ const PAGE_RESOURCE_KEYS = {
   schools: ['schools'], students: ['students'], academics: ['students', 'researches'],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
-  roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'universities', 'students'],
+  roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'universities', 'students', 'essays', 'recommendations'],
   documents: ['documents'], certificates: ['documents'], essays: ['essays'],
   student_center: ['students', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations', 'documents'],
   bookings: ['bookings'], messages: ['messageChannels'],
   programs: ['opportunityPrograms', 'scholarships'], essay_lab: [],
-  college_search: ['students', 'universities', 'applications'], store: ['storeItems'], support: ['supportTickets'],
+  college_search: ['students', 'universities', 'applications', 'scholarships', 'essays', 'documents', 'recommendations'], store: ['storeItems'], support: ['supportTickets'],
   screen_time: [], account_settings: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal']
@@ -401,7 +401,7 @@ function PageRouter({ page, params, user, data, stats, query, reload, notify, se
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query, search, navigate }} />;
   if (user.role === 'student' && page === 'essay_lab') return <EssayLab user={user} notify={notify} essayId={params.essayId} onEssay={(essayId) => setPage(page, { essayId })} />;
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
-  if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify }} />;
+  if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
   if (user.role === 'student' && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
