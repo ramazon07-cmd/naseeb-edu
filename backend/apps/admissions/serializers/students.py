@@ -12,6 +12,7 @@ from ..models import (
 )
 from ..exam_scores import EXAM_KEYS
 from ..onboarding import band_field, profile_readiness, sat_total_field, validate_half_band
+from ..section_review import reviews_payload
 from .common import validate_gpa_on_scale
 
 
@@ -50,6 +51,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     has_photo = serializers.SerializerMethodField()
     photo_version = serializers.SerializerMethodField()
     profile_readiness = serializers.SerializerMethodField()
+    section_reviews = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentProfile
@@ -88,6 +90,9 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
     def get_profile_readiness(self, obj) -> dict:
         return profile_readiness(obj)
+
+    def get_section_reviews(self, obj) -> dict:
+        return reviews_payload(obj)
 
     def get_counselor_name(self, obj) -> str | None:
         if not obj.assigned_counselor:

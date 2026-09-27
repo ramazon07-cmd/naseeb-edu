@@ -226,7 +226,7 @@ class ApiErrorLocalizationTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertIn('Сессия', response.data['detail'])
+        self.assertEqual(response.data['detail'], 'Неверный логин или пароль.')
 
     def test_uzbek_api_error_is_localized_at_response_boundary(self):
         response = self.client.get(

@@ -1,9 +1,12 @@
 """Admissions API serializers — messaging."""
+from pathlib import Path
 from rest_framework import serializers
+from django.urls import reverse
 from django.utils import timezone
+from apps.users.models import User
 from apps.users.serializers import ContactSerializer
 from ..scoping import tenant_school_id
-from .common import scope_related_field
+from .common import is_previewable, scope_related_field, uploaded_file_details, validate_private_upload
 from ..models import (
     ChannelMembership,
     ChannelMessage,
@@ -13,6 +16,10 @@ from ..models import (
 
 UNAVAILABLE_CHANNEL = 'Join the channel before posting.'
 UNAVAILABLE_PARENT = 'Reply to a message in one of your channels.'
+# Chat attachments: photos, PDFs and Word files, checked by content like every
+# other private upload (validate_private_upload) and capped at the same size.
+MESSAGE_ATTACHMENT_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.webp', '.heic', '.pdf', '.doc', '.docx'})
+MESSAGE_IMAGE_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.webp', '.heic'})
 
 
 class ChannelMembershipSerializer(serializers.ModelSerializer):
@@ -131,6 +138,7 @@ class MessageChannelSerializer(serializers.ModelSerializer):
             sender_name = message.sender.get_full_name() or message.sender.username
         return {
             'body': 'Message deleted' if message.deleted_at else message.body[:160],
+            'attachment_name': '' if message.deleted_at or not message.attachment else message.attachment_name,
             'sender_name': 'Anonymous' if anonymous else sender_name,
             'created_at': message.created_at,
         }
@@ -142,6 +150,11 @@ class ChannelMessageSerializer(serializers.ModelSerializer):
     parent_preview = serializers.SerializerMethodField()
     replies_count = serializers.SerializerMethodField()
     is_reported_by_me = serializers.SerializerMethodField()
+    # A message may be only a file, so the text is optional when one is attached.
+    # No default: an update without `body` leaves the text alone (create fills it in validate).
+    body = serializers.CharField(required=False, allow_blank=True)
+    attachment = serializers.FileField(write_only=True, required=False, allow_null=True)
+    attachment_file = serializers.SerializerMethodField()
 
     class Meta:
         model = ChannelMessage
@@ -149,6 +162,7 @@ class ChannelMessageSerializer(serializers.ModelSerializer):
             'id', 'channel', 'sender_id', 'sender_name', 'parent', 'parent_preview',
             'replies_count', 'body', 'is_anonymous', 'is_edited', 'is_accepted_answer',
             'is_reported_by_me', 'deleted_at', 'created_at', 'updated_at',
+            'attachment', 'attachment_file',
         )
         read_only_fields = ('sender_id', 'sender_name', 'is_edited', 'is_accepted_answer', 'deleted_at')
 
@@ -204,9 +218,61 @@ class ChannelMessageSerializer(serializers.ModelSerializer):
             return False
         return obj.reports.filter(reporter=request.user).exists()
 
+    def get_attachment_file(self, obj):
+        """Name, type and size of the attached file with its members-only URL."""
+        if obj.deleted_at or not obj.attachment:
+            return None
+        name = obj.attachment_name or Path(obj.attachment.name).name
+        path = reverse('channel-messages-attachment', kwargs={'pk': obj.pk})
+        request = self.context.get('request')
+        url = request.build_absolute_uri(path) if request else path
+        return {
+            'name': name,
+            'content_type': obj.attachment_content_type,
+            'size': obj.attachment_size,
+            'is_image': Path(name).suffix.lower() in MESSAGE_IMAGE_EXTENSIONS,
+            'previewable': is_previewable(name),
+            'url': url,
+        }
+
+    def validate_attachment(self, upload):
+        if upload is None:
+            return None
+        if Path(upload.name or '').suffix.lower() not in MESSAGE_ATTACHMENT_EXTENSIONS:
+            raise serializers.ValidationError(
+                'Attach a photo (JPG, PNG, WebP, HEIC), a PDF or a Word document.'
+            )
+        return validate_private_upload(upload)
+
+    def create(self, validated_data):
+        upload = validated_data.get('attachment')
+        if upload:
+            name, content_type, size = uploaded_file_details(upload, 'attachment')
+            validated_data.update({
+                'attachment_name': name, 'attachment_content_type': content_type, 'attachment_size': size,
+            })
+        else:
+            validated_data.pop('attachment', None)
+        return super().create(validated_data)
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         request = self.context.get('request')
+        if not self.instance:
+            attrs['body'] = (attrs.get('body') or '').strip()
+            upload = attrs.get('attachment')
+            if not attrs['body'] and not upload:
+                raise serializers.ValidationError({'body': 'Write a message or attach a file.'})
+            if upload:
+                channel = attrs.get('channel')
+                # Students send files to their counselor in direct chats only;
+                # other roles read and download what students sent.
+                if not request or request.user.role != User.Role.STUDENT:
+                    raise serializers.ValidationError({'attachment': 'You cannot attach files to messages.'})
+                if not channel or channel.kind != MessageChannel.Kind.DIRECT:
+                    raise serializers.ValidationError({'attachment': 'Files can only be sent in direct conversations.'})
+        elif 'body' in attrs and not attrs['body'].strip() and not self.instance.attachment:
+            raise serializers.ValidationError({'body': 'This field may not be blank.'})
         if self.instance:
             forbidden = set(attrs) - {'body', 'is_anonymous'}
             if forbidden:

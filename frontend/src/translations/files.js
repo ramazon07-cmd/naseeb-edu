@@ -6,6 +6,9 @@ export const FILE_TRANSLATIONS = {
   'Share a document from Google Docs': ['Google Docs’dagi hujjatni ulashing', 'Поделитесь документом из Google Docs'],
   'How do you want to add it?': ['Qanday qo‘shmoqchisiz?', 'Как вы хотите добавить?'],
   'Edit document': ['Hujjatni tahrirlash', 'Редактировать документ'],
+  'Delete document': ['Hujjatni o‘chirish', 'Удалить документ'],
+  'Delete this document?': ['Bu hujjat o‘chirilsinmi?', 'Удалить этот документ?'],
+  'Document deleted.': ['Hujjat o‘chirildi.', 'Документ удалён.'],
   'Choose a file to upload.': ['Yuklash uchun fayl tanlang.', 'Выберите файл для загрузки.'],
   'File uploaded.': ['Fayl yuklandi.', 'Файл загружен.'],
   'Document updated.': ['Hujjat yangilandi.', 'Документ обновлён.'],
@@ -36,6 +39,10 @@ export const FILE_TRANSLATIONS = {
   'Word files can’t be previewed in the browser. Download the file to open it in Word, Google Docs or another editor.': ['Word fayllarini brauzerda ko‘rib bo‘lmaydi. Word, Google Docs yoki boshqa muharrirda ochish uchun faylni yuklab oling.', 'Файлы Word нельзя просмотреть в браузере. Скачайте файл, чтобы открыть его в Word, Google Docs или другом редакторе.'],
   'This photo format can’t be previewed in every browser. Download the file to view it.': ['Bu surat formatini har bir brauzerda ko‘rib bo‘lmaydi. Ko‘rish uchun faylni yuklab oling.', 'Этот формат фото открывается не во всех браузерах. Скачайте файл, чтобы посмотреть его.'],
   'This file type can’t be previewed in the browser. Download it to open it in the appropriate application.': ['Bu turdagi faylni brauzerda ko‘rib bo‘lmaydi. Tegishli dasturda ochish uchun uni yuklab oling.', 'Этот тип файла нельзя просмотреть в браузере. Скачайте его, чтобы открыть в подходящем приложении.'],
+  'Attachment': ['Ilova', 'Вложение'],
+  'Attach a file': ['Fayl biriktirish', 'Прикрепить файл'],
+  'Open photo': ['Suratni ochish', 'Открыть фото'],
+  'Files and links shared in this conversation': ['Ushbu suhbatda ulashilgan fayllar va havolalar', 'Файлы и ссылки из этого чата'],
 }
 
 export function fileMessages(language) {

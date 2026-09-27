@@ -719,6 +719,8 @@ class ParentSchoolMigrationTests(TransactionTestCase):
         from django.db.migrations.executor import MigrationExecutor
 
         executor = MigrationExecutor(connection)
+        # Later migrations (new columns) must be back for the tests that follow.
+        self.addCleanup(lambda: MigrationExecutor(connection).migrate(executor.loader.graph.leaf_nodes()))
         executor.migrate(self.migrate_from)
         old_apps = executor.loader.project_state(self.migrate_from).apps
         OldSchool = old_apps.get_model('admissions', 'School')
@@ -730,8 +732,10 @@ class ParentSchoolMigrationTests(TransactionTestCase):
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
         executor.migrate(self.migrate_to)
-        self.assertIsNone(User.objects.get(pk=parent.pk).school_id)
-        self.assertEqual(User.objects.get(pk=staff.pk).school_id, school.pk)
+        # Only the column under test: the current model may have columns added later.
+        schools = dict(User.objects.filter(pk__in=[parent.pk, staff.pk]).values_list('pk', 'school_id'))
+        self.assertIsNone(schools[parent.pk])
+        self.assertEqual(schools[staff.pk], school.pk)
 
 
 class StudentDeactivationTests(RoleIsolationBase):

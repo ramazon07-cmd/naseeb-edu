@@ -1,11 +1,11 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ErrorDetail, ValidationError
 from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from apps.admissions.listing import ListQueryMixin
@@ -14,10 +14,13 @@ from .admin_permissions import IsSupportStaff, SupportReadOpsWrite, has_tier
 from .audit import audit_staff_read, recorded_actions
 from .models import CredentialAuditEvent, Plan, ProductAuditEvent, User, WorkspaceSubscription
 from .auth_views import token_pair_for_user
-from .credentials import complete_password_change, issue_temporary_credential
+from .credentials import change_own_password, complete_password_change, issue_temporary_credential
 from .serializers import (
+    AccountEmailChangeSerializer,
+    AccountPasswordChangeSerializer,
     CounselorTransferSerializer,
     CounselorProvisionSerializer,
+    DashboardLayoutSerializer,
     IndividualCounselorCreateSerializer,
     PasswordChangeSerializer,
     PlanSerializer,
@@ -261,6 +264,62 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
             **token_pair_for_user(user),
             'user': UserSerializer(user, context={'request': request}).data,
         })
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='me/password',
+        throttle_classes=[ScopedRateThrottle],
+        throttle_scope='password_change',
+    )
+    def account_password(self, request):
+        """Change your own password; this session gets a new token pair, others end."""
+        serializer = AccountPasswordChangeSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = change_own_password(
+            user=request.user,
+            new_password=serializer.validated_data['new_password'],
+            request=request,
+        )
+        return Response({
+            **token_pair_for_user(user),
+            'user': UserSerializer(user, context={'request': request}).data,
+        })
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='me/email',
+        throttle_classes=[ScopedRateThrottle],
+        throttle_scope='account_change',
+    )
+    def account_email(self, request):
+        serializer = AccountEmailChangeSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        user = request.user
+        if email != user.email:
+            try:
+                with transaction.atomic():
+                    User.objects.filter(pk=user.pk).update(email=email)
+            except IntegrityError:
+                # Taken by a concurrent request between the check and the write.
+                raise ValidationError({'email': [ErrorDetail(
+                    'This email address is already used by another account.', code='email_taken',
+                )]}) from None
+            user.email = email
+        return Response(UserSerializer(user, context={'request': request}).data)
+
+    @action(detail=False, methods=['get', 'put'], url_path='me/dashboard-layout')
+    def dashboard_layout(self, request):
+        """The signed-in user's dashboard arrangement, shared by all their devices."""
+        user = request.user
+        if request.method == 'PUT':
+            serializer = DashboardLayoutSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user.dashboard_layout = serializer.validated_data['layout']
+            user.save(update_fields=['dashboard_layout'])
+        return Response({'layout': user.dashboard_layout})
 
     @action(
         detail=True,

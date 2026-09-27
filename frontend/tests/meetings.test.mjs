@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isOpenMeeting, meetingStatus, meetingsForTab, upcomingMeetings } from '../src/lib/meetings.js';
+import { isOpenMeeting, meetingStatus, meetingsForTab, studentMeetingsForTab, upcomingMeetings } from '../src/lib/meetings.js';
 
 const now = new Date('2026-09-25T12:00:00Z');
 const meeting = (id, status, starts_at, extra = {}) => ({ id, status, starts_at, ...extra });
@@ -34,4 +34,21 @@ test('tabs: cancelled and expired requests land in History', () => {
   assert.deepEqual(ids(meetingsForTab(items, 'pending', true, now)), [1]);
   assert.deepEqual(ids(meetingsForTab(items, 'upcoming', true, now)), [2]);
   assert.deepEqual(ids(meetingsForTab(items, 'history', true, now)), [3, 4, 5, 6, 7]);
+});
+
+test('student view: a past meeting still approved reads as not marked completed', () => {
+  assert.equal(meetingStatus(items[4], now, { student: true }), 'past_unmarked');
+  assert.equal(meetingStatus(items[1], now, { student: true }), 'approved');
+  assert.equal(meetingStatus(items[2], now, { student: true }), 'expired_unconfirmed');
+  assert.equal(meetingStatus(items[6], now, { student: true }), 'completed');
+  // Parent and staff pages keep the stored status.
+  assert.equal(meetingStatus(items[4], now), 'approved');
+});
+
+test('student tabs: Upcoming soonest first, Past newest first', () => {
+  const shuffled = [items[6], items[1], items[3], items[0], items[4], items[2], items[5]];
+  assert.deepEqual(ids(studentMeetingsForTab(shuffled, 'upcoming', now)), [1, 2]);
+  assert.deepEqual(ids(studentMeetingsForTab(shuffled, 'history', now)), [6, 4, 3, 5, 7]);
+  // The shared helper keeps its input order for other pages.
+  assert.deepEqual(ids(meetingsForTab(shuffled, 'history', false, now)), [7, 4, 5, 3, 6]);
 });

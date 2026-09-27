@@ -1,3 +1,6 @@
+import json
+import re
+
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
@@ -79,6 +82,20 @@ class UserSerializer(serializers.ModelSerializer):
 
         if value:
             validate_image_upload(value, max_bytes=settings.AVATAR_MAX_UPLOAD_SIZE)
+        return value
+
+    def validate_email(self, value):
+        # A student changes their own email only from Account settings, where
+        # the current password is required.
+        request = self.context.get('request')
+        if (
+            request
+            and self.instance is not None
+            and self.instance.pk == request.user.pk
+            and request.user.role == User.Role.STUDENT
+            and value.lower() != (self.instance.email or '').lower()
+        ):
+            raise serializers.ValidationError('Change your email from Account settings.')
         return value
 
     def validate_is_active(self, value):
@@ -327,6 +344,90 @@ class PasswordChangeSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['confirm_password']:
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
         return attrs
+
+
+class CurrentPasswordMixin:
+    """Re-authentication for account changes: the current password must be given."""
+
+    def validate_current_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError('Your current password is incorrect.', code='wrong_password')
+        return value
+
+
+class AccountPasswordChangeSerializer(CurrentPasswordMixin, serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    confirm_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'}, code='mismatch')
+        if attrs['new_password'] == attrs['current_password']:
+            raise serializers.ValidationError(
+                {'new_password': 'Choose a password different from your current password.'}, code='password_reuse',
+            )
+        try:
+            validate_password(attrs['new_password'], user=self.context['request'].user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'new_password': list(exc.messages)}) from exc
+        return attrs
+
+
+class AccountEmailChangeSerializer(CurrentPasswordMixin, serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    email = serializers.EmailField(max_length=254)
+
+    def validate_email(self, value):
+        value = User.objects.normalize_email(value.strip())
+        user = self.context['request'].user
+        if User.objects.filter(email__iexact=value).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError('This email address is already used by another account.', code='email_taken')
+        return value
+
+
+DASHBOARD_LAYOUT_KEYS = ('order', 'hidden', 'rail')
+DASHBOARD_LAYOUT_MAX_ITEMS = 24
+DASHBOARD_LAYOUT_MAX_BYTES = 2048
+DASHBOARD_WIDGET_ID = re.compile(r'^[a-z][a-z0-9_]{0,39}$')
+
+
+class DashboardLayoutSerializer(serializers.Serializer):
+    """``{"layout": {"order": [...], "hidden": [...], "rail": [...]}}``.
+
+    Only the shape is checked (short widget ids, bounded lists and size); the
+    client drops ids it no longer knows, so the server does not need a copy of
+    the widget catalogue.
+    """
+
+    layout = serializers.JSONField()
+
+    def validate_layout(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('The layout must be an object.', code='invalid_layout')
+        unknown = set(value) - set(DASHBOARD_LAYOUT_KEYS)
+        if unknown:
+            raise serializers.ValidationError(
+                f'Unknown layout keys: {", ".join(sorted(map(str, unknown)))}.', code='invalid_layout',
+            )
+        if 'order' not in value:
+            raise serializers.ValidationError('The layout needs an order.', code='invalid_layout')
+        clean = {}
+        for key in DASHBOARD_LAYOUT_KEYS:
+            if key not in value:
+                continue
+            items = value[key]
+            if not isinstance(items, list) or len(items) > DASHBOARD_LAYOUT_MAX_ITEMS:
+                raise serializers.ValidationError(
+                    f'"{key}" must be a list of at most {DASHBOARD_LAYOUT_MAX_ITEMS} widget ids.', code='invalid_layout',
+                )
+            if not all(isinstance(item, str) and DASHBOARD_WIDGET_ID.match(item) for item in items):
+                raise serializers.ValidationError(f'"{key}" contains an invalid widget id.', code='invalid_layout')
+            clean[key] = list(dict.fromkeys(items))
+        if len(json.dumps(clean)) > DASHBOARD_LAYOUT_MAX_BYTES:
+            raise serializers.ValidationError('The layout is too large.', code='invalid_layout')
+        return clean
 
 
 class TemporaryCredentialIssueSerializer(serializers.Serializer):

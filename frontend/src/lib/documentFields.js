@@ -13,3 +13,9 @@ export function documentContentFields({ doc = null, source, file = null, link = 
   if (doc?.has_file) fields.file = null;
   return fields;
 }
+
+// A student may remove their own document until it is approved; staff keep
+// their existing review tools.
+export function canDeleteDocument(user, doc) {
+  return user?.role === 'student' && Boolean(doc) && doc.status !== 'approved';
+}

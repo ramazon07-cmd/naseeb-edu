@@ -1,5 +1,7 @@
 from collections.abc import Mapping, Sequence
 
+from django.utils import translation
+
 from .localization import localized_api_error, request_language
 
 
@@ -39,7 +41,16 @@ class ApiErrorLocalizationMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        response = self.get_response(request)
+        if request.path_info.startswith('/api/'):
+            # Build API messages (DRF, Django, simplejwt) in English, the one
+            # language the message tables are keyed on; _localize then puts
+            # them into the Accept-Language of the request. Without this a
+            # Russian request got DRF's own Russian text, which the tables
+            # could not recognise, so it fell back to a generic message.
+            with translation.override('en'):
+                response = self.get_response(request)
+        else:
+            response = self.get_response(request)
         if not getattr(response, 'is_rendered', False):
             self._localize(request, response)
         return response

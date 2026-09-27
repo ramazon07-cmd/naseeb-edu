@@ -24,7 +24,7 @@ export const LABELS = {
   open: 'Open', closed: 'Closed', technical: 'Technical', account: 'Account', application: 'Application', billing: 'Billing', other: 'Other',
   resolved: 'Resolved', dismissed: 'Dismissed', none: 'No action', content_removed: 'Content removed',
   muted_24h: 'Muted 24 hours', muted_7d: 'Muted 7 days',
-  issued: 'Issued', reissued: 'Reissued', used: 'Used', revoked: 'Revoked', expired: 'Expired', expired_unconfirmed: 'Expired — not confirmed', password_changed: 'Password changed',
+  issued: 'Issued', reissued: 'Reissued', used: 'Used', revoked: 'Revoked', expired: 'Expired', expired_unconfirmed: 'Expired — not confirmed', past_unmarked: 'Past — not marked completed', password_changed: 'Password changed',
   trial: 'Trial', suspended: 'Suspended',
   // Document types
   passport: 'Passport', transcript: 'Transcript', ielts: 'IELTS', sat: 'SAT', cv: 'CV / Résumé',

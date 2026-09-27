@@ -920,6 +920,12 @@ class ChannelMembership(models.Model):
         return f'{self.user} in {self.channel}'
 
 
+def message_attachment_upload_path(instance, filename):
+    """Chat attachments are private: UUID names, one folder per conversation."""
+    suffix = Path(filename or '').suffix.lower()[:12]
+    return f'message_attachments/{instance.channel_id}/{timezone.now():%Y/%m}/{uuid4().hex}{suffix}'
+
+
 class ChannelMessage(TimeStampedModel):
     channel = models.ForeignKey(MessageChannel, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(
@@ -934,6 +940,16 @@ class ChannelMessage(TimeStampedModel):
     is_edited = models.BooleanField(default=False)
     is_accepted_answer = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    # One private file per message, served only to the conversation's members.
+    attachment = models.FileField(
+        upload_to=message_attachment_upload_path,
+        storage=private_document_storage,
+        blank=True,
+        null=True,
+    )
+    attachment_name = models.CharField(max_length=255, blank=True)
+    attachment_content_type = models.CharField(max_length=120, blank=True)
+    attachment_size = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         ordering = ['created_at', 'id']
@@ -1589,6 +1605,18 @@ class Essay(TimeStampedModel):
     shared_with_counselor = models.BooleanField(default=False)
     shared_at = models.DateTimeField(null=True, blank=True)
 
+    class CounselorAccess(models.TextChoices):
+        # What the assigned counselor may do with a shared essay (the student chooses when sharing).
+        COMMENT = 'comment', 'Comment'
+        SUGGEST = 'suggest', 'Suggest edits'
+        EDIT = 'edit', 'Edit'
+
+    counselor_access = models.CharField(max_length=10, choices=CounselorAccess.choices, default=CounselorAccess.SUGGEST)
+    # Bumped on every comment/suggestion change, so a poll can answer 304 from one row.
+    collab_seq = models.PositiveIntegerField(default=0)
+    # When a staff reviewer last had the document open (the student polls faster then).
+    staff_seen_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ['student__user__first_name', 'status', '-updated_at']
         indexes = [
@@ -1664,6 +1692,10 @@ class EssayTab(TimeStampedModel):
     last_client_save_id = models.CharField(max_length=64, blank=True)
     last_cursor = models.PositiveIntegerField(null=True, blank=True)
     last_edited_at = models.DateTimeField(null=True, blank=True)
+    # Who wrote the tab's text last; null means its owner (every tab before collaboration).
+    last_editor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
 
     class Meta:
         ordering = ['position', 'id']
@@ -1710,6 +1742,20 @@ class EssayCheckpoint(models.Model):
     word_count = models.PositiveIntegerField(default=0)
     reason = models.CharField(max_length=20, choices=Reason.choices, default=Reason.AUTO)
     label = models.CharField(max_length=120, blank=True)
+
+    class Kind(models.TextChoices):
+        # What made this version: writing, feedback or the student's decisions on it.
+        EDIT = 'edit', 'Edit'
+        COMMENT = 'comment', 'Comment'
+        SUGGEST = 'suggest', 'Suggestions'
+        DECISION = 'decision', 'Decisions'
+
+    # Null for versions from before authors were recorded (always the student then).
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name='+')
+    kind = models.CharField(max_length=12, choices=Kind.choices, default=Kind.EDIT)
+    # Counts for the history line ("suggested 2 edits", "accepted 1 suggestion"); never essay text.
+    detail = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1740,6 +1786,114 @@ class EssayDepthCheck(models.Model):
 
     def __str__(self):
         return f'{self.essay_id} depth check @{self.save_seq}'
+
+
+class EssayTabEdit(models.Model):
+    """Who changed a tab, and how: one row per run of changes by one person.
+
+    The history's author timeline. Rows never hold essay text, only counts.
+    """
+
+    class Kind(models.TextChoices):
+        EDIT = 'edit', 'Edit'
+        COMMENT = 'comment', 'Comment'
+        SUGGEST = 'suggest', 'Suggestions'
+        DECISION = 'decision', 'Decisions'
+
+    essay = models.ForeignKey(Essay, on_delete=models.CASCADE, related_name='tab_edits')
+    tab = models.ForeignKey(EssayTab, on_delete=models.CASCADE, related_name='edits')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name='+')
+    kind = models.CharField(max_length=12, choices=Kind.choices, default=Kind.EDIT)
+    save_seq = models.PositiveIntegerField()
+    detail = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['tab', '-created_at'], name='essay_tab_edit_recent_idx')]
+
+    def __str__(self):
+        return f'{self.tab_id} {self.kind} @{self.save_seq}'
+
+
+class EssayCommentThread(models.Model):
+    """A comment thread anchored to text by a `comment{id}` mark in the tab's doc (id = this row's id).
+
+    Threads outlive their text: when the student deletes the highlighted words
+    the thread stays, without an anchor. Unsharing hides threads from staff
+    but keeps them for a later share.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Open'
+        RESOLVED = 'resolved', 'Resolved'
+
+    essay = models.ForeignKey(Essay, on_delete=models.CASCADE, related_name='comment_threads')
+    tab = models.ForeignKey(EssayTab, on_delete=models.CASCADE, related_name='comment_threads')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name='+')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    # The highlighted words when the thread was opened, shown once they are gone from the text.
+    quote = models.CharField(max_length=300, blank=True)
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='+')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        indexes = [models.Index(fields=['tab', 'created_at'], name='essay_thread_tab_idx')]
+
+    def __str__(self):
+        return f'thread {self.pk} on {self.tab_id}'
+
+
+class EssayComment(models.Model):
+    thread = models.ForeignKey(EssayCommentThread, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name='+')
+    body = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return f'comment {self.pk} in {self.thread_id}'
+
+
+class EssaySuggestion(models.Model):
+    """A suggested edit, stored in the doc as suggestInsert/suggestDelete marks with this row's id.
+
+    Suggested text never counts as the essay's text until the student accepts
+    it; the server applies every decision to the doc atomically.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        ACCEPTED = 'accepted', 'Accepted'
+        REJECTED = 'rejected', 'Rejected'
+
+    essay = models.ForeignKey(Essay, on_delete=models.CASCADE, related_name='suggestions')
+    tab = models.ForeignKey(EssayTab, on_delete=models.CASCADE, related_name='suggestions')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name='+')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    delete_text = models.CharField(max_length=2000, blank=True)
+    insert_text = models.CharField(max_length=2000, blank=True)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='+')
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        indexes = [models.Index(fields=['tab', 'status'], name='essay_suggestion_tab_idx')]
+
+    def __str__(self):
+        return f'suggestion {self.pk} ({self.status})'
 
 
 class MeetingNote(TimeStampedModel):
@@ -1773,8 +1927,15 @@ class Notification(TimeStampedModel):
         ESSAY = 'essay', 'Essay'
         MEETING = 'meeting', 'Meeting'
         MESSAGE = 'message', 'Message'
+        PROFILE_REVIEW = 'profile_review', 'Profile review'
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='notifications')
+    # Null: the student's notice (their assigned counselor reads the same feed).
+    # Set: a notice about this student for one staff member only (e.g. the counselor
+    # whose suggestions were accepted); the student never sees it.
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications',
+    )
     title = models.CharField(max_length=220)
     message = models.TextField()
     channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.SYSTEM)
@@ -1786,10 +1947,48 @@ class Notification(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['student', 'is_read', '-created_at'], name='notif_student_read_idx')]
+        indexes = [
+            models.Index(fields=['student', 'is_read', '-created_at'], name='notif_student_read_idx'),
+            models.Index(fields=['recipient', 'is_read', '-created_at'], name='notif_recipient_read_idx'),
+        ]
 
     def __str__(self):
         return self.title
+
+
+class ProfileSectionReview(TimeStampedModel):
+    """The counselor's review of one Student Center section of a student's profile.
+
+    A section without a row has never been reviewed. Saving changes to a
+    section sends it back to "waiting for review".
+    """
+    class Section(models.TextChoices):
+        PERSONAL = 'personal', 'Personal & contact'
+        ACADEMICS = 'academics', 'Academics'
+        TESTS = 'tests', 'Test scores'
+        GOAL = 'goal', 'Study goal & targets'
+        HONORS = 'honors', 'Honors'
+        ACTIVITIES = 'activities', 'Activities'
+
+    class Status(models.TextChoices):
+        NOT_REVIEWED = 'not_reviewed', 'Not reviewed'
+        WAITING = 'waiting', 'Waiting for review'
+        APPROVED = 'approved', 'Approved'
+        CHANGES_REQUESTED = 'changes_requested', 'Needs changes'
+
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='section_reviews')
+    section = models.CharField(max_length=20, choices=Section.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_REVIEWED)
+    note = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['student', 'section']
+        constraints = [models.UniqueConstraint(fields=['student', 'section'], name='unique_profile_section_review')]
+
+    def __str__(self):
+        return f'{self.student_id} {self.section}: {self.status}'
 
 
 class ActivityLog(TimeStampedModel):
@@ -1847,3 +2046,4 @@ class ChallengeAttempt(TimeStampedModel):
 
     def __str__(self):
         return f'{self.student}: {self.challenge} ({self.completed_at:%Y-%m-%d})'
+

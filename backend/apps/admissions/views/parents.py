@@ -282,3 +282,40 @@ class ParentPortalView(APIView):
                 'read_only': True,
             },
         })
+
+
+class StudentParentAccessView(APIView):
+    """Read-only: which parents can see the signed-in student's information.
+
+    Students only, and only their own links. Changing what a parent sees is
+    done by the counselor; revoked links are left out.
+    """
+
+    ALWAYS_VISIBLE = ('profile', 'progress', 'tasks')
+    NEVER_VISIBLE = ('private_essays', 'messages', 'counselor_notes', 'task_responses', 'document_files')
+
+    def get(self, request):
+        profile = getattr(request.user, 'student_profile', None) if request.user.role == User.Role.STUDENT else None
+        if profile is None:
+            return Response({'detail': 'Only students can view their parent access.'}, status=403)
+        links = ParentStudentLink.objects.filter(
+            student=profile,
+            status__in=[ParentStudentLink.Status.ACTIVE, ParentStudentLink.Status.PENDING],
+        ).select_related('parent').order_by('status', 'parent__first_name', 'parent__last_name', 'id')
+        return Response({
+            'parents': [{
+                'id': link.id,
+                'name': link.parent.get_full_name() or link.parent.username,
+                'relationship': link.relationship,
+                'status': link.status,
+                'sections': {
+                    'applications': link.can_view_applications,
+                    'documents': link.can_view_documents,
+                    'meetings': link.can_view_meetings,
+                },
+                'invited_at': link.invited_at,
+                'consented_at': link.consented_at,
+            } for link in links],
+            'always_visible': list(self.ALWAYS_VISIBLE),
+            'never_visible': list(self.NEVER_VISIBLE),
+        })
