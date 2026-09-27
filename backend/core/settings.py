@@ -361,6 +361,7 @@ REST_FRAMEWORK = {
         'refresh_ip': config('AUTH_REFRESH_IP_RATE', default='600/minute'),
         'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
         'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
+        'account_change': config('AUTH_ACCOUNT_CHANGE_RATE', default='10/hour'),
         'public_reach': config('PUBLIC_REACH_RATE', default='60/minute'),
     },
     # Number of trusted reverse proxies in front of Django (Render's edge = 1).
