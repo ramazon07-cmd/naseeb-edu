@@ -43,12 +43,14 @@ from ..exam_scores import EXAM_KEYS
 from ..tenancy import create_student_account
 from apps.users import entitlements
 from apps.users.audit import audit_staff_read
+from apps.users.throttles import ScopedRateThrottle
 from apps.users.services import audit_product_action
 from ..params import int_param
 from ..section_review import SECTION_KEYS, changed_sections, mark_waiting, set_review
 from ..listing import STUDENT_SEARCH_FIELDS, ListQueryMixin
 from ..progress import attach_progress_stats
 from .common import ScopedQuerysetMixin
+from ..services import send_reminder
 from core.storage import delete_file_on_commit
 
 
@@ -77,6 +79,8 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         '-created': ('-created_at', '-id'),
     }
     default_cursor_ordering = 'name'
+    # Per-action scopes (remind) are named on @action; ScopedRateThrottle reads this.
+    throttle_scope = None
 
     def paginate_queryset(self, queryset):
         page = super().paginate_queryset(queryset)
@@ -497,6 +501,21 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         data = StudentProfileSerializer(student, context={'request': request}).data
         data['approved_from_level'] = previous_level
         return Response(data)
+
+    @action(detail=True, methods=['post'], url_path='remind', throttle_classes=[ScopedRateThrottle], throttle_scope='remind')
+    def remind(self, request, pk=None):
+        """The counselor nudges the student about one open item (task, mission, document) or their profile."""
+        if not request.user.is_counselor_like:
+            return Response({'detail': 'Only a counselor can send reminders.'}, status=403)
+        student = self.get_object()
+        try:
+            notice = send_reminder(
+                student=student, actor=request.user,
+                topic=str(request.data.get('topic', '')), record_id=int_param(request.data, 'record'),
+            )
+        except ValueError as error:
+            return Response({'detail': str(error)}, status=400)
+        return Response({'sent': notice is not None}, status=201 if notice else 200)
 
     @action(detail=True, methods=['get'], url_path='xp-history')
     def xp_history(self, request, pk=None):

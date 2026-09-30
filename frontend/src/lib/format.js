@@ -13,6 +13,33 @@ export const chatStampText = (value) => {
   return moment.toDateString() === new Date().toDateString() ? clockText(value) : formatDateLocale(value, { day: '2-digit', month: 'short' });
 };
 
+// "Today" / "Yesterday" / "{n} days ago" for the first week, then a plain date.
+export const relativeDayText = (value) => {
+  if (!value) return '';
+  const midnight = (date) => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; };
+  const days = Math.round((midnight(new Date()) - midnight(value)) / 86400000);
+  if (days <= 0) return t('Today');
+  if (days === 1) return t('Yesterday');
+  if (days < 7) return tp('{n} day ago|{n} days ago', days, { n: days });
+  return dateText(value);
+};
+
+// "19 Jul": the day and month, September as "Sep" (see shortDayText).
+export const dayMonthText = (value) => formatDateLocale(value, { day: 'numeric', month: 'short' }).replace(/\bSept\b/, 'Sep');
+
+// "Mon 29 Sep": en-GB writes September as "Sept", the design and most UIs "Sep".
+export const shortDayText = (value) => formatDateLocale(value, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\bSept\b/, 'Sep');
+
+// "Today" / "Tomorrow" / "Mon 29 Sep": the day a meeting or deadline falls on.
+export const dayLabel = (value) => {
+  if (!value) return '';
+  const midnight = (date) => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; };
+  const days = Math.round((midnight(value) - midnight(new Date())) / 86400000);
+  if (days === 0) return t('Today');
+  if (days === 1) return t('Tomorrow');
+  return shortDayText(value);
+};
+
 export const studentName = (data, id) => fullName(data.students?.find((student) => student.id === Number(id))?.user_detail);
 
 export const localDateKey = () => {

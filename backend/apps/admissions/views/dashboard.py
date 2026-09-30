@@ -19,6 +19,7 @@ from ..models import (
     StudentProfile,
     Task,
 )
+from ..counselor_summary import counselor_summary
 from ..scoping import active_visible_students, shared_essay_lookups
 from ..progress import APPLICATION_DONE, OPEN_TASK_STATUSES, late_tasks
 from ..progress_cache import cached_progress_summary
@@ -117,6 +118,20 @@ class DashboardStatsView(APIView):
                 'essays_need_revision': drf_serializers.IntegerField(required=False),
                 'application_by_status': drf_serializers.ListField(required=False),
                 'task_by_status': drf_serializers.ListField(required=False),
+                # Counselors only: what Home and the sidebar count.
+                'review': inline_serializer(
+                    name='DashboardReviewCounts',
+                    fields={
+                        'tasks': drf_serializers.IntegerField(),
+                        'documents': drf_serializers.IntegerField(),
+                        'roadmap': drf_serializers.IntegerField(),
+                        'portfolio': drf_serializers.IntegerField(),
+                        'essays': drf_serializers.IntegerField(),
+                    },
+                    required=False,
+                ),
+                'students_need_you': drf_serializers.IntegerField(required=False),
+                'deadlines': drf_serializers.ListField(required=False),
             },
         )
     )
@@ -175,4 +190,10 @@ class DashboardStatsView(APIView):
             'application_by_status': application_by_status,
             'task_by_status': task_by_status,
         }
+        if user.role == User.Role.COUNSELOR:
+            data.update(counselor_summary(
+                user, students, today,
+                tasks_submitted=sum(row['count'] for row in task_by_status if row['status'] == Task.Status.SUBMITTED),
+                documents_waiting=data['documents_pending_review'],
+            ))
         return Response(data)

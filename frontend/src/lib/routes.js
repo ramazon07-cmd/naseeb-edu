@@ -7,6 +7,7 @@ export const PAGE_PATHS = {
   dashboard: '/dashboard',
   schools: '/schools',
   students: '/students',
+  review: '/review',
   academics: '/academics',
   portfolio: '/portfolio',
   activities: '/activities',
@@ -119,11 +120,19 @@ export function buildPath({ page, params = {} } = {}) {
   return base;
 }
 
+// Sidebar order of the counselor workspace, and the pages that left it: still
+// openable by a direct link (search results, old bookmarks), just not listed.
+export const COUNSELOR_NAV = ['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap'];
+const COUNSELOR_DIRECT_LINK_PAGES = ['academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates'];
+
 // Sidebar order per role.
 export function navigationFor(user) {
   if (isPlatformAdmin(user)) return ['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'counselor_roadmap', 'admin_audit', 'support'];
   if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings'];
-  if (isCounselor(user)) return ['dashboard', 'students', 'counselor_roadmap', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays', 'bookings', 'messages', 'screen_time', 'support'];
+  // The counselor sidebar is the "Counselor Dashboard" design: seven destinations.
+  // Tasks, documents, roadmap, portfolio and the rest are reviewed in Review and
+  // read per student in Student 360; the old flat pages stay reachable by link.
+  if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages', 'screen_time', 'support'];
   return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
@@ -147,6 +156,7 @@ export function reachablePages(user) {
   if (!user) return new Set();
   const extra = user.role === 'parent' && !isPlatformAdmin(user) ? [] : ['screen_time'];
   if (!isPlatformAdmin(user)) extra.push(...(ACCOUNT_MENU_PAGES[user.role] || []));
+  if (user.role === 'counselor' && !isPlatformAdmin(user)) extra.push(...COUNSELOR_DIRECT_LINK_PAGES);
   const locked = lockedPages(user);
   return new Set([...navigationFor(user), ...extra].filter((page) => !locked.has(page)));
 }

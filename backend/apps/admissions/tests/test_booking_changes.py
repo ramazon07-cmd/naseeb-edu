@@ -90,9 +90,18 @@ class BookingChangeTests(RoleIsolationBase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('participant', response.data)
 
-    def test_staff_cannot_reschedule(self):
-        later = (self.soon + timedelta(days=1)).isoformat()
-        self.assertEqual(self.post(self.counselor, 'reschedule', {'starts_at': later}).status_code, 403)
+    def test_participant_staff_can_suggest_another_time(self):
+        # "Suggest another time": the participant proposes a new slot, the
+        # request goes back to PENDING, and the student reads it as a staff
+        # move — not the "asked to move" wording used for a student's own proposal.
+        later = (self.soon + timedelta(days=1)).replace(microsecond=0)
+        response = self.post(self.counselor, 'reschedule', {'starts_at': later.isoformat()})
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.booking.refresh_from_db()
+        self.assertEqual((self.booking.status, self.booking.starts_at), (Booking.Status.PENDING, later))
+        notice = Notification.objects.get(student=self.student_a, title='Meeting reschedule requested')
+        self.assertIn('was moved to', notice.message)
+        self.assertNotIn('asked to move', notice.message)
 
     def test_other_students_and_staff_get_404(self):
         later = (self.soon + timedelta(days=1)).isoformat()
@@ -101,8 +110,34 @@ class BookingChangeTests(RoleIsolationBase):
             self.assertEqual(self.post(user, 'reschedule', {'starts_at': later}).status_code, status.HTTP_404_NOT_FOUND)
         for user in (self.teacher, self.counselor_b):
             self.assertEqual(self.post(user, 'cancel').status_code, status.HTTP_404_NOT_FOUND)
+            # A staff member who isn't this booking's participant is still shut out.
+            self.assertEqual(self.post(user, 'reschedule', {'starts_at': later}).status_code, status.HTTP_404_NOT_FOUND)
         self.booking.refresh_from_db()
         self.assertEqual(self.booking.status, Booking.Status.PENDING)
+
+    def test_counselor_can_book_with_their_student(self):
+        self.client.force_authenticate(self.counselor)
+        starts_at = self.soon + timedelta(days=5)
+        response = self.client.post('/api/bookings/', {
+            'student': self.student_a.pk, 'topic': 'SAT plan',
+            'starts_at': starts_at.isoformat(), 'duration_minutes': 30,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        # Confirmed immediately: no self-approval step, but the student is told.
+        self.assertEqual(response.data['status'], Booking.Status.APPROVED)
+        booking = Booking.objects.get(pk=response.data['id'])
+        self.assertEqual((booking.student_id, booking.participant_id), (self.student_a.pk, self.counselor.pk))
+        notice = Notification.objects.get(student=self.student_a, title='Meeting confirmed')
+        self.assertIn('SAT plan', notice.message)
+
+    def test_counselor_cannot_book_with_a_student_outside_their_scope(self):
+        self.client.force_authenticate(self.counselor)
+        response = self.client.post('/api/bookings/', {
+            'student': self.student_b.pk, 'topic': 'SAT plan',
+            'starts_at': (self.soon + timedelta(days=5)).isoformat(), 'duration_minutes': 30,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('student', response.data)
 
     def test_unconfirmed_request_expires_at_its_start_time(self):
         self.client.force_authenticate(self.student_a_user)

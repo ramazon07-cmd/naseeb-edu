@@ -83,7 +83,7 @@ class BookingPermission(permissions.BasePermission):
     """Keep meeting requests scoped to the student and the selected staff participant."""
 
     STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'cancel', 'reschedule'}
-    STAFF_ACTIONS = {'list', 'retrieve', 'approve', 'reject', 'complete', 'cancel'}
+    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'approve', 'reject', 'complete', 'cancel', 'reschedule'}
 
     def has_permission(self, request, view):
         user = request.user
@@ -103,7 +103,7 @@ class BookingPermission(permissions.BasePermission):
             return True
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
             return obj.student_id == user.student_profile.id and view.action in {'retrieve', 'cancel', 'reschedule'}
-        return obj.participant_id == user.id and view.action in {'retrieve', 'approve', 'reject', 'complete', 'cancel'}
+        return obj.participant_id == user.id and view.action in {'retrieve', 'approve', 'reject', 'complete', 'cancel', 'reschedule'}
 
 
 class StudentPortalOwnedViewSet(viewsets.ModelViewSet):
@@ -141,8 +141,23 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         return self.queryset.none()
 
     def perform_create(self, serializer):
-        profile = self.request.user.student_profile
-        serializer.save(student=profile, status=Booking.Status.PENDING)
+        user = self.request.user
+        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+            student_id = int_param(self.request.data, 'student')
+            profile = visible_students(user).filter(id=student_id).first()
+            if not profile:
+                raise drf_serializers.ValidationError({'student': 'Select one of your students.'})
+            # Staff books with themselves: confirmed immediately (no self-approval
+            # step), the student is told and can still reschedule or cancel.
+            booking = serializer.save(student=profile, participant=user, status=Booking.Status.APPROVED)
+            participant_name = user.get_full_name() or user.username
+            meeting_time = timezone.localtime(booking.starts_at).strftime('%d %b %Y, %H:%M')
+            self._notify(
+                booking, 'Meeting confirmed',
+                f'{participant_name} booked "{booking.topic}" with you on {meeting_time}.',
+            )
+            return
+        serializer.save(student=self.request.user.student_profile, status=Booking.Status.PENDING)
 
     @action(detail=False, methods=['get'])
     def participants(self, request):
@@ -248,15 +263,17 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             duration = payload.validated_data.get('duration_minutes', booking.duration_minutes)
             if (booking.status, booking.starts_at, booking.duration_minutes) == (Booking.Status.PENDING, starts_at, duration):
                 return Response(self.get_serializer(booking).data)
+            booking.previous_starts_at = booking.starts_at
             booking.starts_at = starts_at
             booking.duration_minutes = duration
             booking.status = Booking.Status.PENDING
-            booking.save(update_fields=['starts_at', 'duration_minutes', 'status', 'updated_at'])
-            student_name, _, meeting_time = self._names(booking)
-            self._notify(
-                booking, 'Meeting reschedule requested',
-                f'{student_name} asked to move "{booking.topic}" to {meeting_time}.',
-            )
+            booking.save(update_fields=['previous_starts_at', 'starts_at', 'duration_minutes', 'status', 'updated_at'])
+            student_name, participant_name, meeting_time = self._names(booking)
+            if request.user.role == User.Role.STUDENT:
+                message = f'{student_name} asked to move "{booking.topic}" to {meeting_time}.'
+            else:
+                message = f'Your meeting with {participant_name} was moved to {meeting_time}.'
+            self._notify(booking, 'Meeting reschedule requested', message)
         return Response(self.get_serializer(booking).data)
 
 

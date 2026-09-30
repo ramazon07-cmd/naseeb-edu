@@ -156,7 +156,7 @@ export function SubjectScoresFields({ form, update, errors = {} }) {
     change(i, { type, score });
   };
   return <section className="test-score-block" aria-labelledby="ts-subjects-title">
-    <h3 id="ts-subjects-title">AP / IB <small>({t('optional')})</small></h3>
+    <h3 id="ts-subjects-title">{t('AP / IB')} <small>({t('optional')})</small></h3>
     <p className="test-score-intro">{t('Add one row for each AP or IB exam you have a score for. AP scores go from 1 to 5, IB scores from 1 to 7.')}</p>
     {errors.subjects && <p className="onboarding-field-error" role="alert">{errorText(errors.subjects)}</p>}
     <div className="onboarding-rows">
@@ -164,7 +164,7 @@ export function SubjectScoresFields({ form, update, errors = {} }) {
         <legend>{tx`Exam ${i + 1}`}</legend>
         <div className="onboarding-grid">
           <Question name={`subjects.${i}.type`} label={t('Exam type')} error={errors[`subjects.${i}.type`]}>
-            <select value={row.type || ''} onChange={(e) => setType(i, e.target.value)}><option value="AP">AP</option><option value="IB">IB</option></select>
+            <select value={row.type || ''} onChange={(e) => setType(i, e.target.value)}><option value="AP">{t('AP')}</option><option value="IB">{t('IB')}</option></select>
           </Question>
           <Question name={`subjects.${i}.subject`} label={t('Subject name')} error={errors[`subjects.${i}.subject`]}>
             <input value={row.subject || ''} maxLength={160} placeholder={t('For example, Biology')} onChange={(e) => change(i, { subject: e.target.value })} />

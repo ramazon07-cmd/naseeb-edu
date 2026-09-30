@@ -2,6 +2,7 @@
 from rest_framework import serializers
 from django.urls import reverse
 from apps.users.models import User
+from ..services import TASK_XP_BY_PRIORITY
 from ..models import (
     Achievement,
     Activity,
@@ -89,6 +90,7 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     submission_preview_url = serializers.SerializerMethodField()
     submission_file = serializers.FileField(write_only=True, required=False, allow_null=True)
     has_submission_file = serializers.SerializerMethodField()
+    xp_reward = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -143,6 +145,10 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
 
     def get_has_submission_file(self, obj) -> bool:
         return bool(obj.submission_file)
+
+    def get_xp_reward(self, obj) -> int:
+        # What approving it awards; a student's own task never does.
+        return 0 if obj.is_self_assigned else TASK_XP_BY_PRIORITY.get(obj.priority, 0)
 
     @staticmethod
     def _submission_file_metadata(upload):

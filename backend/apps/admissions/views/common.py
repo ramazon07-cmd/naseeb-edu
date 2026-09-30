@@ -5,12 +5,18 @@ from django.http import FileResponse, Http404, HttpResponseRedirect, JsonRespons
 from django.utils import timezone
 from pathlib import Path
 import mimetypes
+from django.db import transaction
 from rest_framework import permissions
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 from apps.users.models import User
 from core.storage import presigned_file_url
 from ..models import School, StudentProfile
 from ..listing import ListQueryMixin
 from ..scoping import scope_students
+from ..services import NOTE_LIMIT, record_approval_note, record_send_back
+from ..models import ActivityLog
 from ..serializers.common import INLINE_FILE_EXTENSIONS
 
 
@@ -235,6 +241,97 @@ class StaffControlledWorkMixin:
 
     def filter_work_for_user(self, queryset):
         return scope_students(queryset, self.request.user, via='student')
+
+
+def clean_note(request):
+    """The counselor's optional note on a review action, trimmed and bounded."""
+    note = str(request.data.get('note', '') or '').strip()
+    if len(note) > NOTE_LIMIT:
+        raise ValidationError({'note': [f'Keep the note under {NOTE_LIMIT} characters.']})
+    return note
+
+
+class ApproveMixin:
+    """POST .../{id}/approve/: a counselor accepts submitted work, optionally with a note for the student.
+
+    A viewset says what approval changes (``apply_approval`` returns the fields
+    it set) and what the notice is about; the note is kept on records that have
+    a ``counselor_comment`` and always reaches the student as a notice.
+    """
+
+    approve_notice_kind = 'general'
+    approve_label = 'Record'
+
+    def apply_approval(self, record):
+        raise NotImplementedError
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        if not request.user.is_counselor_like:
+            return Response({'detail': 'Only a counselor can approve work.'}, status=403)
+        note = clean_note(request)
+        scoped = self.get_object()
+        with transaction.atomic():
+            record = type(scoped).objects.select_for_update(of=('self',)).select_related('student__user').get(pk=scoped.pk)
+            changed = ['updated_at', *self.apply_approval(record)]
+            if hasattr(record, 'counselor_comment'):
+                record.counselor_comment = note
+                changed.append('counselor_comment')
+            record.save(update_fields=changed)
+            record_approval_note(record=record, student=record.student, note=note, notice_kind=self.approve_notice_kind)
+            ActivityLog.objects.create(
+                actor=request.user, student=record.student,
+                action=f'{self.approve_label} approved: {record.title}',
+                metadata={'record': record.pk, 'kind': self.approve_label.lower()},
+            )
+        return Response(self.get_serializer(record).data)
+
+
+class SendBackMixin:
+    """POST .../{id}/send-back/: a counselor returns submitted work to its student with a note.
+
+    The student gets a notice with the note; records that carry a
+    ``counselor_comment`` keep it too. A viewset names what may be sent back
+    (``send_back_statuses``), where it returns to (``send_back_to``) and who may
+    do it (``send_back_managers``).
+    """
+
+    send_back_statuses = ()
+    send_back_to = None
+    send_back_notice_kind = 'general'
+    send_back_label = 'Record'
+    send_back_managers = 'counselor'
+
+    def can_send_back(self, record):
+        return not self.send_back_statuses or record.status in self.send_back_statuses
+
+    @action(detail=True, methods=['post'], url_path='send-back')
+    def send_back(self, request, pk=None):
+        user = request.user
+        allowed = user.is_task_manager if self.send_back_managers == 'task_manager' else user.is_counselor_like
+        if not allowed:
+            return Response({'detail': 'Only a counselor can send work back.'}, status=403)
+        note = clean_note(request)
+        if not note:
+            return Response({'note': ['Tell the student what to change.']}, status=400)
+        scoped = self.get_object()
+        with transaction.atomic():
+            record = type(scoped).objects.select_for_update(of=('self',)).select_related('student__user').get(pk=scoped.pk)
+            if not self.can_send_back(record):
+                return Response({'detail': 'This work is not waiting for review.'}, status=400)
+            changed = ['updated_at']
+            if self.send_back_to:
+                record.status = self.send_back_to
+                changed.append('status')
+            if hasattr(record, 'counselor_comment'):
+                record.counselor_comment = note
+                changed.append('counselor_comment')
+            record.save(update_fields=changed)
+            record_send_back(
+                record=record, student=record.student, note=note, actor=user,
+                notice_kind=self.send_back_notice_kind, label=self.send_back_label,
+            )
+        return Response(self.get_serializer(record).data)
 
 
 class ProductAdminPermission(permissions.BasePermission):

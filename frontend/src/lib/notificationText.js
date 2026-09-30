@@ -31,9 +31,16 @@ const MEETING_STATUS = {
 const MESSAGES = {
   task: [
     [/^(\d+) task\(s\) are past their deadline\.$/, ([, n]) => tp('{n} task is past its deadline.|{n} tasks are past their deadline.', Number(n), { n: Number(n) })],
+    // A counselor's reminder (send_reminder in services.py).
+    [new RegExp(`^“(.+)” is due ${ISO_DATE}\\.$`), ([, title, date]) => t('“{title}” is due {date}.', { title, date: formatDateLocale(date) })],
+    [/^“(.+)” is on your roadmap\.$/, ([, title]) => t('“{title}” is on your roadmap.', { title })],
   ],
   document: [
     [/^(\d+) required document\(s\) still need to be uploaded\.$/, ([, n]) => tp('{n} required document still needs to be uploaded.|{n} required documents still need to be uploaded.', Number(n), { n: Number(n) })],
+    [/^Please upload “(.+)”\.$/, ([, title]) => t('Please upload “{title}”.', { title })],
+  ],
+  profile_review: [
+    [/^Please finish your profile so your counselor can plan with you\.$/, () => t('Please finish your profile so your counselor can plan with you.')],
   ],
   deadline: [
     [new RegExp(`^(.+) deadline is ${ISO_DATE}\\.$`), ([, university, date]) => t('The {university} deadline is {date}.', { university, date: formatDateLocale(date) })],

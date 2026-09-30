@@ -510,9 +510,15 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  approveTask: (id) => request(`/tasks/${id}/approve/`, { method: 'POST' }),
-  approveRoadmapMission: (id) => request(`/roadmap-missions/${id}/approve/`, { method: 'POST' }),
+  approveTask: (id, note = '') => request(`/tasks/${id}/approve/`, { method: 'POST', body: JSON.stringify({ note }) }),
+  approveRoadmapMission: (id, note = '') => request(`/roadmap-missions/${id}/approve/`, { method: 'POST', body: JSON.stringify({ note }) }),
+  // Documents and achievements: accept them, optionally with a note for the student.
+  approveRecord: (endpoint, id, note = '') => request(`/${endpoint}/${id}/approve/`, { method: 'POST', body: JSON.stringify({ note }) }),
+  // A counselor returns submitted work (tasks, roadmap-missions, documents, achievements) with a note.
+  sendBack: (endpoint, id, note) => request(`/${endpoint}/${id}/send-back/`, { method: 'POST', body: JSON.stringify({ note }) }),
   approveStudentLevel: (id) => request(`/students/${id}/approve-level/`, { method: 'POST' }),
+  // A counselor's nudge about one open item (topic: task | mission | document | profile).
+  remindStudent: (id, payload) => request(`/students/${id}/remind/`, { method: 'POST', body: JSON.stringify(payload) }),
   studentXpHistory: (id) => request(`/students/${id}/xp-history/`),
   studentDataVisibility: (id) => request(`/students/${id}/data-visibility/`),
   bookingParticipants: () => request('/bookings/participants/'),

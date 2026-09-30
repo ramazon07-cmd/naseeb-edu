@@ -17,7 +17,7 @@ const KIND_ICONS = { task: ClipboardCheck, document: FileText, deadline: Target,
 function noticeMessage(item) {
   if (item.kind !== 'profile_review') return notificationMessage(item);
   const section = sectionFromNotice(item.target_id);
-  return joinParts(section && t(section.title), item.message);
+  return joinParts(section && t(section.title), notificationMessage(item));
 }
 
 // `linkChat`: open that chat rather than the Messages page (student portal).

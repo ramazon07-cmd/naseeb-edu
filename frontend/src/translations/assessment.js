@@ -870,6 +870,22 @@ export const ASSESSMENT_TRANSLATIONS = {
     "Testni yakunlash",
     "Завершить тест"
   ],
+  "{placed} of {total} placed": [
+    "{total} tadan {placed} tasi joylashtirildi",
+    "Распределено: {placed} из {total}"
+  ],
+  "{label} is already full": [
+    "{label} allaqachon to‘lgan",
+    "Уровень «{label}» уже заполнен"
+  ],
+  "Put exactly {n} in every level": [
+    "Har bir darajaga aynan {n} tadan joylashtiring",
+    "Разместите ровно {n} на каждом уровне"
+  ],
+  "{value} of 5": [
+    "5 dan {value}",
+    "{value} из 5"
+  ],
   "Answer every question to finish": [
     "Yakunlash uchun barcha savollarga javob bering",
     "Ответьте на все вопросы, чтобы завершить"

@@ -19,6 +19,10 @@ const SERVER = {
   cancelledByStaff: { kind: 'meeting', title: 'Meeting cancelled', message: 'Your meeting with Madina Counselor on 29 Sep 2026, 17:42 was cancelled.' },
   cancelledByStudent: { kind: 'meeting', title: 'Meeting cancelled', message: 'Ramazon cancelled the meeting "Essay review" on 29 Sep 2026, 17:42.' },
   reschedule: { kind: 'meeting', title: 'Meeting reschedule requested', message: 'Ramazon asked to move "Essay review" to 2 Oct 2026, 10:30.' },
+  remindTask: { kind: 'task', title: 'Your counselor sent a reminder', message: '“Recommendation letter request” is due 2026-07-18.' },
+  remindMission: { kind: 'task', title: 'Your counselor sent a reminder', message: '“Research 10 universities” is on your roadmap.' },
+  remindDocument: { kind: 'document', title: 'Your counselor sent a reminder', message: 'Please upload “Passport”.' },
+  remindProfile: { kind: 'profile_review', title: 'Your counselor sent a reminder', message: 'Please finish your profile so your counselor can plan with you.' },
 };
 
 test('known server notices are rewritten in Uzbek and Russian', () => {
