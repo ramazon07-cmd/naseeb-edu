@@ -53,8 +53,6 @@ export const STUDENT_CENTER_TABS = ['overview', 'academics', 'portfolio', 'activ
 // Students see path/tasks, staff missions/tasks/timeline/reflections; the bare
 // /roadmap path opens the role's first tab, so no tab is the default here.
 export const ROADMAP_TABS = ['path', 'missions', 'tasks', 'timeline', 'reflections'];
-// /messages/counselor opens the student's earlier counselor messages.
-export const MESSAGES_TABS = ['counselor'];
 const DEFAULT_TAB = { student_center: 'overview' };
 const ROADMAP_ROLE_TABS = { student: ['path', 'tasks'], staff: ['missions', 'tasks', 'timeline', 'reflections'] };
 // Student Center cards that open in edit mode from a link (?edit=goal).
@@ -65,7 +63,7 @@ export function roadmapTab(tab, manager) {
   const tabs = ROADMAP_ROLE_TABS[manager ? 'staff' : 'student'];
   return tabs.includes(tab) ? tab : tabs[0];
 }
-const TAB_PAGES = { student_center: STUDENT_CENTER_TABS, roadmap: ROADMAP_TABS, messages: MESSAGES_TABS };
+const TAB_PAGES = { student_center: STUDENT_CENTER_TABS, roadmap: ROADMAP_TABS };
 
 // Record pages: /essay-lab/essays/42, /students/15, /platform/students/15,
 // /messages/9 (open that chat).

@@ -360,7 +360,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
           return <button key={item} className={page === item ? "active" : ''} title={collapsed ? itemLabel : undefined} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
         })}</nav>
 
-      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{user.role === 'student' && <button onClick={() => {setPage('student_center');setProfileOpen(false);setMobileOpen(false);}}><UserRound size={17} />{t('My profile')}</button>}{canOpenPage('account_settings', user) && <button onClick={() => {setPage('account_settings');setProfileOpen(false);setMobileOpen(false);}}><Settings size={17} />{t('Account settings')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
+      <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{canOpenPage('account_settings', user) && <button onClick={() => {setPage('account_settings');setProfileOpen(false);setMobileOpen(false);}}><Settings size={17} />{t('Account settings')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
     </aside>
     <main className={`workspace ${page === 'messages' ? 'workspace-messages' : ''} ${page === 'dashboard' && user.role === 'student' ? 'workspace-dashboard' : ''}`}>
       <header className="top-header">
@@ -421,7 +421,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} />;
   if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage user={user} notify={notify} data={data} reload={reload} />;
   if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />;
-  if (page === 'messages') return <MessagesPage {...{ user, data, notify }} initialChannel={directChannel} channelId={params.channelId} openInbox={params.tab === 'counselor'} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
+  if (page === 'messages') return <MessagesPage {...{ user, data, notify }} initialChannel={directChannel} channelId={params.channelId} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query, search, navigate }} />;
@@ -459,6 +459,7 @@ export default function App() {
   const signingOut = useRef(false);
   const handleUnauthorized = useCallback(() => {api.logout();setUser(null);}, []);
   const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace } = useWorkspaceData(user, handleUnauthorized);
+  useEffect(() => (user ? api.onSessionEnded(handleUnauthorized) : undefined), [user, handleUnauthorized]);
 
   const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
 

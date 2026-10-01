@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, CalendarClock, CheckCheck, ChevronRight, ClipboardCheck, FileText, ListChecks, MessageCircle, PenLine, Target, UserRound } from 'lucide-react';
+import { Bell, CalendarClock, CheckCheck, ChevronRight, ClipboardCheck, FileText, ListChecks, MessageCircle, PenLine, Target } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, t } from '../i18n';
 import { dateText, dateTimeText, joinParts } from '../lib/format';
@@ -41,7 +41,6 @@ function StudentNotifications({ data, summary, onOpen, notify }) {
   const [chats, setChats] = useState(() => data.messageChannels.filter((item) => item.unread_count > 0));
   const [markingAll, setMarkingAll] = useState(false);
   const chatsUnread = summary?.chats_unread || 0;
-  const counselorUnread = summary?.counselor_messages_unread || 0;
 
   // The workspace's channel list is loaded once; fetch it fresh when the
   // server says there is something unread.
@@ -80,14 +79,13 @@ function StudentNotifications({ data, summary, onOpen, notify }) {
   }
 
   const hasUnread = (summary?.unread || 0) > 0 || list.items.some((item) => !item.is_read);
-  const empty = !chats.length && !counselorUnread && !list.items.length && !firstPageLoading(list) && !list.error;
+  const empty = !chats.length && !list.items.length && !firstPageLoading(list) && !list.error;
   return <>
     <div className="notification-panel-head">
       <p>{t('Alerts about your work and unread conversations.')}</p>
       {hasUnread && <button type="button" className="button quiet small" onClick={markAll} disabled={markingAll} aria-busy={markingAll}><CheckCheck size={15} /> {t('Mark all as read')}</button>}
     </div>
     <ChatNotices chats={chats} onOpen={onOpen} linkChat />
-    {counselorUnread > 0 && <button type="button" className="sidebar-notice unread" onClick={() => onOpen('messages', { tab: 'counselor' })}><UserRound size={18} /><span><b>{t('From your counselor')}</b><small>{formatNumberLocale(counselorUnread)} {t('Unread')}</small></span><ChevronRight size={16} /></button>}
     {list.items.map((item) => {
       const Icon = KIND_ICONS[item.kind] || Bell;
       const target = notificationTarget(item);

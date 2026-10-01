@@ -30,14 +30,14 @@ test('each notice kind opens the page that holds its work', () => {
   assert.equal(notificationTarget(null), null);
 });
 
-test('the bell counts notices, counselor messages and unread chats', () => {
+test('the bell counts notices and unread chats, not the legacy counselor thread', () => {
   assert.equal(bellTotal(null), 0);
-  assert.equal(bellTotal({ unread: 2, counselor_messages_unread: 1, chats_unread: 4 }), 7);
-  assert.equal(bellTotal({ unread: -1, counselor_messages_unread: 'x' }), 0);
+  assert.equal(bellTotal({ unread: 2, counselor_messages_unread: 1, chats_unread: 4 }), 6);
+  assert.equal(bellTotal({ unread: -1, chats_unread: 'x' }), 0);
 });
 
 test('only a different summary counts as a change', () => {
-  const summary = { unread: 1, counselor_messages_unread: 0, chats_unread: 2 };
+  const summary = { unread: 1, chats_unread: 2 };
   assert.equal(summaryChanged(null, summary), true);
   assert.equal(summaryChanged(summary, { ...summary }), false);
   assert.equal(summaryChanged(summary, { ...summary, chats_unread: 3 }), true);
