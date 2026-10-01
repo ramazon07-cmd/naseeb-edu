@@ -320,6 +320,7 @@ migrations and the cron jobs, which connect directly.
 | `AUTH_LOGIN_IP_RATE` | 300/minute | Sign-in attempts per IP (flood ceiling only). |
 | `AUTH_REFRESH_RATE` | 30/hour | Refreshes per refresh token. |
 | `AUTH_REFRESH_IP_RATE` | 600/minute | Refreshes per IP (flood ceiling only). |
+| `TELEGRAM_FEED_RATE` | 60/minute | Channel feed requests per user (`GET /api/telegram-feed/`; see `docs/telegram-channel.md`). |
 | `PGBOUNCER` or `DB_POOLER` | unset | Set when `DATABASE_URL` points at PgBouncer in transaction mode. |
 | `DIRECT_DATABASE_URL` | unset | Direct database URL for migrations and job locks (needed with PgBouncer). |
 | `MIGRATE_ON_START` | 0 | `1` runs `migrate_locked` before gunicorn starts (docker-compose; not for Render). |

@@ -1,5 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+from .telegram_feed import TelegramFeedView
 from .assistant import AssistantChatView
 from .views import (
     AchievementViewSet,
@@ -81,6 +82,7 @@ router.register('parent-links', ParentStudentLinkViewSet, basename='parent-links
 router.register('challenge-attempts', ChallengeAttemptViewSet, basename='challenge-attempts')
 
 urlpatterns = [
+    path('telegram-feed/', TelegramFeedView.as_view(), name='telegram-feed'),
     path('assistant/chat/', AssistantChatView.as_view(), name='assistant-chat'),
     path('public/reach/', PublicReachView.as_view(), name='public-reach'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
