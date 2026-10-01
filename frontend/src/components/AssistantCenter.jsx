@@ -5,7 +5,9 @@ import { Trash2, X, ShieldCheck, WifiOff, ChevronRight, Square, Send, Info } fro
 import { initials, fullName } from '../lib/labels';
 import { assistantSource } from '../lib/assistantSource';
 
-export function AssistantCenter({ user, onOpenScreenTime }) {
+// `launcher`: false drops the floating button (the counselor workspace opens the
+// assistant from its account menu); `openRequest` opens it when the number changes.
+export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openRequest = 0 }) {
   const welcome = useMemo(() => ({
     id: `welcome-${user.id}`,
     role: 'assistant',
@@ -25,6 +27,7 @@ export function AssistantCenter({ user, onOpenScreenTime }) {
   const busy = status === 'submitted' || status === 'streaming';
 
   useEffect(() => setMessages([welcome]), [welcome]);
+  useEffect(() => {if (openRequest) setOpen(true);}, [openRequest]);
   // Stop a streaming answer when the assistant unmounts (sign-out, role change).
   useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => {
@@ -117,6 +120,6 @@ export function AssistantCenter({ user, onOpenScreenTime }) {
         <details className="assistant-info"><summary>{t("AI can make mistakes.")}</summary><p>{t("Role-scoped context only. Do not share contact, passport, password, or payment details.")}</p><p>{t("AI can make mistakes. Verify important deadlines with your counselor. History is kept only while this page is open.")}</p></details>
       </form>
     </section>}
-    <div className="assistant-launchers"><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><span className="assistant-launcher-mark" aria-hidden="true" /></button></div>
+    {launcher && <div className="assistant-launchers"><button type="button" className="assistant-launcher" onClick={() => setOpen((current) => !current)} aria-label={t("Open Naseeb AI assistant")} aria-expanded={open}><span className="assistant-launcher-mark" aria-hidden="true" /></button></div>}
   </div>;
 }

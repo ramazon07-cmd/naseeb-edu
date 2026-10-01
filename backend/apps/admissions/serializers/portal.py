@@ -32,7 +32,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
     class Meta:
         model = Booking
         fields = '__all__'
-        read_only_fields = ('student', 'status')
+        read_only_fields = ('student', 'status', 'previous_starts_at')
 
     def get_participant_name(self, obj):
         if not obj.participant:
@@ -53,6 +53,10 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
         fields = super().get_fields()
         request = self.context.get('request')
         user = getattr(request, 'user', None)
+        if user and user.role != User.Role.STUDENT:
+            # Staff books with themselves (the view sets it); nothing to choose from.
+            fields['participant'].required = False
+            return fields
         profile = getattr(user, 'student_profile', None) if user and user.role == User.Role.STUDENT else None
         # Only staff of the student's current school; an assignment never
         # reaches across schools, and other ids fail like missing ones.

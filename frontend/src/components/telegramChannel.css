@@ -1,0 +1,236 @@
+.messaging-page .telegram-channel {
+  min-width: 0;
+  min-height: 0;
+}
+
+.telegram-channel .telegram-feed-wrap {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.telegram-channel .telegram-feed {
+  height: 100%;
+  overflow: auto;
+  padding: 16px clamp(8px, 2vw, 24px);
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+}
+
+/* A short feed sits at the bottom, where the newest post is, and so does its skeleton. */
+.telegram-channel .telegram-feed-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 100%;
+}
+
+.telegram-channel .telegram-feed-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A post unfolds to its real height instead of jumping to it. */
+.telegram-channel .telegram-post {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto 12px;
+  overflow: hidden;
+  border-radius: 12px;
+  contain: layout paint;
+  transition: height 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.telegram-channel .telegram-post iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  /* Telegram's page declares `color-scheme: light dark` and follows the system.
+     A frame whose scheme differs from its page's is painted on an opaque canvas
+     (black in a dark system), which showed as black bars around the light post. */
+  color-scheme: light dark;
+  opacity: 0;
+  transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.telegram-channel .telegram-post.is-ready iframe {
+  opacity: 1;
+}
+
+/* The post before its frame has loaded: the same card, with the outline of the
+   text to come. It fades out when the frame reports its size. */
+.telegram-channel .telegram-post-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 12px;
+  border: 1px solid var(--border);
+  border-radius: inherit;
+  background: var(--surface);
+  transition:
+    opacity 200ms ease-out,
+    visibility 0s linear 200ms;
+}
+
+.telegram-channel .telegram-post.is-ready .telegram-post-skeleton {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.telegram-channel .telegram-skeleton-body {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 11px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.telegram-channel .telegram-skeleton-body i {
+  display: block;
+  width: var(--w, 90%);
+  height: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+}
+
+/* The large block is lighter than the lines: inset is darker than the card in the dark theme. */
+.telegram-channel .telegram-skeleton-body i.media {
+  width: 100%;
+  height: 132px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+/* Only posts near the screen shimmer; the rest wait quietly. */
+.telegram-channel .telegram-post.is-loading .telegram-skeleton-body i {
+  background: linear-gradient(
+    100deg,
+    var(--surface-inset) 20%,
+    var(--surface-hover) 38%,
+    var(--surface-inset) 56%
+  );
+  background-size: 240% 100%;
+  animation: skeleton-shimmer 1.25s ease-in-out infinite;
+}
+
+.telegram-channel .telegram-post.is-loading .telegram-skeleton-body i.media {
+  background-image: linear-gradient(
+    100deg,
+    var(--surface-soft) 20%,
+    var(--surface-hover) 38%,
+    var(--surface-soft) 56%
+  );
+}
+
+.telegram-channel .telegram-post.is-stalled .telegram-skeleton-body {
+  opacity: 0.55;
+}
+
+.telegram-channel .telegram-post-skeleton footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.telegram-channel .telegram-post-skeleton a,
+.telegram-channel .telegram-channel-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.telegram-channel .telegram-channel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.telegram-channel .telegram-older {
+  display: block;
+  margin: 0 auto 16px;
+}
+
+.telegram-channel .telegram-empty {
+  color: var(--muted);
+  text-align: center;
+}
+
+.telegram-channel .telegram-jump {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+}
+
+@media (width <= 600px) {
+  .messaging-page .telegram-channel > header {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .messaging-page .telegram-channel > header > div:first-child {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .messaging-page .telegram-channel > header .avatar {
+    display: none;
+  }
+
+  .telegram-channel .channel-actions {
+    flex-shrink: 0;
+    gap: 2px;
+  }
+
+  .telegram-channel .channel-actions .icon-button {
+    width: 30px;
+    height: 34px;
+    padding: 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .telegram-channel .telegram-post {
+    transition: none;
+  }
+
+  .telegram-channel .telegram-post.is-loading .telegram-skeleton-body i {
+    animation: none;
+  }
+
+  .telegram-channel .telegram-post iframe {
+    transition-duration: 120ms;
+  }
+
+  .telegram-channel .telegram-post-skeleton {
+    transition:
+      opacity 120ms ease-out,
+      visibility 0s linear 120ms;
+  }
+}

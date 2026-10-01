@@ -1,5 +1,5 @@
 import { getLanguage, t } from './i18n'
-import { browserLock, createRefresher, createTokenStore } from './authTokens'
+import { TOKEN_KEYS, browserLock, createRefresher, createTokenStore } from './authTokens'
 import { UNTRACKED_ENDPOINTS, createMutationTracker } from './lib/reloadPlan'
 import { errorPayloadMessage } from './lib/apiErrors'
 import { firstListPath } from './lib/listPath.js'
@@ -174,6 +174,24 @@ async function saveOpenEditors(timeoutMs) {
   }
 }
 
+const SESSION_ENDED_EVENT = 'naseeb:session-ended'
+
+// Fires when this tab is left without a session: a request came back 401 with
+// no tokens to refresh, or another tab signed out (it clears the shared tokens).
+// Without it, parts that fetch on their own (screen time, chat polling) keep
+// running on a dead session and show the raw 401.
+function onSessionEnded(callback) {
+  const onStorage = (event) => {
+    if ((event.key === TOKEN_KEYS.access || event.key === null) && event.newValue === null) callback()
+  }
+  window.addEventListener(SESSION_ENDED_EVENT, callback)
+  window.addEventListener('storage', onStorage)
+  return () => {
+    window.removeEventListener(SESSION_ENDED_EVENT, callback)
+    window.removeEventListener('storage', onStorage)
+  }
+}
+
 export function clearTokens() {
   tokens.clear()
 }
@@ -246,6 +264,7 @@ export async function request(path, options = {}, retry = true, unwrapPagination
     await refreshAccessToken(access)
     return request(path, options, false, unwrapPagination)
   }
+  if (auth && response.status === 401 && !getToken('access') && !getToken('refresh')) window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
   if (etag !== undefined && response.status === 304) return { notModified: true }
   const payload = await parseResponse(response)
   if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
@@ -363,6 +382,7 @@ export const api = {
     return payload
   },
   logout: clearTokens,
+  onSessionEnded,
   signOut,
   syncBeforeSignOut,
   changePassword: async (newPassword, confirmPassword) => {
@@ -510,9 +530,15 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  approveTask: (id) => request(`/tasks/${id}/approve/`, { method: 'POST' }),
-  approveRoadmapMission: (id) => request(`/roadmap-missions/${id}/approve/`, { method: 'POST' }),
+  approveTask: (id, note = '') => request(`/tasks/${id}/approve/`, { method: 'POST', body: JSON.stringify({ note }) }),
+  approveRoadmapMission: (id, note = '') => request(`/roadmap-missions/${id}/approve/`, { method: 'POST', body: JSON.stringify({ note }) }),
+  // Documents and achievements: accept them, optionally with a note for the student.
+  approveRecord: (endpoint, id, note = '') => request(`/${endpoint}/${id}/approve/`, { method: 'POST', body: JSON.stringify({ note }) }),
+  // A counselor returns submitted work (tasks, roadmap-missions, documents, achievements) with a note.
+  sendBack: (endpoint, id, note) => request(`/${endpoint}/${id}/send-back/`, { method: 'POST', body: JSON.stringify({ note }) }),
   approveStudentLevel: (id) => request(`/students/${id}/approve-level/`, { method: 'POST' }),
+  // A counselor's nudge about one open item (topic: task | mission | document | profile).
+  remindStudent: (id, payload) => request(`/students/${id}/remind/`, { method: 'POST', body: JSON.stringify(payload) }),
   studentXpHistory: (id) => request(`/students/${id}/xp-history/`),
   studentDataVisibility: (id) => request(`/students/${id}/data-visibility/`),
   bookingParticipants: () => request('/bookings/participants/'),
@@ -521,6 +547,7 @@ export const api = {
   completeBooking: (id) => request(`/bookings/${id}/complete/`, { method: 'POST' }),
   cancelBooking: (id) => request(`/bookings/${id}/cancel/`, { method: 'POST' }),
   rescheduleBooking: (id, payload) => request(`/bookings/${id}/reschedule/`, { method: 'POST', body: JSON.stringify(payload) }),
+  telegramFeed: (before) => request(`/telegram-feed/${before ? `?before=${encodeURIComponent(before)}` : ''}`, {}, true, false),
   messageChannels: (kind = '', search = '') => {
     const query = new URLSearchParams()
     if (kind) query.set('kind', kind)
@@ -574,9 +601,6 @@ export const api = {
     body: JSON.stringify({ student }),
   }),
   markStudentMessageRead: (id) => request(`/student-messages/${id}/read/`, { method: 'POST' }),
-  // Earlier counselor messages, newest first: { results, next, has_more }.
-  counselorMessages: (next) => request(nextApiPath(next) || '/student-messages/?cursor=&page_size=30', {}, true, false),
-  markCounselorMessagesRead: () => request('/student-messages/read-all/', { method: 'POST' }),
   notificationSummary: () => request('/notifications/summary/'),
   markNotificationRead: (id) => request(`/notifications/${id}/read/`, { method: 'POST' }),
   markAllNotificationsRead: () => request('/notifications/read-all/', { method: 'POST' }),

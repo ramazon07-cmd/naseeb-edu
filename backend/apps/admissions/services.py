@@ -3,7 +3,8 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from .models import RoadmapMission, StudentProfile, XPTransaction
+from .models import ActivityLog, Document, Notification, RoadmapMission, StudentProfile, Task, XPTransaction
+from .progress import OPEN_MISSION_STATUSES, OPEN_TASK_STATUSES
 
 
 TASK_XP_BY_PRIORITY = {
@@ -136,6 +137,95 @@ def award_approval_xp(*, student, source_type, source_id, amount, reason, awarde
         locked_student.xp_total += amount
         locked_student.save(update_fields=['xp_total', 'updated_at'])
     return xp_transaction, created
+
+
+SEND_BACK_NOTICE_TITLE = 'Your counselor asked for changes'
+APPROVAL_NOTICE_TITLE = 'Your counselor approved your work'
+NOTE_LIMIT = 2000
+
+
+def record_send_back(*, record, student, note, actor, notice_kind, label):
+    """Tell a student what to change on a record a counselor sent back.
+
+    The status change (if any) is the caller's; this writes the student's
+    notice and the timeline entry, so every kind of send-back reads the same.
+    """
+    Notification.objects.create(
+        student=student,
+        title=SEND_BACK_NOTICE_TITLE,
+        message=f'{record.title}: {note}',
+        kind=notice_kind,
+        target_id=record.pk,
+    )
+    ActivityLog.objects.create(
+        actor=actor,
+        student=student,
+        action=f'{label} sent back: {record.title}',
+        metadata={'record': record.pk, 'kind': label.lower()},
+    )
+
+
+def record_approval_note(*, record, student, note, notice_kind):
+    """An approval carries no notice of its own; a note the counselor typed does."""
+    if not note:
+        return
+    Notification.objects.create(
+        student=student,
+        title=APPROVAL_NOTICE_TITLE,
+        message=f'{record.title}: {note}',
+        kind=notice_kind,
+        target_id=record.pk,
+    )
+
+
+REMINDER_TITLE = 'Your counselor sent a reminder'
+REMINDER_COOLDOWN = timedelta(hours=12)
+REMINDER_TOPICS = ('task', 'mission', 'document', 'profile')
+
+
+def send_reminder(*, student, actor, topic, record_id=None):
+    """Nudge a student about one thing they owe: an open task or mission, a missing document, their profile.
+
+    Returns the student's notice, or None when the same reminder already went
+    out in the last 12 hours (a second click must not pile up notices).
+    Raises ValueError with a message for the counselor when the input is wrong.
+    """
+    record = None
+    if topic == 'task':
+        record = Task.objects.filter(student=student, pk=record_id, status__in=OPEN_TASK_STATUSES).first()
+        kind, subject = Notification.Kind.TASK, 'task'
+        message = f'“{record.title}” is due {record.due_date.isoformat()}.' if record else ''
+    elif topic == 'mission':
+        record = RoadmapMission.objects.filter(student=student, pk=record_id, status__in=OPEN_MISSION_STATUSES).first()
+        kind, subject = Notification.Kind.TASK, 'mission'
+        message = f'“{record.title}” is on your roadmap.' if record else ''
+    elif topic == 'document':
+        record = Document.objects.filter(
+            student=student, pk=record_id, status__in=(Document.Status.REQUIRED, Document.Status.REJECTED),
+        ).first()
+        kind, subject = Notification.Kind.DOCUMENT, 'document'
+        message = f'Please upload “{record.title}”.' if record else ''
+    elif topic == 'profile':
+        kind, subject = Notification.Kind.PROFILE_REVIEW, 'profile'
+        message = 'Please finish your profile so your counselor can plan with you.'
+    else:
+        raise ValueError('Choose what to remind the student about.')
+    if topic != 'profile' and record is None:
+        raise ValueError('That item is no longer open.')
+    target_id = record.pk if record else None
+    if Notification.objects.filter(
+        student=student, recipient__isnull=True, title=REMINDER_TITLE, kind=kind, target_id=target_id,
+        message=message, created_at__gte=timezone.now() - REMINDER_COOLDOWN,
+    ).exists():
+        return None
+    notice = Notification.objects.create(
+        student=student, title=REMINDER_TITLE, message=message, kind=kind, target_id=target_id,
+    )
+    ActivityLog.objects.create(
+        actor=actor, student=student, action=f'Reminder sent: {getattr(record, "title", "profile")}',
+        metadata={'topic': subject, 'record': target_id},
+    )
+    return notice
 
 
 def student_profile_defaults(school):

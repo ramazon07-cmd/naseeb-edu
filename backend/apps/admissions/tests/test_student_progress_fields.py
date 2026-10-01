@@ -1,8 +1,11 @@
 """The per-student numbers the student dashboard and roadmap page show (docs/metrics.md)."""
+from datetime import timedelta
+
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
-from ..models import Achievement, Application, Honor, RoadmapMission, University
+from ..models import Achievement, Application, Document, Honor, RoadmapMission, Task, University
 from ..progress import load_progress_stats
 from .base import RoleIsolationBase
 
@@ -56,6 +59,31 @@ class StudentProgressFieldsTests(RoleIsolationBase):
         for key in ('level_missions_approved', 'level_missions_total', 'applications_total',
                     'applications_submitted', 'applications_accepted'):
             self.assertEqual(data[key], 0, key)
+
+    def test_why_they_need_you_counts(self):
+        # One overdue (past due, still open), one on time, one already submitted.
+        yesterday = timezone.localdate() - timedelta(days=1)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        Task.objects.create(student=self.student_a, title='Overdue', due_date=yesterday, status=Task.Status.TODO)
+        Task.objects.create(student=self.student_a, title='On time', due_date=tomorrow, status=Task.Status.IN_PROGRESS)
+        Task.objects.create(student=self.student_a, title='Submitted', due_date=tomorrow, status=Task.Status.SUBMITTED)
+        RoadmapMission.objects.create(student=self.student_a, title='Waiting', level=3, sequence=1,
+                                      status=RoadmapMission.Status.SUBMITTED)
+        Document.objects.create(student=self.student_a, title='Passport', document_type='passport',
+                                status=Document.Status.UPLOADED)
+        data = self.own_profile()
+        self.assertEqual(data['tasks_overdue'], 1)
+        self.assertEqual(data['missions_overdue'], 0)
+        # 1 submitted task + 2 submitted missions (this one, plus setUp's L2-2) + 1 pending document
+        # + 1 portfolio item nobody verified yet (setUp's Olympiad).
+        self.assertEqual(data['to_review_total'], 5)
+
+    def test_last_login_is_exposed_for_the_quiet_for_n_days_reason(self):
+        seen = timezone.now() - timedelta(days=20)
+        self.student_a_user.last_login = seen
+        self.student_a_user.save(update_fields=['last_login'])
+        data = self.own_profile()
+        self.assertIsNotNone(data['user_detail']['last_login'])
 
     def test_batch_load_is_a_constant_number_of_queries(self):
         with CaptureQueriesContext(connection) as context:

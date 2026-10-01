@@ -3,7 +3,7 @@ import { api } from '../api';
 
 // The per-student collections a Student 360 view shows. One student's records
 // are small, so each is loaded whole (?student=<id>) in parallel.
-export const STUDENT_RECORD_ENDPOINTS = ['tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations'];
+export const STUDENT_RECORD_ENDPOINTS = ['tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations', 'roadmap-missions'];
 
 const EMPTY = Object.freeze({});
 

@@ -17,7 +17,7 @@ test('every inline script in index.html is allowed by hash and nothing else inli
   assert.ok(!/script-src[^;]*unsafe-inline/.test(csp));
 });
 
-test('the CSP allows the API origin, Google Docs previews and blob previews only', () => {
+test('the CSP allows the API origin, Google Docs, Telegram posts and blob previews', () => {
   const csp = buildCsp(html, 'https://api.naseebedu.com/api');
   assert.match(csp, /connect-src 'self' https:\/\/api\.naseebedu\.com;/);
   assert.match(csp, /frame-src https:\/\/docs\.google\.com blob:/);
@@ -47,7 +47,7 @@ test('private-file bucket origins join connect-src only; bad values fail the bui
   const csp = buildCsp(html, 'https://api.naseebedu.com/api', origins);
   assert.match(csp, /connect-src 'self' https:\/\/api\.naseebedu\.com https:\/\/files\.acct\.r2\.cloudflarestorage\.com https:\/\/naseeb\.s3\.eu-central-1\.amazonaws\.com;/);
   assert.match(csp, /img-src 'self' data: blob:;/);
-  assert.match(csp, /frame-src https:\/\/docs\.google\.com blob:;/);
+  assert.match(csp, /frame-src https:\/\/docs\.google\.com blob: https:\/\/t\.me;/);
   assert.deepEqual(storageOrigins(''), []);
   assert.deepEqual(storageOrigins(undefined), []);
   for (const bad of ['files.example.com', 'https://files.example.com/private/', "https://x.com; script-src *", 'javascript:alert(1)']) {
