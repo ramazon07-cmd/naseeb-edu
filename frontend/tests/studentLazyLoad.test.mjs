@@ -37,8 +37,8 @@ test('a student signing in to the dashboard fetches only what the dashboard show
   const s = session(student);
   s.signIn();
   s.open('dashboard');
-  assert.deepEqual(s.fetched.sort(), ['bookings', 'essays', 'program-services', 'student-team', 'students', 'support-tickets', 'tasks']);
-  for (const endpoint of ['universities', 'scholarships', 'opportunity-programs', 'store-items', 'documents', 'message-channels', 'roadmap-missions', 'dashboard/stats']) {
+  assert.deepEqual(s.fetched.sort(), ['bookings', 'essays', 'opportunity-programs', 'program-services', 'student-team', 'students', 'support-tickets', 'tasks']);
+  for (const endpoint of ['universities', 'scholarships', 'store-items', 'documents', 'message-channels', 'roadmap-missions', 'dashboard/stats']) {
     assert.ok(!s.fetched.includes(endpoint), `${endpoint} must wait for its page`);
   }
 });
@@ -47,7 +47,8 @@ test('each student page fetches its own collections the first time it opens, onc
   const s = session(student);
   s.signIn();
   s.open('dashboard');
-  assert.deepEqual(s.open('programs'), ['opportunity-programs']);
+  // The dashboard's Programs tile already brought the catalog.
+  assert.deepEqual(s.open('programs'), []);
   assert.deepEqual(s.open('college_search').sort(), ['applications', 'scholarships', 'universities']);
   // Applications' collections came with College Search: nothing new to fetch.
   assert.deepEqual(s.open('applications'), []);
@@ -90,7 +91,7 @@ test('a student save refetches only collections already loaded', () => {
   // loaded (impossible in the UI, but the plan must not pull catalogues).
   assert.deepEqual(s.reloadAfter(['applications']), ['students']);
   // An unknown write refetches what is loaded, not every collection.
-  assert.deepEqual(s.reloadAfter(['something-new']).sort(), ['bookings', 'essays', 'program-services', 'student-team', 'students', 'support-tickets', 'tasks']);
+  assert.deepEqual(s.reloadAfter(['something-new']).sort(), ['bookings', 'essays', 'opportunity-programs', 'program-services', 'student-team', 'students', 'support-tickets', 'tasks']);
   // A retry of a named key always fetches it.
   assert.deepEqual(s.load(['universities']), ['universities']);
 });

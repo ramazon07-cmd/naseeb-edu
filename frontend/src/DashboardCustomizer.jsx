@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeftRight, GripVertical, Minus, Plus } from 'lucide-react';
+import { ArrowLeftRight, GripVertical, Lock, Minus, Plus } from 'lucide-react';
 import { t } from './i18n';
-import { moveDashboardWidget, normalizeDashboardPreferences } from './dashboardPreferences';
+import { isLockedWidget, moveDashboardWidget, normalizeDashboardPreferences, setWidgetHidden } from './dashboardPreferences';
 
 const descriptions = {
   screen_time: 'Your daily activity over the last 7 or 30 days.',
-  roadmap: 'Your study goal, level, and overall progress.',
+  roadmap: 'Your progress through the roadmap missions.',
   journey: 'Your study goal, level, and overall progress.',
   tasks: 'Assignments and upcoming deadlines.',
   meetings: 'Your upcoming counselor meetings.',
   applications: 'University applications, essays, and achievements.',
   discovery: 'Explore your strengths and university matches.',
   team: 'Your counselors and school contacts.',
+  programs: 'Programs open for applications and their deadlines.',
 };
 export default function DashboardCustomizer({ draft, setDraft, metadata, Modal, onClose, onSave }) {
   const [dragged, setDragged] = useState(null);
@@ -65,7 +66,7 @@ export default function DashboardCustomizer({ draft, setDraft, metadata, Modal, 
     setAnnouncement(`${t(metadata[id][0])}: ${other + 1}`);
   }
   return <Modal title={t('Customize dashboard')} onClose={onClose} className="dashboard-customize-modal"><div className="dashboard-customizer-v2">
-    <p className="customizer-instructions">{t('Drag to reorder. Use ⇄ to move widgets between the main column and side rail.')}</p>
+    <p className="customizer-instructions">{t('Drag to reorder. Use ⇄ to move widgets between the main column and side rail.')} {t('Widgets with a lock are always shown.')}</p>
     <span className="sr-only" aria-live="polite">{announcement}</span>
     {groups.map((column) => { const items = itemsFor(column); if (column === 'hidden' && !items.length) return null; return <section key={column} className={`customizer-column ${dragged ? 'accepts-drop' : ''}`} data-widget-column={column} aria-label={t(names[column])} onDragOver={(event) => { if (dragged && column !== 'hidden') { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={(event) => {event.preventDefault(); if (dragged && column !== 'hidden') move(dragged, column);}}>
       <h3>{t(names[column])}<span>— {items.length}</span></h3>
@@ -74,7 +75,7 @@ export default function DashboardCustomizer({ draft, setDraft, metadata, Modal, 
         {column !== 'hidden' ? <button className="customizer-grip" onPointerDown={(event) => { if (event.button === 0) pointerDrag.current = {id, x: event.clientX, y: event.clientY, active: false}; }} onDragStart={(event) => {setDragged(id);event.dataTransfer.setData('text/plain', id);event.dataTransfer.effectAllowed = 'move';}} onDragEnd={() => setDragged(null)} onKeyDown={(event) => keyboardMove(event, id, column, items)} aria-label={`${t('Reorder with arrow keys')}: ${t(title)}`} title={t('Drag or use ↑ and ↓')}><GripVertical size={18} /></button> : <span className="customizer-grip" />}
         <Icon className="customizer-widget-icon" size={21} /><div className="customizer-widget-copy"><b>{t(title)}</b><p>{t(descriptions[id])}</p></div>
         {column !== 'hidden' && <button className="icon-button" onClick={() => move(id, column === 'main' ? 'rail' : 'main')} aria-label={`${t(column === 'main' ? 'Move to side rail' : 'Move to main column')}: ${t(title)}`} title={t(column === 'main' ? 'Move to side rail' : 'Move to main column')}><ArrowLeftRight size={18} /></button>}
-        <button className="icon-button" disabled={column !== 'hidden' && draft.hidden.length === draft.order.length - 1} onClick={() => {setDraft((current) => ({...current, hidden: column === 'hidden' ? current.hidden.filter((key) => key !== id) : [...current.hidden, id]}));}} aria-label={`${t(column === 'hidden' ? 'Show widget' : 'Hide widget')}: ${t(title)}`} title={t(column === 'hidden' ? 'Show widget' : 'Hide widget')}>{column === 'hidden' ? <Plus size={18} /> : <Minus size={18} />}</button>
+        {isLockedWidget(id) ? <span className="customizer-lock" role="img" aria-label={`${t('Always shown')}: ${t(title)}`} title={t('Always shown')}><Lock size={16} /></span> : <button className="icon-button" onClick={() => setDraft((current) => setWidgetHidden(current, id, column !== 'hidden'))} aria-label={`${t(column === 'hidden' ? 'Show widget' : 'Hide widget')}: ${t(title)}`} title={t(column === 'hidden' ? 'Show widget' : 'Hide widget')}>{column === 'hidden' ? <Plus size={18} /> : <Minus size={18} />}</button>}
       </div>; })}
     </section>; })}
     <footer><button className="button quiet" onClick={() => setDraft(normalizeDashboardPreferences())}>{t('Reset layout')}</button><button className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" onClick={onSave}>{t('Save')}</button></footer>
