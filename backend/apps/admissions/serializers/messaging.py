@@ -139,6 +139,7 @@ class MessageChannelSerializer(serializers.ModelSerializer):
         return {
             'body': 'Message deleted' if message.deleted_at else message.body[:160],
             'attachment_name': '' if message.deleted_at or not message.attachment else message.attachment_name,
+            'sender_id': None if anonymous else message.sender_id,
             'sender_name': 'Anonymous' if anonymous else sender_name,
             'created_at': message.created_at,
         }

@@ -149,7 +149,7 @@ class TelegramFeedTests(SimpleTestCase):
         self.get()
         fetch.assert_called_once_with(None)
 
-    @patch('apps.admissions.telegram_feed.UPSTREAM_PAGES_PER_MINUTE', 2)
+    @patch('apps.admissions.telegram_feed.HISTORY_PAGES_PER_MINUTE', 2)
     @patch('apps.admissions.telegram_feed.WAIT_FOR_OTHER', 0)
     @patch('apps.admissions.telegram_feed.fetch_posts')
     def test_pages_asked_from_telegram_are_capped_per_minute(self, fetch):
@@ -157,6 +157,27 @@ class TelegramFeedTests(SimpleTestCase):
         self.keep(None, ['naseeb_edu/151'], 140)
         self.assertEqual([self.get(f'?before={cursor}').status_code for cursor in (140, 130, 120)], [200, 200, 503])
         self.assertEqual(fetch.call_count, 2)
+
+    @patch('apps.admissions.telegram_feed.HISTORY_PAGES_PER_MINUTE', 2)
+    @patch('apps.admissions.telegram_feed.WAIT_FOR_OTHER', 0)
+    @patch('apps.admissions.telegram_feed.fetch_posts')
+    def test_older_pages_cannot_use_up_the_newest_pages_budget(self, fetch):
+        fetch.return_value = {'channel': 'naseeb_edu', 'posts': ['naseeb_edu/100'], 'before': None}
+        self.keep(None, ['naseeb_edu/151'], 140, age=61)
+        statuses = [self.get(f'?before={cursor}').status_code for cursor in range(150, 100, -1)]
+        self.assertEqual(statuses.count(503), 48)
+        self.assertEqual(fetch.call_count, 2)
+        fetch.return_value = {'channel': 'naseeb_edu', 'posts': ['naseeb_edu/160'], 'before': 151}
+        self.assertEqual(self.get().data['posts'], ['naseeb_edu/160'])
+        fetch.assert_called_with(None)
+
+    @patch('apps.admissions.telegram_feed.LATEST_PAGES_PER_MINUTE', 1)
+    @patch('apps.admissions.telegram_feed.fetch_posts', side_effect=URLError('offline'))
+    def test_the_newest_page_is_capped_too(self, fetch):
+        for _ in range(3):
+            cache.delete(page_key(None) + ':lock')
+            self.get()
+        self.assertEqual(fetch.call_count, 1)
 
     @patch('apps.admissions.telegram_feed.fetch_posts')
     def test_a_made_up_cursor_gets_the_newest_page_and_no_cache_entry(self, fetch):

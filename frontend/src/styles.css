@@ -15377,6 +15377,10 @@ a:focus-visible {
   transform-origin: top left;
 }
 
+.app-brief:not([popover]) {
+  z-index: 1000;
+}
+
 .app-brief[data-side='above'] {
   top: auto;
   bottom: var(--brief-y);

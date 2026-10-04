@@ -212,9 +212,9 @@ const TELEGRAM_CHANNEL_ID = 'naseeb-telegram';
 
 // Telegram-style group preview: "You: hi" / "Madina: hi". Direct chats show the text alone.
 function previewSender(channel, user) {
-  const sender = channel.last_message?.sender_name;
+  const { sender_id: senderId, sender_name: sender } = channel.last_message || {};
   if (channel.kind === 'direct' || channel.is_saved_messages || !sender || sender === 'Anonymous') return '';
-  return `${sender === fullName(user) ? t('You') : sender.split(' ')[0]}: `;
+  return `${senderId != null && senderId === user.id ? t('You') : sender.split(' ')[0]}: `;
 }
 
 export function MessagesPage({ user, data, notify, initialChannel, channelId, onChannelOpened }) {
@@ -416,6 +416,19 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
     return () => window.clearTimeout(timer);
   }, [tab, search]);
 
+  // The workspace copy is fetched once per sign-in, so it goes stale while the
+  // student is elsewhere: update the open folder quietly, keeping the list and
+  // the selection as they are. A tab or search change supersedes it.
+  useEffect(() => {
+    const requestId = channelRequest.current;
+    const kind = tab;
+    api.messageChannels(kind).then((items) => {
+      if (requestId !== channelRequest.current) return;
+      setChannels((current) => [...current.filter((item) => item.kind !== kind), ...(items || [])]);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per visit
+  }, []);
+
   useEffect(() => {refreshOverview();}, [refreshOverview]);
 
   // A link to one chat (/messages/9, e.g. from the notification bell): open
@@ -523,7 +536,7 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
         setReplyTo(null);
         if (composerRef.current) {composerRef.current.style.height = 'auto';composerRef.current.focus();}
       }
-      setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, last_message: { body: sent.body, attachment_name: sent.attachment_file?.name || '', created_at: sent.created_at, sender_name: sent.sender_name }, last_message_at: sent.created_at } : item));
+      setChannels((current) => current.map((item) => item.id === channel.id ? { ...item, last_message: { body: sent.body, attachment_name: sent.attachment_file?.name || '', created_at: sent.created_at, sender_id: sent.sender_id, sender_name: sent.sender_name }, last_message_at: sent.created_at } : item));
     } catch (err) {
       if (activeChannelRef.current === channel.id) setSendError(err.message);
       else notify(err.message, 'error');
