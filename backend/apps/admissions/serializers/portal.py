@@ -1,10 +1,12 @@
 """Admissions API serializers — portal."""
+from datetime import timedelta
 from rest_framework import serializers
 from django.utils import timezone
 from apps.users.models import User
 from apps.users.serializers import ContactSerializer
 from ..models import (
     Booking,
+    MeetingAvailability,
     ProgramService,
     ScreenTimeDaily,
     StudentMessage,
@@ -28,6 +30,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
     participant_detail = ContactSerializer(source='participant', read_only=True)
     student_name = serializers.SerializerMethodField()
     is_expired = serializers.BooleanField(read_only=True)
+    availability_slot = serializers.PrimaryKeyRelatedField(queryset=MeetingAvailability.objects.all(), required=False, allow_null=True)
 
     class Meta:
         model = Booking
@@ -79,12 +82,47 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
             raise serializers.ValidationError('Choose a 30, 45, or 60 minute meeting.')
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        request = self.context.get('request')
+        if request and request.user.role == User.Role.STUDENT and self.instance is None:
+            participant = attrs.get('participant')
+            slot = attrs.get('availability_slot')
+            if slot:
+                if slot.participant_id != participant.id or slot.starts_at != attrs.get('starts_at') or slot.duration_minutes != attrs.get('duration_minutes', 45):
+                    raise serializers.ValidationError({'availability_slot': 'Choose a time from this staff member’s availability.'})
+                if slot.bookings.filter(status__in=Booking.OPEN_STATUSES).exists():
+                    raise serializers.ValidationError({'availability_slot': 'This time has already been requested.'})
+                nearby = Booking.objects.filter(
+                    participant=participant, status__in=Booking.OPEN_STATUSES,
+                    starts_at__lt=slot.starts_at + timedelta(minutes=slot.duration_minutes),
+                    starts_at__gt=slot.starts_at - timedelta(minutes=60),
+                )
+                if any(other.starts_at + timedelta(minutes=other.duration_minutes) > slot.starts_at for other in nearby):
+                    raise serializers.ValidationError({'availability_slot': 'This time overlaps another meeting.'})
+            elif MeetingAvailability.objects.filter(participant=participant, starts_at__gt=timezone.now()).exists():
+                raise serializers.ValidationError({'availability_slot': 'Choose an available time.'})
+        elif attrs.get('availability_slot'):
+            raise serializers.ValidationError({'availability_slot': 'Only students can choose an available time.'})
+        return attrs
+
 
 class BookingRescheduleSerializer(serializers.Serializer):
     """A new time for an existing request, checked by the same rules as a new one."""
 
     starts_at = serializers.DateTimeField()
     duration_minutes = serializers.IntegerField(required=False)
+    availability_slot = serializers.PrimaryKeyRelatedField(queryset=MeetingAvailability.objects.all(), required=False, allow_null=True)
+
+    validate_starts_at = BookingSerializer.validate_starts_at
+    validate_duration_minutes = BookingSerializer.validate_duration_minutes
+
+
+class MeetingAvailabilitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MeetingAvailability
+        fields = ('id', 'starts_at', 'duration_minutes')
+        read_only_fields = ('id',)
 
     validate_starts_at = BookingSerializer.validate_starts_at
     validate_duration_minutes = BookingSerializer.validate_duration_minutes

@@ -239,6 +239,47 @@ EXACT = {
         'uz': 'Eng yuqori ball eng yaxshi test kunidagi baldan past bo‘lmasligi kerak.',
         'ru': 'Лучший балл не может быть ниже балла за лучший день теста.',
     },
+    # Other tests and certificates in the Test scores section
+    'Choose the type of test or certificate.': {
+        'uz': 'Test yoki sertifikat turini tanlang.',
+        'ru': 'Выберите тип теста или сертификата.',
+    },
+    'Enter the name of the certificate.': {
+        'uz': 'Sertifikat nomini kiriting.',
+        'ru': 'Укажите название сертификата.',
+    },
+    'Enter your score or result.': {
+        'uz': 'Ball yoki natijangizni kiriting.',
+        'ru': 'Укажите балл или результат.',
+    },
+    'TOEFL iBT scores go from 0 to 120.': {
+        'uz': 'TOEFL iBT ballari 0 dan 120 gacha bo‘ladi.',
+        'ru': 'Баллы TOEFL iBT — от 0 до 120.',
+    },
+    'Duolingo English Test scores go from 10 to 160.': {
+        'uz': 'Duolingo English Test ballari 10 dan 160 gacha bo‘ladi.',
+        'ru': 'Баллы Duolingo English Test — от 10 до 160.',
+    },
+    'Duolingo scores go up in steps of 5, like 120 or 125.': {
+        'uz': 'Duolingo ballari 5 tadan oshadi, masalan 120 yoki 125.',
+        'ru': 'Баллы Duolingo идут с шагом 5, например 120 или 125.',
+    },
+    'PTE Academic scores go from 10 to 90.': {
+        'uz': 'PTE Academic ballari 10 dan 90 gacha bo‘ladi.',
+        'ru': 'Баллы PTE Academic — от 10 до 90.',
+    },
+    'ACT composite scores go from 1 to 36.': {
+        'uz': 'ACT umumiy bali 1 dan 36 gacha bo‘ladi.',
+        'ru': 'Общий балл ACT — от 1 до 36.',
+    },
+    'Cambridge English scores go from 80 to 230.': {
+        'uz': 'Cambridge English ballari 80 dan 230 gacha bo‘ladi.',
+        'ru': 'Баллы Cambridge English — от 80 до 230.',
+    },
+    'The test date cannot be in the future.': {
+        'uz': 'Test sanasi kelajakda bo‘lishi mumkin emas.',
+        'ru': 'Дата теста не может быть в будущем.',
+    },
     # Profile photo and file uploads
     'Only the student can change their own profile photo.': {
         'uz': 'Profil rasmini faqat o‘quvchining o‘zi o‘zgartira oladi.',
@@ -609,6 +650,10 @@ PATTERNS = (
     (_P(r'^With these section scores your overall band is ([\d.]+)\. Check your test report\.$'), {
         'uz': 'Bu bo‘lim ballari bilan umumiy ballingiz {0} bo‘ladi. Test natijangizni tekshiring.',
         'ru': 'С такими баллами за разделы общий балл — {0}. Проверьте результаты теста.',
+    }),
+    (_P(r'^You can add up to (\d+) other test scores or certificates\.$'), {
+        'uz': 'Boshqa test natijalari yoki sertifikatlardan ko‘pi bilan {0} tasini qo‘shish mumkin.',
+        'ru': 'Можно добавить не более {0} других результатов тестов или сертификатов.',
     }),
     (_P(r'^Answer .+ must be a whole number from 1 to 5\.$'), {
         'uz': 'Har bir javob 1 dan 5 gacha butun son bo‘lishi kerak.',

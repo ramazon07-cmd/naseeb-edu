@@ -7,6 +7,7 @@ from ..education_ai import latest_assessment_scores
 from ..models import (
     ChallengeAttempt,
     OpportunityProgram,
+    SavedOpportunityProgram,
     Scholarship,
     University,
     UniversityProgram,
@@ -15,6 +16,30 @@ from .base import RoleIsolationBase
 
 
 class CatalogResearchRoleIsolationTests(RoleIsolationBase):
+    def test_saved_programs_persist_and_are_private_to_each_student(self):
+        OpportunityProgram.objects.filter(source_key__isnull=False).delete()
+        program = OpportunityProgram.objects.create(
+            title='Research Program', provider='Naseeb',
+            program_type=OpportunityProgram.ProgramType.INTERNATIONAL, category='Research',
+        )
+        self.client.force_authenticate(self.student_a_user)
+        path = f'/api/opportunity-programs/{program.id}/save/'
+        self.assertEqual(self.client.post(path).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.post(path).status_code, status.HTTP_200_OK)
+        self.assertEqual(SavedOpportunityProgram.objects.filter(program=program).count(), 1)
+        self.assertEqual(self.client.get('/api/opportunity-programs/saved/').data['program_ids'], [program.id])
+
+        self.client.force_authenticate(self.student_b_user)
+        self.assertEqual(self.client.get('/api/opportunity-programs/saved/').data['program_ids'], [])
+        self.assertEqual(self.client.delete(path).status_code, status.HTTP_200_OK)
+        self.assertEqual(SavedOpportunityProgram.objects.filter(program=program).count(), 1)
+
+        self.client.force_authenticate(self.counselor)
+        self.assertEqual(self.client.post(path).status_code, status.HTTP_403_FORBIDDEN)
+        self.client.force_authenticate(self.student_a_user)
+        self.assertEqual(self.client.delete(path).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get('/api/opportunity-programs/saved/').data['program_ids'], [])
+
     def test_student_reads_active_scholarship_and_program_catalogs(self):
         active_scholarship = Scholarship.objects.create(
             title='Active Scholarship', provider='Naseeb', scholarship_type=Scholarship.Type.MERIT,
