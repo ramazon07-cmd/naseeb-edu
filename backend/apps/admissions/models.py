@@ -582,6 +582,17 @@ class OpportunityProgram(TimeStampedModel):
         return self.title
 
 
+class SavedOpportunityProgram(TimeStampedModel):
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='saved_opportunity_programs')
+    program = models.ForeignKey(OpportunityProgram, on_delete=models.CASCADE, related_name='saved_by_students')
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'program'], name='unique_student_saved_opportunity_program'),
+        ]
+
+
 class Application(TimeStampedModel):
     class Status(models.TextChoices):
         RESEARCHING = 'researching', 'Researching'
@@ -792,6 +803,18 @@ class LevelApproval(models.Model):
         return f'{self.student}: Level {self.from_level} → {self.to_level}'
 
 
+class MeetingAvailability(TimeStampedModel):
+    """A staff member's bookable, dated meeting slot."""
+
+    participant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='meeting_availability')
+    starts_at = models.DateTimeField()
+    duration_minutes = models.PositiveSmallIntegerField(default=45)
+
+    class Meta:
+        ordering = ['starts_at', 'id']
+        constraints = [models.UniqueConstraint(fields=['participant', 'starts_at'], name='unique_meeting_availability_start')]
+
+
 class Booking(TimeStampedModel):
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
@@ -811,6 +834,7 @@ class Booking(TimeStampedModel):
         blank=True,
         related_name='meeting_bookings',
     )
+    availability_slot = models.ForeignKey(MeetingAvailability, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
     topic = models.CharField(max_length=220)
     starts_at = models.DateTimeField()
     # Where the meeting was before the last reschedule request, so the other side sees what moved.

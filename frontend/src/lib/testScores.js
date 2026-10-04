@@ -7,6 +7,15 @@ export const IELTS_SECTIONS = [['ielts_listening', 'Listening'], ['ielts_reading
 export const IELTS_BANDS = Array.from({ length: 19 }, (_, i) => (18 - i) / 2);
 export const SUBJECT_SCORE_MAX = { AP: 5, IB: 7 };
 export const MAX_ATTEMPTS = 20;
+export const MAX_CERTIFICATES = 30;
+export const CERTIFICATE_TYPES = {
+  toefl: { label: 'TOEFL iBT', min: 0, max: 120, example: 'e.g. 105', range: 'TOEFL iBT scores go from 0 to 120.' },
+  duolingo: { label: 'Duolingo English Test', min: 10, max: 160, step: 5, example: 'e.g. 125', range: 'Duolingo English Test scores go from 10 to 160.' },
+  pte: { label: 'PTE Academic', min: 10, max: 90, example: 'e.g. 75', range: 'PTE Academic scores go from 10 to 90.' },
+  act: { label: 'ACT', min: 1, max: 36, example: 'e.g. 32', range: 'ACT composite scores go from 1 to 36.' },
+  cambridge: { label: 'Cambridge English', min: 80, max: 230, example: 'e.g. 190', range: 'Cambridge English scores go from 80 to 230.' },
+  other: { label: 'Other certificate', example: 'e.g. C1 / Pass' },
+};
 const EARLIEST_TEST_DATE = '2015-01-01';
 
 const blank = (value) => value == null || value === '';
@@ -98,6 +107,23 @@ export function validateTestScores(form, today = new Date()) {
     else if (score == null) errors[`subjects.${i}.score`] = ['Choose your score.'];
     else if (!Number.isInteger(score) || score < 1 || score > max) errors[`subjects.${i}.score`] = [row.type === 'AP' ? 'AP scores go from 1 to 5.' : 'IB scores go from 1 to 7.'];
   });
+  const certificates = form.certificates || [];
+  if (certificates.length > MAX_CERTIFICATES) errors.certificates = ['You can add up to {0} other test scores or certificates.', MAX_CERTIFICATES];
+  certificates.forEach((row, i) => {
+    const prefix = `certificates.${i}`;
+    const rule = CERTIFICATE_TYPES[row.type];
+    if (!rule) errors[`${prefix}.type`] = ['Choose the type of test or certificate.'];
+    if (row.type === 'other' && !String(row.name || '').trim()) errors[`${prefix}.name`] = ['Enter the name of the certificate.'];
+    const score = String(row.score ?? '').trim();
+    if (!score) errors[`${prefix}.score`] = ['Enter your score or result.'];
+    else if (rule && row.type !== 'other') {
+      if (!/^-?[0-9]+$/.test(score)) errors[`${prefix}.score`] = ['Enter a whole number.'];
+      else if (Number(score) < rule.min || Number(score) > rule.max) errors[`${prefix}.score`] = [rule.range];
+      else if (Number(score) % (rule.step || 1)) errors[`${prefix}.score`] = ['Duolingo scores go up in steps of 5, like 120 or 125.'];
+    }
+    if (row.test_date && row.test_date > isoDate(today)) errors[`${prefix}.test_date`] = ['The test date cannot be in the future.'];
+    else if (row.test_date && row.test_date < EARLIEST_TEST_DATE) errors[`${prefix}.test_date`] = ['Enter a date from 2015 or later.'];
+  });
   return errors;
 }
 
@@ -111,6 +137,12 @@ export function testScoresPayload(form) {
   for (const key of ['ielts_test_date', 'sat_test_date']) out[key] = blank(form[key]) ? null : form[key];
   out.sat_superscore = canSuperscore(form) ? form.sat_superscore ?? null : null;
   out.subjects = (form.subjects || []).map((row) => ({ type: row.type, subject: String(row.subject || '').trim(), score: num(row.score) }));
+  out.certificates = (form.certificates || []).map((row) => ({
+    type: row.type,
+    name: row.type === 'other' ? String(row.name || '').trim() : '',
+    score: row.type === 'other' ? String(row.score ?? '').trim() : Number(row.score),
+    test_date: row.test_date || null,
+  }));
   return out;
 }
 

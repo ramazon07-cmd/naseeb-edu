@@ -3,7 +3,8 @@
 Students can open the pinned Naseeb Edu channel in Messages → Groups. The feed
 opens at the latest post at the bottom, in chronological order. Older posts load
 above the current page without moving the reading position. Nearby post embeds
-are mounted on demand and released offscreen, retaining their measured height.
+are mounted on demand and released after moving well away from the viewport,
+retaining their measured height.
 The embeds follow the application’s light/dark theme.
 Post content and media are rendered in Telegram's own isolated post embeds.
 Subscriptions and other Telegram account actions open Telegram.
@@ -28,10 +29,12 @@ What it costs, and how the server is protected:
 - Each user is limited to `TELEGRAM_FEED_RATE` (60/minute). When no page can be had
   the endpoint answers 503 with `Retry-After`.
 
-In the browser, a post's embed frame loads only after the post has stayed on screen
-for 200 ms (fast scrolling passes posts by) and is released 600 ms after it leaves,
-which also stops anything it was downloading. Videos in a post are fetched in full
-by Telegram's widget while its frame is alive, so they are the largest cost.
+In the browser, a post's embed frame loads only after the post has stayed near the
+viewport for 200 ms (fast scrolling passes posts by). Once loaded, it remains
+mounted while within one viewport, with at least 600 px of margin, and is released
+3 seconds after moving farther away. This avoids reloading neighboring embeds
+while scrolling and stops distant media downloads. Telegram's widget may fetch
+videos in full while its frame is alive, so those are the largest cost.
 
 How loading looks: until a post's frame reports its size, the post shows an outline
 of text sized to the height measured earlier in the session (300 px for a post not

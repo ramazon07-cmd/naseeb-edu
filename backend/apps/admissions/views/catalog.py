@@ -1,11 +1,12 @@
 """Admissions API views — catalog."""
 from django.db.models import Count, Prefetch
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from apps.users.models import User
 from ..models import (
     OpportunityProgram,
+    SavedOpportunityProgram,
     School,
     Scholarship,
     StoreItem,
@@ -26,6 +27,11 @@ from ..catalog_cache import CachedCatalogListMixin
 from ..listing import ListQueryMixin
 from .common import CounselorOrOwnerPermission, ProductAdminPermission
 from .portal import StudentPortalPermission
+
+
+class SavedProgramPermission(StudentPortalPermission):
+    def has_object_permission(self, request, view, obj):
+        return True
 
 
 class SchoolViewSet(ListQueryMixin, viewsets.ModelViewSet):
@@ -147,6 +153,29 @@ class OpportunityProgramViewSet(CachedCatalogListMixin, viewsets.ReadOnlyModelVi
     # labelled in the UI instead of hidden here.
     queryset = OpportunityProgram.objects.filter(is_active=True)
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in {'saved', 'save'}:
+            return [SavedProgramPermission()]
+        return super().get_permissions()
+
+    @action(detail=False, methods=['get'])
+    def saved(self, request):
+        ids = SavedOpportunityProgram.objects.filter(
+            student=request.user.student_profile,
+            program__is_active=True,
+        ).values_list('program_id', flat=True)
+        return Response({'program_ids': list(ids)})
+
+    @action(detail=True, methods=['post', 'delete'])
+    def save(self, request, pk=None):
+        program = self.get_object()
+        lookup = {'student': request.user.student_profile, 'program': program}
+        if request.method == 'POST':
+            SavedOpportunityProgram.objects.get_or_create(**lookup)
+            return Response({'program_id': program.id, 'saved': True}, status=status.HTTP_200_OK)
+        SavedOpportunityProgram.objects.filter(**lookup).delete()
+        return Response({'program_id': program.id, 'saved': False}, status=status.HTTP_200_OK)
 
 
 class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):

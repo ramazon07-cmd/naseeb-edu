@@ -20,7 +20,7 @@ SECTION_FIELDS = {
         'family_income', 'residency_status', 'guardian_name', 'guardian_relation', 'guardian_contact',
     }),
     Section.ACADEMICS: frozenset({'school_name', 'country', 'state', 'city', 'class_size', 'class_rank', 'gpa_scale', 'gpa'}),
-    Section.TESTS: frozenset({*EXAM_KEYS, 'subjects'}),
+    Section.TESTS: frozenset({*EXAM_KEYS, 'subjects', 'certificates'}),
     Section.GOAL: frozenset({'target_countries', 'interests', 'program_strengths', 'personal_story'}),
     Section.HONORS: frozenset({'honors'}),
     Section.ACTIVITIES: frozenset({'activities'}),
