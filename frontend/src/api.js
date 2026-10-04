@@ -177,7 +177,8 @@ async function saveOpenEditors(timeoutMs) {
 const SESSION_ENDED_EVENT = 'naseeb:session-ended'
 
 // Fires when this tab is left without a session: a request came back 401 with
-// no tokens to refresh, or another tab signed out (it clears the shared tokens).
+// no tokens to refresh, the refresh token was rejected, or another tab signed
+// out (it clears the shared tokens).
 // Without it, parts that fetch on their own (screen time, chat polling) keep
 // running on a dead session and show the raw 401.
 function onSessionEnded(callback) {
@@ -232,7 +233,13 @@ function errorMessage(payload) {
 // One shared refresh for every caller: parallel 401s must not each spend the
 // (rotating, blacklisted-after-use) refresh token and then wipe the new pair.
 const refreshAccessToken = createRefresher({
-  store: tokens,
+  store: {
+    ...tokens,
+    clear() {
+      tokens.clear()
+      window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
+    },
+  },
   lock: browserLock('naseeb-token-refresh'),
   jitterMs: 300,
   send: async (refresh) => {

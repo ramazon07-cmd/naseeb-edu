@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DASHBOARD_WIDGETS, LOCKED_WIDGETS, dashboardColumns, isLockedWidget, moveDashboardWidget, normalizeDashboardPreferences, setWidgetHidden } from '../src/dashboardPreferences.js';
+import { DASHBOARD_WIDGETS, LOCKED_WIDGETS, THREE_ACROSS_MIN_WIDTH, dashboardColumns, isLockedWidget, moveDashboardWidget, normalizeDashboardPreferences, setWidgetHidden } from '../src/dashboardPreferences.js';
 test('invalid and old stored preferences preserve every supported card once', () => {
   assert.deepEqual(normalizeDashboardPreferences(null), { order: DASHBOARD_WIDGETS, hidden: [], rail: ['roadmap', 'discovery', 'programs'] });
   const result = normalizeDashboardPreferences({order: ['team', 'removed', 'team'], hidden: ['removed', 'meetings', 'meetings']});
@@ -62,7 +62,7 @@ test('every layout draws each visible widget once, and the locked ones always', 
   for (const hidden of subsets(DASHBOARD_WIDGETS)) {
     for (const rail of subsets(DASHBOARD_WIDGETS)) {
       const { order, hidden: kept } = normalizeDashboardPreferences({ order: [...DASHBOARD_WIDGETS].reverse(), hidden, rail });
-      const columns = dashboardColumns({ order, hidden, rail });
+      const columns = dashboardColumns({ order, hidden, rail }, THREE_ACROSS_MIN_WIDTH);
       const drawn = columns.flatMap((column) => column.ids);
       assert.equal(new Set(drawn).size, drawn.length, 'no widget twice');
       assert.deepEqual([...drawn].sort(), order.filter((id) => !kept.includes(id)).sort());
@@ -98,12 +98,17 @@ test('the main column is cut one or three tiles wide so it matches the side colu
   assert.deepEqual([main.ids, main.across, main.wideLast, main.rows], [['journey', 'applications', 'tasks'], 1, false, 3]);
   assert.deepEqual([rail.ids, rail.across], [['roadmap', 'discovery', 'programs'], 1]);
   // Discovery and programs hidden: six beside one would leave the side column far short.
-  const [six] = dashboardColumns({ hidden: ['discovery', 'programs'] });
+  const [six] = dashboardColumns({ hidden: ['discovery', 'programs'] }, THREE_ACROSS_MIN_WIDTH);
   assert.deepEqual([six.ids.length, six.across, six.rows, six.lastSpan, six.fewRows], [6, 3, 2, 1, true]);
-  const [five] = dashboardColumns({ hidden: ['discovery', 'programs', 'screen_time'] });
+  const [five] = dashboardColumns({ hidden: ['discovery', 'programs', 'screen_time'] }, 1200);
   assert.deepEqual([five.ids.length, five.across, five.rows, five.lastSpan, five.wideLast], [5, 3, 2, 2, true]);
+  // A board narrower than CSS needs for three across (or not measured yet) keeps two.
+  for (const width of [undefined, 0, THREE_ACROSS_MIN_WIDTH - 1]) {
+    const [narrow] = dashboardColumns({ hidden: ['discovery', 'programs'] }, width);
+    assert.deepEqual([narrow.across, narrow.rows, narrow.lastSpan, narrow.fewRows], [2, 3, 1, false]);
+  }
   // The default layout (six beside three) and near matches keep two across.
-  for (const layout of [{}, { hidden: ['programs'] }, { hidden: ['discovery'] }, { hidden: [...hidden, 'programs'] }]) assert.equal(dashboardColumns(layout)[0].across, 2);
+  for (const layout of [{}, { hidden: ['programs'] }, { hidden: ['discovery'] }, { hidden: [...hidden, 'programs'] }]) assert.equal(dashboardColumns(layout, THREE_ACROSS_MIN_WIDTH)[0].across, 2);
 });
 
 test('a side rail with no main column beside it is drawn as the main column', () => {

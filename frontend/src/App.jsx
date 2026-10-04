@@ -390,7 +390,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   </div>;
 }
 
-function PageRouter({ page, params, user, data, stats, query, setQuery, reload, notify, setPage, search, navigate, language, changeLanguage, updateUser }) {
+function PageRouter({ page, params, user, data, stats, query, setQuery, reload, notify, setPage, search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources }) {
   const [directChannel, setDirectChannel] = useState(null);
   const openingDirect = useRef(false);
   useEffect(() => {if (page !== 'messages') setDirectChannel(null);}, [page]);
@@ -411,7 +411,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (isPlatformAdmin(user) && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (isCounselor(user) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
-  if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect }} />;
+  if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources }} />;
   if (user.role === 'student' && page === 'student_center') {
     const editSection = new URLSearchParams(search).get('edit');
     return <StudentCenterPage {...{ user, data, query, reload, notify, setPage }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} editSection={editSection}
@@ -591,6 +591,7 @@ export default function App() {
     resetWorkspace();
     api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
+  const loadResources = useCallback((keys) => ensureLoaded(user, keys), [ensureLoaded, user]);
 
   if (bootstrapping) return <AppBootLoader message="Checking your secure session…" />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={bootstrapSession} onSignOut={logout} />;
@@ -601,7 +602,7 @@ export default function App() {
   if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
     <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
-      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, setQuery, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser }} /></LazyBoundary>
+      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, setQuery, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources }} /></LazyBoundary>
     </AppShell>
     {signOutPrompt && <Modal title={t("Sign out?")} backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
       <div className="sign-out-prompt" role="alert">

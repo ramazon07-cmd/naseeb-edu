@@ -40,10 +40,14 @@ export function setWidgetHidden(preferences, id, hidden) {
   return next;
 }
 
+// The board width (its content box) from which CSS draws three tiles across; see
+// the `@container board` rule in dashboard.css.
+export const THREE_ACROSS_MIN_WIDTH = 1060;
+
 // The columns the dashboard draws: visible widgets only, in order. A side rail
 // with no main column beside it is drawn as the main column, so a layout never
 // stretches a narrow rail across the whole page.
-export function dashboardColumns(preferences) {
+export function dashboardColumns(preferences, boardWidth = 0) {
   const { order, hidden, rail } = normalizeDashboardPreferences(preferences);
   const visible = order.filter((id) => !hidden.includes(id));
   let main = visible.filter((id) => !rail.includes(id));
@@ -52,11 +56,11 @@ export function dashboardColumns(preferences) {
   // The main column leads, so it must neither end above the side column nor far
   // below it. Two tiles wide it would, so it is cut one wide when the side column
   // has more tiles than it has rows (the two split the board in half), and three
-  // wide when it has two rows or more to spare.
+  // wide when it has two rows or more to spare and the board is wide enough.
   const twoWideRows = Math.ceil(main.length / 2);
   let across = 2;
   if (side.length && twoWideRows < side.length) across = 1;
-  else if (side.length && main.length >= 5 && twoWideRows - side.length >= 2) across = 3;
+  else if (side.length && main.length >= 5 && twoWideRows - side.length >= 2 && boardWidth >= THREE_ACROSS_MIN_WIDTH) across = 3;
   return [['main', main], ['rail', side]].filter(([, ids]) => ids.length).map(([column, ids]) => {
     const wide = column === 'main' ? across : 1;
     const rows = Math.ceil(ids.length / wide);
