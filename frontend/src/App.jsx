@@ -424,7 +424,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (page === 'messages') return <MessagesPage {...{ user, data, notify }} initialChannel={directChannel} channelId={params.channelId} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;
-  if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query, search, navigate }} />;
+  if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query, search, navigate, notify }} />;
   if (user.role === 'student' && page === 'essay_lab') return <EssayLab user={user} notify={notify} essayId={params.essayId} onEssay={(essayId) => setPage(page, { essayId })} />;
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;

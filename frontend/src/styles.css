@@ -18015,3 +18015,55 @@ button.cx-search {
   }
 }
 /* == counselor workspace end == */
+/* Meeting availability picker and staff schedule. */
+.availability-picker {
+  display: grid;
+  gap: 1rem;
+}
+
+.availability-picker h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.availability-dates,
+.availability-times,
+.booking-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.availability-dates button,
+.availability-times button {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  padding: .75rem 1rem;
+  cursor: pointer;
+}
+
+.availability-dates button.selected,
+.availability-times button.selected {
+  border-color: var(--accent-deep);
+  background: var(--surface-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-deep);
+}
+
+.availability-times button:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.availability-times small {
+  display: block;
+  font-size: .72rem;
+  opacity: .7;
+}
+
+
+
+
+

@@ -1,7 +1,7 @@
 import { Children, cloneElement } from 'react';
 import { t, tx, formatNumberLocale } from '../i18n';
 import { dateText } from '../lib/format';
-import { IELTS_BANDS, IELTS_SECTIONS, MAX_ATTEMPTS, SUBJECT_SCORE_MAX, canSuperscore, ieltsOverall, satSentTotal } from '../lib/testScores';
+import { CERTIFICATE_TYPES, IELTS_BANDS, IELTS_SECTIONS, MAX_ATTEMPTS, MAX_CERTIFICATES, SUBJECT_SCORE_MAX, canSuperscore, ieltsOverall, satSentTotal } from '../lib/testScores';
 
 // Test-score questions for the profile form. Each block takes the shared form
 // state, so it can later be dropped into an inline editor one section at a time.
@@ -183,8 +183,46 @@ export function SubjectScoresFields({ form, update, errors = {} }) {
   </section>;
 }
 
+export function CertificateScoresFields({ form, update, errors = {} }) {
+  const rows = form.certificates || [];
+  const change = (i, patch) => update('certificates', rows.map((row, n) => (n === i ? { ...row, ...patch } : row)));
+  return <section className="test-score-block" aria-labelledby="ts-certificates-title">
+    <h3 id="ts-certificates-title">{t('Other tests & certificates')} <small>({t('optional')})</small></h3>
+    <p className="test-score-intro">{t('Add results you already have, such as TOEFL, Duolingo, PTE, ACT or Cambridge. You can name any other certificate too.')}</p>
+    {errors.certificates && <p className="onboarding-field-error" role="alert">{errorText(errors.certificates)}</p>}
+    <div className="onboarding-rows">
+      {rows.map((row, i) => {
+        const rule = CERTIFICATE_TYPES[row.type];
+        return <fieldset key={i} className="test-score-row">
+          <legend>{tx`Result ${i + 1}`}</legend>
+          <div className="onboarding-grid">
+            <Question name={`certificates.${i}.type`} label={t('Test or certificate')} error={errors[`certificates.${i}.type`]}>
+              <select value={row.type || ''} onChange={(e) => change(i, { type: e.target.value, name: '', score: '' })}>
+                <option value="">{t('Select')}</option>
+                {Object.entries(CERTIFICATE_TYPES).map(([value, spec]) => <option key={value} value={value}>{t(spec.label)}</option>)}
+              </select>
+            </Question>
+            {row.type === 'other' && <Question name={`certificates.${i}.name`} label={t('Certificate name')} error={errors[`certificates.${i}.name`]}>
+              <input value={row.name || ''} maxLength={120} placeholder={t('e.g. Goethe-Zertifikat C1')} onChange={(e) => change(i, { name: e.target.value })} />
+            </Question>}
+            <Question name={`certificates.${i}.score`} label={row.type === 'other' ? t('Result or score') : t('Score')} error={errors[`certificates.${i}.score`]}
+              help={rule?.range ? t(rule.range) : undefined}>
+              <input type={row.type === 'other' ? 'text' : 'number'} inputMode={row.type === 'other' ? undefined : 'numeric'} min={rule?.min} max={rule?.max} step={rule?.step || 1} maxLength={row.type === 'other' ? 40 : undefined} value={row.score ?? ''} placeholder={rule ? t(rule.example) : t('e.g. 105')} onChange={(e) => change(i, { score: e.target.value })} />
+            </Question>
+            <Question name={`certificates.${i}.test_date`} label={t('Test date (optional)')} error={errors[`certificates.${i}.test_date`]}>
+              <input type="date" min="2015-01-01" value={row.test_date || ''} onChange={(e) => change(i, { test_date: e.target.value })} />
+            </Question>
+          </div>
+          <button className="button quiet" type="button" onClick={() => update('certificates', rows.filter((_, n) => n !== i))}>{tx`Remove result ${i + 1}`}</button>
+        </fieldset>;
+      })}
+      <button type="button" className="button secondary" onClick={() => update('certificates', [...rows, { type: '', name: '', score: '', test_date: '' }])} disabled={rows.length >= MAX_CERTIFICATES}>+ {t('Add another result')}</button>
+    </div>
+  </section>;
+}
+
 export function TestScoresFields(props) {
-  return <div className="onboarding-tests"><IeltsFields {...props} /><SatFields {...props} /><SubjectScoresFields {...props} /></div>;
+  return <div className="onboarding-tests"><IeltsFields {...props} /><SatFields {...props} /><SubjectScoresFields {...props} /><CertificateScoresFields {...props} /></div>;
 }
 
 // Read-only summary for the student, counselors and school staff.
@@ -202,6 +240,7 @@ export function TestScoreSummary({ student }) {
   const satTaken = student.sat_score != null;
   const hasIeltsSections = IELTS_SECTIONS.every(([key]) => student[key] != null);
   const subjects = student.application_profile?.subjects || [];
+  const certificates = student.application_profile?.certificates || [];
   return <div className="test-score-summary">
     <article>
       <header><span>IELTS</span><b>{ieltsTaken ? band(student.ielts_score) : '—'}</b></header>
@@ -222,6 +261,10 @@ export function TestScoreSummary({ student }) {
     {subjects.length > 0 && <article>
       <header><span>AP / IB</span><b>{formatNumberLocale(subjects.length)}</b></header>
       <dl className="test-score-parts">{subjects.map((row, i) => <div key={i}><dt>{row.type} · {row.subject}</dt><dd>{row.score}</dd></div>)}</dl>
+    </article>}
+    {certificates.length > 0 && <article>
+      <header><span>{t('Other tests & certificates')}</span><b>{formatNumberLocale(certificates.length)}</b></header>
+      <dl className="test-score-parts">{certificates.map((row, i) => <div key={i}><dt>{row.type === 'other' ? row.name : t(CERTIFICATE_TYPES[row.type]?.label || row.type)}{row.test_date ? ` · ${dateText(row.test_date)}` : ''}</dt><dd>{row.score}</dd></div>)}</dl>
     </article>}
   </div>;
 }

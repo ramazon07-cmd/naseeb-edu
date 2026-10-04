@@ -66,3 +66,26 @@ test('profile data maps back into form answers', () => {
   assert.equal(form.sat_superscore, null);
   assert.equal(testScoresFromProfile({ ielts_score: '7.0', sat_score: 1400 }).sat_status, 'taken');
 });
+
+test('other certificates validate against their own scoring rules and survive a profile edit', () => {
+  const certificates = [
+    { type: 'toefl', score: '105', test_date: '2026-05-01' },
+    { type: 'other', name: 'Goethe-Zertifikat', score: 'C1', test_date: '' },
+  ];
+  assert.deepEqual(keys({ certificates }), []);
+  assert.deepEqual(testScoresPayload({ certificates }).certificates, [
+    { type: 'toefl', name: '', score: 105, test_date: '2026-05-01' },
+    { type: 'other', name: 'Goethe-Zertifikat', score: 'C1', test_date: null },
+  ]);
+});
+
+test('other certificate errors are tied to the correct row and field', () => {
+  const certificates = [
+    { type: 'duolingo', score: '121', test_date: '' },
+    { type: 'act', score: '37', test_date: '' },
+    { type: 'other', name: '', score: '', test_date: '2026-10-01' },
+  ];
+  assert.deepEqual(keys({ certificates }), [
+    'certificates.0.score', 'certificates.1.score', 'certificates.2.name', 'certificates.2.score', 'certificates.2.test_date',
+  ]);
+});

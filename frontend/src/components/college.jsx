@@ -5,6 +5,11 @@ import { dateText } from '../lib/format';
 import { label } from '../lib/labels';
 import { COLLEGE_AID_FLAGS, PRICE_SCALE_MAX, SAT_SCALE, SCORE_PARTS, daysUntil, dueLabel, dueTone, scalePercent, shortDate } from '../lib/college';
 
+// One checkbox/radio row of a filter list, with its live result count.
+export function FilterOption({ type = 'checkbox', name, checked, disabled = false, onChange, count, children }) {
+  return <label className="filter-option"><input type={type} name={name} checked={checked} disabled={disabled} onChange={onChange} /><span>{children}</span>{count != null && <em>{typeof count === 'number' ? formatNumberLocale(count) : count}</em>}</label>;
+}
+
 export function TierBand({ value }) {
   return <span className={`tier-band ${value}`}>{label(value)}</span>;
 }
