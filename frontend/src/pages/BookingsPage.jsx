@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { t, tx, locale, formatDateLocale } from '../i18n';
 import { Modal, Badge, Empty, Panel } from '../components/ui';
@@ -126,6 +126,8 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
   const person = participants.find((item) => String(item.id) === participantId);
   const personName = person ? fullName(person) || person.username : '';
   const duration = selectedSlot?.duration_minutes || personSlots[0]?.duration_minutes;
+  // Nobody can be booked through slots until they publish some: ask for any time instead.
+  const freeForm = !loading && Boolean(participantId) && !personSlots.some((slot) => slot.available);
   function choosePerson(id) {
     const next = slots.filter((slot) => slot.participant === id && slot.available).sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at))[0];
     setParticipantId(String(id));
@@ -134,7 +136,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
   }
   async function submit(event) {
     event.preventDefault();
-    if (!staff && !selectedSlot) return;
+    if (!staff && !selectedSlot && !freeForm) return;
     setSaving(true);
     const values = new FormData(event.currentTarget);
     try {
@@ -144,6 +146,10 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
         starts_at: new Date(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
         notes: values.get('notes')
+      } : freeForm ? {
+        participant: Number(participantId), topic, notes,
+        starts_at: new Date(values.get('starts_at')).toISOString(),
+        duration_minutes: Number(values.get('duration_minutes')),
       } : {
         participant: Number(participantId), availability_slot: selectedSlot.id,
         topic, starts_at: selectedSlot.starts_at, duration_minutes: selectedSlot.duration_minutes, notes
@@ -191,9 +197,16 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
         </div>
       </> : <>
         <h3>{t("Choose a date and time")}</h3>
-        {loading ? <p className="booking-cal-note">{t("Loading available times…")}</p> : !participantId ? null : personSlots.some((slot) => slot.available)
-          ? <SlotCalendar key={participantId} slots={personSlots} selectedDate={selectedDate} onDate={(key) => { setSelectedDate(key); setSelectedSlot(null); }} selectedSlot={selectedSlot} onSlot={setSelectedSlot} onNext={() => setStep('details')} />
-          : <p className="booking-cal-note">{t("No available times yet. Ask this person to add their availability.")}</p>}
+        {loading ? <p className="booking-cal-note">{t("Loading available times…")}</p> : !participantId ? null : freeForm
+          ? <div className="booking-cal-fields">
+            <p className="booking-cal-note">{t("No published times yet. Suggest a time and they will confirm it.")}</p>
+            <Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required /></Field>
+            <Field label={t("Duration")}><select name="duration_minutes" defaultValue="45"><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field>
+            <Field label={t("Topic")}><input name="topic" required value={topic} onChange={(event) => setTopic(event.target.value)} placeholder={t("Essay review, university list...")} /></Field>
+            <Field label={t("Notes")}><textarea name="notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t("What would you like to discuss?")} /></Field>
+            <div><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Requesting…") : t("Request meeting")}</button></div>
+          </div>
+          : <SlotCalendar key={participantId} slots={personSlots} selectedDate={selectedDate} onDate={(key) => { setSelectedDate(key); setSelectedSlot(null); }} selectedSlot={selectedSlot} onSlot={setSelectedSlot} onNext={() => setStep('details')} />}
       </>}
     </section>
   </form></Modal>;
@@ -279,26 +292,39 @@ function localInputValue(iso) {
 export function RescheduleForm({ booking, staff = false, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   const [slots, setSlots] = useState([]);
+  const [loading, setLoading] = useState(!staff && Boolean(booking.participant));
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const form = useRef(null);
   useEffect(() => {
     if (staff || !booking.participant) return undefined;
     let active = true;
-    api.bookingAvailability(booking.participant).then((items) => { if (active) setSlots(items || []); }).catch((err) => { if (active) notify(err.message, 'error'); });
+    const current = new Date(booking.starts_at).getTime();
+    api.bookingAvailability(booking.participant).then((items) => {
+      if (!active) return;
+      // The meeting's own slot (or time) is where it already is, not a new time.
+      const next = (items || [])
+        .map((slot) => (slot.id === booking.availability_slot || new Date(slot.starts_at).getTime() === current ? { ...slot, available: false } : slot))
+        .sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
+      setSlots(next);
+      const first = next.find((slot) => slot.available);
+      if (first) setSelectedDate(dayKey(first.starts_at));
+    }).catch((err) => { if (active) notify(err.message, 'error'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [staff, booking.participant, notify]);
-  const dates = [...new Set(slots.map((slot) => new Date(slot.starts_at).toDateString()))];
-  const daySlots = slots.filter((slot) => new Date(slot.starts_at).toDateString() === (selectedDate || dates[0]));
+  }, [staff, booking.participant, booking.availability_slot, booking.starts_at, notify]);
+  // Staff, or a participant without open slots: any date and time, as before slots existed.
+  const freeForm = staff || (!loading && !slots.some((slot) => slot.available));
   async function submit(event) {
     event.preventDefault();
-    if (!staff && !selectedSlot) return;
+    if (!freeForm && !selectedSlot) return;
     setSaving(true);
     const values = new FormData(event.currentTarget);
     try {
-      await api.rescheduleBooking(booking.id, {
-        starts_at: staff ? new Date(values.get('starts_at')).toISOString() : selectedSlot.starts_at,
-        duration_minutes: staff ? Number(values.get('duration_minutes')) : selectedSlot.duration_minutes,
-        ...(!staff && { availability_slot: selectedSlot.id }),
+      await api.rescheduleBooking(booking.id, freeForm ? {
+        starts_at: new Date(values.get('starts_at')).toISOString(),
+        duration_minutes: Number(values.get('duration_minutes')),
+      } : {
+        starts_at: selectedSlot.starts_at, duration_minutes: selectedSlot.duration_minutes, availability_slot: selectedSlot.id,
       });
       notify(t("New time sent for confirmation."));
       onSaved();
@@ -309,7 +335,8 @@ export function RescheduleForm({ booking, staff = false, onClose, onSaved, notif
     }
   }
   const otherParty = (staff ? booking.student_name : booking.participant_name) || t("Meeting participant");
-  return <Modal title={staff ? t("Suggest another time") : t("Reschedule meeting")} onClose={onClose}><form className="form-grid" onSubmit={submit}><p className="form-wide">{t("The new time goes back to {name} to confirm.", { name: otherParty })}</p>{staff ? <><Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required defaultValue={localInputValue(booking.starts_at)} /></Field><Field label={t("Duration")}><select name="duration_minutes" defaultValue={String(booking.duration_minutes || 45)}><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field></> : <div className="form-wide availability-picker"><h3>{t("Choose a new date and time")}</h3>{dates.length ? <><div className="availability-dates">{dates.map((date) => <button key={date} type="button" className={(selectedDate || dates[0]) === date ? 'selected' : ''} onClick={() => { setSelectedDate(date); setSelectedSlot(null); }}>{formatDateLocale(date, { weekday: 'short', month: 'short', day: 'numeric' })}</button>)}</div><div className="availability-times">{daySlots.map((slot) => <button key={slot.id} type="button" disabled={!slot.available && slot.id !== booking.availability_slot} className={selectedSlot?.id === slot.id ? 'selected' : ''} onClick={() => setSelectedSlot(slot)}>{clockText(slot.starts_at)} <small>{slot.duration_minutes} {t("min")}</small></button>)}</div></> : <p>{t("No available times yet. Ask this person to add their availability.")}</p>}</div>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || (!staff && !selectedSlot)} aria-busy={saving}>{saving ? t("Sending…") : t("Propose new time")}</button></div></form></Modal>;
+  const calendar = !loading && !freeForm;
+  return <Modal title={staff ? t("Suggest another time") : t("Reschedule meeting")} onClose={onClose} className={calendar ? 'booking-scheduler-modal' : undefined}><form ref={form} className="form-grid" onSubmit={submit}><p className="form-wide">{t("The new time goes back to {name} to confirm.", { name: otherParty })}</p>{loading ? <p className="form-wide booking-cal-note">{t("Loading available times…")}</p> : freeForm ? <><Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required defaultValue={localInputValue(booking.starts_at)} /></Field><Field label={t("Duration")}><select name="duration_minutes" defaultValue={String(booking.duration_minutes || 45)}><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field></> : <div className="form-wide availability-picker"><h3>{t("Choose a new date and time")}</h3><SlotCalendar slots={slots} selectedDate={selectedDate} onDate={(key) => { setSelectedDate(key); setSelectedSlot(null); }} selectedSlot={selectedSlot} onSlot={setSelectedSlot} onNext={() => form.current?.requestSubmit()} /></div>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || loading || (!freeForm && !selectedSlot)} aria-busy={saving}>{saving ? t("Sending…") : t("Propose new time")}</button></div></form></Modal>;
 }
 
 export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {

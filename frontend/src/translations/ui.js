@@ -26,7 +26,7 @@ export const UI_TRANSLATIONS = {
   'Loading available times…': ['Bo‘sh vaqtlar yuklanmoqda…', 'Загружаются свободные часы…'],
   'Available dates': ['Bo‘sh sanalar', 'Доступные даты'],
   'Available times': ['Bo‘sh vaqtlar', 'Доступное время'],
-  'No available times yet. Ask this person to add their availability.': ['Hozircha bo‘sh vaqt yo‘q. Mutaxassisdan vaqt qo‘shishini so‘rang.', 'Свободного времени пока нет. Попросите специалиста добавить часы.'],
+  'No published times yet. Suggest a time and they will confirm it.': ['Hozircha bo‘sh vaqt e’lon qilinmagan. Vaqt taklif qiling, mutaxassis uni tasdiqlaydi.', 'Свободное время пока не опубликовано. Предложите время, и специалист его подтвердит.'],
   'What would you like to discuss?': ['Nimani muhokama qilmoqchisiz?', 'Что вы хотели бы обсудить?'],
   'Available time added.': ['Bo‘sh vaqt qo‘shildi.', 'Доступное время добавлено.'],
   'Available time removed.': ['Bo‘sh vaqt o‘chirildi.', 'Доступное время удалено.'],
