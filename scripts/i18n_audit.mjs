@@ -9,10 +9,17 @@ const parser = require('@babel/parser')
 const traverse = require('@babel/traverse').default
 const generate = require('@babel/generator').default
 
-const appPath = path.join(root, 'frontend/src/App.jsx')
 const i18nPath = path.join(root, 'frontend/src/i18n.js')
-const source = fs.readFileSync(appPath, 'utf8')
-const ast = parser.parse(source, { sourceType: 'module', plugins: ['jsx'] })
+// App.jsx plus every module split out of it (see frontend_smoke.js's own
+// workspaceDirs) — most t()/tx calls live in pages/components/hooks/lib now,
+// not App.jsx, so the audit has to parse all of them, not just the shell.
+const workspaceDirs = ['frontend/src/pages', 'frontend/src/components', 'frontend/src/hooks', 'frontend/src/lib']
+const workspaceFiles = [
+  path.join(root, 'frontend/src/App.jsx'),
+  ...workspaceDirs.filter((dir) => fs.existsSync(path.join(root, dir))).flatMap((dir) =>
+    fs.readdirSync(path.join(root, dir)).filter((name) => /\.jsx?$/.test(name)).sort()
+      .map((name) => path.join(root, dir, name))),
+]
 const keys = new Map()
 const { TRANSLATIONS } = await import(`${path.toNamespacedPath(i18nPath)}?audit=${Date.now()}`)
 const dictionary = Object.fromEntries(Object.entries(TRANSLATIONS).map(([language, messages]) => [language, new Set(Object.keys(messages))]))
@@ -20,6 +27,9 @@ const translatedAttributes = new Set(['aria-label', 'description', 'hint', 'labe
 const translatedObjectProperties = new Set(['description', 'label', 'note', 'title'])
 const feedbackCalls = new Set(['notify', 'setBootstrapError', 'setError'])
 const dynamicIssues = []
+// Set before each file's traversal: scanning many files now (not just
+// App.jsx), so every recorded hit needs to say which one it came from.
+let currentFile = ''
 
 function normalized(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
@@ -29,10 +39,10 @@ function addKey(value, line, origin) {
   const key = normalized(value)
   if (!key || !/[A-Za-z]/.test(key)) return
   if (!keys.has(key)) keys.set(key, [])
-  keys.get(key).push({ line, origin })
+  keys.get(key).push({ file: currentFile, line, origin })
 }
 
-traverse(ast, {
+const visitors = {
   JSXAttribute(pathRef) {
     const name = pathRef.node.name?.name
     if (!translatedAttributes.has(name)) return
@@ -59,7 +69,7 @@ traverse(ast, {
         if (!/[A-Za-z]/.test(value)) return
         const signature = `${stringPath.node.loc?.start.line}:${value}`
         if (!dynamicIssues.some((issue) => issue.signature === signature)) {
-          dynamicIssues.push({ line: stringPath.node.loc?.start.line, source: JSON.stringify(value), origin: 'jsx-string', signature })
+          dynamicIssues.push({ file: currentFile, line: stringPath.node.loc?.start.line, source: JSON.stringify(value), origin: 'jsx-string', signature })
         }
       },
       TemplateLiteral(templatePath) {
@@ -78,7 +88,7 @@ traverse(ast, {
         if (closestAttributeName && !translatedAttributes.has(closestAttributeName)) return
         const source = generate(templatePath.node).code
         const signature = `${templatePath.node.loc?.start.line}:${source}`
-        if (!dynamicIssues.some((issue) => issue.signature === signature)) dynamicIssues.push({ line: templatePath.node.loc?.start.line, source, origin: 'jsx-template', signature })
+        if (!dynamicIssues.some((issue) => issue.signature === signature)) dynamicIssues.push({ file: currentFile, line: templatePath.node.loc?.start.line, source, origin: 'jsx-template', signature })
       },
     })
   },
@@ -91,6 +101,13 @@ traverse(ast, {
     if (pathRef.node.callee.type === 'Identifier' && pathRef.node.callee.name === 't') {
       const argument = pathRef.node.arguments[0]
       if (argument?.type === 'StringLiteral') addKey(argument.value, argument.loc?.start.line, 't()')
+    }
+    // tp(key, count, vars): the plural pattern is its own key, same as t() — the
+    // t()-only check above never covered `tp`, so plural strings sitting apart
+    // from any t()/tx use never got a coverage check.
+    if (pathRef.node.callee.type === 'Identifier' && pathRef.node.callee.name === 'tp') {
+      const argument = pathRef.node.arguments[0]
+      if (argument?.type === 'StringLiteral') addKey(argument.value, argument.loc?.start.line, 'tp()')
     }
     const calleeName = pathRef.node.callee?.name
     const isConfirm = pathRef.node.callee?.type === 'MemberExpression'
@@ -116,7 +133,7 @@ traverse(ast, {
       if (!normalized(candidate.value || candidate.quasis?.map((quasi) => quasi.value.cooked).join(''))) return
       const signature = `${candidate.loc?.start.line}:${generate(candidate).code}`
       if (!dynamicIssues.some((issue) => issue.signature === signature)) {
-        dynamicIssues.push({ line: candidate.loc?.start.line, source: generate(candidate).code, origin: isConfirm ? 'confirm' : calleeName, signature })
+        dynamicIssues.push({ file: currentFile, line: candidate.loc?.start.line, source: generate(candidate).code, origin: isConfirm ? 'confirm' : calleeName, signature })
       }
     }
     inspectFeedbackNode(argument)
@@ -128,9 +145,16 @@ traverse(ast, {
       addKey(pathRef.node.value.value, pathRef.node.value.loc?.start.line, `object:${propertyName}`)
     }
   },
-})
+}
+
+for (const filePath of workspaceFiles) {
+  currentFile = path.relative(root, filePath)
+  const fileAst = parser.parse(fs.readFileSync(filePath, 'utf8'), { sourceType: 'module', plugins: ['jsx'] })
+  traverse(fileAst, visitors)
+}
 
 const apiPath = path.join(root, 'frontend/src/api.js')
+currentFile = path.relative(root, apiPath)
 const apiAst = parser.parse(fs.readFileSync(apiPath, 'utf8'), { sourceType: 'module' })
 traverse(apiAst, {
   CallExpression(pathRef) {
@@ -142,7 +166,7 @@ traverse(apiAst, {
     if (pathRef.node.callee?.name !== 'ApiError') return
     const argument = pathRef.node.arguments[0]
     if (argument?.type === 'StringLiteral' || argument?.type === 'TemplateLiteral') {
-      dynamicIssues.push({ line: argument.loc?.start.line, source: generate(argument).code, origin: 'api-error' })
+      dynamicIssues.push({ file: currentFile, line: argument.loc?.start.line, source: generate(argument).code, origin: 'api-error' })
     }
   },
 })
@@ -151,9 +175,9 @@ const missing = [...keys.keys()].filter((key) => !dictionary.uz.has(key) || !dic
 if (process.argv.includes('--list')) {
   for (const key of missing) {
     const first = keys.get(key)[0]
-    console.log(`${first.line}\t${first.origin}\t${key}`)
+    console.log(`${first.file}:${first.line}\t${first.origin}\t${key}`)
   }
-  for (const issue of dynamicIssues) console.log(`${issue.line}\t${issue.origin}\t${issue.source}`)
+  for (const issue of dynamicIssues) console.log(`${issue.file}:${issue.line}\t${issue.origin}\t${issue.source}`)
 }
 console.log(`UI keys: ${keys.size}; missing uz/ru keys: ${missing.length}; untranslated dynamic messages: ${dynamicIssues.length}`)
 if (missing.length || dynamicIssues.length) process.exitCode = 1

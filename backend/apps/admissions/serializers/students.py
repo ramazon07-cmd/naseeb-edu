@@ -1,4 +1,5 @@
 """Admissions API serializers — students."""
+from django.utils import timezone
 from rest_framework import serializers
 from apps.users.images import image_version
 from apps.users.models import User
@@ -42,6 +43,12 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     achievements_total = serializers.SerializerMethodField()
     task_status_counts = serializers.SerializerMethodField()
     roadmap_status_counts = serializers.SerializerMethodField()
+    tasks_overdue = serializers.SerializerMethodField()
+    missions_overdue = serializers.SerializerMethodField()
+    to_review_total = serializers.SerializerMethodField()
+    documents_missing = serializers.SerializerMethodField()
+    missing_document_title = serializers.SerializerMethodField()
+    next_deadline = serializers.SerializerMethodField()
     eligible_level = serializers.IntegerField(read_only=True)
     next_level_xp = serializers.IntegerField(read_only=True)
     xp_progress_percent = serializers.IntegerField(read_only=True)
@@ -132,6 +139,24 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         counts = {choice: 0 for choice, _ in RoadmapMission.Status.choices}
         counts.update(obj.progress_stats.mission_counts)
         return counts
+
+    def get_tasks_overdue(self, obj) -> int:
+        return obj.progress_stats.tasks_overdue_count
+
+    def get_missions_overdue(self, obj) -> int:
+        return obj.progress_stats.missions_overdue_count
+
+    def get_to_review_total(self, obj) -> int:
+        return obj.progress_stats.to_review_total
+
+    def get_documents_missing(self, obj) -> int:
+        return obj.progress_stats.documents_missing
+
+    def get_missing_document_title(self, obj) -> str:
+        return obj.progress_stats.missing_document_title
+
+    def get_next_deadline(self, obj) -> dict | None:
+        return obj.progress_stats.next_deadline(timezone.localdate())
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

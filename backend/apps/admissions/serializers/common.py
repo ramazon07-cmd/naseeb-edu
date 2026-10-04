@@ -191,15 +191,28 @@ class VerifiedStudentRecordMixin(StudentRecordSerializerMixin):
                 raise serializers.ValidationError('Only a counselor can verify records.')
         return value
 
+    def validate_counselor_comment(self, value):
+        request = self.context.get('request')
+        if request and not request.user.is_counselor_like and value != getattr(self.instance, 'counselor_comment', ''):
+            raise serializers.ValidationError('Only a counselor can write review comments.')
+        return value
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         request = self.context.get('request')
         instance = self.instance
-        if request and not request.user.is_counselor_like and instance is not None and instance.verified:
-            # The badge vouches for what the counselor checked; edited content
-            # goes back for review.
-            if any(value != getattr(instance, key, None) for key, value in attrs.items() if key != 'verified'):
+        if request and not request.user.is_counselor_like and instance is not None:
+            edited = any(
+                value != getattr(instance, key, None)
+                for key, value in attrs.items() if key not in {'verified', 'counselor_comment'}
+            )
+            if edited and instance.verified:
+                # The badge vouches for what the counselor checked; edited content
+                # goes back for review.
                 attrs['verified'] = False
+            if edited and getattr(instance, 'counselor_comment', ''):
+                # A record sent back with a note returns to the counselor's queue once its owner changes it.
+                attrs['counselor_comment'] = ''
         return attrs
 
 

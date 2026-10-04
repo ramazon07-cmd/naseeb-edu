@@ -813,6 +813,8 @@ class Booking(TimeStampedModel):
     )
     topic = models.CharField(max_length=220)
     starts_at = models.DateTimeField()
+    # Where the meeting was before the last reschedule request, so the other side sees what moved.
+    previous_starts_at = models.DateTimeField(null=True, blank=True)
     duration_minutes = models.PositiveSmallIntegerField(default=45)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     notes = models.TextField(blank=True)
@@ -1368,6 +1370,8 @@ class Achievement(TimeStampedModel):
     proof_file_content_type = models.CharField(max_length=120, blank=True)
     proof_file_size = models.PositiveBigIntegerField(default=0)
     verified = models.BooleanField(default=False)
+    # Why the counselor sent it back instead of verifying it; the student's next edit clears it.
+    counselor_comment = models.TextField(blank=True)
 
     class Meta:
         ordering = ['-date', 'title']

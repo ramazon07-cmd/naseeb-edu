@@ -22,15 +22,20 @@ from ..serializers import (
     CounselorRoadmapTemplateSerializer,
     StudentProfileSerializer,
 )
-from ..services import ROADMAP_APPROVAL_XP, award_approval_xp, extend_level_one_roadmap
+from ..services import ROADMAP_APPROVAL_XP, award_approval_xp, record_approval_note, extend_level_one_roadmap
 from apps.users.services import audit_product_action
 from ..params import int_param
 from ..scoping import visible_students
-from .common import RECORD_ORDERING, StaffControlledWorkMixin, StudentRecordListMixin
+from .common import RECORD_ORDERING, SendBackMixin, StaffControlledWorkMixin, StudentRecordListMixin, clean_note
 
 
-class RoadmapMissionViewSet(StudentRecordListMixin, StaffControlledWorkMixin, viewsets.ModelViewSet):
+class RoadmapMissionViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixin, viewsets.ModelViewSet):
     serializer_class = RoadmapMissionSerializer
+    send_back_statuses = (RoadmapMission.Status.SUBMITTED,)
+    send_back_to = RoadmapMission.Status.IN_PROGRESS
+    send_back_notice_kind = 'task'
+    send_back_label = 'Roadmap mission'
+    send_back_managers = 'task_manager'
     queryset = RoadmapMission.objects.select_related('student__user', 'assigned_by', 'prerequisite').all()
     search_fields = ('title',)
     choice_filters = {'status': ('status', RoadmapMission.Status.choices)}
@@ -73,6 +78,8 @@ class RoadmapMissionViewSet(StudentRecordListMixin, StaffControlledWorkMixin, vi
     def approve(self, request, pk=None):
         if not request.user.is_task_manager:
             return Response({'detail': 'Only a teacher or counselor can approve roadmap missions.'}, status=403)
+        # Validate the note first: a bad note must not leave the mission approved.
+        note = clean_note(request)
         scoped_mission = self.get_object()
         with transaction.atomic():
             mission = RoadmapMission.objects.select_for_update(of=('self',)).select_related('student').get(pk=scoped_mission.pk)
@@ -96,6 +103,7 @@ class RoadmapMissionViewSet(StudentRecordListMixin, StaffControlledWorkMixin, vi
                     action=f'Roadmap mission approved: {mission.title} (+{ROADMAP_APPROVAL_XP} XP)',
                     metadata={'roadmap_mission': mission.id},
                 )
+        record_approval_note(record=mission, student=mission.student, note=note, notice_kind='task')
         mission.student.refresh_from_db()
         data = RoadmapMissionSerializer(mission, context={'request': request}).data
         data['xp_awarded'] = ROADMAP_APPROVAL_XP if xp_created else 0

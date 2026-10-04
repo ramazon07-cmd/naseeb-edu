@@ -38,7 +38,9 @@ test('a student signing in to the dashboard fetches only what the dashboard show
   s.signIn();
   s.open('dashboard');
   assert.deepEqual(s.fetched.sort(), ['bookings', 'essays', 'program-services', 'student-team', 'students', 'support-tickets', 'tasks']);
-  for (const endpoint of ['universities', 'scholarships', 'opportunity-programs', 'store-items', 'documents', 'message-channels', 'roadmap-missions', 'dashboard/stats']) {
+  // The program catalog is large: the Programs tile fetches it on its own, so the dashboard never waits for it.
+  assert.ok(!studentPageKeys('dashboard').includes('opportunityPrograms'));
+  for (const endpoint of ['universities', 'scholarships', 'store-items', 'documents', 'message-channels', 'roadmap-missions', 'dashboard/stats']) {
     assert.ok(!s.fetched.includes(endpoint), `${endpoint} must wait for its page`);
   }
 });

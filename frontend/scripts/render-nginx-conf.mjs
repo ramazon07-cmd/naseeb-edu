@@ -53,7 +53,7 @@ export function buildCsp(html, apiUrl, fileOrigins = []) {
     "font-src 'self'",
     `connect-src ${connect}`,
     // Google Docs previews and blob: previews of private uploaded files.
-    "frame-src https://docs.google.com blob:",
+    "frame-src https://docs.google.com blob: https://t.me",
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
     "manifest-src 'self'",

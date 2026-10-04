@@ -8,7 +8,8 @@ queryset inside the database, in one set-based query.
 """
 from dataclasses import dataclass, field
 
-from django.db.models import Case, Count, IntegerField, Q, QuerySet, Sum, Value, When
+from django.db.models import Case, CharField, Count, IntegerField, Min, Q, QuerySet, Sum, Value, When
+from django.db.models.functions import Cast, Concat
 from django.utils import timezone
 
 TASK_WEIGHTS = {
@@ -30,6 +31,11 @@ APPLICATION_ACCEPTED = 'accepted'
 DOCUMENT_DONE = 'approved'
 # The recommender has sent the letter; the counselor's approval is a quality check on top.
 RECOMMENDATION_DONE = ('submitted', 'approved')
+
+
+def _dated(date_field, title_field):
+    """'YYYY-MM-DD|title' as one sortable string, so MIN() finds the earliest date and its title in one pass."""
+    return Concat(Cast(date_field, CharField()), Value('|'), title_field, output_field=CharField())
 
 
 def late_tasks(today):
@@ -69,10 +75,26 @@ class ProgressStats:
     achievements_total: int = 0
     documents_total: int = 0
     documents_done: int = 0
+    documents_pending: int = 0
+    # Documents a counselor asked for that the student has not provided (status
+    # "required"); the alphabetically first title names it ("Passport missing").
+    documents_missing: int = 0
+    missing_document_title: str = ''
+    # Portfolio items waiting for the counselor: not verified and not sent back.
+    achievements_unverified: int = 0
     recommendations_total: int = 0
     recommendations_done: int = 0
     task_overdue: bool = False
     mission_overdue: bool = False
+    # Real counts (not just the booleans above): the Students page "why they
+    # need you" chips name a number ("1 late task"), not just yes/no.
+    tasks_overdue_count: int = 0
+    missions_overdue_count: int = 0
+    # Earliest open deadline per source, each "YYYY-MM-DD|title" so plain string
+    # order is date order: an open task, an unsent application, an unwritten letter.
+    _next_task: str = ''
+    _next_application: str = ''
+    _next_letter: str = ''
 
     @property
     def tasks_total(self):
@@ -132,6 +154,27 @@ class ProgressStats:
     def is_at_risk(self):
         return self.task_overdue or self.mission_overdue
 
+    @property
+    def to_review_total(self):
+        """Submitted work waiting on the counselor: the Students page "N to review" chip."""
+        return (
+            self.task_counts.get('submitted', 0) + self.mission_counts.get('submitted', 0)
+            + self.documents_pending + self.achievements_unverified
+        )
+
+    def next_deadline(self, today):
+        """The student's nearest open deadline as {kind, title, due, late}, or None."""
+        found = [
+            (value, kind) for kind, value in (
+                ('task', self._next_task), ('application', self._next_application), ('letter', self._next_letter),
+            ) if value
+        ]
+        if not found:
+            return None
+        value, kind = min(found)
+        due, _, title = value.partition('|')
+        return {'kind': kind, 'title': title, 'due': due, 'late': due < today.isoformat()}
+
 
 def _student_filter(students):
     if isinstance(students, QuerySet):
@@ -154,12 +197,18 @@ def load_progress_stats(students):
 
     for row in (
         Task.objects.filter(**scope).order_by().values('student_id', 'status')
-        .annotate(total=Count('id'), overdue=Count('id', filter=late_tasks(today)))
+        .annotate(
+            total=Count('id'), overdue=Count('id', filter=late_tasks(today)),
+            next_due=Min(_dated('due_date', 'title'), filter=Q(status__in=OPEN_TASK_STATUSES)),
+        )
     ):
         item = get(row['student_id'])
+        if row['next_due'] and (not item._next_task or row['next_due'] < item._next_task):
+            item._next_task = row['next_due']
         item.task_counts[row['status']] = row['total']
         if row['overdue']:
             item.task_overdue = True
+            item.tasks_overdue_count += row['overdue']
     for row in (
         RoadmapMission.objects.filter(**scope).order_by().values('student_id', 'level', 'status')
         .annotate(total=Count('id'), overdue=Count('id', filter=Q(due_date__lt=today)))
@@ -170,37 +219,61 @@ def load_progress_stats(students):
         item.mission_level_counts.setdefault(row['level'], {})[status] = row['total']
         if row['status'] in OPEN_MISSION_STATUSES and row['overdue']:
             item.mission_overdue = True
+            item.missions_overdue_count += row['overdue']
     for row in (
         Application.objects.filter(**scope).order_by().values('student_id')
         .annotate(
             total=Count('id'),
             done=Count('id', filter=Q(status__in=APPLICATION_DONE)),
             accepted=Count('id', filter=Q(status=APPLICATION_ACCEPTED)),
+            next_due=Min(_dated('deadline', 'university__name'), filter=Q(deadline__isnull=False) & ~Q(status__in=APPLICATION_DONE)),
         )
     ):
         item = get(row['student_id'])
+        item._next_application = row['next_due'] or ''
         item.applications_total = row['total']
         item.applications_done = row['done']
         item.applications_accepted = row['accepted']
     for row in (
         Document.objects.filter(**scope).order_by().values('student_id')
-        .annotate(total=Count('id'), done=Count('id', filter=Q(status=DOCUMENT_DONE)))
+        .annotate(
+            total=Count('id'), done=Count('id', filter=Q(status=DOCUMENT_DONE)),
+            pending=Count('id', filter=Q(status__in=('uploaded', 'reviewing'))),
+            missing=Count('id', filter=Q(status='required')),
+            missing_title=Min('title', filter=Q(status='required')),
+        )
     ):
         item = get(row['student_id'])
         item.documents_total = row['total']
         item.documents_done = row['done']
+        item.documents_pending = row['pending']
+        item.documents_missing = row['missing']
+        item.missing_document_title = row['missing_title'] or ''
     for row in (
         RecommendationLetter.objects.filter(**scope).order_by().values('student_id')
-        .annotate(total=Count('id'), done=Count('id', filter=Q(status__in=RECOMMENDATION_DONE)))
+        .annotate(
+            total=Count('id'), done=Count('id', filter=Q(status__in=RECOMMENDATION_DONE)),
+            next_due=Min(
+                _dated('deadline', 'recommender_name'),
+                filter=Q(deadline__isnull=False) & ~Q(status__in=RECOMMENDATION_DONE),
+            ),
+        )
     ):
         item = get(row['student_id'])
         item.recommendations_total = row['total']
         item.recommendations_done = row['done']
+        item._next_letter = row['next_due'] or ''
     # Achievements and honors are one "Achievements" count: one UNION ALL query.
-    achievements = Achievement.objects.filter(**scope).order_by().values('student_id').annotate(total=Count('id'))
-    honors = Honor.objects.filter(**scope).order_by().values('student_id').annotate(total=Count('id'))
+    achievements = Achievement.objects.filter(**scope).order_by().values('student_id').annotate(
+        total=Count('id'), unverified=Count('id', filter=Q(verified=False, counselor_comment='')),
+    )
+    honors = Honor.objects.filter(**scope).order_by().values('student_id').annotate(
+        total=Count('id'), unverified=Value(0, output_field=IntegerField()),
+    )
     for row in achievements.union(honors, all=True):
-        get(row['student_id']).achievements_total += row['total']
+        item = get(row['student_id'])
+        item.achievements_total += row['total']
+        item.achievements_unverified += row['unverified']
     return stats
 
 

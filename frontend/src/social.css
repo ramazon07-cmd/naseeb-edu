@@ -562,7 +562,7 @@
   width: 30px;
   height: 30px;
   margin: 10px 0 -30px;
-  border-radius: var(--radius-base);
+  border-radius: 50%;
   font-size: var(--text-xs);
 }
 
@@ -823,6 +823,25 @@
   border-color: var(--selected-border);
 }
 
+.direct-contact input[type='radio'] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin: 0;
+  border: 2px solid var(--border-interactive);
+  border-radius: 50%;
+  background: transparent;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
+}
+
+.direct-contact input[type='radio']:checked {
+  border-color: var(--social-accent);
+  background: radial-gradient(circle, var(--social-accent) 40%, transparent 45%);
+}
+
 .direct-contact > span:last-child {
   min-width: 0;
   display: grid;
@@ -974,18 +993,6 @@
   border-bottom: 1px solid var(--chat-line);
 }
 
-.chat-brand-icon {
-  width: 42px;
-  height: 42px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--social-accent) 24%, transparent);
-  border-radius: var(--radius-lg);
-  color: var(--social-accent);
-  background: var(--social-accent-wash);
-}
-
 .chat-sidebar-header > div {
   min-width: 0;
   flex: 1;
@@ -1008,17 +1015,15 @@
 }
 
 .chat-new-button {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
   flex-shrink: 0;
-  padding: 8px 10px;
   color: var(--social-accent);
   background: var(--social-accent-wash);
   border: 1px solid color-mix(in srgb, var(--social-accent) 20%, transparent);
-  border-radius: 99px;
-  font-size: var(--text-xs);
-  font-weight: 600;
+  border-radius: 50%;
   cursor: pointer;
 }
 
@@ -1089,6 +1094,13 @@
   border-color: var(--social-accent);
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* The focus ring sits on the whole field, not on the bare input inside it. */
+.messaging-page .channel-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .messaging-page .channel-list {
@@ -1163,6 +1175,15 @@
 .messaging-page .saved-messages .channel-item-copy {
   display: grid;
   gap: 5px;
+}
+
+.messaging-page .pinned-channel {
+  text-decoration: none;
+}
+
+.messaging-page .pinned-channel .pinned-mark {
+  flex: none;
+  color: var(--chat-muted);
 }
 
 .messaging-page .channel-compose {
@@ -1582,15 +1603,6 @@
     padding-inline: 14px;
   }
 
-  .chat-new-button {
-    padding-inline: 8px;
-    font-size: var(--text-xs);
-  }
-
-  .chat-brand-icon {
-    width: 36px;
-    height: 36px;
-  }
 }
 
 @media (max-width: 820px) {

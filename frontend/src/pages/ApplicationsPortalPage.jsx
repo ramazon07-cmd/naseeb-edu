@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownWideNarrow, ArrowRight, Check, CheckCircle2, GripVertical, Hourglass, Link2, Lock, MoreHorizontal, Pencil, PenLine, Plus, Search, Trash2 } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDownWideNarrow, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3, GripVertical, Hourglass, Link2, Lock, MapPin, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, parseDateValue, t, tx } from '../i18n';
 import { FilterChip } from '../components/forms';
 import { DeadlineChip, TierBand } from '../components/college';
+import { money } from '../lib/format';
 import { label } from '../lib/labels';
 import { matchesQuery } from '../lib/searchIndex';
-import { APPLICATION_STAGES, daysUntil, essayProgress, historyDate, longDate, nextDeadline, scalePercent, shortDate, stageOf } from '../lib/college';
+import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, satText, scalePercent, shortDate, stageOf } from '../lib/college';
 import { ResourceForm } from './ResourceSection';
 
 function ApplicationSummary({ applications, essays, letters, openUniversity }) {
@@ -52,51 +53,125 @@ function ApplicationSummary({ applications, essays, letters, openUniversity }) {
   </div>;
 }
 
-function ApplicationCard({ application, university, essays, menuOpen, dragging, busy, onMenu, onDragStart, onDragEnd, onMove, onOpen, onEdit, onRemove }) {
+const BRIEF_ROOM = 360; // px a card needs below it before its brief opens upward instead
+// Without the Popover API (older Safari and Firefox) the brief is a plain fixed panel.
+const HAS_POPOVER = typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function';
+
+function DecisionTag({ application, decidedAt }) {
+  return <span className={`tag ${application.status === 'accepted' ? 'ok' : application.status === 'rejected' ? 'bad' : 'warn'}`}><CheckCircle2 size={12} aria-hidden="true" /> {label(application.status)}{decidedAt ? ` ${shortDate(decidedAt)}` : ''}</span>;
+}
+
+// Everything a compact board card leaves out. It is a non-modal popover: the top layer keeps
+// it clear of the board's scroll clipping, and the page closes it on outside click, Escape and scroll.
+function ApplicationBrief({ id, briefRef, application, info, essays, name, onOpen, onEdit, onClose }) {
   const stage = stageOf(application.status);
   const decided = stage === 'decision';
-  const essay = essayProgress(essays);
-  const name = university?.name || application.university_detail?.name || t("University");
+  const approved = essays.filter((essay) => essay.status === 'approved').length;
   const submittedAt = historyDate(application, 'submitted');
-  const decidedAt = historyDate(application, application.status);
-  const deadlines = [['aid', application.scholarship_deadline], ['application', application.deadline]].filter(([, date]) => date).sort(([, a], [, b]) => daysUntil(a) - daysUntil(b));
-  return <article className={`board-card ${dragging ? 'is-dragging' : ''}`.trim()} draggable={!decided && !busy} aria-busy={busy} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-    <div className="board-card-top">
-      <button type="button" className="board-card-title" onClick={onOpen}>{name}</button>
-      {!decided && <span className="grip" role="img" aria-label={t("Drag to move")}><GripVertical size={14} /></span>}
-      <div className="card-menu">
-        <button type="button" className="icon-button" aria-expanded={menuOpen} aria-label={tx`Actions for ${name}`} onClick={onMenu}><MoreHorizontal size={16} /></button>
-        {menuOpen && <div className="card-menu-list">
-          {!decided && <><span className="card-menu-title">{t("Move to")}</span>{['researching', 'shortlisted', 'applying', 'submitted'].filter((status) => status !== application.status).map((status) => <button type="button" key={status} onClick={() => onMove(status)}>{label(status)}</button>)}<hr /></>}
-          <button type="button" onClick={onOpen}><ArrowRight size={14} aria-hidden="true" /> {t("Open university page")}</button>
-          {!decided && <button type="button" onClick={onEdit}><Pencil size={14} aria-hidden="true" /> {t("Edit details")}</button>}
-          {!decided && <button type="button" className="danger" onClick={onRemove}><Trash2 size={14} aria-hidden="true" /> {t("Remove from my list")}</button>}
-        </div>}
+  const place = [[...new Set([info.city, info.country].filter(Boolean))].join(', '), info.institution_type && label(info.institution_type)].filter(Boolean).join(' · ');
+  const portalMissing = stage === 'applying' && !application.application_portal_url;
+  const rows = decided || stage === 'submitted' ?
+  [{ Icon: Check, title: t("Submitted"), date: submittedAt, chip: decided ? <DecisionTag application={application} decidedAt={historyDate(application, application.status)} /> : <span className="tag"><Hourglass size={12} aria-hidden="true" /> {t("Waiting")}</span> }] :
+  [['aid', application.scholarship_deadline], ['application', application.deadline]].filter(([, date]) => date).sort(([, a], [, b]) => daysUntil(a) - daysUntil(b)).map(([kind, date]) => {
+    const days = daysUntil(date);
+    return { Icon: kind === 'aid' ? Clock3 : CalendarDays, title: kind === 'aid' ? t("Scholarship") : t("Application"), date, chip: <span className={`due ${dueTone(days)}`.trim()}>{dueLabel(days)}</span> };
+  });
+  return <div id={id} ref={briefRef} className="app-brief" popover={HAS_POPOVER ? 'manual' : undefined} role="dialog" aria-label={name} tabIndex={-1}>
+    <header className="app-brief-head">
+      <div>
+        <TierBand value={application.tier} />
+        <h4>{name}</h4>
+        <p>{application.program}</p>
+        {place && <small><MapPin size={12} aria-hidden="true" /> {place}</small>}
       </div>
-    </div>
-    <p className="board-card-program">{application.program}</p>
-    <TierBand value={application.tier} />
-    <div className="tag-row application-card-details">
-      {decided ? <span className={`tag ${application.status === 'accepted' ? 'ok' : application.status === 'rejected' ? 'bad' : 'warn'}`}><CheckCircle2 size={12} aria-hidden="true" /> {label(application.status)}{decidedAt ? ` ${shortDate(decidedAt)}` : ''}</span> :
-      stage === 'submitted' ? <>
-        <span className="tag ok"><Check size={12} aria-hidden="true" /> {submittedAt ? tx`Submitted ${shortDate(submittedAt)}` : t("Submitted")}</span>
-        <span className={`tag ${essay.tone}`.trim()}><PenLine size={12} aria-hidden="true" /> {essay.text}</span>
-        <span className="tag"><Hourglass size={12} aria-hidden="true" /> {t("Waiting")}</span>
-      </> : <>
-        {deadlines.map(([kind, date]) => <DeadlineChip key={kind} kind={kind} date={date} />)}
-        <span className={`tag ${essay.tone}`.trim()}><PenLine size={12} aria-hidden="true" /> {essay.text}</span>
-        {stage === 'applying' && !application.application_portal_url && <span className="tag warn"><Link2 size={12} aria-hidden="true" /> {t("Portal missing")}</span>}
-        {university?.css_profile_required && <span className="tag">{t("CSS Profile")}</span>}
-      </>}
-    </div>
-    {decided && submittedAt && <small className="note">{tx`Submitted ${shortDate(submittedAt)}`}</small>}
-  </article>;
+      <button type="button" className="icon-button" aria-label={t("Close")} onClick={onClose}><X size={16} aria-hidden="true" /></button>
+    </header>
+    <dl className="app-brief-facts">
+      <div><dt>{t("Acceptance")}</dt><dd>{percentText(info.acceptance_rate)}</dd></div>
+      <div><dt>{t("SAT")}</dt><dd>{info.sat_min ? satText(info.sat_min, info.sat_max) : t("Optional")}</dd></div>
+      <div><dt>{t("Net price")}</dt><dd>{money(info.net_price_usd)}</dd></div>
+    </dl>
+    <section className="app-brief-block">
+      <div className="app-brief-eyebrow"><span>{decided || stage === 'submitted' ? t("Status") : t("Deadlines")}</span></div>
+      {rows.length ? <ul className="app-brief-rows">{rows.map(({ Icon, title, date, chip }) => <li key={title}><span><Icon size={14} aria-hidden="true" /> {title}</span><b>{date ? shortDate(date) : '—'}</b>{chip}</li>)}</ul> : <p className="app-brief-empty">{t("No deadlines set")}</p>}
+    </section>
+    <section className="app-brief-block">
+      <div className="app-brief-eyebrow"><span>{t("Essays")}</span>{essays.length > 0 && <span>{tx`${approved} of ${essays.length}`} {t("approved")}</span>}</div>
+      {essays.length ? <>
+        <span className="score-bar" aria-hidden="true"><i style={{ '--fill': scalePercent(approved, 0, essays.length) }} /></span>
+        <ul className="app-brief-essays">{essays.map((essay) => <li key={essay.id}><span>{essay.title}</span><span className={`tag ${essay.status === 'approved' ? 'ok' : essay.status === 'needs_revision' ? 'warn' : ''}`.trim()}>{label(essay.status)}</span></li>)}</ul>
+      </> : <p className="app-brief-empty">{t("No essays yet")}</p>}
+    </section>
+    {(portalMissing || info.css_profile_required) && <div className="app-brief-block tag-row">
+      {portalMissing && <span className="tag warn"><Link2 size={12} aria-hidden="true" /> {t("Portal missing")}</span>}
+      {info.css_profile_required && <span className="tag">{t("CSS Profile")}</span>}
+    </div>}
+    <footer className="app-brief-actions">
+      <button type="button" className="button primary small" onClick={onOpen}>{t("Open university page")} <ArrowRight size={14} aria-hidden="true" /></button>
+      {!decided && <button type="button" className="button quiet small" onClick={onEdit}><Pencil size={14} aria-hidden="true" /> {t("Edit details")}</button>}
+    </footer>
+  </div>;
+}
+
+function ApplicationCard({ application, university, essays, menuOpen, briefOpen, dragging, busy, onMenu, onBrief, onBriefClose, onDragStart, onDragEnd, onMove, onOpen, onEdit, onRemove }) {
+  const stage = stageOf(application.status);
+  const decided = stage === 'decision';
+  const info = university || application.university_detail || {};
+  const name = info.name || t("University");
+  const decidedAt = historyDate(application, application.status);
+  const briefId = `application-brief-${application.id}`;
+  const cardRef = useRef(null);
+  const briefRef = useRef(null);
+  // Only deadlines inside three weeks stay on the card; the rest wait in the brief.
+  const urgent = decided || stage === 'submitted' ? [] : [['aid', application.scholarship_deadline], ['application', application.deadline]].filter(([, date]) => {
+    const days = daysUntil(date);
+    return days != null && days <= 21;
+  }).sort(([, a], [, b]) => daysUntil(a) - daysUntil(b));
+
+  useLayoutEffect(() => {
+    const brief = briefRef.current;
+    if (!briefOpen || !brief) return undefined;
+    const rect = cardRef.current.getBoundingClientRect();
+    const below = window.innerHeight - rect.bottom;
+    const above = below < BRIEF_ROOM && rect.top > below;
+    brief.dataset.side = above ? 'above' : 'below';
+    brief.style.setProperty('--brief-x', `${rect.left}px`);
+    brief.style.setProperty('--brief-y', `${(above ? window.innerHeight - rect.top : rect.bottom) + 8}px`);
+    if (HAS_POPOVER && !brief.matches(':popover-open')) brief.showPopover();
+    brief.focus({ preventScroll: true });
+    return () => {if (HAS_POPOVER && brief.matches(':popover-open')) brief.hidePopover();};
+  }, [briefOpen]);
+
+  return <>
+    <article ref={cardRef} className={`board-card ${dragging ? 'is-dragging' : ''} ${briefOpen ? 'is-open' : ''}`.trim()} draggable={!decided && !busy} aria-busy={busy} onDragStart={onDragStart} onDragEnd={onDragEnd} onClick={(event) => {if (!event.target.closest('.card-menu')) onBrief();}}>
+      <div className="board-card-top">
+        <button type="button" className="board-card-title" aria-haspopup="dialog" aria-expanded={briefOpen} aria-controls={briefOpen ? briefId : undefined}>{name}</button>
+        {!decided && <span className="grip" role="img" aria-label={t("Drag to move")}><GripVertical size={14} /></span>}
+        <div className="card-menu">
+          <button type="button" className="icon-button" aria-expanded={menuOpen} aria-label={tx`Actions for ${name}`} onClick={onMenu}><MoreHorizontal size={16} /></button>
+          {menuOpen && <div className="card-menu-list">
+            {!decided && <><span className="card-menu-title">{t("Move to")}</span>{['researching', 'shortlisted', 'applying', 'submitted'].filter((status) => status !== application.status).map((status) => <button type="button" key={status} onClick={() => onMove(status)}>{label(status)}</button>)}<hr /></>}
+            <button type="button" onClick={onOpen}><ArrowRight size={14} aria-hidden="true" /> {t("Open university page")}</button>
+            {!decided && <button type="button" onClick={onEdit}><Pencil size={14} aria-hidden="true" /> {t("Edit details")}</button>}
+            {!decided && <button type="button" className="danger" onClick={onRemove}><Trash2 size={14} aria-hidden="true" /> {t("Remove from my list")}</button>}
+          </div>}
+        </div>
+      </div>
+      <p className="board-card-program">{application.program}</p>
+      <TierBand value={application.tier} />
+      {(decided || urgent.length > 0) && <div className="tag-row application-card-details">
+        {decided ? <DecisionTag application={application} decidedAt={decidedAt} /> : urgent.map(([kind, date]) => <DeadlineChip key={kind} kind={kind} date={date} />)}
+      </div>}
+    </article>
+    {briefOpen && <ApplicationBrief id={briefId} briefRef={briefRef} application={application} info={info} essays={essays} name={name} onOpen={onOpen} onEdit={onEdit} onClose={onBriefClose} />}
+  </>;
 }
 
 export function ApplicationsPortalPage({ user, data, query, reload, notify, setPage }) {
   const [tier, setTier] = useState('all');
   const [sort, setSort] = useState('deadline');
   const [menuId, setMenuId] = useState(null);
+  const [briefId, setBriefId] = useState(null);
   const [dragId, setDragId] = useState(null);
   const [overStage, setOverStage] = useState(null);
   const [moves, setMoves] = useState({});
@@ -116,6 +191,16 @@ export function ApplicationsPortalPage({ user, data, query, reload, notify, setP
     document.addEventListener('pointerdown', close);document.addEventListener('keydown', escape);
     return () => {document.removeEventListener('pointerdown', close);document.removeEventListener('keydown', escape);};
   }, [menuId]);
+
+  useEffect(() => {
+    if (briefId == null) return undefined;
+    const close = () => setBriefId(null);
+    const outside = (event) => {if (!event.target.closest?.('.app-brief, .board-card')) close();};
+    const escape = (event) => {if (event.key === 'Escape') {document.querySelector('.board-card-title[aria-expanded="true"]')?.focus();close();}};
+    const scrolled = (event) => {if (!event.target.closest?.('.app-brief')) close();};
+    document.addEventListener('pointerdown', outside);document.addEventListener('keydown', escape);document.addEventListener('scroll', scrolled, true);window.addEventListener('resize', close);
+    return () => {document.removeEventListener('pointerdown', outside);document.removeEventListener('keydown', escape);document.removeEventListener('scroll', scrolled, true);window.removeEventListener('resize', close);};
+  }, [briefId]);
 
   async function moveTo(application, status) {
     if (!application || application.status === status) return;
@@ -168,9 +253,9 @@ export function ApplicationsPortalPage({ user, data, query, reload, notify, setP
         }}>
           <header><div><h3>{t(stage.title)}</h3><span className="count-pill neutral">{formatNumberLocale(cards.length)}</span>{stage.locked && <span className="board-lock" role="img" aria-label={t("Set by your counselor")}><Lock size={14} /></span>}</div><p>{t(stage.description)}</p></header>
           <div className="board-stack">
-            {cards.map((application) => <ApplicationCard key={application.id} application={application} university={universities.get(application.university)} essays={data.essays.filter((essay) => essay.application === application.id)} menuOpen={menuId === application.id} dragging={dragId === application.id} busy={removingId === application.id || application.id in moves}
-            onMenu={() => setMenuId(menuId === application.id ? null : application.id)} onDragStart={(event) => {event.dataTransfer.setData('text/plain', String(application.id));event.dataTransfer.effectAllowed = 'move';setDragId(application.id);}} onDragEnd={() => {setDragId(null);setOverStage(null);}}
-            onMove={(status) => moveTo(data.applications.find((item) => item.id === application.id), status)} onOpen={() => openUniversity(application.university)} onEdit={() => {setMenuId(null);setEditing(data.applications.find((item) => item.id === application.id));}} onRemove={() => removeApplication(application)} />)}
+            {cards.map((application) => <ApplicationCard key={application.id} application={application} university={universities.get(application.university)} essays={data.essays.filter((essay) => essay.application === application.id)} menuOpen={menuId === application.id} briefOpen={briefId === application.id} dragging={dragId === application.id} busy={removingId === application.id || application.id in moves}
+            onMenu={() => {setBriefId(null);setMenuId(menuId === application.id ? null : application.id);}} onBrief={() => {setMenuId(null);setBriefId(briefId === application.id ? null : application.id);}} onBriefClose={() => setBriefId(null)} onDragStart={(event) => {event.dataTransfer.setData('text/plain', String(application.id));event.dataTransfer.effectAllowed = 'move';setBriefId(null);setDragId(application.id);}} onDragEnd={() => {setDragId(null);setOverStage(null);}}
+            onMove={(status) => moveTo(data.applications.find((item) => item.id === application.id), status)} onOpen={() => openUniversity(application.university)} onEdit={() => {setMenuId(null);setBriefId(null);setEditing(data.applications.find((item) => item.id === application.id));}} onRemove={() => removeApplication(application)} />)}
             {!cards.length && <p className="board-empty">{stage.locked ? t("No decisions yet.") : t("Nothing here yet.")}</p>}
           </div>
         </section>;

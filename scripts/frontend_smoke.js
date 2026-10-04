@@ -128,8 +128,15 @@ if (!app.includes('challenge.scale.map(')) throw new Error('The runner must use 
 if (app.includes('PERSONALITY_QUIZ_URL')) throw new Error('The personality challenges must run inside the platform, not link out.');
 if (!app.includes('{done} of {n} missions approved') || !app.includes("state === 'locked'") || !styles.includes('.roadmap-step.locked')) throw new Error('Ordered Level 1 prerequisite path is missing.');
 if (app.includes('CommunityPage') || app.includes('communityPosts') || api.includes('/community-posts/')) throw new Error('The retired Community feed must not be exposed.');
-if (!app.includes('Meet with') || !app.includes('Pending approval') || !app.includes('Mark completed') || !styles.includes('.booking-actions')) throw new Error('Booking participant and approval UI is missing.');
+if (!app.includes('Meet with') || !app.includes('Requests waiting for you') || !app.includes('Mark completed') || !styles.includes('.booking-actions')) throw new Error('Booking participant and approval UI is missing.');
 if (!app.includes('participant_name') || !app.includes('participant_role')) throw new Error('Booking participant identity is not displayed.');
+// Counselor workspace (the "Counselor Dashboard" design): own shell, five pages, review actions.
+if (!app.includes('function CounselorLayout(') || !styles.includes('.cx-sidebar') || !styles.includes('.cx-tabbar') || !styles.includes('--cx-canvas')) throw new Error('The counselor workspace shell (sidebar, phone tab bar, design tokens) is missing.');
+for (const name of ['CounselorHome', 'CounselorStudentsPage', 'CounselorStudent360', 'CounselorMeetingsPage', 'ReviewWorkspace']) {
+  if (!app.includes(`function ${name}(`)) throw new Error(`Counselor workspace page is missing: ${name}.`);
+}
+if (!api.includes('sendBack') || !api.includes('approveRecord') || !api.includes('remindStudent')) throw new Error('Counselor review and reminder API methods are missing.');
+if (!app.includes('launcher={!counselorShell}')) throw new Error('The counselor workspace must not float the assistant launcher over its content.');
 if (app.includes("\n  meetings: { label: 'Meetings'") || app.includes("'meetings', 'bookings'")) throw new Error('Legacy meeting notes navigation must be removed.');
 if (!app.includes("bookings: { label: 'Meetings'")) throw new Error('Booking workflow must be presented as Meetings.');
 // The retired standalone notification page and launcher stay gone; server

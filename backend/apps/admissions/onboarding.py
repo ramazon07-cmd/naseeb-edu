@@ -319,4 +319,4 @@ def profile_readiness(profile):
         if not done(profile, answers)
     ]
     total = len(PROFILE_READINESS_ITEMS)
-    return {'percent': percent(total - len(missing), total), 'missing': missing}
+    return {'percent': percent(total - len(missing), total), 'done': total - len(missing), 'total': total, 'missing': missing}
