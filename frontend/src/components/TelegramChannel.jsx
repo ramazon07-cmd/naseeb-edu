@@ -6,12 +6,11 @@ import { InlineLoadError } from './states';
 import { DEFAULT_POST_HEIGHT, MAX_POST_HEIGHT, createHeightMemory, mergeTelegramPosts, skeletonShape, telegramEmbedUrl } from '../lib/telegramFeed';
 import './telegramChannel.css';
 
-// A post loads its frame once it has stayed near the viewport this long, so fast
-// scrolling passes posts by without a download (videos in a post stream in full
-// while its frame is alive). A post left behind is released after the second
-// delay: that stops its downloads, and jitter at its edge does not reload it.
+// Load only posts at the viewport, but retain a loaded frame while it remains
+// within one viewport of the reader. Adjacent posts otherwise cross the tiny
+// load boundary repeatedly as embeds resize and cause expensive re-downloads.
 const LOAD_AFTER_MS = 200;
-const RELEASE_AFTER_MS = 600;
+const RELEASE_AFTER_MS = 3000;
 // A frame that has not reported a size by then is not going to (blocked, offline).
 const STALL_AFTER_MS = 12000;
 const MAX_POST_WIDTH = 520;
@@ -53,16 +52,35 @@ const TelegramPost = memo(function TelegramPost({ post, dark, feed, width, above
   const [stalled, setStalled] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const number = post.split('/')[1];
-  // Native iframe lazy-loading preloads thousands of pixels ahead. Instead,
-  // keep only nearby frames alive; preserve measured space when releasing one.
+  // Separate load and release boundaries give the iframe hysteresis. Scrolling
+  // between neighboring posts never destroys and re-creates an already loaded
+  // Telegram widget; distant posts are still released to stop media downloads.
   useEffect(() => {
-    let timer = 0;
-    const observer = new IntersectionObserver(([entry]) => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => setActive(entry.isIntersecting), entry.isIntersecting ? LOAD_AFTER_MS : RELEASE_AFTER_MS);
+    const target = row.current;
+    const root = feed.current;
+    let loadTimer = 0;
+    let releaseTimer = 0;
+    const near = new IntersectionObserver(([entry]) => {
+      window.clearTimeout(loadTimer);
+      if (entry.isIntersecting) {
+        window.clearTimeout(releaseTimer);
+        loadTimer = window.setTimeout(() => setActive(true), LOAD_AFTER_MS);
+      }
     }, { root: feed.current, rootMargin: '32px 0px' });
-    observer.observe(row.current);
-    return () => { window.clearTimeout(timer); observer.disconnect(); };
+    const retained = new IntersectionObserver(([entry]) => {
+      window.clearTimeout(releaseTimer);
+      if (entry.isIntersecting) return;
+      window.clearTimeout(loadTimer);
+      releaseTimer = window.setTimeout(() => setActive(false), RELEASE_AFTER_MS);
+    }, { root, rootMargin: `${Math.max(600, root.clientHeight)}px 0px` });
+    near.observe(target);
+    retained.observe(target);
+    return () => {
+      window.clearTimeout(loadTimer);
+      window.clearTimeout(releaseTimer);
+      near.disconnect();
+      retained.disconnect();
+    };
   }, [feed]);
   useEffect(() => {
     setReady(false);
@@ -110,7 +128,7 @@ const TelegramPost = memo(function TelegramPost({ post, dark, feed, width, above
   return <article ref={row} className={`telegram-post${ready ? ' is-ready' : ''}${loading ? ' is-loading' : ''}${failed ? ' is-stalled' : ''}`} style={{ height }} aria-busy={loading} aria-label={`${t('Telegram post')} ${number}`}>
     {active && <iframe key={`${dark ? 'dark' : 'light'}-${attempt}`} ref={frame}
       src={telegramEmbedUrl(post, dark)}
-      title={`${t('Telegram post')} ${number}`} loading="lazy" allow="fullscreen" />}
+      title={`${t('Telegram post')} ${number}`} loading="eager" allow="fullscreen" />}
     <div className="telegram-post-skeleton">
       <PostOutline post={post} height={height} />
       <footer>

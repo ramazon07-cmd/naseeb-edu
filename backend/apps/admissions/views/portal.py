@@ -1,7 +1,7 @@
 """Admissions API views — portal."""
 from datetime import date, timedelta
 from django.conf import settings
-from django.db import connection, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import permissions, viewsets
@@ -13,6 +13,7 @@ from apps.users.models import User
 from apps.users.serializers import ContactSerializer
 from ..models import (
     Booking,
+    MeetingAvailability,
     Notification,
     ProgramService,
     ScreenTimeDaily,
@@ -26,7 +27,9 @@ from ..serializers import (
     ScreenTimeDailySerializer,
     StudentMessageSerializer,
 )
+from ..serializers.portal import MeetingAvailabilitySerializer
 from ..listing import ListQueryMixin
+from ..meetings import has_open_slot, overlapping, upcoming_slots, with_availability
 from ..params import int_param
 from ..scoping import booking_participants_for, scope_students, visible_students
 from .common import CONTACT_LIST_LIMIT, SCREEN_TIME_TEAM_LIMIT
@@ -82,8 +85,8 @@ class StudentCollaborationPermission(permissions.BasePermission):
 class BookingPermission(permissions.BasePermission):
     """Keep meeting requests scoped to the student and the selected staff participant."""
 
-    STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'cancel', 'reschedule'}
-    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'approve', 'reject', 'complete', 'cancel', 'reschedule'}
+    STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'availability', 'cancel', 'reschedule'}
+    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'availability', 'approve', 'reject', 'complete', 'cancel', 'reschedule'}
 
     def has_permission(self, request, view):
         user = request.user
@@ -157,7 +160,18 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 f'{participant_name} booked "{booking.topic}" with you on {meeting_time}.',
             )
             return
-        serializer.save(student=self.request.user.student_profile, status=Booking.Status.PENDING)
+        slot = serializer.validated_data.get('availability_slot')
+        with transaction.atomic():
+            if slot:
+                # Same per-staff lock as adding a slot, so two claims cannot both pass the checks.
+                User.objects.select_for_update().get(pk=slot.participant_id)
+                locked = MeetingAvailability.objects.select_for_update().get(pk=slot.pk)
+                if locked.bookings.filter(status__in=Booking.OPEN_STATUSES).exists():
+                    raise drf_serializers.ValidationError({'availability_slot': 'This time has already been requested.'})
+                meetings = Booking.objects.filter(participant_id=slot.participant_id, status__in=Booking.OPEN_STATUSES)
+                if overlapping(meetings, locked.starts_at, locked.duration_minutes):
+                    raise drf_serializers.ValidationError({'availability_slot': 'This time overlaps another meeting.'})
+            serializer.save(student=self.request.user.student_profile, status=Booking.Status.PENDING)
 
     @action(detail=False, methods=['get'])
     def participants(self, request):
@@ -167,6 +181,60 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             many=True,
             context={'request': request},
         ).data)
+
+    @action(detail=False, methods=['get', 'post', 'delete'])
+    def availability(self, request):
+        """Student sees free slots; staff manages only their own dated slots."""
+        user = request.user
+        staff = user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}
+        if request.method != 'GET' and not staff:
+            return Response({'detail': 'Only staff can manage availability.'}, status=403)
+        if request.method == 'POST':
+            payload = MeetingAvailabilitySerializer(data=request.data)
+            payload.is_valid(raise_exception=True)
+            start = payload.validated_data['starts_at']
+            duration = payload.validated_data.get('duration_minutes', 45)
+            try:
+                with transaction.atomic():
+                    # One writer per staff member at a time; the unique start is the last guard.
+                    User.objects.select_for_update().get(pk=user.pk)
+                    if overlapping(MeetingAvailability.objects.filter(participant=user), start, duration):
+                        return Response({'starts_at': 'This time overlaps an existing slot.'}, status=400)
+                    if overlapping(Booking.objects.filter(participant=user, status__in=Booking.OPEN_STATUSES), start, duration):
+                        return Response({'starts_at': 'This time overlaps an existing meeting.'}, status=400)
+                    slot = payload.save(participant=user)
+            except IntegrityError:
+                return Response({'starts_at': 'This time overlaps an existing slot.'}, status=400)
+            return Response(MeetingAvailabilitySerializer(slot).data, status=201)
+        if request.method == 'DELETE':
+            slot_id = int_param(request.data, 'id')
+            slot = MeetingAvailability.objects.filter(pk=slot_id, participant=user).first()
+            if not slot:
+                return Response({'detail': 'Slot not found.'}, status=404)
+            if slot.bookings.filter(status__in=Booking.OPEN_STATUSES).exists():
+                return Response({'detail': 'Cancel the meeting before removing this slot.'}, status=400)
+            slot.delete()
+            return Response(status=204)
+        if staff:
+            slots = MeetingAvailability.objects.filter(participant=user)
+        elif user.role == User.Role.STUDENT:
+            profile = user.student_profile
+            participant_id = request.query_params.get('participant')
+            participants = booking_participants_for(profile)
+            if participant_id is not None:
+                participant_id = int_param(request.query_params, 'participant')
+                if not participants.filter(pk=participant_id).exists():
+                    return Response({'participant': 'Choose a staff member from your school.'}, status=400)
+                slots = MeetingAvailability.objects.filter(participant_id=participant_id)
+            else:
+                allowed_ids = participants.values_list('id', flat=True)[:CONTACT_LIST_LIMIT]
+                slots = MeetingAvailability.objects.filter(participant_id__in=allowed_ids)
+        else:
+            return Response({'detail': 'Availability is unavailable for this role.'}, status=403)
+        return Response([
+            {**MeetingAvailabilitySerializer(slot).data, 'participant': slot.participant_id, 'available': free}
+            for slot, free in with_availability(upcoming_slots(slots))
+        ])
 
     def _locked_booking(self):
         """The booking this request may act on (404 otherwise), row-locked until commit."""
@@ -261,13 +329,31 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                     status=400,
                 )
             duration = payload.validated_data.get('duration_minutes', booking.duration_minutes)
-            if (booking.status, booking.starts_at, booking.duration_minutes) == (Booking.Status.PENDING, starts_at, duration):
+            if (booking.starts_at, booking.duration_minutes) == (starts_at, duration):
+                # Same time (so also the same slot): nothing moves, whatever the status.
                 return Response(self.get_serializer(booking).data)
+            slot = payload.validated_data.get('availability_slot')
+            if request.user.role == User.Role.STUDENT:
+                if slot:
+                    User.objects.select_for_update().get(pk=booking.participant_id)
+                    slot = MeetingAvailability.objects.select_for_update().get(pk=slot.pk)
+                    if slot.participant_id != booking.participant_id or slot.starts_at != starts_at or slot.duration_minutes != duration:
+                        return Response({'availability_slot': 'Choose a time from this staff member’s availability.'}, status=400)
+                    if slot.bookings.filter(status__in=Booking.OPEN_STATUSES).exclude(pk=booking.pk).exists():
+                        return Response({'availability_slot': 'This time has already been requested.'}, status=400)
+                    meetings = Booking.objects.filter(participant_id=booking.participant_id, status__in=Booking.OPEN_STATUSES)
+                    if overlapping(meetings, starts_at, duration, exclude_pk=booking.pk):
+                        return Response({'availability_slot': 'This time overlaps another meeting.'}, status=400)
+                elif has_open_slot(booking.participant_id):
+                    return Response({'availability_slot': 'Choose an available time.'}, status=400)
+            elif slot:
+                return Response({'availability_slot': 'Only students can choose an available time.'}, status=400)
             booking.previous_starts_at = booking.starts_at
             booking.starts_at = starts_at
             booking.duration_minutes = duration
+            booking.availability_slot = slot
             booking.status = Booking.Status.PENDING
-            booking.save(update_fields=['previous_starts_at', 'starts_at', 'duration_minutes', 'status', 'updated_at'])
+            booking.save(update_fields=['previous_starts_at', 'starts_at', 'duration_minutes', 'availability_slot', 'status', 'updated_at'])
             student_name, participant_name, meeting_time = self._names(booking)
             if request.user.role == User.Role.STUDENT:
                 message = f'{student_name} asked to move "{booking.topic}" to {meeting_time}.'

@@ -1,5 +1,7 @@
 """Student-owned profile input, independent of counselor administration."""
 import datetime
+import re
+from typing import NamedTuple
 
 from django.utils import timezone
 from rest_framework import serializers
@@ -23,6 +25,85 @@ class SubjectScoreSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs['type'] == 'AP' and attrs['score'] > 5:
             raise serializers.ValidationError({'score': 'AP scores go from 1 to 5.'})
+        return attrs
+
+
+# Other test results a student already has, listed next to IELTS and SAT: the standard tests with
+# the range (and step) of their official score report, plus "other" for any certificate the student
+# names. Stored like the AP / IB rows, as the "certificates" list in application_profile. This is not
+# the Documents page, whose certificates are uploaded files. The frontend mirrors these rules in
+# frontend/src/lib/testScores.js.
+OTHER_CERTIFICATE = 'other'
+MAX_CERTIFICATES = 30
+WHOLE_NUMBER = re.compile(r'-?[0-9]+')
+
+
+class CertificateRule(NamedTuple):
+    low: int
+    high: int
+    out_of_range: str
+    step: int = 1
+    off_step: str = ''
+
+
+CERTIFICATE_RULES = {
+    'toefl': CertificateRule(0, 120, 'TOEFL iBT scores go from 0 to 120.'),
+    'duolingo': CertificateRule(10, 160, 'Duolingo English Test scores go from 10 to 160.', 5, 'Duolingo scores go up in steps of 5, like 120 or 125.'),
+    'pte': CertificateRule(10, 90, 'PTE Academic scores go from 10 to 90.'),
+    'act': CertificateRule(1, 36, 'ACT composite scores go from 1 to 36.'),
+    'cambridge': CertificateRule(80, 230, 'Cambridge English scores go from 80 to 230.'),
+}
+
+
+class ScoreField(serializers.CharField):
+    # A whole-number result stays a number in the stored answers; free text stays text.
+    def to_representation(self, value):
+        return value if isinstance(value, int) else super().to_representation(value)
+
+
+class CertificateScoreSerializer(serializers.Serializer):
+    type = serializers.ChoiceField(
+        choices=[*CERTIFICATE_RULES, OTHER_CERTIFICATE], error_messages={'invalid_choice': 'Choose the type of test or certificate.'},
+    )
+    # Only "other" has a name; for the standard tests it is dropped.
+    name = serializers.CharField(max_length=120, required=False, allow_blank=True, allow_null=True)
+    score = ScoreField(max_length=40, error_messages={'blank': 'Enter your score or result.'})
+    test_date = serializers.DateField(required=False, allow_null=True)
+
+    def validate_test_date(self, value):
+        # A result already exists, so unlike IELTS / SAT there is no booked, future date.
+        if value is not None and value > timezone.localdate():
+            raise serializers.ValidationError('The test date cannot be in the future.')
+        if value is not None and value < EARLIEST_TEST_DATE:
+            raise serializers.ValidationError('Enter a date from 2015 or later.')
+        return value
+
+    def validate(self, attrs):
+        # A section edit (PATCH) is partial for the whole payload, so DRF skips a row's missing
+        # fields instead of reporting them. A row is always complete.
+        errors = {name: self.fields[name].error_messages['required'] for name in ('type', 'score') if name not in attrs}
+        if errors:
+            raise serializers.ValidationError(errors, code='required')
+        if attrs['type'] == OTHER_CERTIFICATE:
+            attrs['name'] = attrs.get('name') or ''
+            if not attrs['name']:
+                errors['name'] = 'Enter the name of the certificate.'
+        else:
+            attrs['name'] = ''
+            rule = CERTIFICATE_RULES[attrs['type']]
+            if not WHOLE_NUMBER.fullmatch(attrs['score']):
+                errors['score'] = 'Enter a whole number.'
+            else:
+                number = int(attrs['score'])
+                if not rule.low <= number <= rule.high:
+                    errors['score'] = rule.out_of_range
+                elif number % rule.step:
+                    errors['score'] = rule.off_step
+                else:
+                    attrs['score'] = number
+        attrs.setdefault('test_date', None)
+        if errors:
+            raise serializers.ValidationError(errors)
         return attrs
 
 
@@ -97,6 +178,9 @@ CROSS_FIELD_GROUPS = (
 def current_answers(profile):
     """The stored answers of a profile, in the shape OnboardingSerializer validates."""
     answers = {key: value for key, value in (profile.application_profile or {}).items() if key not in EXAM_KEYS}
+    # Profiles saved before certificates existed have no entry. An absent list is an empty list, so
+    # saving "none" for the first time is not an edit of the tests section (it would lose its review).
+    answers.setdefault('certificates', [])
     answers.update(
         first_name=profile.user.first_name, last_name=profile.user.last_name, grade=profile.grade,
         school_name=profile.school_name, gpa=profile.gpa, target_countries=profile.target_countries,
@@ -151,6 +235,10 @@ class OnboardingSerializer(serializers.Serializer):
     sat_superscore_reading = sat_section_field()
     sat_superscore_math = sat_section_field()
     subjects = SubjectScoreSerializer(many=True, max_length=50, required=False)
+    certificates = CertificateScoreSerializer(
+        many=True, max_length=MAX_CERTIFICATES, required=False,
+        error_messages={'max_length': f'You can add up to {MAX_CERTIFICATES} other test scores or certificates.'},
+    )
     target_countries = serializers.CharField(max_length=255)
     interests = serializers.ListField(child=serializers.CharField(max_length=80), max_length=30, required=False)
     program_strengths = serializers.ListField(child=serializers.CharField(max_length=100), max_length=10, required=False)

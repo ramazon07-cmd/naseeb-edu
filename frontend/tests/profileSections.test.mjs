@@ -47,6 +47,18 @@ test('a section payload holds only that section, typed for the API', () => {
   assert.equal(answersPayload(form).city, 'Tashkent');
 });
 
+test('certificate results round-trip through the test section without changing other sections', () => {
+  const withCertificates = { ...profile, application_profile: {
+    ...profile.application_profile,
+    certificates: [{ type: 'toefl', name: '', score: 105, test_date: '2026-05-01' }, { type: 'other', name: 'Goethe-Zertifikat', score: 'C1', test_date: null }],
+  } };
+  const form = profileAnswers(withCertificates);
+  assert.equal(form.certificates[0].score, '105');
+  assert.equal(form.certificates[1].test_date, '');
+  assert.deepEqual(answersPayload(form, 'tests').certificates, withCertificates.application_profile.certificates);
+  assert.equal('certificates' in answersPayload(form, 'goal'), false);
+});
+
 test('section checks run before saving', () => {
   const form = profileAnswers(profile);
   assert.deepEqual(validateSection('goal', { ...form, target_countries: [] }), { target_countries: ['Select at least one country.'] });

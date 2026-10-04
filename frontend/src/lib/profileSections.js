@@ -46,7 +46,7 @@ export const STRENGTHS = ['STEM', 'Liberal Arts', 'Specialized programs', 'Resea
 const NUMERIC = ['graduation_year', 'class_size', 'class_rank', 'gpa'];
 // Test answers once lived in application_profile; the columns are authoritative now.
 const LEGACY_TEST_KEYS = ['ielts_status', 'ielts_score', 'sat_status', 'sat_reading', 'sat_math', 'sat_attempts'];
-const DEFAULTS = { subjects: [], interests: [], program_strengths: [], honors: [], activities: [] };
+const DEFAULTS = { subjects: [], certificates: [], interests: [], program_strengths: [], honors: [], activities: [] };
 
 export const splitList = (value) => (Array.isArray(value) ? value : String(value || '').split(',').map((c) => c.trim()).filter(Boolean));
 
@@ -70,8 +70,9 @@ export function profileAnswers(profile) {
     gpa_scale: profile.gpa_scale != null ? String(profile.gpa_scale) : (stored.gpa_scale ?? ''),
     ...testScoresFromProfile(profile),
   };
-  for (const key of ['subjects', 'interests', 'program_strengths', 'honors', 'activities']) if (!Array.isArray(form[key])) form[key] = [];
+  for (const key of ['subjects', 'certificates', 'interests', 'program_strengths', 'honors', 'activities']) if (!Array.isArray(form[key])) form[key] = [];
   form.subjects = form.subjects.map((row) => ({ ...row, score: row.score == null ? '' : String(row.score) }));
+  form.certificates = form.certificates.map((row) => ({ ...row, score: row.score == null ? '' : String(row.score), test_date: row.test_date || '' }));
   form.target_countries = supportedCountries(splitList(profile.target_countries));
   return form;
 }

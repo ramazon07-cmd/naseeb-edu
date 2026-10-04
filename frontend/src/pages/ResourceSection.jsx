@@ -15,61 +15,116 @@ import { useRecordList } from '../hooks/useRecordList';
 import { usePagedList } from '../hooks/usePagedList';
 import { LoadMore, PagedListError, StudentPicker, firstPageLoading } from '../components/paged';
 
+// Field tuples: [name, label, type = 'text', required = false, choices = [], placeholder].
+// The placeholder is an English example shown while the field is empty (DynamicField translates it).
+// Give every text, textarea, url, number and email field one; selects, dates and checkboxes get none.
 export const RESOURCE_FIELDS = {
   researches: [
-  ['title', 'Research title', 'text', true], ['field', 'Field'], ['role', 'Role'],
-  ['summary', 'Summary', 'textarea', true], ['outcome', 'Outcome'], ['start_date', 'Start date', 'date'],
-  ['end_date', 'End date', 'date'], ['link', 'Link', 'url'], ['google_docs_url', 'Google Docs URL', 'url']],
+    ['title', 'Research title', 'text', true, [], 'e.g. Air quality in Tashkent'],
+    ['field', 'Field', 'text', false, [], 'e.g. Environmental science'],
+    ['role', 'Role', 'text', false, [], 'e.g. Research assistant'],
+    ['summary', 'Summary', 'textarea', true, [], 'e.g. What you studied, how you collected data and what you found'],
+    ['outcome', 'Outcome', 'text', false, [], 'e.g. Presented at a science fair'],
+    ['start_date', 'Start date', 'date'],
+    ['end_date', 'End date', 'date'],
+    ['link', 'Link', 'url', false, [], 'https://example.com/my-research'],
+    ['google_docs_url', 'Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+  ],
 
   projects: [
-  ['title', 'Project title', 'text', true], ['role', 'Role'], ['technologies', 'Technologies'],
-  ['description', 'Description', 'textarea', true], ['impact', 'Measurable impact'], ['date', 'Date', 'date'], ['link', 'Link', 'url'],
-  ['google_docs_url', 'Google Docs URL', 'url']],
+    ['title', 'Project title', 'text', true, [], 'e.g. Student attendance tracker'],
+    ['role', 'Role', 'text', false, [], 'e.g. Team lead'],
+    ['technologies', 'Technologies', 'text', false, [], 'e.g. Python, Django, PostgreSQL'],
+    ['description', 'Description', 'textarea', true, [], 'e.g. A web app where teachers mark attendance and parents get weekly reports on Telegram'],
+    ['impact', 'Measurable impact', 'text', false, [], 'e.g. Used by 120 students in 4 classes'],
+    ['date', 'Date', 'date'],
+    ['link', 'Link', 'url', false, [], 'https://github.com/username/project'],
+    ['google_docs_url', 'Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+  ],
 
   internships: [
-  ['organization', 'Organization', 'text', true], ['position', 'Position', 'text', true], ['supervisor', 'Supervisor'],
-  ['description', 'Responsibilities and results', 'textarea'], ['start_date', 'Start date', 'date'], ['end_date', 'End date', 'date'],
-  ['is_current', 'Current internship', 'checkbox'], ['google_docs_url', 'Google Docs URL', 'url']],
+    ['organization', 'Organization', 'text', true, [], 'e.g. Local software company'],
+    ['position', 'Position', 'text', true, [], 'e.g. Software intern'],
+    ['supervisor', 'Supervisor', 'text', false, [], 'e.g. Dilshod Rahimov'],
+    ['description', 'Responsibilities and results', 'textarea', false, [], 'e.g. Tested the mobile app, fixed 15 bugs and wrote the user guide'],
+    ['start_date', 'Start date', 'date'],
+    ['end_date', 'End date', 'date'],
+    ['is_current', 'Current internship', 'checkbox'],
+    ['google_docs_url', 'Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+  ],
 
   activities: [
-  ['name', 'Activity name', 'text', true], ['activity_type', 'Type', 'select', true, ['extracurricular', 'volunteering', 'leadership', 'club', 'competition', 'community', 'other']],
-  ['role', 'Role'], ['description', 'Description', 'textarea'], ['impact', 'Impact'],
-  ['hours_per_week', 'Hours per week', 'number'], ['weeks_per_year', 'Weeks per year', 'number'],
-  ['start_date', 'Start date', 'date'], ['end_date', 'End date', 'date'],
-  ['google_docs_url', 'Google Docs URL', 'url']],
+    ['name', 'Activity name', 'text', true, [], 'e.g. School robotics club'],
+    ['activity_type', 'Type', 'select', true, ['extracurricular', 'volunteering', 'leadership', 'club', 'competition', 'community', 'other']],
+    ['role', 'Role', 'text', false, [], 'e.g. Team captain'],
+    ['description', 'Description', 'textarea', false, [], 'e.g. Led weekly practice for 12 members and prepared the team for the regional olympiad'],
+    ['impact', 'Impact', 'text', false, [], 'e.g. Team placed 2nd in the regional round'],
+    ['hours_per_week', 'Hours per week', 'number', false, [], 'e.g. 4'],
+    ['weeks_per_year', 'Weeks per year', 'number', false, [], 'e.g. 36'],
+    ['start_date', 'Start date', 'date'],
+    ['end_date', 'End date', 'date'],
+    ['google_docs_url', 'Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+  ],
 
   honors: [
-  ['title', 'Honor title', 'text', true], ['issuer', 'Issuer'], ['level', 'Level', 'select', true, ['school', 'regional', 'national', 'international']],
-  ['award_date', 'Award date', 'date'], ['description', 'Description', 'textarea'],
-  ['google_docs_url', 'Google Docs URL', 'url']],
+    ['title', 'Honor title', 'text', true, [], 'e.g. Olympiad gold medal'],
+    ['issuer', 'Issuer', 'text', false, [], 'e.g. Regional Education Department'],
+    ['level', 'Level', 'select', true, ['school', 'regional', 'national', 'international']],
+    ['award_date', 'Award date', 'date'],
+    ['description', 'Description', 'textarea', false, [], 'e.g. Awarded for the highest score among 300 participants'],
+    ['google_docs_url', 'Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+  ],
 
   achievements: [
-  ['title', 'Achievement title', 'text', true], ['category', 'Category', 'select', true, ['project', 'startup', 'olympiad', 'volunteering', 'leadership', 'research', 'sport', 'art', 'other']],
-  ['date', 'Date', 'date'], ['impact', 'Impact'], ['description', 'Description', 'textarea', true],
-  ['google_docs_url', 'Google Docs URL', 'url']],
+    ['title', 'Achievement title', 'text', true, [], 'e.g. Founded a school coding club'],
+    ['category', 'Category', 'select', true, ['project', 'startup', 'olympiad', 'volunteering', 'leadership', 'research', 'sport', 'art', 'other']],
+    ['date', 'Date', 'date'],
+    ['impact', 'Impact', 'text', false, [], 'e.g. 40 students joined in the first month'],
+    ['description', 'Description', 'textarea', true, [], 'e.g. Started the club with two classmates, planned weekly lessons and ran a final contest'],
+    ['google_docs_url', 'Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+  ],
 
   recommendations: [
-  ['recommender_name', 'Recommender name', 'text', true], ['recommender_title', 'Position'], ['recommender_email', 'Email', 'email'],
-  ['relationship', 'Relationship'], ['status', 'Status', 'select', true, ['requested', 'drafting', 'submitted', 'approved']],
-  ['deadline', 'Deadline', 'date'], ['notes', 'Notes', 'textarea'], ['google_docs_url', 'Google Docs URL', 'url']],
+    ['recommender_name', 'Recommender name', 'text', true, [], 'e.g. Malika Yusupova'],
+    ['recommender_title', 'Position', 'text', false, [], 'e.g. Physics teacher'],
+    ['recommender_email', 'Email', 'email', false, [], 'e.g. name@example.com'],
+    ['relationship', 'Relationship', 'text', false, [], 'e.g. Class teacher, grades 9–11'],
+    ['status', 'Status', 'select', true, ['requested', 'drafting', 'submitted', 'approved']],
+    ['deadline', 'Deadline', 'date'],
+    ['notes', 'Notes', 'textarea', false, [], 'e.g. Agreed to write it; needs my CV by Friday'],
+    ['google_docs_url', 'Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+  ],
 
   tasks: [
-  ['title', 'Task title', 'text', true], ['description', 'Description', 'textarea'], ['due_date', 'Due date', 'date', true],
-  ['priority', 'Priority', 'select', true, ['low', 'medium', 'high', 'urgent']],
-  ['status', 'Status', 'select', true, ['todo', 'in_progress', 'submitted', 'late']],
-  ['student_response', 'Student response', 'textarea'], ['submission_url', 'Submission or Google Docs URL', 'url']],
+    ['title', 'Task title', 'text', true, [], 'e.g. Finish the first essay draft'],
+    ['description', 'Description', 'textarea', false, [], 'e.g. Write about 600 words, then upload the draft before the deadline'],
+    ['due_date', 'Due date', 'date', true],
+    ['priority', 'Priority', 'select', true, ['low', 'medium', 'high', 'urgent']],
+    ['status', 'Status', 'select', true, ['todo', 'in_progress', 'submitted', 'late']],
+    ['student_response', 'Student response', 'textarea', false, [], 'e.g. What you did and anything to double-check'],
+    ['submission_url', 'Submission or Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+  ],
 
   applications: [
-  ['university', 'University', 'university', true], ['program', 'Program', 'text', true],
-  ['tier', 'Tier', 'select', true, ['dream', 'target', 'safety']],
-  ['status', 'Status', 'select', true, ['researching', 'shortlisted', 'applying', 'submitted', 'accepted', 'rejected', 'waitlisted']],
-  ['deadline', 'Deadline', 'date'], ['scholarship_deadline', 'Scholarship deadline', 'date'], ['application_portal_url', 'Portal URL', 'url'], ['notes', 'Notes', 'textarea']],
+    ['university', 'University', 'university', true],
+    ['program', 'Program', 'text', true, [], 'e.g. Computer Science, BSc'],
+    ['tier', 'Tier', 'select', true, ['dream', 'target', 'safety']],
+    ['status', 'Status', 'select', true, ['researching', 'shortlisted', 'applying', 'submitted', 'accepted', 'rejected', 'waitlisted']],
+    ['deadline', 'Deadline', 'date'],
+    ['scholarship_deadline', 'Scholarship deadline', 'date'],
+    ['application_portal_url', 'Portal URL', 'url', false, [], 'https://apply.example.com'],
+    ['notes', 'Notes', 'textarea', false, [], 'e.g. Needs 2 recommendation letters and an IELTS score by 1 December'],
+  ],
 
   essays: [
-  ['application', 'Application', 'application'], ['title', 'Essay title', 'text', true], ['prompt', 'Prompt', 'textarea', true],
-  ['content', 'Draft content', 'textarea'], ['status', 'Status', 'select', true, ['draft', 'reviewing', 'needs_revision', 'approved']],
-  ['google_docs_url', 'Google Docs URL', 'url'], ['counselor_comment', 'Counselor comment', 'textarea']]
-
+    ['application', 'Application', 'application'],
+    ['title', 'Essay title', 'text', true, [], 'e.g. Personal statement, draft 1'],
+    ['prompt', 'Prompt', 'textarea', true, [], 'e.g. Describe a challenge you faced and what you learned from it'],
+    ['content', 'Draft content', 'textarea', false, [], 'Paste or type your draft here'],
+    ['status', 'Status', 'select', true, ['draft', 'reviewing', 'needs_revision', 'approved']],
+    ['google_docs_url', 'Google Docs URL', 'url', false, [], 'https://docs.google.com/document/d/.../edit'],
+    ['counselor_comment', 'Counselor comment', 'textarea', false, [], 'e.g. “Great start — add one concrete example in paragraph 2.”'],
+  ],
 };
 
 // Records that carry one private file: the API field and how rows read it back.
@@ -207,7 +262,7 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
   return <Modal title={title || t(item ? editTitle : addTitle)} onClose={close}><form ref={formRef} className="form-grid" onSubmit={submit}>
     {!item && isTaskManager(user) && <StudentPicker required value={studentId} onChange={setStudentId} hint={t("Only students connected to your account are listed.")} />}
     {selfTask && <div className="form-wide self-task-note"><Flag size={18} /><div><b>{t("Personal development task")}</b><p>{t("This task is for your own planning and never awards XP.")}</p></div></div>}
-    {fields.map(([name, title, type = 'text', required = false, choices = []]) => <DynamicField key={name} name={name} labelText={title} type={type} required={required} choices={choices} value={item?.[name]} data={data} user={user} studentId={studentId} />)}
+    {fields.map(([name, title, type = 'text', required = false, choices = [], placeholder]) => <DynamicField key={name} name={name} labelText={title} type={type} required={required} choices={choices} placeholder={placeholder} value={item?.[name]} data={data} user={user} studentId={studentId} />)}
     {fields.some(([name]) => name === 'google_docs_url') && <div className="form-wide google-doc-sharing-hint"><ShieldCheck size={16} /><span>{t("Set Google Docs sharing to Viewer or “Anyone with the link” to enable the preview.")}</span></div>}
     {recordFile && <FileField label={recordFile.field === 'file' ? t("Letter file") : t("Evidence file")} file={file} onFileChange={(next) => {setFile(next);if (next) setRemoveFile(false);}} current={currentFile} removingCurrent={removeFile} onRemoveCurrent={() => setRemoveFile(true)} onKeepCurrent={() => setRemoveFile(false)} upload={upload} />}
     <UploadError message={upload.error} onRetry={() => formRef.current?.requestSubmit()} />
@@ -221,13 +276,14 @@ function StudentApplicationSelect({ name, labelText, value, studentId }) {
   return <Field label={t(labelText)} hint={studentId ? '' : t("Select a student first.")}><select name={name} defaultValue={value || ''} key={list.items.length}><option value="">{t('General essay')}</option>{list.items.map((app) => <option key={app.id} value={app.id}>{app.university_detail?.name} — {app.student_name}</option>)}</select></Field>;
 }
 
-export function DynamicField({ name, labelText, type, required, choices, value, data, user, studentId = '' }) {
+export function DynamicField({ name, labelText, type, required, choices, placeholder, value, data, user, studentId = '' }) {
   if (name === 'status' && !isTaskManager(user)) choices = choices.filter((choice) => !['approved', 'late', 'rejected', 'waitlisted', 'accepted', 'needs_revision', 'completed'].includes(choice));
-  if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} /></Field>;
+  const hint = placeholder ? t(placeholder) : undefined;
+  if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} placeholder={hint} /></Field>;
   if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;
   if (type === 'checkbox') return <CheckboxControl className="form-wide" name={name} defaultChecked={Boolean(value)}>{t(labelText)}</CheckboxControl>;
   if (type === 'university') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''} required={required}><option value="">{t('Select university')}</option>{data.universities.map((uni) => <option key={uni.id} value={uni.id}>{uni.name} — {uni.country}</option>)}</select></Field>;
   if (type === 'application' && isTaskManager(user)) return <StudentApplicationSelect name={name} labelText={labelText} value={value} studentId={studentId} />;
   if (type === 'application') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''}><option value="">{t('General essay')}</option>{data.applications.map((app) => <option key={app.id} value={app.id}>{app.university_detail?.name} — {studentName(data, app.student)}</option>)}</select></Field>;
-  return <Field label={t(labelText)}><input name={name} type={type} defaultValue={value ?? ''} required={required} /></Field>;
+  return <Field label={t(labelText)}><input name={name} type={type} defaultValue={value ?? ''} required={required} placeholder={hint} /></Field>;
 }

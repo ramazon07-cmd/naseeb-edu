@@ -18019,3 +18019,24 @@ button.cx-search {
   }
 }
 /* == counselor workspace end == */
+/* Meeting availability picker and staff schedule. */
+.availability-picker {
+  display: grid;
+  gap: 1rem;
+}
+
+.availability-picker h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.booking-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+
+
+
+
