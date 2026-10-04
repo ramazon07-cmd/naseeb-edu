@@ -6,7 +6,7 @@ import { studentName, dateText, clockText, joinParts, programUsageCaption, short
 import { isCounselor } from '../lib/roles';
 import CompactDashboard from '../CompactDashboard';
 import { ownStudent, label, fullName } from '../lib/labels';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { api } from '../api';
 import { Field, CheckboxControl } from '../components/forms';
 import { usePagedList } from '../hooks/usePagedList';
@@ -28,8 +28,8 @@ function useDashboardLists(user) {
   return { students, tasks };
 }
 
-export function Dashboard({ user, data, stats, reload, notify, setPage, onDirect }) {
-  if (user.role === 'student') return <StudentDashboard user={user} data={data} stats={stats} setPage={setPage} onDirect={onDirect} />;
+export function Dashboard({ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources }) {
+  if (user.role === 'student') return <StudentDashboard {...{ user, data, setPage, onDirect, resourceStatus, loadResources, retryResources }} />;
   return <StaffDashboard {...{ user, data, stats, reload, notify, setPage }} />;
 }
 
@@ -172,8 +172,11 @@ function deadlineLabel(item) {
   return item.title;
 }
 
-export function StudentDashboard({ user, data, setPage, onDirect }) {
-  return <CompactDashboard key={user.id} user={user} student={ownStudent(data)} data={data} setPage={setPage} onDirect={onDirect} Modal={Modal} programUsage={<ProgramUsageSummary user={user} data={data} />} />;
+export function StudentDashboard({ user, data, setPage, onDirect, resourceStatus, loadResources, retryResources }) {
+  const loadPrograms = useCallback(() => loadResources(['opportunityPrograms']), [loadResources]);
+  const retryPrograms = useCallback(() => retryResources(['opportunityPrograms']), [retryResources]);
+  return <CompactDashboard key={user.id} user={user} student={ownStudent(data)} data={data} setPage={setPage} onDirect={onDirect} Modal={Modal} programUsage={<ProgramUsageSummary user={user} data={data} />}
+    programsStatus={resourceStatus?.opportunityPrograms} loadPrograms={loadPrograms} retryPrograms={retryPrograms} />;
 }
 
 export function ProgramServiceForm({ service, user, data, defaultStudentId = null, onClose, onSaved, notify }) {

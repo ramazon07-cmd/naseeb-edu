@@ -54,6 +54,8 @@ function ApplicationSummary({ applications, essays, letters, openUniversity }) {
 }
 
 const BRIEF_ROOM = 360; // px a card needs below it before its brief opens upward instead
+// Without the Popover API (older Safari and Firefox) the brief is a plain fixed panel.
+const HAS_POPOVER = typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function';
 
 function DecisionTag({ application, decidedAt }) {
   return <span className={`tag ${application.status === 'accepted' ? 'ok' : application.status === 'rejected' ? 'bad' : 'warn'}`}><CheckCircle2 size={12} aria-hidden="true" /> {label(application.status)}{decidedAt ? ` ${shortDate(decidedAt)}` : ''}</span>;
@@ -74,7 +76,7 @@ function ApplicationBrief({ id, briefRef, application, info, essays, name, onOpe
     const days = daysUntil(date);
     return { Icon: kind === 'aid' ? Clock3 : CalendarDays, title: kind === 'aid' ? t("Scholarship") : t("Application"), date, chip: <span className={`due ${dueTone(days)}`.trim()}>{dueLabel(days)}</span> };
   });
-  return <div id={id} ref={briefRef} className="app-brief" popover="manual" role="dialog" aria-label={name} tabIndex={-1}>
+  return <div id={id} ref={briefRef} className="app-brief" popover={HAS_POPOVER ? 'manual' : undefined} role="dialog" aria-label={name} tabIndex={-1}>
     <header className="app-brief-head">
       <div>
         <TierBand value={application.tier} />
@@ -135,15 +137,15 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
     brief.dataset.side = above ? 'above' : 'below';
     brief.style.setProperty('--brief-x', `${rect.left}px`);
     brief.style.setProperty('--brief-y', `${(above ? window.innerHeight - rect.top : rect.bottom) + 8}px`);
-    if (!brief.matches(':popover-open')) brief.showPopover();
+    if (HAS_POPOVER && !brief.matches(':popover-open')) brief.showPopover();
     brief.focus({ preventScroll: true });
-    return () => brief.hidePopover();
+    return () => {if (HAS_POPOVER && brief.matches(':popover-open')) brief.hidePopover();};
   }, [briefOpen]);
 
   return <>
     <article ref={cardRef} className={`board-card ${dragging ? 'is-dragging' : ''} ${briefOpen ? 'is-open' : ''}`.trim()} draggable={!decided && !busy} aria-busy={busy} onDragStart={onDragStart} onDragEnd={onDragEnd} onClick={(event) => {if (!event.target.closest('.card-menu')) onBrief();}}>
       <div className="board-card-top">
-        <button type="button" className="board-card-title" aria-haspopup="dialog" aria-expanded={briefOpen} aria-controls={briefId}>{name}</button>
+        <button type="button" className="board-card-title" aria-haspopup="dialog" aria-expanded={briefOpen} aria-controls={briefOpen ? briefId : undefined}>{name}</button>
         {!decided && <span className="grip" role="img" aria-label={t("Drag to move")}><GripVertical size={14} /></span>}
         <div className="card-menu">
           <button type="button" className="icon-button" aria-expanded={menuOpen} aria-label={tx`Actions for ${name}`} onClick={onMenu}><MoreHorizontal size={16} /></button>
@@ -161,7 +163,7 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
         {decided ? <DecisionTag application={application} decidedAt={decidedAt} /> : urgent.map(([kind, date]) => <DeadlineChip key={kind} kind={kind} date={date} />)}
       </div>}
     </article>
-    <ApplicationBrief id={briefId} briefRef={briefRef} application={application} info={info} essays={essays} name={name} onOpen={onOpen} onEdit={onEdit} onClose={onBriefClose} />
+    {briefOpen && <ApplicationBrief id={briefId} briefRef={briefRef} application={application} info={info} essays={essays} name={name} onOpen={onOpen} onEdit={onEdit} onClose={onBriefClose} />}
   </>;
 }
 
