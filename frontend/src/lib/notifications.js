@@ -34,17 +34,17 @@ export function notificationTarget(notification) {
   }
 }
 
-// Everything the bell counts: notices, the counselor inbox and unread chats.
+// Everything the bell counts: notices and unread chats.
 export function bellTotal(summary) {
   if (!summary) return 0;
-  return ['unread', 'counselor_messages_unread', 'chats_unread']
+  return ['unread', 'chats_unread']
     .reduce((total, key) => total + Math.max(0, Number(summary[key]) || 0), 0);
 }
 
 // True when a fresh summary differs from the one on screen.
 export function summaryChanged(previous, next) {
   if (!previous || !next) return previous !== next;
-  return ['unread', 'counselor_messages_unread', 'chats_unread'].some((key) => previous[key] !== next[key]);
+  return ['unread', 'chats_unread'].some((key) => previous[key] !== next[key]);
 }
 
 export function announceNotificationsChanged(target = typeof window === 'undefined' ? null : window) {

@@ -361,8 +361,10 @@ REST_FRAMEWORK = {
         'refresh_ip': config('AUTH_REFRESH_IP_RATE', default='600/minute'),
         'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
         'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
+        'remind': config('REMIND_RATE', default='60/hour'),
         'account_change': config('AUTH_ACCOUNT_CHANGE_RATE', default='10/hour'),
         'public_reach': config('PUBLIC_REACH_RATE', default='60/minute'),
+        'telegram_feed': config('TELEGRAM_FEED_RATE', default='60/minute'),
     },
     # Number of trusted reverse proxies in front of Django (Render's edge = 1).
     # With 0, X-Forwarded-For is ignored and REMOTE_ADDR is used; never leave it

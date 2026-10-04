@@ -29,7 +29,6 @@ test('record and tab routes round-trip', () => {
     [{ page: 'admin_students', params: { studentId: 7 } }, '/platform/students/7'],
     ...STUDENT_CENTER_TABS.filter((tab) => tab !== 'overview').map((tab) => [{ page: 'student_center', params: { tab } }, `/student-center/${tab}`]),
     [{ page: 'messages', params: { channelId: 9 } }, '/messages/9'],
-    [{ page: 'messages', params: { tab: 'counselor' } }, '/messages/counselor'],
     ...ROADMAP_TABS.map((tab) => [{ page: 'roadmap', params: { tab } }, `/roadmap/${tab}`]),
   ];
   for (const [route, path] of routes) {

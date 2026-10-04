@@ -43,12 +43,15 @@ from ..serializers import (
     TaskSerializer,
 )
 from ..progress import OPEN_TASK_STATUSES
-from ..services import TASK_XP_BY_PRIORITY, award_approval_xp
+from ..services import TASK_XP_BY_PRIORITY, award_approval_xp, record_approval_note
 from .common import (
     RECORD_ORDERING,
+    ApproveMixin,
     ScopedQuerysetMixin,
+    SendBackMixin,
     StaffControlledWorkMixin,
     StudentRecordListMixin,
+    clean_note,
     serve_private_file,
 )
 from .messaging import unread_channel_messages
@@ -94,8 +97,13 @@ class ApplicationViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.M
             )
 
 
-class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, viewsets.ModelViewSet):
+class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixin, viewsets.ModelViewSet):
     serializer_class = TaskSerializer
+    send_back_statuses = (Task.Status.SUBMITTED,)
+    send_back_to = Task.Status.IN_PROGRESS
+    send_back_notice_kind = 'task'
+    send_back_label = 'Task'
+    send_back_managers = 'task_manager'
     queryset = Task.objects.select_related('student__user', 'assigned_by', 'student__assigned_counselor').all()
     search_fields = ('title',)
     choice_filters = {'status': ('status', Task.Status.choices), 'priority': ('priority', Task.Priority.choices)}
@@ -142,6 +150,8 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, viewsets.Mod
     def approve(self, request, pk=None):
         if not request.user.is_task_manager:
             return Response({'detail': 'Only a teacher or counselor can approve tasks.'}, status=403)
+        # Validate the note first: a bad note must not leave the task approved.
+        note = clean_note(request)
         scoped_task = self.get_object()
         with transaction.atomic():
             task = Task.objects.select_for_update(of=('self',)).select_related('student').get(pk=scoped_task.pk)
@@ -174,6 +184,7 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, viewsets.Mod
                     ),
                     metadata={'task': task.id},
                 )
+        record_approval_note(record=task, student=task.student, note=note, notice_kind='task')
         task.student.refresh_from_db()
         data = TaskSerializer(task, context={'request': request}).data
         data['xp_awarded'] = xp_amount if xp_created else 0
@@ -200,8 +211,28 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, viewsets.Mod
 
 
 
-class DocumentViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
+class DocumentViewSet(StudentRecordListMixin, ScopedQuerysetMixin, ApproveMixin, SendBackMixin, viewsets.ModelViewSet):
     serializer_class = DocumentSerializer
+    approve_notice_kind = 'document'
+    approve_label = 'Document'
+
+    def apply_approval(self, record):
+        record.status = Document.Status.APPROVED
+        return ['status']
+    send_back_statuses = (Document.Status.UPLOADED, Document.Status.REVIEWING)
+    send_back_to = Document.Status.REJECTED
+    send_back_notice_kind = 'document'
+    send_back_label = 'Document'
+
+    def apply_filters(self, queryset, params):
+        queryset = super().apply_filters(queryset, params)
+        value = params.get('awaiting_review')
+        if value in (None, ''):
+            return queryset
+        if value not in {'true', 'false', '1', '0'}:
+            raise ValidationError({'awaiting_review': ['Use true or false.']})
+        waiting = Q(status__in=(Document.Status.UPLOADED, Document.Status.REVIEWING))
+        return queryset.filter(waiting) if value in {'true', '1'} else queryset.exclude(waiting)
     queryset = Document.objects.select_related('student__user', 'student__assigned_counselor').all()
     search_fields = ('title',)
     choice_filters = {
@@ -243,14 +274,35 @@ class PrivateEvidenceViewSetMixin:
 
 
 
-class AchievementViewSet(PrivateEvidenceViewSetMixin, StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
+class AchievementViewSet(PrivateEvidenceViewSetMixin, StudentRecordListMixin, ScopedQuerysetMixin, ApproveMixin, SendBackMixin, viewsets.ModelViewSet):
     serializer_class = AchievementSerializer
+    approve_label = 'Achievement'
+
+    def apply_approval(self, record):
+        record.verified = True
+        return ['verified']
     queryset = Achievement.objects.select_related('student__user', 'student__assigned_counselor').all()
     search_fields = ('title',)
     choice_filters = {'category': ('category', Achievement.Category.choices)}
+    bool_filters = {'verified': 'verified'}
+    send_back_label = 'Achievement'
 
     def get_queryset(self):
         return self.filter_for_user(self.queryset)
+
+    def apply_filters(self, queryset, params):
+        queryset = super().apply_filters(queryset, params)
+        value = params.get('awaiting_review')
+        if value in (None, ''):
+            return queryset
+        if value not in {'true', 'false', '1', '0'}:
+            raise ValidationError({'awaiting_review': ['Use true or false.']})
+        # Waiting for the counselor: not verified, and not already sent back.
+        waiting = Q(verified=False, counselor_comment='')
+        return queryset.filter(waiting) if value in {'true', '1'} else queryset.exclude(waiting)
+
+    def can_send_back(self, record):
+        return not record.verified
 
 class ResearchViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = ResearchSerializer
@@ -397,7 +449,7 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
         })
 
 
-class ActivityLogViewSet(ScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
+class ActivityLogViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = ActivityLogSerializer
     queryset = ActivityLog.objects.select_related('actor', 'student__user', 'student__assigned_counselor').all()
 

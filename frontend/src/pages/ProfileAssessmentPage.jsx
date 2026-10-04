@@ -41,7 +41,7 @@ function SortRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
   const legal = perColumn.every((n) => n === challenge.perColumn)
   return <div className="section-stack student-portal">
     <section className="portal-hero"><div><span className="eyebrow">CHALLENGE {challenge.number} · {challenge.instrument}</span><h2>{challenge.title}</h2><p>{challenge.blurb}</p></div><Fingerprint size={64} /></section>
-    <Panel title={`${placed} of ${challenge.items.length} placed`} action={<button className="button quiet small" onClick={onBack}>Back to challenges</button>}>
+    <Panel title={t('{placed} of {total} placed', { placed, total: challenge.items.length })} action={<button className="button quiet small" onClick={onBack}>Back to challenges</button>}>
       <div className="sort-tally">{challenge.scale.map((label, index) => <div key={label} className={perColumn[index] === challenge.perColumn ? 'full' : ''}>
         <b>{perColumn[index]}/{challenge.perColumn}</b><span>{label}</span>
       </div>)}</div>
@@ -53,7 +53,7 @@ function SortRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
             const level = position + 1
             const chosen = answers[item.id] === level
             const full = perColumn[position] >= challenge.perColumn && !chosen
-            return <label key={label} className={`scale-opt s${level}${chosen ? ' sel' : ''}${full ? ' full' : ''}`} title={full ? `${label} is already full` : label}>
+            return <label key={label} className={`scale-opt s${level}${chosen ? ' sel' : ''}${full ? ' full' : ''}`} title={full ? t('{label} is already full', { label }) : label}>
               <input type="radio" name={`item-${item.id}`} checked={chosen} disabled={full} aria-label={label} onChange={() => onAnswer(item.id, level)} />
               <span className="scale-dot" aria-hidden="true" />
             </label>
@@ -62,7 +62,7 @@ function SortRunner({ challenge, answers, onAnswer, onFinish, onBack }) {
         </div>
       </fieldset>)}</div>
       <div className="challenge-actions">
-        <button className="button primary" disabled={!legal} onClick={onFinish}>{legal ? 'Finish challenge' : `Put exactly ${challenge.perColumn} in every level`}<ChevronRight size={17} /></button>
+        <button className="button primary" disabled={!legal} onClick={onFinish}>{legal ? t('Finish challenge') : t('Put exactly {n} in every level', { n: challenge.perColumn })}<ChevronRight size={17} /></button>
       </div>
     </Panel>
   </div>
@@ -306,7 +306,7 @@ function ProfilePolygon({ axes, caption }) {
       })}
     </svg>
     <figcaption>{hover
-      ? <><strong>{axes.find((a) => a.key === hover).label}</strong> — {axes.find((a) => a.key === hover).value.toFixed(1)} of 5</>
+      ? <><strong>{axes.find((a) => a.key === hover).label}</strong> — {t('{value} of 5', { value: axes.find((a) => a.key === hover).value.toFixed(1) })}</>
       : caption}</figcaption>
   </figure>
 }
