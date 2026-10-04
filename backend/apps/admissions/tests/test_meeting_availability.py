@@ -1,8 +1,9 @@
 from datetime import timedelta
+from unittest import mock
 
 from django.utils import timezone
 
-from ..models import Booking, MeetingAvailability
+from ..models import Booking, MeetingAvailability, Notification
 from .base import RoleIsolationBase
 
 
@@ -86,3 +87,59 @@ class MeetingAvailabilityTests(RoleIsolationBase):
             'duration_minutes': 45, 'availability_slot': slot.id,
         }, format='json')
         self.assertEqual(attempt.status_code, 400)
+
+    def test_overview_limits_slots_per_staff_member(self):
+        early = [MeetingAvailability.objects.create(participant=self.teacher, starts_at=self.start + timedelta(hours=hour))
+                 for hour in range(3)]
+        late = MeetingAvailability.objects.create(participant=self.counselor, starts_at=self.start + timedelta(days=30))
+        with mock.patch('apps.admissions.meetings.SLOTS_PER_PARTICIPANT', 2):
+            self.client.force_authenticate(self.student_a_user)
+            ids = [slot['id'] for slot in self.client.get('/api/bookings/availability/').data]
+            self.assertEqual(ids, [early[0].id, early[1].id, late.id])
+            self.client.force_authenticate(self.counselor)
+            own = self.client.get('/api/bookings/availability/').data
+            self.assertEqual([slot['id'] for slot in own], [late.id])
+
+    def test_rescheduling_to_the_held_slot_changes_nothing(self):
+        slot = MeetingAvailability.objects.create(participant=self.counselor, starts_at=self.start, duration_minutes=45)
+        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, availability_slot=slot,
+                                         topic='Planning', starts_at=self.start, duration_minutes=45,
+                                         status=Booking.Status.APPROVED)
+        self.client.force_authenticate(self.student_a_user)
+        same = self.client.post(f'/api/bookings/{booking.pk}/reschedule/', {
+            'starts_at': self.start.isoformat(), 'duration_minutes': 45, 'availability_slot': slot.pk,
+        }, format='json')
+        self.assertEqual(same.status_code, 200, same.data)
+        booking.refresh_from_db()
+        self.assertEqual((booking.status, booking.previous_starts_at), (Booking.Status.APPROVED, None))
+        self.assertFalse(Notification.objects.filter(title='Meeting reschedule requested').exists())
+
+    def test_free_form_time_is_allowed_only_when_no_slot_is_open(self):
+        taken = MeetingAvailability.objects.create(participant=self.counselor, starts_at=self.start, duration_minutes=45)
+        mine = Booking.objects.create(student=self.student_a, participant=self.counselor, availability_slot=taken,
+                                      topic='Planning', starts_at=self.start, duration_minutes=45)
+        self.client.force_authenticate(self.student_a_user)
+        free_form = {'participant': self.counselor.id, 'topic': 'Essays', 'duration_minutes': 30,
+                     'starts_at': (self.start + timedelta(days=2)).isoformat()}
+        self.assertEqual(self.client.post('/api/bookings/', free_form, format='json').status_code, 201)
+        moved = self.client.post(f'/api/bookings/{mine.pk}/reschedule/', {
+            'starts_at': (self.start + timedelta(days=3)).isoformat(), 'duration_minutes': 30,
+        }, format='json')
+        self.assertEqual(moved.status_code, 200, moved.data)
+        MeetingAvailability.objects.create(participant=self.counselor, starts_at=self.start + timedelta(days=5))
+        refused = self.client.post('/api/bookings/', {**free_form, 'starts_at': (self.start + timedelta(days=4)).isoformat()},
+                                   format='json')
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn('availability_slot', refused.data)
+
+    def test_duplicate_slot_from_a_concurrent_request_is_a_400(self):
+        MeetingAvailability.objects.create(participant=self.counselor, starts_at=self.start, duration_minutes=45)
+        self.client.force_authenticate(self.counselor)
+        # The overlap check ran before the other request committed; the unique start still holds.
+        with mock.patch('apps.admissions.views.portal.overlapping', return_value=[]):
+            clash = self.client.post('/api/bookings/availability/', {
+                'starts_at': self.start.isoformat(), 'duration_minutes': 45,
+            }, format='json')
+        self.assertEqual(clash.status_code, 400)
+        self.assertEqual(str(clash.data['starts_at']), 'This time overlaps an existing slot.')
+        self.assertEqual(MeetingAvailability.objects.filter(participant=self.counselor).count(), 1)

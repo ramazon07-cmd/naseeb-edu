@@ -415,6 +415,55 @@ EXACT = {
         'uz': 'Bu xodim endi mavjud emas. Yangi uchrashuv so‘rang.',
         'ru': 'Этот сотрудник больше недоступен. Запросите новую встречу.',
     },
+    # Meeting availability (staff slots students choose from)
+    'Choose an available time.': {
+        'uz': 'Bo‘sh vaqtlardan birini tanlang.',
+        'ru': 'Выберите одно из свободных времён.',
+    },
+    'Choose a time from this staff member’s availability.': {
+        'uz': 'Bu xodimning bo‘sh vaqtlaridan birini tanlang.',
+        'ru': 'Выберите время из свободных часов этого сотрудника.',
+    },
+    'Only students can choose an available time.': {
+        'uz': 'Bo‘sh vaqtni faqat o‘quvchi tanlay oladi.',
+        'ru': 'Выбрать свободное время может только ученик.',
+    },
+    'This time has already been requested.': {
+        'uz': 'Bu vaqt allaqachon so‘ralgan.',
+        'ru': 'Это время уже запрошено.',
+    },
+    'This time overlaps another meeting.': {
+        'uz': 'Bu vaqt boshqa uchrashuv bilan to‘qnashadi.',
+        'ru': 'Это время пересекается с другой встречей.',
+    },
+    'This time overlaps an existing meeting.': {
+        'uz': 'Bu vaqt mavjud uchrashuv bilan to‘qnashadi.',
+        'ru': 'Это время пересекается с уже назначенной встречей.',
+    },
+    'This time overlaps an existing slot.': {
+        'uz': 'Bu vaqt qo‘shilgan boshqa bo‘sh vaqt bilan to‘qnashadi.',
+        'ru': 'Это время пересекается с уже добавленным свободным временем.',
+    },
+    'Only staff can manage availability.': {
+        'uz': 'Bo‘sh vaqtlarni faqat xodimlar boshqara oladi.',
+        'ru': 'Управлять свободным временем могут только сотрудники.',
+    },
+    'Availability is unavailable for this role.': {
+        'uz': 'Bu rol uchun bo‘sh vaqtlar mavjud emas.',
+        'ru': 'Для этой роли свободное время недоступно.',
+    },
+    'Cancel the meeting before removing this slot.': {
+        'uz': 'Bu vaqtni o‘chirishdan oldin uchrashuvni bekor qiling.',
+        'ru': 'Перед удалением этого времени отмените встречу.',
+    },
+    'Slot not found.': {
+        'uz': 'Bo‘sh vaqt topilmadi.',
+        'ru': 'Свободное время не найдено.',
+    },
+    'Choose a staff member from your school.': {
+        'uz': 'Maktabingiz xodimlaridan birini tanlang.',
+        'ru': 'Выберите сотрудника вашей школы.',
+    },
     'A counselor has not been assigned yet.': {
         'uz': 'Sizga hali maslahatchi biriktirilmagan.',
         'ru': 'Консультант ещё не назначен.',

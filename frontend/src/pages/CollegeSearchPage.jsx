@@ -11,44 +11,19 @@ import { UniversityPage } from './UniversityPage';
 import './catalog.css';
 import './college-redesign.css';
 
-// Crests we ship ourselves, for universities whose favicon is a generic or blurry icon.
+// Crests we ship ourselves (frontend/public). No remote logo service: the CSP
+// allows only same-origin images, and a lookup would tell it what students browse.
 const UNIVERSITY_LOGO_FILES = {
+  'Duke University': '/landing/universities/duke.svg',
   'The Chinese University of Hong Kong': '/landing/universities/cuhk-crest.png',
-};
-
-const UNIVERSITY_LOGO_DOMAINS = {
-  'Carleton University': 'carleton.ca',
-  'Carnegie Mellon University': 'cmu.edu',
-  'Concordia University': 'concordia.ca',
-  'Cornell University': 'cornell.edu',
-  'Duke University': 'duke.edu',
-  'Georgia Institute of Technology': 'gatech.edu',
-  'Harvard University': 'harvard.edu',
-  'Massachusetts Institute of Technology': 'mit.edu',
-  'McGill University': 'mcgill.ca',
-  'Nanyang Technological University': 'ntu.edu.sg',
-  'National University of Singapore': 'nus.edu.sg',
-  'Princeton University': 'princeton.edu',
-  'Simon Fraser University': 'sfu.ca',
-  'Stanford University': 'stanford.edu',
-  'The Chinese University of Hong Kong': 'cuhk.edu.hk',
-  'University of Alberta': 'ualberta.ca',
-  'University of British Columbia': 'ubc.ca',
-  'University of California, San Diego': 'ucsd.edu',
-  'University of Michigan': 'umich.edu',
-  'University of Toronto': 'utoronto.ca',
-  'University of Waterloo': 'uwaterloo.ca',
-  'Yale University': 'yale.edu',
+  'University of Alberta': '/landing/universities/alberta.png',
+  'University of Toronto': '/landing/universities/toronto.png',
 };
 
 function UniversityLogo({ university }) {
   const [failed, setFailed] = useState(false);
-  let domain = UNIVERSITY_LOGO_DOMAINS[university.name] || '';
-  if (!domain) {
-    try { domain = new URL(university.website || university.programs?.[0]?.source_url).hostname; } catch { /* Some catalog entries have no verified domain. */ }
-  }
   const initials = university.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-  const src = UNIVERSITY_LOGO_FILES[university.name] || (domain && `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`);
+  const src = UNIVERSITY_LOGO_FILES[university.name];
   return <span className="catalog-university-logo" aria-hidden="true">{src && !failed ? <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} /> : <b>{initials}</b>}</span>;
 }
 

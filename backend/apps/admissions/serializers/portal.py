@@ -1,5 +1,4 @@
 """Admissions API serializers — portal."""
-from datetime import timedelta
 from rest_framework import serializers
 from django.utils import timezone
 from apps.users.models import User
@@ -11,6 +10,7 @@ from ..models import (
     ScreenTimeDaily,
     StudentMessage,
 )
+from ..meetings import MEETING_DURATIONS, has_open_slot, overlapping
 from ..scoping import booking_participants_for, school_staff, tenant_school_id
 from .common import StudentRecordSerializerMixin, scope_related_field
 
@@ -78,7 +78,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
         return value
 
     def validate_duration_minutes(self, value):
-        if value not in {30, 45, 60}:
+        if value not in MEETING_DURATIONS:
             raise serializers.ValidationError('Choose a 30, 45, or 60 minute meeting.')
         return value
 
@@ -93,14 +93,10 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
                     raise serializers.ValidationError({'availability_slot': 'Choose a time from this staff member’s availability.'})
                 if slot.bookings.filter(status__in=Booking.OPEN_STATUSES).exists():
                     raise serializers.ValidationError({'availability_slot': 'This time has already been requested.'})
-                nearby = Booking.objects.filter(
-                    participant=participant, status__in=Booking.OPEN_STATUSES,
-                    starts_at__lt=slot.starts_at + timedelta(minutes=slot.duration_minutes),
-                    starts_at__gt=slot.starts_at - timedelta(minutes=60),
-                )
-                if any(other.starts_at + timedelta(minutes=other.duration_minutes) > slot.starts_at for other in nearby):
+                meetings = Booking.objects.filter(participant=participant, status__in=Booking.OPEN_STATUSES)
+                if overlapping(meetings, slot.starts_at, slot.duration_minutes):
                     raise serializers.ValidationError({'availability_slot': 'This time overlaps another meeting.'})
-            elif MeetingAvailability.objects.filter(participant=participant, starts_at__gt=timezone.now()).exists():
+            elif has_open_slot(participant.id):
                 raise serializers.ValidationError({'availability_slot': 'Choose an available time.'})
         elif attrs.get('availability_slot'):
             raise serializers.ValidationError({'availability_slot': 'Only students can choose an available time.'})
