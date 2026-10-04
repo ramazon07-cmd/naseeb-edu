@@ -162,6 +162,7 @@
   }
 }
 
+/* Keep in step with THREE_ACROSS_MIN_WIDTH in dashboardPreferences.js. */
 @container board (min-width: 1060px) {
   .dashboard-column-main.is-three {
     grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -32,7 +32,11 @@ KEEP_STALE = 24 * 3600
 FETCH_LOCK = 10
 WAIT_FOR_OTHER = 3.0
 # Whatever cursors are asked for, no more pages than this leave for Telegram per minute.
+# The newest page has its own share (one try per FETCH_LOCK fits in it), so older
+# pages, whose cursors any user can pick, can never stop it from refreshing.
 UPSTREAM_PAGES_PER_MINUTE = 20
+LATEST_PAGES_PER_MINUTE = 60 // FETCH_LOCK
+HISTORY_PAGES_PER_MINUTE = UPSTREAM_PAGES_PER_MINUTE - LATEST_PAGES_PER_MINUTE
 FETCH_ERRORS = (URLError, OSError, ValueError, http.client.HTTPException)
 logger = logging.getLogger(__name__)
 
@@ -99,9 +103,10 @@ def newest_post(page):
 
 def refresh_page(key, before):
     """Ask Telegram for one page and cache it; ``None`` when it could not be had."""
-    asked = count_hit('telegram-feed:v2:upstream-budget', 60)
-    if asked is not None and asked[0] > UPSTREAM_PAGES_PER_MINUTE:
-        logger.warning('Telegram public feed not asked: over %s pages a minute', UPSTREAM_PAGES_PER_MINUTE)
+    share, limit = ('history', HISTORY_PAGES_PER_MINUTE) if before else ('latest', LATEST_PAGES_PER_MINUTE)
+    asked = count_hit(f'telegram-feed:v2:upstream-budget:{share}', 60)
+    if asked is not None and asked[0] > limit:
+        logger.warning('Telegram public feed not asked: over %s %s pages a minute', limit, share)
         return None
     try:
         page = fetch_posts(before)

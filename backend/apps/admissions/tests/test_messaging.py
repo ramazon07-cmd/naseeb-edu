@@ -103,6 +103,7 @@ class MessagingRoleIsolationTests(RoleIsolationBase):
         inbox = self.results(self.client.get('/api/message-channels/?kind=direct'))
         self.assertEqual(inbox[0]['unread_count'], 1)
         self.assertEqual(inbox[0]['last_message']['body'], sent.data['body'])
+        self.assertEqual(inbox[0]['last_message']['sender_id'], self.student_a_user.id)
         reply = self.client.post('/api/channel-messages/', {
             'channel': channel_id, 'body': 'Send the draft here.',
             'parent': sent.data['id'], 'is_anonymous': False,
@@ -341,6 +342,8 @@ class MessagingRoleIsolationTests(RoleIsolationBase):
         visible = next(item for item in listed if item['id'] == anonymous_message.data['id'])
         self.assertIsNone(visible['sender_id'])
         self.assertEqual(visible['sender_name'], 'Anonymous')
+        preview = next(item for item in self.results(self.client.get('/api/message-channels/?kind=discussion')) if item['id'] == channel_id)
+        self.assertEqual((preview['last_message']['sender_id'], preview['last_message']['sender_name']), (None, 'Anonymous'))
         reported = self.client.post(
             f"/api/channel-messages/{anonymous_message.data['id']}/report/",
             {'reason': MessageReport.Reason.HARASSMENT, 'details': 'Please review this message.'},
