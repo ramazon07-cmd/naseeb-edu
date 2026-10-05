@@ -1,13 +1,14 @@
-import { t, tp, locale, formatNumberLocale } from '../i18n';
-import { dateText, money } from '../lib/format';
+import { t, tp, locale, formatDateLocale, formatNumberLocale } from '../i18n';
+import { dateText, localDateKey, money } from '../lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, CalendarDays, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, X, Plus, Check, Bookmark, Monitor, Building2 } from 'lucide-react';
+import { MapPin, CalendarDays, CalendarSearch, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, X, Check, Bookmark, Monitor } from 'lucide-react';
 import { request } from '../api';
 import './catalog.css';
 import './programs-redesign.css';
 import { FilterOption } from '../components/college';
 import { Empty } from '../components/ui';
-import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, filterPrograms, hasProgramFilters, programFilterState, programFilterWrite, programGrades } from '../lib/programFilters';
+import { daysUntil, dueLabel, dueTone } from '../lib/college';
+import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline, hasProgramFilters, programFilterState, programFilterWrite, programGrades } from '../lib/programFilters';
 
 // The catalog is a yearly list: only a few rows carry a real date, the rest keep the
 // counselor sheet's own deadline text and have to be confirmed on the official page.
@@ -58,11 +59,82 @@ const PROGRAM_LOGOS = [
   [/flex program|future leaders exchange/i, '/landing/programs/flex.png'],
 ];
 
-function ProgramMark({ item }) {
-  const identity = `${item.provider || ''} ${item.title || ''}`;
-  const logo = PROGRAM_LOGOS.find(([pattern]) => pattern.test(identity))?.[1];
-  const initials = (item.provider || item.title || 'P').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-  return <span className="program-database-mark" aria-hidden="true">{logo ? <img src={logo} alt="" loading="lazy" /> : <b>{initials}</b>}</span>;
+const programLogo = (item) => PROGRAM_LOGOS.find(([pattern]) => pattern.test(`${item.provider || ''} ${item.title || ''}`))?.[1];
+
+// Hover text for a dashed date: it is the usual yearly date, not a confirmed one.
+const usualHint = () => `${t('Usual deadline')} · ${t('confirm the date')}`;
+
+// The deadline, read at a glance: day over month. A real date is solid and
+// tinted by urgency; a usual date read from the yearly text is dashed, because
+// it still has to be confirmed on the official page.
+function DueTile({ due, closed, tone }) {
+  if (!due) return <span className="program-tile is-unknown" aria-hidden="true"><CalendarSearch size={24} /></span>;
+  const state = closed ? 'is-closed' : due.exact ? tone : 'is-usual';
+  return <span className={`program-tile ${state}`.trim()} aria-hidden="true" title={state === 'is-usual' ? usualHint() : undefined}>
+    {due.day && <b>{formatNumberLocale(due.day)}</b>}<small>{formatDateLocale(due.date, { month: 'short' })}</small>
+  </span>;
+}
+
+// My List: the days left in place of the date, inside a ring that empties
+// over the last 30 days. Solid = a real deadline; dashed = counted to the
+// usual date from the yearly text, still to be confirmed.
+const RING_RADIUS = 26;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+const RING_DAYS = 30;
+const RING_DASH = [3, 4];
+
+// The drawn part of the ring as a stroke-dasharray: one solid arc, or the
+// track's dash pattern cut off at `length`, so the dashes line up.
+function ringDashes(length, dashed) {
+  if (!dashed) return `${length} ${RING_LENGTH}`;
+  const parts = [];
+  for (let drawn = 0; drawn + RING_DASH[0] <= length; drawn += RING_DASH[0] + RING_DASH[1]) parts.push(...RING_DASH);
+  return [...parts, 0, RING_LENGTH].join(' ');
+}
+
+function CountdownRing({ days, exact, tone }) {
+  const number = formatNumberLocale(days);
+  const unit = tp('{n} day|{n} days', days, { n: number }).replace(number, '').trim();
+  const left = (Math.min(days, RING_DAYS) / RING_DAYS) * RING_LENGTH;
+  return <span className={`program-ring ${exact ? '' : 'is-usual'} ${tone}`.trim()} aria-hidden="true" title={exact ? undefined : usualHint()}>
+    <svg viewBox="0 0 60 60"><circle className="program-ring-track" cx="30" cy="30" r={RING_RADIUS} strokeDasharray={exact ? undefined : RING_DASH.join(' ')} />{left > 0 && <circle className="program-ring-left" cx="30" cy="30" r={RING_RADIUS} strokeDasharray={ringDashes(left, !exact)} />}</svg>
+    <span className="program-ring-label"><b className={days > 99 ? 'is-long' : undefined}>{number}</b><small>{unit}</small></span>
+  </span>;
+}
+
+function ProgramRow({ item, closed, due, today, saved, busy, onToggle, countdown }) {
+  const grades = compactGrades(programGrades(item)).map((grade) => (grade === 'gap' ? t('Gap year') : grade));
+  const place = [item.city, item.country].filter(Boolean).join(', ') || (item.delivery_mode === 'online' ? t('Online') : '');
+  const kind = item.program_type === 'national' ? 'National' : item.program_type === 'international' ? 'International' : 'To verify';
+  // The catalog shows the date and counts down to real deadlines only; My List
+  // (`countdown`) shows the days left instead of the date, usual dates included.
+  const days = due && !closed && (due.exact || countdown) ? daysUntil(countdownDay(due, today)) : null;
+  const tone = days != null ? dueTone(days) : '';
+  const ring = countdown && days != null && days >= 0;
+  const logo = programLogo(item);
+  return <article className={`program-row ${closed ? 'is-closed' : ''}`.trim()}>
+    {ring ? <CountdownRing days={days} exact={due.exact} tone={tone} /> : <DueTile due={due} closed={closed} tone={tone} />}
+    <div className="program-row-body">
+      <h3>{item.title}</h3>
+      {due && <span className="sr-only">{ring ? `${due.exact ? '' : '≈ '}${dueLabel(days)}` : <ProgramDeadline item={item} closed={closed} />}</span>}
+      <p className="program-row-byline">{logo && <img src={logo} alt="" loading="lazy" />}{item.provider && <><span className="program-row-provider">{item.provider}</span>{' '}</>}<span>{t(item.category)}</span>{' '}<span>{t(kind)}</span></p>
+      <div className="program-row-facts">
+        {countdown && due ? <span><CalendarDays size={15} aria-hidden="true" /> <ProgramDeadline item={item} closed={closed} /></span> : due?.detail && <span><CalendarDays size={15} aria-hidden="true" /> {item.deadline_text}</span>}
+        {grades.length > 0 && <span><GraduationCap size={15} aria-hidden="true" /> {t('Grades')} {grades.join(', ')}</span>}
+        {item.eligible_ages && <span><UsersRound size={15} aria-hidden="true" /> {t('Ages')} {item.eligible_ages}</span>}
+        {place && <span><MapPin size={15} aria-hidden="true" /> {place}</span>}
+        {item.delivery_mode !== 'unspecified' && <span><Monitor size={15} aria-hidden="true" /> {t(DELIVERY_LABELS[item.delivery_mode] || 'To verify')}</span>}
+        {item.fee_usd != null && <span><DollarSign size={15} aria-hidden="true" /> {Number(item.fee_usd) === 0 ? t('Free') : money(item.fee_usd)}</span>}
+        {item.scholarship_available && <span className="program-row-aid" title={t(item.aid_details)}><HandCoins size={15} aria-hidden="true" /> {t('Financial aid available')}</span>}
+      </div>
+      {(item.description || item.requirements) && <details className="program-row-details"><summary>{t('Requirements')}</summary>{item.description && <p>{t(item.description)}</p>}{item.requirements && <p>{t(item.requirements)}</p>}</details>}
+    </div>
+    <div className="program-row-actions">
+      {!countdown && days != null && days >= 0 && <span className={`program-row-countdown ${tone}`.trim()}>{dueLabel(days)}</span>}
+      <button type="button" className="program-icon-button" aria-pressed={saved} aria-label={saved ? t('In My List') : t('Add to My List')} title={saved ? t('In My List') : t('Add to My List')} disabled={busy} onClick={onToggle}><Bookmark size={18} fill={saved ? 'currentColor' : 'none'} aria-hidden="true" /></button>
+      {item.application_url && <a className="program-icon-button" href={item.application_url} target="_blank" rel="noreferrer" aria-label={`${t('View program')}: ${item.title}`} title={t('View program')}><ExternalLink size={18} aria-hidden="true" /></a>}
+    </div>
+  </article>;
 }
 
 // A filter pill that opens a small menu under itself. `children(close)`
@@ -98,7 +170,8 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   const sheetRef = useRef(null);
   const toggleRef = useRef(null);
   const catalog = data.opportunityPrograms;
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // The viewer's own calendar day: UTC would still say yesterday in Tashkent before 05:00.
+  const today = useMemo(() => localDateKey(), []);
   const localeTag = locale();
   const { programs, counts } = useMemo(
     () => filterPrograms(catalog, filters, { today, query, translate: t, localeTag }),
@@ -198,25 +271,10 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
 
     <div className="program-results-bar"><span role="status" aria-live="polite">{onlySaved ? tp('{count} saved program|{count} saved programs', shownPrograms.length, { count: shownPrograms.length }) : resultText}</span><div className="catalog-list-controls"><button type="button" className={`button quiet small ${onlySaved ? 'is-active' : ''}`} aria-pressed={onlySaved} onClick={() => setOnlySaved((value) => !value)}><Bookmark size={16} /> {t('My List')} <span>{savedIds.size}</span></button></div></div>
 
-    <div className="program-grid">{shownPrograms.map(({ item, closed }) => {
-      const grades = programGrades(item);
-      const place = [item.city, item.country].filter(Boolean).join(', ') || (item.delivery_mode === 'online' ? t('Online') : '');
-      const isSaved = savedIds.has(item.id);
-      return <article className={`program-card ${closed ? 'is-closed' : ''}`} key={item.id}>
-        <div className="program-database-identity"><ProgramMark item={item} /><div className="program-database-copy"><h3>{item.title}</h3><div className="program-database-byline">{item.provider && <span><Building2 size={15} /> {item.provider}</span>}<span>{t(item.category)}</span><span>{t(item.program_type === 'national' ? 'National' : item.program_type === 'international' ? 'International' : 'To verify')}</span></div></div></div>
-        <div className="program-database-facts">
-          {place && <span><MapPin size={16} /> {place}</span>}
-          {item.delivery_mode !== 'unspecified' && <span><Monitor size={16} /> {t(DELIVERY_LABELS[item.delivery_mode] || 'To verify')}</span>}
-          <span className={closed ? 'program-database-deadline is-closed' : 'program-database-deadline'}><CalendarDays size={16} /> <ProgramDeadline item={item} closed={closed} /></span>
-          {grades.length > 0 && <span><GraduationCap size={16} /> {t('Grades')} {grades.join(', ')}</span>}
-          {item.eligible_ages && <span><UsersRound size={16} /> {t('Ages')} {item.eligible_ages}</span>}
-          {item.fee_usd != null && <span><DollarSign size={16} /> {Number(item.fee_usd) === 0 ? t('Free') : money(item.fee_usd)}</span>}
-          {item.scholarship_available && <span className="program-database-aid" title={t(item.aid_details)}><HandCoins size={16} /> {t('Financial aid available')}</span>}
-        </div>
-        {(item.description || item.requirements) && <details className="program-database-details"><summary>{t('Requirements')}</summary>{item.description && <p>{t(item.description)}</p>}{item.requirements && <p>{t(item.requirements)}</p>}</details>}
-        <div className="program-database-actions"><button type="button" className={`program-database-save ${isSaved ? 'is-saved' : ''}`} aria-pressed={isSaved} disabled={savedLoading || savingId === item.id} onClick={() => toggleSaved(item)}>{isSaved ? <><Check size={16} /> {t('In My List')}</> : <><Plus size={16} /> {t('Add to My List')}</>}</button>{item.application_url && <a className="program-database-link" href={item.application_url} target="_blank" rel="noreferrer" aria-label={`${t('View program')}: ${item.title}`} title={t('View program')}><ExternalLink size={18} /></a>}</div>
-      </article>;
-    })}{!shownPrograms.length && <div className="program-empty"><Empty text={onlySaved ? t('No saved programs match these filters.') : t('No programs match these filters.')} />{onlySaved ? <button type="button" className="button primary small" onClick={() => setOnlySaved(false)}>{t('Browse programs')}</button> : filtered && <><p>{t('Try another search or remove a filter.')}</p><button type="button" className="button primary small" onClick={reset}>{t('Reset filters')}</button></>}</div>}</div>
+    <div className="program-timeline">{groupProgramsByDeadline(shownPrograms).map(({ key, entries }) => <section className="program-month" key={key} aria-labelledby={`program-month-${key}`}>
+      <h2 className="program-month-head" id={`program-month-${key}`}><span>{key === 'closed' ? t('Closed') : key === 'undated' ? t('Deadline on the official page') : formatDateLocale(`${key}-01`, { month: 'long', year: 'numeric' })}</span><small>{tp('{count} program|{count} programs', entries.length, { count: entries.length })}</small></h2>
+      {entries.map(({ item, closed, due }) => <ProgramRow key={item.id} item={item} closed={closed} due={due} today={today} saved={savedIds.has(item.id)} busy={savedLoading || savingId === item.id} onToggle={() => toggleSaved(item)} countdown={onlySaved} />)}
+    </section>)}{!shownPrograms.length && <div className="program-empty"><Empty text={onlySaved ? t('No saved programs match these filters.') : t('No programs match these filters.')} />{onlySaved ? <button type="button" className="button primary small" onClick={() => setOnlySaved(false)}>{t('Browse programs')}</button> : filtered && <><p>{t('Try another search or remove a filter.')}</p><button type="button" className="button primary small" onClick={reset}>{t('Reset filters')}</button></>}</div>}</div>
     </div>
     {sheetOpen && <div className="program-sheet-backdrop" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
     {rail}

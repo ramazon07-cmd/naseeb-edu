@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  PROGRAM_FILTER_DEFAULTS, activeProgramFilterCount, adoptProgramFilterUrl, filterPrograms, hasProgramFilters, programFilterState,
-  programFilterWrite, programFiltersQuery, readProgramFilters,
+  PROGRAM_FILTER_DEFAULTS, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline,
+  hasProgramFilters, programFilterState, programFilterWrite, programFiltersQuery, readProgramFilters, usualDeadline,
 } from '../src/lib/programFilters.js';
 
 const today = '2026-09-25';
@@ -102,4 +102,57 @@ test('active filter counts drive the reset button and the badge', () => {
   assert.equal(hasProgramFilters({ ...PROGRAM_FILTER_DEFAULTS, q: '  ' }), false);
   assert.equal(hasProgramFilters({ ...PROGRAM_FILTER_DEFAULTS, q: 'math' }), true);
   assert.equal(activeProgramFilterCount({ ...PROGRAM_FILTER_DEFAULTS, type: 'national', open: false, aid: true }), 3);
+});
+
+test('the yearly deadline text gives the next date it names', () => {
+  const next = (text) => usualDeadline(text, today)?.date ?? null;
+  assert.equal(next('16-Jan-25'), '2027-01-16');
+  assert.equal(next('Feb 15'), '2027-02-15');
+  assert.equal(next('15th June'), '2027-06-15');
+  assert.equal(next('April 1st'), '2027-04-01');
+  assert.equal(next('July 1(first come first served)'), '2027-07-01');
+  assert.equal(next('08.03'), '2027-03-08');
+  assert.equal(next('Sep 30'), '2026-09-30');
+  // This year's date has passed: the next one is a year on.
+  assert.equal(next('Sep 1'), '2027-09-01');
+  // Several dates: the first one still ahead.
+  assert.equal(next('ED: Dec 13, RD: Feb 12'), '2026-12-13');
+  assert.equal(next('Early-15 Oct; Reg-Jan 07'), '2026-10-15');
+  assert.equal(next('March 28 - April 20'), '2027-03-28');
+  // A bare month files the row at the end of that month, without a day.
+  assert.deepEqual(usualDeadline('Typically in January', today), { date: '2027-01-31', exact: false, day: null, detail: true });
+  // The text is shown as written only when it says more than the one date.
+  const detail = (text) => usualDeadline(text, today).detail;
+  for (const text of ['16-Jan-25', 'Feb 15', '15th June', 'April 1st', '08.03']) assert.equal(detail(text), false, text);
+  for (const text of ['ED: Dec 13, RD: Feb 12', 'March 28 - April 20', 'July 1(first come first served)']) assert.equal(detail(text), true, text);
+  for (const text of ['', '-', 'Rolling', 'Early decision', 'Dates may vary', '31 April']) assert.equal(next(text), null, text);
+});
+
+test('rows sort by the real or usual deadline and group by month', () => {
+  const rows = filterPrograms([
+    program(1, { title: 'No date' }),
+    program(2, { deadline: '2026-10-20' }),
+    program(3, { deadline_text: 'Oct 5' }),
+    program(4, { deadline_text: 'Typically in October' }),
+    program(5, { deadline: '2026-01-10' }),
+    program(6, { deadline_text: '1-Dec-24' }),
+  ], { ...PROGRAM_FILTER_DEFAULTS, open: false }, { today }).programs;
+  assert.deepEqual(ids({ programs: rows }), [3, 2, 4, 6, 1, 5]);
+  assert.deepEqual(rows.map(({ due }) => due?.exact ?? null), [false, true, false, false, null, true]);
+  assert.deepEqual(groupProgramsByDeadline(rows).map(({ key, entries }) => [key, entries.length]), [['2026-10', 3], ['2026-12', 1], ['undated', 1], ['closed', 1]]);
+});
+
+test('consecutive grades collapse into ranges', () => {
+  assert.deepEqual(compactGrades(['6', '7', '8', '9', '10', '11']), ['6–11']);
+  assert.deepEqual(compactGrades(['5', '8', '9', '10', '11', 'gap']), ['5', '8–11', 'gap']);
+  assert.deepEqual(compactGrades(['10']), ['10']);
+  assert.deepEqual(compactGrades([]), []);
+});
+
+test('a countdown runs to the deadline, or to the first day of a bare month', () => {
+  assert.equal(countdownDay(usualDeadline('Feb 15', today), today), '2027-02-15');
+  assert.equal(countdownDay({ date: '2026-10-20', exact: true, day: 20 }, today), '2026-10-20');
+  assert.equal(countdownDay(usualDeadline('Typically in March', today), today), '2027-03-01');
+  // This month's first day has passed: count to the month's end instead.
+  assert.equal(countdownDay(usualDeadline('Usually in September', today), today), '2026-09-30');
 });
