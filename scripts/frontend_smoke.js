@@ -104,10 +104,8 @@ if (!app.includes('function UniversityPage(') || !app.includes('function College
 if (!app.includes('function ApplicationSummary(') || !app.includes('APPLICATION_STAGES') || !app.includes('locked: true') || !styles.includes('.board-card')) throw new Error('Applications must render the five-stage board with a counselor-only Decision column.');
 const compactDashboard = fs.readFileSync(path.join(root, 'frontend/src/CompactDashboard.jsx'), 'utf8');
 if (!compactDashboard.includes("setPage('find_personality')") || !compactDashboard.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
-for (const region of ["label: 'US'", "label: 'Canada'", "label: 'China'", "label: 'Hong Kong'"]) {
-  if (!app.includes(region)) throw new Error(`College region missing: ${region}`);
-}
-if (!app.includes('filters.regions.includes(universityRegion(university))') || !app.includes('<legend className="sr-only">{t("Where")}</legend>')) throw new Error('College region filters are not wired to the university catalog.');
+// The QS catalogue spans 100+ countries: one country picker, not a checkbox per market.
+if (!app.includes('(!filters.country || universityCountry(university) === filters.country)') || !app.includes('<legend className="sr-only">{t("Where")}</legend><select className="filter-country"')) throw new Error('The College Search country filter is not wired to the university catalog.');
 if (!app.includes('filters.bands.includes(result?.admission_band)') || !styles.includes('.filter-set')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
 if (!app.includes('function AIEducationGuidance(') || !app.includes('function MajorMatches(') || !app.includes('assessment-ai-orbit-mark') || !styles.includes('.assessment-ai-orbit-mark') || !styles.includes('.education-ai-guidance')) throw new Error('Assessment-based AI major guidance or the Naseeb logo mark is missing.');
 if (app.includes('education-ai-colleges') || app.includes('college_explanations')) throw new Error('University AI must remain separate from the major guidance stage.');

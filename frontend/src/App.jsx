@@ -15,7 +15,7 @@ import { lazyWithRetry } from './lib/retryableLazy';
 import { pageLoadState } from './lib/pageLoadState';
 import { Empty, Modal } from './components/ui';
 import { NotificationPanel } from './components/NotificationPanel';
-import { COUNSELOR_SELF_HEADED, CounselorLayout, counselorPageLabel } from './components/CounselorShell';
+import { COUNSELOR_SELF_HEADED, CounselorLayout, counselorPageDescription, counselorPageLabel } from './components/CounselorShell';
 import { CounselorStudentsPage } from './pages/CounselorStudents';
 import { CxHead } from './components/counselorUi';
 import { formatNumberLocale, getLanguage, locale, setLanguage, siteTitle, t, tp, tx } from './i18n';
@@ -337,7 +337,7 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
       <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={() => setAssistantRequest((current) => current + 1)} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
         <main className={`cx-main${page === 'messages' ? ' cx-main-messages' : ''}`}>
           {banners}
-          {!COUNSELOR_SELF_HEADED.has(page) && <CxHead title={pageTitle} subtitle={t(meta.description)} />}
+          {!COUNSELOR_SELF_HEADED.has(page) && <CxHead title={pageTitle} subtitle={t(counselorPageDescription(page) || meta.description)} />}
           <div className="cx-content"><PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} lazy={loadsLazily(user)} retry={retryResources}>{children}</PageDataBoundary></div>
         </main>
       </CounselorLayout>
@@ -429,7 +429,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
-  if (user.role === 'student' && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
+  if (['student', 'counselor'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (page === 'students' && user.role === 'counselor') return <CounselorStudentsPage {...{ user, data, stats, query, setQuery, reload, notify, setPage, onDirect }} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;

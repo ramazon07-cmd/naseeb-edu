@@ -38,9 +38,12 @@ export function ProfileSectionFields({ section, form, update, errors = {}, idPre
   return null;
 }
 
+const STUDENT_PHOTO = { load: (id) => api.studentPhoto(id), upload: api.uploadStudentPhoto, remove: api.removeStudentPhoto };
+
 // Upload, replace or remove the profile photo. It saves at once through its
-// own endpoint, independent of the answers around it.
-export function ProfilePhotoField({ profileId, hasPhoto, initials = '', onChanged = () => {}, onError = () => {} }) {
+// own endpoint, independent of the answers around it. `photo` swaps the
+// endpoints, e.g. for a staff account's avatar.
+export function ProfilePhotoField({ profileId, hasPhoto, initials = '', photo = STUDENT_PHOTO, hint, onChanged = () => {}, onError = () => {} }) {
   const [photoUrl, setPhotoUrl] = useState('');
   const [busy, setBusy] = useState(false);
   // Object URLs pin the photo blob in memory until revoked: revoke the old one
@@ -51,7 +54,7 @@ export function ProfilePhotoField({ profileId, hasPhoto, initials = '', onChange
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; if (photoUrlRef.current) URL.revokeObjectURL(photoUrlRef.current); }; }, []);
   const replace = (next) => setPhotoUrl((current) => { if (current) URL.revokeObjectURL(current); return next; });
   function load(id) {
-    api.studentPhoto(id).then((result) => { if (mounted.current) replace(URL.createObjectURL(result.blob)); }).catch(() => { if (mounted.current) replace(''); });
+    photo.load(id).then((result) => { if (mounted.current) replace(URL.createObjectURL(result.blob)); }).catch(() => { if (mounted.current) replace(''); });
   }
   useEffect(() => { if (profileId && hasPhoto) load(profileId); }, [profileId]); // eslint-disable-line react-hooks/exhaustive-deps -- load once per profile
   async function choose(event) {
@@ -59,14 +62,14 @@ export function ProfilePhotoField({ profileId, hasPhoto, initials = '', onChange
     event.target.value = '';
     if (!file || !profileId) return;
     setBusy(true); onError('');
-    try { await api.uploadStudentPhoto(profileId, file); load(profileId); onChanged(); }
+    try { await photo.upload(profileId, file); load(profileId); onChanged(); }
     catch (e) { onError(e.message); }
     finally { if (mounted.current) setBusy(false); }
   }
   async function drop() {
     if (!profileId) return;
     setBusy(true);
-    try { await api.removeStudentPhoto(profileId); replace(''); onChanged(); }
+    try { await photo.remove(profileId); replace(''); onChanged(); }
     catch (e) { onError(e.message); }
     finally { if (mounted.current) setBusy(false); }
   }
@@ -74,7 +77,7 @@ export function ProfilePhotoField({ profileId, hasPhoto, initials = '', onChange
     <span className="onboarding-photo-preview">{photoUrl ? <img src={photoUrl} alt={t('Profile photo')} /> : initials.toUpperCase()}</span>
     <div>
       <b>{t('Profile photo')}</b>
-      <small>{t('PNG, JPG or WebP · up to 5 MB')}</small>
+      <small>{hint || t('PNG, JPG or WebP · up to 5 MB')}</small>
       <div className="onboarding-photo-actions">
         <label className="button quiet small">{busy ? t('Saving…') : t('Upload photo')}<input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={choose} disabled={busy || !profileId} hidden /></label>
         {photoUrl && <button type="button" className="button quiet small" onClick={drop} disabled={busy}>{t('Remove photo')}</button>}

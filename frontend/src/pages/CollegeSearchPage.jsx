@@ -1,47 +1,44 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Filter, List, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Filter, GraduationCap, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, parseDateValue, t, tp, tx } from '../i18n';
 import { Empty, Modal } from '../components/ui';
 import { FilterOption, ScoreBreakdown, TierBand } from '../components/college';
-import { clockText, money } from '../lib/format';
+import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { COLLEGE_AID_FLAGS, COLLEGE_PRICE_CAPS, COLLEGE_REGIONS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFacetCounts, collegeFilterChips, collegeMatches, collegeSorter, matchingPrograms, percentText, priceCapLabel, satText, shortDate, toggleIn, universityFit } from '../lib/college';
+import { COLLEGE_AID_FLAGS, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFacetCounts, collegeFilterChips, collegeMatches, collegeSorter, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, rankText, satLabel, shortDate, toggleIn, universityFit } from '../lib/college';
 import { UniversityPage } from './UniversityPage';
+import { QsUniversityDetails } from '../components/QsUniversityDetails';
+import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
+import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, qsClassification, qsScore, qsScoreText } from '../lib/qs';
+import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
 import './college-redesign.css';
+import './college-toolbar.css';
 
-// Crests we ship ourselves (frontend/public). No remote logo service: the CSP
-// allows only same-origin images, and a lookup would tell it what students browse.
-const UNIVERSITY_LOGO_FILES = {
-  'Duke University': '/landing/universities/duke.svg',
-  'The Chinese University of Hong Kong': '/landing/universities/cuhk-crest.png',
-  'University of Alberta': '/landing/universities/alberta.png',
-  'University of Toronto': '/landing/universities/toronto.png',
-};
-
+// Downloaded university logos are served locally, including under the image CSP.
 function UniversityLogo({ university }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState('');
   const initials = university.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-  const src = UNIVERSITY_LOGO_FILES[university.name];
-  return <span className="catalog-university-logo" aria-hidden="true">{src && !failed ? <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} /> : <b>{initials}</b>}</span>;
+  const src = universityLogoSrc(university);
+  return <span className="catalog-university-logo" aria-hidden="true">{src && failedSrc !== src ? <img src={src} alt="" loading="lazy" onError={() => setFailedSrc(src)} /> : <b>{initials}</b>}</span>;
 }
 
 function CollegeFilters({ filters, setFilters, counts, budget, showBands, chips }) {
   const patch = (change) => setFilters((current) => ({ ...current, ...change }));
   const clear = chips.length > 0 && <button type="button" className="link-button" onClick={() => setFilters(DEFAULT_COLLEGE_FILTERS)}>{t("Clear")}</button>;
   const groups = <>
-    <fieldset className="filter-set"><legend className="sr-only">{t("Where")}</legend>{COLLEGE_REGIONS.map(({ key, label: regionLabel }) => <FilterOption key={key} checked={filters.regions.includes(key)} onChange={() => patch({ regions: toggleIn(filters.regions, key) })} count={counts.regions[key] || 0}>{t(regionLabel)}</FilterOption>)}</fieldset>
-    {showBands && <fieldset className="filter-set"><legend className="sr-only">{t("Admission band")}</legend>{['reach', 'target', 'safety'].map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={counts.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
-    <fieldset className="filter-set"><legend className="sr-only">{t("Net price per year")}</legend>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} disabled={cap === 'budget' && !budget} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
-    <fieldset className="filter-set"><legend className="sr-only">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={counts.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
-    <fieldset className="filter-set"><legend className="sr-only">{t("Testing & type")}</legend>
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Where")}</legend><select className="filter-country" aria-label={t("Country")} value={filters.country} onChange={(event) => patch({ country: event.target.value })}><option value="">{t("All countries")}</option>{Object.entries(counts.countries).sort(([a], [b]) => a.localeCompare(b)).map(([country, count]) => <option key={country} value={country}>{`${country} (${formatNumberLocale(count)})`}</option>)}</select></fieldset>
+    {showBands && <fieldset className="filter-set"><legend className="college-filter-legend">{t("Admission band")}</legend>{['reach', 'target', 'safety'].map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={counts.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Net price per year")}</legend>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} disabled={cap === 'budget' && !budget} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={counts.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Testing & type")}</legend>
       <FilterOption checked={filters.testOptional} onChange={() => patch({ testOptional: !filters.testOptional })} count={counts.testOptional}>{t("Test optional")}</FilterOption>
       <FilterOption checked={filters.satFit} onChange={() => patch({ satFit: !filters.satFit })} count={counts.satFit}>{t("My SAT is in range")}</FilterOption>
       <FilterOption checked={filters.publicOnly} onChange={() => patch({ publicOnly: !filters.publicOnly })} count={counts.publicOnly}>{t("Public only")}</FilterOption>
     </fieldset>
   </>;
-  return <details className="filters-inline"><summary><Filter size={17} aria-hidden="true" /><b>{t("Filters")}</b>{chips.length > 0 && <span className="tab-count">{formatNumberLocale(chips.length)}</span>}<ChevronDown size={15} aria-hidden="true" /></summary><div className="filters-inline-body">{clear && <header>{clear}</header>}{groups}</div></details>;
+  return <div className="college-advanced-filters" id="college-advanced-filters">{clear && <header>{clear}</header>}{groups}</div>;
 }
 
 function CollegeSkyline() {
@@ -64,7 +61,8 @@ function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
   const profile = research.profile_snapshot || {};
   const updated = research.generated_at ? `${t("Updated")} ${clockText(research.generated_at)}` : t("Refresh");
   return <section className="profile-strip" aria-label={t("Ranked for your profile")}>
-    <div className="tag-row"><span className="tag">{t("SAT")} {profile.sat_score}</span><span className="tag">{t("GPA")} {profile.gpa}</span><span className="tag">{t("IELTS")} {profile.ielts_score}</span><span className="tag">{profile.target_major}</span><span className="tag">{t("Budget")} {money(profile.budget_usd)}</span></div>
+    <span className="college-profile-caption"><GraduationCap size={18} aria-hidden="true" />{t('Your profile')}</span>
+    <div className="college-profile-values">{[['SAT', profile.sat_score], ['GPA', profile.gpa], ['IELTS', profile.ielts_score], ['Major', profile.target_major], ['Budget', money(profile.budget_usd)]].map(([title, value]) => <span key={title}><small>{t(title)}</small><b>{value ?? '—'}</b></span>)}</div>
     <div className="profile-strip-actions">
       <button type="button" className="icon-button" title={t("Edit profile")} aria-label={t("Edit profile")} onClick={onEdit}><Pencil size={15} /></button>
       <button type="button" className="icon-button" title={updated} aria-label={t("Refresh")} disabled={refreshing} aria-busy={refreshing} onClick={onRefresh}><RefreshCw className={refreshing ? 'spin' : ''} size={15} /></button>
@@ -72,24 +70,27 @@ function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
   </section>;
 }
 
-function CollegeRow({ university, result, student, application, expanded, busy, onToggle, onOpen, onAdd }) {
-  const fit = result ? { score: result.match_score } : universityFit(university, student);
+function CollegeRow({ university, view, result, score, student, application, expanded, busy, onToggle, onOpen, onAdd }) {
+  const fit = score ? { score: score.match_score } : universityFit(university, student);
   const panelId = `college-details-${university.id}`;
+  const days = daysUntil(university.application_deadline);
   return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
-    <div className="uni-fit" role="cell"><b>{university.ranking ? `#${formatNumberLocale(university.ranking)}` : '—'}</b></div>
-    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{university.institution_type ? ` · ${t(university.institution_type)}` : ''}</small></span></div>
+    <div className="uni-fit" role="cell"><b>{rankText(university)}</b></div>
+    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{university.institution_type ? ` · ${university.qs_data?.status ? qsClassification('status', university.qs_data.status) : t(university.institution_type)}` : ''}</small></span></div>
     <div className="uni-facts">
+      {view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <div className={`uni-value ${code === 'overall' ? 'qs-score-primary' : ''}`} role="cell" data-label={t(title)} key={code}><span className="v">{qsScoreText(qsScore(university.qs_data, code))}</span></div>) : <>
       <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{formatNumberLocale(fit.score)}<small>/100</small></span></div>
-      <div className="uni-band" role="cell" data-label={t("Band")}>{result ? <TierBand value={result.admission_band} /> : <span className="muted-copy">—</span>}</div>
+      <div className="uni-band" role="cell" data-label={t("Band")}>{score?.admission_band ? <TierBand value={score.admission_band} /> : <span className="muted-copy">—</span>}</div>
       <div className="uni-value" role="cell" data-label={t("Acceptance")}><span className="v">{percentText(university.acceptance_rate)}</span></div>
-      <div className="uni-value" role="cell" data-label={t("SAT")}><span className="v">{university.sat_min ? satText(university.sat_min, university.sat_max) : t("Optional")}</span></div>
+      <div className="uni-value" role="cell" data-label={t("SAT")}><span className="v">{satLabel(university)}</span></div>
       <div className="uni-value" role="cell" data-label={t("Net price")}><span className="v">{money(university.net_price_usd)}</span></div>
-      <div className="uni-value" role="cell" data-label={t("Deadline")}><span className="v">{university.application_deadline ? shortDate(university.application_deadline) : '—'}</span></div>
+      <div className="uni-value" role="cell" data-label={t("Deadline")}><span className="v">{university.application_deadline ? shortDate(university.application_deadline) : '—'}</span>{days != null && days >= 0 && <small className="uni-due">{dueLabel(days)}</small>}</div>
+      </>}
     </div>
     <div className="uni-action" role="cell">{application ? <span className="uni-added"><Check size={14} aria-hidden="true" /> {t("Added")}</span> : <button type="button" className="button quiet small" aria-label={t("Add to my list")} disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={14} aria-hidden="true" /> {t("Add")}</button>}</div>
-    <div className="uni-chevron" role="cell"><button type="button" aria-expanded={expanded} aria-controls={panelId} aria-label={t("Show why this result")} onClick={onToggle}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button></div>
+    <div className="uni-chevron" role="cell"><button type="button" aria-expanded={expanded} aria-controls={panelId} aria-label={view === 'qs' ? t("Show QS details") : t("Show why this result")} onClick={onToggle}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button></div>
     {expanded && <div className="uni-expand" id={panelId} role="cell">
-      {result && <div className="uni-expand-grid">
+      {view === 'qs' ? <QsUniversityDetails university={university} /> : result && <div className="uni-expand-grid">
         <section className="college-detail-score"><h4>{t("Fit")}</h4><ScoreBreakdown breakdown={result.score_breakdown} /></section><div className="college-detail-notes"><section><h4>{t("Why it fits")}</h4>
         <ul className="note-list ok" aria-label={t("Why it fits")}>{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={14} aria-hidden="true" /><span>{reason}</span></li>)}</ul></section><section><h4>{t("Watch-outs")}</h4>
         <ul className="note-list gap" aria-label={t("Watch-outs")}>{result.gaps.map((gap) => <li key={gap}><Clock3 size={14} aria-hidden="true" /><span>{gap}</span></li>)}</ul></section></div>
@@ -99,7 +100,14 @@ function CollegeRow({ university, result, student, application, expanded, busy, 
   </div>;
 }
 
-function CollegeListDrawer({ applications, universities, researchMap, busyId, onClose, onOpen, onRemove, onApplications }) {
+// A date picked here becomes the application's own deadline. Only today or later
+// counts, so the partial years a typed date passes through (0002, 0020…) never save.
+function DeadlinePicker({ name, busy, onPick }) {
+  const today = localDateKey();
+  return <label className="drawer-deadline" onClick={(event) => event.stopPropagation()}><CalendarPlus size={13} aria-hidden="true" /><span>{t("Set deadline")}</span><input type="date" min={today} disabled={busy} aria-busy={busy} aria-label={tx`Set deadline for ${name}`} onChange={(event) => {if (event.target.value >= today) onPick(event.target.value);}} /></label>;
+}
+
+function CollegeListDrawer({ applications, universities, fits, busyId, onClose, onOpen, onRemove, onDeadline, onApplications }) {
   const deadlineOf = (application) => application.deadline || universities.get(application.university)?.application_deadline;
   const sorted = [...applications].sort((a, b) => (deadlineOf(a) ? parseDateValue(deadlineOf(a)).getTime() : Infinity) - (deadlineOf(b) ? parseDateValue(deadlineOf(b)).getTime() : Infinity));
   const bandOf = (application) => application.tier === 'dream' ? 'reach' : application.tier;
@@ -110,11 +118,14 @@ function CollegeListDrawer({ applications, universities, researchMap, busyId, on
       <div className="drawer-list">{sorted.map((application) => {
           const university = universities.get(application.university);
           const name = university?.name || application.university_detail?.name || t("University");
-          const score = researchMap.get(application.university)?.match_score;
+          const score = fits.get(application.university)?.match_score;
+          const deadline = deadlineOf(application);
+          const days = daysUntil(deadline);
+          const busy = busyId === application.university;
           return <article className="drawer-row" key={application.id} onClick={() => onOpen(application.university)}>
-            <div className="drawer-copy">{university && <UniversityLogo university={university} />}<span><button type="button" className="drawer-name" onClick={(event) => {event.stopPropagation();onOpen(application.university);}}>{name}</button><div className="drawer-sub"><TierBand value={bandOf(application)} /><span>{[university?.city, university?.country].filter(Boolean).join(', ')}</span></div></span></div>
+            <div className="drawer-copy">{university && <UniversityLogo university={university} />}<span><button type="button" className="drawer-name" onClick={(event) => {event.stopPropagation();onOpen(application.university);}}>{name}</button><div className="drawer-sub"><TierBand value={bandOf(application)} /><span>{[university?.city, university?.country].filter(Boolean).join(', ')}</span></div>{days != null && <span className={`due drawer-due ${dueTone(days)}`.trim()}><Clock3 size={12} aria-hidden="true" /> {dueLabel(days)}</span>}</span></div>
             {score != null && <div className="drawer-score"><b>{formatNumberLocale(score)}</b><small>{t("fit")}</small></div>}
-            <div className="drawer-row-footer"><small>{money(university?.net_price_usd)} · {deadlineOf(application) ? shortDate(deadlineOf(application)) : '—'}</small><button type="button" className="drawer-remove" aria-label={tx`Remove ${name} from my list`} disabled={busyId === application.university} aria-busy={busyId === application.university} onClick={(event) => {event.stopPropagation();onRemove(application);}}><Trash2 size={13} aria-hidden="true" />{t("Remove")}</button></div>
+            <div className="drawer-row-footer"><small>{money(university?.net_price_usd)} · {deadline ? shortDate(deadline) : <DeadlinePicker name={name} busy={busy} onPick={(date) => onDeadline(application, date)} />}</small><button type="button" className="drawer-remove" aria-label={tx`Remove ${name} from my list`} disabled={busyId === application.university} aria-busy={busyId === application.university} onClick={(event) => {event.stopPropagation();onRemove(application);}}><Trash2 size={13} aria-hidden="true" />{t("Remove")}</button></div>
           </article>;
         })}{!sorted.length && <Empty text={t("Your list is empty. Add universities from the results.")} />}</div>
     </div>
@@ -122,10 +133,17 @@ function CollegeListDrawer({ applications, universities, researchMap, busyId, on
   </Modal>;
 }
 
+// The catalogue holds ~1,500 universities; the table grows by this many rows at a time.
+const ROWS_PER_STEP = 50;
+
 export function CollegeSearchPage({ data, query, reload, notify, setPage, universityId }) {
   const [localQuery, setLocalQuery] = useState(query || '');
   const [filters, setFilters] = useState(DEFAULT_COLLEGE_FILTERS);
-  const [sort, setSort] = useState('fit');
+  const [sort, setSort] = useState('ranking');
+  const [view, setView] = useState('qs');
+  const [qsFilters, setQsFilters] = useState({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [shown, setShown] = useState(ROWS_PER_STEP);
   const [expandedId, setExpandedId] = useState(null);
   const [listOpen, setListOpen] = useState(false);
   const [busyId, setBusyId] = useState(null);
@@ -139,12 +157,16 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const student = ownStudent(data);
   const budget = Number(student?.budget_usd) || 0;
   const researchMap = useMemo(() => new Map((research?.recommendations || []).map((item) => [item.university.id, item])), [research]);
+  // Score and band of every university; only the best matches (researchMap) explain theirs.
+  const fits = useMemo(() => new Map(Object.entries(research?.scores || {}).map(([id, [match_score, admission_band]]) => [Number(id), { match_score, admission_band }])), [research]);
   const universities = useMemo(() => new Map(data.universities.map((item) => [item.id, item])), [data.universities]);
   const listed = useMemo(() => new Map(data.applications.map((item) => [item.university, item])), [data.applications]);
-  const counts = useMemo(() => collegeFacetCounts(data.universities, researchMap, student), [data.universities, researchMap, student]);
-  const rows = useMemo(() => data.universities.filter((item) => collegeMatches(item, researchMap.get(item.id), filters, student, localQuery)).sort(collegeSorter(sort, researchMap, student)), [data.universities, researchMap, filters, student, localQuery, sort]);
+  const counts = useMemo(() => collegeFacetCounts(data.universities, fits, student), [data.universities, fits, student]);
+  const qsFacets = useMemo(() => Object.fromEntries(QS_CLASSIFICATIONS.slice(0, 4).map(([key]) => [key, data.universities.reduce((counts, item) => { const value = item.qs_data?.[key]; if (value) counts[value] = (counts[value] || 0) + 1; return counts; }, {})])), [data.universities]);
+  const rows = useMemo(() => data.universities.filter((item) => collegeMatches(item, fits.get(item.id), filters, student, localQuery) && (view !== 'qs' || Object.entries(qsFilters).every(([key, value]) => !value || item.qs_data?.[key] === value))).sort(collegeSorter(sort, fits, student)), [data.universities, fits, filters, student, localQuery, sort, view, qsFilters]);
 
   useEffect(() => { setLocalQuery(query || ''); }, [query]);
+  useEffect(() => { setShown(ROWS_PER_STEP); }, [filters, sort, localQuery, view, qsFilters]);
   const searchRef = useRef(null);
   const resultsRef = useRef(null);
   // The list filters as you type; Enter or the search button brings the results into view.
@@ -185,13 +207,22 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   }
 
   async function addToList(university) {
-    const band = researchMap.get(university.id)?.admission_band;
+    const band = fits.get(university.id)?.admission_band;
     const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
     setBusyId(university.id);
     try {
       await api.create('applications', { student: student?.id, university: university.id, program, tier: band === 'reach' ? 'dream' : band === 'safety' ? 'safety' : 'target', status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
       await reload();
       notify(tx`${university.name} added to your list.`);
+    } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
+  }
+
+  async function saveDeadline(application, deadline) {
+    setBusyId(application.university);
+    try {
+      await api.update('applications', application.id, { deadline });
+      await reload();
+      notify(t("Deadline saved."));
     } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
   }
 
@@ -211,33 +242,42 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
 
   const chips = collegeFilterChips(filters, setFilters, budget);
   const ready = Boolean(research?.ready);
-  const filtersPanel = <CollegeFilters {...{ filters, setFilters, counts, budget, chips }} showBands />;
+  const filtersPanel = <CollegeFilters {...{ filters, setFilters, counts, budget, chips }} showBands={ready} />;
   return <div className="section-stack student-portal college-page">
     <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><span className="catalog-eyebrow">NASEEB EDU / {t('College Search')}</span><h1>{t('College Search')}</h1><p>{t('Explore admissions, cost, deadlines, and your personal fit in one place.')}</p><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, budget, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
     {research && !research.ready && <CollegeProfileQuestions research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
-    {ready && <div className="college-layout">
+    {(ready || view === 'qs') && <div className="college-layout">
       <div className="college-main">
-      {filtersPanel}
-      <div className="uni-meta" ref={resultsRef}>
-        <p className="filter-count" aria-live="polite"><b>{formatNumberLocale(rows.length)}</b> {t("Universities")}</p>
-        {chips.map((chip) => <span className="filter-token" key={chip.key}>{chip.text}<button type="button" aria-label={tx`Remove ${chip.text} filter`} onClick={chip.clear}><X size={13} aria-hidden="true" /></button></span>)}
-        <div className="uni-meta-actions">
-          <div className="sort-control"><select aria-label={t("Sort by")} value={sort} onChange={(event) => setSort(event.target.value)}>{COLLEGE_SORTS.map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
-          <button type="button" className="button primary" onClick={() => setListOpen(true)}><List size={16} aria-hidden="true" /> {t("My college list")}<span className="count-pill">{formatNumberLocale(data.applications.length)}</span></button>
+      <section className="college-toolbar" aria-label={t('University data view')} ref={resultsRef}>
+        <header className="college-toolbar-header">
+          <div className="college-data-views" role="group" aria-label={t('University data view')}>{[['qs', 'QS rankings'], ['admissions', 'Admissions & costs']].map(([key, title]) => <button type="button" key={key} aria-pressed={view === key} onClick={() => { setView(key); setExpandedId(null); setSort(key === 'qs' ? 'ranking' : 'fit'); }}>{t(title)}{key === 'qs' && <span className="college-edition">2027</span>}</button>)}</div>
+          <button type="button" className="college-saved-button" onClick={() => setListOpen(true)} aria-label={t('My college list')}><Bookmark size={17} aria-hidden="true" /><span>{t('My List')}</span><b>{formatNumberLocale(data.applications.length)}</b></button>
+        </header>
+        <div className="college-filter-row">
+          {view === 'qs' && <div className="college-qs-filters">{QS_CLASSIFICATIONS.slice(0, 4).map(([key, title, values]) => <CollegeFilterSelect key={key} label={t(title)} value={qsFilters[key] || ''} onChange={(value) => setQsFilters((current) => ({ ...current, [key]: value }))} options={[{ value: '', label: t('All') }, ...Object.keys(values).filter((value) => qsFacets[key][value]).map((value) => ({ value, label: qsClassification(key, value), count: qsFacets[key][value] }))]} />)}</div>}
+          <button type="button" className="college-filters-toggle" aria-expanded={filtersOpen} aria-controls="college-advanced-filters" onClick={() => setFiltersOpen(!filtersOpen)}><Filter size={16} aria-hidden="true" />{t('Filters')}{chips.length > 0 && <b>{formatNumberLocale(chips.length)}</b>}<ChevronDown size={14} aria-hidden="true" /></button>
         </div>
-      </div>
-      <CollegeProfileStrip research={research} refreshing={researchLoading} onRefresh={refreshResearch} onEdit={() => setPage('student_center')} />
-      <div className="uni-table" role="table" aria-label={t("Universities")}>
-        <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts"><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Net price")}</span><span role="columnheader">{t("Deadline")}</span></div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t("Show why this result")}</span></div>
-        {rows.map((item) => <CollegeRow key={item.id} university={item} result={researchMap.get(item.id)} student={student} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item)} />)}
+        {filtersOpen && filtersPanel}
+        <div className="uni-meta">
+          <p className="filter-count" aria-live="polite"><b>{formatNumberLocale(rows.length)}</b> {t('Universities')}</p>
+          {chips.map((chip) => <span className="filter-token" key={chip.key}>{chip.text}<button type="button" aria-label={tx`Remove ${chip.text} filter`} onClick={chip.clear}><X size={13} aria-hidden="true" /></button></span>)}
+          {view === 'qs' && Object.values(qsFilters).some(Boolean) && <button type="button" className="college-reset-filters" onClick={() => setQsFilters({})}><X size={13} aria-hidden="true" />{t('Clear')}</button>}
+          <div className="sort-control"><span>{t('Sort by')}</span><select aria-label={t('Sort by')} value={sort} onChange={(event) => setSort(event.target.value)}>{COLLEGE_SORTS.map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
+        </div>
+        {ready && <CollegeProfileStrip research={research} refreshing={researchLoading} onRefresh={refreshResearch} onEdit={() => setPage('student_center')} />}
+      </section>
+      <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''}`} role="table" aria-label={t("Universities")}>
+        <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Net price")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
+        {rows.slice(0, shown).map((item) => <CollegeRow key={item.id} view={view} university={item} result={researchMap.get(item.id)} score={fits.get(item.id)} student={student} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item)} />)}
         {!rows.length && <Empty text={t("No universities match these filters.")} />}
       </div>
-      <p className="uni-note">{t("Fit is not an admission probability.")}</p>
+      {rows.length > shown && <button type="button" className="button quiet uni-more" onClick={() => setShown(shown + ROWS_PER_STEP)}>{t('Show {n} more', { n: formatNumberLocale(Math.min(ROWS_PER_STEP, rows.length - shown)) })}</button>}
+      <p className="uni-note">{t(view === 'qs' ? "Published QS scores out of 100." : "Fit is not an admission probability.")} {t("Rankings: QS World University Rankings 2027.")}</p>
       </div>
     </div>}
-    {listOpen && <CollegeListDrawer applications={data.applications} universities={universities} researchMap={researchMap} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onApplications={() => setPage('applications')} />}
+    {listOpen && <CollegeListDrawer applications={data.applications} universities={universities} fits={fits} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onDeadline={saveDeadline} onApplications={() => setPage('applications')} />}
   </div>;
 }
 

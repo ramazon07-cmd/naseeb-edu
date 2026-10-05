@@ -50,6 +50,33 @@ class AccountWriteScopeTests(APITestCase):
         self.assertEqual(self.unassigned.email, 'scope-unassigned@example.com')
         self.assertTrue(User.objects.filter(pk=self.unassigned.pk).exists())
 
+    def test_counselor_edits_own_profile_but_not_a_colleague_or_own_access(self):
+        self.client.force_authenticate(self.counselor)
+        profile = {'first_name': 'Dilnoza', 'last_name': 'Karimova', 'phone': '+998901234567', 'position': 'Lead counselor'}
+        response = self.client.patch(self.url(self.counselor), profile, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.counselor.refresh_from_db()
+        self.assertEqual(
+            [self.counselor.first_name, self.counselor.last_name, self.counselor.phone, self.counselor.position],
+            list(profile.values()),
+        )
+        # A colleague in the same school is listed, never editable.
+        colleague = self.client.patch(self.url(self.other_counselor), {'first_name': 'Changed'}, format='json')
+        self.assertEqual(colleague.status_code, status.HTTP_403_FORBIDDEN)
+        self.other_counselor.refresh_from_db()
+        self.assertEqual(self.other_counselor.first_name, '')
+        # The same endpoint cannot widen the counselor's own access.
+        other_school = School.objects.create(name='Other Scope School', code='other-scope-school')
+        for change in ({'role': User.Role.ADMIN}, {'is_active': False}, {'admin_tier': User.AdminTier.SUPERADMIN}, {'school': other_school.id}):
+            with self.subTest(change=change):
+                denied = self.client.patch(self.url(self.counselor), change, format='json')
+                self.assertEqual(denied.status_code, status.HTTP_400_BAD_REQUEST)
+        self.counselor.refresh_from_db()
+        self.assertEqual(
+            (self.counselor.role, self.counselor.is_active, self.counselor.admin_tier, self.counselor.school_id),
+            (User.Role.COUNSELOR, True, '', self.school.id),
+        )
+
     def test_counselor_account_list_hides_unassigned_students(self):
         self.client.force_authenticate(self.counselor)
         ids = {row['id'] for row in self.client.get('/api/users/accounts/').data['results']}

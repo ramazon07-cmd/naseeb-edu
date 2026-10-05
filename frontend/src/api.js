@@ -487,6 +487,14 @@ export const api = {
     return request(`/students/${id}/photo/`, { method: 'POST', body: payload, timeoutMs: 120_000 })
   },
   removeStudentPhoto: (id) => request(`/students/${id}/photo/`, { method: 'DELETE' }),
+  // A staff account's own photo (User.avatar); each write returns the updated account.
+  accountAvatar: (id, version) => protectedFileRequest(`/users/accounts/${id}/avatar/`, { query: version ? { v: version } : {} }),
+  uploadAccountAvatar: (id, file) => {
+    const payload = new FormData()
+    payload.append('avatar', file)
+    return request(`/users/accounts/${id}/`, { method: 'PATCH', body: payload, timeoutMs: 120_000 })
+  },
+  removeAccountAvatar: (id) => request(`/users/accounts/${id}/`, { method: 'PATCH', body: JSON.stringify({ avatar: null }) }),
   messageAttachment: (id) => messageAttachmentRequest(id),
   downloadMessageAttachment: (id) => messageAttachmentRequest(id, true),
   documentFile: (id) => documentFileRequest(id),

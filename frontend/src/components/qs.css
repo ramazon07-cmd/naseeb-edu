@@ -1,0 +1,144 @@
+.qs-details {
+  padding: 24px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.qs-details-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.qs-details-heading h3 {
+  margin: 8px 0 4px;
+  font-size: 1.25rem;
+}
+
+.qs-details-heading p,
+.qs-overall > span,
+.qs-classifications dt,
+.qs-indicator small,
+.qs-source {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.qs-details-heading p {
+  margin: 0;
+}
+
+.qs-overall {
+  display: grid;
+  gap: 2px;
+  flex: none;
+  text-align: right;
+}
+
+.qs-overall b {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.qs-classifications {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 24px;
+  margin: 24px 0;
+  padding: 18px 0;
+  border-block: 1px solid var(--border);
+}
+
+.qs-classifications dd {
+  margin: 5px 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.qs-classifications dd small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.qs-indicator-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px 28px;
+}
+
+.qs-indicator > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.qs-indicator b {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.qs-indicator-track {
+  height: 4px;
+  margin: 10px 0 6px;
+  overflow: hidden;
+  background: var(--surface-soft);
+  border-radius: 3px;
+}
+
+.qs-indicator-track i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.qs-indicator small {
+  display: flex;
+  justify-content: space-between;
+}
+
+.qs-source {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.qs-source a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text);
+}
+
+.college-page .qs-score-primary .v {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.college-page .qs-table .uni-head .uni-facts span {
+  line-height: 1.35;
+}
+
+@media (width <= 700px) {
+  .qs-classifications,
+  .qs-indicator-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .qs-details {
+    padding: 18px;
+  }
+}
+
+@media (width <= 420px) {
+  .qs-indicator-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

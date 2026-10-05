@@ -21,6 +21,7 @@ class UniversitySerializer(serializers.ModelSerializer):
     class Meta:
         model = University
         fields = '__all__'
+        read_only_fields = ('qs_data',)
 
     def get_programs(self, obj):
         programs = [
