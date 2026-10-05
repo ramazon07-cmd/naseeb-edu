@@ -101,6 +101,9 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
                 request.method in permissions.SAFE_METHODS
                 and view.basename in self.organization_read_resources
             )
+        if view.basename == 'meetings':
+            # Meeting notes are the counselor's private notes on a student.
+            return False
         if request.method in permissions.SAFE_METHODS:
             return True
         if view.basename == 'notifications' and view.action in {'read', 'read_all'}:

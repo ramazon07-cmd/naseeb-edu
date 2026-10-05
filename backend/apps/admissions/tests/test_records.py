@@ -39,17 +39,16 @@ class RecordRoleIsolationTests(RoleIsolationBase):
                 Essay.objects.create(student=self.student_a, title='My essay', prompt='My prompt'),
                 Essay.objects.create(student=self.student_b, title='Other essay', prompt='Other prompt'),
             ),
-            'meetings': (
-                MeetingNote.objects.create(student=self.student_a, counselor=self.counselor, title='My meeting', summary='My summary'),
-                MeetingNote.objects.create(student=self.student_b, counselor=self.counselor, title='Other meeting', summary='Other summary'),
-            ),
         }
+        MeetingNote.objects.create(student=self.student_a, counselor=self.counselor, title='My meeting', summary='My summary')
         self.client.force_authenticate(self.student_a_user)
         for path, (own_record, _) in records.items():
             with self.subTest(path=path):
                 response = self.client.get(f'/api/{path}/')
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertEqual([item['id'] for item in self.results(response)], [own_record.id])
+        # Meeting notes are the counselor's private notes, even on the student's own profile.
+        self.assertEqual(self.client.get('/api/meetings/').status_code, status.HTTP_403_FORBIDDEN)
 
     def test_student_cannot_create_task_for_another_student(self):
         self.client.force_authenticate(self.student_a_user)
