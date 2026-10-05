@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from rest_framework.views import APIView
 from apps.users.models import User
+from ..countries import country_key
 from ..models import University
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer, UniversitySerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
@@ -57,20 +58,13 @@ def build_college_research(profile):
     gpa = float(profile.gpa)
     gpa_scale = int(profile.effective_gpa_scale)
     budget = int(profile.budget_usd)
-    target_countries = [value.strip().lower() for value in profile.target_countries.split(',') if value.strip()]
+    target_countries = {country_key(value) for value in profile.target_countries.split(',') if value.strip()}
     target_major = profile.target_major.strip().lower()
     evidence_total = sum(min(value, 2) for value in profile_counts.values())
     profile_strength_score = min(10, evidence_total * 2)
     recommendations = []
 
-    for university in University.objects.filter(
-        market__in=[
-            University.Market.US,
-            University.Market.CANADA,
-            University.Market.CHINA,
-            University.Market.HONG_KONG,
-        ],
-    ).prefetch_related('programs'):
+    for university in University.objects.prefetch_related('programs'):
         reasons = []
         gaps = []
 
@@ -105,7 +99,7 @@ def build_college_research(profile):
             gaps.append('Verify the IELTS requirement on the official program page')
 
         preference_score = 0
-        if university.country.lower() in target_countries:
+        if country_key(university.country) in target_countries:
             preference_score += 12
             reasons.append(f'{university.country} is one of your target countries')
         else:
@@ -149,7 +143,10 @@ def build_college_research(profile):
 
         total_score = min(100, academic_score + preference_score + financial_score + profile_strength_score)
         acceptance_rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
-        if (acceptance_rate is not None and acceptance_rate < 15) or (university.sat_min and sat < university.sat_min):
+        if acceptance_rate is None and not university.sat_min:
+            # No admission data in the catalogue (e.g. a QS-only row): unknown, not "target".
+            admission_band = None
+        elif (acceptance_rate is not None and acceptance_rate < 15) or (university.sat_min and sat < university.sat_min):
             admission_band = 'reach'
         elif acceptance_rate is not None and acceptance_rate >= 45 and (not university.sat_min or sat >= university.sat_min):
             admission_band = 'safety'
@@ -172,6 +169,9 @@ def build_college_research(profile):
         })
 
     recommendations.sort(key=lambda item: (-item['match_score'], item['university'].ranking or 999999))
+    # Every university gets its score and band so the whole catalogue sorts on
+    # one scale; only the best matches carry the full explanation.
+    scores = {item['university'].id: [item['match_score'], item['admission_band']] for item in recommendations}
     # Return (and serialize) only the best matches, not the whole catalog.
     recommendations = recommendations[:COLLEGE_RESEARCH_LIMIT]
     for item in recommendations:
@@ -191,6 +191,7 @@ def build_college_research(profile):
         'questions': [],
         'profile_snapshot': snapshot,
         'recommendations': recommendations,
+        'scores': scores,
         'methodology': 'Academic fit, preferences, affordability, aid and verified profile evidence.',
         'generated_at': timezone.now(),
     }

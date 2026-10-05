@@ -395,7 +395,7 @@
 }
 
 .college-page .uni-row {
-  grid-template-columns: 45px minmax(0, 1fr) auto 28px;
+  grid-template-columns: 54px minmax(0, 1fr) auto 28px;
   align-items: start;
   row-gap: 10px;
 }
@@ -447,7 +447,7 @@
 
 @container college-results (max-width: 560px) {
 .college-page .uni-row {
-  grid-template-columns: 41px minmax(0, 1fr) 25px;
+  grid-template-columns: 52px minmax(0, 1fr) 25px;
   padding: 14px 12px;
 }
 
@@ -872,4 +872,55 @@
 
 :root[data-theme='dark'] .college-page .college-skyline [fill='#fff7df'] {
   fill: var(--student-hero-text-token);
+}
+
+/* Country picker under "Where" (a native select: 100+ countries), the quiet
+   "N days left" under a catalogue deadline, and the "Show more" step. */
+.college-page .filter-country {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.8125rem;
+}
+
+.college-page .uni-value .uni-due {
+  margin-top: -3px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+
+.college-page .uni-more {
+  margin: 14px auto 0;
+  display: flex;
+}
+
+/* My college list: the countdown under each university, or a date picker
+   where the application has no deadline yet. */
+.college-page .drawer-due {
+  margin-top: 8px;
+}
+
+.college-page .drawer-deadline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.college-page .drawer-deadline input {
+  min-height: 30px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 500;
 }

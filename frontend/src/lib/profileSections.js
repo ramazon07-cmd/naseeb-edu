@@ -38,7 +38,7 @@ export const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong'
 // They match no checkbox, so they stay invisible on screen yet are still sent
 // on save, and the backend rejects the whole field for a country the student
 // cannot see or untick. Map what has an equivalent, drop what does not.
-const COUNTRY_ALIASES = { USA: 'US', 'United States': 'US', 'United Kingdom': 'UK', GB: 'UK', HK: 'Hong Kong' };
+export const COUNTRY_ALIASES = { USA: 'US', 'United States': 'US', 'United Kingdom': 'UK', GB: 'UK', HK: 'Hong Kong' };
 export const supportedCountries = (list) => [...new Set(list.map((c) => COUNTRY_ALIASES[c] || c).filter((c) => COUNTRIES.includes(c)))];
 export const INCOMES = ['Under $10,000', '$10,000–$25,000', '$25,000–$50,000', '$50,000–$100,000', '$100,000+'];
 export const INTERESTS = ['Arts', 'Humanities', 'Political science', 'Business', 'Economics', 'Accounting', 'Communications', 'Health and Medicine', 'Public and Social Services', 'Math and Statistics', 'Environmental Science', 'Computer Technologies', 'Science', 'Education', 'Engineering', 'English', 'History', 'Psychology'];

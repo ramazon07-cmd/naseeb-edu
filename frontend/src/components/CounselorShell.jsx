@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@fontsource-variable/roboto/wght.css';
-import { Bell, Calendar, CheckSquare, Compass, Ellipsis, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Pencil, Search, Sun, Users, X } from 'lucide-react';
+import { Bell, Calendar, CheckSquare, Compass, Ellipsis, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Pencil, Search, Settings, Sun, Users, X } from 'lucide-react';
 import { LANGUAGE_OPTIONS, formatNumberLocale, t } from '../i18n';
 import { fullName, initials } from '../lib/labels';
 import { counselorCounts } from '../lib/counselorCounts';
 import { COUNSELOR_NAV } from '../lib/routes';
 import { CounselorUiContext } from './counselorUi';
+import { useAccountPhoto } from './records';
 
 // The sidebar of the "Counselor Dashboard" design: label, icon and the number
 // (from counselorCounts) that badges it.
@@ -26,15 +27,20 @@ export const COUNSELOR_SELF_HEADED = new Set(['dashboard', 'students', 'review',
 
 export const counselorPageLabel = (page) => NAV[page]?.label;
 
+// Pages whose shared description does not fit the counselor workspace.
+const DESCRIPTIONS = { account_settings: 'Your profile, password, email and language' };
+export const counselorPageDescription = (page) => DESCRIPTIONS[page];
+
 function NavCount({ value }) {
   return value > 0 ? <i className="cx-count">{formatNumberLocale(value)}</i> : null;
 }
 
 // The account card (desktop) or avatar (phone) and the menu it opens: language,
 // theme, support and sign out — the controls the old top bar carried.
-function AccountMenu({ user, variant, theme, toggleTheme, language, changeLanguage, logout, openSupport, openAssistant, supportBadge, setAccountActionsHost }) {
+function AccountMenu({ user, variant, theme, toggleTheme, language, changeLanguage, logout, openSupport, openAssistant, openAccountSettings, supportBadge, setAccountActionsHost }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const photo = useAccountPhoto(user);
   const attachActions = useCallback((element) => {
     setAccountActionsHost(element ? { element, close: () => setOpen(false) } : null);
   }, [setAccountActionsHost]);
@@ -51,12 +57,13 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
   }, [open]);
   const dark = theme === 'dark';
   const name = fullName(user);
+  const face = photo ? <img src={photo} alt="" /> : initials(name);
   const trigger = variant === 'card'
     ? <button type="button" className="cx-account-trigger" aria-haspopup="menu" aria-expanded={open} aria-label={t('Account menu')} onClick={() => setOpen(!open)}>
-      <span className="cx-avatar self" aria-hidden="true">{initials(name)}</span>
-      <span className="cx-account-copy"><b>{name}</b><small>{t('School counselor')}</small></span>
+      <span className="cx-avatar self" aria-hidden="true">{face}</span>
+      <span className="cx-account-copy"><b>{name}</b><small>{user.position || t('School counselor')}</small></span>
     </button>
-    : <button type="button" className="cx-avatar self cx-avatar-button" aria-haspopup="menu" aria-expanded={open} aria-label={t('Account menu')} onClick={() => setOpen(!open)}>{initials(name)}</button>;
+    : <button type="button" className="cx-avatar self cx-avatar-button" aria-haspopup="menu" aria-expanded={open} aria-label={t('Account menu')} onClick={() => setOpen(!open)}>{face}</button>;
   return <div className={`cx-account cx-account-${variant}`} ref={ref}>
     {trigger}
     {open && <div className="cx-account-menu" role="menu">
@@ -65,6 +72,7 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
         <div className="cx-segmented">{LANGUAGE_OPTIONS.map((option) => <button type="button" key={option.value} className={language === option.value ? 'active' : ''} aria-pressed={language === option.value} onClick={() => changeLanguage(option.value)}>{option.short}</button>)}</div>
       </div>
       <button type="button" role="menuitem" aria-pressed={dark} onClick={toggleTheme}>{dark ? <Sun size={17} /> : <Moon size={17} />}{dark ? t('Light mode') : t('Dark mode')}</button>
+      <button type="button" role="menuitem" onClick={() => { setOpen(false); openAccountSettings(); }}><Settings size={17} />{t('Account settings')}</button>
       <button type="button" role="menuitem" onClick={() => { setOpen(false); openAssistant(); }}><span className="cx-bird" aria-hidden="true" />{t('Naseeb AI assistant')}</button>
       {openSupport && <button type="button" role="menuitem" onClick={() => { setOpen(false); openSupport(); }}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <i className="cx-count">{formatNumberLocale(supportBadge)}</i>}</button>}
       <div ref={attachActions} />
@@ -87,7 +95,7 @@ export function CounselorLayout({ user, data, stats, page, title, setPage, setQu
     return () => document.removeEventListener('keydown', escape);
   }, [drawer]);
   const go = (next) => { setPage(next); setQuery(''); setDrawer(false); };
-  const account = { user, theme, toggleTheme, language, changeLanguage, logout, openAssistant, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), supportBadge, setAccountActionsHost };
+  const account = { user, theme, toggleTheme, language, changeLanguage, logout, openAssistant, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), openAccountSettings: () => go('account_settings'), supportBadge, setAccountActionsHost };
   const item = (next, className = 'cx-nav-item', badges = true) => {
     const { label, icon: Icon, badge } = NAV[next];
     const active = page === next;

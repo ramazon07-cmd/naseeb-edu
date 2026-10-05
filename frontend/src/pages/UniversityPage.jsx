@@ -3,10 +3,12 @@ import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Circle, Clock
 import { formatNumberLocale, formatPercentLocale, t, tx } from '../i18n';
 import { PortalTabs } from '../components/forms';
 import { Empty } from '../components/ui';
+import { QsUniversityDetails } from '../components/QsUniversityDetails';
+import { qsClassification } from '../lib/qs';
 import { AidTags, DeadlineCard, InfoCard, PriceMeter, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { dateText, money } from '../lib/format';
 import { initials, label, ownStudent } from '../lib/labels';
-import { daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, satText, scalePercent, scholarshipRequirements } from '../lib/college';
+import { daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
 
 function UniversityOverview({ university, result, research, researchLoading, student, application, essays, onLeave, setPage }) {
   const budget = Number(student?.budget_usd) || 0;
@@ -25,9 +27,10 @@ function UniversityOverview({ university, result, research, researchLoading, stu
         <InfoCard title="Why it fits"><ul className="note-list ok">{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={15} aria-hidden="true" /><span>{reason}</span></li>)}</ul></InfoCard>
         <InfoCard title="Watch-outs"><ul className="note-list gap">{result.gaps.map((gap) => <li key={gap}><Clock3 size={15} aria-hidden="true" /><span>{gap}</span></li>)}{!result.gaps.length && <li><CheckCircle2 size={15} aria-hidden="true" /><span>{t("Nothing to watch out for.")}</span></li>}</ul></InfoCard>
       </div>}
+      <QsUniversityDetails university={university} />
       <InfoCard title="Numbers that matter"><div className="numbers">
         <div><span className="k">{t("Acceptance rate")}</span><span className="v">{percentText(rate)}</span><span className="s">{rate == null ? t("Not available in the catalog.") : Number(rate) < 15 ? t("Highly selective: fewer than 15% are admitted.") : Number(rate) >= 45 ? t("Less selective: 45% or more are admitted.") : t("Moderately selective.")}</span></div>
-        <div><span className="k">{t("SAT range")}</span><span className="v">{university.sat_min ? satText(university.sat_min, university.sat_max) : t("Optional")}</span>{university.sat_min && <SatRange min={university.sat_min} max={university.sat_max} score={sat} />}<span className={`s ${sat && university.sat_min && sat < university.sat_min ? 'warn' : ''}`.trim()}>{!sat || !university.sat_min ? t("No SAT minimum listed.") : sat < university.sat_min ? tx`Your SAT is ${String(sat)}, ${university.sat_min - sat} below` : tx`Your SAT is ${String(sat)}, in range`}</span></div>
+        <div><span className="k">{t("SAT range")}</span><span className="v">{satLabel(university)}</span>{university.sat_min && <SatRange min={university.sat_min} max={university.sat_max} score={sat} />}<span className={`s ${sat && university.sat_min && sat < university.sat_min ? 'warn' : ''}`.trim()}>{!sat || !university.sat_min ? t("No SAT minimum listed.") : sat < university.sat_min ? tx`Your SAT is ${String(sat)}, ${university.sat_min - sat} below` : tx`Your SAT is ${String(sat)}, in range`}</span></div>
         <div><span className="k">{t("Tuition")}</span><span className="v">{money(university.tuition_usd)}</span><span className="s">{t("Per year, before aid.")}</span></div>
         <div><span className="k">{t("Net price")}</span><span className="v">{money(net)}</span>{net != null && <PriceMeter price={net} budget={budget} />}<span className={`s ${net != null && budget && net > budget ? 'warn' : ''}`.trim()}>{net == null || !budget ? t("Estimated per year, after aid.") : net > budget ? tx`${money(net - budget)} above your ${money(budget)} budget` : t("Within your budget")}</span></div>
         <div><span className="k">{t("Average aid")}</span><span className="v">{money(university.average_aid_usd)}</span><span className="s">{university.students_receiving_aid_percent != null ? tx`${university.students_receiving_aid_percent}% of students receive aid.` : t("Per year.")}</span></div>
@@ -128,7 +131,7 @@ export function UniversityPage({ data, university, result, research, researchLoa
     <nav className="crumb" aria-label={t("Breadcrumb")}><button type="button" className="link-button" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> {t("College Search")}</button><span aria-hidden="true">/</span><b>{university.name}</b></nav>
     <section className="info-card university-head" aria-label={university.name}>
       <div className="university-head-top"><span className="monogram" aria-hidden="true">{initials(university.name)}</span><div><h2>{university.name}</h2>
-        <p className="university-facts"><span><MapPin size={14} aria-hidden="true" /> {[university.city, university.country].filter(Boolean).join(', ')}</span><span>{label(university.institution_type)}</span>{university.campus_setting && <span>{tx`${label(university.campus_setting)} campus`}</span>}<span>{label(university.degree_type)}</span>{result && <TierBand value={result.admission_band} />}</p></div></div>
+        <p className="university-facts"><span><MapPin size={14} aria-hidden="true" /> {[university.city, university.country].filter(Boolean).join(', ')}</span><span>{university.qs_data?.status ? qsClassification('status', university.qs_data.status) : label(university.institution_type)}</span>{university.campus_setting && <span>{tx`${label(university.campus_setting)} campus`}</span>}<span>{label(university.degree_type)}</span>{result?.admission_band && <TierBand value={result.admission_band} />}</p></div></div>
       <div className="university-actions">
         {application ? <span className="tag ok large"><Check size={14} aria-hidden="true" /> {t("In my list")}</span> : <button type="button" className="button primary" disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={16} aria-hidden="true" /> {t("Add to my list")}</button>}
         {university.website && <a className="button quiet" href={university.website} target="_blank" rel="noreferrer">{t("Official site")} <ExternalLink size={14} aria-hidden="true" /></a>}

@@ -3,27 +3,26 @@
 import { formatDateLocale, formatNumberLocale, formatPercentLocale, parseDateValue, t, tp, tx } from '../i18n.js';
 import { money } from './format.js';
 import { label } from './labels.js';
+import { COUNTRY_ALIASES } from './profileSections.js';
 import { matchesQuery } from './searchIndex.js';
 
-export const COLLEGE_REGIONS = [
-  { key: 'us', label: 'US', countries: ['usa', 'united states', 'united states of america'] },
-  { key: 'canada', label: 'Canada', countries: ['canada'] },
-  { key: 'china', label: 'China', countries: ['china', 'mainland china'] },
-  { key: 'hong_kong', label: 'Hong Kong', countries: ['hong kong', 'hong kong sar'] },
-];
+// The country a university is filtered and counted under: one name per market
+// ('USA' and 'United States' are one country), otherwise the catalogue's spelling.
+const MARKET_COUNTRIES = { us: 'United States', canada: 'Canada', china: 'China', hong_kong: 'Hong Kong' };
 
-export function universityRegion(university) {
-  const market = String(university?.market || '').trim().toLowerCase();
-  if (COLLEGE_REGIONS.some((region) => region.key === market)) return market;
-  const country = String(university?.country || '').trim().toLowerCase();
-  return COLLEGE_REGIONS.find((region) => region.countries.includes(country))?.key || null;
+export const universityCountry = (university) => MARKET_COUNTRIES[university?.market] || String(university?.country || '').trim();
+
+// Target countries are onboarding codes ('US', 'UK'); the catalogue spells them out.
+function countryKey(value) {
+  const name = String(value || '').trim();
+  return (COUNTRY_ALIASES[name] || name).toLowerCase();
 }
 
 export function universityFit(university, student) {
   if (!student) return { score: 0, label: 'Profile needed' };
   let score = 20;
-  const targets = String(student.target_countries || '').toLowerCase();
-  if (targets.includes(String(university.country || '').toLowerCase())) score += 25;
+  const targets = String(student.target_countries || '').split(',').map(countryKey);
+  if (targets.includes(countryKey(university.country))) score += 25;
   if (!university.sat_min || Number(student.sat_score || 0) >= Number(university.sat_min)) score += 25;
   if (!university.net_price_usd || !student.budget_usd || Number(university.net_price_usd) <= Number(student.budget_usd)) score += 15;
   if (!student.scholarship_needed || university.offers_international_aid || university.offers_merit_aid) score += 15;
@@ -47,7 +46,7 @@ export function eligibleScholarship(item, student) {
   return !item.eligible_grades || String(item.eligible_grades).split(',').map((value) => value.trim()).includes(String(student.grade));
 }
 
-export const DEFAULT_COLLEGE_FILTERS = { regions: COLLEGE_REGIONS.map((region) => region.key), bands: ['reach', 'target', 'safety'], price: 'all', aid: [], testOptional: false, satFit: false, publicOnly: false };
+export const DEFAULT_COLLEGE_FILTERS = { country: '', bands: ['reach', 'target', 'safety'], price: 'all', aid: [], testOptional: false, satFit: false, publicOnly: false };
 
 export const COLLEGE_PRICE_CAPS = ['all', 'budget', '25000', '40000'];
 
@@ -65,7 +64,11 @@ export const toggleIn = (list, value) => list.includes(value) ? list.filter((ite
 
 export const satText = (min, max) => `${formatNumberLocale(min, { useGrouping: false })}–${max ? formatNumberLocale(max, { useGrouping: false }) : '—'}`;
 
-export const satInRange = (university, student) => !university.sat_min || Number(student?.sat_score || 0) >= Number(university.sat_min);
+// A missing range is only "Optional" when the university says so; otherwise it is unknown.
+export const satLabel = (university) => university.sat_min ? satText(university.sat_min, university.sat_max) : university.test_optional ? t("Optional") : '—';
+
+// In range: the student meets a known minimum, or the university is test-optional (unknown is not in range).
+export const satInRange = (university, student) => university.sat_min ? Number(student?.sat_score || 0) >= Number(university.sat_min) : Boolean(university.test_optional);
 
 export const scalePercent = (value, min, max) => `${Math.max(0, Math.min(100, (Number(value) - min) / (max - min) * 100))}%`;
 
@@ -73,7 +76,7 @@ export const priceCapLabel = (cap) => cap === 'all' ? t("Any price") : cap === '
 
 export function collegeMatches(university, result, filters, student, query) {
   const cap = filters.price === 'budget' ? Number(student?.budget_usd) || 0 : Number(filters.price);
-  return filters.regions.includes(universityRegion(university)) && (
+  return (!filters.country || universityCountry(university) === filters.country) && (
   filters.bands.length === 3 || filters.bands.includes(result?.admission_band)) && (
   filters.price === 'all' || Number(university.net_price_usd || Infinity) <= cap) &&
   filters.aid.every((flag) => university[flag]) && (
@@ -97,11 +100,11 @@ export function collegeSorter(sort, researchMap, student) {
 }
 
 export function collegeFacetCounts(universities, researchMap, student) {
-  const counts = { regions: {}, bands: { reach: 0, target: 0, safety: 0 }, aid: {}, testOptional: 0, satFit: 0, publicOnly: 0 };
+  const counts = { countries: {}, bands: { reach: 0, target: 0, safety: 0 }, aid: {}, testOptional: 0, satFit: 0, publicOnly: 0 };
   universities.forEach((university) => {
-    const region = universityRegion(university);
+    const country = universityCountry(university);
     const band = researchMap.get(university.id)?.admission_band;
-    if (region) counts.regions[region] = (counts.regions[region] || 0) + 1;
+    if (country) counts.countries[country] = (counts.countries[country] || 0) + 1;
     if (band) counts.bands[band] += 1;
     COLLEGE_AID_FLAGS.forEach(([flag]) => {if (university[flag]) counts.aid[flag] = (counts.aid[flag] || 0) + 1;});
     if (university.test_optional) counts.testOptional += 1;
@@ -114,7 +117,7 @@ export function collegeFacetCounts(universities, researchMap, student) {
 export function collegeFilterChips(filters, setFilters, budget) {
   const reset = (change) => () => setFilters((current) => ({ ...current, ...change }));
   const chips = [];
-  if (filters.regions.length < COLLEGE_REGIONS.length) chips.push({ key: 'regions', text: COLLEGE_REGIONS.filter((region) => filters.regions.includes(region.key)).map((region) => t(region.label)).join(', ') || t("No country"), clear: reset({ regions: DEFAULT_COLLEGE_FILTERS.regions }) });
+  if (filters.country) chips.push({ key: 'country', text: filters.country, clear: reset({ country: '' }) });
   if (filters.bands.length < 3) chips.push({ key: 'bands', text: filters.bands.map(label).join(', ') || t("No band"), clear: reset({ bands: DEFAULT_COLLEGE_FILTERS.bands }) });
   if (filters.price !== 'all') chips.push({ key: 'price', text: filters.price === 'budget' ? `${t("Within budget")} ${money(budget)}` : priceCapLabel(filters.price), clear: reset({ price: 'all' }) });
   COLLEGE_AID_FLAGS.filter(([flag]) => filters.aid.includes(flag)).forEach(([flag, title]) => chips.push({ key: flag, text: t(title), clear: reset({ aid: filters.aid.filter((item) => item !== flag) }) }));
@@ -132,6 +135,11 @@ export function matchingPrograms(university, major) {
     return canonical && (canonical.includes(target) || target.includes(canonical));
   });
 }
+
+// '#12', or the band the QS rankings publish past 700 ('701–710', '1401+').
+export const rankText = (university) => university.ranking_label
+  ? university.ranking_label.replace(/\d+/g, (value) => formatNumberLocale(Number(value), { useGrouping: false })).replace('-', '–')
+  : university.ranking ? `#${formatNumberLocale(university.ranking)}` : '—';
 
 export const shortDate = (value) => formatDateLocale(value, { day: 'numeric', month: 'short' });
 

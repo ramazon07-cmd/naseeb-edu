@@ -1,9 +1,9 @@
 // Small pieces shared by the College Search, university and Applications pages.
 import { CalendarDays, Check, Clock3, HandCoins } from 'lucide-react';
-import { formatNumberLocale, t, tx } from '../i18n';
+import { formatNumberLocale, t } from '../i18n';
 import { dateText } from '../lib/format';
 import { label } from '../lib/labels';
-import { COLLEGE_AID_FLAGS, PRICE_SCALE_MAX, SAT_SCALE, SCORE_PARTS, daysUntil, dueLabel, dueTone, scalePercent, shortDate } from '../lib/college';
+import { COLLEGE_AID_FLAGS, PRICE_SCALE_MAX, SAT_SCALE, SCORE_PARTS, daysUntil, dueLabel, dueTone, scalePercent } from '../lib/college';
 
 // One checkbox/radio row of a filter list, with its live result count.
 export function FilterOption({ type = 'checkbox', name, checked, disabled = false, onChange, count, children }) {
@@ -18,9 +18,8 @@ export function DeadlineChip({ date, kind }) {
   const days = daysUntil(date);
   if (days == null) return null;
   const Icon = kind === 'aid' ? Clock3 : CalendarDays;
-  const urgent = days <= 21;
-  const text = urgent ? `${kind === 'aid' ? t("Scholarship") : t("Apply")} · ${dueLabel(days)}` : kind === 'aid' ? tx`Scholarship by ${shortDate(date)}` : tx`Apply by ${shortDate(date)}`;
-  return <span className={`due ${urgent ? dueTone(days) : ''}`.trim()}><Icon size={12} aria-hidden="true" /> {text}</span>;
+  // dueTone colours the last three weeks; later deadlines stay a quiet countdown.
+  return <span className={`due ${dueTone(days)}`.trim()}><Icon size={12} aria-hidden="true" /> {kind === 'aid' ? t("Scholarship") : t("Apply")} · {dueLabel(days)}</span>;
 }
 
 export function SatRange({ min, max, score }) {

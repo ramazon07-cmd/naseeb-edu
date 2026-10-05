@@ -20,6 +20,7 @@ from ..serializers import (
     StoreItemSerializer,
     UniversitySerializer,
 )
+from core.pagination import CatalogPagination
 from apps.users import entitlements
 from apps.users.admin_permissions import has_tier
 from apps.users.services import audit_product_action
@@ -129,6 +130,7 @@ class UniversityViewSet(CachedCatalogListMixin, viewsets.ModelViewSet):
     serializer_class = UniversitySerializer
     queryset = University.objects.prefetch_related('programs').all()
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = CatalogPagination
 
     def get_permissions(self):
         # Universities are a shared catalog: any authenticated user may read,

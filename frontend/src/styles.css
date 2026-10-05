@@ -16424,6 +16424,13 @@ a:focus-visible {
   color: var(--cx-avatar-self-text);
 }
 
+.cx-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
 .cx-avatar-button {
   cursor: pointer;
 }

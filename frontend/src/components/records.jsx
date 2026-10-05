@@ -41,20 +41,32 @@ export function ProfileCard({ student }) {
 // Shared by every avatar on screen; entries are keyed by photo version, so an
 // upload shows up at once and unchanged photos are never refetched.
 const studentPhotos = createBlobUrlCache({ max: 64 });
+const accountPhotos = createBlobUrlCache({ max: 8 });
 
-export function StudentAvatar({ student, className = '' }) {
-  const version = student?.photo_version || student?.updated_at || '';
-  const key = student?.id && student.has_photo ? `${student.id}:${version}` : '';
-  const [photo, setPhoto] = useState(() => ({ key, src: key ? studentPhotos.peek(key) : '' }));
+// The object URL of a private photo ('' while loading or when there is none).
+function usePhotoSrc(cache, key, fetchBlob) {
+  const [photo, setPhoto] = useState(() => ({ key, src: key ? cache.peek(key) : '' }));
   useEffect(() => {
     if (!key) return;
     let active = true;
-    studentPhotos.load(key, () => api.studentPhoto(student.id, student.photo_version).then((result) => result.blob)).
+    cache.load(key, fetchBlob).
     then((src) => {if (active) setPhoto({ key, src });}).
     catch(() => {if (active) setPhoto({ key, src: '' });});
     return () => {active = false;};
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps -- key covers id and version
-  const src = !key ? '' : photo.key === key ? photo.src : studentPhotos.peek(key);
+  return !key ? '' : photo.key === key ? photo.src : cache.peek(key);
+}
+
+// A staff account's own photo; `account.avatar` is its versioned URL, or null.
+export function useAccountPhoto(account) {
+  const version = account?.avatar ? new URL(account.avatar, window.location.href).searchParams.get('v') : '';
+  return usePhotoSrc(accountPhotos, version ? `${account.id}:${version}` : '', () => api.accountAvatar(account.id, version).then((result) => result.blob));
+}
+
+export function StudentAvatar({ student, className = '' }) {
+  const version = student?.photo_version || student?.updated_at || '';
+  const key = student?.id && student.has_photo ? `${student.id}:${version}` : '';
+  const src = usePhotoSrc(studentPhotos, key, () => api.studentPhoto(student.id, student.photo_version).then((result) => result.blob));
   const name = fullName(student?.user_detail);
   return <span className={`avatar ${src ? 'has-photo' : ''} ${className}`.trim()}>{src ? <img src={src} alt={name} /> : initials(name)}</span>;
 }
