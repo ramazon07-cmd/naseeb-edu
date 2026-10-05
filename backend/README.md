@@ -39,6 +39,18 @@ These accounts are only available when `ENABLE_DEMO_ACCOUNTS=True`. Production m
 
 If `APP_ENV` is not set, the backend fails closed to production (it refuses to start without real secrets) unless `DEBUG=True` is set explicitly on a non-hosted machine or the test runner is used. There is no built-in default `SECRET_KEY`; development without one gets a random per-process key.
 
+## AI assistant
+
+`AI_ASSISTANT_ENABLED` (default `False`) switches the Naseeb AI assistant on for
+students and counselors. It stays off until production use has legal sign-off
+(open item H8 in `docs/product-vision-and-stages.md`), because the assistant sends
+students' (minors') data to an outside AI gateway. While it is off,
+`POST /api/assistant/chat/` answers `503`, `GET /api/users/accounts/me/` reports
+`"assistant_enabled": false` and the frontend shows no assistant launcher or menu
+entry. When on, `AI_GATEWAY_API_KEY` selects the provider; without a key the
+assistant answers with built-in guidance and makes no outside calls. The workspace
+plan's `ai_assistant` feature still applies per school.
+
 ## API Docs
 
 ```text

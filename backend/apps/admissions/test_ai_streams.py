@@ -21,6 +21,7 @@ def fresh_semaphore():
     return mock.patch.multiple(streaming, _semaphore=None, _semaphore_size=None)
 
 
+@override_settings(AI_ASSISTANT_ENABLED=True)
 class AssistantStreamLimitTests(APITestCase):
     def setUp(self):
         cache.clear()
@@ -124,7 +125,7 @@ class Clock:
         return self.now
 
 
-@override_settings(AI_GATEWAY_API_KEY='test-key', AI_STREAM_MAX_SECONDS=25, AI_ASSISTANT_TIMEOUT_SECONDS=35)
+@override_settings(AI_ASSISTANT_ENABLED=True, AI_GATEWAY_API_KEY='test-key', AI_STREAM_MAX_SECONDS=25, AI_ASSISTANT_TIMEOUT_SECONDS=35)
 class AssistantStreamDeadlineTests(APITestCase):
     def setUp(self):
         cache.clear()
@@ -165,7 +166,7 @@ class AssistantStreamDeadlineTests(APITestCase):
             self.assertEqual(b''.join(response.streaming_content).decode(), 'Hello there')
 
 
-@override_settings(AI_GATEWAY_API_KEY='test-key')
+@override_settings(AI_ASSISTANT_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
 class AssistantSourceHeaderTests(APITestCase):
     """The client is told whether an answer really came from the AI gateway."""
 

@@ -92,7 +92,7 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
         setStatus('ready');
       } else {
         setMessages((current) => current.filter((message) => message.id !== assistantId));
-        setError(requestError?.status === 429 ? t("You have reached the assistant limit. Please try again later.") : t("The assistant could not respond. Check your connection and try again."));
+        setError(requestError?.status === 429 ? t("You have reached the assistant limit. Please try again later.") : requestError?.status === 503 ? t("The assistant is unavailable right now. Please try again later.") : t("The assistant could not respond. Check your connection and try again."));
         setStatus('error');
       }
     } finally {

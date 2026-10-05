@@ -236,6 +236,8 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 school_id=request.user.school_id,
             ).first()
         data['workspace'] = entitlements.workspace_summary(subscription)
+        # The frontend hides the assistant entirely when the platform switch is off.
+        data['assistant_enabled'] = settings.AI_ASSISTANT_ENABLED
         return Response(data)
 
     @action(

@@ -146,6 +146,7 @@ if (!api.includes("'/notifications/summary/'") || !api.includes('markAllNotifica
 if (!app.includes('function AssistantCenter(') || !styles.includes('.assistant-launcher') || !styles.includes('.assistant-drawer')) throw new Error('Corner AI assistant is missing.');
 if (!app.includes('Role-scoped context only') || !app.includes('History is kept only while this page is open.')) throw new Error('Assistant privacy and retention guidance is missing.');
 if (!api.includes("streamRequest('/assistant/chat/'") || !app.includes("['counselor', 'student'].includes(user.role)")) throw new Error('Role-limited streaming assistant connection is missing.');
+if (!app.includes('user.assistant_enabled &&')) throw new Error('The assistant must stay hidden while AI_ASSISTANT_ENABLED is off.');
 if (!app.includes('function SupportPage(') || !app.includes('function SupportTicketForm(') || !app.includes('function SupportResponseModal(')) throw new Error('Support ticket frontend workflow is missing.');
 if (!app.includes('has_unread_response') || !styles.includes('.nav-badge') || !styles.includes('.support-ticket-card')) throw new Error('In-page support response indicator is missing.');
 if (!app.includes("['supportTickets', 'support-tickets']") || !app.includes('isPlatformAdmin(user)')) throw new Error('Support ticket resource or admin queue is missing.');

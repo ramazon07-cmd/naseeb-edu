@@ -329,12 +329,12 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   const overlays = <>
     {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(query.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}</span><ChevronRight size={16} /></button>)}{query.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} />}</Modal>}
     <ScreenTimeTracker page={page} userId={user.id} />
-    {['counselor', 'student'].includes(user.role) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} />}
+    {user.assistant_enabled && ['counselor', 'student'].includes(user.role) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} />}
   </>;
   if (counselorShell) {
     const pageTitle = t(counselorPageLabel(page) || meta.label);
     return <div className="app-shell cx-shell role-counselor">
-      <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={() => setAssistantRequest((current) => current + 1)} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
+      <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={user.assistant_enabled ? () => setAssistantRequest((current) => current + 1) : null} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
         <main className={`cx-main${page === 'messages' ? ' cx-main-messages' : ''}`}>
           {banners}
           {!COUNSELOR_SELF_HEADED.has(page) && <CxHead title={pageTitle} subtitle={t(meta.description)} />}
@@ -564,7 +564,8 @@ export default function App() {
     if (!current.must_change_password) await loadInitial(current);
   }
   async function afterPasswordChanged(current) {
-    setUser(current);
+    // Keep the fields only /me/ reports (workspace, assistant_enabled).
+    setUser((previous) => ({ ...previous, ...current }));
     await loadInitial(current);
   }
   async function logout() {

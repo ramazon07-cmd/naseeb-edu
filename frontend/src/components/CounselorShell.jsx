@@ -65,7 +65,7 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
         <div className="cx-segmented">{LANGUAGE_OPTIONS.map((option) => <button type="button" key={option.value} className={language === option.value ? 'active' : ''} aria-pressed={language === option.value} onClick={() => changeLanguage(option.value)}>{option.short}</button>)}</div>
       </div>
       <button type="button" role="menuitem" aria-pressed={dark} onClick={toggleTheme}>{dark ? <Sun size={17} /> : <Moon size={17} />}{dark ? t('Light mode') : t('Dark mode')}</button>
-      <button type="button" role="menuitem" onClick={() => { setOpen(false); openAssistant(); }}><span className="cx-bird" aria-hidden="true" />{t('Naseeb AI assistant')}</button>
+      {openAssistant && <button type="button" role="menuitem" onClick={() => { setOpen(false); openAssistant(); }}><span className="cx-bird" aria-hidden="true" />{t('Naseeb AI assistant')}</button>}
       {openSupport && <button type="button" role="menuitem" onClick={() => { setOpen(false); openSupport(); }}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <i className="cx-count">{formatNumberLocale(supportBadge)}</i>}</button>}
       <div ref={attachActions} />
       <button type="button" role="menuitem" onClick={logout}><LogOut size={17} />{t('Logout')}</button>

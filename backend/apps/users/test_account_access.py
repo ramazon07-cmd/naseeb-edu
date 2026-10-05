@@ -284,6 +284,7 @@ class CacheOutageTests(APITestCase):
         bad = self.client.post('/api/auth/token/', {'username': 'outage-user', 'password': 'wrong'}, format='json')
         self.assertEqual(bad.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    @override_settings(AI_ASSISTANT_ENABLED=True)
     def test_authenticated_api_and_assistant_fail_open(self):
         self.client.force_authenticate(self.user)
         self.assertEqual(self.client.get('/api/users/accounts/me/').status_code, status.HTTP_200_OK)

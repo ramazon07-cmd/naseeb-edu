@@ -44,7 +44,9 @@ DOCUMENT_STORAGE_ROOT_VALUE = config('DOCUMENT_STORAGE_ROOT', default='').strip(
 
 # H8 assistant configuration. Provider credentials are backend-only secrets and
 # must never be mirrored into a VITE_* build variable.
-AI_ASSISTANT_ENABLED = config('AI_ASSISTANT_ENABLED', default=True, cast=bool)
+# Off unless set: the assistant sends students' (minors') data to an outside AI
+# gateway, and production use is waiting on legal sign-off (open item H8).
+AI_ASSISTANT_ENABLED = config('AI_ASSISTANT_ENABLED', default=False, cast=bool)
 AI_GATEWAY_API_KEY = config('AI_GATEWAY_API_KEY', default='').strip()
 AI_GATEWAY_URL = config(
     'AI_GATEWAY_URL',

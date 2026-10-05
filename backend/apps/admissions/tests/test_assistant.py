@@ -9,6 +9,7 @@ from apps.users.models import User
 from .base import RoleIsolationBase
 
 
+@override_settings(AI_ASSISTANT_ENABLED=True)
 class AssistantRoleIsolationTests(RoleIsolationBase):
     @override_settings(AI_GATEWAY_API_KEY='')
     def test_student_assistant_streams_read_only_fallback(self):
@@ -95,3 +96,19 @@ class AssistantCountsTests(RoleIsolationBase):
         self.assertEqual(context['assigned_student_count'], 1)
         self.assertEqual(context['students_at_risk_count'], stats['students_at_risk'])
         self.assertEqual(context['task_status_counts'], {})
+
+
+class AssistantSwitchTests(RoleIsolationBase):
+    @override_settings(AI_ASSISTANT_ENABLED=False, AI_GATEWAY_API_KEY='test-secret-that-must-not-be-called')
+    def test_disabled_assistant_refuses_chat_and_me_hides_it(self):
+        self.client.force_authenticate(self.student_a_user)
+        self.assertIs(self.client.get('/api/users/accounts/me/').data['assistant_enabled'], False)
+        response = self.client.post(
+            '/api/assistant/chat/', {'messages': [{'role': 'user', 'content': 'Hello'}]}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    @override_settings(AI_ASSISTANT_ENABLED=True)
+    def test_enabled_assistant_is_reported_by_me(self):
+        self.client.force_authenticate(self.student_a_user)
+        self.assertIs(self.client.get('/api/users/accounts/me/').data['assistant_enabled'], True)
