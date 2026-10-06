@@ -6528,13 +6528,6 @@
       "source": "https://www.qs-topuniversities.cn/sites/default/files/niigata-university_592560cf2aeae70239af4c46_small.jpg"
     },
     {
-      "name": "Ningbo University",
-      "country": "China",
-      "source": "https://www.nbu.edu.cn",
-      "file": "/universities/logos/official-56e81366292b.webp",
-      "asset_source": "https://www.nbu.edu.cn/sy_images25/logo.png"
-    },
-    {
       "name": "North-West University",
       "country": "South Africa",
       "file": "/universities/logos/qs-1221.webp",
@@ -6976,13 +6969,6 @@
       "country": "Indonesia",
       "file": "/universities/logos/qs-31111.webp",
       "source": "https://www.qs-topuniversities.cn/sites/default/files/universitas-sumatera-utara_592560cf2aeae70239af5ad1_small.jpg"
-    },
-    {
-      "name": "Universitat de Lleida (University of Lleida)",
-      "country": "Spain",
-      "source": "https://www.udl.cat/ca/en/",
-      "file": "/universities/logos/official-15ebb4684f29.webp",
-      "asset_source": "https://www.udl.cat/export/sites/universitat-lleida/.galleries/imagenes-estructura/logo-udl-cabecera.png_1747225888.png"
     },
     {
       "name": "Universitat Jaume I (CASTELLÓ)",
@@ -8140,20 +8126,6 @@
       "source": "https://www.qs-topuniversities.cn/sites/default/files/universidade-federal-fluminense-_592560cf2aeae70239af5147_small.jpg"
     },
     {
-      "name": "Universita' degli Studi del Molise",
-      "country": "Italy",
-      "source": "https://www.unimol.it/",
-      "file": "/universities/logos/official-2c3e13063bd0.webp",
-      "asset_source": "https://apistrapi.unimol.it/uploads/logo_Unimol_bianco_835f1ab2df.png"
-    },
-    {
-      "name": "Universita' degli Studi di Sassari",
-      "country": "Italy",
-      "source": "https://www.uniss.it/",
-      "file": "/universities/logos/official-69c4afd38e6b.webp",
-      "asset_source": "https://www.uniss.it/themes/custom/uniss_base/images/logouniss.svg"
-    },
-    {
       "name": "Universitas Muhammadiyah Yogyakarta (UMY)",
       "country": "Indonesia",
       "file": "/universities/logos/qs-34671.webp",
@@ -8253,13 +8225,6 @@
       "country": "United States",
       "file": "/universities/logos/qs-2251.webp",
       "source": "https://www.qs-topuniversities.cn/sites/default/files/university-of-arkansas-fayetteville-_592560cf2aeae70239af534e_small.jpg"
-    },
-    {
-      "name": "University of Cagliari",
-      "country": "Italy",
-      "source": "https://www.unica.it/",
-      "file": "/universities/logos/official-3e81af8bf44f.webp",
-      "asset_source": "https://www.unica.it/themes/custom/unica_base/images/Logo.svg"
     },
     {
       "name": "University of Dar es Salaam",
@@ -9019,13 +8984,6 @@
       "source": "https://www.qs-topuniversities.cn/sites/default/files/universit-de-limoges_592560cf2aeae70239af4f97_small.jpg"
     },
     {
-      "name": "Université de Rouen Normandie",
-      "country": "France",
-      "source": "https://www.univ-rouen.fr/",
-      "file": "/universities/logos/official-4214423141a4.webp",
-      "asset_source": "https://www.univ-rouen.fr/wp-content/uploads/2026/01/UnivRouen60_blanc.png"
-    },
-    {
       "name": "Universiti Kuala Lumpur (UniKL)",
       "country": "Malaysia",
       "file": "/universities/logos/qs-1980.webp",
@@ -9142,5 +9100,48 @@
       "source": "https://www.qs-topuniversities.cn/sites/default/files/zarqa-university-zu_592560e39988f300e2321376_small.jpg"
     }
   ],
-  "unavailable": []
+  "unavailable": [
+    {
+      "name": "Ningbo University",
+      "country": "China",
+      "source": "https://www.nbu.edu.cn",
+      "asset_source": "https://www.nbu.edu.cn/sy_images25/logo.png",
+      "reason": "The downloaded logo is a blank single-colour image (a white logo on a transparent background)."
+    },
+    {
+      "name": "Universitat de Lleida (University of Lleida)",
+      "country": "Spain",
+      "source": "https://www.udl.cat/ca/en/",
+      "asset_source": "https://www.udl.cat/export/sites/universitat-lleida/.galleries/imagenes-estructura/logo-udl-cabecera.png_1747225888.png",
+      "reason": "The downloaded logo is a blank single-colour image (a white logo on a transparent background)."
+    },
+    {
+      "name": "Universita' degli Studi del Molise",
+      "country": "Italy",
+      "source": "https://www.unimol.it/",
+      "asset_source": "https://apistrapi.unimol.it/uploads/logo_Unimol_bianco_835f1ab2df.png",
+      "reason": "The downloaded logo is a blank single-colour image (a white logo on a transparent background)."
+    },
+    {
+      "name": "Universita' degli Studi di Sassari",
+      "country": "Italy",
+      "source": "https://www.uniss.it/",
+      "asset_source": "https://www.uniss.it/themes/custom/uniss_base/images/logouniss.svg",
+      "reason": "The downloaded logo is a blank single-colour image (a white logo on a transparent background)."
+    },
+    {
+      "name": "University of Cagliari",
+      "country": "Italy",
+      "source": "https://www.unica.it/",
+      "asset_source": "https://www.unica.it/themes/custom/unica_base/images/Logo.svg",
+      "reason": "The downloaded logo is a blank single-colour image (a white logo on a transparent background)."
+    },
+    {
+      "name": "Université de Rouen Normandie",
+      "country": "France",
+      "source": "https://www.univ-rouen.fr/",
+      "asset_source": "https://www.univ-rouen.fr/wp-content/uploads/2026/01/UnivRouen60_blanc.png",
+      "reason": "The downloaded logo is a blank single-colour image (a white logo on a transparent background)."
+    }
+  ]
 }
