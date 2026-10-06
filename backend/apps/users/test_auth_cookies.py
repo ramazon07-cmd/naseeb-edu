@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import UntypedToken
 
-from apps.users.auth_test_utils import COOKIE_AUTH_HEADERS, post_refresh, refresh_cookie_value
+from testing.auth_cookies import COOKIE_AUTH_HEADERS, post_refresh, refresh_cookie_value
 from apps.admissions.models import School
 from apps.users.models import User
 
@@ -81,16 +81,42 @@ class RefreshCookieTests(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, origin)
         no_origin = self.client.post('/api/auth/token/refresh/', format='json', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
         self.assertEqual(no_origin.status_code, status.HTTP_403_FORBIDDEN)
-        evil_referer = self.client.post(
+        # A Referer is not a substitute for Origin, even a same-origin one.
+        referer_only = self.client.post(
             '/api/auth/token/refresh/', format='json', HTTP_X_REQUESTED_WITH='XMLHttpRequest',
-            HTTP_REFERER='https://evil.example/page',
+            HTTP_REFERER='http://testserver/dashboard',
         )
-        self.assertEqual(evil_referer.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(referer_only.status_code, status.HTTP_403_FORBIDDEN)
 
     @override_settings(CORS_ALLOWED_ORIGINS=['https://app.example.com'])
     def test_refresh_from_a_configured_frontend_origin_is_accepted(self):
         self.login()
         self.assertEqual(post_refresh(self.client, HTTP_ORIGIN='https://app.example.com').status_code, status.HTTP_200_OK)
+
+    @override_settings(CORS_ALLOWED_ORIGINS=[], CSRF_TRUSTED_ORIGINS=['https://*.naseeb.example'])
+    def test_wildcard_csrf_trusted_origins_are_honoured(self):
+        self.login()
+        self.assertEqual(post_refresh(self.client, HTTP_ORIGIN='https://app.naseeb.example').status_code, status.HTTP_200_OK)
+        self.assertEqual(post_refresh(self.client, HTTP_ORIGIN='https://naseeb.example.evil.com').status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(post_refresh(self.client, HTTP_ORIGIN='http://app.naseeb.example').status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(CORS_ALLOWED_ORIGINS=[], CORS_ALLOWED_ORIGIN_REGEXES=[r'^https://preview-\d+\.naseeb\.example$'])
+    def test_cors_origin_regexes_are_honoured(self):
+        self.login()
+        self.assertEqual(post_refresh(self.client, HTTP_ORIGIN='https://preview-42.naseeb.example').status_code, status.HTTP_200_OK)
+        self.assertEqual(post_refresh(self.client, HTTP_ORIGIN='https://preview-x.naseeb.example').status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_logout_is_never_throttled(self):
+        from apps.users.test_throttles import rates
+
+        token = refresh_cookie_value(self.login())
+        with rates(anon='1/hour', refresh_ip='1/hour'):
+            for _ in range(3):
+                self.client.post('/api/auth/logout/', **COOKIE_AUTH_HEADERS)
+            self.client.cookies[COOKIE] = token
+            response = self.client.post('/api/auth/logout/', **COOKIE_AUTH_HEADERS)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=UntypedToken(token)['jti']).exists())
 
     def test_refresh_without_a_cookie_is_401(self):
         response = post_refresh(self.client)

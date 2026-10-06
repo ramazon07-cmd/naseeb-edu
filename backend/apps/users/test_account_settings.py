@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.admissions.models import School, StudentProfile
-from apps.users.auth_test_utils import post_refresh, refresh_cookie_value
+from testing.auth_cookies import post_refresh, refresh_cookie_value
 from apps.users.models import CredentialAuditEvent, User, WorkspaceSubscription
 from apps.users.test_throttles import rates
 

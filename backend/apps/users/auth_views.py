@@ -175,7 +175,9 @@ class LogoutView(APIView):
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
-    throttle_classes = [RefreshIPThrottle]
+    # Not throttled: a 429 here would skip the blacklist and leave a working
+    # cookie on a shared computer. Without a valid cookie it costs no write.
+    throttle_classes = []
 
     def post(self, request):
         enforce_cookie_csrf(request)

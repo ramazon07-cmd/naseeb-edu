@@ -8,7 +8,7 @@ from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, APITestCase
 
-from apps.users.auth_test_utils import post_refresh, refresh_cookie_value
+from testing.auth_cookies import post_refresh, refresh_cookie_value
 from apps.users.cache_safety import cache_decrement, cache_get, count_hit
 from apps.users.models import User
 from apps.users.throttles import ScopedRateThrottle, UserRateThrottle, WindowRateThrottle, parse_rate

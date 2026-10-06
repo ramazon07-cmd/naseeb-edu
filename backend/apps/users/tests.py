@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.admissions.models import School, StudentProfile
-from .auth_test_utils import post_refresh, refresh_cookie_value
+from testing.auth_cookies import post_refresh, refresh_cookie_value
 from .credentials import issue_temporary_credential
 from .models import CredentialAuditEvent, TemporaryCredential
 
