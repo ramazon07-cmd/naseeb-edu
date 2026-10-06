@@ -1,5 +1,7 @@
 import { getLanguage, t } from './i18n'
-import { browserLock, createRefresher, createSessionStore, isSignOutSignal } from './authTokens'
+import {
+  AUTH_CHANNEL, browserLock, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
+} from './authTokens'
 import { UNTRACKED_ENDPOINTS, createMutationTracker } from './lib/reloadPlan'
 import { errorPayloadMessage } from './lib/apiErrors'
 import { firstListPath } from './lib/listPath.js'
@@ -31,10 +33,11 @@ const getToken = (key) => session.get(key)
 const saveTokens = (payload) => session.save(payload)
 const hasSession = () => session.hasSession()
 
-// The refresh and logout endpoints authenticate with the HttpOnly cookie, so
-// they require this header (a cross-site form cannot send it) and the cookie
-// must travel even when the API is on another origin of the same site.
-const COOKIE_AUTH = { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }
+// Fresh access tokens from other tabs (see createRefresher in authTokens.js).
+const authChannel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(AUTH_CHANNEL)
+authChannel?.addEventListener('message', (event) => {
+  if (event.data?.type === 'access') session.adopt(event.data.access)
+})
 
 // The in-memory access token, or a fresh one from the refresh cookie after a
 // reload (null when signed out).
@@ -195,9 +198,11 @@ const SESSION_ENDED_EVENT = 'naseeb:session-ended'
 // out (it removes the shared, non-secret session flag).
 // Without it, parts that fetch on their own (screen time, chat polling) keep
 // running on a dead session and show the raw 401.
+// The callback gets { fromOtherTab: true } when another tab signed out: that
+// tab already ended the server session.
 function onSessionEnded(callback) {
   const onStorage = (event) => {
-    if (isSignOutSignal(event)) callback()
+    if (isSignOutSignal(event)) callback({ fromOtherTab: true })
   }
   window.addEventListener(SESSION_ENDED_EVENT, callback)
   window.addEventListener('storage', onStorage)
@@ -207,14 +212,20 @@ function onSessionEnded(callback) {
   }
 }
 
+// The refresh and logout calls, authenticated by the HttpOnly cookie.
+const cookieAuth = createCookieAuth({ apiUrl: API_URL, request: fetchWithTimeout })
+
 export function clearTokens() {
   session.clear()
 }
 
-// Blacklists this browser's refresh token and clears its cookie. Best effort:
-// signing out offline still ends the session on this device.
-function endServerSession() {
-  return fetchWithTimeout(`${API_URL}/auth/logout/`, { method: 'POST', keepalive: true, ...COOKIE_AUTH }).catch(() => {})
+// Ends the session here and on the server (refresh token blacklisted, cookie
+// cleared, one retry). Resolves false when the server could not be reached;
+// the local session is gone either way. `server: false` when another tab
+// already signed out on the server.
+function logout({ server = true } = {}) {
+  clearTokens()
+  return server ? cookieAuth.logout() : Promise.resolve(true)
 }
 
 // keepDrafts: "Sign in again" — end the session but leave this user's
@@ -225,11 +236,11 @@ function signOut(userId, { keepDrafts = false } = {}) {
       try { entry.forget() } catch { /* best effort */ }
     }
   }
-  endServerSession()
-  clearTokens()
+  const ended = logout()
   if (!keepDrafts && userId != null) {
     try { removeUserDrafts(window.localStorage, userId) } catch { /* storage unavailable */ }
   }
+  return ended
 }
 
 async function parseResponse(response) {
@@ -263,10 +274,9 @@ const refreshAccessToken = createRefresher({
   },
   lock: browserLock('naseeb-token-refresh'),
   jitterMs: 300,
-  send: async () => {
-    const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, { method: 'POST', ...COOKIE_AUTH })
-    return { ok: response.ok, status: response.status, payload: await parseResponse(response) }
-  },
+  send: () => cookieAuth.refresh(),
+  share: (access) => authChannel?.postMessage({ type: 'access', access }),
+  warn: (message, payload) => console.warn(message, payload),
   expired: (status, payload) => new ApiError(t('Your session has expired. Sign in again.'), status, payload),
   failed: (status, payload) => new ApiError(errorMessage(payload), status, payload),
 })
@@ -395,6 +405,8 @@ export const api = {
   takeMutations: () => mutations.take(),
   hasSession,
   login: async (username, password) => {
+    // A sign-out still in flight would clear the cookie this sign-in sets.
+    await cookieAuth.settled()
     // credentials: the response sets the refresh cookie (cross-origin API too).
     const response = await fetchWithTimeout(`${API_URL}/auth/token/`, {
       method: 'POST',
@@ -407,7 +419,7 @@ export const api = {
     saveTokens(payload)
     return payload
   },
-  logout: clearTokens,
+  logout,
   onSessionEnded,
   signOut,
   syncBeforeSignOut,

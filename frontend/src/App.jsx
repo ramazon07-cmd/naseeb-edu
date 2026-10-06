@@ -460,7 +460,9 @@ export default function App() {
   const bootstrapAttempted = useRef(false);
   const [signOutPrompt, setSignOutPrompt] = useState(false);
   const signingOut = useRef(false);
-  const handleUnauthorized = useCallback(() => {api.logout();setUser(null);}, []);
+  // Also ends the server session (the cookie may still be valid, e.g. after a
+  // revoked access token), unless another tab already did.
+  const handleUnauthorized = useCallback((info) => {api.logout({ server: !info?.fromOtherTab });setUser(null);}, []);
   const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace } = useWorkspaceData(user, handleUnauthorized);
   useEffect(() => (user ? api.onSessionEnded(handleUnauthorized) : undefined), [user, handleUnauthorized]);
 
@@ -582,18 +584,20 @@ export default function App() {
       const screenTime = flushActiveScreenTime ? Promise.race([flushActiveScreenTime().catch(() => {}), new Promise((resolve) => window.setTimeout(resolve, 3000))]) : null;
       const [, essaysSynced] = await Promise.all([screenTime, api.syncBeforeSignOut(user?.id)]);
       if (!essaysSynced) {setSignOutPrompt(true);return;}
-      finishSignOut();
+      await finishSignOut();
     } finally {
       signingOut.current = false;
     }
   }
   // keepDrafts ("Sign in again"): end the session but keep this user's unsynced
   // Essay Lab drafts on the device, and go straight to the sign-in form.
-  function finishSignOut({ keepDrafts = false } = {}) {
+  // The server sign-out is awaited (it retries once and times out after a few
+  // seconds), so on a shared computer the cookie is gone before the form shows.
+  async function finishSignOut({ keepDrafts = false } = {}) {
     const signedOut = user?.id;
     setSignOutPrompt(false);
     resetWorkspace();
-    api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
+    const ended = api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);await ended;setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
   const loadResources = useCallback((keys) => ensureLoaded(user, keys), [ensureLoaded, user]);
 
