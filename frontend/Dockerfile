@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-ARG VITE_API_URL=http://127.0.0.1:8000/api
+ARG VITE_API_URL=/api
 ARG VITE_SHOW_DEMO_ACCOUNTS=false
 # Object-storage origin(s) the browser downloads private files from (CSP connect-src).
 ARG FILE_STORAGE_ORIGINS=
