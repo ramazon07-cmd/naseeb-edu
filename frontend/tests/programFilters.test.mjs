@@ -118,7 +118,14 @@ test('the yearly deadline text gives the next date it names', () => {
   // Several dates: the first one still ahead.
   assert.equal(next('ED: Dec 13, RD: Feb 12'), '2026-12-13');
   assert.equal(next('Early-15 Oct; Reg-Jan 07'), '2026-10-15');
-  assert.equal(next('March 28 - April 20'), '2027-03-28');
+  // A window is due when it closes, not when it opens.
+  assert.equal(next('March 28 - April 20'), '2027-04-20');
+  assert.equal(next('Nov 1 – Jan 15'), '2027-01-15');
+  assert.equal(next('1st March to 30th April'), '2027-04-30');
+  assert.equal(next('01.02 - 15.03'), '2027-03-15');
+  assert.equal(next('Applications open Oct 1 until December 5'), '2026-12-05');
+  // Separate rounds are not a window.
+  assert.equal(next('ED: Nov 1, RD: Jan 5'), '2026-11-01');
   // A bare month files the row at the end of that month, without a day.
   assert.deepEqual(usualDeadline('Typically in January', today), { date: '2027-01-31', exact: false, day: null, detail: true });
   // The text is shown as written only when it says more than the one date.

@@ -37,32 +37,48 @@ const DAY_AFTER = /^\s*(\d{1,2})(?:st|nd|rd|th)?(?!\d)/;
 const DAY_BEFORE = /(?:^|\D)(\d{1,2})(?:st|nd|rd|th)?[\s-]*$/;
 const DAY_DOT_MONTH = /(?:^|[^\d.])(\d{1,2})\.(\d{1,2})(?![\d.])/g;
 
+// Dates in text order, each with where it starts and ends in the text.
 function deadlineTextDays(source) {
   const found = [];
   for (const match of source.matchAll(MONTH_WORD)) {
-    const after = DAY_AFTER.exec(source.slice(match.index + match[0].length));
+    const monthEnd = match.index + match[0].length;
+    const after = DAY_AFTER.exec(source.slice(monthEnd));
     const before = after ? null : DAY_BEFORE.exec(source.slice(0, match.index));
     const day = Number((after || before)?.[1]) || null;
+    const start = before ? before.index + before[0].indexOf(before[1]) : match.index;
+    const end = after ? monthEnd + after[0].length : monthEnd;
     // A bare month counts only when spelled out ("Typically in January"); "may" is also a verb.
-    if (day || (match[1].length > 3 && match[1] !== 'may')) found.push({ month: MONTHS.indexOf(match[1].slice(0, 3)), day });
+    if (day || (match[1].length > 3 && match[1] !== 'may')) found.push({ month: MONTHS.indexOf(match[1].slice(0, 3)), day, start, end });
   }
-  for (const [, day, month] of source.matchAll(DAY_DOT_MONTH)) found.push({ month: Number(month) - 1, day: Number(day) });
-  return found.filter(({ month, day }) => month >= 0 && month < 12 && (day === null || (day >= 1 && day <= 31)));
+  for (const match of source.matchAll(DAY_DOT_MONTH)) {
+    const start = match.index + match[0].indexOf(`${match[1]}.`);
+    found.push({ month: Number(match[2]) - 1, day: Number(match[1]), start, end: match.index + match[0].length });
+  }
+  return found
+    .filter(({ month, day }) => month >= 0 && month < 12 && (day === null || (day >= 1 && day <= 31)))
+    .sort((a, b) => a.start - b.start);
 }
+
+// "March 28 - April 20" is a window: what is due is its closing date.
+const RANGE_SEPARATOR = /^\s*(?:-|–|—|to|until|till|through)\s*$/;
 
 const isoDay = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 // -> { date: 'YYYY-MM-DD', exact: false, day, detail } for the next deadline
-// the text names (day is null for "Typically in January"), or null when it
+// the text names, a range by its closing date (day is null for "Typically in January"), or null when it
 // names none. `detail`: the text says more than that one date (other rounds,
 // "first come first served"), so it is worth showing as written.
 export function usualDeadline(text, today) {
   const source = String(text || '').toLowerCase();
   const candidates = deadlineTextDays(source);
+  const closing = candidates.filter((candidate, index) => {
+    const next = candidates[index + 1];
+    return !(next && RANGE_SEPARATOR.test(source.slice(candidate.end, next.start)));
+  });
   const [year, month, day] = today.split('-').map(Number);
   const now = new Date(year, month - 1, day);
   let best = null;
-  for (const candidate of candidates) {
+  for (const candidate of closing) {
     for (const offset of [0, 1]) {
       // A bare month runs to its last day, so it sorts after that month's dated rows.
       const date = candidate.day ? new Date(year + offset, candidate.month, candidate.day) : new Date(year + offset, candidate.month + 1, 0);
