@@ -144,7 +144,7 @@ function TierPicker({ university, busy, onPick, onClose }) {
 }
 
 // The catalogue holds ~1,500 universities; the table grows by this many rows at a time.
-const ROWS_PER_STEP = 50;
+const ROWS_PER_STEP = 10;
 
 export function CollegeSearchPage({ data, query, reload, notify, setPage, universityId }) {
   const [localQuery, setLocalQuery] = useState(query || '');
