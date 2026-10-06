@@ -14,7 +14,7 @@ from .models import University
 MIT = {
     'name': 'Massachusetts Institute of Technology (MIT)', 'unitid': 166683, 'acceptance_rate': 4.55,
     'sat_min': 1520, 'sat_max': 1580, 'act_min': 34, 'act_max': 36, 'test_optional': False, 'cost_usd': 82730,
-    'tuition_usd': 62396, 'undergrad_enrollment': 4535, 'city': 'Cambridge, MA', 'website': 'https://web.mit.edu/',
+    'net_price_usd': 20111, 'tuition_usd': 62396, 'undergrad_enrollment': 4535, 'city': 'Cambridge, MA', 'website': 'https://web.mit.edu/',
     'campus_setting': 'urban',
 }
 
@@ -34,16 +34,23 @@ class LoadCollegeScorecardTests(TestCase):
         mit.refresh_from_db()
         self.assertEqual(
             (mit.acceptance_rate, mit.sat_min, mit.sat_max, mit.act_min, mit.net_price_usd, mit.tuition_usd, mit.undergrad_enrollment),
-            (Decimal('4.55'), 1520, 1580, 34, 82730, 62396, 4535),
+            (Decimal('4.55'), 1520, 1580, 34, 20111, 62396, 4535),
         )
         self.assertEqual((mit.city, mit.website, mit.campus_setting, mit.test_optional), ('Cambridge, MA', 'https://web.mit.edu/', 'urban', False))
 
     def test_curated_values_stay_and_only_blanks_are_filled(self):
         duke = University.objects.create(name='Duke University', country='USA', sat_min=1490, sat_max=1570, city='Durham, NC')
-        self.load({'name': 'Duke University', 'sat_min': 1500, 'sat_max': 1560, 'acceptance_rate': 5.1, 'cost_usd': 90000, 'city': 'Elsewhere, NC', 'test_optional': True})
+        self.load({'name': 'Duke University', 'sat_min': 1500, 'sat_max': 1560, 'acceptance_rate': 5.1, 'net_price_usd': 30000, 'city': 'Elsewhere, NC', 'test_optional': True})
         duke.refresh_from_db()
         self.assertEqual((duke.sat_min, duke.sat_max, duke.city), (1490, 1570, 'Durham, NC'))
-        self.assertEqual((duke.acceptance_rate, duke.net_price_usd, duke.test_optional), (Decimal('5.10'), 90000, True))
+        self.assertEqual((duke.acceptance_rate, duke.net_price_usd, duke.test_optional), (Decimal('5.10'), 30000, True))
+
+    def test_cost_of_attendance_is_not_written_as_the_net_price(self):
+        mit = University.objects.create(name='Massachusetts Institute of Technology', country='United States')
+        self.load({key: value for key, value in MIT.items() if key != 'net_price_usd'})
+        mit.refresh_from_db()
+        self.assertIsNone(mit.net_price_usd)
+        self.assertEqual(mit.tuition_usd, 62396)
 
     def test_running_again_changes_nothing(self):
         University.objects.create(name='Massachusetts Institute of Technology', country='United States')
@@ -64,5 +71,5 @@ class LoadCollegeScorecardTests(TestCase):
         self.assertNotIn('not in the catalogue', output.getvalue())
         # load_qs_rankings gave MIT its curated spelling; the Scorecard row still finds it.
         mit = University.objects.get(name='Massachusetts Institute of Technology')
-        self.assertEqual((mit.acceptance_rate, mit.net_price_usd), (Decimal('4.55'), 82730))
+        self.assertEqual((mit.acceptance_rate, mit.net_price_usd), (Decimal('4.55'), 20111))
         self.assertGreaterEqual(University.objects.filter(market=University.Market.US, acceptance_rate__isnull=False).count(), 180)

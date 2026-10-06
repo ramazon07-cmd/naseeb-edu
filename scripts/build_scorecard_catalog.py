@@ -7,9 +7,9 @@
 It reads the US universities of the QS snapshot, finds each one in the U.S.
 Department of Education's College Scorecard (public domain) and rewrites
 backend/apps/admissions/catalog_data/college_scorecard_2026.json, which
-`python manage.py load_college_scorecard` loads. The price is the full yearly
-cost of attendance (COSTT4_A): Scorecard's net price is for US federal-aid
-students, not for international ones.
+`python manage.py load_college_scorecard` loads. The net price is Scorecard's
+average net price (NPT4_PUB for public universities, NPT4_PRIV otherwise);
+the full yearly cost of attendance (COSTT4_A) is kept separately as cost_usd.
 """
 import csv
 import json
@@ -86,6 +86,8 @@ def details(row):
         # ADMCON7: 1 required, 2 recommended, 3 neither, 5 considered but not required.
         'test_optional': {'1': False, '2': True, '3': True, '5': True}.get(row['ADMCON7']),
         'cost_usd': number(row['COSTT4_A']),
+        # CONTROL: 1 public, 2 private nonprofit, 3 private for-profit.
+        'net_price_usd': number(row['NPT4_PUB'] if row['CONTROL'] == '1' else row['NPT4_PRIV']),
         'tuition_usd': number(row['TUITIONFEE_OUT']),
         'undergrad_enrollment': number(row['UGDS']),
         'city': f"{row['CITY']}, {row['STABBR']}" if row['CITY'] else None,

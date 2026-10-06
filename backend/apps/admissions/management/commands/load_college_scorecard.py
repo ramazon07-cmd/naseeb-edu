@@ -5,8 +5,8 @@
 Rows come from catalog_data/college_scorecard_2026.json (rebuilt by
 scripts/build_scorecard_catalog.py) and are matched by their QS name, so run
 load_qs_rankings first. Only empty fields are filled: curated values stay, and
-running it again changes nothing. The price is the full yearly cost of
-attendance, what a student without aid pays.
+running it again changes nothing. The net price is Scorecard's average net
+price; the full cost of attendance (cost_usd) is not a net price and is not loaded.
 """
 import json
 from pathlib import Path
@@ -23,7 +23,7 @@ DATA_FILE = Path(__file__).resolve().parents[2] / 'catalog_data' / 'college_scor
 # Snapshot field -> University field.
 FIELDS = {
     'acceptance_rate': 'acceptance_rate', 'sat_min': 'sat_min', 'sat_max': 'sat_max', 'act_min': 'act_min',
-    'act_max': 'act_max', 'cost_usd': 'net_price_usd', 'tuition_usd': 'tuition_usd',
+    'act_max': 'act_max', 'net_price_usd': 'net_price_usd', 'tuition_usd': 'tuition_usd',
     'undergrad_enrollment': 'undergrad_enrollment', 'city': 'city', 'website': 'website',
     'campus_setting': 'campus_setting',
 }
