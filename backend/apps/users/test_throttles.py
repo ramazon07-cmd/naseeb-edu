@@ -8,6 +8,7 @@ from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, APITestCase
 
+from apps.users.auth_test_utils import post_refresh, refresh_cookie_value
 from apps.users.cache_safety import cache_decrement, cache_get, count_hit
 from apps.users.models import User
 from apps.users.throttles import ScopedRateThrottle, UserRateThrottle, WindowRateThrottle, parse_rate
@@ -269,22 +270,15 @@ class SharedAddressAuthThrottleTests(APITestCase):
         self.assertEqual(codes, [200, 200, 200, 429])
 
     def test_refresh_is_not_limited_per_address(self):
-        tokens = [self.login(user.username).data['refresh'] for user in self.users]
+        tokens = [refresh_cookie_value(self.login(user.username)) for user in self.users]
         with rates(anon='1/hour'):
-            codes = {
-                self.client.post('/api/auth/token/refresh/', {'refresh': token}, format='json',
-                                 REMOTE_ADDR=self.SCHOOL_IP).status_code
-                for token in tokens
-            }
+            codes = {post_refresh(self.client, token, REMOTE_ADDR=self.SCHOOL_IP).status_code for token in tokens}
         self.assertEqual(codes, {status.HTTP_200_OK})
 
     def test_refresh_is_limited_per_token(self):
-        token = self.login('pupil0').data['refresh']
+        token = refresh_cookie_value(self.login('pupil0'))
         with rates(refresh='2/hour'):
-            codes = [
-                self.client.post('/api/auth/token/refresh/', {'refresh': token}, format='json').status_code
-                for _ in range(3)
-            ]
+            codes = [post_refresh(self.client, token).status_code for _ in range(3)]
         # The second use fails because the token was rotated; the third is throttled.
         self.assertEqual(codes, [200, 401, 429])
 

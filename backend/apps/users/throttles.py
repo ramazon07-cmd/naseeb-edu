@@ -24,6 +24,7 @@ from django.core.exceptions import ImproperlyConfigured
 from rest_framework.settings import api_settings
 from rest_framework.throttling import BaseThrottle
 
+from .auth_cookies import refresh_cookie
 from .cache_safety import cache_decrement, count_hit
 from .security import client_ip, is_known_login_device
 
@@ -209,5 +210,5 @@ class RefreshTokenThrottle(WindowRateThrottle):
     scope = 'refresh'
 
     def get_cache_key(self, request, view):
-        token = _body_field(request, 'refresh')
+        token = refresh_cookie(request)
         return hashed(token) if token else None

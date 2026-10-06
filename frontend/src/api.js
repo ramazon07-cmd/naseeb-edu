@@ -1,5 +1,5 @@
 import { getLanguage, t } from './i18n'
-import { TOKEN_KEYS, browserLock, createRefresher, createTokenStore } from './authTokens'
+import { browserLock, createRefresher, createSessionStore, isSignOutSignal } from './authTokens'
 import { UNTRACKED_ENDPOINTS, createMutationTracker } from './lib/reloadPlan'
 import { errorPayloadMessage } from './lib/apiErrors'
 import { firstListPath } from './lib/listPath.js'
@@ -8,11 +8,13 @@ import { protectedFileUrl, readProtectedFile } from './lib/protectedFile.js'
 import { sendWithProgress } from './lib/fileUpload.js'
 import { hasUserDrafts, removeUserDrafts } from './essayLab/drafts.js'
 
-const DEFAULT_API_URL = 'http://127.0.0.1:8000/api'
+// Same origin by default: the Vite dev server proxies /api to Django, so the
+// refresh cookie is first-party in development too.
+const DEFAULT_API_URL = '/api'
 const API_URL = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '')
 const REQUEST_TIMEOUT_MS = 15_000
 
-const tokens = createTokenStore(() => window.localStorage)
+const session = createSessionStore(() => window.localStorage)
 // Successful writes are recorded so the app can reload only what changed.
 const mutations = createMutationTracker(UNTRACKED_ENDPOINTS)
 
@@ -25,8 +27,20 @@ export class ApiError extends Error {
   }
 }
 
-const getToken = (key) => tokens.get(key)
-const saveTokens = (payload) => tokens.save(payload)
+const getToken = (key) => session.get(key)
+const saveTokens = (payload) => session.save(payload)
+const hasSession = () => session.hasSession()
+
+// The refresh and logout endpoints authenticate with the HttpOnly cookie, so
+// they require this header (a cross-site form cannot send it) and the cookie
+// must travel even when the API is on another origin of the same site.
+const COOKIE_AUTH = { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }
+
+// The in-memory access token, or a fresh one from the refresh cookie after a
+// reload (null when signed out).
+async function accessToken() {
+  return getToken('access') || (hasSession() ? refreshAccessToken() : null)
+}
 
 async function fetchWithTimeout(url, options = {}) {
   const { timeoutMs = REQUEST_TIMEOUT_MS, localize = true, ...fetchOptions } = options
@@ -97,10 +111,10 @@ const fetchStoredFile = (url) => fetchWithTimeout(url, {
 
 async function protectedFileRequest(path, { download = false, query } = {}, retry = true) {
   const headers = new Headers()
-  const access = getToken('access')
+  const access = await accessToken()
   if (access) headers.set('Authorization', `Bearer ${access}`)
   const response = await fetchWithTimeout(protectedFileUrl(API_URL, path, download, query), { headers, timeoutMs: 120_000 })
-  if (response.status === 401 && retry && getToken('refresh')) {
+  if (response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)
     return protectedFileRequest(path, { download, query }, false)
   }
@@ -177,13 +191,13 @@ async function saveOpenEditors(timeoutMs) {
 const SESSION_ENDED_EVENT = 'naseeb:session-ended'
 
 // Fires when this tab is left without a session: a request came back 401 with
-// no tokens to refresh, the refresh token was rejected, or another tab signed
-// out (it clears the shared tokens).
+// no session to refresh, the refresh cookie was rejected, or another tab signed
+// out (it removes the shared, non-secret session flag).
 // Without it, parts that fetch on their own (screen time, chat polling) keep
 // running on a dead session and show the raw 401.
 function onSessionEnded(callback) {
   const onStorage = (event) => {
-    if ((event.key === TOKEN_KEYS.access || event.key === null) && event.newValue === null) callback()
+    if (isSignOutSignal(event)) callback()
   }
   window.addEventListener(SESSION_ENDED_EVENT, callback)
   window.addEventListener('storage', onStorage)
@@ -194,7 +208,13 @@ function onSessionEnded(callback) {
 }
 
 export function clearTokens() {
-  tokens.clear()
+  session.clear()
+}
+
+// Blacklists this browser's refresh token and clears its cookie. Best effort:
+// signing out offline still ends the session on this device.
+function endServerSession() {
+  return fetchWithTimeout(`${API_URL}/auth/logout/`, { method: 'POST', keepalive: true, ...COOKIE_AUTH }).catch(() => {})
 }
 
 // keepDrafts: "Sign in again" — end the session but leave this user's
@@ -205,6 +225,7 @@ function signOut(userId, { keepDrafts = false } = {}) {
       try { entry.forget() } catch { /* best effort */ }
     }
   }
+  endServerSession()
   clearTokens()
   if (!keepDrafts && userId != null) {
     try { removeUserDrafts(window.localStorage, userId) } catch { /* storage unavailable */ }
@@ -234,20 +255,16 @@ function errorMessage(payload) {
 // (rotating, blacklisted-after-use) refresh token and then wipe the new pair.
 const refreshAccessToken = createRefresher({
   store: {
-    ...tokens,
+    ...session,
     clear() {
-      tokens.clear()
+      session.clear()
       window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
     },
   },
   lock: browserLock('naseeb-token-refresh'),
   jitterMs: 300,
-  send: async (refresh) => {
-    const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh }),
-    })
+  send: async () => {
+    const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, { method: 'POST', ...COOKIE_AUTH })
     return { ok: response.ok, status: response.status, payload: await parseResponse(response) }
   },
   expired: (status, payload) => new ApiError(t('Your session has expired. Sign in again.'), status, payload),
@@ -263,15 +280,15 @@ export async function request(path, options = {}, retry = true, unwrapPagination
   if (etag) headers.set('If-None-Match', etag)
   const isFormData = fetchOptions.body instanceof FormData
   if (!isFormData && fetchOptions.body !== undefined) headers.set('Content-Type', 'application/json')
-  const access = auth ? getToken('access') : null
+  const access = auth ? await accessToken() : null
   if (access) headers.set('Authorization', `Bearer ${access}`)
 
   const response = await fetchWithRetry(`${API_URL}${path}`, { ...fetchOptions, headers, retries })
-  if (auth && response.status === 401 && retry && getToken('refresh')) {
+  if (auth && response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)
     return request(path, options, false, unwrapPagination)
   }
-  if (auth && response.status === 401 && !getToken('access') && !getToken('refresh')) window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
+  if (auth && response.status === 401 && !hasSession()) window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
   if (etag !== undefined && response.status === 304) return { notModified: true }
   const payload = await parseResponse(response)
   if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
@@ -287,7 +304,7 @@ const UPLOAD_TIMEOUT_MS = 10 * 60_000
 // aborted upload rejects with an AbortError.
 async function uploadRequest(method, path, body, { onProgress, signal } = {}, retry = true) {
   const headers = { 'Accept-Language': getLanguage() }
-  const access = getToken('access')
+  const access = await accessToken()
   if (access) headers.Authorization = `Bearer ${access}`
   let response
   try {
@@ -307,7 +324,7 @@ async function uploadRequest(method, path, body, { onProgress, signal } = {}, re
     if (typeof navigator !== 'undefined' && !navigator.onLine) throw new ApiError(t('You appear to be offline. Reconnect and retry.'), 0, null)
     throw new ApiError(t('Unable to connect to the server. Check your connection and retry.'), 0, null)
   }
-  if (response.status === 401 && retry && getToken('refresh')) {
+  if (response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)
     onProgress?.(0)
     return uploadRequest(method, path, body, { onProgress, signal }, false)
@@ -323,7 +340,7 @@ async function uploadRequest(method, path, body, { onProgress, signal } = {}, re
 
 async function streamRequest(path, payload, signal, retry = true) {
   const headers = new Headers({ 'Content-Type': 'application/json' })
-  const access = getToken('access')
+  const access = await accessToken()
   if (access) headers.set('Authorization', `Bearer ${access}`)
   const response = await fetchWithTimeout(`${API_URL}${path}`, {
     method: 'POST',
@@ -331,7 +348,7 @@ async function streamRequest(path, payload, signal, retry = true) {
     body: JSON.stringify(payload),
     signal,
   })
-  if (response.status === 401 && retry && getToken('refresh')) {
+  if (response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)
     return streamRequest(path, payload, signal, false)
   }
@@ -376,10 +393,12 @@ const listPage = (resource, query, signal) => request(`/${resource}/${query}`, {
 export const api = {
   baseUrl: API_URL,
   takeMutations: () => mutations.take(),
-  hasSession: () => Boolean(getToken('access') || getToken('refresh')),
+  hasSession,
   login: async (username, password) => {
+    // credentials: the response sets the refresh cookie (cross-origin API too).
     const response = await fetchWithTimeout(`${API_URL}/auth/token/`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     })
@@ -395,6 +414,7 @@ export const api = {
   changePassword: async (newPassword, confirmPassword) => {
     const payload = await request('/users/accounts/change-password/', {
       method: 'POST',
+      credentials: 'include',
       body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
     })
     saveTokens(payload)
@@ -406,10 +426,11 @@ export const api = {
   }),
   me: () => request('/users/accounts/me/'),
   // Account settings. A password change ends the other sessions and hands this
-  // one a new token pair, stored here so the user stays signed in.
+  // one a new access token (kept here) and refresh cookie, so it stays signed in.
   changeOwnPassword: async (currentPassword, newPassword, confirmPassword) => {
     const payload = await request('/users/accounts/me/password/', {
       method: 'POST',
+      credentials: 'include',
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword }),
     })
     saveTokens(payload)

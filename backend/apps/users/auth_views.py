@@ -1,12 +1,21 @@
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.db import OperationalError, ProgrammingError
+from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, Throttled
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from apps.users.throttles import (
     LoginAccountCeilingThrottle, LoginAccountThrottle, LoginIPThrottle, RefreshIPThrottle, RefreshTokenThrottle,
 )
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from .auth_cookies import (
+    clear_refresh_cookie, enforce_cookie_csrf, enforce_login_origin, move_refresh_to_cookie, refresh_cookie,
+)
 from .credentials import mark_temporary_credential_used
 from .localization import localized_message
 from .security import (
@@ -122,6 +131,10 @@ class DemoAwareTokenObtainPairView(TokenObtainPairView):
     # one school IP must not share a single allowance.
     throttle_classes = [LoginIPThrottle, LoginAccountThrottle, LoginAccountCeilingThrottle]
 
+    def post(self, request, *args, **kwargs):
+        enforce_login_origin(request)
+        return move_refresh_to_cookie(super().post(request, *args, **kwargs))
+
 
 class SafeTokenRefreshSerializer(TokenRefreshSerializer):
     """Return a normal auth failure when a refresh token's user was deleted."""
@@ -140,3 +153,38 @@ class SafeTokenRefreshView(TokenRefreshView):
     serializer_class = SafeTokenRefreshSerializer
     # Not the per-IP anonymous rate: every tab behind a shared IP refreshes.
     throttle_classes = [RefreshIPThrottle, RefreshTokenThrottle]
+
+    def post(self, request, *args, **kwargs):
+        # The token comes only from the HttpOnly cookie; a body field is ignored.
+        enforce_cookie_csrf(request)
+        token = refresh_cookie(request)
+        if not token:
+            raise InvalidToken({'detail': 'No refresh token cookie.', 'code': 'token_not_valid'})
+        serializer = self.get_serializer(data={'refresh': token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as exc:
+            raise InvalidToken(exc.args[0]) from exc
+        return move_refresh_to_cookie(Response(serializer.validated_data, status=status.HTTP_200_OK))
+
+
+class LogoutView(APIView):
+    """Blacklist this browser's refresh token and clear its cookie.
+
+    Needs no access token: signing out must work after it expired."""
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = [RefreshIPThrottle]
+
+    def post(self, request):
+        enforce_cookie_csrf(request)
+        token = refresh_cookie(request)
+        if token:
+            try:
+                RefreshToken(token).blacklist()
+            except TokenError:
+                pass  # expired, malformed or already blacklisted: nothing left to revoke
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        clear_refresh_cookie(response)
+        return response

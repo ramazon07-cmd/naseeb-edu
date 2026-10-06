@@ -114,7 +114,7 @@ npm ci
 npm run dev
 ```
 
-The frontend uses `VITE_API_URL` and defaults to `http://127.0.0.1:8000/api`.
+The frontend uses `VITE_API_URL` and defaults to `/api`, which the Vite dev server proxies to `http://127.0.0.1:8000` (same origin, so the HttpOnly refresh cookie works). See `frontend/README.md` for how sessions work.
 
 ## Docker start
 

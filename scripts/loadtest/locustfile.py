@@ -179,7 +179,7 @@ class Tab(HttpUser):
     def api(self, method, path, name=None, **kwargs):
         name = name or re.sub(r'/\d+/', '/:id/', path.split('?')[0])
         response = self.client.request(method, f'{API}/{path}', name=f'{API}/{name}', **kwargs)
-        if response.status_code == 401 and self.refresh_token:
+        if response.status_code == 401 and self.signed_in:
             self.renew()
             response = self.client.request(method, f'{API}/{path}', name=f'{API}/{name}', **kwargs)
         return response
@@ -211,11 +211,13 @@ class Tab(HttpUser):
         return items
 
     def renew(self):
-        response = self.client.post(f'{API}/auth/token/refresh/', json={'refresh': self.refresh_token},
+        # The refresh token is the HttpOnly cookie in this session's jar; the
+        # endpoint wants the SPA's CSRF header and an allowed Origin.
+        response = self.client.post(f'{API}/auth/token/refresh/',
+                                    headers={'X-Requested-With': 'XMLHttpRequest', 'Origin': self.host.rstrip('/')},
                                     name=f'{API}/auth/token/refresh/')
         if response.status_code == 200:
             data = response.json()
-            self.refresh_token = data.get('refresh', self.refresh_token)
             self.client.headers['Authorization'] = f"Bearer {data['access']}"
         self.token_at = clock()
 
@@ -227,7 +229,7 @@ class Tab(HttpUser):
         if response.status_code != 200:
             raise StopUser()
         tokens = response.json()
-        self.refresh_token = tokens['refresh']
+        self.signed_in = True
         self.client.headers['Authorization'] = f"Bearer {tokens['access']}"
         self.token_at = clock()
         self.me = self.json(self.get('users/accounts/me/'), {}) or {}
@@ -247,7 +249,7 @@ class Tab(HttpUser):
         self.load_workspace({endpoint, 'dashboard', 'students'})
 
     def on_start(self):
-        self.refresh_token = None
+        self.signed_in = False
         self.timers = {}
         self.page = None
         self.active_seconds = 0

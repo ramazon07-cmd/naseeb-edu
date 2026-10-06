@@ -395,13 +395,25 @@ LOGIN_KNOWN_DEVICE_SECONDS = config('LOGIN_KNOWN_DEVICE_SECONDS', default=30 * 8
 ADMIN_ALLOWED_IPS = [ip for ip in config('ADMIN_ALLOWED_IPS', default='', cast=Csv()) if ip]
 
 SIMPLE_JWT = {
-    # Short-lived access tokens limit the damage of a token stolen from
-    # localStorage; the SPA renews them through the rotating refresh token.
+    # The SPA holds the short-lived access token in memory only and renews it
+    # through the rotating refresh token, which lives in an HttpOnly cookie.
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=config('JWT_ACCESS_TOKEN_MINUTES', default=30, cast=int)),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=config('JWT_REFRESH_TOKEN_DAYS', default=14, cast=int)),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
+
+# The refresh token cookie (apps/users/auth_cookies.py). Scoped to /api/auth/
+# (sign-in, refresh, logout) so no other request carries it. Strict works
+# because the frontend and the API share one site (app.example.com +
+# api.example.com, or one origin behind a proxy); a frontend on another site
+# cannot use it at all. The refresh and logout endpoints only accept requests
+# from CORS_ALLOWED_ORIGINS / CSRF_TRUSTED_ORIGINS or the API's own origin.
+AUTH_REFRESH_COOKIE_NAME = config('AUTH_REFRESH_COOKIE_NAME', default='naseeb_refresh')
+AUTH_REFRESH_COOKIE_PATH = config('AUTH_REFRESH_COOKIE_PATH', default='/api/auth/')
+AUTH_REFRESH_COOKIE_DOMAIN = config('AUTH_REFRESH_COOKIE_DOMAIN', default='').strip() or None
+AUTH_REFRESH_COOKIE_SAMESITE = config('AUTH_REFRESH_COOKIE_SAMESITE', default='Strict')
+AUTH_REFRESH_COOKIE_SECURE = config('AUTH_REFRESH_COOKIE_SECURE', default=not DEBUG, cast=bool)
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Naseeb Edu API',

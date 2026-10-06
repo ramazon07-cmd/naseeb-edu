@@ -82,11 +82,11 @@
           document.documentElement.style.colorScheme = 'light'
         }
         // The hero is only preloaded for visitors who will see the landing
-        // page: not for a stored session (the workspace opens) or #/login.
+        // page: not for a signed-in browser (the workspace opens) or #/login.
+        // 'naseeb-session' is a non-secret flag; the tokens are not in storage.
         let signedIn = false
         try {
-          signedIn = ['naseeb-access-token', 'naseeb-refresh-token', 'admitflow-access-token', 'admitflow-refresh-token']
-            .some((key) => localStorage.getItem(key))
+          signedIn = localStorage.getItem('naseeb-session') === '1'
         } catch { /* storage disabled: treat as a visitor */ }
         const hero = document.querySelector('link[data-theme-hero]')
         if (hero && (signedIn || location.hash === '#/login')) hero.remove()
