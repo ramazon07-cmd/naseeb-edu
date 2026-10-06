@@ -84,7 +84,7 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
             verified_at=date(2026, 9, 12),
         )
         self.client.force_authenticate(self.student_a_user)
-        result = self.results(self.client.get('/api/universities/'))[0]
+        result = self.client.get(f'/api/universities/{university.id}/').data
         self.assertEqual(result['acceptance_rate'], '42.50')
         self.assertEqual(result['net_price_usd'], 18000)
         self.assertTrue(result['offers_international_aid'])

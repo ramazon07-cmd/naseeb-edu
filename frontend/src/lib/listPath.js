@@ -2,8 +2,8 @@
 // page the API allows (backend core/pagination.py) instead of 25 rows per
 // request. The `next` links the API returns keep the page size.
 export const LIST_PAGE_SIZE = 100;
-// The university catalogue (~1,500 rows) allows larger pages (CatalogPagination).
-const PAGE_SIZES = { universities: 1000 };
+// The university catalogue (~1,500 slim rows) allows larger pages (CatalogPagination).
+export const PAGE_SIZES = { universities: 500 };
 
 // query: '' or '?key=value&...'
 export function firstListPath(resource, query = '') {

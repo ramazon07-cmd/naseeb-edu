@@ -11,7 +11,7 @@ from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
 from .management.commands.load_qs_rankings import DATA_FILE
-from .models import University
+from .models import University, UniversityProgram
 from .tests.base import RoleIsolationBase
 
 
@@ -226,7 +226,27 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
     def test_university_catalogue_serves_large_pages(self):
         University.objects.bulk_create(University(name=f'Catalogue University {index}', country='Germany') for index in range(150))
         self.client.force_authenticate(self.student_a_user)
-        response = self.client.get('/api/universities/?page_size=1000')
+        response = self.client.get('/api/universities/?page_size=500')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 150)
         self.assertIsNone(response.data['next'])
+
+    def test_catalogue_list_is_slim_and_the_detail_is_full(self):
+        qs_data = {
+            'year': 2027, 'previous_rank': '3', 'source_url': 'https://www.topuniversities.com/', 'region': 'Europe', 'status': 'Public',
+            'overall_score': 99.2, 'indicators': {'AR': {'score': 99.6, 'rank': '7'}, 'FSR': {'score': 98.9, 'rank': '44'}},
+        }
+        university = University.objects.create(name='Imperial College London', country='United Kingdom', qs_data=qs_data, notes='Long notes')
+        UniversityProgram.objects.create(university=university, name='BSc Computing', canonical_major='Computer Science')
+        self.client.force_authenticate(self.student_a_user)
+        row = self.client.get('/api/universities/').data['results'][0]
+        self.assertNotIn('programs', row)
+        self.assertNotIn('notes', row)
+        # Only the QS values the College Search table shows and filters by.
+        self.assertEqual(row['qs_data'], {'region': 'Europe', 'status': 'Public', 'overall_score': 99.2, 'indicators': {'AR': {'score': 99.6}}})
+        for field in ('name', 'country', 'ranking', 'sat_min', 'net_price_usd', 'application_deadline', 'offers_merit_aid'):
+            self.assertIn(field, row)
+        detail = self.client.get(f'/api/universities/{university.pk}/').data
+        self.assertEqual(detail['qs_data'], qs_data)
+        self.assertEqual([program['canonical_major'] for program in detail['programs']], ['Computer Science'])
+        self.assertEqual(detail['notes'], 'Long notes')

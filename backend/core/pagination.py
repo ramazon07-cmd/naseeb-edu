@@ -193,6 +193,7 @@ class ListPagination(PageNumberPagination):
 
 class CatalogPagination(ListPagination):
     """The shared university catalogue is read whole by every student who opens
-    College Search; larger pages turn its ~1,500 rows into two cached requests."""
+    College Search; its slim list rows (UniversityListSerializer) come in a few
+    cached pages of up to 500 rather than 100."""
 
-    max_page_size = 1000
+    max_page_size = 500
