@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.admissions.models import School, StudentProfile
+from apps.users.auth_test_utils import post_refresh, refresh_cookie_value
 from apps.users.models import CredentialAuditEvent, User, WorkspaceSubscription
 from apps.users.test_throttles import rates
 
@@ -32,7 +33,7 @@ class AccountSettingsBase(APITestCase):
     def login(self, username='settings-student', password=PASSWORD):
         response = self.client.post('/api/auth/token/', {'username': username, 'password': password}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        return response.data
+        return {**response.data, 'refresh': refresh_cookie_value(response)}
 
     def bearer(self, access):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
@@ -53,7 +54,8 @@ class OwnPasswordChangeTests(AccountSettingsBase):
         response = self.change()
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
+        self.assertNotIn('refresh', response.data)
+        self.assertTrue(refresh_cookie_value(response))
         self.assertEqual(response.data['user']['id'], self.student.id)
         self.student.refresh_from_db()
         self.assertTrue(self.student.check_password(NEW_PASSWORD))
@@ -71,7 +73,7 @@ class OwnPasswordChangeTests(AccountSettingsBase):
             self.assertEqual(self.client.get('/api/users/accounts/me/').status_code, status.HTTP_401_UNAUTHORIZED)
         # A refresh of an old session hands out a token that is already revoked.
         self.client.credentials()
-        refreshed = self.client.post('/api/auth/token/refresh/', {'refresh': other_device['refresh']}, format='json')
+        refreshed = post_refresh(self.client, other_device['refresh'])
         if refreshed.status_code == status.HTTP_200_OK:
             self.bearer(refreshed.data['access'])
             self.assertEqual(self.client.get('/api/users/accounts/me/').status_code, status.HTTP_401_UNAUTHORIZED)

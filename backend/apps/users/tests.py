@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.admissions.models import School, StudentProfile
+from .auth_test_utils import post_refresh, refresh_cookie_value
 from .credentials import issue_temporary_credential
 from .models import CredentialAuditEvent, TemporaryCredential
 
@@ -120,7 +121,7 @@ class TemporaryCredentialLifecycleTests(APITestCase):
     def test_password_change_revokes_old_tokens_and_unlocks_account(self):
         login = self.login()
         old_access = login.data['access']
-        old_refresh = login.data['refresh']
+        old_refresh = refresh_cookie_value(login)
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {old_access}')
         changed = self.client.post(
             '/api/users/accounts/change-password/',
@@ -141,7 +142,7 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {old_access}')
         self.assertEqual(self.client.get('/api/users/accounts/me/').status_code, status.HTTP_401_UNAUTHORIZED)
         self.client.credentials()
-        refreshed_old_session = self.client.post('/api/auth/token/refresh/', {'refresh': old_refresh}, format='json')
+        refreshed_old_session = post_refresh(self.client, old_refresh)
         self.assertEqual(refreshed_old_session.status_code, status.HTTP_200_OK)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refreshed_old_session.data['access']}")
         self.assertEqual(self.client.get('/api/users/accounts/me/').status_code, status.HTTP_401_UNAUTHORIZED)
@@ -150,18 +151,18 @@ class TemporaryCredentialLifecycleTests(APITestCase):
 
     def test_refresh_token_rotation_blacklists_the_used_token(self):
         login = self.login()
-        refresh = login.data['refresh']
-        first = self.client.post('/api/auth/token/refresh/', {'refresh': refresh}, format='json')
+        refresh = refresh_cookie_value(login)
+        first = post_refresh(self.client, refresh)
         self.assertEqual(first.status_code, status.HTTP_200_OK)
-        replay = self.client.post('/api/auth/token/refresh/', {'refresh': refresh}, format='json')
+        replay = post_refresh(self.client, refresh)
         self.assertEqual(replay.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_refresh_token_for_deleted_user_returns_401_not_500(self):
         login = self.login()
-        refresh = login.data['refresh']
+        refresh = refresh_cookie_value(login)
         self.student.delete()
 
-        response = self.client.post('/api/auth/token/refresh/', {'refresh': refresh}, format='json')
+        response = post_refresh(self.client, refresh)
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data['code'], 'no_active_account')

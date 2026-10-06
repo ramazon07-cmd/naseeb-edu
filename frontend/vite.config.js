@@ -1,6 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// /api goes to Django from the same origin as the app, so the HttpOnly refresh
+// cookie (SameSite=Strict, Path=/api/auth/) is first-party in development. The
+// Host header is kept: Django then sees the app's own origin.
+const apiProxy = { '/api': { target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:8000' } }
+
 export default defineConfig({
   plugins: [react()],
   build: {
@@ -19,8 +24,10 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    proxy: apiProxy,
   },
   preview: {
     port: 4173,
+    proxy: apiProxy,
   },
 })

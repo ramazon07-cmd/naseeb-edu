@@ -1,76 +1,91 @@
-// Token storage and refresh coordination. Kept free of Vite/DOM globals so the
+// Session state and refresh coordination. Kept free of Vite/DOM globals so the
 // logic can be unit-tested with plain Node.
+//
+// The refresh token is an HttpOnly cookie the backend sets on sign-in and
+// refresh: script never sees it. The access token lives only in memory, so a
+// reload or a new tab gets a fresh one from the cookie. localStorage only holds
+// SESSION_HINT_KEY, a non-secret "this browser is signed in" flag: it tells a
+// fresh page whether a silent refresh is worth trying, and its removal is the
+// cross-tab sign-out signal (a storage event in every other tab).
 
-export const TOKEN_KEYS = {
-  access: 'naseeb-access-token',
-  refresh: 'naseeb-refresh-token',
-}
+export const SESSION_HINT_KEY = 'naseeb-session'
 
-// Keys used before the AdmitFlow -> Naseeb rename. Tokens stored under them
-// are moved once, so nobody is signed out by the rename.
-export const LEGACY_TOKEN_KEYS = {
-  access: 'admitflow-access-token',
-  refresh: 'admitflow-refresh-token',
-}
+// Where tokens were stored before they moved to the cookie (and before the
+// AdmitFlow -> Naseeb rename). Removed on first load; those users sign in once.
+export const STALE_TOKEN_KEYS = [
+  'naseeb-access-token',
+  'naseeb-refresh-token',
+  'admitflow-access-token',
+  'admitflow-refresh-token',
+]
 
-export function migrateLegacyTokens(storage, keys = TOKEN_KEYS, legacy = LEGACY_TOKEN_KEYS) {
-  for (const name of Object.keys(keys)) {
-    const old = storage.getItem(legacy[name])
-    if (old === null) continue
-    if (storage.getItem(keys[name]) === null) storage.setItem(keys[name], old)
-    storage.removeItem(legacy[name])
-  }
+export function dropStoredTokens(storage) {
+  for (const key of STALE_TOKEN_KEYS) storage.removeItem(key)
 }
 
 // `storage` may be a Storage or a function returning one (resolved lazily,
-// because touching window.localStorage throws in some privacy modes).
-export function createTokenStore(storage, keys = TOKEN_KEYS) {
+// because touching window.localStorage throws in some privacy modes; the
+// session then simply does not survive a reload).
+export function createSessionStore(storage) {
+  let access = null
   let migrated = false
   const resolve = () => {
-    const target = typeof storage === 'function' ? storage() : storage
-    if (!migrated && keys === TOKEN_KEYS) {
-      migrated = true
-      migrateLegacyTokens(target)
+    try {
+      const target = typeof storage === 'function' ? storage() : storage
+      if (!migrated) {
+        migrated = true
+        dropStoredTokens(target)
+      }
+      return target
+    } catch {
+      return null
     }
-    return target
+  }
+  const hinted = () => {
+    try { return resolve()?.getItem(SESSION_HINT_KEY) === '1' } catch { return false }
   }
   return {
     get(key) {
-      return resolve().getItem(keys[key])
+      return key === 'access' ? access : null
     },
     save(tokens) {
-      const target = resolve()
-      if (tokens?.access) target.setItem(keys.access, tokens.access)
-      if (tokens?.refresh) target.setItem(keys.refresh, tokens.refresh)
+      if (!tokens?.access) return
+      access = tokens.access
+      try { resolve()?.setItem(SESSION_HINT_KEY, '1') } catch { /* storage full or blocked */ }
     },
     clear() {
-      const target = resolve()
-      target.removeItem(keys.access)
-      target.removeItem(keys.refresh)
+      access = null
+      try { resolve()?.removeItem(SESSION_HINT_KEY) } catch { /* storage blocked */ }
+    },
+    // An access token in memory, or a cookie session to restore from.
+    hasSession() {
+      return Boolean(access) || hinted()
     },
   }
+}
+
+// A storage event meaning another tab signed out (or storage was cleared).
+export function isSignOutSignal(event) {
+  return (event.key === SESSION_HINT_KEY || event.key === null) && event.newValue === null
 }
 
 /**
  * Returns a `refresh(sentAccess)` function that shares one in-flight refresh
  * between every caller. With rotating, blacklisted refresh tokens a second
- * parallel refresh would send an already-used token and fail, so:
- *   - concurrent callers await the same promise;
+ * parallel refresh would send an already-used cookie and fail, so:
+ *   - concurrent callers in this tab await the same promise;
  *   - a caller whose request carried an access token that has since been
- *     replaced simply reuses the new one;
- *   - a failed refresh only clears storage when the stored refresh token is
- *     still the one that was rejected (another tab may have rotated it).
+ *     replaced simply reuses the new one.
  *
- * Across tabs (which share the stored tokens) the single flight is the
- * `lock(fn)` option, e.g. the Web Locks API: a tab that gets the lock after
- * another tab refreshed finds a new access token and reuses it. Without a lock
- * each tab first waits a random 0..`jitterMs`, then checks again, so tabs that
- * hit 401 together rarely spend the same refresh token.
+ * Tabs share the cookie but not the access token, so across tabs the single
+ * flight is the `lock(fn)` option, e.g. the Web Locks API: a tab that gets the
+ * lock after another tab refreshed sends the rotated cookie. Without a lock
+ * each tab first waits a random 0..`jitterMs`.
  *
- * `send(refreshToken)` must resolve to `{ ok, status, payload }`.
- * `expired(status, payload)` builds the error thrown when the session is over;
- * `failed(status, payload)` the one for any other (e.g. 5xx) refresh failure,
- * which keeps the tokens so a later retry can still succeed.
+ * `send()` must resolve to `{ ok, status, payload }` (the cookie goes along).
+ * `expired(status, payload)` builds the error thrown when the session is over
+ * (400/401: the store is cleared); `failed(status, payload)` the one for any
+ * other refresh failure (5xx, offline), which keeps the session for a retry.
  */
 export function createRefresher({
   store, send, expired, failed = expired, lock = null, jitterMs = 0, random = Math.random,
@@ -79,17 +94,10 @@ export function createRefresher({
   let inflight = null
 
   async function run() {
-    const sent = store.get('refresh')
-    if (!sent) throw expired(401, null)
-    const { ok, status, payload } = await send(sent)
+    const { ok, status, payload } = await send()
     if (ok && payload?.access) {
       store.save(payload)
       return payload.access
-    }
-    const current = store.get('refresh')
-    if (current && current !== sent) {
-      // Someone else rotated the pair while we were waiting; use theirs.
-      return store.get('access')
     }
     if (status === 400 || status === 401) {
       store.clear()

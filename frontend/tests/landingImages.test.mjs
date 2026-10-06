@@ -56,8 +56,9 @@ test('the hero is preloaded for system-dark and storage-disabled visitors', () =
 });
 
 test('signed-in users and the login route skip the hero preload', () => {
-  assert.equal(boot({ saved: 'light', tokens: { 'naseeb-refresh-token': 'x' } }).preloaded, false);
-  assert.equal(boot({ saved: 'light', tokens: { 'admitflow-access-token': 'x' } }).preloaded, false);
+  assert.equal(boot({ saved: 'light', tokens: { 'naseeb-session': '1' } }).preloaded, false);
+  // Tokens left in storage by the old frontend are dropped on load, not a session.
+  assert.notEqual(boot({ saved: 'light', tokens: { 'naseeb-refresh-token': 'x' } }).preloaded, false);
   assert.equal(boot({ saved: 'dark', hash: '#/login' }).preloaded, false);
 });
 
