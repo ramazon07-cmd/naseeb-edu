@@ -83,10 +83,10 @@
         }
         // The hero is only preloaded for visitors who will see the landing
         // page: not for a signed-in browser (the workspace opens) or #/login.
-        // 'naseeb-session' is a non-secret flag; the tokens are not in storage.
+        // 'naseeb-session' is a non-secret refresh counter; tokens are not in storage.
         let signedIn = false
         try {
-          signedIn = localStorage.getItem('naseeb-session') === '1'
+          signedIn = localStorage.getItem('naseeb-session') !== null
         } catch { /* storage disabled: treat as a visitor */ }
         const hero = document.querySelector('link[data-theme-hero]')
         if (hero && (signedIn || location.hash === '#/login')) hero.remove()
