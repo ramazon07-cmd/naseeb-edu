@@ -3,20 +3,11 @@
 import { formatDateLocale, formatNumberLocale, formatPercentLocale, parseDateValue, t, tp, tx } from '../i18n.js';
 import { money } from './format.js';
 import { label } from './labels.js';
-import { COUNTRY_ALIASES } from './profileSections.js';
+import { countryKey, countryName } from './countries.js';
 import { matchesQuery } from './searchIndex.js';
 
-// The country a university is filtered and counted under: one name per market
-// ('USA' and 'United States' are one country), otherwise the catalogue's spelling.
-const MARKET_COUNTRIES = { us: 'United States', canada: 'Canada', china: 'China', hong_kong: 'Hong Kong' };
-
-export const universityCountry = (university) => MARKET_COUNTRIES[university?.market] || String(university?.country || '').trim();
-
-// Target countries are onboarding codes ('US', 'UK'); the catalogue spells them out.
-function countryKey(value) {
-  const name = String(value || '').trim();
-  return (COUNTRY_ALIASES[name] || name).toLowerCase();
-}
+// The country a university is filtered and counted under: 'USA' and 'United States' are one country.
+export const universityCountry = (university) => countryName(university?.country);
 
 export function universityFit(university, student) {
   if (!student) return { score: 0, label: 'Profile needed' };

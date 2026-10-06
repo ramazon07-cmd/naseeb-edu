@@ -131,6 +131,13 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
             ('Canada', University.Market.CANADA),
             ('China', University.Market.CHINA),
             ('Hong Kong', University.Market.HONG_KONG),
+            # Every spelling countries.country_key knows maps to the same market.
+            ('USA', University.Market.US),
+            ('United States of America', University.Market.US),
+            ('Hong Kong SAR, China', University.Market.HONG_KONG),
+            ('China (Mainland)', University.Market.CHINA),
+            ('Mainland China', University.Market.CHINA),
+            ('Singapore', ''),
         ]
         for index, (country, expected_market) in enumerate(cases):
             university = University.objects.create(name=f'Market University {index}', country=country)

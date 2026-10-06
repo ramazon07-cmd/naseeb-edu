@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from core.storage import PrivateDocumentStorage
 
+from .countries import country_key
+
 
 def student_evidence_upload_path(instance, filename):
     """Keep student evidence private, grouped, and collision-free."""
@@ -431,14 +433,8 @@ class University(TimeStampedModel):
 
     @classmethod
     def market_for_country(cls, country):
-        country = (country or '').strip().lower()
-        aliases = {
-            cls.Market.US: {'usa', 'united states', 'united states of america'},
-            cls.Market.CANADA: {'canada'},
-            cls.Market.CHINA: {'china', 'mainland china'},
-            cls.Market.HONG_KONG: {'hong kong', 'hong kong sar'},
-        }
-        return next((market for market, countries in aliases.items() if country in countries), '')
+        markets = {'us': cls.Market.US, 'canada': cls.Market.CANADA, 'china': cls.Market.CHINA, 'hong kong': cls.Market.HONG_KONG}
+        return markets.get(country_key(country), '')
 
     def save(self, *args, **kwargs):
         inferred = self.market_for_country(self.country)
