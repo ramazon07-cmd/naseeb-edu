@@ -75,3 +75,16 @@ test('client routes fall back to the app shell and never collide with static fil
     assert.ok(!publicEntries.has(route.split('/')[1]), `${route} shares a name with public/`);
   }
 });
+
+test('docker-compose serves the API from the app origin; the production image proxies nothing', () => {
+  const conf = renderNginxConf(template, html, '/api');
+  assert.match(conf, /include \/etc\/nginx\/snippets\/api-proxy\*\.conf;/, 'optional glob include');
+  const proxy = readFileSync(new URL('nginx-api-proxy.compose.conf', root), 'utf8');
+  // ^~ so the static-file regex location never takes an /api/...json request.
+  assert.match(proxy, /location \^~ \/api\/ \{/);
+  assert.match(proxy, /proxy_pass http:\/\/backend:8000;/);
+  assert.match(proxy, /proxy_set_header Host \$http_host;/);
+  const compose = readFileSync(new URL('../docker-compose.yml', root), 'utf8');
+  assert.match(compose, /VITE_API_URL: \/api/);
+  assert.match(compose, /nginx-api-proxy\.compose\.conf:\/etc\/nginx\/snippets\/api-proxy\.conf/);
+});

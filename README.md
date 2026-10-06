@@ -116,13 +116,15 @@ npm run dev
 
 The frontend uses `VITE_API_URL` and defaults to `/api`, which the Vite dev server proxies to `http://127.0.0.1:8000` (same origin, so the HttpOnly refresh cookie works). See `frontend/README.md` for how sessions work.
 
+Keep `VITE_API_URL=/api` in `frontend/.env`. An absolute `http://127.0.0.1:8000/api` makes the API another site when the app is opened on `localhost` (or vice versa), and the browser then drops the `SameSite=Strict` refresh cookie: you are signed out on every reload.
+
 ## Docker start
 
 ```bash
 docker compose up --build
 ```
 
-This starts PostgreSQL, Django/Gunicorn and the Nginx-served React frontend at `http://127.0.0.1:3000`.
+This starts PostgreSQL, Django/Gunicorn and the Nginx-served React frontend at `http://127.0.0.1:3000`. Nginx also proxies `/api` to the backend (`frontend/nginx-api-proxy.compose.conf`), so the app and the API share one origin.
 
 ## Tests
 

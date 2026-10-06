@@ -42,10 +42,14 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://127.0.0.1:8000/api
+        # Same origin as the app: nginx proxies /api to the backend, so the
+        # SameSite=Strict refresh cookie works on localhost and 127.0.0.1 alike.
+        VITE_API_URL: /api
         VITE_SHOW_DEMO_ACCOUNTS: "true"
     ports:
       - "3000:80"
+    volumes:
+      - ./frontend/nginx-api-proxy.compose.conf:/etc/nginx/snippets/api-proxy.conf:ro
     depends_on:
       - backend
 
