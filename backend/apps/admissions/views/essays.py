@@ -3,25 +3,15 @@ from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import serializers, viewsets
-from rest_framework.exceptions import APIException, NotFound
+from rest_framework.exceptions import NotFound
 from ..models import Essay, EssayRevision, EssayTab
 from ..serializers import EssaySerializer
+from ..serializers.common import changed_fields
+from ..essay_lab.collab_views import CollabError
 from ..essay_lab.doc import count_words, make_preview
 from ..essay_lab.tabs import tab_from_text
 from ..scoping import owns_essays_only, scope_essays, shared_essay_lookups
 from .common import ScopedQuerysetMixin, StudentRecordListMixin
-
-
-class EssayChanged(APIException):
-    status_code = 409
-    default_detail = 'This essay changed since you opened it. Reload it to see the latest version, then make your edit again.'
-    default_code = 'essay_changed'
-
-
-class EssayPreconditionRequired(APIException):
-    status_code = 428
-    default_detail = 'Send the essay\'s updated_at from when you opened it, so newer changes are not overwritten.'
-    default_code = 'precondition_required'
 
 
 class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -89,28 +79,33 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
             if should_version:
                 self._create_revision(essay)
 
-    # Staff's own fields: writing only these can't overwrite the student's work.
-    REVIEW_FIELDS = {'status', 'counselor_comment'}
-
     def _check_unchanged(self, essay, values):
         """Optimistic concurrency: a form built from an older copy must not overwrite newer work.
 
-        The client echoes the ``updated_at`` it loaded; a mismatch means the
-        essay changed since (an Essay Lab autosave, a decision, another edit)
-        and nothing is written. Staff must send it to touch the student's own
-        fields (text, title, prompt...).
+        A write that changes the essay's own fields (text, title, prompt...)
+        must echo the ``updated_at`` it loaded, from any role (428 without it);
+        a mismatch means the essay changed since (an Essay Lab autosave, a
+        decision, another edit) and nothing is written (409). Review-only
+        writes (status, comment) and values equal to the current ones need no
+        precondition.
         """
+        if not changed_fields(essay, values) - set(EssaySerializer.REVIEW_FIELDS):
+            return
         loaded = self.request.data.get('updated_at')
         if loaded in (None, ''):
-            if owns_essays_only(self.request.user) or set(values) <= self.REVIEW_FIELDS:
-                return
-            raise EssayPreconditionRequired()
+            raise CollabError(
+                'Reload the essay before changing it, so newer changes are not overwritten.',
+                'precondition_required', 428,
+            )
         try:
             loaded_at = serializers.DateTimeField().to_internal_value(loaded)
         except serializers.ValidationError as exc:
             raise serializers.ValidationError({'updated_at': exc.detail})
         if loaded_at != essay.updated_at:
-            raise EssayChanged()
+            raise CollabError(
+                'This essay changed since you opened it. Reload it to see the latest version, then make your edit again.',
+                'essay_changed', 409,
+            )
 
     @staticmethod
     def _replace_text(essay, content):

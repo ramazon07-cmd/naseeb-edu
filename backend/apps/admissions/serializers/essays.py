@@ -1,7 +1,9 @@
 """Admissions API serializers — essays."""
 from rest_framework import serializers
 from ..models import Essay, EssayRevision
-from .common import GoogleDocsModelSerializer, StudentRecordSerializerMixin, google_docs_preview_url
+from .common import (
+    GoogleDocsModelSerializer, StudentRecordSerializerMixin, google_docs_preview_url, require_student_for_content,
+)
 
 
 class EssayRevisionSerializer(serializers.ModelSerializer):
@@ -49,8 +51,11 @@ class EssaySerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
             raise serializers.ValidationError('Only a counselor can approve essays.')
         return value
 
+    REVIEW_FIELDS = ('status', 'counselor_comment')
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        require_student_for_content(self, attrs, self.REVIEW_FIELDS)
         # An essay can only point at an application of the same student.
         student = attrs.get('student') or getattr(self.instance, 'student', None)
         application = attrs['application'] if 'application' in attrs else getattr(self.instance, 'application', None)

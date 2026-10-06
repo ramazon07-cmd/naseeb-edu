@@ -53,7 +53,8 @@ class CollabError(exceptions.APIException):
     def __init__(self, detail, code, status_code=None):
         if status_code:
             self.status_code = status_code
-        super().__init__(detail, code)
+        # The body carries the code too, so a client can key its message on it.
+        super().__init__({'detail': detail, 'code': code}, code)
 
 
 def _doc_error(exc):

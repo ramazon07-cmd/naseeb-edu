@@ -7,8 +7,7 @@ import { Plus, Eye, CheckCircle2, Pencil, Trash2, Flag, ShieldCheck } from 'luci
 import { GoogleDocsActions, EssayDetailModal, TaskSubmissionModal, GoogleDocsRecordModal, AttachmentPreviewModal } from '../components/documents';
 import { AttachmentRow, FileField, UploadError, evidenceAttachment, recommendationAttachment, useFileUpload } from '../components/files';
 import { toFormData } from '../lib/fileUpload';
-import { essaySaveError } from '../lib/essayConflict';
-import { canDeleteStudentRecord } from '../lib/recordDeletes';
+import { canDeleteStudentRecord, changedPayload, editableFields, recordErrorMessage } from '../lib/studentAuthored';
 import { studentName, dateText, dateTimeText, joinParts } from '../lib/format';
 import { label, ownStudent } from '../lib/labels';
 import { Record } from '../components/records';
@@ -159,7 +158,7 @@ export function ResourceSection({ title, resource, data, user, query, reload, no
   const filtered = list.items;
   const staffControlled = resource === 'tasks';
   const allowCreate = canCreate && (staffControlled ? isTaskManager(user) || user.role === 'student' : isCounselor(user) || user.role === 'student');
-  const allowEdit = staffControlled ? isTaskManager(user) || user.role === 'student' : allowCreate;
+  const allowEdit = staffControlled ? isTaskManager(user) || user.role === 'student' : allowCreate && editableFields(user, resource, RESOURCE_FIELDS[resource] || []).length > 0;
 
   async function approve(item) {
     try {
@@ -171,7 +170,7 @@ export function ResourceSection({ title, resource, data, user, query, reload, no
 
   async function remove(item) {
     if (!window.confirm(t("Delete this record?"))) return;
-    try {await api.remove(resource, item.id);notify(t("Record deleted."));reload();} catch (err) {notify(err.message, 'error');}
+    try {await api.remove(resource, item.id);notify(t("Record deleted."));reload();} catch (err) {notify(recordErrorMessage(err), 'error');}
   }
   return <><Panel title={title} action={<div className="panel-actions">{allowCreate && !onAdd && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}</div>}><div className="record-list">{filtered.map((item) => {
           const lockedAfterApproval = item.status === 'approved';
@@ -234,17 +233,18 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
   ['title', 'description', 'due_date', 'priority'].includes(name) :
   item.is_self_assigned || ['status', 'student_response', 'submission_url'].includes(name)
   ) :
-  allFields;
+  item ? editableFields(user, resource, allFields) : allFields;
   async function submit(event) {
     event.preventDefault();if (busy) return;setSaving(true);const values = new FormData(event.currentTarget);
-    const payload = {};
+    let payload = {};
     for (const [name,, type] of fields) {
       const raw = values.get(name);
       const nullable = ['date', 'number', 'university', 'application'].includes(type);
       payload[name] = type === 'checkbox' ? raw === 'on' : raw === '' && nullable ? null : raw;
     }
-    if (!item) payload.student = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
-    // The server refuses the save (409) if the essay changed after this copy was loaded.
+    if (item) payload = changedPayload(payload, item);else
+    payload.student = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
+    // The server refuses a text change (409) if the essay changed after this copy was loaded.
     if (item && resource === 'essays') payload.updated_at = item.updated_at;
     if (recordFile && (file || removeFile)) {
       setSaving(false);
@@ -258,7 +258,7 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
       if (item) await api.update(resource, item.id, payload);else
       await api.create(resource, payload);
       notify(item ? t("Record updated.") : t("Record created."));onSaved();
-    } catch (err) {notify(essaySaveError(resource, err), 'error');} finally {setSaving(false);}
+    } catch (err) {notify(recordErrorMessage(err), 'error');} finally {setSaving(false);}
   }
   function close() {upload.cancel();onClose();}
   const selfTask = resource === 'tasks' && user.role === 'student';

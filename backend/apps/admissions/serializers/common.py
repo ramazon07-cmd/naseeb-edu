@@ -9,10 +9,38 @@ import re
 import unicodedata
 import zipfile
 import codecs
+from django.db.models.fields.files import FieldFile
+from apps.users.models import User
 from apps.users.uploads import verify_image
 from core.storage import delete_file_on_commit
+from ..essay_lab.collab_views import CollabError
 from ..models import StudentProfile
 from ..scoping import scope_students
+
+STUDENT_AUTHORED_MESSAGE = 'Only the student can change their own work. Send it back with a note instead.'
+
+
+def changed_fields(instance, values):
+    """The submitted fields whose value differs from ``instance`` (a value equal to the current one is no change)."""
+    changed = set()
+    for key, value in values.items():
+        current = getattr(instance, key, None)
+        if isinstance(current, FieldFile):
+            # Any upload replaces the file; null only changes something when there is a file to clear.
+            if value or current:
+                changed.add(key)
+        elif value != current:
+            changed.add(key)
+    return changed
+
+
+def require_student_for_content(serializer, values, review_fields):
+    """Staff may change only review fields of a student's own work; its content and files stay the student's."""
+    request = serializer.context.get('request')
+    if serializer.instance is None or not request or request.user.role == User.Role.STUDENT:
+        return
+    if changed_fields(serializer.instance, values) - set(review_fields):
+        raise CollabError(STUDENT_AUTHORED_MESSAGE, 'student_authored', 403)
 
 
 def google_docs_document_id(value):
@@ -197,8 +225,11 @@ class VerifiedStudentRecordMixin(StudentRecordSerializerMixin):
             raise serializers.ValidationError('Only a counselor can write review comments.')
         return value
 
+    REVIEW_FIELDS = ('verified', 'counselor_comment')
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        require_student_for_content(self, attrs, self.REVIEW_FIELDS)
         request = self.context.get('request')
         instance = self.instance
         if request and not request.user.is_counselor_like and instance is not None:

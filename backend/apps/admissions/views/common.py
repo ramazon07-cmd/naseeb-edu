@@ -18,6 +18,7 @@ from ..scoping import scope_students
 from ..services import NOTE_LIMIT, record_approval_note, record_send_back
 from ..models import ActivityLog
 from ..serializers.common import INLINE_FILE_EXTENSIONS
+from ..essay_lab.collab_views import CollabError
 
 
 # Media type of the ``?mode=url`` answer, so a client can tell a link apart
@@ -126,8 +127,7 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
             # Only the student permanently deletes their own work; staff send it back with a note.
             student = getattr(obj, 'student', None)
             if not (request.user.role == User.Role.STUDENT and student and student.user_id == request.user.id):
-                self.message = STUDENT_AUTHORED_DELETE_MESSAGE
-                return False
+                raise CollabError(STUDENT_AUTHORED_DELETE_MESSAGE, 'student_authored_delete', 403)
             return True
         if request.user.is_counselor_like:
             return True

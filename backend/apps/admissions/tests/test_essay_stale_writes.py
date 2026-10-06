@@ -49,61 +49,64 @@ class StaleEssayWriteTests(RoleIsolationBase):
         payload.update(changes)
         return payload
 
-    def test_stale_counselor_form_gets_409_and_keeps_the_students_text_and_formatting(self):
-        loaded = self.counselor_loads_form()
-        newer = self.student_saves_newer_text()
+    def student_loads_form(self):
+        self.client.force_authenticate(self.student_a_user)
+        return self.client.get(f'/api/essays/{self.essay.id}/').data
 
-        self.client.force_authenticate(self.counselor)
-        response = self.client.patch(
-            f'/api/essays/{self.essay.id}/', self.form_payload(loaded, counselor_comment='Tighten the opening.'),
-            format='json',
-        )
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.data)
+    def assert_newer_text_kept(self, newer):
         self.essay.refresh_from_db()
         self.assertEqual(self.essay.content, newer)
-        self.assertEqual(self.essay.counselor_comment, '')
-        doc = self.tab().doc
-        self.assertIsNotNone(doc)
-        self.assertEqual(doc['content'][0]['content'][0]['marks'], [{'type': 'bold'}])
-
-    def test_counselor_write_without_a_precondition_is_refused(self):
-        loaded = self.counselor_loads_form()
-        payload = self.form_payload(loaded, content='Counselor rewrite.')
-        payload.pop('updated_at')
-        response = self.client.patch(f'/api/essays/{self.essay.id}/', payload, format='json')
-        self.assertEqual(response.status_code, status.HTTP_428_PRECONDITION_REQUIRED, response.data)
-        self.essay.refresh_from_db()
-        self.assertEqual(self.essay.content, OLD_TEXT)
-
-    def test_review_only_write_needs_no_precondition_and_keeps_the_text(self):
-        self.counselor_loads_form()
-        newer = self.student_saves_newer_text()
-        self.client.force_authenticate(self.counselor)
-        response = self.client.patch(
-            f'/api/essays/{self.essay.id}/', {'counselor_comment': 'Nice.', 'status': 'needs_revision'}, format='json',
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.essay.refresh_from_db()
-        self.assertEqual((self.essay.content, self.essay.counselor_comment), (newer, 'Nice.'))
-
-    def test_counselor_form_from_the_current_copy_saves(self):
-        self.student_saves_newer_text()
-        loaded = self.counselor_loads_form()
-        response = self.client.patch(
-            f'/api/essays/{self.essay.id}/', self.form_payload(loaded, counselor_comment='Good.'), format='json',
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.essay.refresh_from_db()
-        self.assertEqual(self.essay.counselor_comment, 'Good.')
         self.assertEqual(self.tab().doc['content'][0]['content'][0]['marks'], [{'type': 'bold'}])
 
-    def test_student_stale_legacy_form_also_gets_409(self):
-        self.client.force_authenticate(self.student_a_user)
-        loaded = self.client.get(f'/api/essays/{self.essay.id}/').data
+    def test_stale_text_write_gets_409_and_keeps_the_newer_text_and_formatting(self):
+        loaded = self.student_loads_form()
         newer = self.student_saves_newer_text()
         response = self.client.patch(
             f'/api/essays/{self.essay.id}/', {'content': OLD_TEXT, 'updated_at': loaded['updated_at']}, format='json',
         )
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.data)
+        self.assertEqual((response.status_code, response.data['code']), (status.HTTP_409_CONFLICT, 'essay_changed'))
+        self.assert_newer_text_kept(newer)
+
+    def test_text_write_without_a_precondition_is_refused_for_the_student_too(self):
+        newer = self.student_saves_newer_text()
+        response = self.client.patch(f'/api/essays/{self.essay.id}/', {'content': 'Old cached copy.'}, format='json')
+        self.assertEqual(
+            (response.status_code, response.data['code']), (status.HTTP_428_PRECONDITION_REQUIRED, 'precondition_required'),
+        )
+        self.assert_newer_text_kept(newer)
+
+    def test_student_text_write_from_the_current_copy_saves(self):
+        self.student_saves_newer_text()
+        loaded = self.student_loads_form()
+        response = self.client.patch(
+            f'/api/essays/{self.essay.id}/', {'content': 'Fresh edit.', 'updated_at': loaded['updated_at']}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.essay.refresh_from_db()
-        self.assertEqual(self.essay.content, newer)
+        self.assertEqual(self.essay.content, 'Fresh edit.')
+
+    def test_counselor_review_on_a_stale_copy_saves_and_keeps_the_text(self):
+        loaded = self.counselor_loads_form()
+        newer = self.student_saves_newer_text()
+        self.client.force_authenticate(self.counselor)
+        for payload in (
+            {'counselor_comment': 'Nice.', 'status': 'needs_revision'},
+            # A full form whose student fields equal the current ones: those are no change.
+            self.form_payload({**loaded, 'content': newer}, counselor_comment='Tighten the opening.'),
+        ):
+            response = self.client.patch(f'/api/essays/{self.essay.id}/', payload, format='json')
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assert_newer_text_kept(newer)
+        self.assertEqual(self.essay.counselor_comment, 'Tighten the opening.')
+
+    def test_counselor_cannot_change_the_students_text(self):
+        newer = self.student_saves_newer_text()
+        loaded = self.counselor_loads_form()
+        for changes in ({'content': 'Counselor rewrite.'}, {'title': 'Renamed'}, {'prompt': 'Other prompt'}):
+            response = self.client.patch(
+                f'/api/essays/{self.essay.id}/', {**changes, 'updated_at': loaded['updated_at']}, format='json',
+            )
+            self.assertEqual((response.status_code, response.data['code']), (status.HTTP_403_FORBIDDEN, 'student_authored'))
+        self.assert_newer_text_kept(newer)
+        self.assertEqual(self.essay.title, 'Bread')
+

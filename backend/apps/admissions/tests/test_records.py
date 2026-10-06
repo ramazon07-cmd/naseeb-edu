@@ -567,7 +567,7 @@ class RecordRoleIsolationTests(RoleIsolationBase):
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
         updated = self.client.patch(
             f"/api/essays/{created.data['id']}/",
-            {'content': 'Second draft'},
+            {'content': 'Second draft', 'updated_at': created.data['updated_at']},
             format='json',
         )
         self.assertEqual(updated.status_code, status.HTTP_200_OK)

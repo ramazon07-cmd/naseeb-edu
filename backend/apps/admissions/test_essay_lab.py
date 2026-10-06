@@ -1144,7 +1144,7 @@ class LegacyEssayApiTests(EssayLabTestCase):
     def test_legacy_patch_clears_doc_and_bumps_seq(self):
         essay = self.make_essay()
         self.autosave(essay, make_doc('Rich text'), base_seq=0, save_id='1')
-        self.client.force_authenticate(self.counselor)
+        # A plain-text edit from another device of the student (only the student changes the text).
         loaded = self.client.get(f'/api/essays/{essay.pk}/').data['updated_at']
         response = self.client.patch(f'/api/essays/{essay.pk}/', {'content': 'Counselor fixed a typo here.',
                                                                   'updated_at': loaded}, format='json')
@@ -1227,7 +1227,9 @@ class LegacyEssayApiTests(EssayLabTestCase):
             'student': self.student.pk, 'title': 'New', 'prompt': 'P', 'application': foreign.pk,
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        response = self.client.patch(f'/api/essays/{essay.pk}/', {'application': own.pk}, format='json')
+        loaded = self.client.get(f'/api/essays/{essay.pk}/').data['updated_at']
+        response = self.client.patch(f'/api/essays/{essay.pk}/', {'application': own.pk, 'updated_at': loaded},
+                                     format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Counselors are held to the same rule.
         self.client.force_authenticate(self.counselor)
