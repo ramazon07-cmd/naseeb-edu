@@ -164,13 +164,16 @@ test('profile answers are edited on Student Center cards; /profile leads there',
   assert.equal(buildPath({ page: 'student_center', params: { edit: 'nope' } }), '/student-center');
 });
 
-test('account settings open from the account menu for students only', () => {
+test('account settings open from the account menu for students and counselors only', () => {
   assert.equal(parsePath('/account').page, 'account_settings');
   assert.equal(buildPath({ page: 'account_settings' }), '/account');
-  assert.equal(canOpenPage('account_settings', student), true);
-  assert.ok(!navigationFor(student).includes('account_settings'), 'not a sidebar item');
-  for (const user of [counselor, teacher, parent, organization, admin, { id: 9, role: 'student', is_superuser: true }]) {
-    assert.equal(canOpenPage('account_settings', user), false, user.role);
+  for (const user of [student, counselor]) {
+    assert.equal(canOpenPage('account_settings', user), true, user.role);
+    assert.ok(!navigationFor(user).includes('account_settings'), `${user.role}: not a sidebar item`);
   }
-  assert.deepEqual(resolveRoute(parsePath('/account'), counselor), { page: 'dashboard', params: {} });
+  assert.deepEqual(resolveRoute(parsePath('/account'), counselor), { page: 'account_settings', params: {} });
+  for (const user of [teacher, parent, organization, admin, { id: 9, role: 'student', is_superuser: true }, { id: 10, role: 'counselor', is_superuser: true }]) {
+    assert.equal(canOpenPage('account_settings', user), false, user.is_superuser ? `superuser ${user.role}` : user.role);
+  }
+  assert.deepEqual(resolveRoute(parsePath('/account'), teacher), { page: 'dashboard', params: {} });
 });
