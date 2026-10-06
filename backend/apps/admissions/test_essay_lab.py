@@ -1145,8 +1145,9 @@ class LegacyEssayApiTests(EssayLabTestCase):
         essay = self.make_essay()
         self.autosave(essay, make_doc('Rich text'), base_seq=0, save_id='1')
         self.client.force_authenticate(self.counselor)
-        response = self.client.patch(f'/api/essays/{essay.pk}/', {'content': 'Counselor fixed a typo here.'},
-                                     format='json')
+        loaded = self.client.get(f'/api/essays/{essay.pk}/').data['updated_at']
+        response = self.client.patch(f'/api/essays/{essay.pk}/', {'content': 'Counselor fixed a typo here.',
+                                                                  'updated_at': loaded}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         essay.refresh_from_db()
         self.assertIsNone(self.tab_of(essay).doc)
@@ -1164,8 +1165,9 @@ class LegacyEssayApiTests(EssayLabTestCase):
         essay = self.make_essay()
         self.autosave(essay, make_doc('Rich text'), base_seq=0, save_id='1')
         self.client.force_authenticate(self.counselor)
-        self.client.patch(f'/api/essays/{essay.pk}/', {'content': 'Rich text', 'counselor_comment': 'Nice'},
-                          format='json')
+        loaded = self.client.get(f'/api/essays/{essay.pk}/').data['updated_at']
+        self.client.patch(f'/api/essays/{essay.pk}/', {'content': 'Rich text', 'counselor_comment': 'Nice',
+                                                       'updated_at': loaded}, format='json')
         essay.refresh_from_db()
         self.assertEqual(self.tab_of(essay).doc, make_doc('Rich text'))
         self.assertEqual(self.tab_of(essay).save_seq, 1)

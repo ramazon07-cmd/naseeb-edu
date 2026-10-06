@@ -1409,6 +1409,7 @@ export const UI_TRANSLATIONS = {
   'Program service updated.': ['Dastur xizmati yangilandi.', 'Услуга программы обновлена.'],
   'Record created.': ['Yozuv yaratildi.', 'Запись создана.'],
   'Record updated.': ['Yozuv yangilandi.', 'Запись обновлена.'],
+  'This essay changed since you opened it. Reload to see the latest version, then make your edit again.': ['Siz ochganingizdan keyin insho o‘zgardi. Eng so‘nggi versiyani ko‘rish uchun sahifani yangilang va tahrirni qaytadan kiriting.', 'Эссе изменилось после того, как вы его открыли. Обновите страницу, чтобы увидеть последнюю версию, и внесите правку заново.'],
   'Report dismissed.': ['Shikoyat rad etildi.', 'Жалоба отклонена.'],
   'Report moved to review.': ['Shikoyat ko‘rib chiqishga olindi.', 'Жалоба передана на рассмотрение.'],
   'Self-task approved. No XP awarded.': ['Shaxsiy vazifa tasdiqlandi. XP berilmadi.', 'Личное задание одобрено. XP не начислен.'],

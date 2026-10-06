@@ -7,6 +7,7 @@ import { Plus, Eye, CheckCircle2, Pencil, Trash2, Flag, ShieldCheck } from 'luci
 import { GoogleDocsActions, EssayDetailModal, TaskSubmissionModal, GoogleDocsRecordModal, AttachmentPreviewModal } from '../components/documents';
 import { AttachmentRow, FileField, UploadError, evidenceAttachment, recommendationAttachment, useFileUpload } from '../components/files';
 import { toFormData } from '../lib/fileUpload';
+import { essaySaveError } from '../lib/essayConflict';
 import { studentName, dateText, dateTimeText, joinParts } from '../lib/format';
 import { label, ownStudent } from '../lib/labels';
 import { Record } from '../components/records';
@@ -242,6 +243,8 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
       payload[name] = type === 'checkbox' ? raw === 'on' : raw === '' && nullable ? null : raw;
     }
     if (!item) payload.student = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
+    // The server refuses the save (409) if the essay changed after this copy was loaded.
+    if (item && resource === 'essays') payload.updated_at = item.updated_at;
     if (recordFile && (file || removeFile)) {
       setSaving(false);
       payload[recordFile.field] = file || null;
@@ -254,7 +257,7 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
       if (item) await api.update(resource, item.id, payload);else
       await api.create(resource, payload);
       notify(item ? t("Record updated.") : t("Record created."));onSaved();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
+    } catch (err) {notify(essaySaveError(resource, err), 'error');} finally {setSaving(false);}
   }
   function close() {upload.cancel();onClose();}
   const selfTask = resource === 'tasks' && user.role === 'student';

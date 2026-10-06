@@ -211,7 +211,7 @@ class TabTextTests(TabTestCase):
         self.assert_tab_counts(essay)
         detail = self.client.get(f'/api/essays/{essay.pk}/').data
         response = self.client.put(f'/api/essays/{essay.pk}/', {
-            key: detail[key] for key in ('student', 'title', 'prompt', 'content', 'status')
+            key: detail[key] for key in ('student', 'title', 'prompt', 'content', 'status', 'updated_at')
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assert_tab_counts(essay)
@@ -411,8 +411,9 @@ class LegacyApiWithTabsTests(TabTestCase):
     def test_plain_text_edits_replace_a_one_tab_document(self):
         self.save_tab(self.first.pk, make_doc('Rich text'))
         self.client.force_authenticate(self.counselor)
-        response = self.client.patch(f'/api/essays/{self.essay.pk}/', {'content': 'Counselor fixed it.'},
-                                     format='json')
+        loaded = self.client.get(f'/api/essays/{self.essay.pk}/').data['updated_at']
+        response = self.client.patch(f'/api/essays/{self.essay.pk}/', {'content': 'Counselor fixed it.',
+                                                                       'updated_at': loaded}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         tab = self.tab_of(self.essay)
         self.assertEqual((tab.doc, tab.content, tab.save_seq, tab.word_count), (None, 'Counselor fixed it.', 2, 3))
@@ -420,8 +421,9 @@ class LegacyApiWithTabsTests(TabTestCase):
     def test_plain_text_edits_are_refused_for_a_document_with_tabs(self):
         self.add_tab(title='Second')
         self.client.force_authenticate(self.counselor)
-        response = self.client.patch(f'/api/essays/{self.essay.pk}/', {'content': 'Overwrite everything.'},
-                                     format='json')
+        loaded = self.client.get(f'/api/essays/{self.essay.pk}/').data['updated_at']
+        response = self.client.patch(f'/api/essays/{self.essay.pk}/', {'content': 'Overwrite everything.',
+                                                                       'updated_at': loaded}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(EssayTab.objects.filter(essay=self.essay).count(), 2)
         # Comments still work.
