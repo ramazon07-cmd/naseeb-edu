@@ -270,6 +270,7 @@ class ApiCompressionTests(TestCase):
         response = self.client.get('/api/users/accounts/me/')
         self.assertFalse(response.has_header('Content-Encoding'))
 
+    @override_settings(AI_ASSISTANT_ENABLED=True, AI_GATEWAY_API_KEY='')
     def test_streams_are_not_compressed(self):
         response = self.client.post(
             '/api/assistant/chat/', {'messages': [{'role': 'user', 'content': 'Help with my tasks ' * 30}]},

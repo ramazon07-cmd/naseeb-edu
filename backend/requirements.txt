@@ -14,5 +14,7 @@ django-storages[s3]==1.14.6
 boto3==1.43.101
 gunicorn==23.0.0
 sentry-sdk==2.70.0
+# Keeps tracebacks of failures in `manage.py test --parallel`.
+tblib==3.2.2
 
 dj-database-url==2.3.0

@@ -127,7 +127,7 @@ This starts PostgreSQL, Django/Gunicorn and the Nginx-served React frontend at `
 
 ```bash
 # Backend (from backend/, with the venv active)
-SECRET_KEY=dev-only DEBUG=True ALLOWED_HOSTS=localhost,testserver python manage.py test apps --parallel
+SECRET_KEY=dev-only DEBUG=True ALLOWED_HOSTS=localhost,testserver python manage.py test --parallel
 
 # Frontend (from frontend/)
 npm test          # node --test unit tests
