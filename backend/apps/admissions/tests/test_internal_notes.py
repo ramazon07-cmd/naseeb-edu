@@ -1,7 +1,9 @@
 """P0: internal counselor notes stay with staff; students and parents can neither read nor write them."""
+from datetime import timedelta
+from django.utils import timezone
 from rest_framework import status
 from apps.users.models import User
-from ..models import MeetingNote, ParentStudentLink
+from ..models import MeetingNote, ParentStudentLink, Task
 from .base import RoleIsolationBase
 
 
@@ -79,6 +81,31 @@ class InternalCounselorNotesTests(RoleIsolationBase):
             self.client.patch(f'/api/students/{self.student_a.id}/', {'notes': 'x'}, format='json').status_code,
             {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND},
         )
+
+    def test_only_counselors_and_admins_see_notes_on_every_profile_payload(self):
+        admin = User.objects.create_user(
+            username='admin-notes', email='admin-notes@example.com', password='StrongPass123!', role=User.Role.ADMIN,
+        )
+        secret = 'Internal: weak essays'
+        for actor, sees in (
+            (self.counselor, True), (admin, True),
+            (self.teacher, False), (self.organization, False), (self.student_a_user, False), (self.parent, False),
+        ):
+            self.client.force_authenticate(actor)
+            with self.subTest(role=actor.role):
+                payloads = [self.client.get('/api/students/').data, self.client.get(f'/api/students/{self.student_a.id}/').data]
+                self.assertEqual(any(secret in str(payload) for payload in payloads), sees)
+
+    def test_teacher_task_approval_does_not_embed_notes(self):
+        task = Task.objects.create(
+            student=self.student_a, assigned_by=self.teacher, title='Essay outline',
+            due_date=timezone.localdate() + timedelta(days=3), status=Task.Status.SUBMITTED,
+        )
+        self.client.force_authenticate(self.teacher)
+        response = self.client.post(f'/api/tasks/{task.id}/approve/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertIn('student_leveling', response.data)
+        self.assertNotIn('notes', response.data['student_leveling'])
 
     def test_assigned_counselor_still_reads_and_writes_internal_notes(self):
         self.client.force_authenticate(self.counselor)

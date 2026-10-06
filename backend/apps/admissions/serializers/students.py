@@ -161,8 +161,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
-        if request and (request.user.is_organization or request.user.role == User.Role.STUDENT):
-            # Internal counselor notes are never shown to the student or their school account.
+        if not (request and request.user.is_counselor_like):
+            # Internal counselor notes: counselors and product admins only.
             data.pop('notes', None)
         return data
 
