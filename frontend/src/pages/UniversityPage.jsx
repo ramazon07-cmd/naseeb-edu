@@ -66,6 +66,7 @@ function ScholarshipItem({ item, university, student }) {
 }
 
 function UniversityAid({ university, scholarships, student }) {
+  const listed = hasAidData(university);
   return <div className="two-column">
     <div className="stack-16">
       <InfoCard title={tx`Aid at ${university.name}`}>
@@ -73,7 +74,7 @@ function UniversityAid({ university, scholarships, student }) {
         <div className="numbers">
           <div><span className="k">{t("Average aid")}</span><span className="v">{money(university.average_aid_usd)}</span><span className="s">{t("Per year.")}</span></div>
           <div><span className="k">{t("Students receiving aid")}</span><span className="v">{university.students_receiving_aid_percent != null ? formatPercentLocale(university.students_receiving_aid_percent) : '—'}</span><span className="s">{t("Of undergraduates.")}</span></div>
-          <div><span className="k">{t("Need-blind")}</span><span className="v">{university.need_blind ? t("Yes") : t("No")}</span><span className="s">{university.need_blind ? t("Aid does not affect admission.") : t("Aid can affect admission.")}</span></div>
+          <div><span className="k">{t("Need-blind")}</span><span className="v">{university.need_blind ? t("Yes") : listed ? t("No") : '—'}</span><span className="s">{university.need_blind ? t("Aid does not affect admission.") : listed ? t("Aid can affect admission.") : t("Not listed. Check the official aid page.")}</span></div>
         </div>
       </InfoCard>
       {scholarships.map((item) => <ScholarshipItem key={item.id} item={item} university={university} student={student} />)}
@@ -85,6 +86,9 @@ function UniversityAid({ university, scholarships, student }) {
     </div>
   </div>;
 }
+
+// QS-only catalogue rows carry no aid data, so their false/blank aid fields mean "unknown", not "no".
+const hasAidData = (university) => Boolean(university.average_aid_usd != null || university.students_receiving_aid_percent != null || university.financial_aid_url || university.scholarship_deadline || university.aid_application_notes || university.need_blind || university.css_profile_required || university.fafsa_required || university.meets_full_need);
 
 function universityNeeds(data, university, application, student) {
   const transcript = data.documents.find((document) => document.document_type === 'transcript' && ['uploaded', 'reviewing', 'approved'].includes(document.status));
@@ -98,9 +102,10 @@ function universityNeeds(data, university, application, student) {
     { key: 'essays', title: 'Scholarship essays', detail: essays.length ? `${t("Motivation, impact and financial-need responses")} · ${tx`${essaysApproved} of ${essays.length} approved`}` : t("Motivation, impact and financial-need responses"), state: essays.length && essaysApproved === essays.length ? 'ok' : essays.length ? 'wait' : 'open', icon: PenLine, page: 'essay_lab', label: 'Open Essay Lab' },
     { key: 'letters', title: 'Recommendation letters', detail: data.recommendations.length ? `${t("Teacher or counselor recommendations")} · ${tx`${lettersApproved} of ${data.recommendations.length} approved`}` : t("Teacher or counselor recommendations"), state: data.recommendations.length && lettersApproved === data.recommendations.length ? 'ok' : data.recommendations.length ? 'wait' : 'open', icon: Mail, page: 'student_center', label: 'Manage letters' }
   ].filter(Boolean);
+  const listed = hasAidData(university);
   const forms = [
-    { key: 'css', title: 'CSS Profile', needed: university.css_profile_required, detail: university.css_profile_required ? tx`Required by ${university.name} for financial aid` : tx`Not required by ${university.name}` },
-    { key: 'fafsa', title: 'FAFSA', needed: university.fafsa_required, detail: university.fafsa_required ? tx`Required by ${university.name} for financial aid` : tx`Not required by ${university.name} for your profile` }
+    { key: 'css', title: 'CSS Profile', needed: university.css_profile_required, unknown: !listed, detail: university.css_profile_required ? tx`Required by ${university.name} for financial aid` : listed ? tx`Not required by ${university.name}` : t("Not listed. Check the official aid page.") },
+    { key: 'fafsa', title: 'FAFSA', needed: university.fafsa_required, unknown: !listed, detail: university.fafsa_required ? tx`Required by ${university.name} for financial aid` : listed ? tx`Not required by ${university.name} for your profile` : t("Not listed. Check the official aid page.") }
   ];
   const required = [...documents, ...forms.filter((form) => form.needed)];
   return { documents, forms, total: required.length, ready: documents.filter((row) => row.state === 'ok').length, next: required.find((row) => row.state !== 'ok') };
@@ -112,7 +117,7 @@ function UniversityNeeds({ university, needs, setPage }) {
     <div className="stack-16">
       <InfoCard title="Ready to send"><div className="big-count"><b>{tx`${needs.ready} of ${needs.total}`}</b><span>{t("ready")}</span></div><span className="score-bar wide" aria-hidden="true"><i style={{ '--fill': scalePercent(needs.ready, 0, needs.total || 1) }} /></span>{needs.next && <p className="note">{tx`Next: ${t(needs.next.title)}`}</p>}</InfoCard>
       <InfoCard title="Documents">{needs.documents.map((row) => {const RowIcon = row.state === 'ok' ? Check : row.icon || Circle;return <div className={`need-row ${row.state}`} key={row.key}><span className="need-icon" aria-hidden="true"><RowIcon size={16} /></span><div><b>{t(row.title)}</b><small>{row.detail}</small></div><button type="button" className="button quiet small" onClick={() => setPage(row.page)}>{t(row.label)}</button></div>;})}</InfoCard>
-      <InfoCard title="Forms">{needs.forms.map((form) => <div className={`need-row ${form.needed ? 'open' : 'off'}`} key={form.key}><span className="need-icon" aria-hidden="true">{form.needed ? <FileText size={16} /> : <Minus size={16} />}</span><div><b>{t(form.title)}</b><small>{form.detail}</small></div>{form.needed ? university.financial_aid_url && <a className="button quiet small" href={university.financial_aid_url} target="_blank" rel="noreferrer">{tx`Open ${t(form.title)}`} <ExternalLink size={14} aria-hidden="true" /></a> : <span className="tag">{t("Not needed")}</span>}</div>)}</InfoCard>
+      <InfoCard title="Forms">{needs.forms.map((form) => <div className={`need-row ${form.needed ? 'open' : 'off'}`} key={form.key}><span className="need-icon" aria-hidden="true">{form.needed ? <FileText size={16} /> : <Minus size={16} />}</span><div><b>{t(form.title)}</b><small>{form.detail}</small></div>{form.needed ? university.financial_aid_url && <a className="button quiet small" href={university.financial_aid_url} target="_blank" rel="noreferrer">{tx`Open ${t(form.title)}`} <ExternalLink size={14} aria-hidden="true" /></a> : <span className="tag">{form.unknown ? t("Not listed") : t("Not needed")}</span>}</div>)}</InfoCard>
     </div>
     <div className="stack-16">
       <InfoCard title="Deadline"><div className="big-date">{university.application_deadline ? dateText(university.application_deadline) : '—'}</div><small className="note">{t("Application and aid")}</small>{days != null && <span className={`due ${dueTone(days)}`.trim()}><Clock3 size={12} aria-hidden="true" /> {dueLabel(days)}</span>}</InfoCard>
