@@ -36,7 +36,24 @@ class LoadQsRankingsTests(TestCase):
         values = lambda name: University.objects.values_list('market', 'ranking', 'ranking_label', 'institution_type').get(name=name)
         self.assertEqual(values('Peking University'), (University.Market.CHINA, 14, '', 'public'))
         self.assertEqual(values('Zarqa University (ZU)'), ('', 1401, '1401+', 'private'))
-        self.assertEqual(values('Status Unknown University'), ('', 951, '951-1000', ''))
+        # A blank QS status is never stored as an invalid choice: it takes the model default.
+        self.assertEqual(values('Status Unknown University'), ('', 951, '951-1000', University._meta.get_field('institution_type').default))
+
+    def test_every_institution_type_written_is_a_valid_choice(self):
+        self.load(row('Blank Type University', 'Jordan', 1001, kind=''), row('Odd Type University', 'Jordan', 1002, kind='state'))
+        for university in University.objects.all():
+            university.full_clean()
+        self.assertEqual(set(University.objects.values_list('institution_type', flat=True)), {University.InstitutionType.PRIVATE})
+
+    def test_duplicate_snapshot_rows_are_reported_not_silently_dropped(self):
+        output = self.load(
+            row('National University of Singapore (NUS)', 'Singapore', 8),
+            row('National University of Singapore', 'Singapore', 9),
+            row('Imperial College London', 'United Kingdom', 2),
+        )
+        self.assertEqual(University.objects.get(country='Singapore').ranking, 8)
+        self.assertIn('Skipped 1 rows that match a university listed earlier in the snapshot: National University of Singapore (Singapore)', output)
+        self.assertIn('Added 2 universities', output)
 
     def test_existing_university_keeps_its_details_and_only_takes_the_rank(self):
         duke = University.objects.create(name='Duke University', country='USA', sat_min=1500, net_price_usd=26000, ranking=99)
@@ -98,6 +115,7 @@ class LoadQsRankingsTests(TestCase):
         self.assertEqual(imperial.qs_data['indicators']['SUS'], {'score': 98.0, 'rank': '7='})
         self.assertEqual(len(imperial.qs_data['indicators']), 9)
         self.assertIsNone(University.objects.get(name='Zarqa University (ZU)').qs_data['overall_score'])
+        self.assertFalse(University.objects.exclude(institution_type__in=University.InstitutionType.values).exists())
 
 
 class WorldwideCollegeResearchTests(RoleIsolationBase):

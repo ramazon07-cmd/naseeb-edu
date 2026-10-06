@@ -10,7 +10,7 @@ import { COLLEGE_AID_FLAGS, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_F
 import { UniversityPage } from './UniversityPage';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
-import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, qsClassification, qsScore, qsScoreText } from '../lib/qs';
+import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
 import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
 import './college-redesign.css';
@@ -74,9 +74,10 @@ function CollegeRow({ university, view, result, score, student, application, exp
   const fit = score ? { score: score.match_score } : universityFit(university, student);
   const panelId = `college-details-${university.id}`;
   const days = daysUntil(university.application_deadline);
+  const status = institutionStatus(university, t);
   return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
     <div className="uni-fit" role="cell"><b>{rankText(university)}</b></div>
-    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{university.institution_type ? ` · ${university.qs_data?.status ? qsClassification('status', university.qs_data.status) : t(university.institution_type)}` : ''}</small></span></div>
+    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small></span></div>
     <div className="uni-facts">
       {view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <div className={`uni-value ${code === 'overall' ? 'qs-score-primary' : ''}`} role="cell" data-label={t(title)} key={code}><span className="v">{qsScoreText(qsScore(university.qs_data, code))}</span></div>) : <>
       <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{formatNumberLocale(fit.score)}<small>/100</small></span></div>

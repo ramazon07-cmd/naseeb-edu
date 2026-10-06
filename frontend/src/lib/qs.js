@@ -38,3 +38,11 @@ export function qsScoreText(value) {
 export function qsScore(data, code) {
   return code === 'overall' ? data?.overall_score : data?.indicators?.[code]?.score;
 }
+
+// QS rows carry their own status, and a blank one is unknown: institution_type
+// then only holds the model default. Other rows show their institution type.
+export function institutionStatus(university, typeLabel) {
+  const data = university?.qs_data;
+  if (data && 'status' in data) return data.status ? qsClassification('status', data.status) : '';
+  return university?.institution_type ? typeLabel(university.institution_type) : '';
+}

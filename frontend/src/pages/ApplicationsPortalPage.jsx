@@ -6,6 +6,7 @@ import { FilterChip } from '../components/forms';
 import { DeadlineChip, TierBand } from '../components/college';
 import { money } from '../lib/format';
 import { label } from '../lib/labels';
+import { institutionStatus } from '../lib/qs';
 import { matchesQuery } from '../lib/searchIndex';
 import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, satLabel, scalePercent, shortDate, stageOf } from '../lib/college';
 import { ResourceForm } from './ResourceSection';
@@ -68,7 +69,7 @@ function ApplicationBrief({ id, briefRef, application, info, essays, name, onOpe
   const decided = stage === 'decision';
   const approved = essays.filter((essay) => essay.status === 'approved').length;
   const submittedAt = historyDate(application, 'submitted');
-  const place = [[...new Set([info.city, info.country].filter(Boolean))].join(', '), info.institution_type && label(info.institution_type)].filter(Boolean).join(' · ');
+  const place = [[...new Set([info.city, info.country].filter(Boolean))].join(', '), institutionStatus(info, label)].filter(Boolean).join(' · ');
   const portalMissing = stage === 'applying' && !application.application_portal_url;
   const rows = decided || stage === 'submitted' ?
   [{ Icon: Check, title: t("Submitted"), date: submittedAt, chip: decided ? <DecisionTag application={application} decidedAt={historyDate(application, application.status)} /> : <span className="tag"><Hourglass size={12} aria-hidden="true" /> {t("Waiting")}</span> }] :

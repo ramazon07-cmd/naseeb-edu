@@ -33,17 +33,24 @@ class Command(BaseCommand):
         # load_university_catalog upserts by exact name, so new rows take the curated spelling.
         curated = {university_key(name, country): name for name, country, *_ in CATALOG}
         catalogue = {university_key(item.name, item.country): item for item in University.objects.all()}
+        # QS leaves Status blank for some universities; an unknown type takes the model default.
+        types = set(University.InstitutionType.values)
+        default_type = University._meta.get_field('institution_type').default
         now = timezone.now()
-        created, updated = [], []
+        created, updated, duplicates, seen = [], [], [], set()
         for row in snapshot['universities']:
             key = university_key(row['name'], row['country'])
+            if key in seen:
+                duplicates.append(f"{row['name']} ({row['country']})")
+                continue
+            seen.add(key)
             university = catalogue.get(key)
             if university is None:
                 university = catalogue[key] = University(
                     name=curated.get(key, row['name']),
                     country=row['country'],
                     market=University.market_for_country(row['country']),
-                    institution_type=row['type'],
+                    institution_type=row['type'] if row['type'] in types else default_type,
                     ranking=row['rank'],
                     ranking_label=row['rank_label'],
                     qs_data=row.get('qs_data', {}),
@@ -61,6 +68,10 @@ class Command(BaseCommand):
             University.objects.bulk_update(updated, ['ranking', 'ranking_label', 'qs_data', 'updated_at'], batch_size=500)
         # Bulk writes skip the save signals that refresh the cached catalogue lists.
         bump_version()
+        if duplicates:
+            self.stdout.write(self.style.WARNING(
+                f'Skipped {len(duplicates)} rows that match a university listed earlier in the snapshot: {"; ".join(duplicates)}'
+            ))
         self.stdout.write(self.style.SUCCESS(
             f'Added {len(created)} universities and updated QS data for {len(updated)} from the {snapshot["source"]}.'
         ))

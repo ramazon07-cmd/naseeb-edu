@@ -4,7 +4,7 @@ import { formatNumberLocale, formatPercentLocale, t, tx } from '../i18n';
 import { PortalTabs } from '../components/forms';
 import { Empty } from '../components/ui';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
-import { qsClassification } from '../lib/qs';
+import { institutionStatus } from '../lib/qs';
 import { AidTags, DeadlineCard, InfoCard, PriceMeter, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { dateText, money } from '../lib/format';
 import { initials, label, ownStudent } from '../lib/labels';
@@ -131,7 +131,7 @@ export function UniversityPage({ data, university, result, research, researchLoa
     <nav className="crumb" aria-label={t("Breadcrumb")}><button type="button" className="link-button" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> {t("College Search")}</button><span aria-hidden="true">/</span><b>{university.name}</b></nav>
     <section className="info-card university-head" aria-label={university.name}>
       <div className="university-head-top"><span className="monogram" aria-hidden="true">{initials(university.name)}</span><div><h2>{university.name}</h2>
-        <p className="university-facts"><span><MapPin size={14} aria-hidden="true" /> {[university.city, university.country].filter(Boolean).join(', ')}</span><span>{university.qs_data?.status ? qsClassification('status', university.qs_data.status) : label(university.institution_type)}</span>{university.campus_setting && <span>{tx`${label(university.campus_setting)} campus`}</span>}<span>{label(university.degree_type)}</span>{result?.admission_band && <TierBand value={result.admission_band} />}</p></div></div>
+        <p className="university-facts"><span><MapPin size={14} aria-hidden="true" /> {[university.city, university.country].filter(Boolean).join(', ')}</span>{institutionStatus(university, label) && <span>{institutionStatus(university, label)}</span>}{university.campus_setting && <span>{tx`${label(university.campus_setting)} campus`}</span>}<span>{label(university.degree_type)}</span>{result?.admission_band && <TierBand value={result.admission_band} />}</p></div></div>
       <div className="university-actions">
         {application ? <span className="tag ok large"><Check size={14} aria-hidden="true" /> {t("In my list")}</span> : <button type="button" className="button primary" disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={16} aria-hidden="true" /> {t("Add to my list")}</button>}
         {university.website && <a className="button quiet" href={university.website} target="_blank" rel="noreferrer">{t("Official site")} <ExternalLink size={14} aria-hidden="true" /></a>}
