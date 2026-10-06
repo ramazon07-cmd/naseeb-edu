@@ -5,7 +5,9 @@ from io import StringIO
 from pathlib import Path
 
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
 from .management.commands.load_qs_rankings import DATA_FILE
@@ -162,14 +164,64 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         reasons = self.research_as_student('US, Turkey')[0]['reasons']
         self.assertIn('United States of America is one of your target countries', reasons)
 
-    def test_every_university_gets_a_score_while_only_the_best_carry_details(self):
-        University.objects.bulk_create(University(name=f'Scored University {index}', country='Germany') for index in range(60))
+    def test_every_candidate_gets_a_score_while_only_the_best_carry_details(self):
+        University.objects.bulk_create(University(name=f'Scored University {index}', country='United Kingdom') for index in range(60))
         self.research_as_student('UK')
         data = self.client.get('/api/college-research/').data
         self.assertEqual(len(data['recommendations']), 50)
         self.assertEqual(len(data['scores']), 60)
         top = data['recommendations'][0]
         self.assertEqual(data['scores'][top['university']['id']], [top['match_score'], top['admission_band']])
+
+    def test_research_scores_target_countries_and_rows_with_admissions_data_only(self):
+        target = University.objects.create(name='Target Country University', country='United Kingdom')
+        with_data = University.objects.create(name='Data University', country='USA', sat_min=1300, sat_max=1500)
+        priced = University.objects.create(name='Priced University', country='Japan', net_price_usd=9000)
+        University.objects.create(name='Unrelated University', country='Germany', ranking=1)
+        self.research_as_student('UK')
+        scores = self.client.get('/api/college-research/').data['scores']
+        self.assertEqual(set(scores), {target.id, with_data.id, priced.id})
+
+    def test_research_queries_do_not_grow_with_the_catalogue(self):
+        def queries():
+            with CaptureQueriesContext(connection) as captured:
+                self.client.get('/api/college-research/')
+            return len(captured)
+
+        self.research_as_student('UK')
+        University.objects.bulk_create(University(name=f'Small {index}', country='United Kingdom') for index in range(3))
+        small = queries()
+        University.objects.bulk_create(University(name=f'Large {index}', country='United Kingdom', popular_majors='History') for index in range(80))
+        self.assertEqual(queries(), small)
+
+    def test_missing_admissions_data_is_unknown_not_a_bonus(self):
+        University.objects.create(name='Unknown University', country='United Kingdom', ranking=1)
+        University.objects.create(
+            name='Known University', country='United Kingdom', ranking=50,
+            sat_min=1400, sat_max=1500, acceptance_rate='30.00', net_price_usd=20000,
+        )
+        University.objects.create(name='Optional University', country='United Kingdom', ranking=60, test_optional=True)
+        results = {item['university']['name']: item for item in self.research_as_student('UK')}
+        unknown, known = results['Unknown University'], results['Known University']
+        # The same row with admissions data that fits ranks above the one without.
+        self.assertGreater(known['match_score'], unknown['match_score'])
+        self.assertNotIn('No strict SAT minimum is listed in the catalog', unknown['reasons'])
+        self.assertFalse([reason for reason in unknown['reasons'] if 'SAT' in reason])
+        self.assertIn('SAT range is not listed in the catalog', unknown['gaps'])
+        self.assertEqual(unknown['score_breakdown']['academic'] - known['score_breakdown']['academic'], -22)
+        self.assertIn('SAT is optional at this university', results['Optional University']['reasons'])
+
+    def test_qs_only_rows_do_not_outrank_curated_universities(self):
+        University.objects.bulk_create(
+            University(name=f'QS Only University {index}', country='United Kingdom', ranking=index + 1, popular_majors='Computer Science')
+            for index in range(30)
+        )
+        # Only a partial fit: SAT a little under the range and the price above budget.
+        curated = University.objects.create(
+            name='Curated University', country='United Kingdom', ranking=900, popular_majors='Computer Science',
+            sat_min=1480, sat_max=1560, acceptance_rate='40.00', net_price_usd=40000,
+        )
+        self.assertEqual(self.research_as_student('UK')[0]['university']['id'], curated.id)
 
     def test_university_catalogue_serves_large_pages(self):
         University.objects.bulk_create(University(name=f'Catalogue University {index}', country='Germany') for index in range(150))

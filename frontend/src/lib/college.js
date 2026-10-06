@@ -14,8 +14,9 @@ export function universityFit(university, student) {
   let score = 20;
   const targets = String(student.target_countries || '').split(',').map(countryKey);
   if (targets.includes(countryKey(university.country))) score += 25;
-  if (!university.sat_min || Number(student.sat_score || 0) >= Number(university.sat_min)) score += 25;
-  if (!university.net_price_usd || !student.budget_usd || Number(university.net_price_usd) <= Number(student.budget_usd)) score += 15;
+  // Missing catalogue data earns nothing: unknown is not a fit.
+  if (satInRange(university, student)) score += 25;
+  if (university.net_price_usd && (!student.budget_usd || Number(university.net_price_usd) <= Number(student.budget_usd))) score += 15;
   if (!student.scholarship_needed || university.offers_international_aid || university.offers_merit_aid) score += 15;
   const bounded = Math.min(score, 100);
   return { score: bounded, label: bounded >= 80 ? 'Strong fit' : bounded >= 60 ? 'Good fit' : 'Explore' };
@@ -77,8 +78,9 @@ export function collegeMatches(university, result, filters, student, query) {
   matchesQuery(university, query);
 }
 
+// Once research has scored its candidates, the rows it left out sort after them.
 export function collegeSorter(sort, researchMap, student) {
-  const fit = (university) => researchMap.get(university.id)?.match_score ?? universityFit(university, student).score;
+  const fit = (university) => researchMap.size ? researchMap.get(university.id)?.match_score ?? -1 : universityFit(university, student).score;
   const time = (value) => value ? parseDateValue(value).getTime() : Infinity;
   const last = (value) => value == null ? Infinity : Number(value);
   return {

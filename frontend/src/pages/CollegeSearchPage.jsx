@@ -70,8 +70,9 @@ function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
   </section>;
 }
 
-function CollegeRow({ university, view, result, score, student, application, expanded, busy, onToggle, onOpen, onAdd }) {
-  const fit = score ? { score: score.match_score } : universityFit(university, student);
+function CollegeRow({ university, view, result, score, scored, student, application, expanded, busy, onToggle, onOpen, onAdd }) {
+  // Research scores a set of plausible universities; the rest have no fit, not a guessed one.
+  const fit = score ? score.match_score : scored ? null : universityFit(university, student).score;
   const panelId = `college-details-${university.id}`;
   const days = daysUntil(university.application_deadline);
   const status = institutionStatus(university, t);
@@ -80,7 +81,7 @@ function CollegeRow({ university, view, result, score, student, application, exp
     <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small></span></div>
     <div className="uni-facts">
       {view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <div className={`uni-value ${code === 'overall' ? 'qs-score-primary' : ''}`} role="cell" data-label={t(title)} key={code}><span className="v">{qsScoreText(qsScore(university.qs_data, code))}</span></div>) : <>
-      <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{formatNumberLocale(fit.score)}<small>/100</small></span></div>
+      <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{fit == null ? '—' : <>{formatNumberLocale(fit)}<small>/100</small></>}</span></div>
       <div className="uni-band" role="cell" data-label={t("Band")}>{score?.admission_band ? <TierBand value={score.admission_band} /> : <span className="muted-copy">—</span>}</div>
       <div className="uni-value" role="cell" data-label={t("Acceptance")}><span className="v">{percentText(university.acceptance_rate)}</span></div>
       <div className="uni-value" role="cell" data-label={t("SAT")}><span className="v">{satLabel(university)}</span></div>
@@ -271,7 +272,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       </section>
       <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''}`} role="table" aria-label={t("Universities")}>
         <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Net price")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
-        {rows.slice(0, shown).map((item) => <CollegeRow key={item.id} view={view} university={item} result={researchMap.get(item.id)} score={fits.get(item.id)} student={student} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item)} />)}
+        {rows.slice(0, shown).map((item) => <CollegeRow key={item.id} view={view} university={item} result={researchMap.get(item.id)} score={fits.get(item.id)} scored={fits.size > 0} student={student} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item)} />)}
         {!rows.length && <Empty text={t("No universities match these filters.")} />}
       </div>
       {rows.length > shown && <button type="button" className="button quiet uni-more" onClick={() => setShown(shown + ROWS_PER_STEP)}>{t('Show {n} more', { n: formatNumberLocale(Math.min(ROWS_PER_STEP, rows.length - shown)) })}</button>}
