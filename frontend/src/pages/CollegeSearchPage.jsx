@@ -6,7 +6,7 @@ import { Empty, Modal } from '../components/ui';
 import { FilterOption, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { COLLEGE_AID_FLAGS, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFacetCounts, collegeFilterChips, collegeMatches, collegeSorter, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, rankText, satLabel, shortDate, toggleIn, universityFit } from '../lib/college';
+import { BAND_TIERS, COLLEGE_AID_FLAGS, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFacetCounts, collegeFilterChips, collegeMatches, collegeSorter, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, rankText, satLabel, shortDate, toggleIn, universityFit } from '../lib/college';
 import { UniversityPage } from './UniversityPage';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
@@ -135,6 +135,14 @@ function CollegeListDrawer({ applications, universities, fits, busyId, onClose, 
   </Modal>;
 }
 
+// Research has no admission data to place this university, so the student picks its band.
+function TierPicker({ university, busy, onPick, onClose }) {
+  return <Modal title="Pick a band" onClose={onClose}>
+    <p>{tx`There is no admission data to tell whether ${university.name} is a reach, target or safety for you. Pick one; you can change it later in Applications.`}</p>
+    <div className="chip-row">{Object.entries(BAND_TIERS).map(([band, tier]) => <button type="button" key={tier} className="button quiet small" disabled={busy} aria-busy={busy} onClick={() => onPick(tier)}><TierBand value={band} /></button>)}</div>
+  </Modal>;
+}
+
 // The catalogue holds ~1,500 universities; the table grows by this many rows at a time.
 const ROWS_PER_STEP = 50;
 
@@ -149,6 +157,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [expandedId, setExpandedId] = useState(null);
   const [listOpen, setListOpen] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [tierFor, setTierFor] = useState(null);
   const [research, setResearch] = useState(null);
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchSaving, setResearchSaving] = useState(false);
@@ -208,13 +217,16 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     } catch (error) {setResearchError(error.message);} finally {setResearchSaving(false);}
   }
 
-  async function addToList(university) {
-    const band = fits.get(university.id)?.admission_band;
+  // Without a known band the student picks the tier: an unknown band is never filed as "target".
+  async function addToList(university, pickedTier) {
+    const tier = pickedTier || BAND_TIERS[fits.get(university.id)?.admission_band];
+    if (!tier) {setTierFor(university);return;}
     const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
     setBusyId(university.id);
     try {
-      await api.create('applications', { student: student?.id, university: university.id, program, tier: band === 'reach' ? 'dream' : band === 'safety' ? 'safety' : 'target', status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
+      await api.create('applications', { student: student?.id, university: university.id, program, tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
       await reload();
+      setTierFor(null);
       notify(tx`${university.name} added to your list.`);
     } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
   }
@@ -239,8 +251,9 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
   }
 
+  const tierPicker = tierFor && <TierPicker university={tierFor} busy={busyId === tierFor.id} onPick={(tier) => addToList(tierFor, tier)} onClose={() => setTierFor(null)} />;
   const university = universityId == null ? null : universities.get(universityId);
-  if (university) return <UniversityPage {...{ data, university, research, researchLoading, setPage }} result={researchMap.get(university.id)} application={listed.get(university.id)} busy={busyId === university.id} onAdd={() => addToList(university)} onRemove={() => removeFromList(listed.get(university.id))} onBack={closeUniversity} />;
+  if (university) return <><UniversityPage {...{ data, university, research, researchLoading, setPage }} result={researchMap.get(university.id)} application={listed.get(university.id)} busy={busyId === university.id} onAdd={() => addToList(university)} onRemove={() => removeFromList(listed.get(university.id))} onBack={closeUniversity} />{tierPicker}</>;
 
   const chips = collegeFilterChips(filters, setFilters, budget);
   const ready = Boolean(research?.ready);
@@ -279,6 +292,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       <p className="uni-note">{t(view === 'qs' ? "Published QS scores out of 100." : "Fit is not an admission probability.")} {t("Rankings: QS World University Rankings 2027.")}</p>
       </div>
     </div>}
+    {tierPicker}
     {listOpen && <CollegeListDrawer applications={data.applications} universities={universities} fits={fits} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onDeadline={saveDeadline} onApplications={() => setPage('applications')} />}
   </div>;
 }

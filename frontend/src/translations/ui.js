@@ -2343,6 +2343,8 @@ export const UI_TRANSLATIONS = {
   "Requested": ["So‘ralgan", "Запрошено"],
   "Drafting": ["Yozilmoqda", "Пишется"],
   "Fit is not an admission probability.": ["Moslik — qabul ehtimoli emas.", "Соответствие — это не вероятность поступления."],
+  "Pick a band": ["Toifani tanlang", "Выберите категорию"],
+  "There is no admission data to tell whether {0} is a reach, target or safety for you. Pick one; you can change it later in Applications.": ["{0} siz uchun orzudagi, maqsadli yoki zaxira ekanini aniqlash uchun qabul ma’lumotlari yo‘q. Birini tanlang; keyinroq Arizalar bo‘limida o‘zgartirishingiz mumkin.", "Нет данных о приёме, чтобы понять, амбициозный ли {0} для вас вариант, целевой или запасной. Выберите сами; позже это можно изменить в разделе «Заявки»."],
 }
 
 export function uiMessages(language) {

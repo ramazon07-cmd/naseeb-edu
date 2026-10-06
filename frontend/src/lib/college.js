@@ -40,6 +40,9 @@ export function eligibleScholarship(item, student) {
 
 export const DEFAULT_COLLEGE_FILTERS = { country: '', bands: ['reach', 'target', 'safety'], price: 'all', aid: [], testOptional: false, satFit: false, publicOnly: false };
 
+// Admission band -> Application.tier. An unknown band has no tier: the student picks one.
+export const BAND_TIERS = { reach: 'dream', target: 'target', safety: 'safety' };
+
 export const COLLEGE_PRICE_CAPS = ['all', 'budget', '25000', '40000'];
 
 export const COLLEGE_AID_FLAGS = [['offers_need_based_aid', 'Need-based'], ['offers_merit_aid', 'Merit'], ['offers_international_aid', 'International aid'], ['meets_full_need', 'Meets full need']];
