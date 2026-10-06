@@ -1,5 +1,6 @@
 """Role isolation: university catalog, college research and education-match AI."""
 from datetime import date
+from unittest import mock
 from django.test import override_settings
 from rest_framework import status
 from apps.users.models import User
@@ -232,6 +233,18 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
             )
         scores = latest_assessment_scores(self.student_a)
         self.assertEqual(set(scores), {'personality', 'interests', 'subjects', 'reasoning'})
+
+    @override_settings(AI_ASSISTANT_ENABLED=False, GROQ_API_KEY='test-key')
+    def test_ai_switch_off_keeps_education_guidance_offline(self):
+        self.client.force_authenticate(self.student_a_user)
+        with mock.patch('urllib.request.urlopen') as urlopen:
+            response = self.client.post(
+                '/api/education-matches/ai/', {'major_candidates': ['Computer Science']}, format='json',
+            )
+        urlopen.assert_not_called()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mode'], 'deterministic')
+        self.assertFalse(response.data['provider_available'])
 
     def test_non_student_cannot_generate_education_match_guidance(self):
         self.client.force_authenticate(self.counselor)

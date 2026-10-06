@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 
 from django.conf import settings
+from core.ai_policy import outbound_ai_allowed
 
 from ..assistant import redact_pii
 
@@ -189,7 +190,7 @@ def _request_gateway(essay, content):
 
 
 def gateway_configured():
-    return bool(settings.AI_GATEWAY_API_KEY)
+    return outbound_ai_allowed() and bool(settings.AI_GATEWAY_API_KEY)
 
 
 def run_ai_check(essay, content):

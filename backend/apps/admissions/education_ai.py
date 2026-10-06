@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 
 from django.conf import settings
+from core.ai_policy import outbound_ai_allowed
 from apps.users.cache_safety import cache_get, cache_set
 
 
@@ -17,7 +18,7 @@ CURRENT_ASSESSMENTS = {'personality', 'interests', 'subjects', 'reasoning'}
 
 
 def recommendation_ai_available():
-    return bool(settings.GROQ_API_KEY)
+    return outbound_ai_allowed() and bool(settings.GROQ_API_KEY)
 
 
 def latest_assessment_scores(profile):

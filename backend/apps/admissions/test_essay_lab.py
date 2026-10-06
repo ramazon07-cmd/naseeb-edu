@@ -896,6 +896,7 @@ class EssayLabFolderTests(EssayLabTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
+@override_settings(AI_ASSISTANT_ENABLED=True)
 class EssayLabDepthCheckTests(EssayLabTestCase):
     def setUp(self):
         super().setUp()
@@ -1038,6 +1039,14 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertEqual(response.data['result'], {
             'summary': '', 'strengths': ['fine'], 'scores': {'structure': 2}, 'notes': [],
         })
+
+    @override_settings(AI_ASSISTANT_ENABLED=False, AI_GATEWAY_API_KEY='test-key')
+    def test_ai_switch_off_uses_the_local_coach(self):
+        with mock.patch('urllib.request.urlopen') as urlopen:
+            response = self.check()
+        urlopen.assert_not_called()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['model'], 'local')
 
     @override_settings(AI_GATEWAY_API_KEY='test-key')
     def test_gateway_error_is_503(self):

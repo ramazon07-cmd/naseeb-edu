@@ -97,7 +97,8 @@ class AiBudgetTests(APITestCase):
         self.assertEqual(gateway.call_count, 1)
 
 
-@override_settings(AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0, ESSAY_COACH_USER_DAILY_LIMIT=1)
+@override_settings(AI_ASSISTANT_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0,
+                   ESSAY_COACH_USER_DAILY_LIMIT=1)
 class EssayCoachBudgetTests(EssayLabTestCase):
     def test_per_user_daily_limit(self):
         essay = self.make_essay()

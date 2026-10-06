@@ -53,7 +53,7 @@ for dark), and components use the semantic tokens (`--canvas`, `--surface`,
 - Messages: direct chats, groups, school communities and discussions, with reports and moderation
 - Notifications bell, Screen Time (active learning time), Support tickets and account settings
 - Parent portal, workspace plans and subscriptions (read-only when lapsed), audit log
-- Naseeb AI assistant for students and counselors, **off by default** (`AI_ASSISTANT_ENABLED`, see `backend/README.md`)
+- Naseeb AI assistant for students and counselors; it and every other outside AI call (Essay Coach AI checks, education guidance) are **off by default** (`AI_ASSISTANT_ENABLED`, see `backend/README.md`)
 - Naseeb Store (sample offers; locked for students for now)
 - Django Admin and OpenAPI/Swagger docs
 
