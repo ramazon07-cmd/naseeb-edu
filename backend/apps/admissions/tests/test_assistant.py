@@ -5,7 +5,7 @@ from rest_framework import status
 from ..assistant import build_role_context, redact_pii
 from ..models import Task
 from ..tenancy import set_student_active
-from apps.users.models import User
+from apps.users.models import PLAN_FEATURES, Plan, User, WorkspaceSubscription
 from .base import RoleIsolationBase
 
 
@@ -99,16 +99,38 @@ class AssistantCountsTests(RoleIsolationBase):
 
 
 class AssistantSwitchTests(RoleIsolationBase):
+    def me(self, user):
+        self.client.force_authenticate(user)
+        return self.client.get('/api/users/accounts/me/').data['assistant_enabled']
+
     @override_settings(AI_ASSISTANT_ENABLED=False, AI_GATEWAY_API_KEY='test-secret-that-must-not-be-called')
     def test_disabled_assistant_refuses_chat_and_me_hides_it(self):
-        self.client.force_authenticate(self.student_a_user)
-        self.assertIs(self.client.get('/api/users/accounts/me/').data['assistant_enabled'], False)
+        self.assertIs(self.me(self.student_a_user), False)
+        self.assertIs(self.me(self.counselor), False)
         response = self.client.post(
             '/api/assistant/chat/', {'messages': [{'role': 'user', 'content': 'Hello'}]}, format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data['code'], 'assistant_disabled')
 
     @override_settings(AI_ASSISTANT_ENABLED=True)
-    def test_enabled_assistant_is_reported_by_me(self):
-        self.client.force_authenticate(self.student_a_user)
-        self.assertIs(self.client.get('/api/users/accounts/me/').data['assistant_enabled'], True)
+    def test_me_reports_access_for_allowed_roles_only(self):
+        self.assertIs(self.me(self.student_a_user), True)
+        self.assertIs(self.me(self.counselor), True)
+        for user in (self.teacher, self.organization):
+            self.assertIs(self.me(user), False, user.role)
+        parent = User.objects.create_user(username='switch-parent', email='switch-parent@example.com', password='StrongPass123!', role=User.Role.PARENT)
+        admin = User.objects.create_user(username='switch-admin', email='switch-admin@example.com', password='StrongPass123!', role=User.Role.ADMIN)
+        self.assertIs(self.me(parent), False)
+        self.assertIs(self.me(admin), False)
+
+    @override_settings(AI_ASSISTANT_ENABLED=True)
+    def test_me_follows_the_school_plan(self):
+        plan = Plan.objects.create(
+            code='no-assistant', name='No assistant',
+            features={key: key != 'ai_assistant' for key in PLAN_FEATURES},
+        )
+        self.assertEqual(WorkspaceSubscription.objects.filter(school=self.school_a).update(plan=plan), 1)
+        self.assertIs(self.me(self.student_a_user), False)
+        self.assertIs(self.me(self.counselor), False)
+        self.assertIs(self.me(self.student_b_user), True)

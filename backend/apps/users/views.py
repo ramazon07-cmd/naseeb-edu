@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ErrorDetail, ValidationError
 from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
+from apps.admissions.assistant import assistant_available
 from apps.admissions.listing import ListQueryMixin
 from . import entitlements
 from .admin_permissions import IsSupportStaff, SupportReadOpsWrite, has_tier
@@ -236,8 +237,8 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 school_id=request.user.school_id,
             ).first()
         data['workspace'] = entitlements.workspace_summary(subscription)
-        # The frontend hides the assistant entirely when the platform switch is off.
-        data['assistant_enabled'] = settings.AI_ASSISTANT_ENABLED
+        # Same rules as the chat view, so the frontend only offers what will work.
+        data['assistant_enabled'] = assistant_available(request.user)
         return Response(data)
 
     @action(

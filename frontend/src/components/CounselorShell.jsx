@@ -4,6 +4,7 @@ import { Bell, Calendar, CheckSquare, Compass, Ellipsis, LayoutDashboard, LifeBu
 import { LANGUAGE_OPTIONS, formatNumberLocale, t } from '../i18n';
 import { fullName, initials } from '../lib/labels';
 import { counselorCounts } from '../lib/counselorCounts';
+import { canUseAssistant } from '../lib/assistantAccess';
 import { COUNSELOR_NAV } from '../lib/routes';
 import { CounselorUiContext } from './counselorUi';
 
@@ -87,7 +88,7 @@ export function CounselorLayout({ user, data, stats, page, title, setPage, setQu
     return () => document.removeEventListener('keydown', escape);
   }, [drawer]);
   const go = (next) => { setPage(next); setQuery(''); setDrawer(false); };
-  const account = { user, theme, toggleTheme, language, changeLanguage, logout, openAssistant, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), supportBadge, setAccountActionsHost };
+  const account = { user, theme, toggleTheme, language, changeLanguage, logout, openAssistant: canUseAssistant(user) ? openAssistant : null, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), supportBadge, setAccountActionsHost };
   const item = (next, className = 'cx-nav-item', badges = true) => {
     const { label, icon: Icon, badge } = NAV[next];
     const active = page === next;

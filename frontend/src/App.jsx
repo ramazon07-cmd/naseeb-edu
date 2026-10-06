@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
 import { AssistantCenter } from './components/AssistantCenter';
+import { canUseAssistant } from './lib/assistantAccess';
 import { ScreenTimeTracker, flushActiveScreenTime } from './components/ScreenTimeTracker';
 import { AppBootLoader, BootstrapError, BrandLockup, LanguageSelector, ThemeToggle } from './components/brand';
 import { ProfileCard, StudentAvatar } from './components/records';
@@ -219,7 +220,7 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, re
   </>;
 }
 
-function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, onSearchOpen, isOnline, notify, logout, theme, toggleTheme, language, changeLanguage, children }) {
+function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, onSearchOpen, isOnline, notify, logout, theme, toggleTheme, language, changeLanguage, children }) {
   const [utility, setUtility] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileMenuRef = useRef(null);
@@ -329,12 +330,12 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   const overlays = <>
     {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(query.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}</span><ChevronRight size={16} /></button>)}{query.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} />}</Modal>}
     <ScreenTimeTracker page={page} userId={user.id} />
-    {user.assistant_enabled && ['counselor', 'student'].includes(user.role) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} />}
+    {canUseAssistant(user) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} onSwitchedOff={() => {updateUser({ assistant_enabled: false });notify(t('The AI assistant has been turned off.'), 'error');}} />}
   </>;
   if (counselorShell) {
     const pageTitle = t(counselorPageLabel(page) || meta.label);
     return <div className="app-shell cx-shell role-counselor">
-      <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={user.assistant_enabled ? () => setAssistantRequest((current) => current + 1) : null} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
+      <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={() => setAssistantRequest((current) => current + 1)} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
         <main className={`cx-main${page === 'messages' ? ' cx-main-messages' : ''}`}>
           {banners}
           {!COUNSELOR_SELF_HEADED.has(page) && <CxHead title={pageTitle} subtitle={t(meta.description)} />}
@@ -602,7 +603,7 @@ export default function App() {
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
   if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
-    <AppShell {...{ user, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
+    <AppShell {...{ user, updateUser, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
       <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, setQuery, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources }} /></LazyBoundary>
     </AppShell>
     {signOutPrompt && <Modal title={t("Sign out?")} backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
