@@ -40,13 +40,13 @@ jobs:
           APP_ENV: test
           SECRET_KEY: ci-only-secret
       - name: Django tests (SQLite)
-        run: python backend/manage.py test apps -v 2
+        run: python backend/manage.py test apps --parallel
         env:
           SECRET_KEY: ci-only-secret
           DEBUG: "True"
           ALLOWED_HOSTS: localhost,testserver
       - name: Django tests (PostgreSQL, matches production)
-        run: python backend/manage.py test apps -v 2 --noinput
+        run: python backend/manage.py test apps --parallel --noinput
         env:
           SECRET_KEY: ci-only-secret
           DEBUG: "True"

@@ -6,12 +6,14 @@ Production-oriented CRM for schools and counselors managing students who apply t
 
 | Role | Access |
 | --- | --- |
-| School Counselor | Only students assigned to that counselor, including their tasks and responses, college list, documents, essays, portfolio records, recommendations and meetings |
-| Teacher | Students in their own school; creates and controls Tasks and Roadmap missions, and approves submitted work |
-| Organization School | Its own students only; student create/edit/delete plus read-only Student 360° admissions records |
-| Student | Only the signed-in student's profile, assigned tasks, academics, projects, internships, activities, honors, recommendations, applications, documents, certificates, essays and counselor meetings |
+| Admin | Product staff (tiers: support, ops, super admin). Provisions schools, counselors and plans, opens Student 360 for any student, reads the audit log and handles support |
+| Organization School | Its own school's students: create and edit them, read-only Student 360, meetings and messages |
+| Counselor | Only the students assigned to them: review queue, Student 360, essays, applications, documents, meetings and messages; invites parents |
+| Teacher | Students in their own school; creates Tasks and Roadmap missions and approves submitted work |
+| Student | Their own profile, assessment, roadmap, tasks, applications, documents, essays, meetings and messages |
+| Parent | Read-only view of linked children (progress, tasks, applications, documents, meetings) once they accept a counselor's invite |
 
-Public registration is disabled. Students are created by a counselor or their school organization.
+Public registration is disabled. Students are created by a counselor or their school; parents join through an invite.
 
 ## Brand and themes
 
@@ -36,50 +38,37 @@ for dark), and components use the semantic tokens (`--canvas`, `--surface`,
 | Dark | Charcoal | `--charcoal` | `#0c1923` |
 | Dark | Text | `--text` | `#f7f7f7` |
 
-## Included modules
+## Features
 
-- Schools and organization accounts
-- Student academic profiles: GPA, IELTS, SAT, major, countries, budget and scholarship requirement
-- Teacher/counselor-controlled Tasks with deadlines, priorities, student submission and staff approval
-- University application tracker with dream/target/safety tiers
-- Documents with real file upload and counselor review
-- Essays and personal statement review
-- Achievements, research, projects, internships, activities and honors
-- Recommendation-letter workflow
-- Counselor meeting notes, notifications and activity logs
-- Student 360° profile for counselors and school organizations, with assigned tasks and full student responses, college list, essays, files and every admissions section in one view
-- Google Docs integration for task submissions, student documents and essays, including validated links, embedded visual previews and direct “Open in Google Docs” actions
-- Dedicated student Certificates and Meetings pages
-- Student portal dashboard and Student Center with academic, portfolio, activity and document tabs
-- Teacher/counselor-controlled Roadmap missions, task list and timeline; student progress, submission and reflections; staff approval
-- Duolingo-style student Roadmap path with live mission states, responsive light/dark themes, XP progress and the next level checkpoint
-- Approval-backed XP and Leveling: approved Tasks award 25/50/75/100 XP by priority, approved Roadmap missions award 75 XP, and every award is recorded once in an XP ledger
-- Level thresholds grow cumulatively (Level 2 at 100 XP, Level 3 at 300 XP, Level 4 at 600 XP); reaching a threshold creates a pending level-up that only a teacher/counselor can approve
-- Scalable messaging for every role: unique private Direct conversations, invite-only Groups, joinable school Communities and Stack Overflow-style Discussions with threaded replies, anonymous mode, unread counts and accepted answers
-- Confidential message reports with duplicate/self-report protection and a school-scoped moderation queue; trusted admins, counselors, teachers and school organizations can review/dismiss reports, remove content or mute a channel member for 24 hours/7 days while anonymous identity stays hidden in the normal feed
-- Counselor and school messaging interfaces add scoped contacts, inbox/report metrics, audience shortcuts and channel-member management
-- Fixed corner notification center for students, counselors and school organizations, with unread counts and mark-as-read controls
-- Program usage, Essay Lab, Naseeb Store and team contacts
-- Profile-driven College & Aid Finder that uses GPA, SAT, IELTS, major, target countries, budget and portfolio evidence; asks only for missing information and explains each match
-- College filters for acceptance, SAT, net price, test-optional, merit, need-based and international aid
-- Scholarship catalog with eligibility indicators, funding level, deadline and document requirements
-- National and International opportunity-program catalogs with category, delivery and scholarship filters
-- Separate task, roadmap and overall journey progress with at-risk deadline indicators for students, counselors and organizations
-- Role-specific dashboards, navigation and data isolation
-- English-only user-facing interface and demo content
-- Django Admin and OpenAPI/Swagger documentation
+- Interface in Uzbek, Russian and English (`frontend/src/translations`); API errors follow `Accept-Language`
+- Role-specific dashboards, navigation and data isolation per school and per assigned counselor
+- Student Center: academics, test scores, portfolio (projects, internships, research), activities, honors, certificates and documents
+- Profile Assessment challenges that suggest best-fit study directions
+- Roadmap missions and Tasks with deadlines, submissions and staff approval; approval-backed XP and level-ups
+- Counselor Review queue and Student 360 view
+- University application tracker, College Search (filters, shortlist, scholarships) and a Programs catalog of national and international opportunities
+- Essay Lab: drafts, revision history, sharing and counselor feedback; optional AI checks under the plan's `essay_coach` feature
+- Documents with private file storage and review; Google Docs links with previews
+- Meetings scheduler with counselor availability and booking requests
+- Messages: direct chats, groups, school communities and discussions, with reports and moderation
+- Notifications bell, Screen Time (active learning time), Support tickets and account settings
+- Parent portal, workspace plans and subscriptions (read-only when lapsed), audit log
+- Naseeb AI assistant for students and counselors, **off by default** (`AI_ASSISTANT_ENABLED`, see `backend/README.md`)
+- Naseeb Store (sample offers; locked for students for now)
+- Django Admin and OpenAPI/Swagger docs
 
 ## Local demo accounts
 
 Run `python manage.py seed_demo` first.
 
 ```text
-Counselor:    counselor  / admin12345
+Counselor:    counselor   / admin12345
 Organization: schooladmin / school12345
-Student:      ramazon    / student12345
+Student:      ramazon     / student12345
+Parent:       parent      / parent12345
 ```
 
-Demo accounts are development-only. They are enabled by `ENABLE_DEMO_ACCOUNTS=True`, and their local passwords can be replaced with the three `DEMO_*_PASSWORD` variables in `backend/.env`.
+Demo accounts are development-only. They are enabled by `ENABLE_DEMO_ACCOUNTS=True`, and their local passwords can be replaced with the `DEMO_*_PASSWORD` variables in `backend/.env`. Create an admin with `python manage.py createsuperuser`.
 
 ## Quick local start
 
@@ -134,13 +123,20 @@ docker compose up --build
 
 This starts PostgreSQL, Django/Gunicorn and the Nginx-served React frontend at `http://127.0.0.1:3000`.
 
-## Verification
+## Tests
 
 ```bash
-./scripts/verify.sh
+# Backend (from backend/, with the venv active)
+SECRET_KEY=dev-only DEBUG=True ALLOWED_HOSTS=localhost,testserver python manage.py test apps --parallel
+
+# Frontend (from frontend/)
+npm test          # node --test unit tests
+npm run lint
+npm run build
+node ../scripts/frontend_smoke.js
 ```
 
-The verification runs Django checks, migration-drift detection, backend tests and JavaScript syntax checks.
+`./scripts/verify.sh` runs Django checks, migration-drift detection, the backend tests, the frontend build and the smoke checks in one go. CI (`.github/workflows/ci.yml`) runs the backend tests on SQLite and PostgreSQL plus the frontend lint, tests, audit, build and i18n smoke checks.
 
 ## Production environment
 
@@ -181,7 +177,7 @@ Create a clean handoff ZIP without `.env`, SQLite, uploaded media, virtual envir
 ## Project structure
 
 ```text
-counselor-crm/
+naseeb-edu/
 ├── backend/
 │   ├── apps/users/
 │   ├── apps/admissions/
