@@ -74,6 +74,10 @@ def serve_private_file(request, field_file, *, original_name='', content_type=''
     return response
 
 
+STUDENT_AUTHORED_RESOURCES = {'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors'}
+STUDENT_AUTHORED_DELETE_MESSAGE = 'Only the student can delete their own work. Send it back with a note instead.'
+
+
 class CounselorOrOwnerPermission(permissions.BasePermission):
     organization_read_resources = {
         'tasks', 'applications', 'documents', 'essays', 'achievements',
@@ -118,6 +122,13 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         }
 
     def has_object_permission(self, request, view, obj):
+        if view.action == 'destroy' and view.basename in STUDENT_AUTHORED_RESOURCES:
+            # Only the student permanently deletes their own work; staff send it back with a note.
+            student = getattr(obj, 'student', None)
+            if not (request.user.role == User.Role.STUDENT and student and student.user_id == request.user.id):
+                self.message = STUDENT_AUTHORED_DELETE_MESSAGE
+                return False
+            return True
         if request.user.is_counselor_like:
             return True
         if request.user.role == User.Role.TEACHER:
