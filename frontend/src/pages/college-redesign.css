@@ -924,3 +924,14 @@
   font: inherit;
   font-weight: 500;
 }
+
+/* College Search asks for the band of a university without admission data. */
+.tier-picker {
+  display: grid;
+  gap: var(--space-4);
+  padding: 22px;
+}
+
+.tier-picker p {
+  margin: 0;
+}

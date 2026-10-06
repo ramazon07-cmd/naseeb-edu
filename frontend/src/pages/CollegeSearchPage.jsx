@@ -137,10 +137,10 @@ function CollegeListDrawer({ applications, universities, fits, busyId, onClose, 
 
 // Research has no admission data to place this university, so the student picks its band.
 function TierPicker({ university, busy, onPick, onClose }) {
-  return <Modal title="Pick a band" onClose={onClose}>
+  return <Modal title="Pick a band" onClose={onClose}><div className="tier-picker">
     <p>{tx`There is no admission data to tell whether ${university.name} is a reach, target or safety for you. Pick one; you can change it later in Applications.`}</p>
     <div className="chip-row">{Object.entries(BAND_TIERS).map(([band, tier]) => <button type="button" key={tier} className="button quiet small" disabled={busy} aria-busy={busy} onClick={() => onPick(tier)}><TierBand value={band} /></button>)}</div>
-  </Modal>;
+  </div></Modal>;
 }
 
 // The catalogue holds ~1,500 universities; the table grows by this many rows at a time.
