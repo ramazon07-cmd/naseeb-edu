@@ -1,7 +1,7 @@
 
 
 export const EMPTY_DATA = {
-  schools: [], students: [], universities: [], tasks: [], applications: [], documents: [], essays: [],
+  schools: [], students: [], tasks: [], applications: [], documents: [], essays: [],
   achievements: [], researches: [], projects: [], internships: [], activities: [], honors: [],
   recommendations: [], roadmapMissions: [],
   bookings: [], studentMessages: [], messageChannels: [], programServices: [], scholarships: [], opportunityPrograms: [], storeItems: [], team: [], supportTickets: [],

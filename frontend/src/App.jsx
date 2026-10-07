@@ -134,7 +134,7 @@ const GLOBAL_SEARCH_RESOURCES = {
   essays: 'essays', achievements: 'activities', researches: 'academics', projects: 'portfolio', internships: 'portfolio',
   activities: 'activities', honors: 'activities', recommendations: 'recommendations', roadmapMissions: 'roadmap',
   bookings: 'bookings', messageChannels: 'messages', programServices: 'dashboard',
-  universities: 'college_search', scholarships: 'college_search', opportunityPrograms: 'programs',
+  scholarships: 'college_search', opportunityPrograms: 'programs',
   storeItems: 'store', team: 'dashboard', supportTickets: 'support',
   accounts: 'admin_counselors', counselorRoadmaps: 'counselor_roadmap'
 };
@@ -147,7 +147,6 @@ function globalSearchTitle(resource, item) {
   if (resource === 'bookings') return item.topic;
   if (resource === 'messageChannels') return item.name || item.title;
   if (resource === 'programServices') return item.name;
-  if (resource === 'universities') return item.name;
   if (resource === 'team') return item.name;
   return item.title || item.name || item.organization || item.recommender_name || item.subject || item.program || item.category;
 }
@@ -187,6 +186,7 @@ function remoteSearchDestinations(user) {
     applications: pick('applications'), documents: pick('documents'), essays: pick('essays'), recommendations: pick('recommendations'),
     roadmapMissions: pick('roadmap'), bookings: pick('bookings'), schools: pick(admin ? 'admin_schools' : 'schools'),
     accounts: pick('admin_counselors'), supportTickets: pick('support'),
+    universities: pick('college_search'),
   };
 }
 
@@ -195,12 +195,12 @@ const PAGE_RESOURCE_KEYS = {
   schools: ['schools'], students: ['students'], review: [], academics: ['students', 'researches'],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
-  roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'universities', 'students', 'essays', 'recommendations'],
+  roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'students', 'essays', 'recommendations'],
   documents: ['documents'], certificates: ['documents'], essays: ['essays'],
   student_center: ['students', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations', 'documents'],
   bookings: ['bookings'], messages: ['messageChannels'],
   programs: ['opportunityPrograms', 'scholarships'], essay_lab: [],
-  college_search: ['students', 'universities', 'applications', 'scholarships', 'essays', 'documents', 'recommendations'], store: ['storeItems'], support: ['supportTickets'],
+  college_search: ['students', 'applications', 'scholarships', 'essays', 'documents', 'recommendations'], store: ['storeItems'], support: ['supportTickets'],
   screen_time: [], account_settings: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal']
@@ -245,7 +245,8 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- language changes the translated labels
   const searchIndexData = useMemo(() => buildGlobalSearchIndex(user, data), [user, data, language]);
   // Staff lists are paged, so records beyond what is loaded come from the server.
-  const remoteSearch = useRemoteSearch(query, usesPagedLists(user));
+  // Students search on the server too: the university catalogue is not held in the browser.
+  const remoteSearch = useRemoteSearch(query, usesPagedLists(user) || user?.role === 'student');
   const searchResults = useMemo(() => mergeSearchResults(
     globalSearchResults(searchIndexData, query),
     remoteSearchEntries(remoteSearch.results, remoteSearchDestinations(user)).map((entry) => ({ ...entry, subtitle: entry.subtitle || t(PAGE_META[entry.destination].label) })),

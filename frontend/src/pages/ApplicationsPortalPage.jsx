@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowDownWideNarrow, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3, GripVertical, Hourglass, Link2, Lock, MapPin, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, parseDateValue, t, tx } from '../i18n';
@@ -176,10 +176,10 @@ export function ApplicationsPortalPage({ user, data, query, reload, notify, setP
   const [editing, setEditing] = useState(null);
   const [removingId, setRemovingId] = useState(null);
   const openUniversity = (id) => setPage('college_search', { universityId: id });
-  const universities = useMemo(() => new Map(data.universities.map((item) => [item.id, item])), [data.universities]);
   const applications = data.applications.map((application) => moves[application.id] ? { ...application, status: moves[application.id] } : application);
   const visible = applications.filter((application) => (tier === 'all' || application.tier === tier) && matchesQuery(application, query));
-  const nameOf = (application) => universities.get(application.university)?.name || application.university_detail?.name || t("University");
+  // Each application carries its university, so the board needs no catalogue.
+  const nameOf = (application) => application.university_detail?.name || t("University");
   const order = sort === 'name' ? (a, b) => nameOf(a).localeCompare(nameOf(b)) : (a, b) => (a.deadline ? parseDateValue(a.deadline).getTime() : Infinity) - (b.deadline ? parseDateValue(b.deadline).getTime() : Infinity);
 
   useEffect(() => {
@@ -251,7 +251,7 @@ export function ApplicationsPortalPage({ user, data, query, reload, notify, setP
         }}>
           <header><div><h3>{t(stage.title)}</h3><span className="count-pill neutral">{formatNumberLocale(cards.length)}</span>{stage.locked && <span className="board-lock" role="img" aria-label={t("Set by your counselor")}><Lock size={14} /></span>}</div><p>{t(stage.description)}</p></header>
           <div className="board-stack">
-            {cards.map((application) => <ApplicationCard key={application.id} application={application} university={universities.get(application.university)} essays={data.essays.filter((essay) => essay.application === application.id)} menuOpen={menuId === application.id} briefOpen={briefId === application.id} dragging={dragId === application.id} busy={removingId === application.id || application.id in moves}
+            {cards.map((application) => <ApplicationCard key={application.id} application={application} university={application.university_detail} essays={data.essays.filter((essay) => essay.application === application.id)} menuOpen={menuId === application.id} briefOpen={briefId === application.id} dragging={dragId === application.id} busy={removingId === application.id || application.id in moves}
             onMenu={() => {setBriefId(null);setMenuId(menuId === application.id ? null : application.id);}} onBrief={() => {setMenuId(null);setBriefId(briefId === application.id ? null : application.id);}} onBriefClose={() => setBriefId(null)} onDragStart={(event) => {event.dataTransfer.setData('text/plain', String(application.id));event.dataTransfer.effectAllowed = 'move';setBriefId(null);setDragId(application.id);}} onDragEnd={() => {setDragId(null);setOverStage(null);}}
             onMove={(status) => moveTo(data.applications.find((item) => item.id === application.id), status)} onOpen={() => openUniversity(application.university)} onEdit={() => {setMenuId(null);setBriefId(null);setEditing(data.applications.find((item) => item.id === application.id));}} onRemove={() => removeApplication(application)} />)}
             {!cards.length && <p className="board-empty">{stage.locked ? t("No decisions yet.") : t("Nothing here yet.")}</p>}
