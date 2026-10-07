@@ -84,6 +84,7 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
             verified_at=date(2026, 9, 12),
         )
         self.client.force_authenticate(self.student_a_user)
+        # List rows are slim; the full record (every aid field) is the detail.
         result = self.client.get(f'/api/universities/{university.id}/').data
         self.assertEqual(result['acceptance_rate'], '42.50')
         self.assertEqual(result['net_price_usd'], 18000)
@@ -185,10 +186,11 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['ready'])
-        self.assertEqual(response.data['recommendations'][0]['university']['id'], university.id)
-        self.assertGreaterEqual(response.data['recommendations'][0]['match_score'], 65)
-        self.assertIn(response.data['recommendations'][0]['admission_band'], {'reach', 'target', 'safety'})
-        self.assertIn('academic', response.data['recommendations'][0]['score_breakdown'])
+        top = self.client.get('/api/college-search/?sort=fit').data['results'][0]
+        self.assertEqual(top['id'], university.id)
+        self.assertGreaterEqual(top['fit']['match_score'], 65)
+        self.assertIn(top['fit']['admission_band'], {'reach', 'target', 'safety'})
+        self.assertIn('academic', top['fit']['score_breakdown'])
         self.student_a.refresh_from_db()
         self.assertEqual(self.student_a.sat_score, 1450)
         self.assertEqual(self.student_a.target_major, 'Computer Science')

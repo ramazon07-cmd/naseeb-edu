@@ -92,8 +92,9 @@ class GlobalSearchTests(ListContractMixin, APITestCase):
 
         from apps.admissions.views import search
 
+        # Students (and admins, who search every type) also search the university catalogue.
         expected = {
-            self.admin: (11, 11), self.counselor: (9, 9), self.organization: (9, 9), self.student_user: (9, 9),
+            self.admin: (12, 12), self.counselor: (9, 9), self.organization: (9, 9), self.student_user: (10, 10),
             self.teacher: (4, 4), self.parent: (0, 0),
         }
         for user, (views_built, queries) in expected.items():
