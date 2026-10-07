@@ -193,7 +193,6 @@ class StudentRecordListMixin(ListQueryMixin):
 
 # Upper bounds for list-shaped custom actions.
 CONTACT_LIST_LIMIT = 500
-COLLEGE_RESEARCH_LIMIT = 50
 SCREEN_TIME_TEAM_LIMIT = 200
 
 

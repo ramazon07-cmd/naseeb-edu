@@ -120,43 +120,42 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
             setattr(self.student_a, field, value)
         self.student_a.save()
         self.client.force_authenticate(self.student_a_user)
-        response = self.client.get('/api/college-research/')
+        response = self.client.get('/api/college-search/?sort=fit&page_size=100')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        return response.data['recommendations']
+        return response.data['results']
 
     def test_research_ranks_universities_outside_the_first_four_markets(self):
         oxford = University.objects.create(name='University of Oxford', country='United Kingdom', ranking=4, popular_majors='Computer Science')
         University.objects.create(name='Market University', country='Canada', popular_majors='History')
         top = self.research_as_student('UK')[0]
-        self.assertEqual(top['university']['id'], oxford.id)
-        self.assertIn('United Kingdom is one of your target countries', top['reasons'])
+        self.assertEqual(top['id'], oxford.id)
+        self.assertIn('United Kingdom is one of your target countries', top['fit']['reasons'])
         # Without an acceptance rate or SAT range the band is unknown, not "target".
-        self.assertIsNone(top['admission_band'])
+        self.assertIsNone(top['fit']['admission_band'])
 
     def test_band_still_comes_from_admission_data(self):
         University.objects.create(name='Selective University', country='United Kingdom', acceptance_rate='9.00')
         University.objects.create(name='Open University', country='United Kingdom', acceptance_rate='60.00')
-        bands = {item['university']['name']: item['admission_band'] for item in self.research_as_student('UK')}
+        bands = {item['name']: item['fit']['admission_band'] for item in self.research_as_student('UK')}
         self.assertEqual(bands, {'Selective University': 'reach', 'Open University': 'safety'})
 
     def test_onboarding_country_codes_match_catalogue_spellings(self):
         University.objects.create(name='Spelling University', country='United States of America')
-        reasons = self.research_as_student('US, Turkey')[0]['reasons']
+        reasons = self.research_as_student('US, Turkey')[0]['fit']['reasons']
         self.assertIn('United States of America is one of your target countries', reasons)
 
-    def test_every_university_gets_a_score_while_only_the_best_carry_details(self):
+    def test_every_university_is_ranked_and_explained_on_its_page(self):
         University.objects.bulk_create(University(name=f'Scored University {index}', country='Germany') for index in range(60))
-        self.research_as_student('UK')
-        data = self.client.get('/api/college-research/').data
-        self.assertEqual(len(data['recommendations']), 50)
-        self.assertEqual(len(data['scores']), 60)
-        top = data['recommendations'][0]
-        self.assertEqual(data['scores'][top['university']['id']], [top['match_score'], top['admission_band']])
+        rows = self.research_as_student('UK')
+        self.assertEqual(len(rows), 60)
+        self.assertTrue(all(row['fit']['reasons'] and 'academic' in row['fit']['score_breakdown'] for row in rows))
+        scores = [row['fit']['match_score'] for row in rows]
+        self.assertEqual(scores, sorted(scores, reverse=True))
 
-    def test_university_catalogue_serves_large_pages(self):
+    def test_university_catalogue_pages_hold_at_most_100_rows(self):
         University.objects.bulk_create(University(name=f'Catalogue University {index}', country='Germany') for index in range(150))
         self.client.force_authenticate(self.student_a_user)
         response = self.client.get('/api/universities/?page_size=1000')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 150)
-        self.assertIsNone(response.data['next'])
+        self.assertEqual(len(response.data['results']), 100)
+        self.assertIsNotNone(response.data['next'])

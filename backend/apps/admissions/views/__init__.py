@@ -9,7 +9,6 @@ from .common import (  # noqa: F401
     CounselorOrOwnerPermission,
     ScopedQuerysetMixin,
     CONTACT_LIST_LIMIT,
-    COLLEGE_RESEARCH_LIMIT,
     SCREEN_TIME_TEAM_LIMIT,
     StaffControlledWorkPermission,
     StaffControlledWorkMixin,
@@ -29,6 +28,7 @@ from .research import (  # noqa: F401
     COLLEGE_RESEARCH_QUESTIONS,
     build_college_research,
     CollegeResearchView,
+    CollegeSearchView,
     EducationMatchAIView,
 )
 from .records import (  # noqa: F401

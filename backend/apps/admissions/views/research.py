@@ -5,11 +5,9 @@ from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from rest_framework.views import APIView
 from apps.users.models import User
-from ..countries import country_key
-from ..models import University
-from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer, UniversitySerializer
+from ..college_search import CollegeSearchParams, college_search, evidence_counts, missing_fields
+from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
-from .common import COLLEGE_RESEARCH_LIMIT
 
 
 COLLEGE_RESEARCH_QUESTIONS = {
@@ -23,202 +21,70 @@ COLLEGE_RESEARCH_QUESTIONS = {
 
 
 def build_college_research(profile):
-    required_fields = tuple(COLLEGE_RESEARCH_QUESTIONS)
-    missing_fields = [field for field in required_fields if getattr(profile, field) in (None, '')]
-    profile_counts = {
-        'achievements': profile.achievements.count(),
-        'honors': profile.honors.count(),
-        'researches': profile.researches.count(),
-        'projects': profile.projects.count(),
-        'internships': profile.internships.count(),
-        'activities': profile.activities.count(),
-    }
-    snapshot = {
-        'gpa': profile.gpa,
-        'gpa_scale': profile.effective_gpa_scale,
-        'sat_score': profile.sat_score,
-        'ielts_score': profile.ielts_score,
-        'target_major': profile.target_major,
-        'target_countries': profile.target_countries,
-        'budget_usd': profile.budget_usd,
-        'scholarship_needed': profile.scholarship_needed,
-        'evidence': profile_counts,
-    }
-    if missing_fields:
-        return {
-            'ready': False,
-            'missing_fields': missing_fields,
-            'questions': [dict(field=field, **COLLEGE_RESEARCH_QUESTIONS[field]) for field in missing_fields],
-            'profile_snapshot': snapshot,
-            'recommendations': [],
-        }
+    """The student's research profile: what is still missing and the answers College Search ranks by.
 
-    sat = int(profile.sat_score)
-    ielts = float(profile.ielts_score)
-    gpa = float(profile.gpa)
-    gpa_scale = int(profile.effective_gpa_scale)
-    budget = int(profile.budget_usd)
-    target_countries = {country_key(value) for value in profile.target_countries.split(',') if value.strip()}
-    target_major = profile.target_major.strip().lower()
-    evidence_total = sum(min(value, 2) for value in profile_counts.values())
-    profile_strength_score = min(10, evidence_total * 2)
-    recommendations = []
-
-    for university in University.objects.prefetch_related('programs'):
-        reasons = []
-        gaps = []
-
-        gpa_score = round(min(15, (gpa / gpa_scale) * 15))
-        academic_score = gpa_score
-        if university.sat_min:
-            if sat >= (university.sat_max or university.sat_min):
-                sat_score = 25
-                reasons.append(f'SAT {sat} meets or exceeds the catalog range')
-            elif sat >= university.sat_min:
-                sat_score = 22
-                reasons.append(f'SAT {sat} fits the {university.sat_min}–{university.sat_max or university.sat_min} catalog range')
-            elif sat >= max(400, university.sat_min - 80):
-                sat_score = 12
-                gaps.append(f'SAT is {university.sat_min - sat} points below the catalog minimum')
-            else:
-                sat_score = 4
-                gaps.append(f'Raise SAT toward at least {university.sat_min}')
-        else:
-            sat_score = 20
-            reasons.append('No strict SAT minimum is listed in the catalog')
-        academic_score += sat_score
-
-        if ielts >= 7:
-            academic_score += 8
-            reasons.append(f'IELTS {ielts:g} is a strong language score')
-        elif ielts >= 6.5:
-            academic_score += 6
-            reasons.append(f'IELTS {ielts:g} is suitable for many programs')
-        else:
-            academic_score += 3
-            gaps.append('Verify the IELTS requirement on the official program page')
-
-        preference_score = 0
-        if country_key(university.country) in target_countries:
-            preference_score += 12
-            reasons.append(f'{university.country} is one of your target countries')
-        else:
-            preference_score += 3
-        active_programs = [
-            program for program in university.programs.all()
-            if program.is_active and program.international_students_eligible
-        ]
-        majors = [program.canonical_major.strip().lower() for program in active_programs]
-        majors.extend(value.strip().lower() for value in university.popular_majors.split(',') if value.strip())
-        if target_major and any(target_major in major or major in target_major for major in majors):
-            preference_score += 10
-            reasons.append(f'{profile.target_major} matches an available field of study')
-        else:
-            preference_score += 4
-            gaps.append('Check the exact program requirements for your selected major')
-
-        financial_score = 0
-        if university.net_price_usd:
-            if university.net_price_usd <= budget:
-                financial_score += 12
-                reasons.append('Estimated net price is within your budget')
-            elif university.net_price_usd <= budget * 1.5:
-                financial_score += 7
-                gaps.append('Net price is above budget but may be covered with aid')
-            else:
-                financial_score += 2
-                gaps.append('Estimated net price is significantly above your budget')
-        else:
-            financial_score += 5
-            gaps.append('Net price is not available in the catalog')
-        if profile.scholarship_needed:
-            if university.offers_international_aid or university.offers_merit_aid or university.offers_need_based_aid:
-                financial_score += 8
-                reasons.append('A suitable type of financial aid is available')
-            else:
-                financial_score += 1
-                gaps.append('International or merit aid is not listed in the catalog')
-        else:
-            financial_score += 8
-
-        total_score = min(100, academic_score + preference_score + financial_score + profile_strength_score)
-        acceptance_rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
-        if acceptance_rate is None and not university.sat_min:
-            # No admission data in the catalogue (e.g. a QS-only row): unknown, not "target".
-            admission_band = None
-        elif (acceptance_rate is not None and acceptance_rate < 15) or (university.sat_min and sat < university.sat_min):
-            admission_band = 'reach'
-        elif acceptance_rate is not None and acceptance_rate >= 45 and (not university.sat_min or sat >= university.sat_min):
-            admission_band = 'safety'
-        else:
-            admission_band = 'target'
-        match_label = 'Strong match' if total_score >= 80 else 'Good match' if total_score >= 65 else 'Developing match'
-        recommendations.append({
-            'university': university,
-            'match_score': total_score,
-            'match_label': match_label,
-            'admission_band': admission_band,
-            'score_breakdown': {
-                'academic': academic_score,
-                'preferences': preference_score,
-                'financial': financial_score,
-                'profile_strength': profile_strength_score,
-            },
-            'reasons': reasons[:5],
-            'gaps': gaps[:4],
-        })
-
-    recommendations.sort(key=lambda item: (-item['match_score'], item['university'].ranking or 999999))
-    # Every university gets its score and band so the whole catalogue sorts on
-    # one scale; only the best matches carry the full explanation.
-    scores = {item['university'].id: [item['match_score'], item['admission_band']] for item in recommendations}
-    # Return (and serialize) only the best matches, not the whole catalog.
-    recommendations = recommendations[:COLLEGE_RESEARCH_LIMIT]
-    for item in recommendations:
-        serialized_university = UniversitySerializer(item['university']).data
-        matching_programs = [
-            program for program in serialized_university['programs']
-            if target_major and (
-                target_major in program['canonical_major'].strip().lower()
-                or program['canonical_major'].strip().lower() in target_major
-            )
-        ]
-        item['university'] = serialized_university
-        item['matched_programs'] = (matching_programs or serialized_university['programs'])[:5]
+    Each university's fit travels with its row in College Search (``college_search``), so
+    opening the page no longer scores the whole catalogue.
+    """
+    evidence = evidence_counts(profile)
+    missing = missing_fields(profile)
     return {
-        'ready': True,
-        'missing_fields': [],
-        'questions': [],
-        'profile_snapshot': snapshot,
-        'recommendations': recommendations,
-        'scores': scores,
+        'ready': not missing,
+        'missing_fields': missing,
+        'questions': [dict(field=field, **COLLEGE_RESEARCH_QUESTIONS[field]) for field in missing],
+        'profile_snapshot': {
+            'gpa': profile.gpa,
+            'gpa_scale': profile.effective_gpa_scale,
+            'sat_score': profile.sat_score,
+            'ielts_score': profile.ielts_score,
+            'target_major': profile.target_major,
+            'target_countries': profile.target_countries,
+            'budget_usd': profile.budget_usd,
+            'scholarship_needed': profile.scholarship_needed,
+            'evidence': evidence,
+        },
         'methodology': 'Academic fit, preferences, affordability, aid and verified profile evidence.',
         'generated_at': timezone.now(),
     }
 
 
+def student_profile(request):
+    if request.user.role != User.Role.STUDENT or not hasattr(request.user, 'student_profile'):
+        return None
+    return request.user.student_profile
+
+
 class CollegeResearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_profile(self, request):
-        if request.user.role != User.Role.STUDENT or not hasattr(request.user, 'student_profile'):
-            return None
-        return request.user.student_profile
-
     def get(self, request):
-        profile = self.get_profile(request)
+        profile = student_profile(request)
         if not profile:
             return Response({'detail': 'College research is available to student accounts only.'}, status=403)
         return Response(build_college_research(profile))
 
     def post(self, request):
-        profile = self.get_profile(request)
+        profile = student_profile(request)
         if not profile:
             return Response({'detail': 'College research is available to student accounts only.'}, status=403)
         serializer = CollegeResearchProfileSerializer(data=request.data, context={'profile': profile})
         serializer.is_valid(raise_exception=True)
         serializer.update_profile(profile)
         return Response(build_college_research(profile))
+
+
+class CollegeSearchView(APIView):
+    """One page of College Search (``GET /api/college-search/``), ranked for the student."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        profile = student_profile(request)
+        if not profile:
+            return Response({'detail': 'College Search is available to student accounts only.'}, status=403)
+        params = CollegeSearchParams(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        return Response(college_search(profile, params.validated_data))
 
 
 class EducationMatchAIView(APIView):

@@ -26,6 +26,7 @@ from .students import (  # noqa: F401
 from .catalog import (  # noqa: F401
     UniversityProgramSerializer,
     UniversitySerializer,
+    UniversityRowSerializer,
     ScholarshipSerializer,
     OpportunityProgramSerializer,
     StoreItemSerializer,

@@ -189,10 +189,3 @@ class ListPagination(PageNumberPagination):
             url = replace_query_param(request.build_absolute_uri(), self.cursor_query_param, cursor)
             self.next_link = remove_query_param(url, self.page_query_param)
         return rows
-
-
-class CatalogPagination(ListPagination):
-    """The shared university catalogue is read whole by every student who opens
-    College Search; larger pages turn its ~1,500 rows into two cached requests."""
-
-    max_page_size = 1000

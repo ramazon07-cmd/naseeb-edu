@@ -18,13 +18,14 @@ from ..serializers import (
     SchoolSerializer,
     ScholarshipSerializer,
     StoreItemSerializer,
+    UniversityRowSerializer,
     UniversitySerializer,
 )
-from core.pagination import CatalogPagination
 from apps.users import entitlements
 from apps.users.admin_permissions import has_tier
 from apps.users.services import audit_product_action
 from ..catalog_cache import CachedCatalogListMixin
+from ..college_search import SEARCH_FIELDS, eligible_programs
 from ..listing import ListQueryMixin
 from .common import CounselorOrOwnerPermission, ProductAdminPermission
 from .portal import StudentPortalPermission
@@ -126,11 +127,25 @@ class SchoolViewSet(ListQueryMixin, viewsets.ModelViewSet):
         }, status=201)
 
 
-class UniversityViewSet(CachedCatalogListMixin, viewsets.ModelViewSet):
+class UniversityViewSet(ListQueryMixin, CachedCatalogListMixin, viewsets.ModelViewSet):
+    """The shared catalogue. Lists are searched and paged like every other list
+    (at most 100 rows a page) with slim rows; a university's full record is its
+    detail. College Search pages through ``/api/college-search/`` instead."""
+
     serializer_class = UniversitySerializer
     queryset = University.objects.prefetch_related('programs').all()
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = CatalogPagination
+    search_fields = SEARCH_FIELDS
+    ordering_options = {'name': ('name', 'id')}
+    default_cursor_ordering = 'name'
+
+    def get_queryset(self):
+        if self.action == 'list':
+            return University.objects.prefetch_related(eligible_programs())
+        return super().get_queryset()
+
+    def get_serializer_class(self):
+        return UniversityRowSerializer if self.action == 'list' else UniversitySerializer
 
     def get_permissions(self):
         # Universities are a shared catalog: any authenticated user may read,

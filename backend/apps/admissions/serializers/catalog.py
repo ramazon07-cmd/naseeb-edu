@@ -31,6 +31,29 @@ class UniversitySerializer(serializers.ModelSerializer):
         return UniversityProgramSerializer(programs, many=True).data
 
 
+class UniversityRowSerializer(serializers.ModelSerializer):
+    """A university as one row of a list: what College Search and the pickers show.
+
+    The full record (aid details, notes, URLs, timestamps) is served by the
+    detail endpoint, so a page of rows stays small on a slow connection.
+    ``programs`` must be prefetched with the eligible programs only
+    (``college_search.eligible_programs``).
+    """
+
+    programs = serializers.SerializerMethodField()
+
+    class Meta:
+        model = University
+        fields = (
+            'id', 'name', 'city', 'country', 'institution_type', 'ranking', 'ranking_label', 'qs_data',
+            'acceptance_rate', 'sat_min', 'sat_max', 'test_optional', 'net_price_usd',
+            'application_deadline', 'scholarship_deadline', 'programs',
+        )
+
+    def get_programs(self, obj):
+        return [{'id': program.id, 'name': program.name, 'canonical_major': program.canonical_major} for program in obj.programs.all()]
+
+
 class ScholarshipSerializer(serializers.ModelSerializer):
     university_name = serializers.CharField(source='university.name', read_only=True)
 
