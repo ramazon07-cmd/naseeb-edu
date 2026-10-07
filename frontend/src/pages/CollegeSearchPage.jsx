@@ -6,7 +6,10 @@ import { Empty, Modal } from '../components/ui';
 import { FilterOption, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { COLLEGE_AID_FLAGS, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFacetCounts, collegeFilterChips, collegeMatches, collegeSorter, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, rankText, satLabel, shortDate, toggleIn, universityFit } from '../lib/college';
+import { COLLEGE_AID_FLAGS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
+import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
+import { useCollegeSearch } from '../hooks/useCollegeSearch';
+import { PageSkeleton } from '../components/states';
 import { UniversityPage } from './UniversityPage';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
@@ -24,18 +27,18 @@ function UniversityLogo({ university }) {
   return <span className="catalog-university-logo" aria-hidden="true">{src && failedSrc !== src ? <img src={src} alt="" loading="lazy" onError={() => setFailedSrc(src)} /> : <b>{initials}</b>}</span>;
 }
 
-function CollegeFilters({ filters, setFilters, counts, budget, showBands, chips }) {
+function CollegeFilters({ filters, setFilters, facets, budget, showBands, chips }) {
   const patch = (change) => setFilters((current) => ({ ...current, ...change }));
   const clear = chips.length > 0 && <button type="button" className="link-button" onClick={() => setFilters(DEFAULT_COLLEGE_FILTERS)}>{t("Clear")}</button>;
   const groups = <>
-    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Where")}</legend><select className="filter-country" aria-label={t("Country")} value={filters.country} onChange={(event) => patch({ country: event.target.value })}><option value="">{t("All countries")}</option>{Object.entries(counts.countries).sort(([a], [b]) => a.localeCompare(b)).map(([country, count]) => <option key={country} value={country}>{`${country} (${formatNumberLocale(count)})`}</option>)}</select></fieldset>
-    {showBands && <fieldset className="filter-set"><legend className="college-filter-legend">{t("Admission band")}</legend>{['reach', 'target', 'safety'].map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={counts.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Where")}</legend><select className="filter-country" aria-label={t("Country")} value={filters.country} onChange={(event) => patch({ country: event.target.value })}><option value="">{t("All countries")}</option>{Object.entries(facets.countries).sort(([a], [b]) => a.localeCompare(b)).map(([country, count]) => <option key={country} value={country}>{`${country} (${formatNumberLocale(count)})`}</option>)}</select></fieldset>
+    {showBands && <fieldset className="filter-set"><legend className="college-filter-legend">{t("Admission band")}</legend>{['reach', 'target', 'safety'].map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={facets.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Net price per year")}</legend>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} disabled={cap === 'budget' && !budget} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
-    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={counts.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={facets.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Testing & type")}</legend>
-      <FilterOption checked={filters.testOptional} onChange={() => patch({ testOptional: !filters.testOptional })} count={counts.testOptional}>{t("Test optional")}</FilterOption>
-      <FilterOption checked={filters.satFit} onChange={() => patch({ satFit: !filters.satFit })} count={counts.satFit}>{t("My SAT is in range")}</FilterOption>
-      <FilterOption checked={filters.publicOnly} onChange={() => patch({ publicOnly: !filters.publicOnly })} count={counts.publicOnly}>{t("Public only")}</FilterOption>
+      <FilterOption checked={filters.testOptional} onChange={() => patch({ testOptional: !filters.testOptional })} count={facets.test_optional}>{t("Test optional")}</FilterOption>
+      <FilterOption checked={filters.satFit} onChange={() => patch({ satFit: !filters.satFit })} count={facets.sat_fit}>{t("My SAT is in range")}</FilterOption>
+      <FilterOption checked={filters.publicOnly} onChange={() => patch({ publicOnly: !filters.publicOnly })} count={facets.public}>{t("Public only")}</FilterOption>
     </fieldset>
   </>;
   return <div className="college-advanced-filters" id="college-advanced-filters">{clear && <header>{clear}</header>}{groups}</div>;
@@ -70,8 +73,10 @@ function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
   </section>;
 }
 
-function CollegeRow({ university, view, result, score, student, application, expanded, busy, onToggle, onOpen, onAdd }) {
-  const fit = score ? { score: score.match_score } : universityFit(university, student);
+// One row of results. `university.fit` is the student's fit, sent with the row
+// once their research profile is complete.
+function CollegeRow({ university, view, application, expanded, busy, onToggle, onOpen, onAdd }) {
+  const fit = university.fit;
   const panelId = `college-details-${university.id}`;
   const days = daysUntil(university.application_deadline);
   return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
@@ -79,8 +84,8 @@ function CollegeRow({ university, view, result, score, student, application, exp
     <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{university.institution_type ? ` · ${university.qs_data?.status ? qsClassification('status', university.qs_data.status) : t(university.institution_type)}` : ''}</small></span></div>
     <div className="uni-facts">
       {view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <div className={`uni-value ${code === 'overall' ? 'qs-score-primary' : ''}`} role="cell" data-label={t(title)} key={code}><span className="v">{qsScoreText(qsScore(university.qs_data, code))}</span></div>) : <>
-      <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{formatNumberLocale(fit.score)}<small>/100</small></span></div>
-      <div className="uni-band" role="cell" data-label={t("Band")}>{score?.admission_band ? <TierBand value={score.admission_band} /> : <span className="muted-copy">—</span>}</div>
+      <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{fit ? <>{formatNumberLocale(fit.match_score)}<small>/100</small></> : '—'}</span></div>
+      <div className="uni-band" role="cell" data-label={t("Band")}>{fit?.admission_band ? <TierBand value={fit.admission_band} /> : <span className="muted-copy">—</span>}</div>
       <div className="uni-value" role="cell" data-label={t("Acceptance")}><span className="v">{percentText(university.acceptance_rate)}</span></div>
       <div className="uni-value" role="cell" data-label={t("SAT")}><span className="v">{satLabel(university)}</span></div>
       <div className="uni-value" role="cell" data-label={t("Net price")}><span className="v">{money(university.net_price_usd)}</span></div>
@@ -90,10 +95,10 @@ function CollegeRow({ university, view, result, score, student, application, exp
     <div className="uni-action" role="cell">{application ? <span className="uni-added"><Check size={14} aria-hidden="true" /> {t("Added")}</span> : <button type="button" className="button quiet small" aria-label={t("Add to my list")} disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={14} aria-hidden="true" /> {t("Add")}</button>}</div>
     <div className="uni-chevron" role="cell"><button type="button" aria-expanded={expanded} aria-controls={panelId} aria-label={view === 'qs' ? t("Show QS details") : t("Show why this result")} onClick={onToggle}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button></div>
     {expanded && <div className="uni-expand" id={panelId} role="cell">
-      {view === 'qs' ? <QsUniversityDetails university={university} /> : result && <div className="uni-expand-grid">
-        <section className="college-detail-score"><h4>{t("Fit")}</h4><ScoreBreakdown breakdown={result.score_breakdown} /></section><div className="college-detail-notes"><section><h4>{t("Why it fits")}</h4>
-        <ul className="note-list ok" aria-label={t("Why it fits")}>{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={14} aria-hidden="true" /><span>{reason}</span></li>)}</ul></section><section><h4>{t("Watch-outs")}</h4>
-        <ul className="note-list gap" aria-label={t("Watch-outs")}>{result.gaps.map((gap) => <li key={gap}><Clock3 size={14} aria-hidden="true" /><span>{gap}</span></li>)}</ul></section></div>
+      {view === 'qs' ? <QsUniversityDetails university={university} /> : fit && <div className="uni-expand-grid">
+        <section className="college-detail-score"><h4>{t("Fit")}</h4><ScoreBreakdown breakdown={fit.score_breakdown} /></section><div className="college-detail-notes"><section><h4>{t("Why it fits")}</h4>
+        <ul className="note-list ok" aria-label={t("Why it fits")}>{fit.reasons.map((reason) => <li key={reason}><CheckCircle2 size={14} aria-hidden="true" /><span>{reason}</span></li>)}</ul></section><section><h4>{t("Watch-outs")}</h4>
+        <ul className="note-list gap" aria-label={t("Watch-outs")}>{fit.gaps.map((gap) => <li key={gap}><Clock3 size={14} aria-hidden="true" /><span>{gap}</span></li>)}</ul></section></div>
       </div>}
       <button type="button" className="button quiet small uni-open" onClick={onOpen}>{t("Open university")} <ArrowRight size={13} aria-hidden="true" /></button>
     </div>}
@@ -107,8 +112,10 @@ function DeadlinePicker({ name, busy, onPick }) {
   return <label className="drawer-deadline" onClick={(event) => event.stopPropagation()}><CalendarPlus size={13} aria-hidden="true" /><span>{t("Set deadline")}</span><input type="date" min={today} disabled={busy} aria-busy={busy} aria-label={tx`Set deadline for ${name}`} onChange={(event) => {if (event.target.value >= today) onPick(event.target.value);}} /></label>;
 }
 
-function CollegeListDrawer({ applications, universities, fits, busyId, onClose, onOpen, onRemove, onDeadline, onApplications }) {
-  const deadlineOf = (application) => application.deadline || universities.get(application.university)?.application_deadline;
+// Each application carries its university, so the list needs no catalogue; `fits`
+// holds the student's fit for the listed universities.
+function CollegeListDrawer({ applications, fits, busyId, onClose, onOpen, onRemove, onDeadline, onApplications }) {
+  const deadlineOf = (application) => application.deadline || application.university_detail?.application_deadline;
   const sorted = [...applications].sort((a, b) => (deadlineOf(a) ? parseDateValue(deadlineOf(a)).getTime() : Infinity) - (deadlineOf(b) ? parseDateValue(deadlineOf(b)).getTime() : Infinity));
   const bandOf = (application) => application.tier === 'dream' ? 'reach' : application.tier;
   return <Modal title="My college list" className="drawer-modal" backdropClassName="drawer-backdrop" onClose={onClose}>
@@ -116,8 +123,8 @@ function CollegeListDrawer({ applications, universities, fits, busyId, onClose, 
       <div className="drawer-summary"><h3>{tp('{n} university|{n} universities', applications.length, { n: applications.length })}</h3>
         <div className="drawer-tiers">{['reach', 'target', 'safety'].map((band) => <span key={band}><b>{formatNumberLocale(applications.filter((application) => bandOf(application) === band).length)}</b><TierBand value={band} /></span>)}</div></div>
       <div className="drawer-list">{sorted.map((application) => {
-          const university = universities.get(application.university);
-          const name = university?.name || application.university_detail?.name || t("University");
+          const university = application.university_detail;
+          const name = university?.name || t("University");
           const score = fits.get(application.university)?.match_score;
           const deadline = deadlineOf(application);
           const days = daysUntil(deadline);
@@ -133,47 +140,72 @@ function CollegeListDrawer({ applications, universities, fits, busyId, onClose, 
   </Modal>;
 }
 
-// The catalogue holds ~1,500 universities; the table grows by this many rows at a time.
-const ROWS_PER_STEP = 50;
+// The catalogue holds ~1,500 universities, so the server sends one page at a time
+// (10 by default, so a slow connection gets its first rows quickly) and the
+// filters, sorting and counts run there (hooks/useCollegeSearch).
+const PAGE_SIZE_KEY = 'naseeb-college-page-size';
+const EMPTY_FACETS = { countries: {}, bands: {}, aid: {}, test_optional: 0, sat_fit: 0, public: 0, qs: {} };
+
+function storedPageSize() {
+  try {
+    const size = Number(window.localStorage.getItem(PAGE_SIZE_KEY));
+    return COLLEGE_PAGE_SIZES.includes(size) ? size : COLLEGE_PAGE_SIZES[0];
+  } catch {
+    return COLLEGE_PAGE_SIZES[0];
+  }
+}
 
 export function CollegeSearchPage({ data, query, reload, notify, setPage, universityId }) {
   const [localQuery, setLocalQuery] = useState(query || '');
+  const [searchTerm, setSearchTerm] = useState(query || '');
   const [filters, setFilters] = useState(DEFAULT_COLLEGE_FILTERS);
   const [sort, setSort] = useState('ranking');
   const [view, setView] = useState('qs');
   const [qsFilters, setQsFilters] = useState({});
+  const [pageSize, setPageSize] = useState(storedPageSize);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [shown, setShown] = useState(ROWS_PER_STEP);
   const [expandedId, setExpandedId] = useState(null);
   const [listOpen, setListOpen] = useState(false);
+  const [listFits, setListFits] = useState(() => new Map());
+  const [opened, setOpened] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [research, setResearch] = useState(null);
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchSaving, setResearchSaving] = useState(false);
   const [researchError, setResearchError] = useState('');
+  // Bumped when the profile changes: the fit of every row has to be fetched again.
+  const [researchVersion, setResearchVersion] = useState(0);
   const previousQuery = useRef(query);
   const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
   const closeUniversity = useCallback(() => setPage('college_search'), [setPage]);
   const student = ownStudent(data);
   const budget = Number(student?.budget_usd) || 0;
-  const researchMap = useMemo(() => new Map((research?.recommendations || []).map((item) => [item.university.id, item])), [research]);
-  // Score and band of every university; only the best matches (researchMap) explain theirs.
-  const fits = useMemo(() => new Map(Object.entries(research?.scores || {}).map(([id, [match_score, admission_band]]) => [Number(id), { match_score, admission_band }])), [research]);
-  const universities = useMemo(() => new Map(data.universities.map((item) => [item.id, item])), [data.universities]);
+  const search = useCollegeSearch(collegeSearchQuery({ query: searchTerm, filters, qsFilters, sort, view, pageSize }), researchVersion);
+  const rows = search.rows;
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const facets = search.facets || EMPTY_FACETS;
   const listed = useMemo(() => new Map(data.applications.map((item) => [item.university, item])), [data.applications]);
-  const counts = useMemo(() => collegeFacetCounts(data.universities, fits, student), [data.universities, fits, student]);
-  const qsFacets = useMemo(() => Object.fromEntries(QS_CLASSIFICATIONS.slice(0, 4).map(([key]) => [key, data.universities.reduce((counts, item) => { const value = item.qs_data?.[key]; if (value) counts[value] = (counts[value] || 0) + 1; return counts; }, {})])), [data.universities]);
-  const rows = useMemo(() => data.universities.filter((item) => collegeMatches(item, fits.get(item.id), filters, student, localQuery) && (view !== 'qs' || Object.entries(qsFilters).every(([key, value]) => !value || item.qs_data?.[key] === value))).sort(collegeSorter(sort, fits, student)), [data.universities, fits, filters, student, localQuery, sort, view, qsFilters]);
 
-  useEffect(() => { setLocalQuery(query || ''); }, [query]);
-  useEffect(() => { setShown(ROWS_PER_STEP); }, [filters, sort, localQuery, view, qsFilters]);
+  useEffect(() => { setLocalQuery(query || ''); setSearchTerm(query || ''); }, [query]);
+  // The list follows the search box once typing pauses: one request, not one per key.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchTerm(localQuery), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [localQuery]);
   const searchRef = useRef(null);
   const resultsRef = useRef(null);
-  // The list filters as you type; Enter or the search button brings the results into view.
+  // Enter or the search button searches at once and brings the results into view.
   function submitSearch(event) {
     event.preventDefault();
+    setSearchTerm(localQuery);
     const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     resultsRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+  }
+
+  function changePageSize(size) {
+    setPageSize(size);
+    try {window.localStorage.setItem(PAGE_SIZE_KEY, String(size));} catch {/* The choice is just not remembered. */}
   }
 
   useEffect(() => {
@@ -191,9 +223,38 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
 
   useEffect(() => {window.scrollTo({ top: 0, left: 0, behavior: 'auto' });}, [universityId]);
 
+  // A university page shows the full record (programs, aid, QS details) and the student's fit.
+  useEffect(() => {
+    if (universityId == null) {
+      setOpened(null);
+      return undefined;
+    }
+    let active = true;
+    const row = rowsRef.current.find((item) => item.id === universityId);
+    setOpened((current) => current?.id === universityId ? current : { id: universityId });
+    Promise.all([
+      api.retrieve('universities', universityId),
+      row ? row.fit : api.collegeSearch(`ids=${universityId}`).then((payload) => payload.results[0]?.fit),
+    ]).then(([university, fit]) => {if (active) setOpened({ id: universityId, university, fit });}).
+    catch((error) => {if (active) setOpened({ id: universityId, error: error.status === 404 ? t("University not found.") : error.message });});
+    return () => {active = false;};
+  }, [universityId, researchVersion]);
+
+  // The fit of each university on the student's list, fetched when the list opens.
+  useEffect(() => {
+    const ids = [...new Set(data.applications.map((item) => item.university))].slice(0, 100);
+    if (!listOpen || !ids.length) return undefined;
+    let active = true;
+    api.collegeSearch(`ids=${ids.join(',')}`).then((payload) => {if (active) setListFits(new Map(payload.results.map((row) => [row.id, row.fit])));}).catch(() => {});
+    return () => {active = false;};
+  }, [listOpen, data.applications, researchVersion]);
+
   async function refreshResearch() {
     setResearchLoading(true);setResearchError('');
-    try {setResearch(await api.collegeResearch());} catch (error) {setResearchError(error.message);} finally {setResearchLoading(false);}
+    try {
+      setResearch(await api.collegeResearch());
+      setResearchVersion((value) => value + 1);
+    } catch (error) {setResearchError(error.message);} finally {setResearchLoading(false);}
   }
 
   async function completeResearchProfile(payload) {
@@ -201,13 +262,14 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     try {
       const result = await api.updateCollegeResearchProfile(payload);
       setResearch(result);
+      setResearchVersion((value) => value + 1);
       notify(t("Profile details saved and college research updated."));
       reload();
     } catch (error) {setResearchError(error.message);} finally {setResearchSaving(false);}
   }
 
-  async function addToList(university) {
-    const band = fits.get(university.id)?.admission_band;
+  async function addToList(university, fit) {
+    const band = fit?.admission_band;
     const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
     setBusyId(university.id);
     try {
@@ -228,7 +290,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
 
   async function removeFromList(application) {
     if (!window.confirm(t("Remove this university from your list?"))) return;
-    const name = universities.get(application.university)?.name || t("University");
+    const name = application.university_detail?.name || t("University");
     setBusyId(application.university);
     try {
       await api.remove('applications', application.id);
@@ -237,14 +299,18 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
   }
 
-  const university = universityId == null ? null : universities.get(universityId);
-  if (university) return <UniversityPage {...{ data, university, research, researchLoading, setPage }} result={researchMap.get(university.id)} application={listed.get(university.id)} busy={busyId === university.id} onAdd={() => addToList(university)} onRemove={() => removeFromList(listed.get(university.id))} onBack={closeUniversity} />;
+  if (universityId != null) {
+    if (opened?.university) return <UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={opened.fit} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, opened.fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} />;
+    if (opened?.error) return <div className="section-stack student-portal college-page"><div className="college-research-state error"><X size={22} /><div><b>{t("This university could not be opened")}</b><p>{opened.error}</p></div><button className="button quiet small" onClick={closeUniversity}>{t("Back to College Search")}</button></div></div>;
+    return <PageSkeleton />;
+  }
 
   const chips = collegeFilterChips(filters, setFilters, budget);
   const ready = Boolean(research?.ready);
-  const filtersPanel = <CollegeFilters {...{ filters, setFilters, counts, budget, chips }} showBands={ready} />;
+  const filtersPanel = <CollegeFilters {...{ filters, setFilters, facets, budget, chips }} showBands={ready} />;
+  const remaining = Math.min(pageSize, search.count - rows.length);
   return <div className="section-stack student-portal college-page">
-    <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><span className="catalog-eyebrow">NASEEB EDU / {t('College Search')}</span><h1>{t('College Search')}</h1><p>{t('Explore admissions, cost, deadlines, and your personal fit in one place.')}</p><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
+    <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><span className="catalog-eyebrow">NASEEB EDU / {t('College Search')}</span><h1>{t('College Search')}</h1><p>{t('Explore admissions, cost, deadlines, and your personal fit in one place.')}</p><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, budget, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
     {research && !research.ready && <CollegeProfileQuestions research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
@@ -256,28 +322,31 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
           <button type="button" className="college-saved-button" onClick={() => setListOpen(true)} aria-label={t('My college list')}><Bookmark size={17} aria-hidden="true" /><span>{t('My List')}</span><b>{formatNumberLocale(data.applications.length)}</b></button>
         </header>
         <div className="college-filter-row">
-          {view === 'qs' && <div className="college-qs-filters">{QS_CLASSIFICATIONS.slice(0, 4).map(([key, title, values]) => <CollegeFilterSelect key={key} label={t(title)} value={qsFilters[key] || ''} onChange={(value) => setQsFilters((current) => ({ ...current, [key]: value }))} options={[{ value: '', label: t('All') }, ...Object.keys(values).filter((value) => qsFacets[key][value]).map((value) => ({ value, label: qsClassification(key, value), count: qsFacets[key][value] }))]} />)}</div>}
+          {view === 'qs' && <div className="college-qs-filters">{QS_CLASSIFICATIONS.slice(0, 4).map(([key, title, values]) => <CollegeFilterSelect key={key} label={t(title)} value={qsFilters[key] || ''} onChange={(value) => setQsFilters((current) => ({ ...current, [key]: value }))} options={[{ value: '', label: t('All') }, ...Object.keys(values).filter((value) => facets.qs[key]?.[value]).map((value) => ({ value, label: qsClassification(key, value), count: facets.qs[key][value] }))]} />)}</div>}
           <button type="button" className="college-filters-toggle" aria-expanded={filtersOpen} aria-controls="college-advanced-filters" onClick={() => setFiltersOpen(!filtersOpen)}><Filter size={16} aria-hidden="true" />{t('Filters')}{chips.length > 0 && <b>{formatNumberLocale(chips.length)}</b>}<ChevronDown size={14} aria-hidden="true" /></button>
         </div>
         {filtersOpen && filtersPanel}
         <div className="uni-meta">
-          <p className="filter-count" aria-live="polite"><b>{formatNumberLocale(rows.length)}</b> {t('Universities')}</p>
+          <p className="filter-count" aria-live="polite"><b>{search.query == null ? '…' : formatNumberLocale(search.count)}</b> {t('Universities')}</p>
           {chips.map((chip) => <span className="filter-token" key={chip.key}>{chip.text}<button type="button" aria-label={tx`Remove ${chip.text} filter`} onClick={chip.clear}><X size={13} aria-hidden="true" /></button></span>)}
           {view === 'qs' && Object.values(qsFilters).some(Boolean) && <button type="button" className="college-reset-filters" onClick={() => setQsFilters({})}><X size={13} aria-hidden="true" />{t('Clear')}</button>}
           <div className="sort-control"><span>{t('Sort by')}</span><select aria-label={t('Sort by')} value={sort} onChange={(event) => setSort(event.target.value)}>{COLLEGE_SORTS.map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
+          <div className="sort-control"><span>{t('Show')}</span><select aria-label={t('Universities per page')} value={pageSize} onChange={(event) => changePageSize(Number(event.target.value))}>{COLLEGE_PAGE_SIZES.map((size) => <option value={size} key={size}>{formatNumberLocale(size)}</option>)}</select></div>
         </div>
         {ready && <CollegeProfileStrip research={research} refreshing={researchLoading} onRefresh={refreshResearch} onEdit={() => setPage('student_center')} />}
       </section>
-      <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''}`} role="table" aria-label={t("Universities")}>
+      <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''} ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} role="table" aria-label={t("Universities")} aria-busy={search.loading}>
         <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Net price")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
-        {rows.slice(0, shown).map((item) => <CollegeRow key={item.id} view={view} university={item} result={researchMap.get(item.id)} score={fits.get(item.id)} student={student} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item)} />)}
-        {!rows.length && <Empty text={t("No universities match these filters.")} />}
+        {rows.map((item) => <CollegeRow key={item.id} view={view} university={item} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
+        {search.loading && !rows.length && <p className="uni-loading" role="status">{t("Loading universities…")}</p>}
+        {!search.loading && !search.error && !rows.length && <Empty text={t("No universities match these filters.")} />}
       </div>
-      {rows.length > shown && <button type="button" className="button quiet uni-more" onClick={() => setShown(shown + ROWS_PER_STEP)}>{t('Show {n} more', { n: formatNumberLocale(Math.min(ROWS_PER_STEP, rows.length - shown)) })}</button>}
+      {search.error && <div className="college-research-state error" role="alert"><X size={22} /><div><b>{t("Universities could not be loaded")}</b><p>{search.error}</p></div><button className="button quiet small" onClick={search.retry}>{t("Retry")}</button></div>}
+      {search.next && remaining > 0 && <button type="button" className="button quiet uni-more" onClick={search.loadMore} disabled={search.loadingMore} aria-busy={search.loadingMore}>{search.loadingMore ? t('Loading…') : t('Show {n} more', { n: formatNumberLocale(remaining) })}</button>}
       <p className="uni-note">{t(view === 'qs' ? "Published QS scores out of 100." : "Fit is not an admission probability.")} {t("Rankings: QS World University Rankings 2027.")}</p>
       </div>
     </div>}
-    {listOpen && <CollegeListDrawer applications={data.applications} universities={universities} fits={fits} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onDeadline={saveDeadline} onApplications={() => setPage('applications')} />}
+    {listOpen && <CollegeListDrawer applications={data.applications} fits={listFits} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onDeadline={saveDeadline} onApplications={() => setPage('applications')} />}
   </div>;
 }
 

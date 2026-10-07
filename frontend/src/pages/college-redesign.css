@@ -899,6 +899,19 @@
   display: flex;
 }
 
+/* A new search keeps the previous rows on screen, dimmed, until its page arrives. */
+.college-page .uni-table.is-refreshing {
+  opacity: 0.55;
+  transition: opacity var(--theme-duration) ease;
+}
+
+.college-page .uni-loading {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
 /* My college list: the countdown under each university, or a date picker
    where the application has no deadline yet. */
 .college-page .drawer-due {

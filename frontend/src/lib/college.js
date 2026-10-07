@@ -1,34 +1,9 @@
 // Pure helpers for College Search, the university pages and the Applications
-// board: filtering, sorting, deadlines and application stages.
+// board: search queries, deadlines and application stages. Filtering, sorting
+// and the facet counts run on the server (backend apps/admissions/college_search.py).
 import { formatDateLocale, formatNumberLocale, formatPercentLocale, parseDateValue, t, tp, tx } from '../i18n.js';
 import { money } from './format.js';
 import { label } from './labels.js';
-import { COUNTRY_ALIASES } from './profileSections.js';
-import { matchesQuery } from './searchIndex.js';
-
-// The country a university is filtered and counted under: one name per market
-// ('USA' and 'United States' are one country), otherwise the catalogue's spelling.
-const MARKET_COUNTRIES = { us: 'United States', canada: 'Canada', china: 'China', hong_kong: 'Hong Kong' };
-
-export const universityCountry = (university) => MARKET_COUNTRIES[university?.market] || String(university?.country || '').trim();
-
-// Target countries are onboarding codes ('US', 'UK'); the catalogue spells them out.
-function countryKey(value) {
-  const name = String(value || '').trim();
-  return (COUNTRY_ALIASES[name] || name).toLowerCase();
-}
-
-export function universityFit(university, student) {
-  if (!student) return { score: 0, label: 'Profile needed' };
-  let score = 20;
-  const targets = String(student.target_countries || '').split(',').map(countryKey);
-  if (targets.includes(countryKey(university.country))) score += 25;
-  if (!university.sat_min || Number(student.sat_score || 0) >= Number(university.sat_min)) score += 25;
-  if (!university.net_price_usd || !student.budget_usd || Number(university.net_price_usd) <= Number(student.budget_usd)) score += 15;
-  if (!student.scholarship_needed || university.offers_international_aid || university.offers_merit_aid) score += 15;
-  const bounded = Math.min(score, 100);
-  return { score: bounded, label: bounded >= 80 ? 'Strong fit' : bounded >= 60 ? 'Good fit' : 'Explore' };
-}
 
 export function scholarshipRequirements(item) {
   return [
@@ -54,6 +29,32 @@ export const COLLEGE_AID_FLAGS = [['offers_need_based_aid', 'Need-based'], ['off
 
 export const COLLEGE_SORTS = [['fit', 'Best fit'], ['price', 'Lowest net price'], ['deadline', 'Nearest deadline'], ['acceptance', 'Highest acceptance rate'], ['ranking', 'Best ranking']];
 
+// How many universities one College Search page holds; the first is the default,
+// so a slow connection gets its first rows quickly.
+export const COLLEGE_PAGE_SIZES = [10, 25, 50, 100];
+
+const SEARCH_MAX_LENGTH = 100;
+
+// The College Search query for one set of filters (the page and facets are added
+// per request). Only what differs from the defaults is sent, so equal searches
+// share one cache key.
+export function collegeSearchQuery({ query = '', filters = DEFAULT_COLLEGE_FILTERS, qsFilters = {}, sort = 'ranking', view = 'qs', pageSize = COLLEGE_PAGE_SIZES[0] }) {
+  const params = new URLSearchParams();
+  const term = String(query).trim().slice(0, SEARCH_MAX_LENGTH);
+  if (term) params.set('search', term);
+  if (filters.country) params.set('country', filters.country);
+  if (filters.price !== 'all') params.set('price', filters.price);
+  if (filters.aid.length) params.set('aid', filters.aid.join(','));
+  if (filters.bands.length < 3) params.set('bands', filters.bands.join(','));
+  if (filters.testOptional) params.set('test_optional', 'true');
+  if (filters.satFit) params.set('sat_fit', 'true');
+  if (filters.publicOnly) params.set('public', 'true');
+  if (view === 'qs') Object.entries(qsFilters).forEach(([key, value]) => {if (value) params.set(key, value);});
+  params.set('sort', sort);
+  params.set('page_size', String(pageSize));
+  return params.toString();
+}
+
 export const SCORE_PARTS = [['academic', 48], ['preferences', 22], ['financial', 20], ['profile_strength', 10]];
 
 export const SAT_SCALE = [1000, 1600];
@@ -67,52 +68,9 @@ export const satText = (min, max) => `${formatNumberLocale(min, { useGrouping: f
 // A missing range is only "Optional" when the university says so; otherwise it is unknown.
 export const satLabel = (university) => university.sat_min ? satText(university.sat_min, university.sat_max) : university.test_optional ? t("Optional") : '—';
 
-// In range: the student meets a known minimum, or the university is test-optional (unknown is not in range).
-export const satInRange = (university, student) => university.sat_min ? Number(student?.sat_score || 0) >= Number(university.sat_min) : Boolean(university.test_optional);
-
 export const scalePercent = (value, min, max) => `${Math.max(0, Math.min(100, (Number(value) - min) / (max - min) * 100))}%`;
 
 export const priceCapLabel = (cap) => cap === 'all' ? t("Any price") : cap === 'budget' ? t("Within budget") : tx`Up to ${money(Number(cap))}`;
-
-export function collegeMatches(university, result, filters, student, query) {
-  const cap = filters.price === 'budget' ? Number(student?.budget_usd) || 0 : Number(filters.price);
-  return (!filters.country || universityCountry(university) === filters.country) && (
-  filters.bands.length === 3 || filters.bands.includes(result?.admission_band)) && (
-  filters.price === 'all' || Number(university.net_price_usd || Infinity) <= cap) &&
-  filters.aid.every((flag) => university[flag]) && (
-  !filters.testOptional || university.test_optional) && (
-  !filters.satFit || satInRange(university, student)) && (
-  !filters.publicOnly || university.institution_type === 'public') &&
-  matchesQuery(university, query);
-}
-
-export function collegeSorter(sort, researchMap, student) {
-  const fit = (university) => researchMap.get(university.id)?.match_score ?? universityFit(university, student).score;
-  const time = (value) => value ? parseDateValue(value).getTime() : Infinity;
-  const last = (value) => value == null ? Infinity : Number(value);
-  return {
-    fit: (a, b) => fit(b) - fit(a),
-    price: (a, b) => last(a.net_price_usd) - last(b.net_price_usd),
-    deadline: (a, b) => time(a.application_deadline) - time(b.application_deadline),
-    acceptance: (a, b) => Number(b.acceptance_rate ?? -1) - Number(a.acceptance_rate ?? -1),
-    ranking: (a, b) => last(a.ranking) - last(b.ranking)
-  }[sort];
-}
-
-export function collegeFacetCounts(universities, researchMap, student) {
-  const counts = { countries: {}, bands: { reach: 0, target: 0, safety: 0 }, aid: {}, testOptional: 0, satFit: 0, publicOnly: 0 };
-  universities.forEach((university) => {
-    const country = universityCountry(university);
-    const band = researchMap.get(university.id)?.admission_band;
-    if (country) counts.countries[country] = (counts.countries[country] || 0) + 1;
-    if (band) counts.bands[band] += 1;
-    COLLEGE_AID_FLAGS.forEach(([flag]) => {if (university[flag]) counts.aid[flag] = (counts.aid[flag] || 0) + 1;});
-    if (university.test_optional) counts.testOptional += 1;
-    if (satInRange(university, student)) counts.satFit += 1;
-    if (university.institution_type === 'public') counts.publicOnly += 1;
-  });
-  return counts;
-}
 
 export function collegeFilterChips(filters, setFilters, budget) {
   const reset = (change) => () => setFilters((current) => ({ ...current, ...change }));

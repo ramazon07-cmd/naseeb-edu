@@ -428,6 +428,8 @@ export const api = {
   health: () => request('/health/'),
   dashboard: () => request('/dashboard/stats/'),
   collegeResearch: () => request('/college-research/'),
+  // One College Search page (filters, sort and page size in `query`); never the whole catalogue.
+  collegeSearch: (query, signal) => request(`/college-search/?${query}`, { signal }, true, false),
   updateCollegeResearchProfile: (payload) => request('/college-research/', {
     method: 'POST',
     body: JSON.stringify(payload),
