@@ -273,7 +273,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     api.collegeSearch(`ids=${universityId}`).then((payload) => {if (active) setOpenedFit({ id: universityId, version: researchVersion, fit: payload.results[0]?.fit });}).catch(() => {});
     return () => {active = false;};
   }, [universityId, researchVersion, rowFit]);
-  const fit = openedFit?.id === universityId && openedFit.version === researchVersion ? openedFit.fit : undefined;
+  const fit = openedFit && openedFit.id === universityId && openedFit.version === researchVersion ? openedFit.fit : undefined;
 
   // The fit of each university on the student's list, fetched when the list opens.
   useEffect(() => {
