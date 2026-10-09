@@ -17,7 +17,8 @@ from ..listing import ListQueryMixin
 from ..scoping import scope_students
 from ..services import NOTE_LIMIT, record_approval_note, record_send_back
 from ..models import ActivityLog
-from ..serializers.common import INLINE_FILE_EXTENSIONS
+from ..serializers.common import INLINE_FILE_EXTENSIONS, staff_created
+from core.exceptions import CodedError
 
 
 # Media type of the ``?mode=url`` answer, so a client can tell a link apart
@@ -74,6 +75,10 @@ def serve_private_file(request, field_file, *, original_name='', content_type=''
     return response
 
 
+STUDENT_AUTHORED_RESOURCES = {'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors'}
+STUDENT_AUTHORED_DELETE_MESSAGE = 'Only the student can delete their own work. Send it back with a note instead.'
+
+
 class CounselorOrOwnerPermission(permissions.BasePermission):
     organization_read_resources = {
         'tasks', 'applications', 'documents', 'essays', 'achievements',
@@ -101,6 +106,9 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
                 request.method in permissions.SAFE_METHODS
                 and view.basename in self.organization_read_resources
             )
+        if view.basename == 'meetings':
+            # Meeting notes are the counselor's private notes on a student.
+            return False
         if request.method in permissions.SAFE_METHODS:
             return True
         if view.basename == 'notifications' and view.action in {'read', 'read_all'}:
@@ -115,6 +123,13 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         }
 
     def has_object_permission(self, request, view, obj):
+        if view.action == 'destroy' and view.basename in STUDENT_AUTHORED_RESOURCES:
+            # Only the student (or staff, for a record they created) deletes it; otherwise staff send it back with a note.
+            student = getattr(obj, 'student', None)
+            owner = request.user.role == User.Role.STUDENT and student and student.user_id == request.user.id
+            if not (owner or staff_created(obj, request.user)):
+                raise CodedError(STUDENT_AUTHORED_DELETE_MESSAGE, 'student_authored_delete', 403)
+            return True
         if request.user.is_counselor_like:
             return True
         if request.user.role == User.Role.TEACHER:

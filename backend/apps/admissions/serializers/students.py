@@ -21,7 +21,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     STUDENT_EDITABLE_FIELDS = {
         'grade', 'gpa', 'gpa_scale', 'ielts_score', 'sat_score',
         'target_major', 'target_countries', 'budget_usd', 'scholarship_needed',
-        'parent_contact', 'notes',
+        'parent_contact',
     }
     # Same rules as onboarding, checked here so a bad score is a 400, not a database error.
     ielts_score = band_field(validators=[validate_half_band])
@@ -161,7 +161,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
-        if request and request.user.is_organization:
+        if not (request and request.user.is_counselor_like):
+            # Internal counselor notes: counselors and product admins only.
             data.pop('notes', None)
         return data
 

@@ -6,10 +6,22 @@ from rest_framework import serializers, viewsets
 from rest_framework.exceptions import NotFound
 from ..models import Essay, EssayRevision, EssayTab
 from ..serializers import EssaySerializer
+from ..serializers.common import changed_fields
+from core.exceptions import CodedError
 from ..essay_lab.doc import count_words, make_preview
 from ..essay_lab.tabs import tab_from_text
 from ..scoping import owns_essays_only, scope_essays, shared_essay_lookups
 from .common import ScopedQuerysetMixin, StudentRecordListMixin
+
+
+# Translated by code in the app (translations/errorCodes.js) and by text for older
+# clients (users/api_messages.py); a test keeps the two wordings the same.
+ESSAY_CHANGED_MESSAGE = 'This essay changed since you opened it. Check the latest version, then save your edit again.'
+PRECONDITION_REQUIRED_MESSAGE = 'Reload the essay before changing its text, so newer changes are not overwritten.'
+
+
+def _as_text(value):
+    return '' if value is None else str(value)
 
 
 class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -64,6 +76,8 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
             )
             if essay is None:
                 raise NotFound()
+            changed = changed_fields(essay, serializer.validated_data)
+            self._check_unchanged(essay, changed - set(EssaySerializer.REVIEW_FIELDS))
             serializer.instance = essay
             extra = {}
             content = serializer.validated_data.get('content')
@@ -75,6 +89,26 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
             essay = serializer.save(**extra)
             if should_version:
                 self._create_revision(essay)
+
+    def _check_unchanged(self, essay, changed):
+        """Optimistic concurrency per field: a form built from an older copy must not overwrite newer work.
+
+        ``changed`` are the essay's own fields (not review fields) this write
+        really changes, computed under the row lock. The client sends
+        ``original``: the value it loaded for each field it changes. A field
+        whose server value moved since then is a real conflict (409); other
+        saves, such as an autosave that touched only formatting, don't block
+        an edit of the title. The text needs its original (428 without it);
+        title or application edits from older clients that send none still save.
+        """
+        original = self.request.data.get('original')
+        original = original if isinstance(original, dict) else {}
+        if 'content' in changed and 'content' not in original:
+            raise CodedError(PRECONDITION_REQUIRED_MESSAGE, 'precondition_required', 428)
+        for field in changed & set(original):
+            current = getattr(essay, Essay._meta.get_field(field).attname)
+            if _as_text(current) != _as_text(original[field]):
+                raise CodedError(ESSAY_CHANGED_MESSAGE, 'essay_changed', 409)
 
     @staticmethod
     def _replace_text(essay, content):

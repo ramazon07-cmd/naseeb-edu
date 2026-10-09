@@ -7,6 +7,7 @@ import { Plus, Eye, CheckCircle2, Pencil, Trash2, Flag, ShieldCheck } from 'luci
 import { GoogleDocsActions, EssayDetailModal, TaskSubmissionModal, GoogleDocsRecordModal, AttachmentPreviewModal } from '../components/documents';
 import { AttachmentRow, FileField, UploadError, evidenceAttachment, recommendationAttachment, useFileUpload } from '../components/files';
 import { toFormData } from '../lib/fileUpload';
+import { canDelete, changedPayload, editableFields, isStaleCopyError, recordErrorMessage } from '../lib/recordRights';
 import { studentName, dateText, dateTimeText, joinParts } from '../lib/format';
 import { label, ownStudent } from '../lib/labels';
 import { Record } from '../components/records';
@@ -169,13 +170,15 @@ export function ResourceSection({ title, resource, data, user, query, reload, no
 
   async function remove(item) {
     if (!window.confirm(t("Delete this record?"))) return;
-    try {await api.remove(resource, item.id);notify(t("Record deleted."));reload();} catch (err) {notify(err.message, 'error');}
+    try {await api.remove(resource, item.id);notify(t("Record deleted."));reload();} catch (err) {notify(recordErrorMessage(err), 'error');}
   }
   return <><Panel title={title} action={<div className="panel-actions">{allowCreate && !onAdd && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}</div>}><div className="record-list">{filtered.map((item) => {
           const lockedAfterApproval = item.status === 'approved';
-          const allowDelete = !staffControlled ? allowCreate : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
+          // The API says per record what this user may change or delete (staff only review a student's own work).
+          const itemEditable = allowEdit && editableFields(item, RESOURCE_FIELDS[resource] || []).length > 0;
+          const allowDelete = !staffControlled ? allowCreate && canDelete(item, true) : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
           const attachment = RECORD_FILES[resource]?.attachment(item);
-          return <RecordRow key={item.id} resource={resource} item={item} data={data} attachment={attachment && <AttachmentRow attachment={attachment} onPreview={() => setViewingFile({ item, attachment })} notify={notify} />} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
+          return <RecordRow key={item.id} resource={resource} item={item} data={data} attachment={attachment && <AttachmentRow attachment={attachment} onPreview={() => setViewingFile({ item, attachment })} notify={notify} />} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{itemEditable && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
         })}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !filtered.length && <Empty text={emptyText} action={allowCreate && onAdd && emptyAction ? <button type="button" className="link-button empty-add" onClick={onAdd}>{emptyAction}</button> : null} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} defaultStudentId={defaultStudentId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} notify={notify} />}{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}{viewingFile && <AttachmentPreviewModal title={recordTitle(resource, viewingFile.item)} attachment={viewingFile.attachment} onClose={() => setViewingFile(null)} notify={notify} />}</>;
 }
 
@@ -223,6 +226,8 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
   const currentFile = currentRecordFile(resource, item);
   const [file, setFile] = useState(null);
   const [removeFile, setRemoveFile] = useState(false);
+  // The server copy edits are compared against; refreshed after a conflict.
+  const [base, setBase] = useState(item);
   const upload = useFileUpload();
   const busy = saving || upload.uploading;
   const allFields = RESOURCE_FIELDS[resource] || [];
@@ -232,16 +237,21 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
   ['title', 'description', 'due_date', 'priority'].includes(name) :
   item.is_self_assigned || ['status', 'student_response', 'submission_url'].includes(name)
   ) :
-  allFields;
+  item ? editableFields(item, allFields) : allFields;
   async function submit(event) {
     event.preventDefault();if (busy) return;setSaving(true);const values = new FormData(event.currentTarget);
-    const payload = {};
+    let payload = {};
     for (const [name,, type] of fields) {
+      // A field shown read-only (e.g. a status only the counselor sets) has no input and is never sent.
+      if (type !== 'checkbox' && !values.has(name)) continue;
       const raw = values.get(name);
       const nullable = ['date', 'number', 'university', 'application'].includes(type);
       payload[name] = type === 'checkbox' ? raw === 'on' : raw === '' && nullable ? null : raw;
     }
-    if (!item) payload.student = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
+    if (base) payload = changedPayload(payload, base);else
+    payload.student = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
+    // The server refuses the save (409) when a field changed here also changed on the server since this copy was loaded.
+    if (base && resource === 'essays') payload.original = Object.fromEntries(Object.keys(payload).map((name) => [name, base[name] ?? null]));
     if (recordFile && (file || removeFile)) {
       setSaving(false);
       payload[recordFile.field] = file || null;
@@ -254,7 +264,11 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
       if (item) await api.update(resource, item.id, payload);else
       await api.create(resource, payload);
       notify(item ? t("Record updated.") : t("Record created."));onSaved();
-    } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
+    } catch (err) {
+      notify(recordErrorMessage(err), 'error');
+      // Load the latest copy so the next save compares against it; what was typed stays in the form.
+      if (item && isStaleCopyError(err)) api.retrieve(resource, item.id).then(setBase, () => {});
+    } finally {setSaving(false);}
   }
   function close() {upload.cancel();onClose();}
   const selfTask = resource === 'tasks' && user.role === 'student';
@@ -278,6 +292,8 @@ function StudentApplicationSelect({ name, labelText, value, studentId }) {
 
 export function DynamicField({ name, labelText, type, required, choices, placeholder, value, data, user, studentId = '' }) {
   if (name === 'status' && !isTaskManager(user)) choices = choices.filter((choice) => !['approved', 'late', 'rejected', 'waitlisted', 'accepted', 'needs_revision', 'completed'].includes(choice));
+  // A value this user can't choose (e.g. the counselor's needs_revision) is shown, not editable, and not sent.
+  if (type === 'select' && value && !choices.includes(value)) return <Field label={t(labelText)}><input value={label(value)} readOnly disabled /></Field>;
   const hint = placeholder ? t(placeholder) : undefined;
   if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} placeholder={hint} /></Field>;
   if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;

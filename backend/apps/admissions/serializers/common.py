@@ -9,10 +9,103 @@ import re
 import unicodedata
 import zipfile
 import codecs
+from django.db.models.fields.files import FieldFile
+from apps.users.models import User
 from apps.users.uploads import verify_image
 from core.storage import delete_file_on_commit
+from core.exceptions import CodedError
 from ..models import StudentProfile
 from ..scoping import scope_students
+
+STUDENT_AUTHORED_MESSAGE = 'Only the student can change their own work. Send it back with a note instead.'
+
+
+def changed_fields(instance, values):
+    """The submitted fields whose value differs from ``instance`` (a value equal to the current one is no change)."""
+    changed = set()
+    for key, value in values.items():
+        current = getattr(instance, key, None)
+        if isinstance(current, FieldFile):
+            # Any upload replaces the file; null only changes something when there is a file to clear.
+            if value or current:
+                changed.add(key)
+        elif value != current:
+            changed.add(key)
+    return changed
+
+
+def staff_created(record, user):
+    """True when staff ``user`` created this essay or portfolio record and it is still theirs.
+
+    Counselors add records for a student (an assigned essay, an award they
+    know of); they keep full rights to those. An essay stops being theirs
+    once the student writes in it: an Essay Lab save (last_edited_at) or a
+    legacy revision by anyone else.
+    """
+    if not user or user.role == User.Role.STUDENT or record.created_by_id != user.id:
+        return False
+    if hasattr(record, 'revisions'):
+        return record.last_edited_at is None and all(r.created_by_id == user.id for r in record.revisions.all())
+    return True
+
+
+def require_student_for_content(serializer, values, review_fields):
+    """Staff may change only review fields of a student's own work; its content and files stay the student's."""
+    request = serializer.context.get('request')
+    if serializer.instance is None or not request or request.user.role == User.Role.STUDENT:
+        return
+    if staff_created(serializer.instance, request.user):
+        return
+    if changed_fields(serializer.instance, values) - set(review_fields):
+        raise CodedError(STUDENT_AUTHORED_MESSAGE, 'student_authored', 403)
+
+
+class StudentAuthoredMixin:
+    """Essays and portfolio records: tell the client what this user may change or delete on each record.
+
+    ``REVIEW_FIELDS`` are what staff may change on a student's work;
+    ``STAFF_ONLY_FIELDS`` are never the student's to set. Creating a record
+    records its author (``created_by``), which is not itself writable.
+    """
+
+    REVIEW_FIELDS = ()
+    STAFF_ONLY_FIELDS = ()
+
+    def get_fields(self):
+        fields = super().get_fields()
+        fields.pop('created_by', None)
+        fields['editable_fields'] = serializers.SerializerMethodField()
+        fields['can_delete'] = serializers.SerializerMethodField()
+        return fields
+
+    def _viewer(self):
+        request = self.context.get('request')
+        return getattr(request, 'user', None)
+
+    def get_editable_fields(self, obj) -> list[str]:
+        user = self._viewer()
+        if user is None or not user.is_authenticated:
+            return []
+        writable = [name for name, field in self.fields.items() if not field.read_only and name != 'student']
+        if user.role == User.Role.STUDENT:
+            return [name for name in writable if name not in self.STAFF_ONLY_FIELDS]
+        if not user.is_counselor_like:
+            return []
+        if staff_created(obj, user):
+            return writable
+        return [name for name in writable if name in self.REVIEW_FIELDS]
+
+    def get_can_delete(self, obj) -> bool:
+        user = self._viewer()
+        if user is None or not user.is_authenticated:
+            return False
+        if user.role == User.Role.STUDENT:
+            return obj.student.user_id == user.id
+        return staff_created(obj, user)
+
+    def create(self, validated_data):
+        validated_data['created_by'] = self._viewer()
+        return super().create(validated_data)
 
 
 def google_docs_document_id(value):
@@ -182,7 +275,9 @@ class StudentRecordSerializerMixin:
         return fields
 
 
-class VerifiedStudentRecordMixin(StudentRecordSerializerMixin):
+class VerifiedStudentRecordMixin(StudentAuthoredMixin, StudentRecordSerializerMixin):
+    STAFF_ONLY_FIELDS = ('verified', 'counselor_comment')
+
     def validate_verified(self, value):
         request = self.context.get('request')
         if request and not request.user.is_counselor_like:
@@ -197,15 +292,15 @@ class VerifiedStudentRecordMixin(StudentRecordSerializerMixin):
             raise serializers.ValidationError('Only a counselor can write review comments.')
         return value
 
+    REVIEW_FIELDS = ('verified', 'counselor_comment')
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        require_student_for_content(self, attrs, self.REVIEW_FIELDS)
         request = self.context.get('request')
         instance = self.instance
         if request and not request.user.is_counselor_like and instance is not None:
-            edited = any(
-                value != getattr(instance, key, None)
-                for key, value in attrs.items() if key not in {'verified', 'counselor_comment'}
-            )
+            edited = bool(changed_fields(instance, attrs) - set(self.REVIEW_FIELDS))
             if edited and instance.verified:
                 # The badge vouches for what the counselor checked; edited content
                 # goes back for review.

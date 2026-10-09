@@ -1153,9 +1153,10 @@ class LegacyEssayApiTests(EssayLabTestCase):
     def test_legacy_patch_clears_doc_and_bumps_seq(self):
         essay = self.make_essay()
         self.autosave(essay, make_doc('Rich text'), base_seq=0, save_id='1')
-        self.client.force_authenticate(self.counselor)
-        response = self.client.patch(f'/api/essays/{essay.pk}/', {'content': 'Counselor fixed a typo here.'},
-                                     format='json')
+        # A plain-text edit from another device of the student (only the student changes the text).
+        loaded = self.client.get(f'/api/essays/{essay.pk}/').data['content']
+        response = self.client.patch(f'/api/essays/{essay.pk}/', {'content': 'Counselor fixed a typo here.',
+                                                                  'original': {'content': loaded}}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         essay.refresh_from_db()
         self.assertIsNone(self.tab_of(essay).doc)

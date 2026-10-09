@@ -123,6 +123,9 @@ class VerifiedRecordTests(AuditBaseMixin, APITestCase):
         response = self.client.patch(f'/api/activities/{records["activities"].id}/', {'name': 'Robotics club'},
                                      format='json')
         self.assertTrue(response.data['verified'])
+        # Staff can't edit the student's own record at all, so its badge stays.
         self.client.force_authenticate(self.counselor)
         response = self.client.patch(f'/api/honors/{records["honors"].id}/', {'issuer': 'Ministry'}, format='json')
-        self.assertTrue(response.data['verified'])
+        self.assertEqual(response.status_code, 403)
+        records['honors'].refresh_from_db()
+        self.assertTrue(records['honors'].verified)

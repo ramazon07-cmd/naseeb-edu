@@ -6,6 +6,7 @@ import { notificationMessages } from "./translations/notifications.js";
 import { studentCenterMessages } from "./translations/studentCenter.js";
 import { essayLabPagesMessages } from "./translations/essayLabPages.js";
 import { accountMessages } from "./translations/account.js";
+import { errorCodeMessages } from "./translations/errorCodes.js";
 
 import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
 
@@ -29,6 +30,7 @@ export const TRANSLATIONS = {
     ...studentCenterMessages("uz"),
     ...essayLabPagesMessages("uz"),
     ...accountMessages("uz"),
+    ...errorCodeMessages("uz"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
@@ -214,6 +216,7 @@ export const TRANSLATIONS = {
     ...studentCenterMessages("ru"),
     ...essayLabPagesMessages("ru"),
     ...accountMessages("ru"),
+    ...errorCodeMessages("ru"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",

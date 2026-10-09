@@ -606,6 +606,23 @@ EXACT = {
         'uz': 'Bu hujjatda bir nechta varaq bor. Matn Insholar laboratoriyasida tahrirlanadi.',
         'ru': 'В этом документе несколько вкладок. Текст редактируется в Лаборатории эссе.',
     },
+    # Student work (essays, portfolio). Same wording as the app's frontend/src/translations/errorCodes.js.
+    'This essay changed since you opened it. Check the latest version, then save your edit again.': {
+        'uz': 'Siz ochganingizdan keyin insho o‘zgardi. Eng so‘nggi versiyani tekshiring va tahrirni qayta saqlang.',
+        'ru': 'Эссе изменилось после того, как вы его открыли. Проверьте последнюю версию и сохраните правку ещё раз.',
+    },
+    'Reload the essay before changing its text, so newer changes are not overwritten.': {
+        'uz': 'Matnni o‘zgartirishdan oldin inshoni yangilang, shunda yangiroq o‘zgarishlar ustidan yozilmaydi.',
+        'ru': 'Обновите эссе перед изменением текста, чтобы не затереть более новые правки.',
+    },
+    'Only the student can change their own work. Send it back with a note instead.': {
+        'uz': 'O‘z ishini faqat o‘quvchi o‘zgartira oladi. Buning o‘rniga izoh bilan qaytaring.',
+        'ru': 'Изменять свою работу может только ученик. Вместо этого верните её с комментарием.',
+    },
+    'Only the student can delete their own work. Send it back with a note instead.': {
+        'uz': 'O‘z ishini faqat o‘quvchi o‘chira oladi. Buning o‘rniga izoh bilan qaytaring.',
+        'ru': 'Удалить свою работу может только ученик. Вместо этого верните её с комментарием.',
+    },
     # Profile assessment
     'A challenge key is required.': {
         'uz': 'Test tanlanmagan.',

@@ -26,6 +26,15 @@ def student_photo_upload_path(instance, filename):
     return f'student_photos/{instance.pk or "pending"}/{uuid4().hex}{suffix}'
 
 
+def record_author_field():
+    """Who created a student's essay or portfolio record. Null: the student, or unknown (older rows).
+
+    Staff may edit and delete the records they created themselves; everything
+    else the student wrote stays theirs.
+    """
+    return models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1398,6 +1407,7 @@ class Achievement(TimeStampedModel):
     proof_file_content_type = models.CharField(max_length=120, blank=True)
     proof_file_size = models.PositiveBigIntegerField(default=0)
     verified = models.BooleanField(default=False)
+    created_by = record_author_field()
     # Why the counselor sent it back instead of verifying it; the student's next edit clears it.
     counselor_comment = models.TextField(blank=True)
 
@@ -1421,6 +1431,7 @@ class Research(TimeStampedModel):
     link = models.URLField(blank=True)
     google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
+    created_by = record_author_field()
 
     class Meta:
         ordering = ['-start_date', 'title']
@@ -1441,6 +1452,7 @@ class Project(TimeStampedModel):
     google_docs_url = models.URLField(blank=True)
     date = models.DateField(null=True, blank=True)
     verified = models.BooleanField(default=False)
+    created_by = record_author_field()
 
     class Meta:
         ordering = ['-date', 'title']
@@ -1461,6 +1473,7 @@ class Internship(TimeStampedModel):
     supervisor = models.CharField(max_length=180, blank=True)
     google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
+    created_by = record_author_field()
 
     class Meta:
         ordering = ['-start_date', 'organization']
@@ -1501,6 +1514,7 @@ class Activity(TimeStampedModel):
     proof_file_size = models.PositiveBigIntegerField(default=0)
     google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
+    created_by = record_author_field()
 
     class Meta:
         ordering = ['-start_date', 'name']
@@ -1534,6 +1548,7 @@ class Honor(TimeStampedModel):
     proof_file_size = models.PositiveBigIntegerField(default=0)
     google_docs_url = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
+    created_by = record_author_field()
 
     class Meta:
         ordering = ['-award_date', 'title']
@@ -1636,6 +1651,7 @@ class Essay(TimeStampedModel):
     # visible to anyone else (counselor, school, admins, parents).
     shared_with_counselor = models.BooleanField(default=False)
     shared_at = models.DateTimeField(null=True, blank=True)
+    created_by = record_author_field()
 
     class CounselorAccess(models.TextChoices):
         # What the assigned counselor may do with a shared essay (the student chooses when sharing).
