@@ -1,7 +1,9 @@
 import { getLanguage, t } from './i18n'
 import {
-  AUTH_CHANNEL, browserLock, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
+  AUTH_CHANNEL, AUTH_LOCK, browserLock, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
+  migrateLegacyTokens,
 } from './authTokens'
+import { readPayload } from './lib/payload.js'
 import { UNTRACKED_ENDPOINTS, createMutationTracker } from './lib/reloadPlan'
 import { errorPayloadMessage } from './lib/apiErrors'
 import { firstListPath } from './lib/listPath.js'
@@ -10,8 +12,10 @@ import { protectedFileUrl, readProtectedFile } from './lib/protectedFile.js'
 import { sendWithProgress } from './lib/fileUpload.js'
 import { hasUserDrafts, removeUserDrafts } from './essayLab/drafts.js'
 
-// Same origin by default: the Vite dev server proxies /api to Django, so the
-// refresh cookie is first-party in development too.
+// Same origin by default: the Vite dev server, the nginx image (API_UPSTREAM)
+// and Vercel (NASEEB_API_ORIGIN, middleware.js) proxy /api to Django, so the
+// refresh cookie is first-party. An absolute URL is the cross-site setup
+// (AUTH_REFRESH_COOKIE_SAMESITE=None on the backend); see docs/deployment-auth.md.
 const DEFAULT_API_URL = '/api'
 const API_URL = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '')
 const REQUEST_TIMEOUT_MS = 15_000
@@ -30,7 +34,8 @@ export class ApiError extends Error {
 }
 
 const getToken = (key) => session.get(key)
-const saveTokens = (payload) => session.save(payload)
+// Every token pair outside a refresh comes from a new sign-in (a new server session).
+const saveTokens = (payload) => session.save(payload, { signIn: true })
 const hasSession = () => session.hasSession()
 
 // Fresh access tokens from other tabs (see createRefresher in authTokens.js).
@@ -212,20 +217,62 @@ function onSessionEnded(callback) {
   }
 }
 
-// The refresh and logout calls, authenticated by the HttpOnly cookie.
-const cookieAuth = createCookieAuth({ apiUrl: API_URL, request: fetchWithTimeout })
+const authLock = browserLock(AUTH_LOCK)
 
-export function clearTokens() {
-  session.clear()
+// The refresh and logout calls, authenticated by the HttpOnly cookie.
+const cookieAuth = createCookieAuth({
+  apiUrl: API_URL,
+  request: fetchWithTimeout,
+  store: session,
+  lock: authLock,
+  settleRefreshes: () => refreshAccessToken.settled(),
+})
+
+// The previous frontend kept tokens in localStorage: revoke them, then drop them.
+migrateLegacyTokens(() => window.localStorage, (token) => cookieAuth.revokeLegacy(token))
+
+// The session ended on its own (expired, revoked, another tab signed out):
+// end it here and, unless another tab already did, on the server too.
+function logout({ server = true } = {}) {
+  // The user's own sign-out is in progress: it decides when the counter goes.
+  if (userSignOut) return userSignOut
+  const signInId = session.endHere()
+  if (!server) {
+    session.clear(signInId)
+    return Promise.resolve(true)
+  }
+  return cookieAuth.logout(signInId).then((ok) => {
+    session.clear(signInId)
+    return ok
+  })
 }
 
-// Ends the session here and on the server (refresh token blacklisted, cookie
-// cleared, one retry). Resolves false when the server could not be reached;
-// the local session is gone either way. `server: false` when another tab
-// already signed out on the server.
-function logout({ server = true } = {}) {
-  clearTokens()
-  return server ? cookieAuth.logout() : Promise.resolve(true)
+// The user signs out. Resolves true once the server ended the session; only
+// then is the session counter removed (signing the other tabs out). On false
+// (server unreachable after one retry) this tab is signed out locally but the
+// cookie may still work: the caller offers retrySignOut() or forgetSession().
+let userSignOut = null
+let pendingSignInId
+function endUserSession() {
+  pendingSignInId = session.endHere()
+  return retrySignOut()
+}
+
+function retrySignOut() {
+  userSignOut = cookieAuth.logout(pendingSignInId).then((ok) => {
+    if (ok) {
+      session.clear(pendingSignInId)
+      userSignOut = null
+    }
+    return ok
+  })
+  return userSignOut
+}
+
+// Gives up on the server: the session ends on this device only.
+function forgetSession() {
+  session.clear(pendingSignInId)
+  userSignOut = null
 }
 
 // keepDrafts: "Sign in again" — end the session but leave this user's
@@ -236,22 +283,14 @@ function signOut(userId, { keepDrafts = false } = {}) {
       try { entry.forget() } catch { /* best effort */ }
     }
   }
-  const ended = logout()
+  const ended = endUserSession()
   if (!keepDrafts && userId != null) {
     try { removeUserDrafts(window.localStorage, userId) } catch { /* storage unavailable */ }
   }
   return ended
 }
 
-async function parseResponse(response) {
-  const text = await response.text()
-  if (!text) return null
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
-  }
-}
+const parseResponse = readPayload
 
 function errorMessage(payload) {
   if (!payload) return t('Unable to connect to the server.')
@@ -272,7 +311,7 @@ const refreshAccessToken = createRefresher({
       window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
     },
   },
-  lock: browserLock('naseeb-token-refresh'),
+  lock: authLock,
   jitterMs: 300,
   send: () => cookieAuth.refresh(),
   share: (access) => authChannel?.postMessage({ type: 'access', access }),
@@ -404,9 +443,9 @@ export const api = {
   baseUrl: API_URL,
   takeMutations: () => mutations.take(),
   hasSession,
-  login: async (username, password) => {
-    // A sign-out still in flight would clear the cookie this sign-in sets.
-    await cookieAuth.settled()
+  // After any sign-out (this tab or another) has finished, so its response
+  // cannot delete the cookie this sign-in sets.
+  login: (username, password) => cookieAuth.signIn(async () => {
     // credentials: the response sets the refresh cookie (cross-origin API too).
     const response = await fetchWithTimeout(`${API_URL}/auth/token/`, {
       method: 'POST',
@@ -418,10 +457,12 @@ export const api = {
     if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
     saveTokens(payload)
     return payload
-  },
+  }),
   logout,
   onSessionEnded,
   signOut,
+  retrySignOut,
+  forgetSession,
   syncBeforeSignOut,
   changePassword: async (newPassword, confirmPassword) => {
     const payload = await request('/users/accounts/change-password/', {

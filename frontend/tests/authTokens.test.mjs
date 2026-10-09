@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SESSION_HINT_KEY, STALE_TOKEN_KEYS, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
+  migrateLegacyTokens,
 } from '../src/authTokens.js';
 
 function memoryStorage(initial = {}) {
@@ -74,12 +75,17 @@ function mutex() {
 
 // --- session store ---------------------------------------------------------
 
-test('the access token lives in memory only; storage holds a non-secret counter', () => {
+test('the access token lives in memory only; storage holds a non-secret "<sign-in>.<refreshes>" counter', () => {
   const { storage, store } = signedIn('secret-access');
   assert.equal(store.get('access'), 'secret-access');
   assert.equal(store.get('refresh'), null);
+  const [signIn, count] = storage.getItem(SESSION_HINT_KEY).split('.');
+  assert.equal(count, '1');
   store.save({ access: 'a1', refresh: 'should-not-be-kept' });
-  assert.deepEqual([...storage.map.entries()], [[SESSION_HINT_KEY, '2']]);
+  assert.deepEqual([...storage.map.entries()], [[SESSION_HINT_KEY, `${signIn}.2`]]);
+  assert.ok(![...storage.map.values()].some((value) => value.includes('secret') || value.includes('kept')));
+  store.save({ access: 'a2' }, { signIn: true });
+  assert.notEqual(store.signInId(), signIn, 'a new sign-in gets a new id');
 });
 
 test('a reloaded page has no access token but knows a cookie session may exist', () => {
@@ -92,12 +98,53 @@ test('a reloaded page has no access token but knows a cookie session may exist',
   assert.equal(storage.getItem(SESSION_HINT_KEY), null);
 });
 
-test('tokens stored by the old frontend are removed on first use', () => {
-  const initial = Object.fromEntries(STALE_TOKEN_KEYS.map((key) => [key, 'old']));
-  const storage = memoryStorage({ ...initial, other: 'x' });
-  const store = createSessionStore(storage);
-  assert.equal(store.hasSession(), false, 'old tokens are not a session: the user signs in once');
+test('refresh tokens the old frontend stored are revoked on the server, then all old keys removed', async () => {
+  const storage = memoryStorage({
+    'naseeb-access-token': 'old-a', 'naseeb-refresh-token': 'old-r', 'admitflow-refresh-token': 'older-r', other: 'x',
+  });
+  const revoked = [];
+  await migrateLegacyTokens(storage, async (token) => { revoked.push(token); });
+  assert.deepEqual(revoked, ['old-r', 'older-r'], 'access tokens are not sent (they expire on their own)');
   assert.deepEqual([...storage.map.keys()], ['other']);
+  assert.equal(createSessionStore(storage).hasSession(), false, 'old tokens are not a session: the user signs in once');
+  assert.deepEqual(Object.keys(STALE_TOKEN_KEYS).sort(), ['admitflow-access-token', 'admitflow-refresh-token', 'naseeb-access-token', 'naseeb-refresh-token']);
+});
+
+test('the legacy migration still removes the tokens when the server is unreachable', async () => {
+  const storage = memoryStorage({ 'naseeb-refresh-token': 'old-r' });
+  await migrateLegacyTokens(storage, async () => { throw new Error('offline'); });
+  assert.equal(storage.getItem('naseeb-refresh-token'), null);
+  await migrateLegacyTokens(() => { throw new Error('SecurityError'); }, async () => assert.fail('no storage, nothing to send'));
+});
+
+test('a storage whose removeItem throws cannot hide the session', () => {
+  const storage = memoryStorage({ [SESSION_HINT_KEY]: 'k.1' });
+  storage.removeItem = () => { throw new Error('quota'); };
+  assert.equal(createSessionStore(storage).hasSession(), true);
+});
+
+test('signing out ends the session in this tab at once; the counter waits for clear()', () => {
+  const { storage, store } = signedIn('a1');
+  const signInId = store.signInId();
+  assert.equal(store.endHere(), signInId);
+  assert.equal(store.get('access'), null);
+  assert.equal(store.hasSession(), false, 'no silent refresh in this tab');
+  assert.notEqual(storage.getItem(SESSION_HINT_KEY), null, 'other tabs are told only once the server confirmed');
+  store.adopt('late-token');
+  assert.equal(store.get('access'), null, 'a token shared by another tab does not sign it back in');
+  store.clear(signInId);
+  assert.equal(storage.getItem(SESSION_HINT_KEY), null);
+});
+
+test('a sign-out does not remove the counter of a newer sign-in from another tab', () => {
+  const storage = memoryStorage();
+  const tabA = signedIn('a1', storage).store;
+  const tabB = createSessionStore(storage);
+  const ending = tabA.endHere();
+  tabB.save({ access: 'b1' }, { signIn: true });
+  tabA.clear(ending);
+  assert.notEqual(storage.getItem(SESSION_HINT_KEY), null);
+  assert.equal(tabB.hasSession(), true);
 });
 
 test('blocked storage still gives an in-memory session', () => {
@@ -113,10 +160,10 @@ test('a token shared by another tab is adopted only while signed in', () => {
   const store = createSessionStore(storage);
   store.adopt('late');
   assert.equal(store.get('access'), null, 'signed out: a late broadcast must not sign this tab back in');
-  storage.setItem(SESSION_HINT_KEY, '3');
+  storage.setItem(SESSION_HINT_KEY, 'k.3');
   store.adopt('shared');
   assert.equal(store.get('access'), 'shared');
-  assert.equal(storage.getItem(SESSION_HINT_KEY), '3', 'adopting is not a rotation');
+  assert.equal(storage.getItem(SESSION_HINT_KEY), 'k.3', 'adopting is not a rotation');
 });
 
 test('removing the session counter (or clearing storage) signals sign-out to other tabs', () => {
@@ -139,7 +186,7 @@ test('parallel 401s share one refresh', async () => {
 });
 
 test('a fresh page (no access token) restores the session from the cookie', async () => {
-  const store = createSessionStore(memoryStorage({ [SESSION_HINT_KEY]: '1' }));
+  const store = createSessionStore(memoryStorage({ [SESSION_HINT_KEY]: 'k.1' }));
   const server = cookieServer();
   const refresh = createRefresher({ store, expired, failed, send: server.send });
   assert.equal(await refresh(), 'a1');
@@ -227,7 +274,7 @@ test('the losing tab reuses a token another tab shared instead of rotating again
 });
 
 test('with Web Locks, tabs waiting behind a refresh reuse the shared token: five tabs, one rotation', async () => {
-  const storage = memoryStorage({ [SESSION_HINT_KEY]: '1' });
+  const storage = memoryStorage({ [SESSION_HINT_KEY]: 'k.1' });
   const server = cookieServer();
   const hub = channelHub();
   const lock = mutex();
@@ -242,7 +289,7 @@ test('with Web Locks, tabs waiting behind a refresh reuse the shared token: five
 });
 
 test('with Web Locks and no channel, waiting tabs still never send a used cookie', async () => {
-  const storage = memoryStorage({ [SESSION_HINT_KEY]: '1' });
+  const storage = memoryStorage({ [SESSION_HINT_KEY]: 'k.1' });
   const server = cookieServer();
   const lock = mutex();
   const tabs = Array.from({ length: 3 }, () => createRefresher({
@@ -261,6 +308,24 @@ test('without a lock, tabs wait a random jitter before refreshing', async () => 
   const refresh = createRefresher({ store, expired, failed, send: server.send, jitterMs: 300, random: () => 0.2, sleep });
   assert.equal(await refresh('a0'), 'a1');
   assert.deepEqual(delays, [60]);
+});
+
+test('a refresh that lands after sign-out is dropped: no token, no counter', async () => {
+  const { storage, store } = signedIn('a0');
+  let land;
+  const refresh = createRefresher({
+    store, expired, failed,
+    send: () => new Promise((resolve) => { land = () => resolve({ ok: true, status: 200, payload: { access: 'a1' } }); }),
+  });
+  const pending = refresh('a0');
+  await tick();
+  const signInId = store.endHere();
+  land();
+  await assert.rejects(pending, (error) => error.status === 401);
+  assert.equal(store.get('access'), null);
+  store.clear(signInId);
+  assert.equal(storage.getItem(SESSION_HINT_KEY), null, 'the late response did not write the counter back');
+  await refresh.settled();
 });
 
 // --- cookie client (mock fetch) --------------------------------------------
@@ -289,7 +354,7 @@ test('refresh is a body-less POST carrying the cookie and the CSRF header', asyn
   assert.equal(options.body, undefined, 'the refresh token is never in a body');
 });
 
-test('logout posts to the logout endpoint with the cookie, header and keepalive', async () => {
+test('logout posts with the cookie and header, without keepalive (it breaks CORS preflights)', async () => {
   const fetch = mockFetch([{ status: 204 }]);
   const auth = createCookieAuth({ apiUrl: '/api', request: fetch.request, logoutTimeoutMs: 1234 });
   assert.equal(await auth.logout(), true);
@@ -297,7 +362,8 @@ test('logout posts to the logout endpoint with the cookie, header and keepalive'
   assert.equal(url, '/api/auth/logout/');
   assert.equal(options.credentials, 'include');
   assert.equal(options.headers['X-Requested-With'], 'XMLHttpRequest');
-  assert.equal(options.keepalive, true);
+  assert.equal(options.keepalive, undefined);
+  assert.equal(options.body, undefined);
   assert.equal(options.timeoutMs, 1234);
 });
 
@@ -311,7 +377,71 @@ test('a failed logout is retried once; it reports failure only when both tries f
   assert.equal(down.calls.length, 2, 'one retry, no more');
 });
 
-test('sign-in can wait for a pending logout, and concurrent logouts share one request', async () => {
+test('logout waits for this tab\'s in-flight refresh, then sends the newest cookie', async () => {
+  const order = [];
+  const jar = { cookie: 'r0' };
+  const { store } = signedIn('a0');
+  let land;
+  const refresher = createRefresher({
+    store, expired, failed,
+    send: () => new Promise((resolve) => {
+      order.push(`refresh sent ${jar.cookie}`);
+      land = () => { jar.cookie = 'r1'; order.push('refresh landed'); resolve({ ok: true, status: 200, payload: { access: 'a1' } }); };
+    }),
+  });
+  const request = async (url) => { order.push(`logout sent ${jar.cookie}`); return { ok: true, status: 204, text: async () => '' }; };
+  const auth = createCookieAuth({ apiUrl: '/api', request, store, settleRefreshes: () => refresher.settled() });
+  const refreshing = refresher('a0').catch(() => 'dropped');
+  await tick();
+  const signInId = store.endHere();
+  const loggingOut = auth.logout(signInId);
+  await tick(5);
+  assert.deepEqual(order, ['refresh sent r0'], 'logout is held back while the refresh is in flight');
+  land();
+  assert.equal(await loggingOut, true);
+  assert.equal(await refreshing, 'dropped');
+  assert.deepEqual(order, ['refresh sent r0', 'refresh landed', 'logout sent r1']);
+  assert.equal(store.get('access'), null);
+});
+
+test('across tabs, a sign-in waits for a sign-out holding the lock, so the logout response cannot delete the new cookie', async () => {
+  const lock = mutex();
+  const storage = memoryStorage();
+  const tabA = signedIn('a0', storage).store;
+  const tabB = createSessionStore(storage);
+  const order = [];
+  let finishLogout;
+  const requestA = () => new Promise((resolve) => {
+    order.push('logout sent');
+    finishLogout = () => { order.push('logout response (deletes cookie)'); resolve({ ok: true, status: 204, text: async () => '' }); };
+  });
+  const authA = createCookieAuth({ apiUrl: '/api', request: requestA, store: tabA, lock });
+  const authB = createCookieAuth({ apiUrl: '/api', request: async () => ({}), store: tabB, lock });
+  const loggingOut = authA.logout(tabA.endHere());
+  await tick();
+  const signingIn = authB.signIn(async () => { order.push('login (sets cookie)'); tabB.save({ access: 'b1' }, { signIn: true }); });
+  await tick(5);
+  assert.deepEqual(order, ['logout sent']);
+  finishLogout();
+  await Promise.all([loggingOut, signingIn]);
+  assert.deepEqual(order, ['logout sent', 'logout response (deletes cookie)', 'login (sets cookie)']);
+});
+
+test('a sign-out superseded by a newer sign-in in another tab is not sent', async () => {
+  const storage = memoryStorage();
+  const tabA = signedIn('a0', storage).store;
+  const tabB = createSessionStore(storage);
+  const fetch = mockFetch([{ status: 204 }]);
+  const auth = createCookieAuth({ apiUrl: '/api', request: fetch.request, store: tabA });
+  const ending = tabA.endHere();
+  tabB.save({ access: 'b1' }, { signIn: true });
+  assert.equal(await auth.logout(ending), true);
+  assert.equal(fetch.calls.length, 0, 'the cookie now belongs to the newer sign-in');
+  tabA.clear(ending);
+  assert.equal(tabB.hasSession(), true);
+});
+
+test('sign-in waits for this tab\'s pending logout, and concurrent logouts share one request', async () => {
   let release;
   const calls = [];
   const request = (url) => {
@@ -319,17 +449,26 @@ test('sign-in can wait for a pending logout, and concurrent logouts share one re
     return new Promise((resolve) => { release = () => resolve({ ok: true, status: 204, text: async () => '' }); });
   };
   const auth = createCookieAuth({ apiUrl: '/api', request });
-  assert.equal(await auth.settled(), true, 'nothing pending');
   const first = auth.logout();
   const second = auth.logout();
-  let settled = false;
-  const waiting = auth.settled().then(() => { settled = true; });
+  let signedIn = false;
+  const signingIn = auth.signIn(async () => { signedIn = true; return 'ok'; });
   await tick(5);
-  assert.equal(settled, false, 'sign-in still waits');
+  assert.equal(signedIn, false, 'sign-in still waits');
   assert.equal(calls.length, 1);
   release();
-  await waiting;
+  assert.equal(await signingIn, 'ok');
   assert.equal(await first, true);
   assert.equal(await second, true);
-  assert.equal(settled, true);
+});
+
+test('a legacy token is revoked through the logout endpoint, in the body, with the CSRF header', async () => {
+  const fetch = mockFetch([{ status: 204 }]);
+  await createCookieAuth({ apiUrl: '/api', request: fetch.request }).revokeLegacy('old-r');
+  const [{ url, options }] = fetch.calls;
+  assert.equal(url, '/api/auth/logout/');
+  assert.equal(options.headers['X-Requested-With'], 'XMLHttpRequest');
+  assert.equal(options.headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(options.body), { refresh: 'old-r' });
+  await assert.rejects(createCookieAuth({ apiUrl: '/api', request: mockFetch([{ status: 403 }]).request }).revokeLegacy('x'));
 });
