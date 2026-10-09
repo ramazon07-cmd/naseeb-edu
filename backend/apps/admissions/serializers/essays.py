@@ -2,7 +2,8 @@
 from rest_framework import serializers
 from ..models import Essay, EssayRevision
 from .common import (
-    GoogleDocsModelSerializer, StudentRecordSerializerMixin, google_docs_preview_url, require_student_for_content,
+    GoogleDocsModelSerializer, StudentAuthoredMixin, StudentRecordSerializerMixin, google_docs_preview_url,
+    require_student_for_content,
 )
 
 
@@ -16,7 +17,7 @@ class EssayRevisionSerializer(serializers.ModelSerializer):
         fields = ('id', 'essay', 'version', 'status', 'created_by', 'created_by_name', 'created_at')
 
 
-class EssaySerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
+class EssaySerializer(StudentAuthoredMixin, StudentRecordSerializerMixin, GoogleDocsModelSerializer):
     student_name = serializers.SerializerMethodField()
     university_name = serializers.SerializerMethodField()
     revisions = EssayRevisionSerializer(many=True, read_only=True)
@@ -52,6 +53,7 @@ class EssaySerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer):
         return value
 
     REVIEW_FIELDS = ('status', 'counselor_comment')
+    STAFF_ONLY_FIELDS = ('counselor_comment',)
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

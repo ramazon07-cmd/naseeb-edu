@@ -17,7 +17,7 @@ from ..listing import ListQueryMixin
 from ..scoping import scope_students
 from ..services import NOTE_LIMIT, record_approval_note, record_send_back
 from ..models import ActivityLog
-from ..serializers.common import INLINE_FILE_EXTENSIONS
+from ..serializers.common import INLINE_FILE_EXTENSIONS, staff_created
 from core.exceptions import CodedError
 
 
@@ -124,9 +124,10 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         if view.action == 'destroy' and view.basename in STUDENT_AUTHORED_RESOURCES:
-            # Only the student permanently deletes their own work; staff send it back with a note.
+            # Only the student (or staff, for a record they created) deletes it; otherwise staff send it back with a note.
             student = getattr(obj, 'student', None)
-            if not (request.user.role == User.Role.STUDENT and student and student.user_id == request.user.id):
+            owner = request.user.role == User.Role.STUDENT and student and student.user_id == request.user.id
+            if not (owner or staff_created(obj, request.user)):
                 raise CodedError(STUDENT_AUTHORED_DELETE_MESSAGE, 'student_authored_delete', 403)
             return True
         if request.user.is_counselor_like:

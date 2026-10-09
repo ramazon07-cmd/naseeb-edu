@@ -7,7 +7,7 @@ import { Plus, Eye, CheckCircle2, Pencil, Trash2, Flag, ShieldCheck } from 'luci
 import { GoogleDocsActions, EssayDetailModal, TaskSubmissionModal, GoogleDocsRecordModal, AttachmentPreviewModal } from '../components/documents';
 import { AttachmentRow, FileField, UploadError, evidenceAttachment, recommendationAttachment, useFileUpload } from '../components/files';
 import { toFormData } from '../lib/fileUpload';
-import { canDeleteStudentRecord, changedPayload, editableFields, isStaleCopyError, recordErrorMessage } from '../lib/studentAuthored';
+import { canDelete, changedPayload, editableFields, isStaleCopyError, recordErrorMessage } from '../lib/recordRights';
 import { studentName, dateText, dateTimeText, joinParts } from '../lib/format';
 import { label, ownStudent } from '../lib/labels';
 import { Record } from '../components/records';
@@ -158,7 +158,7 @@ export function ResourceSection({ title, resource, data, user, query, reload, no
   const filtered = list.items;
   const staffControlled = resource === 'tasks';
   const allowCreate = canCreate && (staffControlled ? isTaskManager(user) || user.role === 'student' : isCounselor(user) || user.role === 'student');
-  const allowEdit = staffControlled ? isTaskManager(user) || user.role === 'student' : allowCreate && editableFields(user, resource, RESOURCE_FIELDS[resource] || []).length > 0;
+  const allowEdit = staffControlled ? isTaskManager(user) || user.role === 'student' : allowCreate;
 
   async function approve(item) {
     try {
@@ -174,9 +174,11 @@ export function ResourceSection({ title, resource, data, user, query, reload, no
   }
   return <><Panel title={title} action={<div className="panel-actions">{allowCreate && !onAdd && <button className="button quiet" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={16} /> {staffControlled ? user.role === 'student' ? t("Create self-task") : t("Assign task") : t("Add")}</button>}</div>}><div className="record-list">{filtered.map((item) => {
           const lockedAfterApproval = item.status === 'approved';
-          const allowDelete = !staffControlled ? allowCreate && canDeleteStudentRecord(user, resource) : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
+          // The API says per record what this user may change or delete (staff only review a student's own work).
+          const itemEditable = allowEdit && editableFields(item, RESOURCE_FIELDS[resource] || []).length > 0;
+          const allowDelete = !staffControlled ? allowCreate && canDelete(item, true) : isTaskManager(user) || user.role === 'student' && item.is_self_assigned;
           const attachment = RECORD_FILES[resource]?.attachment(item);
-          return <RecordRow key={item.id} resource={resource} item={item} data={data} attachment={attachment && <AttachmentRow attachment={attachment} onPreview={() => setViewingFile({ item, attachment })} notify={notify} />} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{allowEdit && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
+          return <RecordRow key={item.id} resource={resource} item={item} data={data} attachment={attachment && <AttachmentRow attachment={attachment} onPreview={() => setViewingFile({ item, attachment })} notify={notify} />} actions={<>{resource === 'tasks' && <button className="button quiet small" onClick={() => setViewingTask(item)}><Eye size={14} /> {t("Response")}</button>}{resource === 'essays' && <button className="button quiet small" onClick={() => setViewingEssay(item)}><Eye size={14} /> {t("Details")}</button>}{resource !== 'essays' && <GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />}{isTaskManager(user) && staffControlled && item.status === 'submitted' && <button className="button quiet small" onClick={() => approve(item)}><CheckCircle2 size={15} /> {t("Approve")}</button>}{itemEditable && !lockedAfterApproval && <button className="icon-button" onClick={() => {setEditing(item);setOpen(true);}} aria-label={tx`Edit ${title}`}><Pencil size={15} /></button>}{allowDelete && <button className="icon-button danger" onClick={() => remove(item)} aria-label={tx`Delete ${title}`}><Trash2 size={15} /></button>}</>} />;
         })}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !filtered.length && <Empty text={emptyText} action={allowCreate && onAdd && emptyAction ? <button type="button" className="link-button empty-add" onClick={onAdd}>{emptyAction}</button> : null} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{open && <ResourceForm resource={resource} item={editing} data={data} user={user} defaultStudentId={defaultStudentId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{viewingEssay && <EssayDetailModal essay={viewingEssay} onClose={() => setViewingEssay(null)} />}{viewingTask && <TaskSubmissionModal task={viewingTask} onClose={() => setViewingTask(null)} notify={notify} />}{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}{viewingFile && <AttachmentPreviewModal title={recordTitle(resource, viewingFile.item)} attachment={viewingFile.attachment} onClose={() => setViewingFile(null)} notify={notify} />}</>;
 }
 
@@ -235,7 +237,7 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
   ['title', 'description', 'due_date', 'priority'].includes(name) :
   item.is_self_assigned || ['status', 'student_response', 'submission_url'].includes(name)
   ) :
-  item ? editableFields(user, resource, allFields) : allFields;
+  item ? editableFields(item, allFields) : allFields;
   async function submit(event) {
     event.preventDefault();if (busy) return;setSaving(true);const values = new FormData(event.currentTarget);
     let payload = {};

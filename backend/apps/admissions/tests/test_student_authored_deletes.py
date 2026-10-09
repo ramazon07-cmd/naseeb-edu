@@ -112,6 +112,63 @@ class StudentAuthoredDeleteTests(RoleIsolationBase):
         response = self.client.patch(f'/api/achievements/{records["achievements"].pk}/', {'description': 'Silver'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
 
+    def test_staff_keep_full_rights_on_records_they_created(self):
+        self.client.force_authenticate(self.counselor)
+        created = self.client.post('/api/achievements/', {
+            'student': self.student_a.id, 'title': 'Regional olympiad', 'category': 'olympiad', 'description': 'Bronze',
+        }, format='json')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertEqual(Achievement.objects.get(pk=created.data['id']).created_by, self.counselor)
+        self.assertTrue(created.data['can_delete'])
+        self.assertIn('description', created.data['editable_fields'])
+        edited = self.client.patch(f"/api/achievements/{created.data['id']}/", {'description': 'Silver'}, format='json')
+        self.assertEqual(edited.status_code, status.HTTP_200_OK, edited.data)
+        # Another staff member did not create it: review only.
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.patch(f"/api/achievements/{created.data['id']}/", {'description': 'x'}, format='json').status_code, 403)
+        self.assertEqual(self.client.delete(f"/api/achievements/{created.data['id']}/").status_code, 403)
+        self.client.force_authenticate(self.counselor)
+        self.assertEqual(self.client.delete(f"/api/achievements/{created.data['id']}/").status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_a_staff_created_essay_becomes_the_students_once_they_write_in_it(self):
+        self.client.force_authenticate(self.counselor)
+        created = self.client.post('/api/essays/', {
+            'student': self.student_a.id, 'title': 'Assigned: why this major', 'prompt': 'Why this major?',
+        }, format='json')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        essay_id = created.data['id']
+        renamed = self.client.patch(f'/api/essays/{essay_id}/', {'title': 'Assigned: why CS'}, format='json')
+        self.assertEqual(renamed.status_code, status.HTTP_200_OK, renamed.data)
+        self.assertTrue(renamed.data['can_delete'])
+        # The student starts writing in the Essay Lab.
+        self.client.force_authenticate(self.student_a_user)
+        tab = self.client.get(f'/api/essay-lab/essays/{essay_id}/').data['tab']
+        saved = self.client.put(f'/api/essay-lab/essays/{essay_id}/autosave/', {
+            'doc': {'type': 'doc', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': 'My answer.'}]}]},
+            'base_seq': tab['save_seq'], 'client_save_id': 'student-1',
+        }, format='json')
+        self.assertEqual(saved.status_code, status.HTTP_200_OK, saved.data)
+        self.client.force_authenticate(self.counselor)
+        detail = self.client.get(f'/api/essays/{essay_id}/').data
+        self.assertEqual((detail['can_delete'], detail['editable_fields']), (False, ['status', 'counselor_comment']))
+        self.assertEqual(self.client.delete(f'/api/essays/{essay_id}/').status_code, 403)
+        self.assertEqual(self.client.patch(f'/api/essays/{essay_id}/', {'title': 'x'}, format='json').status_code, 403)
+        self.assertTrue(Essay.objects.filter(pk=essay_id, content='My answer.').exists())
+
+    def test_rights_are_reported_per_record_for_the_viewer(self):
+        achievement = self.make_records()['achievements']
+        self.client.force_authenticate(self.student_a_user)
+        own = self.client.get(f'/api/achievements/{achievement.pk}/').data
+        self.assertTrue(own['can_delete'])
+        self.assertIn('description', own['editable_fields'])
+        self.assertNotIn('verified', own['editable_fields'])
+        self.assertNotIn('counselor_comment', own['editable_fields'])
+        self.client.force_authenticate(self.counselor)
+        review = self.client.get(f'/api/achievements/{achievement.pk}/').data
+        self.assertFalse(review['can_delete'])
+        self.assertEqual(sorted(review['editable_fields']), ['counselor_comment', 'verified'])
+        self.assertNotIn('created_by', review)
+
     def test_counselor_still_reviews_instead(self):
         achievement = self.make_records()['achievements']
         self.client.force_authenticate(self.counselor)
