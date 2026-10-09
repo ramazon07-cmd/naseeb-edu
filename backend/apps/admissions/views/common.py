@@ -208,9 +208,6 @@ class StudentRecordListMixin(ListQueryMixin):
 
 # Upper bounds for list-shaped custom actions.
 CONTACT_LIST_LIMIT = 500
-COLLEGE_RESEARCH_LIMIT = 50
-# Research scores at most this many plausible universities, not the whole catalogue.
-COLLEGE_RESEARCH_CANDIDATES = 600
 SCREEN_TIME_TEAM_LIMIT = 200
 
 

@@ -613,21 +613,22 @@ class BoundedListTests(AuditFixtureMixin, APITestCase):
         self.assertEqual(response.data['team_total'], 2)
         self.assertTrue(response.data['team_truncated'])
 
-    def test_college_research_returns_top_matches_only(self):
-        from unittest import mock
+    def test_college_search_serves_one_small_page_at_a_time(self):
         from ..models import University
-        for index in range(4):
+        for index in range(12):
             University.objects.create(name=f'Cap U {index}', country='USA', market='us')
         self.student.gpa, self.student.gpa_scale, self.student.sat_score = 3.8, 4, 1400
         self.student.ielts_score, self.student.target_major = 7, 'Computer Science'
         self.student.target_countries, self.student.budget_usd = 'USA', 30000
         self.student.save()
         self.client.force_authenticate(self.student_user)
-        with mock.patch('apps.admissions.views.research.COLLEGE_RESEARCH_LIMIT', 3):
-            response = self.client.get('/api/college-research/')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['recommendations']), 3)
-        self.assertIn('matched_programs', response.data['recommendations'][0])
+        first = self.client.get('/api/college-search/?sort=fit')
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual((len(first.data['results']), first.data['count'], first.data['next']), (10, 12, 2))
+        second = self.client.get('/api/college-search/?sort=fit&page=2')
+        self.assertEqual((len(second.data['results']), second.data['next']), (2, None))
+        # The research endpoint describes the profile; it no longer scores the catalogue.
+        self.assertNotIn('recommendations', self.client.get('/api/college-research/').data)
 
 
 class VisibleStudentsTests(AuditFixtureMixin, APITestCase):

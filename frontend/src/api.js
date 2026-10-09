@@ -428,6 +428,8 @@ export const api = {
   health: () => request('/health/'),
   dashboard: () => request('/dashboard/stats/'),
   collegeResearch: () => request('/college-research/'),
+  // One College Search page (filters, sort and page size in `query`); never the whole catalogue.
+  collegeSearch: (query, signal) => request(`/college-search/?${query}`, { signal }, true, false),
   updateCollegeResearchProfile: (payload) => request('/college-research/', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -443,7 +445,7 @@ export const api = {
     params.set('page_size', '1')
     return (await request(`/${resource}/?${params}`, {}, true, false))?.count ?? 0
   },
-  search: (query, signal) => request(`/search/?q=${encodeURIComponent(query)}`, { signal }, true, false),
+  search: (query, signal, types = '') => request(`/search/?q=${encodeURIComponent(query)}${types ? `&types=${encodeURIComponent(types)}` : ''}`, { signal }, true, false),
   retrieve: (resource, id) => request(`/${resource}/${encodeURIComponent(id)}/`),
   create: (resource, payload) => request(`/${resource}/`, {
     method: 'POST',

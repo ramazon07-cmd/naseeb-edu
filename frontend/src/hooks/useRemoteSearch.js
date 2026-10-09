@@ -5,10 +5,11 @@ import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 const EMPTY = Object.freeze({});
 export const REMOTE_SEARCH_MIN_LENGTH = 2;
 
-// Server-side matches for the header search, for records a staff member does
-// not hold in memory. Debounced; a newer query aborts the older request and a
-// late response for an old query is ignored.
-export function useRemoteSearch(query, enabled) {
+// Server-side matches for the header search, for records the browser does not
+// hold in memory. `types` ('a,b') narrows the record types searched. Debounced;
+// a newer query aborts the older request and a late response for an old query
+// is ignored.
+export function useRemoteSearch(query, enabled, types = '') {
   const [state, setState] = useState({ query: '', results: EMPTY, loading: false });
   const term = String(query || '').trim();
   const active = enabled && term.length >= REMOTE_SEARCH_MIN_LENGTH;
@@ -17,14 +18,14 @@ export function useRemoteSearch(query, enabled) {
     const controller = new AbortController();
     setState((current) => ({ ...current, loading: true }));
     const timer = window.setTimeout(() => {
-      api.search(term, controller.signal).then((payload) => {
+      api.search(term, controller.signal, types).then((payload) => {
         if (!controller.signal.aborted) setState({ query: term, results: payload?.results || EMPTY, loading: false });
       }).catch((error) => {
         if (!controller.signal.aborted && error?.name !== 'AbortError') setState({ query: term, results: EMPTY, loading: false });
       });
     }, SEARCH_DEBOUNCE_MS);
     return () => {window.clearTimeout(timer);controller.abort();};
-  }, [active, term]);
+  }, [active, term, types]);
   if (!active) return { results: EMPTY, loading: false };
   return { results: state.query === term ? state.results : EMPTY, loading: state.loading || state.query !== term };
 }

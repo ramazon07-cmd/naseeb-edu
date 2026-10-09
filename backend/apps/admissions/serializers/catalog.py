@@ -36,20 +36,23 @@ QS_LIST_KEYS = ('region', 'size', 'focus', 'research', 'status', 'overall_score'
 QS_LIST_INDICATORS = ('AR', 'ER', 'CPF', 'ISR', 'SUS')
 
 
-class UniversityListSerializer(serializers.ModelSerializer):
-    """The catalogue list: what College Search and the Applications board show for every row."""
+class UniversityRowSerializer(serializers.ModelSerializer):
+    """A university as one row of a list: what College Search and the pickers show.
+
+    The full record (programs, aid details, notes, URLs, timestamps) is served
+    by the detail endpoint, so a page of rows stays small on a slow connection.
+    College Search adds the program names it needs (``college_search.serialize_rows``).
+    """
 
     qs_data = serializers.SerializerMethodField()
 
     class Meta:
         model = University
         fields = (
-            'id', 'name', 'country', 'city', 'institution_type', 'ranking', 'ranking_label', 'qs_data',
+            'id', 'name', 'city', 'country', 'institution_type', 'ranking', 'ranking_label', 'qs_data',
             'acceptance_rate', 'sat_min', 'sat_max', 'test_optional', 'net_price_usd',
-            'offers_need_based_aid', 'offers_merit_aid', 'offers_international_aid', 'meets_full_need',
-            'css_profile_required', 'application_deadline', 'scholarship_deadline',
+            'application_deadline', 'scholarship_deadline',
         )
-        read_only_fields = fields
 
     def get_qs_data(self, obj):
         data = obj.qs_data or {}

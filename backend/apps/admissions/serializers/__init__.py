@@ -24,9 +24,9 @@ from .students import (  # noqa: F401
     LevelApprovalSerializer,
 )
 from .catalog import (  # noqa: F401
-    UniversityListSerializer,
     UniversityProgramSerializer,
     UniversitySerializer,
+    UniversityRowSerializer,
     ScholarshipSerializer,
     OpportunityProgramSerializer,
     StoreItemSerializer,

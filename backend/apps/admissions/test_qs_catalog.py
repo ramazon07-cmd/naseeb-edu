@@ -10,6 +10,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
+from .college_search import fit_context, fit_scores
 from .management.commands.load_qs_rankings import DATA_FILE
 from .models import University, UniversityProgram
 from .tests.base import RoleIsolationBase
@@ -140,52 +141,55 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
             setattr(self.student_a, field, value)
         self.student_a.save()
         self.client.force_authenticate(self.student_a_user)
-        response = self.client.get('/api/college-research/')
+        response = self.client.get('/api/college-search/?sort=fit&page_size=100')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        return response.data['recommendations']
+        return response.data['results']
 
     def test_research_ranks_universities_outside_the_first_four_markets(self):
         oxford = University.objects.create(name='University of Oxford', country='United Kingdom', ranking=4, popular_majors='Computer Science')
         University.objects.create(name='Market University', country='Canada', popular_majors='History')
         top = self.research_as_student('UK')[0]
-        self.assertEqual(top['university']['id'], oxford.id)
-        self.assertIn('United Kingdom is one of your target countries', top['reasons'])
+        self.assertEqual(top['id'], oxford.id)
+        self.assertIn('United Kingdom is one of your target countries', top['fit']['reasons'])
         # Without an acceptance rate or SAT range the band is unknown, not "target".
-        self.assertIsNone(top['admission_band'])
+        self.assertIsNone(top['fit']['admission_band'])
 
     def test_band_still_comes_from_admission_data(self):
         University.objects.create(name='Selective University', country='United Kingdom', acceptance_rate='9.00')
         University.objects.create(name='Open University', country='United Kingdom', acceptance_rate='60.00')
-        bands = {item['university']['name']: item['admission_band'] for item in self.research_as_student('UK')}
+        bands = {item['name']: item['fit']['admission_band'] for item in self.research_as_student('UK')}
         self.assertEqual(bands, {'Selective University': 'reach', 'Open University': 'safety'})
 
     def test_onboarding_country_codes_match_catalogue_spellings(self):
         University.objects.create(name='Spelling University', country='United States of America')
-        reasons = self.research_as_student('US, Turkey')[0]['reasons']
+        reasons = self.research_as_student('US, Turkey')[0]['fit']['reasons']
         self.assertIn('United States of America is one of your target countries', reasons)
 
-    def test_every_candidate_gets_a_score_while_only_the_best_carry_details(self):
-        University.objects.bulk_create(University(name=f'Scored University {index}', country='United Kingdom') for index in range(60))
-        self.research_as_student('UK')
-        data = self.client.get('/api/college-research/').data
-        self.assertEqual(len(data['recommendations']), 50)
-        self.assertEqual(len(data['scores']), 60)
-        top = data['recommendations'][0]
-        self.assertEqual(data['scores'][top['university']['id']], [top['match_score'], top['admission_band']])
+    def test_every_university_is_ranked_and_explained_on_its_page(self):
+        University.objects.bulk_create(University(name=f'Scored University {index}', country='Germany') for index in range(60))
+        rows = self.research_as_student('UK')
+        self.assertEqual(len(rows), 60)
+        self.assertTrue(all(row['fit']['reasons'] and 'academic' in row['fit']['score_breakdown'] for row in rows))
+        scores = [row['fit']['match_score'] for row in rows]
+        self.assertEqual(scores, sorted(scores, reverse=True))
 
-    def test_research_scores_target_countries_and_rows_with_admissions_data_only(self):
+    def test_every_university_is_scored_and_the_unrelated_ones_rank_last(self):
         target = University.objects.create(name='Target Country University', country='United Kingdom')
         with_data = University.objects.create(name='Data University', country='USA', sat_min=1300, sat_max=1500)
         priced = University.objects.create(name='Priced University', country='Japan', net_price_usd=9000)
-        University.objects.create(name='Unrelated University', country='Germany', ranking=1)
-        self.research_as_student('UK')
-        scores = self.client.get('/api/college-research/').data['scores']
-        self.assertEqual(set(scores), {target.id, with_data.id, priced.id})
+        unrelated = University.objects.create(name='Unrelated University', country='Germany', ranking=1)
+        rows = self.research_as_student('UK')
+        scores = fit_scores(self.student_a, fit_context(self.student_a))
+        self.assertEqual(set(scores), {target.id, with_data.id, priced.id, unrelated.id})
+        # The map and the rows agree: what a row shows is what it is sorted and filtered by.
+        self.assertEqual({row['id']: (row['fit']['match_score'], row['fit']['admission_band']) for row in rows}, scores)
+        # Not a target country and no admissions data: last, despite the best rank.
+        self.assertEqual(rows[-1]['id'], unrelated.id)
 
-    def test_research_queries_do_not_grow_with_the_catalogue(self):
+    def test_fit_sort_queries_do_not_grow_with_the_catalogue(self):
         def queries():
             with CaptureQueriesContext(connection) as captured:
-                self.client.get('/api/college-research/')
+                self.client.get('/api/college-search/?sort=fit')
             return len(captured)
 
         self.research_as_student('UK')
@@ -201,7 +205,7 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
             sat_min=1400, sat_max=1500, acceptance_rate='30.00', net_price_usd=20000,
         )
         University.objects.create(name='Optional University', country='United Kingdom', ranking=60, test_optional=True)
-        results = {item['university']['name']: item for item in self.research_as_student('UK')}
+        results = {item['name']: item['fit'] for item in self.research_as_student('UK')}
         unknown, known = results['Unknown University'], results['Known University']
         # The same row with admissions data that fits ranks above the one without.
         self.assertGreater(known['match_score'], unknown['match_score'])
@@ -221,15 +225,15 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
             name='Curated University', country='United Kingdom', ranking=900, popular_majors='Computer Science',
             sat_min=1480, sat_max=1560, acceptance_rate='40.00', net_price_usd=40000,
         )
-        self.assertEqual(self.research_as_student('UK')[0]['university']['id'], curated.id)
+        self.assertEqual(self.research_as_student('UK')[0]['id'], curated.id)
 
-    def test_university_catalogue_serves_large_pages(self):
+    def test_university_catalogue_pages_hold_at_most_100_rows(self):
         University.objects.bulk_create(University(name=f'Catalogue University {index}', country='Germany') for index in range(150))
         self.client.force_authenticate(self.student_a_user)
         response = self.client.get('/api/universities/?page_size=500')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 150)
-        self.assertIsNone(response.data['next'])
+        self.assertEqual(len(response.data['results']), 100)
+        self.assertIsNotNone(response.data['next'])
 
     def test_catalogue_list_is_slim_and_the_detail_is_full(self):
         qs_data = {
@@ -240,11 +244,12 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         UniversityProgram.objects.create(university=university, name='BSc Computing', canonical_major='Computer Science')
         self.client.force_authenticate(self.student_a_user)
         row = self.client.get('/api/universities/').data['results'][0]
-        self.assertNotIn('programs', row)
-        self.assertNotIn('notes', row)
+        # The pickers need no programs; College Search adds the names it uses.
+        for field in ('notes', 'offers_merit_aid', 'programs'):
+            self.assertNotIn(field, row)
         # Only the QS values the College Search table shows and filters by.
         self.assertEqual(row['qs_data'], {'region': 'Europe', 'status': 'Public', 'overall_score': 99.2, 'indicators': {'AR': {'score': 99.6}}})
-        for field in ('name', 'country', 'ranking', 'sat_min', 'net_price_usd', 'application_deadline', 'offers_merit_aid'):
+        for field in ('name', 'country', 'ranking', 'sat_min', 'net_price_usd', 'application_deadline'):
             self.assertIn(field, row)
         detail = self.client.get(f'/api/universities/{university.pk}/').data
         self.assertEqual(detail['qs_data'], qs_data)

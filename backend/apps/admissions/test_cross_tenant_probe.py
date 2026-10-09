@@ -417,7 +417,8 @@ class CrossTenantEndpointSweepTests(CrossTenantFixture, APITestCase):
                     students = SEARCH_MODELS[key].objects.filter(pk__in=ids).values_list('student_id', flat=True)
                     assert_students(students, (actor.username, key))
                 else:
-                    self.assertIn(key, {'supportTickets'}, actor.username)
+                    # Universities are the shared catalogue: the same rows for every user, no tenant.
+                    self.assertIn(key, {'supportTickets', 'universities'}, actor.username)
 
             if actor.role != User.Role.PARENT:
                 stats = self.client.get('/api/dashboard/stats/')

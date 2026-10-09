@@ -14,7 +14,7 @@ import { Record } from '../components/records';
 import { Field, CheckboxControl } from '../components/forms';
 import { useRecordList } from '../hooks/useRecordList';
 import { usePagedList } from '../hooks/usePagedList';
-import { LoadMore, PagedListError, StudentPicker, firstPageLoading } from '../components/paged';
+import { LoadMore, PagedListError, StudentPicker, UniversityPicker, firstPageLoading } from '../components/paged';
 
 // Field tuples: [name, label, type = 'text', required = false, choices = [], placeholder].
 // The placeholder is an English example shown while the field is empty (DynamicField translates it).
@@ -278,7 +278,7 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
   return <Modal title={title || t(item ? editTitle : addTitle)} onClose={close}><form ref={formRef} className="form-grid" onSubmit={submit}>
     {!item && isTaskManager(user) && <StudentPicker required value={studentId} onChange={setStudentId} hint={t("Only students connected to your account are listed.")} />}
     {selfTask && <div className="form-wide self-task-note"><Flag size={18} /><div><b>{t("Personal development task")}</b><p>{t("This task is for your own planning and never awards XP.")}</p></div></div>}
-    {fields.map(([name, title, type = 'text', required = false, choices = [], placeholder]) => <DynamicField key={name} name={name} labelText={title} type={type} required={required} choices={choices} placeholder={placeholder} value={item?.[name]} data={data} user={user} studentId={studentId} />)}
+    {fields.map(([name, title, type = 'text', required = false, choices = [], placeholder]) => <DynamicField key={name} name={name} labelText={title} type={type} required={required} choices={choices} placeholder={placeholder} value={item?.[name]} selectedLabel={type === 'university' ? item?.university_detail?.name : ''} data={data} user={user} studentId={studentId} />)}
     {fields.some(([name]) => name === 'google_docs_url') && <div className="form-wide google-doc-sharing-hint"><ShieldCheck size={16} /><span>{t("Set Google Docs sharing to Viewer or “Anyone with the link” to enable the preview.")}</span></div>}
     {recordFile && <FileField label={recordFile.field === 'file' ? t("Letter file") : t("Evidence file")} file={file} onFileChange={(next) => {setFile(next);if (next) setRemoveFile(false);}} current={currentFile} removingCurrent={removeFile} onRemoveCurrent={() => setRemoveFile(true)} onKeepCurrent={() => setRemoveFile(false)} upload={upload} />}
     <UploadError message={upload.error} onRetry={() => formRef.current?.requestSubmit()} />
@@ -292,7 +292,7 @@ function StudentApplicationSelect({ name, labelText, value, studentId }) {
   return <Field label={t(labelText)} hint={studentId ? '' : t("Select a student first.")}><select name={name} defaultValue={value || ''} key={list.items.length}><option value="">{t('General essay')}</option>{list.items.map((app) => <option key={app.id} value={app.id}>{app.university_detail?.name} — {app.student_name}</option>)}</select></Field>;
 }
 
-export function DynamicField({ name, labelText, type, required, choices, placeholder, value, data, user, studentId = '' }) {
+export function DynamicField({ name, labelText, type, required, choices, placeholder, value, selectedLabel = '', data, user, studentId = '' }) {
   if (name === 'status' && !isTaskManager(user)) choices = choices.filter((choice) => !['approved', 'late', 'rejected', 'waitlisted', 'accepted', 'needs_revision', 'completed'].includes(choice));
   // A value this user can't choose (e.g. the counselor's needs_revision) is shown, not editable, and not sent.
   if (type === 'select' && value && !choices.includes(value)) return <Field label={t(labelText)}><input value={label(value)} readOnly disabled /></Field>;
@@ -300,7 +300,8 @@ export function DynamicField({ name, labelText, type, required, choices, placeho
   if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} placeholder={hint} /></Field>;
   if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;
   if (type === 'checkbox') return <CheckboxControl className="form-wide" name={name} defaultChecked={Boolean(value)}>{t(labelText)}</CheckboxControl>;
-  if (type === 'university') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''} required={required}><option value="">{t('Select university')}</option>{data.universities.map((uni) => <option key={uni.id} value={uni.id}>{uni.name} — {uni.country}</option>)}</select></Field>;
+  // The catalogue is searched on the server rather than loaded into the form.
+  if (type === 'university') return <UniversityPicker name={name} label={labelText} required={required} value={value} selectedLabel={selectedLabel} />;
   if (type === 'application' && isTaskManager(user)) return <StudentApplicationSelect name={name} labelText={labelText} value={value} studentId={studentId} />;
   if (type === 'application') return <Field label={t(labelText)}><select name={name} defaultValue={value || ''}><option value="">{t('General essay')}</option>{data.applications.map((app) => <option key={app.id} value={app.id}>{app.university_detail?.name} — {studentName(data, app.student)}</option>)}</select></Field>;
   return <Field label={t(labelText)}><input name={name} type={type} defaultValue={value ?? ''} required={required} placeholder={hint} /></Field>;

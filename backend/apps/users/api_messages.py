@@ -390,6 +390,31 @@ EXACT = {
         'uz': 'Tasdiqlangan tavsiyanomani o‘quvchi qayta ocha olmaydi.',
         'ru': 'Ученик не может заново открыть одобренное рекомендательное письмо.',
     },
+    # College Search
+    'College Search is available to student accounts only.': {
+        'uz': 'Universitet qidiruvi faqat o‘quvchi akkauntlari uchun.',
+        'ru': 'Поиск университетов доступен только ученикам.',
+    },
+    'Choose 10, 25, 50 or 100.': {
+        'uz': '10, 25, 50 yoki 100 ni tanlang.',
+        'ru': 'Выберите 10, 25, 50 или 100.',
+    },
+    'Unknown financial aid filter.': {
+        'uz': 'Moliyaviy yordam filtri noma’lum.',
+        'ru': 'Неизвестный фильтр финансовой помощи.',
+    },
+    'Choose reach, target or safety.': {
+        'uz': '“Yuqori”, “Maqsadli” yoki “Zaxira” toifasini tanlang.',
+        'ru': 'Выберите «Амбициозный», «Целевой» или «Запасной».',
+    },
+    'Use comma-separated university ids.': {
+        'uz': 'Universitet ID raqamlarini vergul bilan ajrating.',
+        'ru': 'Укажите ID университетов через запятую.',
+    },
+    'Ask for at most 100 universities at a time.': {
+        'uz': 'Bir so‘rovda ko‘pi bilan 100 ta universitet so‘rang.',
+        'ru': 'Запрашивайте не больше 100 университетов за раз.',
+    },
     'Use true or false.': {
         'uz': '“Ha” yoki “Yo‘q” qiymatini yuboring.',
         'ru': 'Укажите «Да» или «Нет».',

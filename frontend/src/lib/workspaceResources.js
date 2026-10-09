@@ -3,12 +3,13 @@ import { workspaceRole } from './roles.js';
 // Which API collections each role keeps in memory, as [dataKey, endpoint, query?].
 //
 // Only collections with a per-user bound are loaded up front: a student's or
-// parent's own records, catalogues, the admin's counselor roster (three per
+// parent's own records, small catalogues, the admin's counselor roster (three per
 // school), roadmap templates, a staff member's own meetings, channels and
 // tickets. Staff-wide collections (students, tasks, applications, documents,
 // essays, portfolio records, roadmap missions, accounts, audit events, all
 // support tickets) grow with the number of students and are fetched a page at
-// a time by the page that shows them (hooks/usePagedList).
+// a time by the page that shows them (hooks/usePagedList). So is the ~1,500-row
+// university catalogue (College Search pages, pickers search it on the server).
 const STUDENT_RESOURCES = ['students', 'tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations'].map((key) => [key, key]);
 const PORTAL_RESOURCES = [
   ['roadmapMissions', 'roadmap-missions'], ['bookings', 'bookings'],
@@ -18,7 +19,7 @@ const PORTAL_RESOURCES = [
 ];
 const ROADMAP_ADMIN = [['counselorRoadmapTemplates', 'counselor-roadmap-templates'], ['counselorRoadmaps', 'counselor-roadmaps']];
 const ADMIN_RESOURCES = [['schools', 'schools'], ['accounts', 'users/accounts', '?role=counselor'], ...ROADMAP_ADMIN];
-const COUNSELOR_RESOURCES = [['schools', 'schools'], ['universities', 'universities'], ...ROADMAP_ADMIN, ['programServices', 'program-services'], ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']];
+const COUNSELOR_RESOURCES = [['schools', 'schools'], ...ROADMAP_ADMIN, ['programServices', 'program-services'], ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']];
 
 export function resourcesFor(user) {
   switch (workspaceRole(user)) {
@@ -27,7 +28,7 @@ export function resourcesFor(user) {
     case 'teacher': return [['bookings', 'bookings'], ['messageChannels', 'message-channels']];
     case 'admin': return ADMIN_RESOURCES;
     case 'counselor': return COUNSELOR_RESOURCES;
-    default: return [...STUDENT_RESOURCES, ['universities', 'universities'], ...PORTAL_RESOURCES];
+    default: return [...STUDENT_RESOURCES, ...PORTAL_RESOURCES];
   }
 }
 
@@ -79,8 +80,8 @@ export const STUDENT_PAGE_KEYS = {
   messages: ['messageChannels'],
   programs: ['opportunityPrograms'],
   essay_lab: [],
-  applications: ['applications', 'universities'],
-  college_search: ['universities', 'applications', 'scholarships'],
+  applications: ['applications'],
+  college_search: ['applications', 'scholarships'],
   store: ['storeItems'],
   screen_time: [],
   support: ['supportTickets'],

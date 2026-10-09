@@ -105,8 +105,9 @@ if (!app.includes('function ApplicationSummary(') || !app.includes('APPLICATION_
 const compactDashboard = fs.readFileSync(path.join(root, 'frontend/src/CompactDashboard.jsx'), 'utf8');
 if (!compactDashboard.includes("setPage('find_personality')") || !compactDashboard.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
 // The QS catalogue spans 100+ countries: one country picker, not a checkbox per market.
-if (!app.includes('(!filters.country || universityCountry(university) === filters.country)') || !app.includes('{t("Where")}</legend><select className="filter-country"')) throw new Error('The College Search country filter is not wired to the university catalog.');
-if (!app.includes('filters.bands.includes(result?.admission_band)') || !styles.includes('.filter-set')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
+// College Search filters run on the server (/api/college-search/); the page only builds the query.
+if (!app.includes("params.set('country', filters.country)") || !app.includes('{t("Where")}</legend><select className="filter-country"')) throw new Error('The College Search country filter is not wired to the university catalog.');
+if (!app.includes("params.set('bands', filters.bands.join(','))") || !styles.includes('.filter-set')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
 if (!app.includes('function AIEducationGuidance(') || !app.includes('function MajorMatches(') || !app.includes('assessment-ai-orbit-mark') || !styles.includes('.assessment-ai-orbit-mark') || !styles.includes('.education-ai-guidance')) throw new Error('Assessment-based AI major guidance or the Naseeb logo mark is missing.');
 if (app.includes('education-ai-colleges') || app.includes('college_explanations')) throw new Error('University AI must remain separate from the major guidance stage.');
 if (app.includes('title="Where this could lead"')) throw new Error('The retired deterministic career recommendation panel has returned.');

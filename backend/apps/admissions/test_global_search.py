@@ -61,6 +61,13 @@ class GlobalSearchTests(ListContractMixin, APITestCase):
         self.assertEqual(self.titles(student, 'students'), ['Nodira Karimov'])
         self.assertEqual(self.search(self.parent), {})
 
+    def test_types_narrow_the_search_but_never_widen_it(self):
+        # The student header asks only for universities: their own records are already in the browser.
+        student = self.search(self.student_user, 'nodira&types=universities')
+        self.assertEqual(list(student), ['universities'])
+        self.assertEqual(list(self.search(self.counselor_b, 'nodira&types=students')), ['students'])
+        self.assertEqual(self.search(self.counselor_b, 'nodira&types=accounts'), {})
+
     def test_admin_sees_every_school_and_accounts(self):
         results = self.search(self.admin)
         self.assertEqual(self.titles(results, 'students'), ['Nodira Aliyev', 'Nodira Karimov'])
@@ -92,8 +99,9 @@ class GlobalSearchTests(ListContractMixin, APITestCase):
 
         from apps.admissions.views import search
 
+        # Students (and admins, who search every type) also search the university catalogue.
         expected = {
-            self.admin: (11, 11), self.counselor: (9, 9), self.organization: (9, 9), self.student_user: (9, 9),
+            self.admin: (12, 12), self.counselor: (9, 9), self.organization: (9, 9), self.student_user: (10, 10),
             self.teacher: (4, 4), self.parent: (0, 0),
         }
         for user, (views_built, queries) in expected.items():

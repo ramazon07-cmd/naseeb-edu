@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from apps.users.models import User
 from apps.users.views import UserViewSet
 from ..listing import search_terms
-from .catalog import SchoolViewSet
+from .catalog import SchoolViewSet, UniversityViewSet
 from .essays import EssayViewSet
 from .portal import BookingViewSet
 from .records import ApplicationViewSet, DocumentViewSet, RecommendationLetterViewSet, TaskViewSet
@@ -87,6 +87,11 @@ SEARCH_TYPES = {
         SupportTicketViewSet, 'support-tickets', ('subject', 'status', 'category'), ('-updated_at', '-id'),
         lambda row: (row['subject'], row['status']),
     ),
+    # The catalogue is no longer held in the browser, so students find universities here.
+    'universities': (
+        UniversityViewSet, 'universities', ('name', 'city', 'country'), ('name', 'id'),
+        lambda row: (row['name'], ', '.join(part for part in (row['city'], row['country']) if part)),
+    ),
 }
 
 STUDENT_RECORD_TYPES = (
@@ -100,7 +105,7 @@ STUDENT_RECORD_TYPES = (
 ROLE_SEARCH_TYPES = {
     User.Role.COUNSELOR: (*STUDENT_RECORD_TYPES, 'supportTickets'),
     User.Role.ORGANIZATION: (*STUDENT_RECORD_TYPES, 'supportTickets'),
-    User.Role.STUDENT: (*STUDENT_RECORD_TYPES, 'supportTickets'),
+    User.Role.STUDENT: (*STUDENT_RECORD_TYPES, 'supportTickets', 'universities'),
     User.Role.TEACHER: ('students', 'tasks', 'roadmapMissions', 'bookings'),
     User.Role.PARENT: (),
 }
@@ -137,8 +142,13 @@ class GlobalSearchView(APIView):
         if len(' '.join(terms)) < SEARCH_MIN_LENGTH:
             return Response({'query': raw.strip(), 'results': {}})
         query = ' '.join(terms)
+        types = search_types_for(request.user)
+        # ?types=a,b narrows further (students search only what the browser does not hold).
+        wanted = {name for name in request.query_params.get('types', '').split(',') if name}
+        if wanted:
+            types = [name for name in types if name in wanted]
         results = {}
-        for key in search_types_for(request.user):
+        for key in types:
             viewset_class, basename, fields, ordering, describe = SEARCH_TYPES[key]
             queryset, view = scoped_list_queryset(viewset_class, basename, request)
             if queryset is None:

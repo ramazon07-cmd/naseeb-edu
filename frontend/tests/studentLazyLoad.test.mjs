@@ -50,7 +50,8 @@ test('each student page fetches its own collections the first time it opens, onc
   s.signIn();
   s.open('dashboard');
   assert.deepEqual(s.open('programs'), ['opportunity-programs']);
-  assert.deepEqual(s.open('college_search').sort(), ['applications', 'scholarships', 'universities']);
+  // College Search pages the university catalogue itself (/api/college-search/).
+  assert.deepEqual(s.open('college_search').sort(), ['applications', 'scholarships']);
   // Applications' collections came with College Search: nothing new to fetch.
   assert.deepEqual(s.open('applications'), []);
   assert.deepEqual(s.open('store'), ['store-items']);
@@ -94,7 +95,14 @@ test('a student save refetches only collections already loaded', () => {
   // An unknown write refetches what is loaded, not every collection.
   assert.deepEqual(s.reloadAfter(['something-new']).sort(), ['bookings', 'essays', 'program-services', 'student-team', 'students', 'support-tickets', 'tasks']);
   // A retry of a named key always fetches it.
-  assert.deepEqual(s.load(['universities']), ['universities']);
+  assert.deepEqual(s.load(['scholarships']), ['scholarships']);
+});
+
+test('no role downloads the university catalogue at sign-in or with a page', () => {
+  for (const role of ['student', ...STAFF_ROLES]) {
+    assert.ok(!resourcesFor({ id: 1, role }).some(([, endpoint]) => endpoint === 'universities'), role);
+  }
+  assert.ok(!Object.values(STUDENT_PAGE_KEYS).flat().includes('universities'));
 });
 
 test('other roles still load their whole workspace at sign-in, exactly as before', () => {
