@@ -7,6 +7,8 @@ scripts/build_scorecard_catalog.py) and are matched by their QS name, so run
 load_qs_rankings first. Only empty fields are filled: curated values stay, and
 running it again changes nothing. The net price is Scorecard's average net
 price; the full cost of attendance (cost_usd) is not a net price and is not loaded.
+intl_cost_usd is the cost of attendance for a student from abroad (out-of-state
+tuition, living on campus), which College Search prices US universities by.
 """
 import json
 from pathlib import Path
@@ -23,7 +25,7 @@ DATA_FILE = Path(__file__).resolve().parents[2] / 'catalog_data' / 'college_scor
 # Snapshot field -> University field.
 FIELDS = {
     'acceptance_rate': 'acceptance_rate', 'sat_min': 'sat_min', 'sat_max': 'sat_max', 'act_min': 'act_min',
-    'act_max': 'act_max', 'net_price_usd': 'net_price_usd', 'tuition_usd': 'tuition_usd',
+    'act_max': 'act_max', 'net_price_usd': 'net_price_usd', 'intl_cost_usd': 'intl_cost_usd', 'tuition_usd': 'tuition_usd',
     'undergrad_enrollment': 'undergrad_enrollment', 'city': 'city', 'website': 'website',
     'campus_setting': 'campus_setting',
 }
@@ -60,6 +62,8 @@ class Command(BaseCommand):
                 university.updated_at = now
                 changed.append(university)
                 written.update(fields)
+        # TODO(search_text): once University.search_text lands (fix/college-search-ui), refresh it
+        # for the rows whose city changed here, since bulk_update skips save().
         with transaction.atomic():
             University.objects.bulk_update(changed, sorted(written), batch_size=200)
         # Bulk writes skip the save signals that refresh the cached catalogue lists.

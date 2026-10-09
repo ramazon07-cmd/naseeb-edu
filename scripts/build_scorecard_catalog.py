@@ -10,6 +10,16 @@ backend/apps/admissions/catalog_data/college_scorecard_2026.json, which
 `python manage.py load_college_scorecard` loads. The net price is Scorecard's
 average net price (NPT4_PUB for public universities, NPT4_PRIV otherwise);
 the full yearly cost of attendance (COSTT4_A) is kept separately as cost_usd.
+
+Neither is what an international student pays: the net price averages students
+who received domestic aid (in-state ones, at a public university), and COSTT4_A
+charges in-state tuition and averages on- and off-campus living. intl_cost_usd is
+IPEDS's "total price for out-of-state students living on campus":
+
+    TUITIONFEE_OUT + ROOMBOARD_ON + OTHEREXPENSE_ON + BOOKSUPPLY
+
+and, where a component is suppressed, COSTT4_A - TUITIONFEE_IN + TUITIONFEE_OUT
+(the average cost with out-of-state tuition in place of in-state tuition).
 """
 import csv
 import json
@@ -73,6 +83,18 @@ def number(value, cast=int):
         return None
 
 
+def international_cost(row):
+    """Yearly cost of attendance for a student from abroad (see the module docstring)."""
+    out_of_state = number(row['TUITIONFEE_OUT'])
+    if out_of_state is None:
+        return None
+    living = [number(row[column]) for column in ('ROOMBOARD_ON', 'OTHEREXPENSE_ON', 'BOOKSUPPLY')]
+    if None not in living:
+        return out_of_state + sum(living)
+    average, in_state = number(row['COSTT4_A']), number(row['TUITIONFEE_IN'])
+    return average - in_state + out_of_state if None not in (average, in_state) else None
+
+
 def details(row):
     scores = [number(row[column]) for column in ('SATVR25', 'SATMT25', 'SATVR75', 'SATMT75')]
     acceptance = number(row['ADM_RATE'], float)
@@ -86,6 +108,7 @@ def details(row):
         # ADMCON7: 1 required, 2 recommended, 3 neither, 5 considered but not required.
         'test_optional': {'1': False, '2': True, '3': True, '5': True}.get(row['ADMCON7']),
         'cost_usd': number(row['COSTT4_A']),
+        'intl_cost_usd': international_cost(row),
         # CONTROL: 1 public, 2 private nonprofit, 3 private for-profit.
         'net_price_usd': number(row['NPT4_PUB'] if row['CONTROL'] == '1' else row['NPT4_PRIV']),
         'tuition_usd': number(row['TUITIONFEE_OUT']),
