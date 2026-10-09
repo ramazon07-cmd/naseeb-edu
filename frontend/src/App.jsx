@@ -2,7 +2,7 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import './mind-section.css';
-import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
+import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
@@ -52,6 +52,7 @@ const ProfileAssessmentPage = lazyWithRetry(() => import('./pages/ProfileAssessm
 const lazyNamed = (load, name) => lazyWithRetry(() => load().then((module) => ({ default: module[name] })));
 const EssayLab = lazyWithRetry(() => import('./essayLab/EssayLab.jsx'));
 const AdminAuditPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminAuditPage');
+const CatalogAdminPage = lazyNamed(() => import('./pages/CatalogAdminPage'), 'CatalogAdminPage');
 const AdminControlDashboard = lazyNamed(() => import('./pages/AdminPages'), 'AdminControlDashboard');
 const AdminCounselorsPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminCounselorsPage');
 const CounselorRoadmapPage = lazyNamed(() => import('./pages/AdminPages'), 'CounselorRoadmapPage');
@@ -126,6 +127,7 @@ const PAGE_META = {
   admin_schools: { label: 'Schools', icon: Building2, description: 'Create and manage organization workspaces' },
   admin_counselors: { label: 'Counselors', icon: UserRound, description: 'Provision, transfer, and deactivate counselors' },
   admin_students: { label: 'Student 360', icon: Users, description: 'Open every permitted student profile' },
+  admin_catalog: { label: 'Catalog', icon: Library, description: 'Universities, programs, scholarships and opportunity programs students search' },
   counselor_roadmap: { label: 'Counselor Roadmap', icon: Compass, description: 'Professional and school-management milestones' },
   admin_audit: { label: 'Audit Log', icon: ShieldAlert, description: 'Review product administration actions' }
 };
@@ -194,6 +196,8 @@ function remoteSearchDestinations(user) {
 const PAGE_RESOURCE_KEYS = {
   dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'programServices', 'parentPortal'],
   schools: ['schools'], students: ['students'], review: [], academics: ['students', 'researches'],
+  // The catalog editor pages its own lists from the server.
+  admin_catalog: [],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
   roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'students', 'essays', 'recommendations'],
@@ -210,13 +214,14 @@ const PAGE_RESOURCE_KEYS = {
 // `lazy`: a student's page waits for exactly the collections it fetches.
 function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, retry, children }) {
   const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
-  const { loadingKeys, failedKeys, hasVisibleData, initialLoading } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy });
+  const requireComplete = lazy && ['college_search', 'applications'].includes(page);
+  const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, requireComplete });
 
   if (initialLoading) return <PageSkeleton />;
   return <>
-    {failedKeys.length > 0 && <div className="data-state error" role="alert"><X size={18} /><div><b>{t("Some information could not be loaded")}</b><p>{failedKeys.slice(0, 2).map((key) => resourceStatus[key].error).join(' · ')}</p>{hasVisibleData && <small>{t("Available information remains visible while you retry.")}</small>}</div><button type="button" className="button quiet small" onClick={() => retry(failedKeys)}><RefreshCw size={14} /> {t("Retry")}</button></div>}
+    {failedKeys.length > 0 && <div className="data-state error" role="alert"><X size={18} /><div><b>{t("Some information could not be loaded")}</b><p>{failedKeys.slice(0, 2).map((key) => resourceStatus[key].error).join(' · ')}</p>{hasVisibleData && !contentBlocked && <small>{t("Available information remains visible while you retry.")}</small>}</div><button type="button" className="button quiet small" onClick={() => retry(failedKeys)}><RefreshCw size={14} /> {t("Retry")}</button></div>}
     {loadingKeys.length > 0 && hasVisibleData && <div className="data-state refreshing" role="status"><RefreshCw className="spin" size={16} /><span>{t("Refreshing this page. Current information remains available.")}</span></div>}
-    {children}
+    {!contentBlocked && children}
   </>;
 }
 
@@ -414,6 +419,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (isPlatformAdmin(user) && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (isCounselor(user) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
+  if (isPlatformAdmin(user) && page === 'admin_catalog') return <CatalogAdminPage user={user} query={query} notify={notify} />;
   if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources }} />;
   if (user.role === 'student' && page === 'student_center') {
     const editSection = new URLSearchParams(search).get('edit');

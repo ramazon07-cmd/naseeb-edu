@@ -38,6 +38,7 @@ export const PAGE_PATHS = {
   admin_schools: '/platform/schools',
   admin_counselors: '/platform/counselors',
   admin_students: '/platform/students',
+  admin_catalog: '/platform/catalog',
   counselor_roadmap: '/counselor-roadmap',
   admin_audit: '/platform/audit',
 };
@@ -125,7 +126,7 @@ const COUNSELOR_DIRECT_LINK_PAGES = ['academics', 'portfolio', 'activities', 're
 
 // Sidebar order per role.
 export function navigationFor(user) {
-  if (isPlatformAdmin(user)) return ['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'counselor_roadmap', 'admin_audit', 'support'];
+  if (isPlatformAdmin(user)) return ['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'admin_catalog', 'counselor_roadmap', 'admin_audit', 'support'];
   if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings'];
   // The counselor sidebar is the "Counselor Dashboard" design: seven destinations.
   // Tasks, documents, roadmap, portfolio and the rest are reviewed in Review and

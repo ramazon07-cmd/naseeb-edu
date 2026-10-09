@@ -83,6 +83,17 @@ class ChallengeAttemptTests(AuditBaseMixin, APITestCase):
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, payload)
         self.assertFalse(ChallengeAttempt.objects.exists())
 
+    def test_reasoning_answers_are_option_numbers_up_to_eight(self):
+        """ICAR-16 answers are the chosen option (A-H), not a 1-5 scale."""
+        self.client.force_authenticate(self.student_user)
+        payload = {'challenge': 'reasoning', 'instrument_version': '3', 'answers': {'2100': 4, '2103': 6, '2115': 7, '2112': 8}}
+        response = self.client.post(URL, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        for answers in ({'2112': 9}, {'2112': 0}, {'2112': True}):
+            response = self.client.post(URL, {'challenge': 'reasoning', 'answers': answers}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, answers)
+        self.assertEqual(ChallengeAttempt.objects.filter(challenge='reasoning').count(), 1)
+
     def test_only_students_may_create(self):
         for user in (self.admin, self.counselor, self.teacher, self.organization, self.parent):
             self.client.force_authenticate(user)

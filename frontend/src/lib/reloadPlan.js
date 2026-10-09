@@ -14,7 +14,8 @@ export function endpointOf(path) {
 // folders; its autosaves must not make the next save reload everything).
 // 'notifications' and 'student-messages': read marks only change the bell and
 // the counselor inbox, which keep their own state.
-export const UNTRACKED_ENDPOINTS = ['screen-time', 'assistant', 'education-matches', 'auth', 'essay-lab', 'notifications', 'student-messages'];
+// 'catalog': the admin catalog editor refreshes its own server-paged lists.
+export const UNTRACKED_ENDPOINTS = ['screen-time', 'assistant', 'education-matches', 'auth', 'essay-lab', 'notifications', 'student-messages', 'catalog'];
 
 // `ignore`: endpoints whose writes never change loaded data (telemetry, AI).
 export function createMutationTracker(ignore = []) {

@@ -2563,6 +2563,8 @@ h3,
 }
 
 .roadmap-admin-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -2711,14 +2713,30 @@ h3,
 }
 
 .school-card {
+  overflow-wrap: anywhere;
   min-height: 108px;
   display: grid;
-  grid-template-columns: 64px 1fr 38px;
+  grid-template-columns: 64px minmax(0, 1fr) 38px;
   gap: 15px;
   align-items: center;
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
+}
+
+.school-card > div {
+  min-width: 0;
+}
+
+.school-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.school-card .badge {
+  max-width: 100%;
+  white-space: normal;
 }
 
 .school-card h3 {
@@ -5510,7 +5528,7 @@ body:has(.modal-backdrop) .assistant-launchers {
   min-width: 0;
 }
 
-.assessment-number-column h4 {
+.assessment-number-column h3 {
   margin: 0 0 9px;
   color: var(--muted);
   font-size: var(--text-xs);
@@ -7332,6 +7350,8 @@ body:has(.modal-backdrop) .assistant-launchers {
 }
 
 .mission-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -7383,6 +7403,8 @@ body:has(.modal-backdrop) .assistant-launchers {
 }
 
 .mission-list-shell {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   display: grid;
   gap: var(--space-4);
 }
@@ -7433,6 +7455,7 @@ body:has(.modal-backdrop) .assistant-launchers {
 }
 
 .mission-list-toolbar {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7528,7 +7551,7 @@ body:has(.modal-backdrop) .assistant-launchers {
   min-width: 0;
   padding: 10px;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 3px 7px;
   color: var(--muted);
@@ -8633,11 +8656,15 @@ button.roadmap-step-card:focus-visible {
 }
 
 .staff-messaging-overview {
-  padding: 22px;
+  --overview-pad: 22px;
+  padding: var(--overview-pad) var(--overview-pad) var(--space-2);
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(420px, 0.9fr) auto;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  grid-template-areas:
+    'copy actions'
+    'stats stats';
   align-items: center;
-  gap: 22px;
+  gap: var(--space-4) var(--space-6);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-3xl);
@@ -8645,6 +8672,7 @@ button.roadmap-step-card:focus-visible {
 }
 
 .staff-messaging-copy {
+  grid-area: copy;
   min-width: 0;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
@@ -8683,36 +8711,43 @@ button.roadmap-step-card:focus-visible {
   line-height: 1.5;
 }
 
-.staff-messaging-stats {
+/* The figures share one strip under a full-width divider instead of a box
+   each, so long Uzbek and Russian labels have room to wrap between words. */
+.staff-messaging-stats,
+.staff-stats-skeleton {
+  grid-area: stats;
   display: grid;
-  grid-template-columns: repeat(5, minmax(68px, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-inline: calc(-1 * var(--overview-pad));
+  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
 }
 
-.staff-messaging-stats > div {
+.staff-messaging-stats > div,
+.staff-stats-skeleton > span {
   min-width: 0;
-  padding: 12px 9px;
-  text-align: center;
-  background: var(--surface-soft);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--overview-pad);
+  /* Hairlines between figures and between wrapped rows; the strip clips
+     the ones that fall on its outer edges. */
+  box-shadow:
+    -1px 0 0 var(--border-subtle),
+    0 -1px 0 var(--border-subtle);
 }
 
-.staff-messaging-stats > div.attention {
-  background: var(--warning-bg);
-  border-color: var(--warning-border);
+/* Figure and label share a line, so the strip stays as low as the old tiles
+   and the chat below keeps its height; a long label wraps beside the figure. */
+.staff-messaging-stats > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
 }
 
 .staff-messaging-stats > div.attention strong {
   color: var(--warning);
 }
 
-.staff-messaging-stats strong,
-.staff-messaging-stats span {
-  display: block;
-}
-
 .staff-messaging-stats strong {
+  flex: none;
   font:
     600 var(--text-xl)/1 'Montserrat',
     system-ui,
@@ -8720,15 +8755,34 @@ button.roadmap-step-card:focus-visible {
 }
 
 .staff-messaging-stats span {
-  margin-top: 6px;
+  min-width: 0;
   color: var(--muted);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .staff-messaging-actions {
-  display: grid;
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-2);
+}
+
+/* Below laptop width the actions no longer fit beside the title. */
+@media (max-width: 1100px) {
+  .staff-messaging-overview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'copy'
+      'actions'
+      'stats';
+  }
+
+  .staff-messaging-actions {
+    justify-content: flex-start;
+  }
 }
 
 /* Beats the generic .member-picker > div list styling without !important. */
@@ -10034,22 +10088,11 @@ button.roadmap-step-card:focus-visible {
   border-radius: var(--radius-sm);
 }
 
-.staff-stats-skeleton {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(68px, 1fr));
-  gap: var(--space-2);
-}
-
 .staff-stats-skeleton > span {
-  min-height: 72px;
-  padding: 13px 9px;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 9px;
-  background: var(--surface-soft);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .staff-stats-skeleton i {
@@ -10097,6 +10140,7 @@ button.roadmap-step-card:focus-visible {
 }
 
 .staff-messaging-overview > .inline-load-error {
+  grid-area: stats;
   min-height: 84px;
   padding: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -10547,6 +10591,11 @@ button.roadmap-step-card:focus-visible {
 
 .support-requester > div {
   min-width: 0;
+}
+
+.support-requester .button {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .support-requester b,
@@ -11647,15 +11696,6 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .staff-messaging-overview {
-    grid-template-columns: 1fr;
-  }
-
-  .staff-messaging-actions {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
   .messages-shell {
     height: auto;
     min-height: 600px;
@@ -12022,8 +12062,32 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .staff-messaging-stats {
+  .staff-messaging-overview {
+    --overview-pad: var(--space-4);
+  }
+
+  /* The eyebrow and title already say what this inbox is for. */
+  .staff-messaging-copy p {
+    display: none;
+  }
+
+  .staff-messaging-stats,
+  .staff-stats-skeleton {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Two narrow columns: the label goes under its figure. */
+  .staff-messaging-stats > div,
+  .staff-stats-skeleton > span {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1-5);
+  }
+
+  /* As tall as a figure over a one-line label, so loading does not jump. */
+  .staff-stats-skeleton > span {
+    min-height: 68px;
+    justify-content: center;
   }
 
   .staff-messaging-actions {
@@ -12194,6 +12258,7 @@ a:focus-visible {
   }
 
   .mission-card footer > div {
+    flex-wrap: wrap;
     width: 100%;
     justify-content: flex-end;
   }
@@ -18094,3 +18159,91 @@ button.cx-search {
 
 
 
+
+/* Admin identities and mission controls must fit narrow phones without clipping. */
+@media (max-width: 560px) {
+  .school-card {
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .school-card-actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .school-card-actions .icon-button,
+  .mission-card footer .icon-button,
+  .mission-card footer .button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .mission-top {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .mission-top .badge {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .mission-approval {
+    grid-template-columns: 8px minmax(0, 1fr);
+  }
+
+  .mission-approval small {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .mission-card footer .button {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 560px) {
+  .roadmap-admin-card > header {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .roadmap-progress {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .roadmap-admin-missions {
+    padding: 0 16px;
+  }
+
+  .roadmap-admin-missions > div {
+    grid-template-columns: 12px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .roadmap-admin-missions .status-dot {
+    margin-top: 6px;
+  }
+
+  .roadmap-admin-missions > div > div:last-child {
+    grid-column: 2;
+    flex-wrap: wrap;
+  }
+
+  .roadmap-admin-missions .button {
+    flex: 1 1 120px;
+    min-height: 44px;
+    white-space: normal;
+  }
+}

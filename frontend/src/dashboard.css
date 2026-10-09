@@ -39,6 +39,10 @@
     color-mix(in srgb, var(--accent) 11%, transparent),
     transparent 70%
   );
+  /* The light still shows at the layer's left edge, which is the content edge:
+     fade it out there, or it ends in a hard vertical line behind the header. */
+  mask-image: linear-gradient(to right, transparent, black 24%);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24%);
 }
 
 .dashboard-greeting {

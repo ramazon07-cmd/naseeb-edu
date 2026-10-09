@@ -1329,6 +1329,27 @@ class SupportTicket(TimeStampedModel):
         return f'#{self.pk} {self.subject}'
 
 
+class SupportTicketReply(TimeStampedModel):
+    """One support answer on a ticket. A new answer is added, never written over
+    an older one; SupportTicket.admin_response mirrors the latest."""
+
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name='replies')
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='support_ticket_replies',
+    )
+    body = models.TextField()
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return f'#{self.ticket_id} reply {self.pk}'
+
+
 def student_document_upload_path(instance, filename):
     """Keep private uploads collision-free and grouped by student."""
     suffix = Path(filename or '').suffix.lower()[:12]
@@ -1577,6 +1598,10 @@ class RecommendationLetter(TimeStampedModel):
         SUBMITTED = 'submitted', 'Submitted'
         APPROVED = 'approved', 'Approved'
 
+    class StudentReview(models.TextChoices):
+        CONFIRMED = 'confirmed', 'Confirmed'
+        CHANGES_REQUESTED = 'changes_requested', 'Changes requested'
+
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='recommendations')
     recommender_name = models.CharField(max_length=180)
     recommender_title = models.CharField(max_length=180, blank=True)
@@ -1595,6 +1620,15 @@ class RecommendationLetter(TimeStampedModel):
     file_size = models.PositiveBigIntegerField(default=0)
     google_docs_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
+    # The letter itself, written by the counselor in Student 360. Only
+    # counselors write it, and the student reads it only once it is shared.
+    body = models.TextField(blank=True)
+    shared_with_student = models.BooleanField(default=False)
+    # The student's check of the shared text: it is right, or what to change.
+    # A new text clears it, so it always refers to the words the student read.
+    student_review = models.CharField(max_length=20, choices=StudentReview.choices, blank=True)
+    student_review_note = models.TextField(blank=True)
+    student_reviewed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['deadline', 'recommender_name']

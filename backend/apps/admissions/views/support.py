@@ -1,10 +1,12 @@
 """Admissions API views — support."""
+from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from apps.users.models import User
-from ..models import SupportTicket
+from ..models import SupportTicket, SupportTicketReply
 from ..listing import ListQueryMixin
 from ..serializers import SupportTicketSerializer
 
@@ -47,7 +49,9 @@ class SupportTicketViewSet(
 ):
     serializer_class = SupportTicketSerializer
     permission_classes = [SupportTicketPermission]
-    queryset = SupportTicket.objects.select_related('requester', 'responded_by').all()
+    queryset = SupportTicket.objects.select_related('requester', 'responded_by').prefetch_related(
+        Prefetch('replies', queryset=SupportTicketReply.objects.select_related('author')),
+    )
     search_fields = ('subject',)
     choice_filters = {
         'status': ('status', SupportTicket.Status.choices),
@@ -71,12 +75,15 @@ class SupportTicketViewSet(
             admin_response='',
         )
 
+    @transaction.atomic
     def perform_update(self, serializer):
         previous_response = serializer.instance.admin_response
         ticket = serializer.save()
         if ticket.admin_response and ticket.admin_response != previous_response:
+            # A new answer joins the history; admin_response only mirrors the latest.
+            reply = ticket.replies.create(author=self.request.user, body=ticket.admin_response)
             ticket.responded_by = self.request.user
-            ticket.responded_at = timezone.now()
+            ticket.responded_at = reply.created_at
             ticket.requester_viewed_at = None
             ticket.save(update_fields=[
                 'responded_by', 'responded_at', 'requester_viewed_at', 'updated_at',

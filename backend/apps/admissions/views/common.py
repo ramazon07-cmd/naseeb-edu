@@ -159,6 +159,10 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
                 return True
             if view.basename == 'students':
                 return view.action in {'retrieve', 'update', 'partial_update', 'photo', 'cv'}
+            if view.basename == 'recommendations' and obj.body:
+                # A letter the counselor has written is theirs: the student only reads
+                # the row and answers it through student-review.
+                return request.method in permissions.SAFE_METHODS or view.action == 'student_review'
             return request.method in permissions.SAFE_METHODS or view.basename in {
                 'applications', 'documents', 'essays', 'tasks', 'achievements', 'researches', 'projects',
                 'internships', 'activities', 'honors', 'recommendations',

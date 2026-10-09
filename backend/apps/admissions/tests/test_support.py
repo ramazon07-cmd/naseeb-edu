@@ -1,7 +1,12 @@
 """Role isolation: support tickets."""
+from datetime import timedelta
+from importlib import import_module
+
+from django.apps import apps
+from django.utils import timezone
 from rest_framework import status
 from apps.users.models import User
-from ..models import SupportTicket
+from ..models import SupportTicket, SupportTicketReply
 from .base import RoleIsolationBase
 
 
@@ -126,4 +131,41 @@ class SupportRoleIsolationTests(RoleIsolationBase):
         self.assertEqual(
             self.client.get('/api/support-tickets/').status_code,
             status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_every_support_answer_is_kept_in_order(self):
+        admin_user = User.objects.create_user(username='support-admin', email='support-admin@example.com', password=None, role=User.Role.ADMIN)
+        ticket = SupportTicket.objects.create(
+            requester=self.student_a_user, category=SupportTicket.Category.TECHNICAL, subject='Login', message='I cannot sign in.',
+        )
+        url = f'/api/support-tickets/{ticket.id}/'
+        self.client.force_authenticate(admin_user)
+        self.client.patch(url, {'status': SupportTicket.Status.IN_PROGRESS, 'admin_response': 'Please clear your cache.'}, format='json')
+        # A status change alone, or the same answer sent again, adds nothing.
+        self.client.patch(url, {'status': SupportTicket.Status.IN_PROGRESS}, format='json')
+        self.client.patch(url, {'admin_response': 'Please clear your cache.'}, format='json')
+        last = self.client.patch(url, {'status': SupportTicket.Status.RESOLVED, 'admin_response': 'We sent a new sign-in link.'}, format='json')
+        self.assertEqual(last.status_code, status.HTTP_200_OK, last.data)
+        self.assertEqual([reply['body'] for reply in last.data['replies']], ['Please clear your cache.', 'We sent a new sign-in link.'])
+        self.assertEqual({reply['author_name'] for reply in last.data['replies']}, {'support-admin'})
+        self.assertEqual(last.data['admin_response'], 'We sent a new sign-in link.')
+
+        self.client.force_authenticate(self.student_a_user)
+        own = self.client.get(url)
+        self.assertEqual(len(own.data['replies']), 2)
+        self.assertTrue(own.data['has_unread_response'])
+        self.client.force_authenticate(self.student_b_user)
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_answers_given_before_the_history_start_it_with_their_own_date(self):
+        answered = timezone.now() - timedelta(days=30)
+        old = SupportTicket.objects.create(
+            requester=self.student_a_user, category=SupportTicket.Category.ACCOUNT, subject='Old', message='Old question',
+            admin_response='Old answer', responded_by=self.counselor, responded_at=answered,
+        )
+        SupportTicket.objects.create(requester=self.student_a_user, category=SupportTicket.Category.OTHER, subject='Open', message='No answer yet')
+        import_module('apps.admissions.migrations.0075_support_ticket_reply_history').backfill_replies(apps, None)
+        self.assertEqual(
+            [(reply.ticket_id, reply.author_id, reply.body, reply.created_at) for reply in SupportTicketReply.objects.all()],
+            [(old.id, self.counselor.id, 'Old answer', answered)],
         )

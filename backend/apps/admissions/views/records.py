@@ -1,13 +1,19 @@
 """Admissions API views — records."""
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Prefetch, Q
 from django.http import Http404
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.translation import get_language
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
+from apps.users.entitlements import feature_enabled
 from apps.users.models import User
+from apps.users.throttles import WindowRateThrottle
+from .. import ai_budget, rec_letter_ai
 from ..models import (
     Achievement,
     Activity,
@@ -23,6 +29,7 @@ from ..models import (
     RecommendationLetter,
     Research,
     StudentMessage,
+    StudentProfile,
     Task,
     University,
     XPTransaction,
@@ -36,6 +43,8 @@ from ..serializers import (
     DocumentSerializer,
     HonorSerializer,
     InternshipSerializer,
+    LetterStudentReviewSerializer,
+    LetterSuggestionRequestSerializer,
     MeetingNoteSerializer,
     NotificationSerializer,
     ProjectSerializer,
@@ -45,6 +54,8 @@ from ..serializers import (
     TaskSerializer,
 )
 from ..progress import OPEN_TASK_STATUSES
+from ..scoping import scope_students
+from ..streaming import release_db_connection
 from ..services import TASK_XP_BY_PRIORITY, award_approval_xp, record_approval_note
 from .common import (
     RECORD_ORDERING,
@@ -354,6 +365,23 @@ class HonorViewSet(PrivateEvidenceViewSetMixin, StudentRecordListMixin, ScopedQu
         return self.filter_for_user(self.queryset)
 
 
+class LetterSuggestThrottle(WindowRateThrottle):
+    """Suggestions follow the counselor's typing: a short minimum interval plus an hourly cap."""
+
+    scope = 'rec_letter_suggest'
+    sliding = False
+    cache_prefix = 'rec-letter'
+
+    def get_cache_key(self, request, view):
+        return str(request.user.pk) if request.user.is_authenticated else None
+
+    def get_limits(self):
+        return [
+            (1, settings.REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS),
+            (settings.REC_LETTER_SUGGEST_HOURLY_LIMIT, 3600),
+        ]
+
+
 class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = RecommendationLetterSerializer
     queryset = RecommendationLetter.objects.select_related('student__user', 'student__school').all()
@@ -362,6 +390,61 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
 
     def get_queryset(self):
         return self.filter_for_user(self.queryset)
+
+    @action(detail=False, methods=['post'], url_path='suggest')
+    def suggest(self, request):
+        """Ideas for the letter a counselor is writing, drawn from the student's profile."""
+        if not request.user.is_counselor_like:
+            raise PermissionDenied('Only a counselor can ask for letter suggestions.')
+        payload = LetterSuggestionRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        throttle = LetterSuggestThrottle()
+        if not throttle.allow_request(request, self):
+            self.throttled(request, throttle.wait())
+        data = payload.validated_data
+        student = get_object_or_404(scope_students(StudentProfile.objects.select_related('user'), request.user), pk=data['student'])
+        facts = rec_letter_ai.profile_facts(student)
+        if (
+            rec_letter_ai.gateway_configured()
+            and feature_enabled(request.user, 'ai_assistant')
+            and ai_budget.consume('recommendation_letter', request.user)
+        ):
+            release_db_connection()  # don't hold a pooled connection during the AI call
+            language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
+            try:
+                suggestions = rec_letter_ai.ai_suggestions(student, facts, data['draft'], letter=data, language=language)
+                return Response({'source': 'ai', 'suggestions': suggestions})
+            except rec_letter_ai.SuggestionsUnavailable:
+                pass
+        return Response({'source': 'profile', 'suggestions': rec_letter_ai.local_suggestions(facts, data['draft'])})
+
+    @action(detail=True, methods=['post'], url_path='student-review')
+    def student_review(self, request, pk=None):
+        """The student confirms the letter their counselor shared, or asks for changes."""
+        letter = self.get_object()
+        if letter.student.user_id != request.user.id:
+            raise PermissionDenied('Only the student can review their letter.')
+        if not (letter.shared_with_student and letter.body):
+            raise ValidationError({'detail': ['Your counselor has not shared this letter with you yet.']})
+        payload = LetterStudentReviewSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        if payload.validated_data.get('reviewed_body', letter.body) != letter.body:
+            raise ValidationError({'detail': ['This letter has changed. Reopen it and read the latest text before reviewing.']})
+        decision = payload.validated_data['decision']
+        changes = decision == RecommendationLetter.StudentReview.CHANGES_REQUESTED
+        now = timezone.now()
+        # The counselor can edit or unshare while this request is being validated.
+        # Write the review only while the exact text remains shared.
+        updated = self.get_queryset().filter(pk=letter.pk, body=letter.body, shared_with_student=True).update(
+            student_review=decision,
+            student_review_note=payload.validated_data['note'].strip() if changes else '',
+            student_reviewed_at=now,
+            updated_at=now,
+        )
+        if not updated:
+            raise ValidationError({'detail': ['This letter has changed. Reopen it and read the latest text before reviewing.']})
+        letter.refresh_from_db()
+        return Response(self.get_serializer(letter).data)
 
     @action(detail=True, methods=['get'], url_path='file')
     def file(self, request, pk=None):

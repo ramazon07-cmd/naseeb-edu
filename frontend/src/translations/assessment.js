@@ -1,6 +1,8 @@
 // Assessment translations. Uzbek RIASEC terminology follows the Naseeb Team document.
 // Existing item meanings, IDs, scales and scoring stay aligned across languages.
 export const ASSESSMENT_TRANSLATIONS = {
+  "Could not prepare your card. Please try again.": ["Kartochkani tayyorlab bo‘lmadi. Qayta urinib ko‘ring.", "Не удалось подготовить карточку. Попробуйте ещё раз."],
+  "Could not download your card. Please try again.": ["Kartochkani yuklab bo‘lmadi. Qayta urinib ko‘ring.", "Не удалось скачать карточку. Попробуйте ещё раз."],
   "Review": ["Qayta ko‘rish", "Просмотреть"],
   "Start": ["Boshlash", "Начать"],
   "Back": ["Orqaga", "Назад"],
@@ -1037,5 +1039,66 @@ export const ASSESSMENT_TRANSLATIONS = {
   "In the following alphanumeric series, what letter comes next? Q S N P L": [
     "Quyidagi ingliz alifbosiga asoslangan ketma-ketlikda keyingi harf qaysi? Q S N P L",
     "Какая буква следующая в последовательности на основе английского алфавита? Q S N P L"
+  ],
+
+  "Interest code": [
+    "Qiziqish kodi",
+    "Код интересов"
+  ],
+  "Majors to explore": [
+    "Tavsiya etilgan yo‘nalishlar",
+    "Рекомендуемые направления"
+  ],
+  "Unlocks once all four challenges are saved.": [
+    "To‘rtala sinov saqlangach ochiladi.",
+    "Откроется, когда все четыре задания будут сохранены."
+  ],
+  "An education-interest snapshot, not a diagnosis.": [
+    "Bu ta’limdagi qiziqishlaringiz surati, tashxis emas.",
+    "Это снимок образовательных интересов, а не диагноз."
+  ],
+  "YOUR PROFILE CARD": [
+    "PROFIL KARTOCHKANGIZ",
+    "ВАША КАРТОЧКА ПРОФИЛЯ"
+  ],
+  "Your results on one card": [
+    "Natijalaringiz bitta kartochkada",
+    "Ваши результаты на одной карточке"
+  ],
+  "Save it as an image to share with your family or keep for later. Your IQ & Reasoning result stays off the card.": [
+    "Uni rasm sifatida saqlab, oilangiz bilan ulashing yoki keyinga qoldiring. IQ va mantiqiy fikrlash natijangiz kartochkaga chiqmaydi.",
+    "Сохраните её как изображение, чтобы показать семье или оставить на потом. Результат «IQ и логическое мышление» на карточку не попадает."
+  ],
+  "Download card": [
+    "Kartochkani yuklab olish",
+    "Скачать карточку"
+  ],
+  "Profile card for {0}: interest code {1}, {2}.": [
+    "{0} profil kartochkasi: qiziqish kodi {1}, {2}.",
+    "Карточка профиля ({0}): код интересов {1}, {2}."
+  ],
+  "Personal profile card": [
+    "Shaxsiy profil kartasi",
+    "Личная карточка профиля"
+  ],
+  "Surname": [
+    "Familiya",
+    "Фамилия"
+  ],
+  "Given name": [
+    "Ismi",
+    "Имя"
+  ],
+  "Recommended majors": [
+    "Tavsiya etilgan yo‘nalishlar",
+    "Рекомендуемые направления"
+  ],
+  "Date of issue": [
+    "Berilgan sana",
+    "Дата выдачи"
+  ],
+  "Signature": [
+    "Imzosi",
+    "Подпись"
   ]
 };

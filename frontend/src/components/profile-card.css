@@ -1,0 +1,173 @@
+/* Editorial surfaces shared by the canvas preview and PNG. */
+:root {
+  --id-card-paper: #fbfbfa;
+  --id-card-ink: #2f3437;
+  --id-card-label: #696965;
+  --id-card-primary: #252624;
+  --id-card-secondary: #718575;
+  --id-card-accent: #dbe5d9;
+  --id-card-border: #eaeaea;
+  --id-card-button: #252624;
+  --id-card-button-hover: #3d403b;
+  --id-card-button-text: #fff;
+}
+
+:root[data-theme='dark'] {
+  --id-card-paper: var(--canvas);
+  --id-card-ink: var(--text);
+  --id-card-label: var(--muted);
+  --id-card-primary: var(--text);
+  --id-card-secondary: var(--accent);
+  --id-card-accent: var(--accent-muted);
+  --id-card-border: var(--border);
+  --id-card-button: var(--accent);
+  --id-card-button-hover: var(--accent-hover);
+  --id-card-button-text: var(--accent-contrast);
+}
+
+/* The card and its copy side by side; the detailed scores run underneath. */
+.profile-card-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) minmax(260px, 1fr);
+  grid-template-areas:
+    'card copy'
+    'details details';
+  gap: var(--space-8);
+  align-items: center;
+  padding: 40px 0 24px;
+  border-top: 1px solid var(--border);
+}
+
+/* A crisp document frame without ornamental shadows. */
+.profile-card-frame {
+  grid-area: card;
+  aspect-ratio: 1600 / 1010;
+  overflow: hidden;
+  border: 1px solid var(--id-card-border);
+  border-radius: 12px;
+  background: var(--id-card-paper);
+  box-shadow: none;
+}
+
+.profile-card-frame[aria-busy='true'] canvas {
+  opacity: 0;
+}
+
+.profile-card-frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.2s ease;
+}
+
+.profile-card-copy {
+  font-family: 'Helvetica Neue', system-ui, sans-serif;
+  grid-area: copy;
+  max-width: 52ch;
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.profile-card-copy h2 {
+  margin: 0;
+  color: var(--text);
+  font-family: 'Newsreader Variable', Georgia, serif;
+  font-size: clamp(1.5rem, 1.9vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.profile-card-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.profile-card-copy .button {
+  margin-top: var(--space-1);
+}
+
+.profile-card-error {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-left: 3px solid var(--danger);
+  background: var(--surface-inset);
+}
+
+.profile-card-error p {
+  color: var(--text);
+}
+
+.profile-card-copy .button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+.profile-card-details {
+  grid-area: details;
+  min-width: 0;
+}
+
+/* The scores are the card's long form: one hairline above, three columns. */
+.profile-card-details .assessment-number-breakdown {
+  max-width: 1040px;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 1100px) {
+  .profile-card-panel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'card'
+      'copy'
+      'details';
+    gap: var(--space-6);
+  }
+
+  .profile-card-frame {
+    width: min(100%, 720px);
+  }
+}
+
+@media (max-width: 560px) {
+  .profile-card-copy .button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-card-frame canvas {
+    transition: none;
+  }
+}
+
+
+.profile-card-copy .button.primary {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--id-card-button);
+  color: var(--id-card-button-text);
+  box-shadow: none;
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.profile-card-copy .button.primary:hover {
+  background: var(--id-card-button-hover);
+}
+
+.profile-card-copy .button.primary:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-card-copy .button.primary {
+    transition: none;
+  }
+}

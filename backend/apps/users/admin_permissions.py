@@ -38,6 +38,15 @@ OPS_WRITE_ROUTES = SUPPORT_WRITE_ROUTES | frozenset({
     'students-quick-create',
     'students-assign-counselor',
     'workspace-subscriptions-detail',
+    # The admin catalogue editor (apps/admissions/views/catalog.py).
+    'catalog-universities-list',
+    'catalog-universities-detail',
+    'catalog-programs-list',
+    'catalog-programs-detail',
+    'catalog-scholarships-list',
+    'catalog-scholarships-detail',
+    'catalog-opportunity-programs-list',
+    'catalog-opportunity-programs-detail',
 })
 WRITE_ROUTES = {
     User.AdminTier.SUPPORT: SUPPORT_WRITE_ROUTES,

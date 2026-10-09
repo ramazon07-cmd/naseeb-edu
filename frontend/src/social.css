@@ -974,8 +974,10 @@
   box-shadow: none;
 }
 
+/* The inbox summary above takes about 190px, a little more when Russian
+   labels wrap; the composer must stay on screen. */
 .messaging-page:has(.staff-messaging-overview) .messages-shell {
-  height: calc(100dvh - 320px);
+  height: calc(100dvh - 336px);
 }
 
 .messaging-page .channel-sidebar {

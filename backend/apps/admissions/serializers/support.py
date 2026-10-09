@@ -1,7 +1,20 @@
 """Admissions API serializers — support."""
 from rest_framework import serializers
 from apps.users.models import User
-from ..models import SupportTicket
+from ..models import SupportTicket, SupportTicketReply
+
+
+class SupportTicketReplySerializer(serializers.ModelSerializer):
+    author_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SupportTicketReply
+        fields = ('id', 'body', 'author_name', 'created_at')
+
+    def get_author_name(self, obj):
+        if not obj.author:
+            return None
+        return obj.author.get_full_name() or obj.author.username
 
 
 class SupportTicketSerializer(serializers.ModelSerializer):
@@ -9,6 +22,8 @@ class SupportTicketSerializer(serializers.ModelSerializer):
     requester_role = serializers.CharField(source='requester.role', read_only=True)
     responded_by_name = serializers.SerializerMethodField()
     has_unread_response = serializers.BooleanField(read_only=True)
+    # Every support answer in order, oldest first.
+    replies = SupportTicketReplySerializer(many=True, read_only=True)
 
     class Meta:
         model = SupportTicket
@@ -16,7 +31,7 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             'id', 'requester', 'requester_name', 'requester_role', 'category',
             'subject', 'message', 'status', 'admin_response', 'responded_by',
             'responded_by_name', 'responded_at', 'requester_viewed_at',
-            'has_unread_response', 'created_at', 'updated_at',
+            'has_unread_response', 'replies', 'created_at', 'updated_at',
         )
         read_only_fields = (
             'requester', 'responded_by', 'responded_by_name', 'responded_at',

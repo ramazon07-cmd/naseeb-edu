@@ -1,7 +1,9 @@
 """Admissions API views — catalog."""
-from django.db.models import Count, Prefetch
+from django.db import transaction
+from django.db.models import Count, Prefetch, Q
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from apps.users.models import User
 from ..models import (
@@ -11,8 +13,13 @@ from ..models import (
     Scholarship,
     StoreItem,
     University,
+    UniversityProgram,
 )
 from ..serializers import (
+    CatalogOpportunityProgramSerializer,
+    CatalogProgramSerializer,
+    CatalogScholarshipSerializer,
+    CatalogUniversitySerializer,
     OpportunityProgramSerializer,
     OrganizationAccountSerializer,
     SchoolSerializer,
@@ -22,7 +29,7 @@ from ..serializers import (
     UniversitySerializer,
 )
 from apps.users import entitlements
-from apps.users.admin_permissions import has_tier
+from apps.users.admin_permissions import SupportReadOpsWrite, has_tier
 from apps.users.services import audit_product_action
 from ..catalog_cache import CachedCatalogListMixin
 from ..college_search import SEARCH_FIELDS
@@ -41,7 +48,10 @@ class SchoolViewSet(ListQueryMixin, viewsets.ModelViewSet):
     serializer_class = SchoolSerializer
     permission_classes = [CounselorOrOwnerPermission]
     queryset = entitlements.annotate_seat_usage(
-        School.objects.annotate(students_count=Count('students')),
+        # Deactivated students keep their data but are not counted (scoping.active_visible_students).
+        School.objects.annotate(students_count=Count(
+            'students', filter=Q(students__user__is_active=True, students__deactivated_at__isnull=True),
+        )),
     ).select_related(
         'owner_counselor', 'subscription__plan',
     ).prefetch_related(
@@ -195,6 +205,85 @@ class OpportunityProgramViewSet(CachedCatalogListMixin, viewsets.ReadOnlyModelVi
             return Response({'program_id': program.id, 'saved': True}, status=status.HTTP_200_OK)
         SavedOpportunityProgram.objects.filter(**lookup).delete()
         return Response({'program_id': program.id, 'saved': False}, status=status.HTTP_200_OK)
+
+
+# -- Admin catalogue editor (/api/catalog/...) ---------------------------------
+# The public catalogue endpoints above stay read-only and cached; these list
+# every row (hidden ones too) a page at a time for the admin portal. Every
+# product admin reads, ops and superadmins write (OPS_WRITE_ROUTES), and every
+# write is audited. A save bumps the catalogue cache version (catalog_cache).
+
+class CatalogAdminMixin(ListQueryMixin):
+    permission_classes = [SupportReadOpsWrite]
+    audit_name = ''
+
+    def perform_create(self, serializer):
+        audit_product_action(actor=self.request.user, action=f'{self.audit_name}.created', target=serializer.save())
+
+    def perform_update(self, serializer):
+        audit_product_action(actor=self.request.user, action=f'{self.audit_name}.updated', target=serializer.save())
+
+    def perform_destroy(self, instance):
+        with transaction.atomic():
+            audit_product_action(actor=self.request.user, action=f'{self.audit_name}.deleted', target=instance)
+            instance.delete()
+
+
+# Hidden (is_active=False), never deleted: students save opportunity programs,
+# and a hidden row can be shown again.
+NO_DELETE = ['get', 'post', 'put', 'patch', 'head', 'options']
+
+
+class CatalogUniversityViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
+    serializer_class = CatalogUniversitySerializer
+    queryset = University.objects.annotate(
+        programs_count=Count('programs', distinct=True),
+        applications_count=Count('applications', distinct=True),
+        scholarships_count=Count('scholarships', distinct=True),
+    ).order_by('name', 'id')
+    search_fields = ('name', 'city', 'country')
+    ordering_options = {'name': ('name', 'id')}
+    default_cursor_ordering = 'name'
+    audit_name = 'university'
+
+    def perform_destroy(self, instance):
+        # Applications are deleted with their university, and linked scholarships
+        # would silently become open to any university.
+        if instance.applications.exists() or instance.scholarships.exists() or instance.programs.exists():
+            raise ValidationError({'detail': ['This university has linked student applications, programs or scholarships. Edit it instead.']})
+        super().perform_destroy(instance)
+
+
+class CatalogProgramViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
+    serializer_class = CatalogProgramSerializer
+    queryset = UniversityProgram.objects.select_related('university').order_by('name', 'id')
+    search_fields = ('name', 'canonical_major', 'university__name')
+    int_filters = {'university': 'university_id'}
+    ordering_options = {'name': ('name', 'id')}
+    default_cursor_ordering = 'name'
+    audit_name = 'university_program'
+
+
+class CatalogScholarshipViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
+    serializer_class = CatalogScholarshipSerializer
+    queryset = Scholarship.objects.select_related('university').order_by('title', 'id')
+    search_fields = ('title', 'provider')
+    bool_filters = {'is_active': 'is_active'}
+    ordering_options = {'title': ('title', 'id')}
+    default_cursor_ordering = 'title'
+    audit_name = 'scholarship'
+    http_method_names = NO_DELETE
+
+
+class CatalogOpportunityProgramViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
+    serializer_class = CatalogOpportunityProgramSerializer
+    queryset = OpportunityProgram.objects.order_by('title', 'id')
+    search_fields = ('title', 'provider', 'category', 'country')
+    bool_filters = {'is_active': 'is_active'}
+    ordering_options = {'title': ('title', 'id')}
+    default_cursor_ordering = 'title'
+    audit_name = 'opportunity_program'
+    http_method_names = NO_DELETE
 
 
 class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):

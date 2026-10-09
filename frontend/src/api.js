@@ -510,6 +510,19 @@ export const api = {
   downloadTaskSubmission: (id) => taskSubmissionFileRequest(id, true),
   recommendationFile: (id) => recommendationFileRequest(id),
   downloadRecommendationFile: (id) => recommendationFileRequest(id, true),
+  // Counselor letter editor: ideas from the student's profile. An AI answer can
+  // take as long as the provider timeout, so this waits longer than a read.
+  letterSuggestions: (payload, signal) => request('/recommendations/suggest/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    signal,
+    timeoutMs: 45_000,
+  }),
+  // The student's answer about a shared letter: { decision: 'confirmed' | 'changes_requested', note }.
+  reviewLetter: (id, payload) => request(`/recommendations/${id}/student-review/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
   createIndividualCounselor: (payload) => request('/users/accounts/create-individual-counselor/', {
     method: 'POST',
     body: JSON.stringify(payload),
