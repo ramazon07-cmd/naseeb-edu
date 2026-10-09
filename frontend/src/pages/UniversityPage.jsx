@@ -9,6 +9,7 @@ import { AidTags, DeadlineCard, InfoCard, PriceMeter, SatRange, ScoreBreakdown, 
 import { dateText, money } from '../lib/format';
 import { initials, label, ownStudent } from '../lib/labels';
 import { daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
+import { fitReasonText } from '../lib/fitReasons';
 
 function UniversityOverview({ university, result, research, researchLoading, student, application, essays, onLeave, setPage }) {
   const budget = Number(student?.budget_usd) || 0;
@@ -24,8 +25,8 @@ function UniversityOverview({ university, result, research, researchLoading, stu
       researchLoading ? <p className="note"><RefreshCw className="spin" size={14} aria-hidden="true" /> {t("Analyzing your profile")}</p> :
       <div className="fit-missing"><p className="note">{research?.ready ? t("Detailed scoring is not available for this university yet.") : t("Complete your research profile to see how well this university fits you.")}</p>{!research?.ready && <button type="button" className="button quiet small" onClick={onLeave}>{t("Complete profile")}</button>}</div>}</InfoCard>
       {result && <div className="pair">
-        <InfoCard title="Why it fits"><ul className="note-list ok">{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={15} aria-hidden="true" /><span>{reason}</span></li>)}</ul></InfoCard>
-        <InfoCard title="Watch-outs"><ul className="note-list gap">{result.gaps.map((gap) => <li key={gap}><Clock3 size={15} aria-hidden="true" /><span>{gap}</span></li>)}{!result.gaps.length && <li><CheckCircle2 size={15} aria-hidden="true" /><span>{t("Nothing to watch out for.")}</span></li>}</ul></InfoCard>
+        <InfoCard title="Why it fits"><ul className="note-list ok">{result.reasons.map((reason) => <li key={fitReasonText(reason)}><CheckCircle2 size={15} aria-hidden="true" /><span>{fitReasonText(reason)}</span></li>)}</ul></InfoCard>
+        <InfoCard title="Watch-outs"><ul className="note-list gap">{result.gaps.map((gap) => <li key={fitReasonText(gap)}><Clock3 size={15} aria-hidden="true" /><span>{fitReasonText(gap)}</span></li>)}{!result.gaps.length && <li><CheckCircle2 size={15} aria-hidden="true" /><span>{t("Nothing to watch out for.")}</span></li>}</ul></InfoCard>
       </div>}
       <QsUniversityDetails university={university} />
       <InfoCard title="Numbers that matter"><div className="numbers">
