@@ -80,6 +80,23 @@ export const satLabel = (university) => university.sat_min ? satText(university.
 
 export const scalePercent = (value, min, max) => `${Math.max(0, Math.min(100, (Number(value) - min) / (max - min) * 100))}%`;
 
+// The yearly price shown for a university. A US row's net price is Scorecard's average for
+// domestic aid recipients, so the headline is the cost of attendance for a student from abroad,
+// and the net price is only an "after aid" line where the university aids international
+// students. `cost` is what the price filter and the fit compare with the budget
+// (backend college_search.COST / cost_of_attendance). Other rows keep their net price.
+export function priceInfo(university) {
+  if (university?.market !== 'us') {
+    const amount = university?.net_price_usd ?? null;
+    return { label: t("Net price"), amount, afterAid: null, cost: amount };
+  }
+  const amount = university.intl_cost_usd ?? null;
+  const afterAid = university.offers_international_aid && university.net_price_usd != null ? university.net_price_usd : null;
+  return { label: t("Estimated cost for international students"), amount, afterAid, cost: afterAid ?? amount };
+}
+
+export const afterAidText = (amount) => tx`${money(amount)} after aid`;
+
 export const priceCapLabel = (cap) => cap === 'all' ? t("Any price") : cap === 'budget' ? t("Within budget") : tx`Up to ${money(Number(cap))}`;
 
 export function collegeFilterChips(filters, setFilters, budget) {

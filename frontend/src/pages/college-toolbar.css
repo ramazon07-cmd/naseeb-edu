@@ -287,6 +287,14 @@
   font-weight: 600;
 }
 
+.college-filter-hint {
+  display: block;
+  margin: 2px 0 6px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
 .college-page .college-toolbar .uni-meta {
   display: flex;
   flex-wrap: wrap;

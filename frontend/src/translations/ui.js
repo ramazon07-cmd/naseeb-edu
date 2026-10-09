@@ -2361,6 +2361,11 @@ export const UI_TRANSLATIONS = {
   "Fit is not an admission probability.": ["Moslik — qabul ehtimoli emas.", "Соответствие — это не вероятность поступления."],
   "Pick a band": ["Toifani tanlang", "Выберите категорию"],
   "There is no admission data to tell whether {0} is a reach, target or safety for you. Pick one; you can change it later in Applications.": ["{0} siz uchun orzudagi, maqsadli yoki zaxira ekanini aniqlash uchun qabul ma’lumotlari yo‘q. Birini tanlang; keyinroq Arizalar bo‘limida o‘zgartirishingiz mumkin.", "Нет данных о приёме, чтобы понять, амбициозный ли {0} для вас вариант, целевой или запасной. Выберите сами; позже это можно изменить в разделе «Заявки»."],
+  "Estimated cost for international students": ["Xalqaro talabalar uchun taxminiy xarajat", "Ориентировочная стоимость для иностранных студентов"],
+  "{0} after aid": ["Yordamdan keyin {0}", "{0} после финансовой помощи"],
+  "Cost per year": ["Yillik xarajat", "Стоимость в год"],
+  "Estimated cost per year": ["Yillik taxminiy xarajat", "Ориентировочная стоимость в год"],
+  "US universities: cost for international students, or the net price after aid where the university aids international students.": ["AQSh universitetlari: xalqaro talabalar uchun xarajat yoki universitet xalqaro talabalarga yordam bersa, yordamdan keyingi sof narx.", "Университеты США: стоимость для иностранных студентов или итоговая стоимость после помощи, если университет помогает иностранным студентам."],
 }
 
 export function uiMessages(language) {

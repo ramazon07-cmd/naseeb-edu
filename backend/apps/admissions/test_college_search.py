@@ -81,6 +81,15 @@ class PagingTests(CollegeSearchFixture, APITestCase):
         self.assertNotIn('catalog_source_url', row)
         self.assertEqual([program['name'] for program in row['programs']], ['BSc Computer Science'])
 
+    def test_rows_and_the_detail_carry_what_the_price_display_needs(self):
+        row = next(row for row in self.search('search=massachusetts')['results'])
+        detail = self.client.get(f'/api/universities/{self.mit.id}/').data
+        for data in (row, detail):
+            self.assertEqual(
+                (data['market'], data['intl_cost_usd'], data['net_price_usd'], data['offers_international_aid']),
+                ('us', 85000, 20000, False),
+            )
+
     def test_unknown_values_are_rejected(self):
         for query in ('sort=random', 'price=10', 'aid=free_lunch', 'bands=dream', 'ids=one', 'test_optional=maybe', 'page=0', 'colour=red', 'sort=fit&pagesize=10'):
             self.assertEqual(self.client.get(f'{URL}?{query}').status_code, 400, query)

@@ -8,7 +8,7 @@ import { institutionStatus } from '../lib/qs';
 import { AidTags, DeadlineCard, InfoCard, PriceMeter, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { dateText, money } from '../lib/format';
 import { initials, label, ownStudent } from '../lib/labels';
-import { daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
+import { afterAidText, daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, priceInfo, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 
 function FitError({ onRetry }) {
@@ -18,7 +18,8 @@ function FitError({ onRetry }) {
 function UniversityOverview({ university, result, fitStatus, onRetryFit, research, researchLoading, student, application, essays, onLeave, setPage }) {
   const budget = Number(student?.budget_usd) || 0;
   const sat = Number(student?.sat_score) || 0;
-  const net = university.net_price_usd;
+  const price = priceInfo(university);
+  const cost = price.cost;
   const rate = university.acceptance_rate;
   const programs = matchingPrograms(university, student?.target_major);
   const shownPrograms = programs.length ? programs : (university.programs || []).slice(0, 5);
@@ -39,7 +40,7 @@ function UniversityOverview({ university, result, fitStatus, onRetryFit, researc
         <div><span className="k">{t("Acceptance rate")}</span><span className="v">{percentText(rate)}</span><span className="s">{rate == null ? t("Not available in the catalog.") : Number(rate) < 15 ? t("Highly selective: fewer than 15% are admitted.") : Number(rate) >= 45 ? t("Less selective: 45% or more are admitted.") : t("Moderately selective.")}</span></div>
         <div><span className="k">{t("SAT range")}</span><span className="v">{satLabel(university)}</span>{university.sat_min && <SatRange min={university.sat_min} max={university.sat_max} score={sat} />}<span className={`s ${sat && university.sat_min && sat < university.sat_min ? 'warn' : ''}`.trim()}>{!sat || !university.sat_min ? t("No SAT minimum listed.") : sat < university.sat_min ? tx`Your SAT is ${String(sat)}, ${university.sat_min - sat} below` : tx`Your SAT is ${String(sat)}, in range`}</span></div>
         <div><span className="k">{t("Tuition")}</span><span className="v">{money(university.tuition_usd)}</span><span className="s">{t("Per year, before aid.")}</span></div>
-        <div><span className="k">{t("Net price")}</span><span className="v">{money(net)}</span>{net != null && <PriceMeter price={net} budget={budget} />}<span className={`s ${net != null && budget && net > budget ? 'warn' : ''}`.trim()}>{net == null || !budget ? t("Estimated per year, after aid.") : net > budget ? tx`${money(net - budget)} above your ${money(budget)} budget` : t("Within your budget")}</span></div>
+        <div><span className="k">{price.label}</span><span className="v">{money(price.amount)}</span>{university.market === 'us' && <span className="s">{price.afterAid != null ? afterAidText(price.afterAid) : t("Per year, before aid.")}</span>}{cost != null && <PriceMeter price={cost} budget={budget} />}{(university.market !== 'us' || (cost != null && budget > 0)) && <span className={`s ${cost != null && budget && cost > budget ? 'warn' : ''}`.trim()}>{cost == null || !budget ? t("Estimated per year, after aid.") : cost > budget ? tx`${money(cost - budget)} above your ${money(budget)} budget` : t("Within your budget")}</span>}</div>
         <div><span className="k">{t("Average aid")}</span><span className="v">{money(university.average_aid_usd)}</span><span className="s">{university.students_receiving_aid_percent != null ? tx`${university.students_receiving_aid_percent}% of students receive aid.` : t("Per year.")}</span></div>
         <div><span className="k">{t("Undergraduates")}</span><span className="v">{university.undergrad_enrollment != null ? formatNumberLocale(university.undergrad_enrollment) : '—'}</span><span className="s">{university.student_faculty_ratio ? tx`Student–faculty ratio ${university.student_faculty_ratio}.` : t("Not available in the catalog.")}</span></div>
       </div></InfoCard>

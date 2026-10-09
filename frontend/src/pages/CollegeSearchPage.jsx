@@ -6,7 +6,7 @@ import { Empty, Modal } from '../components/ui';
 import { FilterOption, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { BAND_TIERS, COLLEGE_AID_FLAGS, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
+import { BAND_TIERS, COLLEGE_AID_FLAGS, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceInfo, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 import { useCollegeSearch } from '../hooks/useCollegeSearch';
@@ -34,7 +34,7 @@ function CollegeFilters({ filters, setFilters, facets, budget, showBands, chips 
   const groups = <>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Where")}</legend><select className="filter-country" aria-label={t("Country")} value={filters.country} onChange={(event) => patch({ country: event.target.value })}><option value="">{t("All countries")}</option>{Object.entries(facets.countries).sort(([a], [b]) => a.localeCompare(b)).map(([country, count]) => <option key={country} value={country}>{`${country} (${formatNumberLocale(count)})`}</option>)}</select></fieldset>
     {showBands && <fieldset className="filter-set"><legend className="college-filter-legend">{t("Admission band")}</legend>{COLLEGE_BANDS.map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={facets.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
-    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Net price per year")}</legend>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} disabled={cap === 'budget' && !budget} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Estimated cost per year")}</legend><small className="college-filter-hint">{t("US universities: cost for international students, or the net price after aid where the university aids international students.")}</small>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} disabled={cap === 'budget' && !budget} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={facets.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Testing & type")}</legend>
       <FilterOption checked={filters.testOptional} onChange={() => patch({ testOptional: !filters.testOptional })} count={facets.test_optional}>{t("Test optional")}</FilterOption>
@@ -81,6 +81,7 @@ function CollegeRow({ university, detail, detailError, view, application, expand
   const panelId = `college-details-${university.id}`;
   const days = daysUntil(university.application_deadline);
   const status = institutionStatus(university, t);
+  const price = priceInfo(university);
   return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
     <div className="uni-fit" role="cell"><b>{rankText(university)}</b></div>
     <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small></span></div>
@@ -90,7 +91,7 @@ function CollegeRow({ university, detail, detailError, view, application, expand
       <div className="uni-band" role="cell" data-label={t("Band")}>{fit?.admission_band ? <TierBand value={fit.admission_band} /> : <span className="muted-copy">—</span>}</div>
       <div className="uni-value" role="cell" data-label={t("Acceptance")}><span className="v">{percentText(university.acceptance_rate)}</span></div>
       <div className="uni-value" role="cell" data-label={t("SAT")}><span className="v">{satLabel(university)}</span></div>
-      <div className="uni-value" role="cell" data-label={t("Net price")}><span className="v">{money(university.net_price_usd)}</span></div>
+      <div className="uni-value" role="cell" data-label={price.label}><span className="v" title={price.label}>{money(price.amount)}</span>{price.afterAid != null && <small className="uni-due">{afterAidText(price.afterAid)}</small>}</div>
       <div className="uni-value" role="cell" data-label={t("Deadline")}><span className="v">{university.application_deadline ? shortDate(university.application_deadline) : '—'}</span>{days != null && days >= 0 && <small className="uni-due">{dueLabel(days)}</small>}</div>
       </>}
     </div>
@@ -132,10 +133,11 @@ function CollegeListDrawer({ applications, fits, fitsError, onRetryFits, busyId,
           const deadline = deadlineOf(application);
           const days = daysUntil(deadline);
           const busy = busyId === application.university;
+          const price = priceInfo(university);
           return <article className="drawer-row" key={application.id} onClick={() => onOpen(application.university)}>
             <div className="drawer-copy">{university && <UniversityLogo university={university} />}<span><button type="button" className="drawer-name" onClick={(event) => {event.stopPropagation();onOpen(application.university);}}>{name}</button><div className="drawer-sub"><TierBand value={bandOf(application)} /><span>{[university?.city, university?.country].filter(Boolean).join(', ')}</span></div>{days != null && <span className={`due drawer-due ${dueTone(days)}`.trim()}><Clock3 size={12} aria-hidden="true" /> {dueLabel(days)}</span>}</span></div>
             {score != null && <div className="drawer-score"><b>{formatNumberLocale(score)}</b><small>{t("fit")}</small></div>}
-            <div className="drawer-row-footer"><small>{money(university?.net_price_usd)} · {deadline ? shortDate(deadline) : <DeadlinePicker name={name} busy={busy} onPick={(date) => onDeadline(application, date)} />}</small><button type="button" className="drawer-remove" aria-label={tx`Remove ${name} from my list`} disabled={busyId === application.university} aria-busy={busyId === application.university} onClick={(event) => {event.stopPropagation();onRemove(application);}}><Trash2 size={13} aria-hidden="true" />{t("Remove")}</button></div>
+            <div className="drawer-row-footer"><small><span title={price.label}>{money(price.amount)}</span>{price.afterAid != null && ` (${afterAidText(price.afterAid)})`} · {deadline ? shortDate(deadline) : <DeadlinePicker name={name} busy={busy} onPick={(date) => onDeadline(application, date)} />}</small><button type="button" className="drawer-remove" aria-label={tx`Remove ${name} from my list`} disabled={busyId === application.university} aria-busy={busyId === application.university} onClick={(event) => {event.stopPropagation();onRemove(application);}}><Trash2 size={13} aria-hidden="true" />{t("Remove")}</button></div>
           </article>;
         })}{!sorted.length && <Empty text={t("Your list is empty. Add universities from the results.")} />}</div>
     </div>
@@ -395,7 +397,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
         {ready && <CollegeProfileStrip research={research} refreshing={researchLoading} onRefresh={refreshResearch} onEdit={() => setPage('student_center')} />}
       </section>
       <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''} ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} role="table" aria-label={t("Universities")} aria-busy={search.loading}>
-        <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Net price")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
+        <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Cost per year")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
         {rows.map((item) => <CollegeRow key={item.id} view={view} university={item} detail={details[item.id]} detailError={detailError} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
         {search.loading && !rows.length && <p className="uni-loading" role="status">{t("Loading universities…")}</p>}
         {!search.loading && !search.error && !rows.length && <Empty text={t("No universities match these filters.")} />}
