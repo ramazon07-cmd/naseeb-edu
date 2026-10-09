@@ -143,7 +143,7 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
             if view.basename == 'notifications' and view.action == 'read':
                 return True
             if view.basename == 'students':
-                return view.action in {'retrieve', 'update', 'partial_update', 'photo'}
+                return view.action in {'retrieve', 'update', 'partial_update', 'photo', 'cv'}
             return request.method in permissions.SAFE_METHODS or view.basename in {
                 'applications', 'documents', 'essays', 'tasks', 'achievements', 'researches', 'projects',
                 'internships', 'activities', 'honors', 'recommendations',

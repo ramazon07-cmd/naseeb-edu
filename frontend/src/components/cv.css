@@ -1,0 +1,166 @@
+/* Harvard-style CV, print only. Fixed black-on-white Times whatever the theme. */
+.cv-print-root {
+  display: none;
+}
+
+@media print {
+  body.printing-cv > :not(.cv-print-root) {
+    display: none !important;
+  }
+
+  :root:has(body.printing-cv),
+  body.printing-cv {
+    background: #fff !important;
+  }
+
+  body.printing-cv .cv-print-root {
+    display: block;
+  }
+}
+
+.cv-document {
+  color: #000;
+  background: #fff;
+  font-family: "Times New Roman", Times, "Liberation Serif", "Nimbus Roman", serif;
+  font-size: 11pt;
+  line-height: 1.15;
+  font-kerning: normal;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.cv-document a {
+  color: #1155cc;
+  text-decoration: underline;
+}
+
+.cv-page {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cv-page > thead > tr > td,
+.cv-page > tbody > tr > td {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #000;
+  font-size: 11pt;
+  line-height: 1.15;
+  text-align: left;
+  vertical-align: top;
+}
+
+.cv-document h1,
+.cv-document h2,
+.cv-document p,
+.cv-document ul,
+.cv-document li {
+  font-family: inherit;
+  letter-spacing: 0;
+}
+
+.cv-page > thead {
+  display: table-header-group;
+}
+
+.cv-header {
+  text-align: center;
+  padding-bottom: 10pt;
+  margin-bottom: 4pt;
+  border-bottom: 0.75pt solid #9e9e9e;
+}
+
+.cv-header h1 {
+  margin: 0 0 2pt;
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.cv-header p {
+  margin: 0;
+  font-size: 11pt;
+}
+
+/* The rule between sections closes the one above, so a section that starts a
+   new page sits under the repeated header's rule alone, not under two. */
+.cv-section:not(:last-child) {
+  border-bottom: 0.75pt solid #9e9e9e;
+  padding-bottom: 6pt;
+}
+
+.cv-section h2 {
+  margin: 4pt 0 5pt;
+  color: #666;
+  font-size: 14pt;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  break-after: avoid;
+}
+
+.cv-entry {
+  margin-top: 6pt;
+}
+
+.cv-entry:first-of-type {
+  margin-top: 2pt;
+}
+
+.cv-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12pt;
+  font-weight: 700;
+  break-after: avoid;
+}
+
+.cv-line-org {
+  font-size: 12pt;
+}
+
+.cv-line-role {
+  font-size: 11pt;
+}
+
+.cv-right {
+  flex: none;
+  max-width: 45%;
+  text-align: right;
+}
+
+.cv-note {
+  margin: 0 0 0 36pt;
+  font-style: italic;
+}
+
+.cv-bullets {
+  margin: 1pt 0 0;
+  padding-left: 36pt;
+  list-style: none;
+}
+
+.cv-bullets > li {
+  position: relative;
+  margin: 0;
+  font-size: 11pt;
+  line-height: 1.15;
+  break-inside: avoid;
+}
+
+.cv-bullets > li::before {
+  content: "●";
+  position: absolute;
+  top: 1.8pt;
+  left: -18pt;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10pt;
+  line-height: 1;
+}
+
+.cv-additional {
+  margin-top: 2pt;
+}

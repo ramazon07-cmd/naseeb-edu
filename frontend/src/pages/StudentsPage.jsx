@@ -20,6 +20,7 @@ import { isCounselor, isPlatformAdmin, isTaskManager } from '../lib/roles';
 import { usePagedList } from '../hooks/usePagedList';
 import { useStudentRecords } from '../hooks/useStudentRecords';
 import { usesPagedLists } from '../lib/workspaceResources';
+import { DownloadCvButton } from '../components/CvDocument';
 import { LoadMore, PagedListError } from '../components/paged';
 
 export const STUDENT_RESOURCE_GROUPS = [
@@ -107,7 +108,7 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
   return <div className="section-stack student-overview">
     <section className="student-overview-hero">
       <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{joinParts(student.user_detail?.email, student.school_name || t("No school assigned"))}</p></div></div></div>
-      <div className="student-overview-actions">{(isCounselor(user) || user?.role === 'organization') && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{isCounselor(user) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}</div>
+      <div className="student-overview-actions">{(isCounselor(user) || user?.role === 'organization') && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{isCounselor(user) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}{isCounselor(user) && <DownloadCvButton studentId={student.id} className="button quiet" notify={notify} />}</div>
       <div className="overview-progress"><strong>{formatPercentLocale(student.progress_percent || 0)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${student.progress_percent || 0}%` }} /></div><small>{tp('{done} of {n} item finished|{done} of {n} items finished', student.readiness_items_total ?? 0, { done: student.readiness_items_done ?? 0, n: student.readiness_items_total ?? 0 })}</small></div>
     </section>
     {profile}

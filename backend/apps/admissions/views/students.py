@@ -164,6 +164,38 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         profile.save()
         user.student_profile = profile
 
+    CV_PREFETCH = ('internships', 'researches', 'projects', 'activities', 'honors', 'achievements')
+
+    def _cv_response(self, profile):
+        from ..cv import build_cv
+
+        response = Response(build_cv(profile))
+        response['Cache-Control'] = 'private, no-store'
+        return response
+
+    @action(detail=False, methods=['get'], url_path='me/cv')
+    def my_cv(self, request):
+        """The signed-in student's own CV (only whitelisted résumé fields)."""
+        if request.user.role != User.Role.STUDENT:
+            return Response({'detail': 'Only students have their own CV.'}, status=403)
+        profile = self.get_queryset().filter(user=request.user).prefetch_related(None).prefetch_related(*self.CV_PREFETCH).first()
+        if not profile:
+            return Response({'detail': 'Student profile not found.'}, status=404)
+        return self._cv_response(profile)
+
+    @action(detail=True, methods=['get'], url_path='cv')
+    def cv(self, request, pk=None):
+        """A student's CV for staff who can open that student (scoped like every student read).
+
+        Parents never reach it: they have no student scope here.
+        """
+        if request.user.role == User.Role.PARENT:
+            return Response({'detail': 'Not found.'}, status=404)
+        profile = self.get_object()
+        profile = StudentProfile.objects.select_related('user').prefetch_related(*self.CV_PREFETCH).get(pk=profile.pk)
+        audit_staff_read(request, profile, 'student_cv.viewed')
+        return self._cv_response(profile)
+
     @action(detail=True, methods=['post'], url_path='section-review')
     def section_review(self, request, pk=None):
         """Staff set the review status (and an optional note) of one profile section.

@@ -458,6 +458,9 @@ export const api = {
   saveStudentOnboarding: (payload) => request('/students/onboarding/', { method: 'POST', body: JSON.stringify(payload) }),
   // Some answers only (one Student Center section); the rest stay as saved.
   updateStudentAnswers: (payload) => request('/students/onboarding/', { method: 'PATCH', body: JSON.stringify(payload) }),
+  // The résumé fields only (backend/apps/admissions/cv.py); never cached.
+  myCv: () => request('/students/me/cv/'),
+  studentCv: (id) => request(`/students/${id}/cv/`),
   quickCreateStudent: (payload) => request('/students/quick-create/', {
     method: 'POST',
     body: JSON.stringify(payload),

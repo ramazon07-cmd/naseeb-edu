@@ -8,6 +8,7 @@ import { ProfileSections } from '../components/ProfileSections';
 import { AddMenu } from '../components/AddMenu';
 import { ResourceForm, ResourceSection } from './ResourceSection';
 import { DocumentsPage } from './DocumentsPage';
+import { DownloadCvButton } from '../components/CvDocument';
 
 // Each tab with several record types gets one "Add" chooser instead of an
 // Add button per card. [resource, card title, menu label, hint, form title, empty text, empty link, icon]
@@ -49,6 +50,7 @@ export function StudentCenterPage({ user, data, query, reload, notify, tab = 'ov
   return <div className="section-stack student-portal">
     <div className="student-center-head">
       <PortalTabs active={tab} onChange={onTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
+      <DownloadCvButton notify={notify} />
     </div>
     {tab === 'overview' && <StudentOverview student={student} data={data} profile={<ProfileSections {...sections} editSection={editSection} onOpenRecords={() => onTab('activities')} />} />}
     {tab === 'academics' && <div className="section-stack"><ProfileSections {...sections} sections={['academics', 'tests']} showReadiness={false} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}
