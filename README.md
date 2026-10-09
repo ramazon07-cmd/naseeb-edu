@@ -88,6 +88,7 @@ Open:
 
 - React app: `http://127.0.0.1:5173/`
 - API docs: `http://127.0.0.1:8000/api/docs/`
+- College Search API: [`docs/college-search.md`](docs/college-search.md)
 - Healthcheck: `http://127.0.0.1:8000/api/health/`
 - Django Admin: `http://127.0.0.1:8000/admin/`
 
