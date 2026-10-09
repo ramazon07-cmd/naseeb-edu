@@ -9,6 +9,7 @@ import { DocumentPreviewModal, EssayDetailModal, TaskSubmissionModal } from '../
 import { LoadMore, PagedListError } from '../components/paged';
 import { PageSkeleton } from '../components/states';
 import { TemporaryCredentialModal } from '../components/TemporaryCredentialModal';
+import { DownloadCvButton } from '../components/CvDocument';
 import { useStudentRecords } from '../hooks/useStudentRecords';
 import { usePagedList } from '../hooks/usePagedList';
 import { activityText } from '../lib/activityText';
@@ -363,6 +364,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
       <button type="button" className="cx-back" onClick={onBack}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button>
       <span className="cx-crumb">/ {name}</span>
       <div className="cx-s360-actions">
+        <DownloadCvButton studentId={student.id} className="cx-btn" notify={notify} />
         <button type="button" className="cx-btn" onClick={() => onDirect(student.user_detail?.id)}><MessageCircle size={15} aria-hidden="true" />{t("Message")}</button>
         <button type="button" className="cx-btn" onClick={() => setBooking(true)}><Calendar size={15} aria-hidden="true" />{t("Book meeting")}</button>
         <button type="button" className="cx-btn primary" onClick={() => setAssigning(true)}><Plus size={15} aria-hidden="true" />{t("Assign task")}</button>

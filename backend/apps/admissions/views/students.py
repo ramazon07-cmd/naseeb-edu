@@ -93,6 +93,8 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         if self.action == 'list':
             # Deactivated students drop out of every list; admins still open them.
             queryset = queryset.filter(user__is_active=True)
+        elif self.action in ('cv', 'my_cv'):
+            queryset = queryset.prefetch_related(None).prefetch_related(*self.CV_PREFETCH)
         return queryset
 
     @action(detail=False, methods=['get', 'post', 'patch'], url_path='onboarding')
@@ -163,6 +165,37 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
             profile.profile_completed_at = timezone.now()
         profile.save()
         user.student_profile = profile
+
+    CV_PREFETCH = ('internships', 'researches', 'projects', 'activities', 'honors', 'achievements')
+
+    def _cv_response(self, profile):
+        from ..cv import build_cv
+
+        response = Response(build_cv(profile))
+        response['Cache-Control'] = 'private, no-store'
+        return response
+
+    @action(detail=False, methods=['get'], url_path='me/cv')
+    def my_cv(self, request):
+        """The signed-in student's own CV (only whitelisted résumé fields)."""
+        if request.user.role != User.Role.STUDENT:
+            return Response({'detail': 'Only students have their own CV.'}, status=403)
+        profile = self.get_queryset().filter(user=request.user).first()
+        if not profile:
+            return Response({'detail': 'Student profile not found.'}, status=404)
+        return self._cv_response(profile)
+
+    @action(detail=True, methods=['get'], url_path='cv')
+    def cv(self, request, pk=None):
+        """A student's CV for staff who can open that student (scoped like every student read).
+
+        Parents never reach it: they have no student scope here.
+        """
+        if request.user.role == User.Role.PARENT:
+            return Response({'detail': 'Not found.'}, status=404)
+        profile = self.get_object()
+        audit_staff_read(request, profile, 'student_cv.viewed')
+        return self._cv_response(profile)
 
     @action(detail=True, methods=['post'], url_path='section-review')
     def section_review(self, request, pk=None):

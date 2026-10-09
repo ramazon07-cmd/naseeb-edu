@@ -1368,6 +1368,30 @@ h3,
     grid-template-columns: repeat(4, 1fr);
   }
 
+  /* Chrome cannot split a grid across pages when its cards avoid breaks: a
+     card pushed to the next page keeps its row, and the next block is drawn
+     over it. Printed, the card grids are plain blocks. */
+  .page-content .section-stack,
+  .page-content .profile-sections,
+  .page-content .profile-section-grid,
+  .page-content .overview-grid,
+  .page-content .split-grid {
+    display: block;
+  }
+
+  .page-content .section-stack > * + *,
+  .page-content .profile-sections > * + *,
+  .page-content .profile-section-grid > * + *,
+  .page-content .overview-grid > * + *,
+  .page-content .split-grid > * + * {
+    margin-top: var(--space-4);
+  }
+
+  /* Contact, guardian, budget and internal notes stay on screen only. */
+  .print-private {
+    display: none !important;
+  }
+
   body.printing-scope * {
     visibility: hidden;
   }

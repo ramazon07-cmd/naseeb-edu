@@ -83,10 +83,10 @@ const SIDEBAR_KEY = 'naseeb-edu-sidebar';
 const readLocation = () => ({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash });
 
 // Export belongs to the page, not to every panel on it. These are the pages
-// whose content is a record people print; student_center keeps its own button
-// because it prints the Overview tab rather than whatever tab is open.
+// whose content is a record people print. The Student Center has none: its
+// cards hold private answers (family income, guardian), and its "Download CV"
+// prints a résumé built from whitelisted fields instead.
 const PDF_EXPORT_PAGES = new Set([
-  'student_center',
   'students', 'admin_students', 'academics', 'portfolio', 'activities', 'recommendations',
   'tasks', 'roadmap', 'applications', 'documents', 'certificates', 'essays',
 ]);

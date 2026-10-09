@@ -8,6 +8,7 @@ import { ProfileSections } from '../components/ProfileSections';
 import { AddMenu } from '../components/AddMenu';
 import { ResourceForm, ResourceSection } from './ResourceSection';
 import { DocumentsPage } from './DocumentsPage';
+import { DownloadCvButton } from '../components/CvDocument';
 
 // Each tab with several record types gets one "Add" chooser instead of an
 // Add button per card. [resource, card title, menu label, hint, form title, empty text, empty link, icon]
@@ -40,15 +41,20 @@ function ResourceTab({ tab, user, data, query, reload, notify }) {
   </div>;
 }
 
+const CV_RECORDS = ['activities', 'internships', 'researches', 'projects', 'honors', 'achievements'];
+
 // The open tab lives in the URL (/student-center/documents), so it survives a
 // reload and back/forward. Profile answers are edited in place on their cards;
 // ?edit=<section> opens one card in edit mode.
 export function StudentCenterPage({ user, data, query, reload, notify, tab = 'overview', onTab, editSection = null, onEditDone }) {
   const student = ownStudent(data);
   const sections = { reload, notify, onEditDone, student, data };
+  // Changes when the profile or a CV record is saved, so the prefetched CV is loaded again.
+  const cvKey = [student?.updated_at, ...CV_RECORDS.map((kind) => (data?.[kind] || []).map((item) => `${item.id}:${item.updated_at}`).join(','))].join('|');
   return <div className="section-stack student-portal">
     <div className="student-center-head">
       <PortalTabs active={tab} onChange={onTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
+      <DownloadCvButton refreshKey={cvKey} notify={notify} />
     </div>
     {tab === 'overview' && <StudentOverview student={student} data={data} profile={<ProfileSections {...sections} editSection={editSection} onOpenRecords={() => onTab('activities')} />} />}
     {tab === 'academics' && <div className="section-stack"><ProfileSections {...sections} sections={['academics', 'tests']} showReadiness={false} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}

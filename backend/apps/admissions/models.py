@@ -1466,6 +1466,8 @@ class Internship(TimeStampedModel):
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='internships')
     organization = models.CharField(max_length=220)
     position = models.CharField(max_length=180)
+    # City and country, or "Online": the right-hand side of the CV entry.
+    location = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
@@ -1497,6 +1499,7 @@ class Activity(TimeStampedModel):
     name = models.CharField(max_length=220)
     activity_type = models.CharField(max_length=40, choices=Type.choices, default=Type.EXTRACURRICULAR)
     role = models.CharField(max_length=160, blank=True)
+    location = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
     impact = models.CharField(max_length=255, blank=True)
     hours_per_week = models.PositiveSmallIntegerField(null=True, blank=True)

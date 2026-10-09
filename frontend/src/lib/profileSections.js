@@ -43,10 +43,16 @@ export const supportedCountries = (list) => [...new Set(list.map((c) => COUNTRY_
 export const INCOMES = ['Under $10,000', '$10,000–$25,000', '$25,000–$50,000', '$50,000–$100,000', '$100,000+'];
 export const INTERESTS = ['Arts', 'Humanities', 'Political science', 'Business', 'Economics', 'Accounting', 'Communications', 'Health and Medicine', 'Public and Social Services', 'Math and Statistics', 'Environmental Science', 'Computer Technologies', 'Science', 'Education', 'Engineering', 'English', 'History', 'Psychology'];
 export const STRENGTHS = ['STEM', 'Liberal Arts', 'Specialized programs', 'Research opportunities', 'No Preference'];
+// CV answers (backend/apps/admissions/onboarding.py has the same limits).
+export const LANGUAGE_LEVELS = ['Native', 'Fluent', 'Advanced', 'Intermediate', 'Basic'];
+export const MAX_LANGUAGES = 10;
+// Skills and hobbies are typed as one comma-separated line and saved as a list.
+const PHRASE_LISTS = { skills: 30, hobbies: 20 };
+const PHRASE_LENGTH = 60;
 const NUMERIC = ['graduation_year', 'class_size', 'class_rank', 'gpa'];
 // Test answers once lived in application_profile; the columns are authoritative now.
 const LEGACY_TEST_KEYS = ['ielts_status', 'ielts_score', 'sat_status', 'sat_reading', 'sat_math', 'sat_attempts'];
-const DEFAULTS = { subjects: [], certificates: [], interests: [], program_strengths: [], honors: [], activities: [] };
+const DEFAULTS = { subjects: [], certificates: [], interests: [], program_strengths: [], honors: [], activities: [], languages: [], linkedin_url: '', website_url: '' };
 
 export const splitList = (value) => (Array.isArray(value) ? value : String(value || '').split(',').map((c) => c.trim()).filter(Boolean));
 
@@ -70,7 +76,8 @@ export function profileAnswers(profile) {
     gpa_scale: profile.gpa_scale != null ? String(profile.gpa_scale) : (stored.gpa_scale ?? ''),
     ...testScoresFromProfile(profile),
   };
-  for (const key of ['subjects', 'certificates', 'interests', 'program_strengths', 'honors', 'activities']) if (!Array.isArray(form[key])) form[key] = [];
+  for (const key of ['subjects', 'certificates', 'interests', 'program_strengths', 'honors', 'activities', 'languages']) if (!Array.isArray(form[key])) form[key] = [];
+  for (const key of Object.keys(PHRASE_LISTS)) form[key] = splitList(form[key]).join(', ');
   form.subjects = form.subjects.map((row) => ({ ...row, score: row.score == null ? '' : String(row.score) }));
   form.certificates = form.certificates.map((row) => ({ ...row, score: row.score == null ? '' : String(row.score), test_date: row.test_date || '' }));
   form.target_countries = supportedCountries(splitList(profile.target_countries));
@@ -80,17 +87,43 @@ export function profileAnswers(profile) {
 // Form state -> API payload. With a section, only that section's answers.
 export function answersPayload(form, sectionKey = null) {
   const payload = { ...form, ...testScoresPayload(form), target_countries: (form.target_countries || []).join(', ') };
+  for (const key of Object.keys(PHRASE_LISTS)) payload[key] = phraseList(form[key]);
+  payload.languages = (form.languages || []).map((row) => ({ name: String(row.name || '').trim(), level: row.level || '' }));
   NUMERIC.forEach((key) => { payload[key] = form[key] === '' || form[key] == null ? null : Number(form[key]); });
   const section = sectionKey ? sectionByKey(sectionKey) : null;
   if (!section) return payload;
   return Object.fromEntries(section.fields.filter((name) => name in payload).map((name) => [name, payload[name]]));
 }
 
+// "Python, , python, SQL" -> ['Python', 'SQL']: trimmed, blanks and repeats dropped.
+export function phraseList(value) {
+  const seen = new Set();
+  return splitList(value).filter((item) => {
+    const key = item.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // Checks the browser can make before saving; { field: [message, ...args] }.
 export function validateSection(sectionKey, form, today = new Date()) {
   if (sectionKey === 'tests') return validateTestScores(form, today);
-  if (sectionKey === 'goal' && !(form.target_countries || []).length) return { target_countries: ['Select at least one country.'] };
-  return {};
+  if (sectionKey !== 'goal') return {};
+  const errors = {};
+  if (!(form.target_countries || []).length) errors.target_countries = ['Select at least one country.'];
+  const languages = form.languages || [];
+  if (languages.length > MAX_LANGUAGES) errors.languages = ['You can add up to {0} languages.', MAX_LANGUAGES];
+  languages.forEach((row, i) => {
+    if (!String(row.name || '').trim()) errors[`languages.${i}.name`] = ['Enter the language.'];
+    if (!LANGUAGE_LEVELS.includes(row.level)) errors[`languages.${i}.level`] = ['Choose a level.'];
+  });
+  for (const [key, max] of Object.entries(PHRASE_LISTS)) {
+    const items = phraseList(form[key]);
+    if (items.length > max) errors[key] = [key === 'skills' ? 'You can add up to {0} skills.' : 'You can add up to {0} interests.', max];
+    else if (items.some((item) => item.length > PHRASE_LENGTH)) errors[key] = ['Keep each item under {0} characters.', PHRASE_LENGTH];
+  }
+  return errors;
 }
 
 // Readiness items the backend reports as missing -> what the student can do.

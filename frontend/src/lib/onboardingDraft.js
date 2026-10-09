@@ -2,11 +2,11 @@
 // and mapping of server validation errors back onto fields and steps.
 
 export const ONBOARDING_STEP_FIELDS = [
-  ['first_name', 'middle_name', 'last_name', 'gender', 'grade', 'graduation_year', 'first_generation', 'family_income', 'residency_status', 'guardian_name', 'guardian_relation', 'guardian_contact', 'photo'],
+  ['first_name', 'middle_name', 'last_name', 'gender', 'grade', 'graduation_year', 'first_generation', 'family_income', 'residency_status', 'guardian_name', 'guardian_relation', 'guardian_contact', 'linkedin_url', 'website_url', 'photo'],
   ['school_name', 'country', 'state', 'city', 'class_size', 'class_rank', 'gpa_scale', 'gpa'],
   ['ielts_status', 'ielts_score', 'ielts_listening', 'ielts_reading', 'ielts_writing', 'ielts_speaking', 'ielts_test_date', 'ielts_attempts',
     'sat_status', 'sat_reading', 'sat_math', 'sat_test_date', 'sat_attempts', 'sat_superscore', 'sat_superscore_reading', 'sat_superscore_math', 'subjects', 'certificates'],
-  ['target_countries', 'interests', 'program_strengths', 'personal_story'],
+  ['target_countries', 'interests', 'program_strengths', 'personal_story', 'languages', 'skills', 'hobbies'],
   ['honors'],
   ['activities'],
 ];
