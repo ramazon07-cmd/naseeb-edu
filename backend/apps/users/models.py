@@ -338,3 +338,18 @@ class WorkspaceSubscription(models.Model):
 
     def __str__(self):
         return f'{self.school} · {self.plan} ({self.status})'
+
+
+class RevokedRefreshSession(models.Model):
+    """A signed-out browser session. Every refresh token carries the `sid` of
+    the sign-in it descends from (rotation keeps it), so logout revokes the
+    whole chain: a rotation that was in flight while the user signed out, or
+    from another tab, cannot hand back a usable cookie. Rows can go once the
+    newest token of the session would have expired (flush_expired_tokens)."""
+
+    sid = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField(db_index=True)
+    revoked_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'session {self.sid}'

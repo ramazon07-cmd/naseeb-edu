@@ -60,6 +60,15 @@ class FlushExpiredTokensTests(AuditBaseMixin, TestCase):
         self.assertEqual(BlacklistedToken.objects.count(), 1)
         self.assertIn('Deleted 0 expired refresh tokens.', run('flush_expired_tokens'))
 
+    def test_removes_expired_signed_out_sessions(self):
+        from apps.users.models import RevokedRefreshSession
+
+        now = timezone.now()
+        RevokedRefreshSession.objects.create(sid='gone', expires_at=now - timedelta(hours=1))
+        RevokedRefreshSession.objects.create(sid='live', expires_at=now + timedelta(days=3))
+        self.assertIn('Deleted 1 expired signed-out sessions.', run('flush_expired_tokens'))
+        self.assertEqual(list(RevokedRefreshSession.objects.values_list('sid', flat=True)), ['live'])
+
 
 class GenerateNotificationsScaleTests(AuditBaseMixin, TestCase):
     def add_student(self, index):

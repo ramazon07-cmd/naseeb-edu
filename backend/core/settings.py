@@ -403,17 +403,29 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
 }
 
-# The refresh token cookie (apps/users/auth_cookies.py). Scoped to /api/auth/
-# (sign-in, refresh, logout) so no other request carries it. Strict works
-# because the frontend and the API share one site (app.example.com +
-# api.example.com, or one origin behind a proxy); a frontend on another site
-# cannot use it at all. The refresh and logout endpoints only accept requests
-# from CORS_ALLOWED_ORIGINS / CSRF_TRUSTED_ORIGINS or the API's own origin.
+# The refresh token cookie (apps/users/auth_cookies.py), scoped to /api/auth/
+# (sign-in, refresh, logout) so no other request carries it. See
+# docs/deployment-auth.md for the production layouts:
+#   - same origin (recommended): the frontend host proxies /api to Django
+#     (Vercel: NASEEB_API_ORIGIN; nginx image: API_UPSTREAM). Lax (default).
+#   - same site (app.example.com + api.example.com): Lax or Strict.
+#   - cross-site (e.g. *.vercel.app + *.onrender.com): None, which forces
+#     Secure. Browsers that block third-party cookies (Safari, Firefox strict)
+#     then lose the session on reload, so prefer the proxy.
+# Refresh and logout always require X-Requested-With and an allowed Origin
+# (the API's own, CORS_ALLOWED_ORIGINS[_REGEXES] or CSRF_TRUSTED_ORIGINS).
 AUTH_REFRESH_COOKIE_NAME = config('AUTH_REFRESH_COOKIE_NAME', default='naseeb_refresh')
 AUTH_REFRESH_COOKIE_PATH = config('AUTH_REFRESH_COOKIE_PATH', default='/api/auth/')
 AUTH_REFRESH_COOKIE_DOMAIN = config('AUTH_REFRESH_COOKIE_DOMAIN', default='').strip() or None
-AUTH_REFRESH_COOKIE_SAMESITE = config('AUTH_REFRESH_COOKIE_SAMESITE', default='Strict')
-AUTH_REFRESH_COOKIE_SECURE = config('AUTH_REFRESH_COOKIE_SECURE', default=not DEBUG, cast=bool)
+AUTH_REFRESH_COOKIE_SAMESITE = config('AUTH_REFRESH_COOKIE_SAMESITE', default='Lax').strip().capitalize()
+if AUTH_REFRESH_COOKIE_SAMESITE not in {'Strict', 'Lax', 'None'}:
+    raise RuntimeError('Invalid runtime environment: AUTH_REFRESH_COOKIE_SAMESITE must be Strict, Lax or None.')
+# Browsers reject SameSite=None without Secure, and production is HTTPS only.
+AUTH_REFRESH_COOKIE_SECURE = (
+    AUTH_REFRESH_COOKIE_SAMESITE == 'None'
+    or IS_PRODUCTION
+    or config('AUTH_REFRESH_COOKIE_SECURE', default=not DEBUG, cast=bool)
+)
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Naseeb Edu API',
