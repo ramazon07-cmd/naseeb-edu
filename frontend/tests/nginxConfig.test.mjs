@@ -53,12 +53,12 @@ test('private-file bucket origins join connect-src only; bad values fail the bui
   for (const bad of ['files.example.com', 'https://files.example.com/private/', "https://x.com; script-src *", 'javascript:alert(1)']) {
     assert.throws(() => storageOrigins(bad), /FILE_STORAGE_ORIGINS/, bad);
   }
-  assert.ok(renderNginxConf(template, html, '/api', origins).includes('https://files.acct.r2.cloudflarestorage.com'));
+  assert.ok(renderNginxConf(template, html, '/api', origins, 'http://backend:8000').includes('https://files.acct.r2.cloudflarestorage.com'));
 });
 
 test('client routes fall back to the app shell and never collide with static files', async () => {
   const { PAGE_PATHS, LOGIN_PATH, buildPath } = await import('../src/lib/routes.js');
-  const conf = renderNginxConf(template, html, '/api');
+  const conf = renderNginxConf(template, html, '/api', [], 'http://backend:8000');
   const fallback = conf.match(/location \/ \{[^}]*\}/);
   assert.ok(fallback, 'catch-all location');
   assert.match(fallback[0], /try_files \$uri \/index\.html;/);
@@ -76,15 +76,21 @@ test('client routes fall back to the app shell and never collide with static fil
   }
 });
 
-test('docker-compose serves the API from the app origin; the production image proxies nothing', () => {
-  const conf = renderNginxConf(template, html, '/api');
-  assert.match(conf, /include \/etc\/nginx\/snippets\/api-proxy\*\.conf;/, 'optional glob include');
-  const proxy = readFileSync(new URL('nginx-api-proxy.compose.conf', root), 'utf8');
+test('a relative API URL is proxied to API_UPSTREAM; without one the build fails', () => {
+  const conf = renderNginxConf(template, html, '/api', [], 'http://backend:8000');
   // ^~ so the static-file regex location never takes an /api/...json request.
-  assert.match(proxy, /location \^~ \/api\/ \{/);
-  assert.match(proxy, /proxy_pass http:\/\/backend:8000;/);
-  assert.match(proxy, /proxy_set_header Host \$http_host;/);
+  const proxy = conf.match(/location \^~ \/api\/ \{[^}]*\}/);
+  assert.ok(proxy, 'an /api/ location');
+  assert.match(proxy[0], /proxy_pass http:\/\/backend:8000;/);
+  assert.match(proxy[0], /X-Forwarded-For \$proxy_add_x_forwarded_for/);
+  assert.ok(!conf.includes('__API_PROXY__'));
+  assert.throws(() => renderNginxConf(template, html, '/api'), /set API_UPSTREAM/);
+  assert.throws(() => renderNginxConf(template, html, '/api', [], 'backend:8000'), /API_UPSTREAM/);
+  assert.throws(() => renderNginxConf(template, html, '/api', [], 'http://backend:8000/api'), /no path/);
+  // Calling the API directly (absolute URL): no proxy, no upstream needed.
+  const direct = renderNginxConf(template, html, 'https://api.naseebedu.com/api');
+  assert.ok(!/location \^~ \/api\//.test(direct));
   const compose = readFileSync(new URL('../docker-compose.yml', root), 'utf8');
   assert.match(compose, /VITE_API_URL: \/api/);
-  assert.match(compose, /nginx-api-proxy\.compose\.conf:\/etc\/nginx\/snippets\/api-proxy\.conf/);
+  assert.match(compose, /API_UPSTREAM: http:\/\/backend:8000/);
 });

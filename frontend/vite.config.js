@@ -1,13 +1,25 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { checkBuildApiConfig } from './scripts/api-config.mjs'
+import { injectSessionKey } from './src/sessionKeys.js'
 
 // /api goes to Django from the same origin as the app, so the HttpOnly refresh
-// cookie (SameSite=Strict, Path=/api/auth/) is first-party in development. The
-// Host header is kept: Django then sees the app's own origin.
+// cookie (Path=/api/auth/) is first-party in development. The Host header is
+// kept: Django then sees the app's own origin.
 const apiProxy = { '/api': { target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:8000' } }
 
-export default defineConfig({
-  plugins: [react()],
+// index.html's inline boot script reads the same session key as the app.
+const sessionKey = { name: 'naseeb-session-key', transformIndexHtml: injectSessionKey }
+
+export default defineConfig(({ command, mode }) => {
+  // A deploy that could not reach the API (e.g. Vercel without
+  // NASEEB_API_ORIGIN) fails here instead of serving index.html for /api.
+  if (command === 'build') checkBuildApiConfig({ ...loadEnv(mode, process.cwd(), ''), ...process.env })
+  return config
+})
+
+const config = {
+  plugins: [react(), sessionKey],
   build: {
     rollupOptions: {
       output: {
@@ -30,4 +42,4 @@ export default defineConfig({
     port: 4173,
     proxy: apiProxy,
   },
-})
+}

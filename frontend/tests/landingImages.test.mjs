@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
+import { SESSION_HINT_KEY, SESSION_KEY_PLACEHOLDER, injectSessionKey } from '../src/sessionKeys.js';
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+// What the build serves: vite.config.js fills in the session key.
+const html = injectSessionKey(source);
 const landing = readFileSync(new URL('../src/LandingPage.jsx', import.meta.url), 'utf8');
 const bootstrap = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
@@ -56,7 +59,7 @@ test('the hero is preloaded for system-dark and storage-disabled visitors', () =
 });
 
 test('signed-in users and the login route skip the hero preload', () => {
-  assert.equal(boot({ saved: 'light', tokens: { 'naseeb-session': '1' } }).preloaded, false);
+  assert.equal(boot({ saved: 'light', tokens: { [SESSION_HINT_KEY]: 'k3x.2' } }).preloaded, false);
   // Tokens left in storage by the old frontend are dropped on load, not a session.
   assert.notEqual(boot({ saved: 'light', tokens: { 'naseeb-refresh-token': 'x' } }).preloaded, false);
   assert.equal(boot({ saved: 'dark', hash: '#/login' }).preloaded, false);
@@ -85,4 +88,15 @@ test('the hero stays eager/high; the other HTML images are lazy/async with dimen
 
 test('?lang= in the URL wins over the stored language (hreflang alternates)', () => {
   assert.deepEqual(boot({ saved: 'light', lang: 'en', search: '?lang=ru' }).fonts, ['/fonts/montserrat-cyrillic.woff2']);
+});
+
+test('index.html reads the session key the app writes, from the one shared constant', async () => {
+  assert.ok(source.includes(`localStorage.getItem('${SESSION_KEY_PLACEHOLDER}')`), 'index.html uses the placeholder, not a copy');
+  assert.ok(!source.includes(`'${SESSION_HINT_KEY}'`), 'no hard-coded copy of the key');
+  assert.ok(html.includes(`localStorage.getItem('${SESSION_HINT_KEY}')`));
+  assert.ok(!html.includes(SESSION_KEY_PLACEHOLDER));
+  const { SESSION_HINT_KEY: storeKey } = await import('../src/authTokens.js');
+  assert.equal(storeKey, SESSION_HINT_KEY);
+  const viteConfig = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+  assert.match(viteConfig, /transformIndexHtml: injectSessionKey/);
 });

@@ -116,7 +116,7 @@ npm run dev
 
 The frontend uses `VITE_API_URL` and defaults to `/api`, which the Vite dev server proxies to `http://127.0.0.1:8000` (same origin, so the HttpOnly refresh cookie works). See `frontend/README.md` for how sessions work.
 
-Keep `VITE_API_URL=/api` in `frontend/.env`. An absolute `http://127.0.0.1:8000/api` makes the API another site when the app is opened on `localhost` (or vice versa), and the browser then drops the `SameSite=Strict` refresh cookie: you are signed out on every reload.
+Keep `VITE_API_URL=/api` in `frontend/.env`. An absolute `http://127.0.0.1:8000/api` makes the API another site when the app is opened on `localhost` (or vice versa), and the browser then drops the refresh cookie: you are signed out on every reload.
 
 ## Docker start
 
@@ -124,7 +124,7 @@ Keep `VITE_API_URL=/api` in `frontend/.env`. An absolute `http://127.0.0.1:8000/
 docker compose up --build
 ```
 
-This starts PostgreSQL, Django/Gunicorn and the Nginx-served React frontend at `http://127.0.0.1:3000`. Nginx also proxies `/api` to the backend (`frontend/nginx-api-proxy.compose.conf`), so the app and the API share one origin.
+This starts PostgreSQL, Django/Gunicorn and the Nginx-served React frontend at `http://127.0.0.1:3000`. Nginx also proxies `/api` to the backend (the `API_UPSTREAM` build argument), so the app and the API share one origin.
 
 ## Tests
 
@@ -164,6 +164,8 @@ DOCUMENT_MAX_UPLOAD_SIZE=26214400
 ```
 
 Start from `backend/.env.production.example` and `frontend/.env.production.example`. Store the real values in the deployment provider's secret manager; do not upload or commit a real `.env` file.
+
+Sign-in uses an HttpOnly refresh cookie, so the frontend must reach the API on its own origin or site. For the current hosting (Vercel frontend, Render API) set `NASEEB_API_ORIGIN=https://<render-service>.onrender.com` on the Vercel project (Production, Preview and build) and, on Render, `CORS_ALLOWED_ORIGINS=https://naseeb-edu-demo.vercel.app` and `NUM_PROXIES=2`. The nginx image needs `API_UPSTREAM` instead. Both builds fail without it. All layouts and settings: [docs/deployment-auth.md](docs/deployment-auth.md).
 
 Production startup fails early when `DEBUG=True`, the secret key is missing/weak, `DATABASE_URL` is missing or points to SQLite, or demo accounts are enabled. When demo accounts are disabled, `seed_demo` safely exits without writing data and `reset_demo` remains blocked before any flush. Local `.env`, SQLite files, media, virtual environments, build output and dependencies are excluded from Git, Docker build context and release ZIP files.
 
