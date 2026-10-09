@@ -6,16 +6,20 @@ Because the browser attaches the cookie by itself, the endpoints that read it
 (refresh, logout) are CSRF-protected: they require the X-Requested-With header,
 which a cross-site form cannot send and a cross-origin fetch can only send after
 a CORS preflight the API answers for allowed origins only, and the request's
-Origin must be an allowed origin (origin_allowed).
+Origin must be an allowed origin (origin_allowed). That holds for every
+AUTH_REFRESH_COOKIE_SAMESITE value, including None for a cross-site frontend.
 """
+import functools
+import re
 from urllib.parse import urlsplit
 
-from corsheaders.middleware import CorsMiddleware
 from django.conf import settings
-from django.middleware.csrf import CsrfViewMiddleware
+from django.core.signals import setting_changed
+from django.utils.http import is_same_domain
 from rest_framework.exceptions import PermissionDenied
 
 CSRF_HEADER = 'HTTP_X_REQUESTED_WITH'
+ORIGIN_SETTINGS = frozenset({'CSRF_TRUSTED_ORIGINS', 'CORS_ALLOWED_ORIGINS', 'CORS_ALLOWED_ORIGIN_REGEXES'})
 
 
 def refresh_cookie(request):
@@ -52,23 +56,54 @@ def move_refresh_to_cookie(response):
     return response
 
 
-# The middlewares are instantiated only for their origin checks.
-def _unused_get_response(request):
-    return None
+def _normalise(origin):
+    parts = urlsplit(origin)
+    if parts.scheme not in {'http', 'https'} or not parts.netloc:
+        return ''
+    return f'{parts.scheme}://{parts.netloc}'.lower()
+
+
+@functools.cache
+def _allow_lists():
+    """(exact origins, wildcard (scheme, .domain) pairs, compiled regexes), built
+    once from CSRF_TRUSTED_ORIGINS (exact and https://*.example.com forms),
+    CORS_ALLOWED_ORIGINS and CORS_ALLOWED_ORIGIN_REGEXES."""
+    exact = set()
+    wildcards = []
+    for entry in [*settings.CSRF_TRUSTED_ORIGINS, *settings.CORS_ALLOWED_ORIGINS]:
+        parts = urlsplit(entry.lower())
+        if parts.netloc.startswith('*'):
+            wildcards.append((parts.scheme, parts.netloc[1:]))
+        elif _normalise(entry):
+            exact.add(_normalise(entry))
+    regexes = [re.compile(pattern) for pattern in getattr(settings, 'CORS_ALLOWED_ORIGIN_REGEXES', ())]
+    return frozenset(exact), tuple(wildcards), tuple(regexes)
+
+
+def _settings_changed(*, setting, **kwargs):
+    if setting in ORIGIN_SETTINGS:
+        _allow_lists.cache_clear()
+
+
+setting_changed.connect(_settings_changed)
 
 
 def origin_allowed(request, origin):
-    """The one origin check: the API's own origin and CSRF_TRUSTED_ORIGINS
-    (exact and wildcard, through Django's CSRF middleware), or
-    CORS_ALLOWED_ORIGINS / CORS_ALLOWED_ORIGIN_REGEXES (through
-    django-cors-headers). `origin` must be the request's Origin header.
-    "null" (sandboxed frames, privacy redirects) never passes."""
-    if not origin or origin == 'null':
+    """True when `origin` (an Origin header value) is the API's own origin or
+    an allowed frontend origin. "null" and anything malformed never pass."""
+    normalised = _normalise(origin or '')
+    if not normalised:
         return False
-    django_request = getattr(request, '_request', request)
-    if CsrfViewMiddleware(_unused_get_response)._origin_verified(django_request):
+    own = f"{'https' if request.is_secure() else 'http'}://{request.get_host()}".lower()
+    if normalised == own:
         return True
-    return CorsMiddleware(_unused_get_response).origin_found_in_white_lists(origin, urlsplit(origin))
+    exact, wildcards, regexes = _allow_lists()
+    if normalised in exact:
+        return True
+    scheme, netloc = normalised.split('://', 1)
+    if any(scheme == wild_scheme and is_same_domain(netloc, domain) for wild_scheme, domain in wildcards):
+        return True
+    return any(regex.match(origin) for regex in regexes)
 
 
 def _reject():

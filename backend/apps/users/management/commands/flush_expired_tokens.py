@@ -1,6 +1,7 @@
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
+from apps.users.models import RevokedRefreshSession
 from core.jobs import ScheduledJobCommand, delete_in_batches
 
 
@@ -14,4 +15,6 @@ class Command(ScheduledJobCommand):
         # Blacklist rows go with their token (on_delete=CASCADE).
         deleted = delete_in_batches(OutstandingToken.objects.filter(expires_at__lte=timezone.now()), batch_size)
         self.stdout.write(self.style.SUCCESS(f'Deleted {deleted} expired refresh tokens.'))
-        return deleted
+        sessions = delete_in_batches(RevokedRefreshSession.objects.filter(expires_at__lte=timezone.now()), batch_size)
+        self.stdout.write(self.style.SUCCESS(f'Deleted {sessions} expired signed-out sessions.'))
+        return deleted + sessions

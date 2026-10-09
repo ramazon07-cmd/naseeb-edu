@@ -1,5 +1,9 @@
+import uuid
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.utils import timezone
 from django.db import OperationalError, ProgrammingError
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, Throttled
@@ -11,12 +15,13 @@ from apps.users.throttles import (
 )
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .auth_cookies import (
     clear_refresh_cookie, enforce_cookie_csrf, enforce_login_origin, move_refresh_to_cookie, refresh_cookie,
 )
 from .credentials import mark_temporary_credential_used
+from .models import RevokedRefreshSession
 from .localization import localized_message
 from .security import (
     client_ip, login_locked, note_account_failure, register_login_failure, remember_login_device, reset_login_failures,
@@ -34,6 +39,8 @@ class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
         token['pv'] = user.password_version
+        # One id per sign-in, kept by every rotation: logout revokes the chain.
+        token['sid'] = uuid.uuid4().hex
         token['must_change_password'] = user.must_change_password
         return token
 
@@ -140,6 +147,9 @@ class SafeTokenRefreshSerializer(TokenRefreshSerializer):
     """Return a normal auth failure when a refresh token's user was deleted."""
 
     def validate(self, attrs):
+        sid = RefreshToken(attrs['refresh']).get('sid')
+        if sid and RevokedRefreshSession.objects.filter(sid=sid).exists():
+            raise InvalidToken({'detail': 'This session was signed out.', 'code': 'token_not_valid'})
         try:
             return super().validate(attrs)
         except get_user_model().DoesNotExist as exc:
@@ -168,10 +178,41 @@ class SafeTokenRefreshView(TokenRefreshView):
         return move_refresh_to_cookie(Response(serializer.validated_data, status=status.HTTP_200_OK))
 
 
-class LogoutView(APIView):
-    """Blacklist this browser's refresh token and clear its cookie.
+def revoke_refresh_token(token):
+    """Revoke the sign-in session `token` belongs to, and blacklist the token.
 
-    Needs no access token: signing out must work after it expired."""
+    Works for a token that was already rotated (blacklisted): its session id
+    still revokes the newer tokens of the same chain."""
+    if not token:
+        return
+    try:
+        payload = UntypedToken(token).payload  # signature and expiry; blacklisted or not
+    except TokenError:
+        return  # malformed or expired: nothing can be refreshed with it
+    if payload.get('token_type') != 'refresh':
+        return
+    if payload.get('sid'):
+        # A refresh that passed its check just before this can still issue one
+        # more token of the chain; keep the row a day longer than that token.
+        lifetime = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'] + timedelta(days=1)
+        RevokedRefreshSession.objects.get_or_create(
+            sid=payload['sid'], defaults={'expires_at': timezone.now() + lifetime},
+        )
+    try:
+        RefreshToken(token).blacklist()
+    except TokenError:
+        pass  # already blacklisted by a rotation; the session row covers its successors
+
+
+class LogoutView(APIView):
+    """Revoke this browser's session and clear its cookie.
+
+    Needs no access token: signing out must work after it expired.
+
+    One-time migration: the previous frontend kept refresh tokens in
+    localStorage. It posts such a token as {"refresh": ...}; that token is
+    revoked and the cookie (which may belong to a newer sign-in) is left alone.
+    The CSRF header and Origin are required either way."""
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
@@ -181,12 +222,11 @@ class LogoutView(APIView):
 
     def post(self, request):
         enforce_cookie_csrf(request)
-        token = refresh_cookie(request)
-        if token:
-            try:
-                RefreshToken(token).blacklist()
-            except TokenError:
-                pass  # expired, malformed or already blacklisted: nothing left to revoke
+        legacy = request.data.get('refresh') if isinstance(request.data, dict) else None
+        if isinstance(legacy, str) and legacy.strip():
+            revoke_refresh_token(legacy.strip())
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        revoke_refresh_token(refresh_cookie(request))
         response = Response(status=status.HTTP_204_NO_CONTENT)
         clear_refresh_cookie(response)
         return response

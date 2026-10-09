@@ -2,13 +2,13 @@ from django.conf import settings
 from django.core.cache import cache
 from django.test import override_settings
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
-from rest_framework_simplejwt.tokens import UntypedToken
+from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 
-from testing.auth_cookies import COOKIE_AUTH_HEADERS, post_refresh, refresh_cookie_value
 from apps.admissions.models import School
-from apps.users.models import User
+from apps.users.models import RevokedRefreshSession, User
+from testing.auth_cookies import COOKIE_AUTH_HEADERS, post_refresh, refresh_cookie_value
 
 COOKIE = settings.AUTH_REFRESH_COOKIE_NAME
 PASSWORD = 'CookiePass123!'
@@ -35,7 +35,7 @@ class RefreshCookieTests(APITestCase):
         self.assertTrue(cookie.value)
         self.assertTrue(cookie['httponly'])
         self.assertEqual(cookie['path'], '/api/auth/')
-        self.assertEqual(cookie['samesite'], 'Strict')
+        self.assertEqual(cookie['samesite'], 'Lax')
         self.assertEqual(cookie['max-age'], int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()))
 
     @override_settings(AUTH_REFRESH_COOKIE_SECURE=True)
@@ -132,6 +132,35 @@ class RefreshCookieTests(APITestCase):
         self.assertEqual(cleared['path'], '/api/auth/')
         self.assertEqual(BlacklistedToken.objects.filter(token__jti=UntypedToken(token)["jti"]).count(), 1)
         self.assertEqual(post_refresh(self.client, token).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_revokes_tokens_rotated_after_it(self):
+        # A refresh that was in flight (or ran in another tab) when the user
+        # signed out: the logout carried the old cookie, the rotation's newer
+        # token reaches the browser afterwards. The whole chain is dead.
+        old = refresh_cookie_value(self.login())
+        rotated = refresh_cookie_value(post_refresh(self.client, old))
+        self.client.cookies[COOKIE] = old
+        self.assertEqual(self.client.post('/api/auth/logout/', **COOKIE_AUTH_HEADERS).status_code, status.HTTP_204_NO_CONTENT)
+        self.assertTrue(RevokedRefreshSession.objects.filter(sid=UntypedToken(rotated)['sid']).exists())
+        response = post_refresh(self.client, rotated)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        # Other sign-ins (another device) are separate sessions and keep working.
+        other = APIClient()
+        other_token = refresh_cookie_value(other.post('/api/auth/token/', {'username': 'cookie-user', 'password': PASSWORD}, format='json'))
+        self.assertNotEqual(UntypedToken(other_token)['sid'], UntypedToken(rotated)['sid'])
+        self.assertEqual(post_refresh(other).status_code, status.HTTP_200_OK)
+
+    def test_logout_of_a_legacy_body_token_revokes_it_and_keeps_the_cookie(self):
+        # The previous frontend's localStorage token (no session id).
+        legacy = str(RefreshToken.for_user(self.user))
+        current = refresh_cookie_value(self.login())
+        response = self.client.post('/api/auth/logout/', {'refresh': legacy}, format='json', **COOKIE_AUTH_HEADERS)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertNotIn(COOKIE, response.cookies, 'the cookie may belong to a newer sign-in')
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=UntypedToken(legacy)['jti']).exists())
+        self.assertEqual(post_refresh(self.client, current).status_code, status.HTTP_200_OK)
+        rejected = self.client.post('/api/auth/logout/', {'refresh': legacy}, format='json', HTTP_ORIGIN='http://testserver')
+        self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN, 'the CSRF header is still required')
 
     def test_logout_needs_the_csrf_header_and_works_without_a_session(self):
         token = refresh_cookie_value(self.login())
