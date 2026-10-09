@@ -45,6 +45,7 @@ export const RESOURCE_FIELDS = {
   internships: [
     ['organization', 'Organization', 'text', true, [], 'e.g. Local software company'],
     ['position', 'Position', 'text', true, [], 'e.g. Software intern'],
+    ['location', 'Location', 'text', false, [], 'e.g. Tashkent, Uzbekistan or Online'],
     ['supervisor', 'Supervisor', 'text', false, [], 'e.g. Dilshod Rahimov'],
     ['description', 'Responsibilities and results', 'textarea', false, [], 'e.g. Tested the mobile app, fixed 15 bugs and wrote the user guide'],
     ['start_date', 'Start date', 'date'],
@@ -57,6 +58,7 @@ export const RESOURCE_FIELDS = {
     ['name', 'Activity name', 'text', true, [], 'e.g. School robotics club'],
     ['activity_type', 'Type', 'select', true, ['extracurricular', 'volunteering', 'leadership', 'club', 'competition', 'community', 'other']],
     ['role', 'Role', 'text', false, [], 'e.g. Team captain'],
+    ['location', 'Location', 'text', false, [], 'e.g. Samarkand, Uzbekistan'],
     ['description', 'Description', 'textarea', false, [], 'e.g. Led weekly practice for 12 members and prepared the team for the regional olympiad'],
     ['impact', 'Impact', 'text', false, [], 'e.g. Team placed 2nd in the regional round'],
     ['hours_per_week', 'Hours per week', 'number', false, [], 'e.g. 4'],

@@ -151,6 +151,18 @@ EXACT = {
         'uz': 'AP yoki IB ni tanlang.',
         'ru': 'Выберите AP или IB.',
     },
+    'Enter the language.': {
+        'uz': 'Tilni kiriting.',
+        'ru': 'Укажите язык.',
+    },
+    'Choose a level.': {
+        'uz': 'Darajani tanlang.',
+        'ru': 'Выберите уровень.',
+    },
+    'Enter a valid link, like https://linkedin.com/in/your-name.': {
+        'uz': 'To‘g‘ri havola kiriting, masalan https://linkedin.com/in/your-name.',
+        'ru': 'Введите корректную ссылку, например https://linkedin.com/in/your-name.',
+    },
     'Enter the subject.': {
         'uz': 'Fanni kiriting.',
         'ru': 'Укажите предмет.',
@@ -699,6 +711,18 @@ PATTERNS = (
     (_P(r'^With these section scores your overall band is ([\d.]+)\. Check your test report\.$'), {
         'uz': 'Bu bo‘lim ballari bilan umumiy ballingiz {0} bo‘ladi. Test natijangizni tekshiring.',
         'ru': 'С такими баллами за разделы общий балл — {0}. Проверьте результаты теста.',
+    }),
+    (_P(r'^You can add up to (\d+) languages\.$'), {
+        'uz': 'Ko‘pi bilan {0} ta til qo‘shish mumkin.',
+        'ru': 'Можно добавить не более {0} языков.',
+    }),
+    (_P(r'^You can add up to (\d+) skills\.$'), {
+        'uz': 'Ko‘pi bilan {0} ta ko‘nikma qo‘shish mumkin.',
+        'ru': 'Можно добавить не более {0} навыков.',
+    }),
+    (_P(r'^You can add up to (\d+) interests\.$'), {
+        'uz': 'Ko‘pi bilan {0} ta qiziqish qo‘shish mumkin.',
+        'ru': 'Можно добавить не более {0} интересов.',
     }),
     (_P(r'^You can add up to (\d+) other test scores or certificates\.$'), {
         'uz': 'Boshqa test natijalari yoki sertifikatlardan ko‘pi bilan {0} tasini qo‘shish mumkin.',

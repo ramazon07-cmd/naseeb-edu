@@ -175,6 +175,36 @@
   gap: var(--space-7);
 }
 
+.onboarding-cv-languages {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.onboarding-cv-languages legend {
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.onboarding-cv-languages > button {
+  justify-self: start;
+}
+
+.onboarding-cv-language {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+@media (max-width: 560px) {
+  .onboarding-cv-language {
+    grid-template-columns: 1fr;
+  }
+}
+
 .onboarding-choices {
   margin: 0;
   border: 0;

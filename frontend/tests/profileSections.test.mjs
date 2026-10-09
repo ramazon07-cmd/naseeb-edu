@@ -32,7 +32,7 @@ test('saved answers fill the form; columns win over the old JSON copy', () => {
 
 test('a section payload holds only that section, typed for the API', () => {
   const form = { ...profileAnswers(profile), class_rank: '3', gpa: '4.7' };
-  assert.deepEqual(answersPayload(form, 'goal'), { target_countries: 'US, Canada', interests: ['Engineering'], program_strengths: [] });
+  assert.deepEqual(answersPayload(form, 'goal'), { target_countries: 'US, Canada', interests: ['Engineering'], program_strengths: [], languages: [], skills: [], hobbies: [] });
   const academics = answersPayload(form, 'academics');
   assert.deepEqual(Object.keys(academics).sort(), [...sectionByKey('academics').fields].filter((name) => name in academics).sort());
   assert.equal(academics.gpa, 4.7);
@@ -57,6 +57,23 @@ test('certificate results round-trip through the test section without changing o
   assert.equal(form.certificates[1].test_date, '');
   assert.deepEqual(answersPayload(form, 'tests').certificates, withCertificates.application_profile.certificates);
   assert.equal('certificates' in answersPayload(form, 'goal'), false);
+});
+
+test('CV answers: links in personal, languages / skills / hobbies in the goal section', () => {
+  const saved = { ...profile, application_profile: { ...profile.application_profile, linkedin_url: 'https://linkedin.com/in/x', languages: [{ name: 'Uzbek', level: 'Native' }], skills: ['Python', 'SQL'], hobbies: ['Chess'] } };
+  const form = profileAnswers(saved);
+  assert.equal(form.skills, 'Python, SQL');
+  assert.equal(form.website_url, '');
+  const goal = answersPayload({ ...form, skills: 'Python, , python,  Public speaking ', languages: [{ name: ' English ', level: 'Fluent' }] }, 'goal');
+  assert.deepEqual(goal.skills, ['Python', 'Public speaking']);
+  assert.deepEqual(goal.hobbies, ['Chess']);
+  assert.deepEqual(goal.languages, [{ name: 'English', level: 'Fluent' }]);
+  assert.deepEqual(Object.keys(answersPayload(form, 'personal')).filter((key) => key.endsWith('_url')).sort(), ['linkedin_url', 'website_url']);
+  assert.deepEqual(validateSection('goal', { ...form, languages: [{ name: '', level: 'Expert' }] }), {
+    'languages.0.name': ['Enter the language.'], 'languages.0.level': ['Choose a level.'],
+  });
+  assert.deepEqual(validateSection('goal', { ...form, skills: Array.from({ length: 31 }, (_, i) => `s${i}`).join(',') }), { skills: ['You can add up to {0} skills.', 30] });
+  assert.deepEqual(validateSection('goal', { ...form, hobbies: 'x'.repeat(61) }), { hobbies: ['Keep each item under {0} characters.', 60] });
 });
 
 test('section checks run before saving', () => {

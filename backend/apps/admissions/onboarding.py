@@ -1,8 +1,11 @@
 """Student-owned profile input, independent of counselor administration."""
 import datetime
 import re
+from urllib.parse import urlsplit
 from typing import NamedTuple
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import URLValidator
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -164,6 +167,57 @@ class ActivitySerializer(serializers.Serializer):
     hours = serializers.IntegerField(min_value=0, max_value=168)
     weeks = serializers.IntegerField(min_value=0, max_value=52)
 
+# CV answers: languages, skills, hobbies and public links. They live in
+# application_profile like the other answers; frontend/src/lib/profileSections.js
+# mirrors the limits.
+LANGUAGE_LEVELS = ['Native', 'Fluent', 'Advanced', 'Intermediate', 'Basic']
+MAX_LANGUAGES = 10
+MAX_SKILLS = 30
+MAX_HOBBIES = 20
+_http_url = URLValidator(schemes=['http', 'https'])
+
+
+class LanguageSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=60, error_messages={'blank': 'Enter the language.'})
+    level = serializers.ChoiceField(choices=LANGUAGE_LEVELS, error_messages={'invalid_choice': 'Choose a level.'})
+
+
+# An http(s) link; "linkedin.com/in/name" is saved as "https://linkedin.com/in/name".
+class PublicLinkField(serializers.CharField):
+
+    def __init__(self, **kwargs):
+        super().__init__(max_length=300, required=False, allow_blank=True, **kwargs)
+
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data)
+        if not value:
+            return ''
+        if not urlsplit(value).scheme:
+            value = f'https://{value}'
+        try:
+            _http_url(value)
+        except DjangoValidationError:
+            raise serializers.ValidationError('Enter a valid link, like https://linkedin.com/in/your-name.')
+        return value
+
+
+# A list of short phrases: trimmed, blanks dropped, repeats (any case) removed.
+class ShortListField(serializers.ListField):
+
+    def __init__(self, item_length, **kwargs):
+        super().__init__(child=serializers.CharField(max_length=item_length, allow_blank=True), required=False, **kwargs)
+
+    def to_internal_value(self, data):
+        seen = set()
+        out = []
+        for item in super().to_internal_value(data):
+            key = item.strip().casefold()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(item.strip())
+        return out
+
+
 SAT_INPUTS = frozenset(name for name in SAT_FIELDS if name != 'sat_score')
 # Rules that read several answers. A partial edit that touches one member is
 # checked against the stored values of the others.
@@ -210,6 +264,8 @@ class OnboardingSerializer(serializers.Serializer):
     guardian_name = serializers.CharField(max_length=160, required=False, allow_blank=True)
     guardian_relation = serializers.ChoiceField(choices=['', 'mother', 'father', 'guardian'], required=False, allow_blank=True)
     guardian_contact = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    linkedin_url = PublicLinkField()
+    website_url = PublicLinkField()
     school_name = serializers.CharField(max_length=180)
     country = serializers.CharField(max_length=100)
     state = serializers.CharField(max_length=100, required=False, allow_blank=True)
@@ -243,8 +299,24 @@ class OnboardingSerializer(serializers.Serializer):
     interests = serializers.ListField(child=serializers.CharField(max_length=80), max_length=30, required=False)
     program_strengths = serializers.ListField(child=serializers.CharField(max_length=100), max_length=10, required=False)
     personal_story = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    languages = LanguageSerializer(
+        many=True, max_length=MAX_LANGUAGES, required=False,
+        error_messages={'max_length': f'You can add up to {MAX_LANGUAGES} languages.'},
+    )
+    skills = ShortListField(60, max_length=MAX_SKILLS, error_messages={'max_length': f'You can add up to {MAX_SKILLS} skills.'})
+    hobbies = ShortListField(60, max_length=MAX_HOBBIES, error_messages={'max_length': f'You can add up to {MAX_HOBBIES} interests.'})
     honors = HonorSerializer(many=True, max_length=50, required=False)
     activities = ActivitySerializer(many=True, max_length=50, required=False)
+
+    def validate_languages(self, value):
+        seen = set()
+        rows = []
+        for row in value:
+            key = row['name'].strip().casefold()
+            if key not in seen:
+                seen.add(key)
+                rows.append({'name': row['name'].strip(), 'level': row['level']})
+        return rows
 
     def validate_target_countries(self, value):
         countries = list(dict.fromkeys(country.strip() for country in value.split(',')))

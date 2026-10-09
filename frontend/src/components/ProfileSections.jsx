@@ -25,6 +25,7 @@ function SectionSummary({ section, student }) {
     <Detail label={t('First-generation college student?')} value={answers.first_generation && t(answers.first_generation)} />
     <Detail label={t('Guardian')} value={joinParts(student.guardian_name, student.guardian_relation && label(student.guardian_relation))} />
     <Detail label={t('Guardian contact')} value={student.parent_contact} />
+    <Detail label={t('Links')} value={[answers.linkedin_url, answers.website_url].filter(Boolean).join(', ')} />
   </div>;
   if (section === 'academics') return <div className="detail-grid">
     <Detail label={t('School')} value={student.school_name} />
@@ -38,6 +39,9 @@ function SectionSummary({ section, student }) {
     <Detail label={t('Areas of interest')} value={list(answers.interests)} />
     <Detail label={t('Academic program strength')} value={list(answers.program_strengths)} />
     <Detail label={t('Personal story')} value={answers.personal_story} />
+    <Detail label={t('Spoken languages')} value={(Array.isArray(answers.languages) ? answers.languages : []).map((row) => (row.level ? `${row.name} (${t(row.level)})` : row.name)).join(', ')} />
+    <Detail label={t('Skills')} value={listText(answers.skills)} />
+    <Detail label={t('Interests & hobbies')} value={listText(answers.hobbies)} />
   </div>;
   const rows = Array.isArray(answers[section]) ? answers[section] : [];
   if (!rows.length) return <p className="profile-section-empty">{t('Nothing added yet.')}</p>;
