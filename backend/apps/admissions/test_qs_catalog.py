@@ -5,9 +5,12 @@ from io import StringIO
 from pathlib import Path
 
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
+from .college_search import fit_context, fit_scores
 from .management.commands.load_qs_rankings import DATA_FILE
 from .models import University, UniversityProgram
 from .tests.base import RoleIsolationBase
@@ -169,6 +172,57 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         self.assertTrue(all(row['fit']['reasons'] and 'academic' in row['fit']['score_breakdown'] for row in rows))
         scores = [row['fit']['match_score'] for row in rows]
         self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_fit_scores_target_countries_and_rows_with_admissions_data_only(self):
+        target = University.objects.create(name='Target Country University', country='United Kingdom')
+        with_data = University.objects.create(name='Data University', country='USA', sat_min=1300, sat_max=1500)
+        priced = University.objects.create(name='Priced University', country='Japan', net_price_usd=9000)
+        unrelated = University.objects.create(name='Unrelated University', country='Germany', ranking=1)
+        rows = self.research_as_student('UK')
+        self.assertEqual(set(fit_scores(self.student_a, fit_context(self.student_a))), {target.id, with_data.id, priced.id})
+        # A row outside the scored candidates still shows its fit, after every scored one.
+        self.assertEqual(rows[-1]['id'], unrelated.id)
+
+    def test_fit_sort_queries_do_not_grow_with_the_catalogue(self):
+        def queries():
+            with CaptureQueriesContext(connection) as captured:
+                self.client.get('/api/college-search/?sort=fit')
+            return len(captured)
+
+        self.research_as_student('UK')
+        University.objects.bulk_create(University(name=f'Small {index}', country='United Kingdom') for index in range(3))
+        small = queries()
+        University.objects.bulk_create(University(name=f'Large {index}', country='United Kingdom', popular_majors='History') for index in range(80))
+        self.assertEqual(queries(), small)
+
+    def test_missing_admissions_data_is_unknown_not_a_bonus(self):
+        University.objects.create(name='Unknown University', country='United Kingdom', ranking=1)
+        University.objects.create(
+            name='Known University', country='United Kingdom', ranking=50,
+            sat_min=1400, sat_max=1500, acceptance_rate='30.00', net_price_usd=20000,
+        )
+        University.objects.create(name='Optional University', country='United Kingdom', ranking=60, test_optional=True)
+        results = {item['name']: item['fit'] for item in self.research_as_student('UK')}
+        unknown, known = results['Unknown University'], results['Known University']
+        # The same row with admissions data that fits ranks above the one without.
+        self.assertGreater(known['match_score'], unknown['match_score'])
+        self.assertNotIn('No strict SAT minimum is listed in the catalog', unknown['reasons'])
+        self.assertFalse([reason for reason in unknown['reasons'] if 'SAT' in reason])
+        self.assertIn('SAT range is not listed in the catalog', unknown['gaps'])
+        self.assertEqual(unknown['score_breakdown']['academic'] - known['score_breakdown']['academic'], -22)
+        self.assertIn('SAT is optional at this university', results['Optional University']['reasons'])
+
+    def test_qs_only_rows_do_not_outrank_curated_universities(self):
+        University.objects.bulk_create(
+            University(name=f'QS Only University {index}', country='United Kingdom', ranking=index + 1, popular_majors='Computer Science')
+            for index in range(30)
+        )
+        # Only a partial fit: SAT a little under the range and the price above budget.
+        curated = University.objects.create(
+            name='Curated University', country='United Kingdom', ranking=900, popular_majors='Computer Science',
+            sat_min=1480, sat_max=1560, acceptance_rate='40.00', net_price_usd=40000,
+        )
+        self.assertEqual(self.research_as_student('UK')[0]['id'], curated.id)
 
     def test_university_catalogue_pages_hold_at_most_100_rows(self):
         University.objects.bulk_create(University(name=f'Catalogue University {index}', country='Germany') for index in range(150))

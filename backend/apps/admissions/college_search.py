@@ -19,7 +19,7 @@ from rest_framework import serializers
 from apps.users.cache_safety import cache_get, cache_set
 
 from .catalog_cache import CACHE_SECONDS, VERSION_KEY
-from .countries import country_key
+from .countries import country_key, country_name, country_spellings
 from .listing import MAX_SEARCH_LENGTH, search_terms, term_query
 from .models import University, UniversityProgram
 
@@ -44,8 +44,12 @@ RESEARCH_FIELDS = ('gpa', 'sat_score', 'ielts_score', 'target_major', 'target_co
 EVIDENCE = ('achievements', 'honors', 'researches', 'projects', 'internships', 'activities')
 SCORING_FIELDS = (
     'id', 'country', 'ranking', 'sat_min', 'sat_max', 'popular_majors', 'net_price_usd', 'acceptance_rate',
-    'offers_international_aid', 'offers_merit_aid', 'offers_need_based_aid',
+    'offers_international_aid', 'offers_merit_aid', 'offers_need_based_aid', 'test_optional',
 )
+# Fit sorting and band filters score at most this many plausible universities, not the whole catalogue.
+FIT_CANDIDATES = 600
+SAT_POINTS = 25
+PRICE_POINTS = 12
 
 
 def eligible_programs(*fields):
@@ -87,6 +91,8 @@ def score_university(university, ctx):
     """One university's fit for a ready profile. ``university.programs`` must be the eligible ones."""
     reasons = []
     gaps = []
+    # Points of factors the catalogue has no data for: they are left out, not guessed.
+    missing = 0
     sat = ctx['sat']
     ielts = ctx['ielts']
 
@@ -104,9 +110,12 @@ def score_university(university, ctx):
         else:
             academic += 4
             gaps.append(f'Raise SAT toward at least {university.sat_min}')
-    else:
+    elif university.test_optional:
         academic += 20
-        reasons.append('No strict SAT minimum is listed in the catalog')
+        reasons.append('SAT is optional at this university')
+    else:
+        missing += SAT_POINTS
+        gaps.append('SAT range is not listed in the catalog')
     if ielts >= 7:
         academic += 8
         reasons.append(f'IELTS {ielts:g} is a strong language score')
@@ -144,7 +153,8 @@ def score_university(university, ctx):
             financial = 2
             gaps.append('Estimated net price is significantly above your budget')
     else:
-        financial = 5
+        financial = 0
+        missing += PRICE_POINTS
         gaps.append('Net price is not available in the catalog')
     if ctx['scholarship_needed']:
         if university.offers_international_aid or university.offers_merit_aid or university.offers_need_based_aid:
@@ -156,7 +166,10 @@ def score_university(university, ctx):
     else:
         financial += 8
 
-    total = min(100, academic + preferences + financial + ctx['strength'])
+    earned = academic + preferences + financial + ctx['strength']
+    # Score the known factors on the full scale, then take off half the missing weight:
+    # a row without admissions data never outscores the same row with data that fits.
+    total = min(100, round(earned * 100 / (100 - missing) * (1 - missing / 200)))
     rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
     if rate is None and not university.sat_min:
         # No admission data in the catalogue (e.g. a QS-only row): unknown, not "target".
@@ -182,17 +195,29 @@ def score_university(university, ctx):
     }
 
 
-def fit_scores(profile, ctx):
-    """``{university_id: (score, band)}`` for the whole catalogue.
+def fit_candidates(ctx):
+    """Universities in the student's target countries or with admissions data, best ranked first."""
+    countries = University.objects.order_by().values_list('country', flat=True).distinct()
+    spellings = [country for country in countries if country_key(country) in ctx['countries']]
+    has_data = Q(sat_min__isnull=False) | Q(acceptance_rate__isnull=False) | Q(net_price_usd__isnull=False)
+    return (
+        University.objects.filter(Q(country__in=spellings) | has_data)
+        .order_by(F('ranking').asc(nulls_last=True), 'name')[:FIT_CANDIDATES]
+    )
 
-    Cached per student, profile answers and catalogue version, so paging,
-    re-sorting and refiltering never rescore the catalogue.
+
+def fit_scores(profile, ctx):
+    """``{university_id: (score, band)}`` for the plausible universities (``fit_candidates``).
+
+    Rows outside the candidates have no score: fit sorting puts them last and
+    band filters leave them out. Cached per student, profile answers and
+    catalogue version, so paging, re-sorting and refiltering never rescore.
     """
     signature = hashlib.sha256(json.dumps(ctx, sort_keys=True).encode()).hexdigest()[:20]
     key = f'college-fit:{profile.pk}:{cache_get(VERSION_KEY, 0)}:{signature}'
     scores = cache_get(key)
     if scores is None:
-        universities = University.objects.only(*SCORING_FIELDS).prefetch_related(
+        universities = fit_candidates(ctx).only(*SCORING_FIELDS).prefetch_related(
             eligible_programs('id', 'university_id', 'canonical_major'),
         )
         scores = {}
@@ -206,12 +231,15 @@ def fit_scores(profile, ctx):
 # ---------------------------------------------------------------- filters and facets
 
 def display_country(market, country):
-    return MARKET_COUNTRIES.get(market) or (country or '').strip()
+    return MARKET_COUNTRIES.get(market) or country_name(country)
 
 
 def country_q(name):
     market = next((code for code, label in MARKET_COUNTRIES.items() if label == name), None)
-    same_name = Q(market='', country=name)
+    spellings = Q()
+    for spelling in country_spellings(name):
+        spellings |= Q(country__iexact=spelling)
+    same_name = Q(market='') & spellings
     return Q(market=market) | same_name if market else same_name
 
 
@@ -361,7 +389,7 @@ def college_search(profile, params):
     size = params['page_size']
     start = (params['page'] - 1) * size
     if by_fit:
-        ranked = sorted(queryset.values_list('pk', 'ranking'), key=lambda row: (-scores.get(row[0], (0,))[0], row[1] or 999999))
+        ranked = sorted(queryset.values_list('pk', 'ranking'), key=lambda row: (-scores.get(row[0], (-1,))[0], row[1] or 999999))
         count = len(ranked)
         page_ids = [pk for pk, _ in ranked[start:start + size]]
         found = {university.pk: university for university in rows.filter(pk__in=page_ids)}

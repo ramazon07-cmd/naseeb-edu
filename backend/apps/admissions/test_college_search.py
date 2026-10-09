@@ -95,6 +95,15 @@ class FilterAndSortTests(CollegeSearchFixture, APITestCase):
         self.assertEqual(set(self.names('country=United%20States')), {self.mit.name, self.state.name})
         self.assertEqual(self.names('country=United%20Kingdom'), [self.oxford.name])
 
+    def test_country_joins_the_aliases_of_a_country_outside_the_markets(self):
+        istanbul = University.objects.create(name='Istanbul Technical University', country='Türkiye')
+        ankara = University.objects.create(name='Middle East Technical University', country='Turkey')
+        self.assertEqual(set(self.names('country=Turkey')), {istanbul.name, ankara.name})
+        self.ready_profile()
+        countries = self.search('facets=true')['facets']['countries']
+        self.assertEqual((countries['Turkey'], countries['United Kingdom']), (2, 1))
+        self.assertNotIn('Türkiye', countries)
+
     def test_price_aid_testing_and_type_filters(self):
         self.assertEqual(set(self.names('price=25000')), {self.mit.name, self.tashkent.name})
         self.ready_profile(budget_usd=5000)
@@ -147,12 +156,13 @@ class FitTests(CollegeSearchFixture, APITestCase):
             first = scorer.call_count
             self.search('sort=fit&page_size=25')
             self.search('bands=reach')
-        self.assertEqual(first, 5 + 5)  # the whole catalogue once, then the rows on the page
+        # The candidates once (Oxford is neither a target country nor has admissions data), then the rows on the page.
+        self.assertEqual(first, 4 + 5)
         self.assertEqual(scorer.call_count, first + 5 + 1)
         Honor.objects.create(student=self.student, title='New olympiad medal')
         with mock.patch.object(college_search, 'score_university', wraps=college_search.score_university) as scorer:
             self.search('sort=fit')
-        self.assertEqual(scorer.call_count, 10, 'new evidence changes the profile, so the scores are rebuilt')
+        self.assertEqual(scorer.call_count, 9, 'new evidence changes the profile, so the scores are rebuilt')
 
     def test_query_count_does_not_grow_with_the_page(self):
         University.objects.bulk_create(University(name=f'Filler {index:03}', country='Germany') for index in range(120))
