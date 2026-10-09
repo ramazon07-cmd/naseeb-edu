@@ -18,7 +18,7 @@ allowed set below.
 |---|---|---|---|
 | `search` | up to 100 characters; the first 4 whitespace-separated terms count | empty | Every term must match the university's name, city or country. Matching ignores case and accents (`Sao Paulo` finds `São Paulo`), transliterates Cyrillic (`Гарвард` finds Harvard) and knows country spellings (`US`, `USA` and `United States` are one country; so are `Turkey`, `Türkiye` and `Turkiye`). |
 | `country` | a country name as `facets.countries` lists it | empty (all) | One country, under any of its catalogue spellings. |
-| `price` | `all`, `budget`, `25000`, `40000` | `all` | Yearly cost (see [Price](#price)) at most the student's budget or the given USD cap. Universities without a cost are left out when it is set. |
+| `price` | `all`, `budget`, `25000`, `40000` | `all` | Yearly cost (see [Price](#price)) at most the student's budget or the given USD cap. Universities without a known cost stay in the results. `budget` without a budget in the profile has no cap (see [Budget rule](#budget-rule)). |
 | `aid` | comma-separated subset of `offers_need_based_aid`, `offers_merit_aid`, `offers_international_aid`, `meets_full_need` | empty | Every listed flag must be true. |
 | `bands` | comma-separated subset of `reach`, `target`, `safety`, `unknown` | absent (every band) | Admission band for the student. `unknown` is a university with no band (no admission data to place it). Absent means every band; present but empty (`bands=`) means none. The frontend omits it while every box, `unknown` included, is ticked, and otherwise sends exactly the ticked set. |
 | `test_optional` | `true`, `false` | `false` | Test-optional universities only. |
@@ -40,12 +40,14 @@ allowed set below.
   "page_size": 10,
   "next": 2,
   "results": [ROW, ...],
+  "unpriced_count": 1318,
   "facets": FACETS
 }
 ```
 
-`next` is the next page number, or `null` on the last page. `facets` is present
-only with `facets=true`. With `ids`, the response is only `{"results": [ROW, ...]}`.
+`next` is the next page number, or `null` on the last page. `unpriced_count` is
+how many of the `count` matching universities have no known cost (all pages, not
+just this one). `facets` is present only with `facets=true`. With `ids`, the response is only `{"results": [ROW, ...]}`.
 
 ### Row
 
@@ -104,18 +106,23 @@ shows a US row's `intl_cost_usd` as "Estimated cost for international students"
 as a secondary "after aid" line only when `offers_international_aid` is true;
 other rows show their net price as before.
 
-## Search folding
+### Budget rule
 
-`University.search_text` (migration `0070_university_search_text`) holds the
-name, city and every catalogue spelling of the country, lower-cased with accents
-removed (`backend/apps/admissions/search_text.py`). `University.save()` keeps it
-current; bulk writes that skip `save()` set it themselves (`load_qs_rankings` for
-the rows it creates, `load_college_scorecard` for the rows whose city it fills).
-A search term is folded the same way and, when Cyrillic, transliterated to a few
-Latin spellings, and each term must be contained in `search_text`. The catalogue
-list (`/api/universities/?search=`) uses the same matching (`listing.py`).
+* **Unknown cost stays.** Every price filter (`budget`, `25000`, `40000`) keeps
+  universities with no known cost: the filter is `cost IS NULL OR cost <= cap`.
+  No published price is not "too expensive". `unpriced_count` in the response
+  says how many such rows the current result holds, and the page notes
+  "N universities have no published price" under a price filter.
+* **No budget, no cap.** `price=budget` when the profile has no budget (empty or
+  0) applies no cap at all, so the list is never emptied by a missing answer. The
+  page keeps "Within budget" selectable and shows "Add your budget in your
+  profile to filter by price" with a link to the profile.
+* **Price sort** puts universities without a cost last, after every priced one.
+* **Fit is unchanged.** The fit's financial factor still treats an unknown cost
+  as missing data (`cost_missing` gap, the missing-weight path above), not as
+  within budget.
 
-### Facets
+## Facets
 
 Counts over the whole catalogue (the current filters do not change them):
 
@@ -131,8 +138,20 @@ Counts over the whole catalogue (the current filters do not change them):
 }
 ```
 
-`bands` counts are for the student and are all 0 until the research profile is
-complete; `unknown` counts the universities with no band.
+`bands` counts are for the student. `unknown` counts the universities with no
+band; until the research profile is complete that is every university and
+`reach`, `target` and `safety` are 0.
+
+## Search folding
+
+`University.search_text` (migration `0070_university_search_text`) holds the
+name, city and every catalogue spelling of the country, lower-cased with accents
+removed (`backend/apps/admissions/search_text.py`). `University.save()` keeps it
+current; bulk writes that skip `save()` set it themselves (`load_qs_rankings` for
+the rows it creates, `load_college_scorecard` for the rows whose city it fills).
+A search term is folded the same way and, when Cyrillic, transliterated to a few
+Latin spellings, and each term must be contained in `search_text`. The catalogue
+list (`/api/universities/?search=`) uses the same matching (`listing.py`).
 
 ## Performance
 
