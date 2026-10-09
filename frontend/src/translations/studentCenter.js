@@ -4,6 +4,7 @@ export const STUDENT_CENTER_TRANSLATIONS = {
   // Download CV and the CV answers (languages, skills, hobbies, links)
   'Download CV': ['CV yuklab olish', 'Скачать резюме'],
   'Preparing CV…': ['CV tayyorlanmoqda…', 'Готовим резюме…'],
+  'Print now': ['Hozir chop etish', 'Печатать'],
   'Add your school, activities or honors first: the CV is still empty.': ['Avval maktabingiz, faoliyatlaringiz yoki mukofotlaringizni qo‘shing: CV hali bo‘sh.', 'Сначала добавьте школу, занятия или награды: резюме пока пустое.'],
   'The CV could not be loaded. Try again.': ['CV yuklanmadi. Qaytadan urinib ko‘ring.', 'Не удалось загрузить резюме. Попробуйте ещё раз.'],
   'Spoken languages': ['Biladigan tillaringiz', 'Владение языками'],

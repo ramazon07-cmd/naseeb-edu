@@ -132,6 +132,10 @@
   text-align: right;
 }
 
+.cv-role + .cv-role {
+  margin-top: 3pt;
+}
+
 .cv-note {
   margin: 0 0 0 36pt;
   font-style: italic;
