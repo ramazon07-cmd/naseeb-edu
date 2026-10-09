@@ -14447,6 +14447,20 @@ a:focus-visible {
   border-left: 1px solid var(--border);
 }
 
+.drawer-fit-error {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+.fit-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
 .drawer-tiers b {
   color: var(--text);
   font-size: var(--text-2xl);

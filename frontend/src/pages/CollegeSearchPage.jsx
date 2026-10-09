@@ -115,14 +115,15 @@ function DeadlinePicker({ name, busy, onPick }) {
 
 // Each application carries its university, so the list needs no catalogue; `fits`
 // holds the student's fit for the listed universities.
-function CollegeListDrawer({ applications, fits, busyId, onClose, onOpen, onRemove, onDeadline, onApplications }) {
+function CollegeListDrawer({ applications, fits, fitsError, onRetryFits, busyId, onClose, onOpen, onRemove, onDeadline, onApplications }) {
   const deadlineOf = (application) => application.deadline || application.university_detail?.application_deadline;
   const sorted = [...applications].sort((a, b) => (deadlineOf(a) ? parseDateValue(deadlineOf(a)).getTime() : Infinity) - (deadlineOf(b) ? parseDateValue(deadlineOf(b)).getTime() : Infinity));
   const bandOf = (application) => application.tier === 'dream' ? 'reach' : application.tier;
   return <Modal title="My college list" className="drawer-modal" backdropClassName="drawer-backdrop" onClose={onClose}>
     <div className="drawer-body">
       <div className="drawer-summary"><h3>{tp('{n} university|{n} universities', applications.length, { n: applications.length })}</h3>
-        <div className="drawer-tiers">{['reach', 'target', 'safety'].map((band) => <span key={band}><b>{formatNumberLocale(applications.filter((application) => bandOf(application) === band).length)}</b><TierBand value={band} /></span>)}</div></div>
+        <div className="drawer-tiers">{['reach', 'target', 'safety'].map((band) => <span key={band}><b>{formatNumberLocale(applications.filter((application) => bandOf(application) === band).length)}</b><TierBand value={band} /></span>)}</div>
+        {fitsError && <p className="drawer-fit-error" role="alert">{t("Couldn't load fit")} <button type="button" className="link-button" onClick={onRetryFits}>{t("Retry")}</button></p>}</div>
       <div className="drawer-list">{sorted.map((application) => {
           const university = application.university_detail;
           const name = university?.name || t("University");
@@ -141,10 +142,10 @@ function CollegeListDrawer({ applications, fits, busyId, onClose, onOpen, onRemo
   </Modal>;
 }
 
-// Research has no admission data to place this university, so the student picks its band.
-function TierPicker({ university, busy, onPick, onClose }) {
+// Without a fit band (no admission data, or no complete research profile yet) the student picks it.
+function TierPicker({ university, needsProfile, busy, onPick, onCompleteProfile, onClose }) {
   return <Modal title="Pick a band" onClose={onClose}><div className="tier-picker">
-    <p>{tx`There is no admission data to tell whether ${university.name} is a reach, target or safety for you. Pick one; you can change it later in Applications.`}</p>
+    {needsProfile ? <p>{t("Complete your research profile to see your fit.")} <button type="button" className="link-button" onClick={onCompleteProfile}>{t("Complete profile")}</button></p> : <p>{tx`There is no admission data to tell whether ${university.name} is a reach, target or safety for you. Pick one; you can change it later in Applications.`}</p>}
     <div className="chip-row">{Object.entries(BAND_TIERS).map(([band, tier]) => <button type="button" key={tier} className="button quiet small" disabled={busy} aria-busy={busy} onClick={() => onPick(tier)}><TierBand value={band} /></button>)}</div>
   </div></Modal>;
 }
@@ -176,8 +177,12 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [expandedId, setExpandedId] = useState(null);
   const [listOpen, setListOpen] = useState(false);
   const [listFits, setListFits] = useState(() => new Map());
+  const [listFitsError, setListFitsError] = useState('');
+  const [listFitsAttempt, setListFitsAttempt] = useState(0);
   const [opened, setOpened] = useState(null);
+  // { id, version, status: 'loading' | 'ready' | 'error', fit } for the open university.
   const [openedFit, setOpenedFit] = useState(null);
+  const [openedFitAttempt, setOpenedFitAttempt] = useState(0);
   const [busyId, setBusyId] = useState(null);
   const [tierFor, setTierFor] = useState(null);
   // Rows are slim; the QS panel loads the university's full record.
@@ -265,24 +270,32 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   // or the profile just changed) the row is fetched again for this profile.
   useEffect(() => {
     if (universityId == null) return undefined;
+    const key = { id: universityId, version: researchVersion };
     if (rowFit) {
-      setOpenedFit({ id: universityId, version: researchVersion, fit: rowFit });
+      setOpenedFit({ ...key, status: 'ready', fit: rowFit });
       return undefined;
     }
     let active = true;
-    api.collegeSearch(`ids=${universityId}`).then((payload) => {if (active) setOpenedFit({ id: universityId, version: researchVersion, fit: payload.results[0]?.fit });}).catch(() => {});
+    setOpenedFit({ ...key, status: 'loading' });
+    api.collegeSearch(`ids=${universityId}`).
+    then((payload) => {if (active) setOpenedFit({ ...key, status: 'ready', fit: payload.results[0]?.fit ?? null });}).
+    catch(() => {if (active) setOpenedFit({ ...key, status: 'error' });});
     return () => {active = false;};
-  }, [universityId, researchVersion, rowFit]);
-  const fit = openedFit && openedFit.id === universityId && openedFit.version === researchVersion ? openedFit.fit : undefined;
+  }, [universityId, researchVersion, rowFit, openedFitAttempt]);
+  const fitState = openedFit && openedFit.id === universityId && openedFit.version === researchVersion ? openedFit : { status: 'loading' };
+  const fit = fitState.status === 'ready' ? fitState.fit : undefined;
 
   // The fit of each university on the student's list, fetched when the list opens.
   useEffect(() => {
     const ids = [...new Set(data.applications.map((item) => item.university))].slice(0, 100);
     if (!listOpen || !ids.length) return undefined;
     let active = true;
-    api.collegeSearch(`ids=${ids.join(',')}`).then((payload) => {if (active) setListFits(new Map(payload.results.map((row) => [row.id, row.fit])));}).catch(() => {});
+    setListFitsError('');
+    api.collegeSearch(`ids=${ids.join(',')}`).
+    then((payload) => {if (active) setListFits(new Map(payload.results.map((row) => [row.id, row.fit])));}).
+    catch((error) => {if (active) setListFitsError(error.message);});
     return () => {active = false;};
-  }, [listOpen, data.applications, researchVersion]);
+  }, [listOpen, data.applications, researchVersion, listFitsAttempt]);
 
   async function refreshResearch() {
     setResearchLoading(true);setResearchError('');
@@ -306,7 +319,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   // Without a known band the student picks the tier: an unknown band is never filed as "target".
   async function addToList(university, fit, pickedTier) {
     const tier = pickedTier || BAND_TIERS[fit?.admission_band];
-    if (!tier) {setTierFor({ university, fit });return;}
+    if (!tier) {setTierFor({ university, fit, needsProfile: !research?.ready });return;}
     const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
     setBusyId(university.id);
     try {
@@ -337,9 +350,15 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
   }
 
-  const tierPicker = tierFor && <TierPicker university={tierFor.university} busy={busyId === tierFor.university.id} onPick={(tier) => addToList(tierFor.university, tierFor.fit, tier)} onClose={() => setTierFor(null)} />;
+  function completeProfileFirst() {
+    setTierFor(null);
+    closeUniversity();
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }
+
+  const tierPicker = tierFor && <TierPicker university={tierFor.university} needsProfile={tierFor.needsProfile} busy={busyId === tierFor.university.id} onPick={(tier) => addToList(tierFor.university, tierFor.fit, tier)} onCompleteProfile={completeProfileFirst} onClose={() => setTierFor(null)} />;
   if (universityId != null) {
-    if (opened?.university) return <><UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} />{tierPicker}</>;
+    if (opened?.university) return <><UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} fitStatus={fitState.status} onRetryFit={() => setOpenedFitAttempt((value) => value + 1)} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} />{tierPicker}</>;
     if (opened?.error) return <div className="section-stack student-portal college-page"><div className="college-research-state error"><X size={22} /><div><b>{t("This university could not be opened")}</b><p>{opened.error}</p></div><button className="button quiet small" onClick={closeUniversity}>{t("Back to College Search")}</button></div></div>;
     return <PageSkeleton />;
   }
@@ -386,7 +405,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       </div>
     </div>}
     {tierPicker}
-    {listOpen && <CollegeListDrawer applications={data.applications} fits={listFits} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onDeadline={saveDeadline} onApplications={() => setPage('applications')} />}
+    {listOpen && <CollegeListDrawer applications={data.applications} fits={listFits} fitsError={listFitsError} onRetryFits={() => setListFitsAttempt((value) => value + 1)} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onDeadline={saveDeadline} onApplications={() => setPage('applications')} />}
   </div>;
 }
 
