@@ -7,7 +7,10 @@ scan). Pagination (page-number or keyset cursor) lives in core.pagination.
 * ``?search=`` — whitespace-separated terms (up to ``MAX_SEARCH_TERMS``); every
   term must match one of ``search_fields`` (case-insensitive substring) or,
   with ``search_student_path``, the student's name/email. Same-table
-  ``search_fields`` keep PostgreSQL on the trigram indexes.
+  ``search_fields`` keep PostgreSQL on the trigram indexes. University search
+  (``name``/``city``/``country``) also matches the folded ``search_text``
+  column, so accents, Cyrillic spellings and country aliases find the row
+  (``search_text``).
 * ``int_filters`` — ``{param: orm_path}``, parsed with ``int_param``.
 * ``choice_filters`` — ``{param: (orm_path, choices)}``.
 * ``bool_filters`` — ``{param: orm_path}``; ``true``/``false``.
@@ -24,10 +27,13 @@ from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework.exceptions import ValidationError
 
 from .params import int_param
+from .search_text import search_variants
 
 MAX_SEARCH_LENGTH = 100
 MAX_SEARCH_TERMS = 4
 STUDENT_SEARCH_FIELDS = ('user__first_name', 'user__last_name', 'user__email', 'user__username')
+# Search fields whose model keeps a folded copy of them (search_text.py).
+FOLDED_SEARCH_COLUMNS = {('name', 'city', 'country'): 'search_text'}
 
 
 def search_terms(raw):
@@ -41,6 +47,10 @@ def term_query(fields, term):
     query = Q()
     for field in fields:
         query |= Q(**{f'{field}__icontains': term})
+    column = FOLDED_SEARCH_COLUMNS.get(tuple(fields))
+    if column:
+        for variant in search_variants(term):
+            query |= Q(**{f'{column}__contains': variant})
     return query
 
 

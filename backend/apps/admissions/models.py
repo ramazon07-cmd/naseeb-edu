@@ -8,6 +8,7 @@ from uuid import uuid4
 from core.storage import PrivateDocumentStorage
 
 from .countries import country_key
+from .search_text import university_search_text
 
 
 def student_evidence_upload_path(instance, filename):
@@ -435,6 +436,8 @@ class University(TimeStampedModel):
     catalog_source_url = models.URLField(blank=True)
     catalog_verified_at = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    # Name, city and country spellings folded for search (search_text.py); kept by save().
+    search_text = models.TextField(blank=True, default='', editable=False)
 
     class Meta:
         ordering = ['country', 'ranking', 'name']
@@ -451,6 +454,9 @@ class University(TimeStampedModel):
             self.market = inferred
             if kwargs.get('update_fields') is not None:
                 kwargs['update_fields'] = set(kwargs['update_fields']) | {'market'}
+        self.search_text = university_search_text(self.name, self.city, self.country)
+        if kwargs.get('update_fields') is not None:
+            kwargs['update_fields'] = set(kwargs['update_fields']) | {'search_text'}
         super().save(*args, **kwargs)
 
     def __str__(self):

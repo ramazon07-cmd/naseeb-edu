@@ -18,6 +18,7 @@ from apps.admissions.catalog_cache import bump_version
 from apps.admissions.catalog_match import university_key
 from apps.admissions.catalog_v1 import CATALOG
 from apps.admissions.models import University
+from apps.admissions.search_text import university_search_text
 
 DATA_FILE = Path(__file__).resolve().parents[2] / 'catalog_data' / 'qs_world_university_rankings_2027.json'
 
@@ -56,6 +57,8 @@ class Command(BaseCommand):
                     qs_data=row.get('qs_data', {}),
                     catalog_source_url=snapshot['source_url'],
                 )
+                # bulk_create skips University.save().
+                university.search_text = university_search_text(university.name, university.city, university.country)
                 created.append(university)
             elif university.pk:
                 qs_data = row.get('qs_data', university.qs_data)
