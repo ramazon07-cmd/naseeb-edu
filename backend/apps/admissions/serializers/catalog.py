@@ -21,6 +21,7 @@ class UniversitySerializer(serializers.ModelSerializer):
     class Meta:
         model = University
         fields = '__all__'
+        read_only_fields = ('qs_data',)
 
     def get_programs(self, obj):
         programs = [
@@ -28,6 +29,37 @@ class UniversitySerializer(serializers.ModelSerializer):
             if program.is_active and program.international_students_eligible
         ]
         return UniversityProgramSerializer(programs, many=True).data
+
+
+# The QS values the College Search table shows and filters by; the detail view has them all.
+QS_LIST_KEYS = ('region', 'size', 'focus', 'research', 'status', 'overall_score')
+QS_LIST_INDICATORS = ('AR', 'ER', 'CPF', 'ISR', 'SUS')
+
+
+class UniversityListSerializer(serializers.ModelSerializer):
+    """The catalogue list: what College Search and the Applications board show for every row."""
+
+    qs_data = serializers.SerializerMethodField()
+
+    class Meta:
+        model = University
+        fields = (
+            'id', 'name', 'country', 'city', 'institution_type', 'ranking', 'ranking_label', 'qs_data',
+            'acceptance_rate', 'sat_min', 'sat_max', 'test_optional', 'net_price_usd',
+            'offers_need_based_aid', 'offers_merit_aid', 'offers_international_aid', 'meets_full_need',
+            'css_profile_required', 'application_deadline', 'scholarship_deadline',
+        )
+        read_only_fields = fields
+
+    def get_qs_data(self, obj):
+        data = obj.qs_data or {}
+        if not data:
+            return {}
+        indicators = data.get('indicators') or {}
+        return {
+            **{key: data[key] for key in QS_LIST_KEYS if key in data},
+            'indicators': {code: {'score': indicators[code].get('score')} for code in QS_LIST_INDICATORS if code in indicators},
+        }
 
 
 class ScholarshipSerializer(serializers.ModelSerializer):

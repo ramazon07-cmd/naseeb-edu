@@ -6,8 +6,9 @@ import { FilterChip } from '../components/forms';
 import { DeadlineChip, TierBand } from '../components/college';
 import { money } from '../lib/format';
 import { label } from '../lib/labels';
+import { institutionStatus } from '../lib/qs';
 import { matchesQuery } from '../lib/searchIndex';
-import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, satText, scalePercent, shortDate, stageOf } from '../lib/college';
+import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, satLabel, scalePercent, shortDate, stageOf } from '../lib/college';
 import { ResourceForm } from './ResourceSection';
 
 function ApplicationSummary({ applications, essays, letters, openUniversity }) {
@@ -68,7 +69,7 @@ function ApplicationBrief({ id, briefRef, application, info, essays, name, onOpe
   const decided = stage === 'decision';
   const approved = essays.filter((essay) => essay.status === 'approved').length;
   const submittedAt = historyDate(application, 'submitted');
-  const place = [[...new Set([info.city, info.country].filter(Boolean))].join(', '), info.institution_type && label(info.institution_type)].filter(Boolean).join(' · ');
+  const place = [[...new Set([info.city, info.country].filter(Boolean))].join(', '), institutionStatus(info, label)].filter(Boolean).join(' · ');
   const portalMissing = stage === 'applying' && !application.application_portal_url;
   const rows = decided || stage === 'submitted' ?
   [{ Icon: Check, title: t("Submitted"), date: submittedAt, chip: decided ? <DecisionTag application={application} decidedAt={historyDate(application, application.status)} /> : <span className="tag"><Hourglass size={12} aria-hidden="true" /> {t("Waiting")}</span> }] :
@@ -88,7 +89,7 @@ function ApplicationBrief({ id, briefRef, application, info, essays, name, onOpe
     </header>
     <dl className="app-brief-facts">
       <div><dt>{t("Acceptance")}</dt><dd>{percentText(info.acceptance_rate)}</dd></div>
-      <div><dt>{t("SAT")}</dt><dd>{info.sat_min ? satText(info.sat_min, info.sat_max) : t("Optional")}</dd></div>
+      <div><dt>{t("SAT")}</dt><dd>{satLabel(info)}</dd></div>
       <div><dt>{t("Net price")}</dt><dd>{money(info.net_price_usd)}</dd></div>
     </dl>
     <section className="app-brief-block">
@@ -122,11 +123,8 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
   const briefId = `application-brief-${application.id}`;
   const cardRef = useRef(null);
   const briefRef = useRef(null);
-  // Only deadlines inside three weeks stay on the card; the rest wait in the brief.
-  const urgent = decided || stage === 'submitted' ? [] : [['aid', application.scholarship_deadline], ['application', application.deadline]].filter(([, date]) => {
-    const days = daysUntil(date);
-    return days != null && days <= 21;
-  }).sort(([, a], [, b]) => daysUntil(a) - daysUntil(b));
+  // Every set deadline counts down on the card: the last three weeks stand out, later ones stay quiet.
+  const deadlines = decided || stage === 'submitted' ? [] : [['aid', application.scholarship_deadline], ['application', application.deadline]].filter(([, date]) => daysUntil(date) != null).sort(([, a], [, b]) => daysUntil(a) - daysUntil(b));
 
   useLayoutEffect(() => {
     const brief = briefRef.current;
@@ -159,8 +157,8 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
       </div>
       <p className="board-card-program">{application.program}</p>
       <TierBand value={application.tier} />
-      {(decided || urgent.length > 0) && <div className="tag-row application-card-details">
-        {decided ? <DecisionTag application={application} decidedAt={decidedAt} /> : urgent.map(([kind, date]) => <DeadlineChip key={kind} kind={kind} date={date} />)}
+      {(decided || deadlines.length > 0) && <div className="tag-row application-card-details">
+        {decided ? <DecisionTag application={application} decidedAt={decidedAt} /> : deadlines.map(([kind, date]) => <DeadlineChip key={kind} kind={kind} date={date} />)}
       </div>}
     </article>
     {briefOpen && <ApplicationBrief id={briefId} briefRef={briefRef} application={application} info={info} essays={essays} name={name} onOpen={onOpen} onEdit={onEdit} onClose={onBriefClose} />}

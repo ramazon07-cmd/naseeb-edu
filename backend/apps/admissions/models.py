@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from core.storage import PrivateDocumentStorage
 
+from .countries import country_key
+
 
 def student_evidence_upload_path(instance, filename):
     """Keep student evidence private, grouped, and collision-free."""
@@ -389,6 +391,10 @@ class University(TimeStampedModel):
     city = models.CharField(max_length=120, blank=True)
     website = models.URLField(blank=True)
     ranking = models.PositiveIntegerField(null=True, blank=True)
+    # A banded rank as published ("701-710", "1401+"); `ranking` then holds its first place.
+    ranking_label = models.CharField(max_length=20, blank=True, default='')
+    # Published QS scores/classifications are separate from admissions and costs.
+    qs_data = models.JSONField(default=dict, blank=True)
     institution_type = models.CharField(max_length=20, choices=InstitutionType.choices, default=InstitutionType.PRIVATE)
     campus_setting = models.CharField(max_length=20, choices=CampusSetting.choices, blank=True)
     degree_type = models.CharField(max_length=20, choices=DegreeType.choices, default=DegreeType.FOUR_YEAR)
@@ -425,15 +431,13 @@ class University(TimeStampedModel):
         ordering = ['country', 'ranking', 'name']
         unique_together = ('name', 'country')
 
+    @classmethod
+    def market_for_country(cls, country):
+        markets = {'us': cls.Market.US, 'canada': cls.Market.CANADA, 'china': cls.Market.CHINA, 'hong kong': cls.Market.HONG_KONG}
+        return markets.get(country_key(country), '')
+
     def save(self, *args, **kwargs):
-        country = (self.country or '').strip().lower()
-        aliases = {
-            self.Market.US: {'usa', 'united states', 'united states of america'},
-            self.Market.CANADA: {'canada'},
-            self.Market.CHINA: {'china', 'mainland china'},
-            self.Market.HONG_KONG: {'hong kong', 'hong kong sar'},
-        }
-        inferred = next((market for market, countries in aliases.items() if country in countries), '')
+        inferred = self.market_for_country(self.country)
         if inferred:
             self.market = inferred
             if kwargs.get('update_fields') is not None:

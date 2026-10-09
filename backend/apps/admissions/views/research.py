@@ -1,14 +1,18 @@
 """Admissions API views — research."""
+from collections import defaultdict
+
+from django.db.models import F, Q
 from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from rest_framework.views import APIView
 from apps.users.models import User
-from ..models import University
+from ..countries import country_key
+from ..models import University, UniversityProgram
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer, UniversitySerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
-from .common import COLLEGE_RESEARCH_LIMIT
+from .common import COLLEGE_RESEARCH_CANDIDATES, COLLEGE_RESEARCH_LIMIT
 
 
 COLLEGE_RESEARCH_QUESTIONS = {
@@ -19,6 +23,20 @@ COLLEGE_RESEARCH_QUESTIONS = {
     'target_countries': {'label': 'Target countries', 'type': 'text', 'placeholder': 'Example: USA, Canada, Singapore'},
     'budget_usd': {'label': 'Annual budget (USD)', 'type': 'number', 'placeholder': 'Example: 20000', 'min': 0, 'max': 500000},
 }
+
+SAT_POINTS = 25
+PRICE_POINTS = 12
+
+
+def research_candidates(target_countries):
+    """Universities in the student's target countries or with admissions data, best ranked first."""
+    countries = University.objects.order_by().values_list('country', flat=True).distinct()
+    spellings = [country for country in countries if country_key(country) in target_countries]
+    has_data = Q(sat_min__isnull=False) | Q(acceptance_rate__isnull=False) | Q(net_price_usd__isnull=False)
+    return list(
+        University.objects.filter(Q(country__in=spellings) | has_data)
+        .order_by(F('ranking').asc(nulls_last=True), 'name')[:COLLEGE_RESEARCH_CANDIDATES]
+    )
 
 
 def build_college_research(profile):
@@ -57,22 +75,24 @@ def build_college_research(profile):
     gpa = float(profile.gpa)
     gpa_scale = int(profile.effective_gpa_scale)
     budget = int(profile.budget_usd)
-    target_countries = [value.strip().lower() for value in profile.target_countries.split(',') if value.strip()]
+    target_countries = {country_key(value) for value in profile.target_countries.split(',') if value.strip()}
     target_major = profile.target_major.strip().lower()
     evidence_total = sum(min(value, 2) for value in profile_counts.values())
     profile_strength_score = min(10, evidence_total * 2)
     recommendations = []
+    candidates = research_candidates(target_countries)
+    # Only the majors are needed to score; full programs are loaded for the explained rows below.
+    program_majors = defaultdict(list)
+    for university_id, major in UniversityProgram.objects.filter(
+        university_id__in=[university.id for university in candidates], is_active=True, international_students_eligible=True,
+    ).values_list('university_id', 'canonical_major'):
+        program_majors[university_id].append(major.strip().lower())
 
-    for university in University.objects.filter(
-        market__in=[
-            University.Market.US,
-            University.Market.CANADA,
-            University.Market.CHINA,
-            University.Market.HONG_KONG,
-        ],
-    ).prefetch_related('programs'):
+    for university in candidates:
         reasons = []
         gaps = []
+        # Points of factors the catalogue has no data for: they are left out, not guessed.
+        missing = 0
 
         gpa_score = round(min(15, (gpa / gpa_scale) * 15))
         academic_score = gpa_score
@@ -89,9 +109,13 @@ def build_college_research(profile):
             else:
                 sat_score = 4
                 gaps.append(f'Raise SAT toward at least {university.sat_min}')
-        else:
+        elif university.test_optional:
             sat_score = 20
-            reasons.append('No strict SAT minimum is listed in the catalog')
+            reasons.append('SAT is optional at this university')
+        else:
+            sat_score = 0
+            missing += SAT_POINTS
+            gaps.append('SAT range is not listed in the catalog')
         academic_score += sat_score
 
         if ielts >= 7:
@@ -105,16 +129,12 @@ def build_college_research(profile):
             gaps.append('Verify the IELTS requirement on the official program page')
 
         preference_score = 0
-        if university.country.lower() in target_countries:
+        if country_key(university.country) in target_countries:
             preference_score += 12
             reasons.append(f'{university.country} is one of your target countries')
         else:
             preference_score += 3
-        active_programs = [
-            program for program in university.programs.all()
-            if program.is_active and program.international_students_eligible
-        ]
-        majors = [program.canonical_major.strip().lower() for program in active_programs]
+        majors = list(program_majors[university.id])
         majors.extend(value.strip().lower() for value in university.popular_majors.split(',') if value.strip())
         if target_major and any(target_major in major or major in target_major for major in majors):
             preference_score += 10
@@ -135,7 +155,7 @@ def build_college_research(profile):
                 financial_score += 2
                 gaps.append('Estimated net price is significantly above your budget')
         else:
-            financial_score += 5
+            missing += PRICE_POINTS
             gaps.append('Net price is not available in the catalog')
         if profile.scholarship_needed:
             if university.offers_international_aid or university.offers_merit_aid or university.offers_need_based_aid:
@@ -147,9 +167,15 @@ def build_college_research(profile):
         else:
             financial_score += 8
 
-        total_score = min(100, academic_score + preference_score + financial_score + profile_strength_score)
+        earned = academic_score + preference_score + financial_score + profile_strength_score
+        # Score the known factors on the full scale, then take off half the missing weight:
+        # a row without admissions data never outscores the same row with data that fits.
+        total_score = min(100, round(earned * 100 / (100 - missing) * (1 - missing / 200)))
         acceptance_rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
-        if (acceptance_rate is not None and acceptance_rate < 15) or (university.sat_min and sat < university.sat_min):
+        if acceptance_rate is None and not university.sat_min:
+            # No admission data in the catalogue (e.g. a QS-only row): unknown, not "target".
+            admission_band = None
+        elif (acceptance_rate is not None and acceptance_rate < 15) or (university.sat_min and sat < university.sat_min):
             admission_band = 'reach'
         elif acceptance_rate is not None and acceptance_rate >= 45 and (not university.sat_min or sat >= university.sat_min):
             admission_band = 'safety'
@@ -172,10 +198,14 @@ def build_college_research(profile):
         })
 
     recommendations.sort(key=lambda item: (-item['match_score'], item['university'].ranking or 999999))
+    # Every candidate gets its score and band so College Search sorts them on
+    # one scale; only the best matches carry the full explanation.
+    scores = {item['university'].id: [item['match_score'], item['admission_band']] for item in recommendations}
     # Return (and serialize) only the best matches, not the whole catalog.
     recommendations = recommendations[:COLLEGE_RESEARCH_LIMIT]
+    explained = University.objects.prefetch_related('programs').in_bulk([item['university'].id for item in recommendations])
     for item in recommendations:
-        serialized_university = UniversitySerializer(item['university']).data
+        serialized_university = UniversitySerializer(explained[item['university'].id]).data
         matching_programs = [
             program for program in serialized_university['programs']
             if target_major and (
@@ -191,6 +221,7 @@ def build_college_research(profile):
         'questions': [],
         'profile_snapshot': snapshot,
         'recommendations': recommendations,
+        'scores': scores,
         'methodology': 'Academic fit, preferences, affordability, aid and verified profile evidence.',
         'generated_at': timezone.now(),
     }

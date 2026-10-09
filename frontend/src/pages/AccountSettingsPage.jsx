@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Eye, EyeOff, Globe2, KeyRound, Mail, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Eye, EyeOff, Globe2, KeyRound, Mail, RefreshCw, ShieldCheck, UserRound, UsersRound } from 'lucide-react';
 import { api } from '../api';
 import { t } from '../i18n';
 import { Field } from '../components/forms';
 import { LanguageSelector } from '../components/brand';
+import { ProfilePhotoField } from '../components/profileFields';
 import { dateText } from '../lib/format';
+import { fullName, initials } from '../lib/labels';
 import { accountFieldErrors } from '../lib/accountSettings';
 
 const RELATIONSHIPS = { mother: 'Mother', father: 'Father', guardian: 'Guardian', other: 'Other' };
@@ -21,6 +23,47 @@ function PasswordInput({ value, onChange, autoComplete, invalid, ...props }) {
   const [visible, setVisible] = useState(false);
   const label = visible ? t('Hide password') : t('Show password');
   return <span className="account-password-input"><input type={visible ? 'text' : 'password'} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} aria-invalid={invalid || undefined} required {...props} /><button type="button" className="icon-button" onClick={() => setVisible(!visible)} aria-label={label} title={label}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>;
+}
+
+const PROFILE_FIELDS = ['first_name', 'last_name', 'phone', 'position'];
+
+// A counselor's own name, phone, position and photo (students edit theirs in Student Center).
+function ProfileSection({ user, onUserChange, notify }) {
+  const [form, setForm] = useState(() => Object.fromEntries(PROFILE_FIELDS.map((name) => [name, user[name] || ''])));
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const unchanged = PROFILE_FIELDS.every((name) => form[name].trim() === (user[name] || ''));
+  // Photo writes save at once and return the account, whose avatar URL carries the new version.
+  const photo = useMemo(() => ({
+    load: (id) => api.accountAvatar(id),
+    upload: async (id, file) => onUserChange({ avatar: (await api.uploadAccountAvatar(id, file)).avatar }),
+    remove: async (id) => onUserChange({ avatar: (await api.removeAccountAvatar(id)).avatar }),
+  }), [onUserChange]);
+  const input = (name) => ({ value: form[name], onChange: (event) => setForm((current) => ({ ...current, [name]: event.target.value })), 'aria-invalid': Boolean(errors[name]) || undefined });
+  async function submit(event) {
+    event.preventDefault();
+    if (unchanged) return;
+    setSaving(true);setErrors({});
+    try {
+      const updated = await api.update('users/accounts', user.id, Object.fromEntries(PROFILE_FIELDS.map((name) => [name, form[name].trim()])));
+      onUserChange(Object.fromEntries(PROFILE_FIELDS.map((name) => [name, updated[name]])));
+      notify(t('Your profile was updated.'));
+    } catch (error) {
+      setErrors(errorsFrom(error));
+    } finally {setSaving(false);}
+  }
+  return <section className="panel account-settings-panel" aria-labelledby="account-profile-title">
+    <header><UserRound size={18} aria-hidden="true" /><h2 id="account-profile-title">{t('Profile')}</h2></header>
+    <form className="panel-body form-grid" onSubmit={submit}>
+      <div className="form-wide"><ProfilePhotoField profileId={user.id} hasPhoto={Boolean(user.avatar)} initials={initials(fullName(user))} photo={photo} hint={t('PNG, JPG or WebP · up to 2 MB')} onError={(message) => message && notify(message, 'error')} /></div>
+      <Field label={t('First name')} error={errors.first_name}><input {...input('first_name')} autoComplete="given-name" maxLength="150" placeholder={t('e.g. Dilnoza')} required /></Field>
+      <Field label={t('Last name')} error={errors.last_name}><input {...input('last_name')} autoComplete="family-name" maxLength="150" placeholder={t('e.g. Karimova')} /></Field>
+      <Field label={t('Phone')} error={errors.phone}><input {...input('phone')} type="tel" autoComplete="tel" maxLength="32" placeholder={t('e.g. +998 90 123 45 67')} /></Field>
+      <Field label={t('Position')} error={errors.position}><input {...input('position')} maxLength="120" placeholder={t('School counselor')} /></Field>
+      {errors.form && <div className="alert error form-wide" role="alert">{errors.form}</div>}
+      <div className="form-actions"><button className="button primary" disabled={saving || unchanged} aria-busy={saving}>{saving ? t('Saving…') : t('Save profile')}</button></div>
+    </form>
+  </section>;
 }
 
 function EmailSection({ user, onUserChange, notify }) {
@@ -122,13 +165,15 @@ function ParentAccessSection() {
 }
 
 export function AccountSettingsPage({ user, language, changeLanguage, onUserChange, notify }) {
+  const student = user.role === 'student';
   return <div className="section-stack account-settings">
+    {!student && <ProfileSection user={user} onUserChange={onUserChange} notify={notify} />}
     <EmailSection user={user} onUserChange={onUserChange} notify={notify} />
     <PasswordSection onUserChange={onUserChange} notify={notify} />
     <section className="panel account-settings-panel" aria-labelledby="account-language-title">
       <header><Globe2 size={18} aria-hidden="true" /><h2 id="account-language-title">{t('Language')}</h2></header>
       <div className="panel-body account-language"><p className="account-settings-muted">{t('Choose the language for Naseeb Edu on this device.')}</p><LanguageSelector language={language} onChange={changeLanguage} /></div>
     </section>
-    <ParentAccessSection />
+    {student && <ParentAccessSection />}
   </div>;
 }

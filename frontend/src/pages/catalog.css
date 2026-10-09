@@ -186,54 +186,6 @@
   min-width: 0;
 }
 
-.catalog-programs .program-grid {
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-.catalog-programs .program-card {
-  min-height: 0;
-  padding: 22px 26px;
-  border-radius: 15px;
-  box-shadow: none;
-}
-
-.catalog-programs .program-card h3 {
-  margin: 12px 0 4px;
-  font-size: 1.15rem;
-}
-
-.catalog-programs .program-card > p:not(.provider) {
-  max-width: 900px;
-  margin: 6px 0 14px;
-  font-size: 0.82rem;
-}
-
-.catalog-programs .program-card .provider {
-  margin: 0;
-}
-
-.catalog-programs .program-meta {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 25px;
-  row-gap: 10px;
-  margin: 12px 0;
-  padding: 13px 0;
-}
-
-.catalog-programs .program-meta span {
-  line-height: 1.4;
-}
-
-.catalog-programs .program-card details {
-  margin: 3px 0 12px;
-}
-
-.catalog-programs .program-card.is-closed {
-  opacity: 0.78;
-}
-
 .catalog-card-actions {
   display: flex;
   align-items: center;
@@ -304,14 +256,6 @@
 
   .catalog-hero-mark {
     display: none;
-  }
-
-  .catalog-programs .program-card {
-    padding: 18px;
-  }
-
-  .catalog-programs .program-meta {
-    column-gap: 14px;
   }
 
   .catalog-programs .program-results-bar {

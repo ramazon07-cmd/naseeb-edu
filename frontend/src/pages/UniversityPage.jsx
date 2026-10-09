@@ -3,10 +3,12 @@ import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Circle, Clock
 import { formatNumberLocale, formatPercentLocale, t, tx } from '../i18n';
 import { PortalTabs } from '../components/forms';
 import { Empty } from '../components/ui';
+import { QsUniversityDetails } from '../components/QsUniversityDetails';
+import { institutionStatus } from '../lib/qs';
 import { AidTags, DeadlineCard, InfoCard, PriceMeter, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { dateText, money } from '../lib/format';
 import { initials, label, ownStudent } from '../lib/labels';
-import { daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, satText, scalePercent, scholarshipRequirements } from '../lib/college';
+import { daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
 
 function UniversityOverview({ university, result, research, researchLoading, student, application, essays, onLeave, setPage }) {
   const budget = Number(student?.budget_usd) || 0;
@@ -25,9 +27,10 @@ function UniversityOverview({ university, result, research, researchLoading, stu
         <InfoCard title="Why it fits"><ul className="note-list ok">{result.reasons.map((reason) => <li key={reason}><CheckCircle2 size={15} aria-hidden="true" /><span>{reason}</span></li>)}</ul></InfoCard>
         <InfoCard title="Watch-outs"><ul className="note-list gap">{result.gaps.map((gap) => <li key={gap}><Clock3 size={15} aria-hidden="true" /><span>{gap}</span></li>)}{!result.gaps.length && <li><CheckCircle2 size={15} aria-hidden="true" /><span>{t("Nothing to watch out for.")}</span></li>}</ul></InfoCard>
       </div>}
+      <QsUniversityDetails university={university} />
       <InfoCard title="Numbers that matter"><div className="numbers">
         <div><span className="k">{t("Acceptance rate")}</span><span className="v">{percentText(rate)}</span><span className="s">{rate == null ? t("Not available in the catalog.") : Number(rate) < 15 ? t("Highly selective: fewer than 15% are admitted.") : Number(rate) >= 45 ? t("Less selective: 45% or more are admitted.") : t("Moderately selective.")}</span></div>
-        <div><span className="k">{t("SAT range")}</span><span className="v">{university.sat_min ? satText(university.sat_min, university.sat_max) : t("Optional")}</span>{university.sat_min && <SatRange min={university.sat_min} max={university.sat_max} score={sat} />}<span className={`s ${sat && university.sat_min && sat < university.sat_min ? 'warn' : ''}`.trim()}>{!sat || !university.sat_min ? t("No SAT minimum listed.") : sat < university.sat_min ? tx`Your SAT is ${String(sat)}, ${university.sat_min - sat} below` : tx`Your SAT is ${String(sat)}, in range`}</span></div>
+        <div><span className="k">{t("SAT range")}</span><span className="v">{satLabel(university)}</span>{university.sat_min && <SatRange min={university.sat_min} max={university.sat_max} score={sat} />}<span className={`s ${sat && university.sat_min && sat < university.sat_min ? 'warn' : ''}`.trim()}>{!sat || !university.sat_min ? t("No SAT minimum listed.") : sat < university.sat_min ? tx`Your SAT is ${String(sat)}, ${university.sat_min - sat} below` : tx`Your SAT is ${String(sat)}, in range`}</span></div>
         <div><span className="k">{t("Tuition")}</span><span className="v">{money(university.tuition_usd)}</span><span className="s">{t("Per year, before aid.")}</span></div>
         <div><span className="k">{t("Net price")}</span><span className="v">{money(net)}</span>{net != null && <PriceMeter price={net} budget={budget} />}<span className={`s ${net != null && budget && net > budget ? 'warn' : ''}`.trim()}>{net == null || !budget ? t("Estimated per year, after aid.") : net > budget ? tx`${money(net - budget)} above your ${money(budget)} budget` : t("Within your budget")}</span></div>
         <div><span className="k">{t("Average aid")}</span><span className="v">{money(university.average_aid_usd)}</span><span className="s">{university.students_receiving_aid_percent != null ? tx`${university.students_receiving_aid_percent}% of students receive aid.` : t("Per year.")}</span></div>
@@ -63,6 +66,7 @@ function ScholarshipItem({ item, university, student }) {
 }
 
 function UniversityAid({ university, scholarships, student }) {
+  const listed = hasAidData(university);
   return <div className="two-column">
     <div className="stack-16">
       <InfoCard title={tx`Aid at ${university.name}`}>
@@ -70,7 +74,7 @@ function UniversityAid({ university, scholarships, student }) {
         <div className="numbers">
           <div><span className="k">{t("Average aid")}</span><span className="v">{money(university.average_aid_usd)}</span><span className="s">{t("Per year.")}</span></div>
           <div><span className="k">{t("Students receiving aid")}</span><span className="v">{university.students_receiving_aid_percent != null ? formatPercentLocale(university.students_receiving_aid_percent) : '—'}</span><span className="s">{t("Of undergraduates.")}</span></div>
-          <div><span className="k">{t("Need-blind")}</span><span className="v">{university.need_blind ? t("Yes") : t("No")}</span><span className="s">{university.need_blind ? t("Aid does not affect admission.") : t("Aid can affect admission.")}</span></div>
+          <div><span className="k">{t("Need-blind")}</span><span className="v">{university.need_blind ? t("Yes") : listed ? t("No") : '—'}</span><span className="s">{university.need_blind ? t("Aid does not affect admission.") : listed ? t("Aid can affect admission.") : t("Not listed. Check the official aid page.")}</span></div>
         </div>
       </InfoCard>
       {scholarships.map((item) => <ScholarshipItem key={item.id} item={item} university={university} student={student} />)}
@@ -82,6 +86,9 @@ function UniversityAid({ university, scholarships, student }) {
     </div>
   </div>;
 }
+
+// QS-only catalogue rows carry no aid data, so their false/blank aid fields mean "unknown", not "no".
+const hasAidData = (university) => Boolean(university.average_aid_usd != null || university.students_receiving_aid_percent != null || university.financial_aid_url || university.scholarship_deadline || university.aid_application_notes || university.need_blind || university.css_profile_required || university.fafsa_required || university.meets_full_need);
 
 function universityNeeds(data, university, application, student) {
   const transcript = data.documents.find((document) => document.document_type === 'transcript' && ['uploaded', 'reviewing', 'approved'].includes(document.status));
@@ -95,9 +102,10 @@ function universityNeeds(data, university, application, student) {
     { key: 'essays', title: 'Scholarship essays', detail: essays.length ? `${t("Motivation, impact and financial-need responses")} · ${tx`${essaysApproved} of ${essays.length} approved`}` : t("Motivation, impact and financial-need responses"), state: essays.length && essaysApproved === essays.length ? 'ok' : essays.length ? 'wait' : 'open', icon: PenLine, page: 'essay_lab', label: 'Open Essay Lab' },
     { key: 'letters', title: 'Recommendation letters', detail: data.recommendations.length ? `${t("Teacher or counselor recommendations")} · ${tx`${lettersApproved} of ${data.recommendations.length} approved`}` : t("Teacher or counselor recommendations"), state: data.recommendations.length && lettersApproved === data.recommendations.length ? 'ok' : data.recommendations.length ? 'wait' : 'open', icon: Mail, page: 'student_center', label: 'Manage letters' }
   ].filter(Boolean);
+  const listed = hasAidData(university);
   const forms = [
-    { key: 'css', title: 'CSS Profile', needed: university.css_profile_required, detail: university.css_profile_required ? tx`Required by ${university.name} for financial aid` : tx`Not required by ${university.name}` },
-    { key: 'fafsa', title: 'FAFSA', needed: university.fafsa_required, detail: university.fafsa_required ? tx`Required by ${university.name} for financial aid` : tx`Not required by ${university.name} for your profile` }
+    { key: 'css', title: 'CSS Profile', needed: university.css_profile_required, unknown: !listed, detail: university.css_profile_required ? tx`Required by ${university.name} for financial aid` : listed ? tx`Not required by ${university.name}` : t("Not listed. Check the official aid page.") },
+    { key: 'fafsa', title: 'FAFSA', needed: university.fafsa_required, unknown: !listed, detail: university.fafsa_required ? tx`Required by ${university.name} for financial aid` : listed ? tx`Not required by ${university.name} for your profile` : t("Not listed. Check the official aid page.") }
   ];
   const required = [...documents, ...forms.filter((form) => form.needed)];
   return { documents, forms, total: required.length, ready: documents.filter((row) => row.state === 'ok').length, next: required.find((row) => row.state !== 'ok') };
@@ -109,7 +117,7 @@ function UniversityNeeds({ university, needs, setPage }) {
     <div className="stack-16">
       <InfoCard title="Ready to send"><div className="big-count"><b>{tx`${needs.ready} of ${needs.total}`}</b><span>{t("ready")}</span></div><span className="score-bar wide" aria-hidden="true"><i style={{ '--fill': scalePercent(needs.ready, 0, needs.total || 1) }} /></span>{needs.next && <p className="note">{tx`Next: ${t(needs.next.title)}`}</p>}</InfoCard>
       <InfoCard title="Documents">{needs.documents.map((row) => {const RowIcon = row.state === 'ok' ? Check : row.icon || Circle;return <div className={`need-row ${row.state}`} key={row.key}><span className="need-icon" aria-hidden="true"><RowIcon size={16} /></span><div><b>{t(row.title)}</b><small>{row.detail}</small></div><button type="button" className="button quiet small" onClick={() => setPage(row.page)}>{t(row.label)}</button></div>;})}</InfoCard>
-      <InfoCard title="Forms">{needs.forms.map((form) => <div className={`need-row ${form.needed ? 'open' : 'off'}`} key={form.key}><span className="need-icon" aria-hidden="true">{form.needed ? <FileText size={16} /> : <Minus size={16} />}</span><div><b>{t(form.title)}</b><small>{form.detail}</small></div>{form.needed ? university.financial_aid_url && <a className="button quiet small" href={university.financial_aid_url} target="_blank" rel="noreferrer">{tx`Open ${t(form.title)}`} <ExternalLink size={14} aria-hidden="true" /></a> : <span className="tag">{t("Not needed")}</span>}</div>)}</InfoCard>
+      <InfoCard title="Forms">{needs.forms.map((form) => <div className={`need-row ${form.needed ? 'open' : 'off'}`} key={form.key}><span className="need-icon" aria-hidden="true">{form.needed ? <FileText size={16} /> : <Minus size={16} />}</span><div><b>{t(form.title)}</b><small>{form.detail}</small></div>{form.needed ? university.financial_aid_url && <a className="button quiet small" href={university.financial_aid_url} target="_blank" rel="noreferrer">{tx`Open ${t(form.title)}`} <ExternalLink size={14} aria-hidden="true" /></a> : <span className="tag">{form.unknown ? t("Not listed") : t("Not needed")}</span>}</div>)}</InfoCard>
     </div>
     <div className="stack-16">
       <InfoCard title="Deadline"><div className="big-date">{university.application_deadline ? dateText(university.application_deadline) : '—'}</div><small className="note">{t("Application and aid")}</small>{days != null && <span className={`due ${dueTone(days)}`.trim()}><Clock3 size={12} aria-hidden="true" /> {dueLabel(days)}</span>}</InfoCard>
@@ -128,7 +136,7 @@ export function UniversityPage({ data, university, result, research, researchLoa
     <nav className="crumb" aria-label={t("Breadcrumb")}><button type="button" className="link-button" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> {t("College Search")}</button><span aria-hidden="true">/</span><b>{university.name}</b></nav>
     <section className="info-card university-head" aria-label={university.name}>
       <div className="university-head-top"><span className="monogram" aria-hidden="true">{initials(university.name)}</span><div><h2>{university.name}</h2>
-        <p className="university-facts"><span><MapPin size={14} aria-hidden="true" /> {[university.city, university.country].filter(Boolean).join(', ')}</span><span>{label(university.institution_type)}</span>{university.campus_setting && <span>{tx`${label(university.campus_setting)} campus`}</span>}<span>{label(university.degree_type)}</span>{result && <TierBand value={result.admission_band} />}</p></div></div>
+        <p className="university-facts"><span><MapPin size={14} aria-hidden="true" /> {[university.city, university.country].filter(Boolean).join(', ')}</span>{institutionStatus(university, label) && <span>{institutionStatus(university, label)}</span>}{university.campus_setting && <span>{tx`${label(university.campus_setting)} campus`}</span>}<span>{label(university.degree_type)}</span>{result?.admission_band && <TierBand value={result.admission_band} />}</p></div></div>
       <div className="university-actions">
         {application ? <span className="tag ok large"><Check size={14} aria-hidden="true" /> {t("In my list")}</span> : <button type="button" className="button primary" disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={16} aria-hidden="true" /> {t("Add to my list")}</button>}
         {university.website && <a className="button quiet" href={university.website} target="_blank" rel="noreferrer">{t("Official site")} <ExternalLink size={14} aria-hidden="true" /></a>}
