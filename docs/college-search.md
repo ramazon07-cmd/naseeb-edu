@@ -46,8 +46,9 @@ allowed set below.
 ```
 
 `next` is the next page number, or `null` on the last page. `unpriced_count` is
-how many of the `count` matching universities have no known cost (all pages, not
-just this one). `facets` is present only with `facets=true`. With `ids`, the response is only `{"results": [ROW, ...]}`.
+sent only on page 1 of a `price` filter (not `all`): how many of the `count`
+matching universities have no known cost (all pages, not just this one).
+`facets` is present only with `facets=true`. With `ids`, the response is only `{"results": [ROW, ...]}`.
 
 ### Row
 
@@ -55,7 +56,8 @@ The slim list row (`UniversityRowSerializer`): `id`, `name`, `city`, `country`,
 `market`, `institution_type`, `ranking`, `ranking_label`, `qs_data` (list keys
 and the indicator scores only), `acceptance_rate`, `sat_min`, `sat_max`,
 `test_optional`, `net_price_usd`, `intl_cost_usd`, `offers_international_aid`,
-`application_deadline`, `scholarship_deadline`; plus `programs` (`[{name, canonical_major}]`, open
+`application_deadline`, `scholarship_deadline`, and the price to show: `cost`,
+`cost_label` and `after_aid_usd` (see [Price](#price)); plus `programs` (`[{name, canonical_major}]`, open
 programs international students can apply to) and, once the student's research
 profile is complete, `fit`. The full record is `GET /api/universities/{id}/`.
 
@@ -71,9 +73,12 @@ profile is complete, `fit`. The full record is `GET /api/universities/{id}/`.
 ```
 
 * `match_score` is 0–100 and is not an admission probability.
-* `admission_band` is `reach`, `target`, `safety`, or `null` when the catalogue
-  has no admission data for the university; `null` rows are what `bands=unknown`
-  selects.
+* `admission_band` is `reach`, `target`, `safety`, or `null` (unknown); `null`
+  rows are what `bands=unknown` selects. It is `null` when nothing places the
+  university: no acceptance rate and no test score compared with its range. A
+  university that requires tests (not test-optional, publishes an SAT or ACT
+  range) is at best `null` for a student with no SAT or ACT, never `target` or
+  `safety`; an acceptance rate under 15% still makes it `reach`.
 * `score_breakdown` parts are out of 48, 22, 20 and 10.
 * `reasons` (up to 5) and `gaps` (up to 4) are `{code, params, text}`: `code` is
   stable, `params` fills the translated message, `text` is the English sentence.
@@ -82,29 +87,39 @@ profile is complete, `fit`. The full record is `GET /api/universities/{id}/`.
   falls back to `text` for a code it does not know.
 * Test scores: the higher of SAT and ACT against the catalogue range counts. The
   English score is IELTS, or TOEFL, Duolingo, PTE or Cambridge converted to an
-  IELTS band by each test owner's published concordance.
+  IELTS band by each test owner's published concordance; a score under a
+  table's lowest row (Duolingo 5) gets the table's lowest band.
 * A factor with no data (no test range, no cost, no aid details) is left out of
   the score rather than guessed, and half its weight is taken off, so a row
   without data never outscores the same row with data that fits.
 
 ## Price
 
-`cost_of_attendance` (Python) and `COST` (the SQL annotation the `price` filter
-and sort use) give the yearly cost a student from abroad pays:
+`backend/apps/admissions/pricing.py` is the one rule. It annotates every
+university query (`with_cost`) in SQL, and the price filter, the price sort,
+the fit's budget factor and every serializer read that annotation:
 
-* **US universities** (`market = "us"`): `intl_cost_usd`, the cost of attendance
-  for an international student (out-of-state tuition and fees plus on-campus
-  room, board, books and other costs, from the College Scorecard snapshot).
-  Scorecard's `net_price_usd` is an average for domestic aid recipients, so it is
-  used instead only where `offers_international_aid` is true.
-* **Everywhere else**: `net_price_usd`.
+* `cost`: for a **US university** (`market = "us"`) `intl_cost_usd`, the cost of
+  attendance for an international student (out-of-state tuition and fees plus
+  on-campus room, board, books and other costs, from the College Scorecard
+  snapshot); **everywhere else** `net_price_usd`.
+* `cost_label`: `international_cost` or `net_price`.
+* `after_aid_usd`: a US university's `net_price_usd` when
+  `offers_international_aid` is true, else `null`. Scorecard's net price is US
+  students' average after aid, so it is never the cost and never compared with a
+  budget (Princeton costs about $86,000, not its $6,128 after-aid average).
 
-The fit's financial reasons say which one they used (`cost_*` or
-`net_after_aid_*` codes). The UI (`priceInfo` in `frontend/src/lib/college.js`)
-shows a US row's `intl_cost_usd` as "Estimated cost for international students"
-(MIT: about $85,960, not its $20,111 domestic net price), with `net_price_usd`
-as a secondary "after aid" line only when `offers_international_aid` is true;
-other rows show their net price as before.
+The rows of College Search and `/api/universities/`, the university detail and
+an application's `university_detail` all carry these three fields. The UI
+(`priceInfo` in `frontend/src/lib/college.js`) only displays them: the cost as
+"Estimated cost for international students" (MIT: about $85,960) or "Net
+price", and `after_aid_usd`, when present, as a secondary line "US students'
+average after aid; international aid varies". The fit's financial reasons are
+the `cost_*` codes.
+
+`intl_cost_usd` is filled by `load_college_scorecard` and, on deploy, by the data
+migration `0071_fill_intl_cost` from the same shipped snapshot (only empty values;
+an empty city too, with `search_text` refreshed).
 
 ### Budget rule
 
@@ -149,9 +164,14 @@ name, city and every catalogue spelling of the country, lower-cased with accents
 removed (`backend/apps/admissions/search_text.py`). `University.save()` keeps it
 current; bulk writes that skip `save()` set it themselves (`load_qs_rankings` for
 the rows it creates, `load_college_scorecard` for the rows whose city it fills).
-A search term is folded the same way and, when Cyrillic, transliterated to a few
-Latin spellings, and each term must be contained in `search_text`. The catalogue
-list (`/api/universities/?search=`) uses the same matching (`listing.py`).
+A search term is folded the same way and, when Cyrillic, transliterated to up to
+32 Latin spellings: the usual one, then each ambiguous letter changed, earliest
+first, so an early letter (Г as H in Гарвард) is always tried. A term matches when
+the name, city or country contains it, or `search_text` contains a variant. The
+catalogue list (`/api/universities/?search=`) uses the same matching: its view
+sets `search_folded_field = 'search_text'` (`listing.py`). On PostgreSQL a pg_trgm
+GIN index on `search_text` (migration `0072_university_search_text_trgm`, a no-op
+on SQLite) serves the `LIKE '%…%'` lookups.
 
 ## Performance
 
