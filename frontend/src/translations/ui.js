@@ -2206,6 +2206,7 @@ export const UI_TRANSLATIONS = {
   "Financial aid page": ["Moliyaviy yordam sahifasi", "Страница финансовой помощи"],
   "Fit": ["Moslik", "Оценка"],
   "Fit for your profile": ["Profilingizga moslik", "Соответствие вашему профилю"],
+  "Not enough data": ["Ma’lumot yetarli emas", "Недостаточно данных"],
   "Forms": ["Shakllar", "Формы"],
   "Highly selective: fewer than 15% are admitted.": ["Juda tanlovli: 15% dan kamrog‘i qabul qilinadi.", "Очень высокая конкуренция: принимают менее 15%."],
   "In my list": ["Ro‘yxatimda", "В моём списке"],

@@ -21,7 +21,14 @@ export function eligibleScholarship(item, student) {
   return !item.eligible_grades || String(item.eligible_grades).split(',').map((value) => value.trim()).includes(String(student.grade));
 }
 
-export const DEFAULT_COLLEGE_FILTERS = { country: '', bands: ['reach', 'target', 'safety'], price: 'all', aid: [], testOptional: false, satFit: false, publicOnly: false };
+// Admission bands the filter offers; 'unknown' is a university with no band for the student.
+export const COLLEGE_BANDS = ['reach', 'target', 'safety', 'unknown'];
+
+const allBands = (bands) => COLLEGE_BANDS.every((band) => bands.includes(band));
+
+export const bandLabel = (band) => band === 'unknown' ? t("Not enough data") : label(band);
+
+export const DEFAULT_COLLEGE_FILTERS = { country: '', bands: COLLEGE_BANDS, price: 'all', aid: [], testOptional: false, satFit: false, publicOnly: false };
 
 // Admission band -> Application.tier. An unknown band has no tier: the student picks one.
 export const BAND_TIERS = { reach: 'dream', target: 'target', safety: 'safety' };
@@ -48,7 +55,7 @@ export function collegeSearchQuery({ query = '', filters = DEFAULT_COLLEGE_FILTE
   if (filters.country) params.set('country', filters.country);
   if (filters.price !== 'all') params.set('price', filters.price);
   if (filters.aid.length) params.set('aid', filters.aid.join(','));
-  if (filters.bands.length < 3) params.set('bands', filters.bands.join(','));
+  if (!allBands(filters.bands)) params.set('bands', filters.bands.join(','));
   if (filters.testOptional) params.set('test_optional', 'true');
   if (filters.satFit) params.set('sat_fit', 'true');
   if (filters.publicOnly) params.set('public', 'true');
@@ -79,7 +86,7 @@ export function collegeFilterChips(filters, setFilters, budget) {
   const reset = (change) => () => setFilters((current) => ({ ...current, ...change }));
   const chips = [];
   if (filters.country) chips.push({ key: 'country', text: filters.country, clear: reset({ country: '' }) });
-  if (filters.bands.length < 3) chips.push({ key: 'bands', text: filters.bands.map(label).join(', ') || t("No band"), clear: reset({ bands: DEFAULT_COLLEGE_FILTERS.bands }) });
+  if (!allBands(filters.bands)) chips.push({ key: 'bands', text: filters.bands.map(bandLabel).join(', ') || t("No band"), clear: reset({ bands: DEFAULT_COLLEGE_FILTERS.bands }) });
   if (filters.price !== 'all') chips.push({ key: 'price', text: filters.price === 'budget' ? `${t("Within budget")} ${money(budget)}` : priceCapLabel(filters.price), clear: reset({ price: 'all' }) });
   COLLEGE_AID_FLAGS.filter(([flag]) => filters.aid.includes(flag)).forEach(([flag, title]) => chips.push({ key: flag, text: t(title), clear: reset({ aid: filters.aid.filter((item) => item !== flag) }) }));
   if (filters.testOptional) chips.push({ key: 'testOptional', text: t("Test optional"), clear: reset({ testOptional: false }) });

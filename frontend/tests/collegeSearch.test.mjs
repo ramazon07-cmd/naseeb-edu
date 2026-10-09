@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
-const { COLLEGE_PAGE_SIZES, DEFAULT_COLLEGE_FILTERS, collegeSearchQuery } = await import('../src/lib/college.js');
+const { COLLEGE_BANDS, COLLEGE_PAGE_SIZES, DEFAULT_COLLEGE_FILTERS, collegeSearchQuery } = await import('../src/lib/college.js');
 
 const query = (options) => Object.fromEntries(new URLSearchParams(collegeSearchQuery(options)));
 
@@ -23,6 +23,20 @@ test('only filters that differ from the defaults are sent', () => {
 test('QS filters apply only in the QS view, and unticking every band is sent as an empty list', () => {
   assert.deepEqual(query({ view: 'qs', qsFilters: { region: 'Europe', size: '' } }), { region: 'Europe', sort: 'ranking', page_size: '10' });
   assert.deepEqual(query({ filters: { ...DEFAULT_COLLEGE_FILTERS, bands: [] } }), { bands: '', sort: 'ranking', page_size: '10' });
+});
+
+test('every band, unknown included, is checked by default and then sends no band filter', () => {
+  assert.deepEqual(COLLEGE_BANDS, ['reach', 'target', 'safety', 'unknown']);
+  assert.deepEqual(DEFAULT_COLLEGE_FILTERS.bands, COLLEGE_BANDS);
+  assert.equal(query({}).bands, undefined);
+  assert.equal(query({ filters: { ...DEFAULT_COLLEGE_FILTERS, bands: ['unknown', 'safety', 'target', 'reach'] } }).bands, undefined);
+});
+
+test('unticking a band sends the checked set, keeping unknown while it stays checked', () => {
+  const bands = (list) => query({ filters: { ...DEFAULT_COLLEGE_FILTERS, bands: list } }).bands;
+  assert.equal(bands(['target', 'safety', 'unknown']), 'target,safety,unknown');
+  assert.equal(bands(['reach', 'target', 'safety']), 'reach,target,safety');
+  assert.equal(bands(['unknown']), 'unknown');
 });
 
 test('the search is trimmed to what the server accepts', () => {
