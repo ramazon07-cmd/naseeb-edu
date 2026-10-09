@@ -8,7 +8,6 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ErrorDetail, ValidationError
 from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
-from apps.admissions.assistant import assistant_available
 from apps.admissions.listing import ListQueryMixin
 from . import entitlements
 from .admin_permissions import IsSupportStaff, SupportReadOpsWrite, has_tier
@@ -238,7 +237,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
             ).first()
         data['workspace'] = entitlements.workspace_summary(subscription)
         # Same rules as the chat view, so the frontend only offers what will work.
-        data['assistant_enabled'] = assistant_available(request.user)
+        data['assistant_enabled'] = entitlements.assistant_available(request.user, subscription)
         return Response(data)
 
     @action(

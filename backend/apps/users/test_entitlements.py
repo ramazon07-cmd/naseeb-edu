@@ -273,7 +273,7 @@ class FeatureFlagTests(APITestCase):
         use_plan(self.school, code='no-ai', features={**features, 'ai_assistant': False, 'essay_coach': False})
         self.client.force_authenticate(self.student_user)
 
-    @override_settings(AI_ASSISTANT_ENABLED=True, AI_GATEWAY_API_KEY='')
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='')
     def test_assistant_is_gated_by_the_plan(self):
         response = self.client.post(
             '/api/assistant/chat/', {'messages': [{'role': 'user', 'content': 'Hello'}]}, format='json',

@@ -652,7 +652,7 @@ class CrossTenantEndpointSweepTests(CrossTenantFixture, APITestCase):
 
     # -- assistant ----------------------------------------------------------------
 
-    @override_settings(AI_ASSISTANT_ENABLED=True)
+    @override_settings(OUTBOUND_AI_ENABLED=True)
     def test_assistant_context_holds_only_the_callers_own_aggregates(self):
         for counselor, profile in ((self.counselor_a, self.student_a), (self.solo, self.student_w)):
             context = build_role_context(self.fresh(counselor))

@@ -1,15 +1,18 @@
 """Role isolation: read-only AI assistant."""
 from datetime import date
+from unittest import mock
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
-from ..assistant import build_role_context, redact_pii
+from ..assistant import AssistantRateThrottle, build_role_context, redact_pii
 from ..models import Task
 from ..tenancy import set_student_active
 from apps.users.models import PLAN_FEATURES, Plan, User, WorkspaceSubscription
 from .base import RoleIsolationBase
 
 
-@override_settings(AI_ASSISTANT_ENABLED=True)
+@override_settings(OUTBOUND_AI_ENABLED=True)
 class AssistantRoleIsolationTests(RoleIsolationBase):
     @override_settings(AI_GATEWAY_API_KEY='')
     def test_student_assistant_streams_read_only_fallback(self):
@@ -103,7 +106,7 @@ class AssistantSwitchTests(RoleIsolationBase):
         self.client.force_authenticate(user)
         return self.client.get('/api/users/accounts/me/').data['assistant_enabled']
 
-    @override_settings(AI_ASSISTANT_ENABLED=False, AI_GATEWAY_API_KEY='test-secret-that-must-not-be-called')
+    @override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='test-secret-that-must-not-be-called')
     def test_disabled_assistant_refuses_chat_and_me_hides_it(self):
         self.assertIs(self.me(self.student_a_user), False)
         self.assertIs(self.me(self.counselor), False)
@@ -113,18 +116,24 @@ class AssistantSwitchTests(RoleIsolationBase):
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(response.data['code'], 'assistant_disabled')
 
-    @override_settings(AI_ASSISTANT_ENABLED=True)
+    @override_settings(OUTBOUND_AI_ENABLED=True)
     def test_me_reports_access_for_allowed_roles_only(self):
         self.assertIs(self.me(self.student_a_user), True)
         self.assertIs(self.me(self.counselor), True)
         for user in (self.teacher, self.organization):
             self.assertIs(self.me(user), False, user.role)
-        parent = User.objects.create_user(username='switch-parent', email='switch-parent@example.com', password='StrongPass123!', role=User.Role.PARENT)
-        admin = User.objects.create_user(username='switch-admin', email='switch-admin@example.com', password='StrongPass123!', role=User.Role.ADMIN)
+        parent = User.objects.create_user(
+            username='switch-parent', email='switch-parent@example.com', password='StrongPass123!',
+            role=User.Role.PARENT,
+        )
+        admin = User.objects.create_user(
+            username='switch-admin', email='switch-admin@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN,
+        )
         self.assertIs(self.me(parent), False)
         self.assertIs(self.me(admin), False)
 
-    @override_settings(AI_ASSISTANT_ENABLED=True)
+    @override_settings(OUTBOUND_AI_ENABLED=True)
     def test_me_follows_the_school_plan(self):
         plan = Plan.objects.create(
             code='no-assistant', name='No assistant',
@@ -134,3 +143,40 @@ class AssistantSwitchTests(RoleIsolationBase):
         self.assertIs(self.me(self.student_a_user), False)
         self.assertIs(self.me(self.counselor), False)
         self.assertIs(self.me(self.student_b_user), True)
+
+    def no_assistant_plan(self):
+        plan = Plan.objects.create(
+            code='no-assistant-2', name='No assistant',
+            features={key: key != 'ai_assistant' for key in PLAN_FEATURES},
+        )
+        WorkspaceSubscription.objects.filter(school=self.school_a).update(plan=plan)
+
+    def post_without_touching_the_rate_limit(self):
+        self.client.force_authenticate(self.student_a_user)
+        with mock.patch.object(AssistantRateThrottle, 'allow_request', return_value=True) as allow:
+            response = self.client.post(
+                '/api/assistant/chat/', {'messages': [{'role': 'user', 'content': 'Hello'}]}, format='json',
+            )
+        allow.assert_not_called()
+        return response
+
+    @override_settings(OUTBOUND_AI_ENABLED=False)
+    def test_switched_off_assistant_does_not_use_the_rate_limit(self):
+        response = self.post_without_touching_the_rate_limit()
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data['code'], 'assistant_disabled')
+
+    @override_settings(OUTBOUND_AI_ENABLED=True)
+    def test_plan_without_assistant_does_not_use_the_rate_limit(self):
+        self.no_assistant_plan()
+        response = self.post_without_touching_the_rate_limit()
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['code'], 'feature_not_in_plan')
+
+    def test_me_reuses_the_loaded_subscription(self):
+        def count_queries(enabled):
+            with override_settings(OUTBOUND_AI_ENABLED=enabled), CaptureQueriesContext(connection) as queries:
+                self.me(self.student_a_user)
+            return len(queries)
+        count_queries(False)
+        self.assertEqual(count_queries(True), count_queries(False))

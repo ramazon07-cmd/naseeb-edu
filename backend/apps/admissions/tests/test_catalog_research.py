@@ -234,7 +234,7 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
         scores = latest_assessment_scores(self.student_a)
         self.assertEqual(set(scores), {'personality', 'interests', 'subjects', 'reasoning'})
 
-    @override_settings(AI_ASSISTANT_ENABLED=False, GROQ_API_KEY='test-key')
+    @override_settings(OUTBOUND_AI_ENABLED=False, GROQ_API_KEY='test-key')
     def test_ai_switch_off_keeps_education_guidance_offline(self):
         self.client.force_authenticate(self.student_a_user)
         with mock.patch('urllib.request.urlopen') as urlopen:
