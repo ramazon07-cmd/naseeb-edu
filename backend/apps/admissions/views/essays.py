@@ -14,6 +14,12 @@ from ..scoping import owns_essays_only, scope_essays, shared_essay_lookups
 from .common import ScopedQuerysetMixin, StudentRecordListMixin
 
 
+# Translated by code in the app (translations/errorCodes.js) and by text for older
+# clients (users/api_messages.py); a test keeps the two wordings the same.
+ESSAY_CHANGED_MESSAGE = 'This essay changed since you opened it. Check the latest version, then save your edit again.'
+PRECONDITION_REQUIRED_MESSAGE = 'Reload the essay before changing its text, so newer changes are not overwritten.'
+
+
 def _as_text(value):
     return '' if value is None else str(value)
 
@@ -98,17 +104,11 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
         original = self.request.data.get('original')
         original = original if isinstance(original, dict) else {}
         if 'content' in changed and 'content' not in original:
-            raise CodedError(
-                'Reload the essay before changing its text, so newer changes are not overwritten.',
-                'precondition_required', 428,
-            )
+            raise CodedError(PRECONDITION_REQUIRED_MESSAGE, 'precondition_required', 428)
         for field in changed & set(original):
             current = getattr(essay, Essay._meta.get_field(field).attname)
             if _as_text(current) != _as_text(original[field]):
-                raise CodedError(
-                    'This essay changed since you opened it. Reload it to see the latest version, then make your edit again.',
-                    'essay_changed', 409,
-                )
+                raise CodedError(ESSAY_CHANGED_MESSAGE, 'essay_changed', 409)
 
     @staticmethod
     def _replace_text(essay, content):

@@ -1,9 +1,11 @@
 // Messages for API error codes ({detail, code} bodies), keyed by the code: [uz, ru].
-// English uses the server's own `detail`, so only translations live here.
+// English uses the server's own `detail`, so only translations live here. The server's
+// table for older clients (backend/apps/users/api_messages.py) must use the same
+// wording; backend test_error_code_translations checks it.
 export const ERROR_CODE_TRANSLATIONS = {
   essay_changed: [
-    'Siz ochganingizdan keyin insho o‘zgardi. Eng so‘nggi versiya yuklandi, kiritganlaringiz saqlanib qoldi — tekshirib, qayta saqlang.',
-    'Эссе изменилось после того, как вы его открыли. Загружена последняя версия, ваши правки остались в форме — проверьте и сохраните ещё раз.',
+    'Siz ochganingizdan keyin insho o‘zgardi. Eng so‘nggi versiyani tekshiring va tahrirni qayta saqlang.',
+    'Эссе изменилось после того, как вы его открыли. Проверьте последнюю версию и сохраните правку ещё раз.',
   ],
   precondition_required: [
     'Matnni o‘zgartirishdan oldin inshoni yangilang, shunda yangiroq o‘zgarishlar ustidan yozilmaydi.',
