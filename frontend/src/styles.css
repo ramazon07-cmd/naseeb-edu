@@ -13363,6 +13363,15 @@ a:focus-visible {
   --tier: var(--tier-safety);
 }
 
+.tier-band.unknown {
+  --tier: transparent;
+}
+
+.tier-band.unknown::before {
+  border: 1.5px dashed var(--muted);
+  border-radius: 2px;
+}
+
 .tag-row {
   display: flex;
   flex-wrap: wrap;
@@ -14436,6 +14445,20 @@ a:focus-visible {
 
 .drawer-tiers > span + span {
   border-left: 1px solid var(--border);
+}
+
+.drawer-fit-error {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+.fit-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--danger);
+  font-size: var(--text-sm);
 }
 
 .drawer-tiers b {

@@ -3,7 +3,7 @@ import { CalendarDays, Check, Clock3, HandCoins } from 'lucide-react';
 import { formatNumberLocale, t } from '../i18n';
 import { dateText } from '../lib/format';
 import { label } from '../lib/labels';
-import { COLLEGE_AID_FLAGS, PRICE_SCALE_MAX, SAT_SCALE, SCORE_PARTS, daysUntil, dueLabel, dueTone, scalePercent } from '../lib/college';
+import { COLLEGE_AID_FLAGS, PRICE_SCALE_MAX, SAT_SCALE, SCORE_PARTS, bandLabel, daysUntil, dueLabel, dueTone, scalePercent } from '../lib/college';
 
 // One checkbox/radio row of a filter list, with its live result count.
 export function FilterOption({ type = 'checkbox', name, checked, disabled = false, onChange, count, children }) {
@@ -11,7 +11,7 @@ export function FilterOption({ type = 'checkbox', name, checked, disabled = fals
 }
 
 export function TierBand({ value }) {
-  return <span className={`tier-band ${value}`}>{label(value)}</span>;
+  return <span className={`tier-band ${value}`}>{bandLabel(value)}</span>;
 }
 
 export function DeadlineChip({ date, kind }) {

@@ -1,0 +1,85 @@
+"""University search ignores accents, reads Cyrillic and knows every spelling of a country."""
+import importlib
+
+from django.apps import apps as django_apps
+from rest_framework.test import APITestCase
+
+from apps.admissions.models import University
+from apps.admissions.search_text import fold, search_variants, university_search_text
+from apps.admissions.test_audit_base import AuditBaseMixin
+
+
+class FoldingTests(APITestCase):
+    def test_terms_and_rows_fold_alike(self):
+        self.assertEqual(fold('São Paulo'), 'sao paulo')
+        self.assertEqual(fold('İstanbul Teknik Üniversitesi'), 'istanbul teknik universitesi')
+        self.assertEqual(fold('O‘zbekiston'), 'ozbekiston')
+        self.assertIn('harvard', search_variants('Гарвард'))
+        self.assertIn('columbia', search_variants('Колумбия'))
+        self.assertIn('oxford', search_variants('Оксфорд'))
+        self.assertEqual(search_variants('Sao'), ['sao'])
+
+    def test_search_text_lists_every_spelling_of_the_country(self):
+        text = university_search_text('Koç University', 'İstanbul', 'Türkiye').split('\n')
+        self.assertEqual(text[:2], ['koc university', 'istanbul'])
+        self.assertTrue({'turkey', 'turkiye'} <= set(text))
+        self.assertTrue({'us', 'usa', 'united states'} <= set(university_search_text('MIT', '', 'United States').split('\n')))
+
+    def test_save_and_partial_save_keep_search_text(self):
+        university = University.objects.create(name='Universidade de São Paulo', country='Brazil', city='São Paulo')
+        self.assertIn('universidade de sao paulo', university.search_text)
+        university.city = 'Ribeirão Preto'
+        university.save(update_fields=['city'])
+        university.refresh_from_db()
+        self.assertIn('ribeirao preto', university.search_text)
+
+    def test_the_migration_fills_existing_rows(self):
+        University.objects.bulk_create([University(name='Koç University', country='Türkiye')])
+        University.objects.filter(name='Koç University').update(search_text='')
+        migration = importlib.import_module('apps.admissions.migrations.0070_university_search_text')
+        migration.fill_search_text(django_apps, None)
+        self.assertIn('koc university', University.objects.get(name='Koç University').search_text)
+
+
+class SearchEndpointTests(AuditBaseMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        make = University.objects.create
+        self.usp = make(name='Universidade de São Paulo', country='Brazil', city='São Paulo')
+        self.harvard = make(name='Harvard University', country='United States', city='Cambridge')
+        self.ohio = make(name='Ohio State University', country='USA', city='Columbus')
+        self.koc = make(name='Koç University', country='Türkiye', city='İstanbul')
+        self.bilkent = make(name='Bilkent University', country='Turkey', city='Ankara')
+        self.oxford = make(name='University of Oxford', country='United Kingdom', city='Oxford')
+        self.client.force_authenticate(self.student_user)
+
+    def found(self, term):
+        names = {}
+        for url in ('/api/college-search/?page_size=100&search=', '/api/universities/?page_size=100&search='):
+            response = self.client.get(url + term)
+            self.assertEqual(response.status_code, 200, response.data)
+            names[url] = {row['name'] for row in response.data['results']}
+        self.assertEqual(*names.values())
+        return next(iter(names.values()))
+
+    def test_accents_do_not_matter(self):
+        self.assertEqual(self.found('Sao Paulo'), {self.usp.name})
+        self.assertEqual(self.found('São'), {self.usp.name})
+        self.assertEqual(self.found('koc'), {self.koc.name})
+        self.assertEqual(self.found('Istanbul'), {self.koc.name})
+
+    def test_cyrillic_is_transliterated(self):
+        self.assertEqual(self.found('Гарвард'), {self.harvard.name})
+        self.assertEqual(self.found('Оксфорд'), {self.oxford.name})
+
+    def test_country_spellings_find_one_country(self):
+        united_states = {self.harvard.name, self.ohio.name}
+        self.assertEqual(self.found('USA'), united_states)
+        self.assertEqual(self.found('United States'), united_states)
+        self.assertTrue(united_states <= self.found('US'))
+        turkey = {self.koc.name, self.bilkent.name}
+        for spelling in ('Turkey', 'Türkiye', 'Turkiye'):
+            self.assertEqual(self.found(spelling), turkey, spelling)
+
+    def test_the_detail_does_not_expose_search_text(self):
+        self.assertNotIn('search_text', self.client.get(f'/api/universities/{self.koc.id}/').data)

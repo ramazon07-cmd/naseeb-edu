@@ -24,7 +24,7 @@ hardware before buying capacity.
 | Errors | Sentry when `SENTRY_DSN` is set (no personal data; auth headers, cookies, passwords and tokens are scrubbed). |
 | Queries | Student, account, essay, application, channel and message lists, the dashboard and schools run a fixed number of queries per page, however many rows there are. Tests check this (`test_audit_query_counts.py`, `test_perf_regressions.py`). |
 | Indexes | Composite indexes for the hot filters: tasks, applications, documents, notifications and the activity log (migration `0043_audit_indexes`). |
-| List pages | List endpoints accept `?page_size=` up to 200 (the default is still 25). `api.list()` asks for 200, so a sign-in loads each collection in one or a few requests instead of one per 25 rows. |
+| List pages | List endpoints accept `?page_size=` up to 100 (`core/pagination.py` `MAX_PAGE_SIZE`; the default is still 25). `api.list()` asks for 100 (`LIST_PAGE_SIZE`), so a sign-in loads each collection in one or a few requests instead of one per 25 rows. College Search pages 10, 25, 50 or 100 universities at a time ([docs/college-search.md](college-search.md)). |
 | Catalogue cache | The university, scholarship and programme lists are cached for 5 minutes after the permission checks. Saving or deleting a catalogue row changes the cache version, so edits show at once. |
 | Polling | The Messages page polls an open conversation every 8 s and slows down to every 30 s while nothing changes; a new message, a send or refocusing the window resets it. |
 | Logging | Log lines go to stdout and include the process and thread. `LOG_LEVEL` sets the level. |
@@ -126,9 +126,12 @@ page sizes.
 
 p95 at 500 tabs (6-minute run with the sign-in ramp) and queries per request,
 before → after; then app CPU, DB time and response size per request after the
-fixes (CPU and DB from the 50-tab run, without contention). List endpoints
-return up to 200 rows per request after the fixes and 25 before, so their
-per-request cost grew while their request count fell.
+fixes (CPU and DB from the 50-tab run, without contention). In this run list
+endpoints returned up to 200 rows per request after the fixes and 25 before,
+so their per-request cost grew while their request count fell; lists are now
+capped at 100 rows. The old `GET /college-research/` row (whole-catalogue
+scoring on every visit) is gone: College Search is measured
+[below](#college-search-measured).
 
 | Endpoint | p95 ms | Queries | CPU ms | DB ms | KB |
 |---|---|---|---|---|---|
@@ -142,7 +145,6 @@ per-request cost grew while their request count fell.
 | `GET /challenge-attempts/` | 200 → 17 | 2.6 → 2.5 | 7.5 | 3.6 | 0.3 |
 | `GET /channel-messages/` (poll) | 170 → 23 | 4.0 → 4.0 | 11.7 | 3.7 | 7.5 |
 | `POST /channel-messages/` | 78 → 14 | 7.0 → 7.0 | 5.4 | 6.4 | 0.4 |
-| `GET /college-research/` | 620 → 61 | 9.3 → 9.3 | 16.6 | 2.4 | 44.4 |
 | `GET /counselor-roadmap-templates/` | 470 → 31 | 2.9 → 4.0 | 2.4 | 2.8 | 1.8 |
 | `GET /counselor-roadmaps/` | 870 → 70 | 4.3 → 6.0 | 4.0 | 4.8 | 3.4 |
 | `GET /dashboard/stats/` | 1200 → 75 | 10.8 → 10.9 | 4.7 | 11.2 | 0.6 |
@@ -187,6 +189,17 @@ per-request cost grew while their request count fell.
 Query counts include the one query that authenticates the request. Before the
 fixes, 500 tabs saturated the instance during the sign-in ramp, so every
 endpoint's p95 was ~1.1 s there; the table shows what the queueing hid.
+
+### College Search (measured)
+
+`GET /api/college-search/` (see [college-search.md](college-search.md)) scores
+the 1,506-university catalogue only when it must: to sort by fit, filter by band
+or count bands. The first such request for a student (cold) takes ~118 ms and
+builds the fit map, `{university_id: (score, band)}`, ~12 KB cached per
+student, profile answers and catalogue version. Every later page, re-sort or
+refilter (warm) takes 5–10 ms. The map lives in the Django cache, so it is
+shared across gunicorn processes and instances only when `REDIS_URL` is set;
+with the per-process memory cache each process pays the cold cost again.
 
 Measured with single requests on the same data: an admin's account list (200
 rows) went from 341 to 3 queries and 132 to 25 ms, a school account's from 602

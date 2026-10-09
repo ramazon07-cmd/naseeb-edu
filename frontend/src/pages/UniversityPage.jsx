@@ -11,7 +11,11 @@ import { initials, label, ownStudent } from '../lib/labels';
 import { daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 
-function UniversityOverview({ university, result, research, researchLoading, student, application, essays, onLeave, setPage }) {
+function FitError({ onRetry }) {
+  return <span className="fit-error" role="alert">{t("Couldn't load fit")} <button type="button" className="link-button" onClick={onRetry}>{t("Retry")}</button></span>;
+}
+
+function UniversityOverview({ university, result, fitStatus, onRetryFit, research, researchLoading, student, application, essays, onLeave, setPage }) {
   const budget = Number(student?.budget_usd) || 0;
   const sat = Number(student?.sat_score) || 0;
   const net = university.net_price_usd;
@@ -23,6 +27,8 @@ function UniversityOverview({ university, result, research, researchLoading, stu
     <div className="stack-16">
       <InfoCard title="Fit for your profile">{result ? <div className="fit-summary"><div className="fit-score"><b>{formatNumberLocale(result.match_score)}</b><span>{label(result.match_label)}</span><small>{t("Not an admission probability. It measures fit, preference and affordability.")}</small></div><ScoreBreakdown breakdown={result.score_breakdown} /></div> :
       researchLoading ? <p className="note"><RefreshCw className="spin" size={14} aria-hidden="true" /> {t("Analyzing your profile")}</p> :
+      research?.ready && fitStatus === 'loading' ? <p className="note" role="status"><RefreshCw className="spin" size={14} aria-hidden="true" /> {t("Checking fit…")}</p> :
+      research?.ready && fitStatus === 'error' ? <p className="note"><FitError onRetry={onRetryFit} /></p> :
       <div className="fit-missing"><p className="note">{research?.ready ? t("Detailed scoring is not available for this university yet.") : t("Complete your research profile to see how well this university fits you.")}</p>{!research?.ready && <button type="button" className="button quiet small" onClick={onLeave}>{t("Complete profile")}</button>}</div>}</InfoCard>
       {result && <div className="pair">
         <InfoCard title="Why it fits"><ul className="note-list ok">{result.reasons.map((reason) => <li key={fitReasonText(reason)}><CheckCircle2 size={15} aria-hidden="true" /><span>{fitReasonText(reason)}</span></li>)}</ul></InfoCard>
@@ -127,25 +133,29 @@ function UniversityNeeds({ university, needs, setPage }) {
   </div>;
 }
 
-export function UniversityPage({ data, university, result, research, researchLoading, application, busy, onAdd, onRemove, onBack, setPage }) {
+export function UniversityPage({ data, university, result, fitStatus, onRetryFit, research, researchLoading, application, busy, onAdd, onRemove, onBack, setPage }) {
   const [tab, setTab] = useState('overview');
   const student = ownStudent(data);
   const scholarships = data.scholarships.filter((item) => item.is_active !== false && (item.university === university.id || item.university == null));
   const essays = application ? data.essays.filter((essay) => essay.application === application.id) : [];
   const needs = universityNeeds(data, university, application, student);
+  // "Add" waits for the fit: picking a band by hand is only for a settled fit without one.
+  const fitPending = researchLoading || (research?.ready && fitStatus === 'loading');
+  const fitFailed = !researchLoading && research?.ready && fitStatus === 'error';
   return <div className="section-stack student-portal college-university">
     <nav className="crumb" aria-label={t("Breadcrumb")}><button type="button" className="link-button" onClick={onBack}><ArrowLeft size={14} aria-hidden="true" /> {t("College Search")}</button><span aria-hidden="true">/</span><b>{university.name}</b></nav>
     <section className="info-card university-head" aria-label={university.name}>
       <div className="university-head-top"><span className="monogram" aria-hidden="true">{initials(university.name)}</span><div><h2>{university.name}</h2>
         <p className="university-facts"><span><MapPin size={14} aria-hidden="true" /> {[university.city, university.country].filter(Boolean).join(', ')}</span>{institutionStatus(university, label) && <span>{institutionStatus(university, label)}</span>}{university.campus_setting && <span>{tx`${label(university.campus_setting)} campus`}</span>}<span>{label(university.degree_type)}</span>{result?.admission_band && <TierBand value={result.admission_band} />}</p></div></div>
       <div className="university-actions">
-        {application ? <span className="tag ok large"><Check size={14} aria-hidden="true" /> {t("In my list")}</span> : <button type="button" className="button primary" disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={16} aria-hidden="true" /> {t("Add to my list")}</button>}
+        {application ? <span className="tag ok large"><Check size={14} aria-hidden="true" /> {t("In my list")}</span> : <button type="button" className="button primary" disabled={busy || fitPending || fitFailed} aria-busy={busy || fitPending} onClick={onAdd}>{fitPending ? <><RefreshCw className="spin" size={16} aria-hidden="true" /> {t("Checking fit…")}</> : <><Plus size={16} aria-hidden="true" /> {t("Add to my list")}</>}</button>}
+        {!application && fitFailed && <FitError onRetry={onRetryFit} />}
         {university.website && <a className="button quiet" href={university.website} target="_blank" rel="noreferrer">{t("Official site")} <ExternalLink size={14} aria-hidden="true" /></a>}
         {application && <button type="button" className="link-button push-end" disabled={busy} aria-busy={busy} onClick={onRemove}>{t("Remove from my list")}</button>}
       </div>
     </section>
     <PortalTabs active={tab} onChange={setTab} items={[['overview', 'Overview'], ['aid', 'Scholarships & Aid', scholarships.length], ['needs', 'What you need', needs.total]]} />
-    {tab === 'overview' && <UniversityOverview {...{ university, result, research, researchLoading, student, application, essays, setPage }} onLeave={onBack} />}
+    {tab === 'overview' && <UniversityOverview {...{ university, result, fitStatus, onRetryFit, research, researchLoading, student, application, essays, setPage }} onLeave={onBack} />}
     {tab === 'aid' && <UniversityAid {...{ university, scholarships, student }} />}
     {tab === 'needs' && <UniversityNeeds {...{ university, needs, setPage }} />}
   </div>;
