@@ -245,8 +245,9 @@ function AppShell({ user, data, stats, page, setPage, query, setQuery, loading, 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- language changes the translated labels
   const searchIndexData = useMemo(() => buildGlobalSearchIndex(user, data), [user, data, language]);
   // Staff lists are paged, so records beyond what is loaded come from the server.
-  // Students search on the server too: the university catalogue is not held in the browser.
-  const remoteSearch = useRemoteSearch(query, usesPagedLists(user) || user?.role === 'student');
+  // Students hold their own records; only the university catalogue is searched on the server.
+  const studentSearch = !usesPagedLists(user) && user?.role === 'student';
+  const remoteSearch = useRemoteSearch(query, usesPagedLists(user) || studentSearch, studentSearch ? 'universities' : '');
   const searchResults = useMemo(() => mergeSearchResults(
     globalSearchResults(searchIndexData, query),
     remoteSearchEntries(remoteSearch.results, remoteSearchDestinations(user)).map((entry) => ({ ...entry, subtitle: entry.subtitle || t(PAGE_META[entry.destination].label) })),

@@ -445,7 +445,7 @@ export const api = {
     params.set('page_size', '1')
     return (await request(`/${resource}/?${params}`, {}, true, false))?.count ?? 0
   },
-  search: (query, signal) => request(`/search/?q=${encodeURIComponent(query)}`, { signal }, true, false),
+  search: (query, signal, types = '') => request(`/search/?q=${encodeURIComponent(query)}${types ? `&types=${encodeURIComponent(types)}` : ''}`, { signal }, true, false),
   retrieve: (resource, id) => request(`/${resource}/${encodeURIComponent(id)}/`),
   create: (resource, payload) => request(`/${resource}/`, {
     method: 'POST',

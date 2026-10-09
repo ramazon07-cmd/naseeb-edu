@@ -142,8 +142,13 @@ class GlobalSearchView(APIView):
         if len(' '.join(terms)) < SEARCH_MIN_LENGTH:
             return Response({'query': raw.strip(), 'results': {}})
         query = ' '.join(terms)
+        types = search_types_for(request.user)
+        # ?types=a,b narrows further (students search only what the browser does not hold).
+        wanted = {name for name in request.query_params.get('types', '').split(',') if name}
+        if wanted:
+            types = [name for name in types if name in wanted]
         results = {}
-        for key in search_types_for(request.user):
+        for key in types:
             viewset_class, basename, fields, ordering, describe = SEARCH_TYPES[key]
             queryset, view = scoped_list_queryset(viewset_class, basename, request)
             if queryset is None:
