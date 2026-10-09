@@ -17,13 +17,14 @@ class CollegeSearchFixture(AuditBaseMixin):
         make = University.objects.create
         self.mit = make(
             name='Massachusetts Institute of Technology', country='United States', city='Cambridge', ranking=1,
-            acceptance_rate='4.00', sat_min=1520, sat_max=1580, net_price_usd=20000, offers_need_based_aid=True,
+            acceptance_rate='4.00', sat_min=1520, sat_max=1580, act_min=34, act_max=36, net_price_usd=20000,
+            intl_cost_usd=85000, offers_need_based_aid=True,
             meets_full_need=True, institution_type='private', application_deadline=date(2027, 1, 1),
             qs_data={'region': 'Americas', 'size': 'M', 'overall_score': 100.0},
         )
         self.state = make(
             name='Ohio State University', country='USA', city='Columbus', ranking=150, acceptance_rate='53.00',
-            sat_min=1200, sat_max=1400, net_price_usd=26000, offers_merit_aid=True, institution_type='public',
+            sat_min=1200, sat_max=1400, net_price_usd=26000, intl_cost_usd=48000, offers_merit_aid=True, institution_type='public',
             test_optional=True, application_deadline=date(2026, 11, 1), qs_data={'region': 'Americas', 'size': 'XL'},
         )
         self.oxford = make(
@@ -105,7 +106,9 @@ class FilterAndSortTests(CollegeSearchFixture, APITestCase):
         self.assertNotIn('Türkiye', countries)
 
     def test_price_aid_testing_and_type_filters(self):
-        self.assertEqual(set(self.names('price=25000')), {self.mit.name, self.tashkent.name})
+        # US rows are priced at the international cost of attendance, not the domestic net price.
+        self.assertEqual(set(self.names('price=25000')), {self.tashkent.name})
+        self.assertEqual(set(self.names('price=40000')), {self.tashkent.name})
         self.ready_profile(budget_usd=5000)
         self.assertEqual(self.names('price=budget'), [self.tashkent.name])
         self.assertEqual(self.names('aid=offers_need_based_aid,meets_full_need'), [self.mit.name])
@@ -121,7 +124,7 @@ class FilterAndSortTests(CollegeSearchFixture, APITestCase):
     def test_sorts_put_missing_values_last(self):
         # Unranked rows follow, by name.
         self.assertEqual(self.names('sort=ranking'), [self.mit.name, self.oxford.name, self.state.name, self.unranked.name, self.tashkent.name])
-        self.assertEqual(self.names('sort=price')[:3], [self.tashkent.name, self.mit.name, self.state.name])
+        self.assertEqual(self.names('sort=price')[:3], [self.tashkent.name, self.state.name, self.mit.name])
         self.assertEqual(self.names('sort=deadline')[:2], [self.state.name, self.mit.name])
         self.assertEqual(self.names('sort=acceptance')[:3], [self.unranked.name, self.state.name, self.mit.name])
 
@@ -138,7 +141,10 @@ class FitTests(CollegeSearchFixture, APITestCase):
         scores = [row['fit']['match_score'] for row in rows]
         self.assertEqual(scores, sorted(scores, reverse=True))
         state = next(row for row in rows if row['id'] == self.state.id)
-        self.assertIn('Computer Science matches an available field of study', state['fit']['reasons'])
+        self.assertIn(
+            {'code': 'major_match', 'params': {'major': 'Computer Science'}, 'text': 'Computer Science matches an available field of study'},
+            state['fit']['reasons'],
+        )
         self.assertEqual(state['fit']['admission_band'], 'safety')
 
     def test_bands_filter_on_the_students_fit(self):
@@ -197,7 +203,7 @@ class FacetAndIdsTests(CollegeSearchFixture, APITestCase):
         self.assertEqual(facets['aid'], {'offers_need_based_aid': 1, 'offers_merit_aid': 1, 'offers_international_aid': 1, 'meets_full_need': 1})
         self.assertEqual((facets['test_optional'], facets['public'], facets['sat_fit']), (2, 2, 2))
         self.assertEqual(facets['qs']['region'], {'Americas': 2, 'Europe': 1, 'Asia': 1})
-        self.assertEqual(facets['bands'], {'reach': 1, 'target': 0, 'safety': 2})
+        self.assertEqual(facets['bands'], {'reach': 1, 'target': 0, 'safety': 2, 'unknown': 2})
         self.assertNotIn('facets', self.search('page=1'))
 
     def test_ids_return_just_those_rows(self):

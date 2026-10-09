@@ -7,6 +7,7 @@ import { FilterOption, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
 import { BAND_TIERS, COLLEGE_AID_FLAGS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
+import { fitReasonText } from '../lib/fitReasons';
 import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 import { useCollegeSearch } from '../hooks/useCollegeSearch';
 import { PageSkeleton } from '../components/states';
@@ -98,8 +99,8 @@ function CollegeRow({ university, detail, detailError, view, application, expand
     {expanded && <div className="uni-expand" id={panelId} role="cell">
       {view === 'qs' ? detail ? <QsUniversityDetails university={detail} /> : <p role="status">{detailError || t('Loading…')}</p> : fit && <div className="uni-expand-grid">
         <section className="college-detail-score"><h4>{t("Fit")}</h4><ScoreBreakdown breakdown={fit.score_breakdown} /></section><div className="college-detail-notes"><section><h4>{t("Why it fits")}</h4>
-        <ul className="note-list ok" aria-label={t("Why it fits")}>{fit.reasons.map((reason) => <li key={reason}><CheckCircle2 size={14} aria-hidden="true" /><span>{reason}</span></li>)}</ul></section><section><h4>{t("Watch-outs")}</h4>
-        <ul className="note-list gap" aria-label={t("Watch-outs")}>{fit.gaps.map((gap) => <li key={gap}><Clock3 size={14} aria-hidden="true" /><span>{gap}</span></li>)}</ul></section></div>
+        <ul className="note-list ok" aria-label={t("Why it fits")}>{fit.reasons.map((reason) => <li key={fitReasonText(reason)}><CheckCircle2 size={14} aria-hidden="true" /><span>{fitReasonText(reason)}</span></li>)}</ul></section><section><h4>{t("Watch-outs")}</h4>
+        <ul className="note-list gap" aria-label={t("Watch-outs")}>{fit.gaps.map((gap) => <li key={fitReasonText(gap)}><Clock3 size={14} aria-hidden="true" /><span>{fitReasonText(gap)}</span></li>)}</ul></section></div>
       </div>}
       <button type="button" className="button quiet small uni-open" onClick={onOpen}>{t("Open university")} <ArrowRight size={13} aria-hidden="true" /></button>
     </div>}

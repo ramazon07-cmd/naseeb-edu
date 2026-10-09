@@ -7,6 +7,7 @@ import { studentCenterMessages } from "./translations/studentCenter.js";
 import { essayLabPagesMessages } from "./translations/essayLabPages.js";
 import { accountMessages } from "./translations/account.js";
 import { errorCodeMessages } from "./translations/errorCodes.js";
+import { fitReasonMessages } from "./translations/fitReasons.js";
 
 import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
 
@@ -31,6 +32,7 @@ export const TRANSLATIONS = {
     ...essayLabPagesMessages("uz"),
     ...accountMessages("uz"),
     ...errorCodeMessages("uz"),
+    ...fitReasonMessages("uz"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
@@ -217,6 +219,7 @@ export const TRANSLATIONS = {
     ...essayLabPagesMessages("ru"),
     ...accountMessages("ru"),
     ...errorCodeMessages("ru"),
+    ...fitReasonMessages("ru"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",
@@ -391,7 +394,8 @@ export const TRANSLATIONS = {
     "Select university": "Выберите университет",
     "General essay": "Общее эссе",
   },
-  en: {},
+  // English is the source text everywhere else; fit reasons are keyed by code.
+  en: { ...fitReasonMessages("en") },
 };
 
 let activeLanguage = "en";

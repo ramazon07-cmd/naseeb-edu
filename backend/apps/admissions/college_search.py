@@ -13,7 +13,8 @@ profile answers and catalogue version, then cached.
 import hashlib
 import json
 
-from django.db.models import F, Prefetch, Q
+from django.db.models import Case, Count, F, IntegerField, OuterRef, Prefetch, Q, Subquery, When
+from django.db.models.functions import Coalesce
 from rest_framework import serializers
 
 from apps.users.cache_safety import cache_get, cache_set
@@ -21,7 +22,7 @@ from apps.users.cache_safety import cache_get, cache_set
 from .catalog_cache import CACHE_SECONDS, VERSION_KEY
 from .countries import country_key, country_name, country_spellings
 from .listing import MAX_SEARCH_LENGTH, search_terms, term_query
-from .models import University, UniversityProgram
+from .models import StudentProfile, University, UniversityProgram
 
 PAGE_SIZES = (10, 25, 50, 100)
 MAX_IDS = 100
@@ -30,24 +31,67 @@ SEARCH_FIELDS = ('name', 'city', 'country')
 MARKET_COUNTRIES = dict(University.Market.choices)
 PRICE_CAPS = {'25000': 25000, '40000': 40000}
 AID_FLAGS = ('offers_need_based_aid', 'offers_merit_aid', 'offers_international_aid', 'meets_full_need')
+OFFERED_AID = ('offers_international_aid', 'offers_merit_aid', 'offers_need_based_aid')
+# Any of these means the catalogue row was given aid details (frontend UniversityPage hasAidData);
+# without them a QS-only row's false aid flags mean "unknown", not "no aid".
+AID_DETAILS = (
+    'average_aid_usd', 'students_receiving_aid_percent', 'financial_aid_url', 'scholarship_deadline',
+    'aid_application_notes', 'need_blind', 'css_profile_required', 'fafsa_required', 'meets_full_need',
+)
+AID_AMOUNTS = ('average_aid_usd', 'students_receiving_aid_percent')
 BANDS = ('reach', 'target', 'safety')
+# A row without admission data has no band; the filter and the facets call it "unknown".
+UNKNOWN_BAND = 'unknown'
+BAND_CHOICES = (*BANDS, UNKNOWN_BAND)
 QS_FILTERS = ('region', 'size', 'focus', 'research')
+# What a student from abroad pays per year. A US row's net price is Scorecard's average for
+# domestic aid recipients (in-state ones at a public university), so it is only used where the
+# university gives international students aid; otherwise the international cost of attendance.
+# Rows outside the US keep their own price. ``cost_of_attendance`` is the same rule in Python.
+COST = Case(
+    When(market=University.Market.US, offers_international_aid=True, net_price_usd__isnull=False, then=F('net_price_usd')),
+    When(market=University.Market.US, then=F('intl_cost_usd')),
+    default=F('net_price_usd'),
+    output_field=IntegerField(),
+)
 ORDERINGS = {
     'ranking': (F('ranking').asc(nulls_last=True), 'name', 'id'),
-    'price': (F('net_price_usd').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
+    'price': (F('cost').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
     'deadline': (F('application_deadline').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
     'acceptance': (F('acceptance_rate').desc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
 }
 SORTS = (*ORDERINGS, 'fit')
-# The profile answers scoring needs; College Research asks for the missing ones.
-RESEARCH_FIELDS = ('gpa', 'sat_score', 'ielts_score', 'target_major', 'target_countries', 'budget_usd')
+# The profile answers scoring needs; College Research asks for the missing ones. Test scores
+# are not among them: a factor without a score is left out of the fit, not guessed.
+RESEARCH_FIELDS = ('gpa', 'target_major', 'target_countries', 'budget_usd')
 EVIDENCE = ('achievements', 'honors', 'researches', 'projects', 'internships', 'activities')
 SCORING_FIELDS = (
-    'id', 'country', 'ranking', 'sat_min', 'sat_max', 'popular_majors', 'net_price_usd', 'acceptance_rate',
-    'offers_international_aid', 'offers_merit_aid', 'offers_need_based_aid', 'test_optional',
+    'id', 'country', 'market', 'ranking', 'sat_min', 'sat_max', 'act_min', 'act_max', 'popular_majors',
+    'net_price_usd', 'intl_cost_usd', 'acceptance_rate', 'test_optional', *OFFERED_AID, *AID_DETAILS,
 )
-SAT_POINTS = 25
+TEST_POINTS = 25
+ENGLISH_POINTS = 8
 PRICE_POINTS = 12
+AID_POINTS = 8
+# How far below a range minimum still counts as "close".
+NEAR_MINIMUM = {'SAT': 80, 'ACT': 2}
+ENGLISH_TESTS = {'toefl': 'TOEFL', 'duolingo': 'Duolingo', 'pte': 'PTE', 'cambridge': 'Cambridge'}
+# Lowest score for each IELTS Academic band, highest first, from each test owner's published
+# concordance. A score below a table's lowest row is given the band under it.
+IELTS_CONCORDANCE = {
+    # ETS, "Linking TOEFL iBT Scores to IELTS Scores" (2010).
+    'toefl': ((118, 9), (115, 8.5), (110, 8), (102, 7.5), (94, 7), (79, 6.5), (60, 6), (46, 5.5), (35, 5), (32, 4.5), (0, 4)),
+    # Duolingo English Test, "Score interpretation: comparison with IELTS Academic" (2019, 991 test takers).
+    'duolingo': (
+        (155, 9), (145, 8.5), (135, 8), (125, 7.5), (115, 7), (105, 6.5), (95, 6), (85, 5.5), (75, 5),
+        (65, 4.5), (55, 4), (45, 3.5), (30, 3), (20, 2.5), (15, 2), (10, 1.5),
+    ),
+    # Pearson, PTE Academic and IELTS Academic concordance (2024 study, July 2025 report).
+    'pte': ((90, 9), (86, 8.5), (79, 8), (71, 7.5), (63, 7), (55, 6.5), (47, 6), (39, 5.5), (31, 5), (24, 4.5), (0, 4)),
+    # Cambridge Assessment English, "Comparing scores to IELTS" (B2 First and C1 Advanced): the
+    # Cambridge English Scale is published up to IELTS 7.5.
+    'cambridge': ((191, 7.5), (185, 7), (176, 6.5), (169, 6), (162, 5.5), (154, 5), (0, 4.5)),
+}
 
 
 def eligible_programs(*fields):
@@ -59,23 +103,58 @@ def eligible_programs(*fields):
 # ---------------------------------------------------------------- fit scoring
 
 def evidence_counts(profile):
-    return {name: getattr(profile, name).count() for name in EVIDENCE}
+    """The student's evidence rows per kind, counted in one query."""
+    counts = {}
+    for name in EVIDENCE:
+        relation = StudentProfile._meta.get_field(name)
+        owner = relation.field.name
+        rows = relation.related_model._default_manager.filter(**{owner: OuterRef('pk')}).order_by().values(owner)
+        counts[f'{name}_count'] = Coalesce(Subquery(rows.annotate(total=Count('pk')).values('total'), output_field=IntegerField()), 0)
+    row = StudentProfile.objects.filter(pk=profile.pk).values(**counts).get()
+    return {name: row[f'{name}_count'] for name in EVIDENCE}
 
 
 def missing_fields(profile):
     return [field for field in RESEARCH_FIELDS if getattr(profile, field) in (None, '')]
 
 
+def ielts_equivalent(test, score):
+    return next(band for low, band in IELTS_CONCORDANCE[test] if score >= low)
+
+
+def certificates(profile, *types):
+    """The student's scored certificates of ``types`` (onboarding stores standard test scores as ints)."""
+    rows = (profile.application_profile or {}).get('certificates') or []
+    return [row for row in rows if row.get('type') in types and isinstance(row.get('score'), int)]
+
+
+def best_english(profile):
+    """The student's strongest English result as its IELTS equivalent, or None without one."""
+    results = []
+    if profile.ielts_score is not None:
+        score = float(profile.ielts_score)
+        results.append({'test': 'IELTS', 'score': score, 'ielts': score})
+    for row in certificates(profile, *ENGLISH_TESTS):
+        results.append({'test': ENGLISH_TESTS[row['type']], 'score': row['score'], 'ielts': ielts_equivalent(row['type'], row['score'])})
+    return max(results, key=lambda result: result['ielts'], default=None)
+
+
 def fit_context(profile):
-    """What scoring reads from a profile, or None while research answers are missing."""
+    """What scoring reads from a profile, or None while research answers are missing.
+
+    Everything scoring reads is here, because it is also the fit cache key.
+    """
     if missing_fields(profile):
         return None
     counts = evidence_counts(profile)
+    act = [row['score'] for row in certificates(profile, 'act')]
     return {
         'gpa': float(profile.gpa),
         'gpa_scale': int(profile.effective_gpa_scale),
-        'sat': int(profile.sat_score),
-        'ielts': float(profile.ielts_score),
+        'sat': int(profile.sat_score) if profile.sat_score is not None else None,
+        'sat_status': profile.sat_status,
+        'act': max(act, default=None),
+        'english': best_english(profile),
         'budget': int(profile.budget_usd),
         'countries': sorted({country_key(value) for value in profile.target_countries.split(',') if value.strip()}),
         'major': profile.target_major.strip().lower(),
@@ -85,82 +164,142 @@ def fit_context(profile):
     }
 
 
+def item(code, text, **params):
+    """One reason or gap: a code and params the frontend translates, and the English text."""
+    return {'code': code, 'params': params, 'text': text}
+
+
+def cost_of_attendance(university):
+    """``(yearly cost or None, after_aid)``: the Python side of ``COST``."""
+    if university.market == University.Market.US:
+        if university.offers_international_aid and university.net_price_usd is not None:
+            return university.net_price_usd, True
+        return university.intl_cost_usd, False
+    return university.net_price_usd, False
+
+
+def has_aid_data(university):
+    """Whether the catalogue says anything about this university's aid (see ``AID_DETAILS``)."""
+    if any(getattr(university, name) for name in OFFERED_AID):
+        return True
+    return any(
+        getattr(university, name) is not None if name in AID_AMOUNTS else bool(getattr(university, name))
+        for name in AID_DETAILS
+    )
+
+
+def range_fit(test, score, low, high):
+    """``(points, is_reason, item, below_minimum)`` for one test score against a catalogue range."""
+    high = high or low
+    key = test.lower()
+    if score >= high:
+        return 25, True, item(f'{key}_above_range', f'{test} {score} meets or exceeds the catalog range', score=score), False
+    if score >= low:
+        return 22, True, item(f'{key}_in_range', f'{test} {score} fits the {low}–{high} catalog range', score=score, min=low, max=high), False
+    if score >= low - NEAR_MINIMUM[test]:
+        return 12, False, item(f'{key}_near_minimum', f'{test} is {low - score} points below the catalog minimum', points=low - score, min=low), True
+    return 4, False, item(f'{key}_below_minimum', f'Raise {test} toward at least {low}', min=low), True
+
+
 def score_university(university, ctx):
     """One university's fit for a ready profile. ``university.programs`` must be the eligible ones."""
     reasons = []
     gaps = []
-    # Points of factors the catalogue has no data for: they are left out, not guessed.
+    # Points of factors with no data (the catalogue's or the student's): they are left out, not guessed.
     missing = 0
-    sat = ctx['sat']
-    ielts = ctx['ielts']
 
     academic = round(min(15, (ctx['gpa'] / ctx['gpa_scale']) * 15))
-    if university.sat_min:
-        if sat >= (university.sat_max or university.sat_min):
-            academic += 25
-            reasons.append(f'SAT {sat} meets or exceeds the catalog range')
-        elif sat >= university.sat_min:
-            academic += 22
-            reasons.append(f'SAT {sat} fits the {university.sat_min}–{university.sat_max or university.sat_min} catalog range')
-        elif sat >= max(400, university.sat_min - 80):
-            academic += 12
-            gaps.append(f'SAT is {university.sat_min - sat} points below the catalog minimum')
-        else:
-            academic += 4
-            gaps.append(f'Raise SAT toward at least {university.sat_min}')
+    tests = []
+    if ctx['sat'] is not None and university.sat_min:
+        tests.append(range_fit('SAT', ctx['sat'], university.sat_min, university.sat_max))
+    if ctx['act'] is not None and university.act_min:
+        tests.append(range_fit('ACT', ctx['act'], university.act_min, university.act_max))
+    taken = [name for name, score in (('SAT', ctx['sat']), ('ACT', ctx['act'])) if score is not None]
+    ranges = bool(university.sat_min or university.act_min)
+    not_required = ctx['sat_status'] == StudentProfile.TestStatus.NOT_REQUIRED
+    below = False
+    if tests:
+        points, is_reason, note, below = max(tests, key=lambda result: result[0])
+        academic += points
+        (reasons if is_reason else gaps).append(note)
     elif university.test_optional:
-        academic += 20
-        reasons.append('SAT is optional at this university')
+        reasons.append(item('tests_optional', 'SAT and ACT are optional at this university'))
+        if taken or not_required:
+            academic += 20
+        else:
+            missing += TEST_POINTS
+    elif ranges and not taken and not_required:
+        academic += 4
+        gaps.append(item('tests_required', 'This university expects an SAT or ACT score'))
+    elif ranges and not taken:
+        missing += TEST_POINTS
+        gaps.append(item('test_score_missing', 'Add an SAT or ACT score to compare with admitted students'))
+    elif ranges:
+        missing += TEST_POINTS
+        gaps.append(item('test_range_missing_for', f'The {taken[0]} range is not listed in the catalog', test=taken[0]))
     else:
-        missing += SAT_POINTS
-        gaps.append('SAT range is not listed in the catalog')
-    if ielts >= 7:
-        academic += 8
-        reasons.append(f'IELTS {ielts:g} is a strong language score')
-    elif ielts >= 6.5:
-        academic += 6
-        reasons.append(f'IELTS {ielts:g} is suitable for many programs')
+        missing += TEST_POINTS
+        gaps.append(item('test_range_missing', 'SAT and ACT ranges are not listed in the catalog'))
+
+    english = ctx['english']
+    if english is None:
+        missing += ENGLISH_POINTS
+        gaps.append(item('english_missing', 'Add an English test score (IELTS, TOEFL, Duolingo, PTE or Cambridge)'))
     else:
-        academic += 3
-        gaps.append('Verify the IELTS requirement on the official program page')
+        test, score = english['test'], english['score']
+        if english['ielts'] >= 7:
+            academic += 8
+            reasons.append(item('english_strong', f'{test} {score:g} is a strong language score', test=test, score=score))
+        elif english['ielts'] >= 6.5:
+            academic += 6
+            reasons.append(item('english_suitable', f'{test} {score:g} is suitable for many programs', test=test, score=score))
+        else:
+            academic += 3
+            gaps.append(item('english_check', 'Verify the English test requirement on the official program page', test=test, score=score))
 
     if country_key(university.country) in ctx['countries']:
         preferences = 12
-        reasons.append(f'{university.country} is one of your target countries')
+        reasons.append(item('country_match', f'{university.country} is one of your target countries', country=university.country))
     else:
         preferences = 3
     majors = [program.canonical_major.strip().lower() for program in university.programs.all()]
     majors.extend(value.strip().lower() for value in university.popular_majors.split(',') if value.strip())
     major = ctx['major']
-    if major and any(major in item or item in major for item in majors):
+    if major and any(major in name or name in major for name in majors):
         preferences += 10
-        reasons.append(f'{ctx["major_name"]} matches an available field of study')
+        reasons.append(item('major_match', f'{ctx["major_name"]} matches an available field of study', major=ctx['major_name']))
     else:
         preferences += 4
-        gaps.append('Check the exact program requirements for your selected major')
+        gaps.append(item('major_check', 'Check the exact program requirements for your selected major'))
 
     budget = ctx['budget']
-    if university.net_price_usd:
-        if university.net_price_usd <= budget:
+    cost, after_aid = cost_of_attendance(university)
+    if cost is not None:
+        prefix, label = ('net_after_aid', 'Estimated net price after aid') if after_aid else (
+            'cost', 'Estimated cost of attendance for international students')
+        if cost <= budget:
             financial = 12
-            reasons.append('Estimated net price is within your budget')
-        elif university.net_price_usd <= budget * 1.5:
+            reasons.append(item(f'{prefix}_within_budget', f'{label} is within your budget', cost=cost, budget=budget))
+        elif cost <= budget * 1.5:
             financial = 7
-            gaps.append('Net price is above budget but may be covered with aid')
+            gaps.append(item(f'{prefix}_above_budget', f'{label} is above your budget', cost=cost, budget=budget))
         else:
             financial = 2
-            gaps.append('Estimated net price is significantly above your budget')
+            gaps.append(item(f'{prefix}_far_above_budget', f'{label} is significantly above your budget', cost=cost, budget=budget))
     else:
         financial = 0
         missing += PRICE_POINTS
-        gaps.append('Net price is not available in the catalog')
+        gaps.append(item('cost_missing', 'Estimated cost of attendance for international students is not available in the catalog'))
     if ctx['scholarship_needed']:
-        if university.offers_international_aid or university.offers_merit_aid or university.offers_need_based_aid:
+        if any(getattr(university, name) for name in OFFERED_AID):
             financial += 8
-            reasons.append('A suitable type of financial aid is available')
-        else:
+            reasons.append(item('aid_available', 'A suitable type of financial aid is available'))
+        elif has_aid_data(university):
             financial += 1
-            gaps.append('International or merit aid is not listed in the catalog')
+            gaps.append(item('aid_not_offered', 'The catalog lists no international, merit or need-based aid at this university'))
+        else:
+            missing += AID_POINTS
+            gaps.append(item('aid_unknown', 'Financial aid details are not listed in the catalog'))
     else:
         financial += 8
 
@@ -169,12 +308,12 @@ def score_university(university, ctx):
     # a row without admissions data never outscores the same row with data that fits.
     total = min(100, round(earned * 100 / (100 - missing) * (1 - missing / 200)))
     rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
-    if rate is None and not university.sat_min:
+    if rate is None and not ranges:
         # No admission data in the catalogue (e.g. a QS-only row): unknown, not "target".
         band = None
-    elif (rate is not None and rate < 15) or (university.sat_min and sat < university.sat_min):
+    elif (rate is not None and rate < 15) or below:
         band = 'reach'
-    elif rate is not None and rate >= 45 and (not university.sat_min or sat >= university.sat_min):
+    elif rate is not None and rate >= 45:
         band = 'safety'
     else:
         band = 'target'
@@ -227,7 +366,8 @@ def display_country(market, country):
 
 
 def country_q(name):
-    market = next((code for code, label in MARKET_COUNTRIES.items() if label == name), None)
+    # 'USA', 'US', 'China (Mainland)' or 'Hong Kong SAR' name the same market as its label.
+    market = University.market_for_country(name)
     spellings = Q()
     for spelling in country_spellings(name):
         spellings |= Q(country__iexact=spelling)
@@ -243,11 +383,11 @@ def sat_fit_q(sat):
 
 def catalog_facets():
     """Counts over the whole catalogue (the filters do not change them), cached per catalogue version."""
-    key = f'college-facets:{cache_get(VERSION_KEY, 0)}'
+    key = f'college-facets-v2:{cache_get(VERSION_KEY, 0)}'
     facets = cache_get(key)
     if facets is None:
         facets = {
-            'countries': {}, 'aid': dict.fromkeys(AID_FLAGS, 0), 'test_optional': 0, 'public': 0,
+            'total': 0, 'countries': {}, 'aid': dict.fromkeys(AID_FLAGS, 0), 'test_optional': 0, 'public': 0,
             'qs': {name: {} for name in QS_FILTERS},
         }
         rows = University.objects.values_list(
@@ -255,6 +395,7 @@ def catalog_facets():
             *(f'qs_data__{name}' for name in QS_FILTERS),
         )
         for market, country, test_optional, institution_type, *values in rows:
+            facets['total'] += 1
             name = display_country(market, country)
             if name:
                 facets['countries'][name] = facets['countries'].get(name, 0) + 1
@@ -270,13 +411,18 @@ def catalog_facets():
 
 
 def student_facets(profile, scores):
-    """The catalogue counts plus the two that depend on the student: SAT in range and bands."""
+    """The catalogue counts plus the two that depend on the student: SAT in range and bands.
+
+    ``unknown`` counts the rows without a band: all of them until the profile is ready.
+    """
+    catalog = catalog_facets()
     bands = dict.fromkeys(BANDS, 0)
     for _, band in scores.values():
         if band:
             bands[band] += 1
+    bands[UNKNOWN_BAND] = catalog['total'] - sum(bands.values())
     sat_fit = University.objects.filter(sat_fit_q(profile.sat_score)).count()
-    return {**catalog_facets(), 'sat_fit': sat_fit, 'bands': bands}
+    return {**catalog, 'sat_fit': sat_fit, 'bands': bands}
 
 
 class CollegeSearchParams(serializers.Serializer):
@@ -287,6 +433,7 @@ class CollegeSearchParams(serializers.Serializer):
     price = serializers.ChoiceField(choices=('all', 'budget', *PRICE_CAPS), default='all')
     aid = serializers.CharField(required=False, allow_blank=True, default='')
     # Absent: every band. Present but empty: no band at all (every box unticked).
+    # 'unknown' is the rows without a band, so unticking a known band never hides them.
     bands = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
     test_optional = serializers.BooleanField(default=False)
     sat_fit = serializers.BooleanField(default=False)
@@ -302,6 +449,13 @@ class CollegeSearchParams(serializers.Serializer):
     )
     ids = serializers.CharField(required=False, allow_blank=True, default='')
     facets = serializers.BooleanField(default=False)
+
+    def to_internal_value(self, data):
+        # ``bands`` may come comma-separated or repeated (bands=reach&bands=unknown).
+        if hasattr(data, 'getlist') and len(data.getlist('bands')) > 1:
+            data = data.copy()
+            data['bands'] = ','.join(data.getlist('bands'))
+        return super().to_internal_value(data)
 
     def validate(self, attrs):
         unknown = sorted(set(self.initial_data) - set(self.fields))
@@ -323,7 +477,7 @@ class CollegeSearchParams(serializers.Serializer):
         return self._subset(value, AID_FLAGS, 'Unknown financial aid filter.')
 
     def validate_bands(self, value):
-        return None if value is None else self._subset(value, BANDS, 'Choose reach, target or safety.')
+        return None if value is None else self._subset(value, BAND_CHOICES, 'Choose reach, target, safety or unknown.')
 
     def validate_ids(self, value):
         try:
@@ -336,14 +490,14 @@ class CollegeSearchParams(serializers.Serializer):
 
 
 def filtered_catalog(params, profile):
-    queryset = University.objects.all()
+    queryset = University.objects.annotate(cost=COST)
     for term in params['search'].split():
         queryset = queryset.filter(term_query(SEARCH_FIELDS, term))
     if params['country']:
         queryset = queryset.filter(country_q(params['country']))
     if params['price'] != 'all':
         cap = int(profile.budget_usd or 0) if params['price'] == 'budget' else PRICE_CAPS[params['price']]
-        queryset = queryset.filter(net_price_usd__isnull=False, net_price_usd__lte=cap)
+        queryset = queryset.filter(cost__isnull=False, cost__lte=cap)
     for flag in params['aid']:
         queryset = queryset.filter(**{flag: True})
     if params['test_optional']:
@@ -389,20 +543,31 @@ def fit_ranking(profile, ctx, params, queryset, scores):
 
 
 def college_search(profile, params):
-    """One page of College Search for ``profile`` (validated ``CollegeSearchParams``)."""
-    ctx = fit_context(profile)
+    """One page of College Search for ``profile`` (validated ``CollegeSearchParams``).
+
+    The fit context (one query for the evidence counts) is read only when the answer
+    needs fit: rows to score, fit sorting, a band filter or the band facets.
+    """
+    ready = not missing_fields(profile)
     rows = University.objects.prefetch_related(eligible_programs())
     if params['ids']:
         # Rows the page already knows by id (the student's list, a university page).
-        return {'results': serialize_rows(list(rows.filter(pk__in=params['ids']).order_by(*ORDERINGS['ranking'])), ctx)}
+        page = list(rows.filter(pk__in=params['ids']).order_by(*ORDERINGS['ranking']))
+        return {'results': serialize_rows(page, fit_context(profile) if ready and page else None)}
 
     bands = params['bands']
-    band_filter = bands is not None and set(bands) != set(BANDS)
-    by_fit = params['sort'] == 'fit' and ctx is not None
-    scores = fit_scores(profile, ctx) if ctx is not None and (by_fit or band_filter or params['facets']) else {}
+    band_filter = bands is not None and set(bands) != set(BAND_CHOICES)
+    by_fit = params['sort'] == 'fit' and ready
+    ctx = fit_context(profile) if ready and (by_fit or band_filter or params['facets']) else None
+    scores = fit_scores(profile, ctx) if ctx is not None else {}
     queryset = filtered_catalog(params, profile)
     if band_filter:
-        queryset = queryset.filter(pk__in=[pk for pk, (_, band) in scores.items() if band in bands])
+        if ctx is None:
+            # Without a ready profile no row has a band.
+            queryset = queryset if UNKNOWN_BAND in bands else queryset.none()
+        else:
+            wanted = {None if band == UNKNOWN_BAND else band for band in bands}
+            queryset = queryset.filter(pk__in=[pk for pk, (_, band) in scores.items() if band in wanted])
 
     size = params['page_size']
     start = (params['page'] - 1) * size
@@ -417,6 +582,8 @@ def college_search(profile, params):
         queryset = queryset.order_by(*ORDERINGS.get(params['sort'], ORDERINGS['ranking']))
         count = queryset.count()
         page = list(queryset.prefetch_related(eligible_programs())[start:start + size])
+    if ctx is None and ready and page:
+        ctx = fit_context(profile)
     data = {
         'count': count,
         'page': params['page'],

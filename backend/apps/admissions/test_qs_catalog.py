@@ -150,7 +150,7 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         University.objects.create(name='Market University', country='Canada', popular_majors='History')
         top = self.research_as_student('UK')[0]
         self.assertEqual(top['id'], oxford.id)
-        self.assertIn('United Kingdom is one of your target countries', top['fit']['reasons'])
+        self.assertIn('United Kingdom is one of your target countries', [reason['text'] for reason in top['fit']['reasons']])
         # Without an acceptance rate or SAT range the band is unknown, not "target".
         self.assertIsNone(top['fit']['admission_band'])
 
@@ -163,7 +163,7 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
     def test_onboarding_country_codes_match_catalogue_spellings(self):
         University.objects.create(name='Spelling University', country='United States of America')
         reasons = self.research_as_student('US, Turkey')[0]['fit']['reasons']
-        self.assertIn('United States of America is one of your target countries', reasons)
+        self.assertIn('United States of America is one of your target countries', [reason['text'] for reason in reasons])
 
     def test_every_university_is_ranked_and_explained_on_its_page(self):
         University.objects.bulk_create(University(name=f'Scored University {index}', country='Germany') for index in range(60))
@@ -209,11 +209,11 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         unknown, known = results['Unknown University'], results['Known University']
         # The same row with admissions data that fits ranks above the one without.
         self.assertGreater(known['match_score'], unknown['match_score'])
-        self.assertNotIn('No strict SAT minimum is listed in the catalog', unknown['reasons'])
-        self.assertFalse([reason for reason in unknown['reasons'] if 'SAT' in reason])
-        self.assertIn('SAT range is not listed in the catalog', unknown['gaps'])
+        self.assertNotIn('tests_optional', [reason['code'] for reason in unknown['reasons']])
+        self.assertFalse([reason for reason in unknown['reasons'] if 'SAT' in reason['text']])
+        self.assertIn('test_range_missing', [gap['code'] for gap in unknown['gaps']])
         self.assertEqual(unknown['score_breakdown']['academic'] - known['score_breakdown']['academic'], -22)
-        self.assertIn('SAT is optional at this university', results['Optional University']['reasons'])
+        self.assertIn('tests_optional', [reason['code'] for reason in results['Optional University']['reasons']])
 
     def test_qs_only_rows_do_not_outrank_curated_universities(self):
         University.objects.bulk_create(

@@ -414,6 +414,9 @@ class University(TimeStampedModel):
     act_max = models.PositiveSmallIntegerField(null=True, blank=True)
     tuition_usd = models.PositiveIntegerField(null=True, blank=True)
     net_price_usd = models.PositiveIntegerField(null=True, blank=True)
+    # Yearly cost of attendance for a student from abroad (US rows: out-of-state tuition and fees
+    # plus on-campus room, board, books and other costs; see scripts/build_scorecard_catalog.py).
+    intl_cost_usd = models.PositiveIntegerField(null=True, blank=True)
     average_aid_usd = models.PositiveIntegerField(null=True, blank=True)
     students_receiving_aid_percent = models.PositiveSmallIntegerField(null=True, blank=True)
     undergrad_enrollment = models.PositiveIntegerField(null=True, blank=True)

@@ -50,7 +50,7 @@ class UniversityRowSerializer(serializers.ModelSerializer):
         model = University
         fields = (
             'id', 'name', 'city', 'country', 'institution_type', 'ranking', 'ranking_label', 'qs_data',
-            'acceptance_rate', 'sat_min', 'sat_max', 'test_optional', 'net_price_usd',
+            'acceptance_rate', 'sat_min', 'sat_max', 'test_optional', 'net_price_usd', 'intl_cost_usd',
             'application_deadline', 'scholarship_deadline',
         )
 
