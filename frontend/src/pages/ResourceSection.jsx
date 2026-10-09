@@ -7,7 +7,7 @@ import { Plus, Eye, CheckCircle2, Pencil, Trash2, Flag, ShieldCheck } from 'luci
 import { GoogleDocsActions, EssayDetailModal, TaskSubmissionModal, GoogleDocsRecordModal, AttachmentPreviewModal } from '../components/documents';
 import { AttachmentRow, FileField, UploadError, evidenceAttachment, recommendationAttachment, useFileUpload } from '../components/files';
 import { toFormData } from '../lib/fileUpload';
-import { canDeleteStudentRecord, changedPayload, editableFields, recordErrorMessage } from '../lib/studentAuthored';
+import { canDeleteStudentRecord, changedPayload, editableFields, isStaleCopyError, recordErrorMessage } from '../lib/studentAuthored';
 import { studentName, dateText, dateTimeText, joinParts } from '../lib/format';
 import { label, ownStudent } from '../lib/labels';
 import { Record } from '../components/records';
@@ -224,6 +224,8 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
   const currentFile = currentRecordFile(resource, item);
   const [file, setFile] = useState(null);
   const [removeFile, setRemoveFile] = useState(false);
+  // The server copy edits are compared against; refreshed after a conflict.
+  const [base, setBase] = useState(item);
   const upload = useFileUpload();
   const busy = saving || upload.uploading;
   const allFields = RESOURCE_FIELDS[resource] || [];
@@ -238,14 +240,16 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
     event.preventDefault();if (busy) return;setSaving(true);const values = new FormData(event.currentTarget);
     let payload = {};
     for (const [name,, type] of fields) {
+      // A field shown read-only (e.g. a status only the counselor sets) has no input and is never sent.
+      if (type !== 'checkbox' && !values.has(name)) continue;
       const raw = values.get(name);
       const nullable = ['date', 'number', 'university', 'application'].includes(type);
       payload[name] = type === 'checkbox' ? raw === 'on' : raw === '' && nullable ? null : raw;
     }
-    if (item) payload = changedPayload(payload, item);else
+    if (base) payload = changedPayload(payload, base);else
     payload.student = isTaskManager(user) ? Number(values.get('student')) : ownStudent(data)?.id;
-    // The server refuses a text change (409) if the essay changed after this copy was loaded.
-    if (item && resource === 'essays') payload.updated_at = item.updated_at;
+    // The server refuses the save (409) when a field changed here also changed on the server since this copy was loaded.
+    if (base && resource === 'essays') payload.original = Object.fromEntries(Object.keys(payload).map((name) => [name, base[name] ?? null]));
     if (recordFile && (file || removeFile)) {
       setSaving(false);
       payload[recordFile.field] = file || null;
@@ -258,7 +262,11 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
       if (item) await api.update(resource, item.id, payload);else
       await api.create(resource, payload);
       notify(item ? t("Record updated.") : t("Record created."));onSaved();
-    } catch (err) {notify(recordErrorMessage(err), 'error');} finally {setSaving(false);}
+    } catch (err) {
+      notify(recordErrorMessage(err), 'error');
+      // Load the latest copy so the next save compares against it; what was typed stays in the form.
+      if (item && isStaleCopyError(err)) api.retrieve(resource, item.id).then(setBase, () => {});
+    } finally {setSaving(false);}
   }
   function close() {upload.cancel();onClose();}
   const selfTask = resource === 'tasks' && user.role === 'student';
@@ -282,6 +290,8 @@ function StudentApplicationSelect({ name, labelText, value, studentId }) {
 
 export function DynamicField({ name, labelText, type, required, choices, placeholder, value, data, user, studentId = '' }) {
   if (name === 'status' && !isTaskManager(user)) choices = choices.filter((choice) => !['approved', 'late', 'rejected', 'waitlisted', 'accepted', 'needs_revision', 'completed'].includes(choice));
+  // A value this user can't choose (e.g. the counselor's needs_revision) is shown, not editable, and not sent.
+  if (type === 'select' && value && !choices.includes(value)) return <Field label={t(labelText)}><input value={label(value)} readOnly disabled /></Field>;
   const hint = placeholder ? t(placeholder) : undefined;
   if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} placeholder={hint} /></Field>;
   if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;

@@ -45,7 +45,7 @@ class StaleEssayWriteTests(RoleIsolationBase):
         return text
 
     def form_payload(self, loaded, **changes):
-        payload = {key: loaded[key] for key in ('title', 'prompt', 'content', 'status', 'counselor_comment', 'updated_at')}
+        payload = {key: loaded[key] for key in ('title', 'prompt', 'content', 'status', 'counselor_comment')}
         payload.update(changes)
         return payload
 
@@ -62,7 +62,7 @@ class StaleEssayWriteTests(RoleIsolationBase):
         loaded = self.student_loads_form()
         newer = self.student_saves_newer_text()
         response = self.client.patch(
-            f'/api/essays/{self.essay.id}/', {'content': OLD_TEXT, 'updated_at': loaded['updated_at']}, format='json',
+            f'/api/essays/{self.essay.id}/', {'content': OLD_TEXT, 'original': {'content': loaded['content']}}, format='json',
         )
         self.assertEqual((response.status_code, response.data['code']), (status.HTTP_409_CONFLICT, 'essay_changed'))
         self.assert_newer_text_kept(newer)
@@ -79,11 +79,36 @@ class StaleEssayWriteTests(RoleIsolationBase):
         self.student_saves_newer_text()
         loaded = self.student_loads_form()
         response = self.client.patch(
-            f'/api/essays/{self.essay.id}/', {'content': 'Fresh edit.', 'updated_at': loaded['updated_at']}, format='json',
+            f'/api/essays/{self.essay.id}/', {'content': 'Fresh edit.', 'original': {'content': loaded['content']}}, format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.essay.refresh_from_db()
         self.assertEqual(self.essay.content, 'Fresh edit.')
+
+    def test_unrelated_saves_since_loading_do_not_block_a_title_edit(self):
+        loaded = self.student_loads_form()
+        newer = self.student_saves_newer_text()
+        response = self.client.patch(
+            f'/api/essays/{self.essay.id}/', {'title': 'Daily bread', 'original': {'title': loaded['title']}}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assert_newer_text_kept(newer)
+        self.assertEqual(self.essay.title, 'Daily bread')
+
+    def test_a_field_changed_since_loading_is_a_conflict(self):
+        loaded = self.student_loads_form()
+        Essay.objects.filter(pk=self.essay.pk).update(title='Renamed elsewhere')
+        response = self.client.patch(
+            f'/api/essays/{self.essay.id}/', {'title': 'Mine', 'original': {'title': loaded['title']}}, format='json',
+        )
+        self.assertEqual((response.status_code, response.data['code']), (status.HTTP_409_CONFLICT, 'essay_changed'))
+        self.essay.refresh_from_db()
+        self.assertEqual(self.essay.title, 'Renamed elsewhere')
+
+    def test_older_clients_without_originals_still_edit_the_title(self):
+        self.client.force_authenticate(self.student_a_user)
+        response = self.client.patch(f'/api/essays/{self.essay.id}/', {'title': 'Old bundle title'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
 
     def test_counselor_review_on_a_stale_copy_saves_and_keeps_the_text(self):
         loaded = self.counselor_loads_form()
@@ -104,7 +129,7 @@ class StaleEssayWriteTests(RoleIsolationBase):
         loaded = self.counselor_loads_form()
         for changes in ({'content': 'Counselor rewrite.'}, {'title': 'Renamed'}, {'prompt': 'Other prompt'}):
             response = self.client.patch(
-                f'/api/essays/{self.essay.id}/', {**changes, 'updated_at': loaded['updated_at']}, format='json',
+                f'/api/essays/{self.essay.id}/', {**changes, 'original': {key: loaded[key] for key in changes}}, format='json',
             )
             self.assertEqual((response.status_code, response.data['code']), (status.HTTP_403_FORBIDDEN, 'student_authored'))
         self.assert_newer_text_kept(newer)

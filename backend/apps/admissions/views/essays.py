@@ -14,6 +14,10 @@ from ..scoping import owns_essays_only, scope_essays, shared_essay_lookups
 from .common import ScopedQuerysetMixin, StudentRecordListMixin
 
 
+def _as_text(value):
+    return '' if value is None else str(value)
+
+
 class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = EssaySerializer
     queryset = (
@@ -66,7 +70,8 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
             )
             if essay is None:
                 raise NotFound()
-            self._check_unchanged(essay, serializer.validated_data)
+            changed = changed_fields(essay, serializer.validated_data)
+            self._check_unchanged(essay, changed - set(EssaySerializer.REVIEW_FIELDS))
             serializer.instance = essay
             extra = {}
             content = serializer.validated_data.get('content')
@@ -79,33 +84,31 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
             if should_version:
                 self._create_revision(essay)
 
-    def _check_unchanged(self, essay, values):
-        """Optimistic concurrency: a form built from an older copy must not overwrite newer work.
+    def _check_unchanged(self, essay, changed):
+        """Optimistic concurrency per field: a form built from an older copy must not overwrite newer work.
 
-        A write that changes the essay's own fields (text, title, prompt...)
-        must echo the ``updated_at`` it loaded, from any role (428 without it);
-        a mismatch means the essay changed since (an Essay Lab autosave, a
-        decision, another edit) and nothing is written (409). Review-only
-        writes (status, comment) and values equal to the current ones need no
-        precondition.
+        ``changed`` are the essay's own fields (not review fields) this write
+        really changes, computed under the row lock. The client sends
+        ``original``: the value it loaded for each field it changes. A field
+        whose server value moved since then is a real conflict (409); other
+        saves, such as an autosave that touched only formatting, don't block
+        an edit of the title. The text needs its original (428 without it);
+        title or application edits from older clients that send none still save.
         """
-        if not changed_fields(essay, values) - set(EssaySerializer.REVIEW_FIELDS):
-            return
-        loaded = self.request.data.get('updated_at')
-        if loaded in (None, ''):
+        original = self.request.data.get('original')
+        original = original if isinstance(original, dict) else {}
+        if 'content' in changed and 'content' not in original:
             raise CodedError(
-                'Reload the essay before changing it, so newer changes are not overwritten.',
+                'Reload the essay before changing its text, so newer changes are not overwritten.',
                 'precondition_required', 428,
             )
-        try:
-            loaded_at = serializers.DateTimeField().to_internal_value(loaded)
-        except serializers.ValidationError as exc:
-            raise serializers.ValidationError({'updated_at': exc.detail})
-        if loaded_at != essay.updated_at:
-            raise CodedError(
-                'This essay changed since you opened it. Reload it to see the latest version, then make your edit again.',
-                'essay_changed', 409,
-            )
+        for field in changed & set(original):
+            current = getattr(essay, Essay._meta.get_field(field).attname)
+            if _as_text(current) != _as_text(original[field]):
+                raise CodedError(
+                    'This essay changed since you opened it. Reload it to see the latest version, then make your edit again.',
+                    'essay_changed', 409,
+                )
 
     @staticmethod
     def _replace_text(essay, content):

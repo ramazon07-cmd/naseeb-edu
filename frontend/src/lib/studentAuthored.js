@@ -33,6 +33,9 @@ const ERROR_MESSAGES = {
   student_authored_delete: 'Only the student can delete their own work. Send it back with a note instead.',
 };
 
+// The form was built from an older copy of the record.
+export const isStaleCopyError = (error) => ['essay_changed', 'precondition_required'].includes(error?.details?.code);
+
 export function recordErrorMessage(error) {
   const message = ERROR_MESSAGES[error?.details?.code];
   return message ? t(message) : error?.message;

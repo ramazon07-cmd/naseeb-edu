@@ -41,9 +41,22 @@ test('each server error code has a translated message', () => {
   assert.equal(recordErrorMessage({ details: { code: 'other' }, message: 'Bad title' }), 'Bad title');
 });
 
+test('only stale-copy codes trigger a reload', async () => {
+  const { isStaleCopyError } = await import('../src/lib/studentAuthored.js');
+  assert.equal(isStaleCopyError({ details: { code: 'essay_changed' } }), true);
+  assert.equal(isStaleCopyError({ details: { code: 'precondition_required' } }), true);
+  assert.equal(isStaleCopyError({ details: { code: 'student_authored' } }), false);
+});
+
 test('the record form uses these rules', () => {
   const source = readFileSync(new URL('../src/pages/ResourceSection.jsx', import.meta.url), 'utf8');
-  assert.match(source, /if \(item\) payload = changedPayload\(payload, item\)/);
+  assert.match(source, /if \(base\) payload = changedPayload\(payload, base\)/);
+  // Each changed essay field carries the value it was loaded with; a conflict reloads the copy, keeping what was typed.
+  assert.match(source, /payload\.original = Object\.fromEntries\(Object\.keys\(payload\)\.map\(\(name\) => \[name, base\[name\] \?\? null\]\)\)/);
+  assert.match(source, /isStaleCopyError\(err\)\) api\.retrieve\(resource, item\.id\)\.then\(setBase/);
+  // A status the user can't choose is shown read-only and left out of the payload.
+  assert.match(source, /value && !choices\.includes\(value\)\) return <Field label=\{t\(labelText\)\}><input value=\{label\(value\)\} readOnly disabled \/>/);
+  assert.match(source, /if \(type !== 'checkbox' && !values\.has\(name\)\) continue;/);
   assert.match(source, /item \? editableFields\(user, resource, allFields\) : allFields/);
   assert.match(source, /allowCreate && canDeleteStudentRecord\(user, resource\)/);
   assert.match(source, /notify\(recordErrorMessage\(err\), 'error'\)/);

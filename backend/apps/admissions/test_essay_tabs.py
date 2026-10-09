@@ -411,18 +411,18 @@ class LegacyApiWithTabsTests(TabTestCase):
     def test_plain_text_edits_replace_a_one_tab_document(self):
         self.save_tab(self.first.pk, make_doc('Rich text'))
         # Only the student changes the text (counselors comment and suggest).
-        loaded = self.client.get(f'/api/essays/{self.essay.pk}/').data['updated_at']
+        loaded = self.client.get(f'/api/essays/{self.essay.pk}/').data['content']
         response = self.client.patch(f'/api/essays/{self.essay.pk}/', {'content': 'Student fixed it.',
-                                                                       'updated_at': loaded}, format='json')
+                                                                       'original': {'content': loaded}}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         tab = self.tab_of(self.essay)
         self.assertEqual((tab.doc, tab.content, tab.save_seq, tab.word_count), (None, 'Student fixed it.', 2, 3))
 
     def test_plain_text_edits_are_refused_for_a_document_with_tabs(self):
         self.add_tab(title='Second')
-        loaded = self.client.get(f'/api/essays/{self.essay.pk}/').data['updated_at']
+        loaded = self.client.get(f'/api/essays/{self.essay.pk}/').data['content']
         response = self.client.patch(f'/api/essays/{self.essay.pk}/', {'content': 'Overwrite everything.',
-                                                                       'updated_at': loaded}, format='json')
+                                                                       'original': {'content': loaded}}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(EssayTab.objects.filter(essay=self.essay).count(), 2)
         # Counselor comments still work.
