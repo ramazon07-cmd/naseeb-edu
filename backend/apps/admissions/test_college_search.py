@@ -81,7 +81,7 @@ class PagingTests(CollegeSearchFixture, APITestCase):
         self.assertEqual([program['name'] for program in row['programs']], ['BSc Computer Science'])
 
     def test_unknown_values_are_rejected(self):
-        for query in ('sort=random', 'price=10', 'aid=free_lunch', 'bands=dream', 'ids=one', 'test_optional=maybe', 'page=0'):
+        for query in ('sort=random', 'price=10', 'aid=free_lunch', 'bands=dream', 'ids=one', 'test_optional=maybe', 'page=0', 'colour=red', 'sort=fit&pagesize=10'):
             self.assertEqual(self.client.get(f'{URL}?{query}').status_code, 400, query)
 
 
@@ -156,13 +156,29 @@ class FitTests(CollegeSearchFixture, APITestCase):
             first = scorer.call_count
             self.search('sort=fit&page_size=25')
             self.search('bands=reach')
-        # The candidates once (Oxford is neither a target country nor has admissions data), then the rows on the page.
-        self.assertEqual(first, 4 + 5)
+        self.assertEqual(first, 5 + 5)  # the whole catalogue once, then the rows on the page
         self.assertEqual(scorer.call_count, first + 5 + 1)
         Honor.objects.create(student=self.student, title='New olympiad medal')
         with mock.patch.object(college_search, 'score_university', wraps=college_search.score_university) as scorer:
             self.search('sort=fit')
-        self.assertEqual(scorer.call_count, 9, 'new evidence changes the profile, so the scores are rebuilt')
+        self.assertEqual(scorer.call_count, 10, 'new evidence changes the profile, so the scores are rebuilt')
+
+    def test_the_fit_ranking_is_sorted_once_per_filter(self):
+        University.objects.bulk_create(University(name=f'Filler {index:02}', country='Germany') for index in range(30))
+        self.ready_profile()
+        def rankings():
+            return [call.args[0] for call in stored.call_args_list if call.args[0].startswith('college-fit-ranked:')]
+
+        with mock.patch.object(college_search, 'cache_set', wraps=college_search.cache_set) as stored:
+            first = self.search('sort=fit')
+            second = self.search('sort=fit&page=2')
+            self.assertEqual(len(rankings()), 1, 'the next page reuses the cached ranking')
+            self.search('sort=fit&country=Germany')
+            self.assertEqual(len(set(rankings())), 2, 'another filter is ranked on its own')
+        ids = [row['id'] for row in first['results'] + second['results']]
+        self.assertEqual(len(ids), len(set(ids)))
+        scores = [row['fit']['match_score'] for row in first['results'] + second['results']]
+        self.assertEqual(scores, sorted(scores, reverse=True))
 
     def test_query_count_does_not_grow_with_the_page(self):
         University.objects.bulk_create(University(name=f'Filler {index:03}', country='Germany') for index in range(120))

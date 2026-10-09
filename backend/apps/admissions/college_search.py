@@ -27,7 +27,7 @@ PAGE_SIZES = (10, 25, 50, 100)
 MAX_IDS = 100
 SEARCH_FIELDS = ('name', 'city', 'country')
 # A market is listed under one name ('USA' and 'United States' are one country).
-MARKET_COUNTRIES = {'us': 'United States', 'canada': 'Canada', 'china': 'China', 'hong_kong': 'Hong Kong'}
+MARKET_COUNTRIES = dict(University.Market.choices)
 PRICE_CAPS = {'25000': 25000, '40000': 40000}
 AID_FLAGS = ('offers_need_based_aid', 'offers_merit_aid', 'offers_international_aid', 'meets_full_need')
 BANDS = ('reach', 'target', 'safety')
@@ -46,8 +46,6 @@ SCORING_FIELDS = (
     'id', 'country', 'ranking', 'sat_min', 'sat_max', 'popular_majors', 'net_price_usd', 'acceptance_rate',
     'offers_international_aid', 'offers_merit_aid', 'offers_need_based_aid', 'test_optional',
 )
-# Fit sorting and band filters score at most this many plausible universities, not the whole catalogue.
-FIT_CANDIDATES = 600
 SAT_POINTS = 25
 PRICE_POINTS = 12
 
@@ -195,29 +193,23 @@ def score_university(university, ctx):
     }
 
 
-def fit_candidates(ctx):
-    """Universities in the student's target countries or with admissions data, best ranked first."""
-    countries = University.objects.order_by().values_list('country', flat=True).distinct()
-    spellings = [country for country in countries if country_key(country) in ctx['countries']]
-    has_data = Q(sat_min__isnull=False) | Q(acceptance_rate__isnull=False) | Q(net_price_usd__isnull=False)
-    return (
-        University.objects.filter(Q(country__in=spellings) | has_data)
-        .order_by(F('ranking').asc(nulls_last=True), 'name')[:FIT_CANDIDATES]
-    )
+def fit_key(profile, ctx):
+    """Cache key prefix for one student's answers on one catalogue version."""
+    signature = hashlib.sha256(json.dumps(ctx, sort_keys=True).encode()).hexdigest()[:20]
+    return f'{profile.pk}:{cache_get(VERSION_KEY, 0)}:{signature}'
 
 
 def fit_scores(profile, ctx):
-    """``{university_id: (score, band)}`` for the plausible universities (``fit_candidates``).
+    """``{university_id: (score, band)}`` for the whole catalogue.
 
-    Rows outside the candidates have no score: fit sorting puts them last and
-    band filters leave them out. Cached per student, profile answers and
-    catalogue version, so paging, re-sorting and refiltering never rescore.
+    The same scores the rows show, so fit sorting, band filters and band counts
+    agree with every row. Cached per student, profile answers and catalogue
+    version, so paging, re-sorting and refiltering never rescore.
     """
-    signature = hashlib.sha256(json.dumps(ctx, sort_keys=True).encode()).hexdigest()[:20]
-    key = f'college-fit:{profile.pk}:{cache_get(VERSION_KEY, 0)}:{signature}'
+    key = f'college-fit:{fit_key(profile, ctx)}'
     scores = cache_get(key)
     if scores is None:
-        universities = fit_candidates(ctx).only(*SCORING_FIELDS).prefetch_related(
+        universities = University.objects.only(*SCORING_FIELDS).prefetch_related(
             eligible_programs('id', 'university_id', 'canonical_major'),
         )
         scores = {}
@@ -311,6 +303,12 @@ class CollegeSearchParams(serializers.Serializer):
     ids = serializers.CharField(required=False, allow_blank=True, default='')
     facets = serializers.BooleanField(default=False)
 
+    def validate(self, attrs):
+        unknown = sorted(set(self.initial_data) - set(self.fields))
+        if unknown:
+            raise serializers.ValidationError({name: 'Unknown parameter.' for name in unknown})
+        return attrs
+
     @staticmethod
     def _subset(value, allowed, message):
         items = list(dict.fromkeys(item for item in (value or '').split(',') if item))
@@ -361,13 +359,33 @@ def filtered_catalog(params, profile):
 
 
 def serialize_rows(universities, ctx):
+    """Slim rows plus what College Search needs on top: the eligible programs
+    (``addToList`` picks one by the target major) and the student's fit."""
     from .serializers import UniversityRowSerializer
 
     rows = UniversityRowSerializer(universities, many=True).data
-    if ctx is not None:
-        for row, university in zip(rows, universities):
+    for row, university in zip(rows, universities):
+        row['programs'] = [{'name': program.name, 'canonical_major': program.canonical_major} for program in university.programs.all()]
+        if ctx is not None:
             row['fit'] = score_university(university, ctx)
     return rows
+
+
+# The query parameters that change which rows match (not the page or the extras).
+FILTER_PARAMS = ('search', 'country', 'price', 'aid', 'bands', 'test_optional', 'sat_fit', 'public', *QS_FILTERS)
+
+
+def fit_ranking(profile, ctx, params, queryset, scores):
+    """The ids matching ``params`` best fit first, cached next to the fit map so
+    "Show more" and the background prefetch do not reload and sort the catalogue."""
+    filters = json.dumps({name: params[name] for name in FILTER_PARAMS}, sort_keys=True)
+    key = f'college-fit-ranked:{fit_key(profile, ctx)}:{hashlib.sha256(filters.encode()).hexdigest()[:20]}'
+    ranked = cache_get(key)
+    if ranked is None:
+        rows = sorted(queryset.values_list('pk', 'ranking'), key=lambda row: (-scores.get(row[0], (-1,))[0], row[1] or 999999))
+        ranked = [pk for pk, _ in rows]
+        cache_set(key, ranked, CACHE_SECONDS)
+    return ranked
 
 
 def college_search(profile, params):
@@ -389,9 +407,9 @@ def college_search(profile, params):
     size = params['page_size']
     start = (params['page'] - 1) * size
     if by_fit:
-        ranked = sorted(queryset.values_list('pk', 'ranking'), key=lambda row: (-scores.get(row[0], (-1,))[0], row[1] or 999999))
+        ranked = fit_ranking(profile, ctx, params, queryset, scores)
         count = len(ranked)
-        page_ids = [pk for pk, _ in ranked[start:start + size]]
+        page_ids = ranked[start:start + size]
         found = {university.pk: university for university in rows.filter(pk__in=page_ids)}
         page = [found[pk] for pk in page_ids if pk in found]
     else:

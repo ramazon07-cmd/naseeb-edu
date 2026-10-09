@@ -173,14 +173,17 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         scores = [row['fit']['match_score'] for row in rows]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
-    def test_fit_scores_target_countries_and_rows_with_admissions_data_only(self):
+    def test_every_university_is_scored_and_the_unrelated_ones_rank_last(self):
         target = University.objects.create(name='Target Country University', country='United Kingdom')
         with_data = University.objects.create(name='Data University', country='USA', sat_min=1300, sat_max=1500)
         priced = University.objects.create(name='Priced University', country='Japan', net_price_usd=9000)
         unrelated = University.objects.create(name='Unrelated University', country='Germany', ranking=1)
         rows = self.research_as_student('UK')
-        self.assertEqual(set(fit_scores(self.student_a, fit_context(self.student_a))), {target.id, with_data.id, priced.id})
-        # A row outside the scored candidates still shows its fit, after every scored one.
+        scores = fit_scores(self.student_a, fit_context(self.student_a))
+        self.assertEqual(set(scores), {target.id, with_data.id, priced.id, unrelated.id})
+        # The map and the rows agree: what a row shows is what it is sorted and filtered by.
+        self.assertEqual({row['id']: (row['fit']['match_score'], row['fit']['admission_band']) for row in rows}, scores)
+        # Not a target country and no admissions data: last, despite the best rank.
         self.assertEqual(rows[-1]['id'], unrelated.id)
 
     def test_fit_sort_queries_do_not_grow_with_the_catalogue(self):
@@ -238,12 +241,12 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
             'overall_score': 99.2, 'indicators': {'AR': {'score': 99.6, 'rank': '7'}, 'FSR': {'score': 98.9, 'rank': '44'}},
         }
         university = University.objects.create(name='Imperial College London', country='United Kingdom', qs_data=qs_data, notes='Long notes')
-        program = UniversityProgram.objects.create(university=university, name='BSc Computing', canonical_major='Computer Science')
+        UniversityProgram.objects.create(university=university, name='BSc Computing', canonical_major='Computer Science')
         self.client.force_authenticate(self.student_a_user)
         row = self.client.get('/api/universities/').data['results'][0]
-        self.assertNotIn('notes', row)
-        self.assertNotIn('offers_merit_aid', row)
-        self.assertEqual(row['programs'], [{'id': program.id, 'name': 'BSc Computing', 'canonical_major': 'Computer Science'}])
+        # The pickers need no programs; College Search adds the names it uses.
+        for field in ('notes', 'offers_merit_aid', 'programs'):
+            self.assertNotIn(field, row)
         # Only the QS values the College Search table shows and filters by.
         self.assertEqual(row['qs_data'], {'region': 'Europe', 'status': 'Public', 'overall_score': 99.2, 'indicators': {'AR': {'score': 99.6}}})
         for field in ('name', 'country', 'ranking', 'sat_min', 'net_price_usd', 'application_deadline'):

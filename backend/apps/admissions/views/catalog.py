@@ -25,7 +25,7 @@ from apps.users import entitlements
 from apps.users.admin_permissions import has_tier
 from apps.users.services import audit_product_action
 from ..catalog_cache import CachedCatalogListMixin
-from ..college_search import SEARCH_FIELDS, eligible_programs
+from ..college_search import SEARCH_FIELDS
 from ..listing import ListQueryMixin
 from .common import CounselorOrOwnerPermission, ProductAdminPermission
 from .portal import StudentPortalPermission
@@ -141,7 +141,7 @@ class UniversityViewSet(ListQueryMixin, CachedCatalogListMixin, viewsets.ModelVi
 
     def get_queryset(self):
         if self.action == 'list':
-            return University.objects.prefetch_related(eligible_programs())
+            return University.objects.all()
         return super().get_queryset()
 
     def get_serializer_class(self):

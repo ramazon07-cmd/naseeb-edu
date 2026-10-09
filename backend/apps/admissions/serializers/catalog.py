@@ -39,21 +39,19 @@ QS_LIST_INDICATORS = ('AR', 'ER', 'CPF', 'ISR', 'SUS')
 class UniversityRowSerializer(serializers.ModelSerializer):
     """A university as one row of a list: what College Search and the pickers show.
 
-    The full record (aid details, notes, URLs, timestamps) is served by the
-    detail endpoint, so a page of rows stays small on a slow connection.
-    ``programs`` must be prefetched with the eligible programs only
-    (``college_search.eligible_programs``).
+    The full record (programs, aid details, notes, URLs, timestamps) is served
+    by the detail endpoint, so a page of rows stays small on a slow connection.
+    College Search adds the program names it needs (``college_search.serialize_rows``).
     """
 
     qs_data = serializers.SerializerMethodField()
-    programs = serializers.SerializerMethodField()
 
     class Meta:
         model = University
         fields = (
             'id', 'name', 'city', 'country', 'institution_type', 'ranking', 'ranking_label', 'qs_data',
             'acceptance_rate', 'sat_min', 'sat_max', 'test_optional', 'net_price_usd',
-            'application_deadline', 'scholarship_deadline', 'programs',
+            'application_deadline', 'scholarship_deadline',
         )
 
     def get_qs_data(self, obj):
@@ -65,9 +63,6 @@ class UniversityRowSerializer(serializers.ModelSerializer):
             **{key: data[key] for key in QS_LIST_KEYS if key in data},
             'indicators': {code: {'score': indicators[code].get('score')} for code in QS_LIST_INDICATORS if code in indicators},
         }
-
-    def get_programs(self, obj):
-        return [{'id': program.id, 'name': program.name, 'canonical_major': program.canonical_major} for program in obj.programs.all()]
 
 
 class ScholarshipSerializer(serializers.ModelSerializer):
