@@ -155,7 +155,7 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data['ready'])
         self.assertNotIn('gpa', response.data['missing_fields'])
-        self.assertIn('sat_score', response.data['missing_fields'])
+        self.assertNotIn('sat_score', response.data['missing_fields'], 'test scores are optional')
         self.assertIn('target_major', response.data['missing_fields'])
         self.assertEqual(
             {question['field'] for question in response.data['questions']},
