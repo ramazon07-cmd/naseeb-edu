@@ -13,7 +13,7 @@ from django.db.models.fields.files import FieldFile
 from apps.users.models import User
 from apps.users.uploads import verify_image
 from core.storage import delete_file_on_commit
-from ..essay_lab.collab_views import CollabError
+from core.exceptions import CodedError
 from ..models import StudentProfile
 from ..scoping import scope_students
 
@@ -40,7 +40,7 @@ def require_student_for_content(serializer, values, review_fields):
     if serializer.instance is None or not request or request.user.role == User.Role.STUDENT:
         return
     if changed_fields(serializer.instance, values) - set(review_fields):
-        raise CollabError(STUDENT_AUTHORED_MESSAGE, 'student_authored', 403)
+        raise CodedError(STUDENT_AUTHORED_MESSAGE, 'student_authored', 403)
 
 
 def google_docs_document_id(value):
@@ -233,10 +233,7 @@ class VerifiedStudentRecordMixin(StudentRecordSerializerMixin):
         request = self.context.get('request')
         instance = self.instance
         if request and not request.user.is_counselor_like and instance is not None:
-            edited = any(
-                value != getattr(instance, key, None)
-                for key, value in attrs.items() if key not in {'verified', 'counselor_comment'}
-            )
+            edited = bool(changed_fields(instance, attrs) - set(self.REVIEW_FIELDS))
             if edited and instance.verified:
                 # The badge vouches for what the counselor checked; edited content
                 # goes back for review.

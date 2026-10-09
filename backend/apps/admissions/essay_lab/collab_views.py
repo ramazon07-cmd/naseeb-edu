@@ -20,6 +20,7 @@ from rest_framework import exceptions, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from core.exceptions import CodedError
 from apps.users.audit import audit_product_action
 from apps.users.models import User
 from ..models import (
@@ -46,15 +47,7 @@ CHANGE_KINDS = {
 }
 
 
-class CollabError(exceptions.APIException):
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_code = 'error'
-
-    def __init__(self, detail, code, status_code=None):
-        if status_code:
-            self.status_code = status_code
-        # The body carries the code too, so a client can key its message on it.
-        super().__init__({'detail': detail, 'code': code}, code)
+CollabError = CodedError
 
 
 def _doc_error(exc):

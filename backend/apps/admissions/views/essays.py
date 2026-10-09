@@ -7,7 +7,7 @@ from rest_framework.exceptions import NotFound
 from ..models import Essay, EssayRevision, EssayTab
 from ..serializers import EssaySerializer
 from ..serializers.common import changed_fields
-from ..essay_lab.collab_views import CollabError
+from core.exceptions import CodedError
 from ..essay_lab.doc import count_words, make_preview
 from ..essay_lab.tabs import tab_from_text
 from ..scoping import owns_essays_only, scope_essays, shared_essay_lookups
@@ -93,7 +93,7 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
             return
         loaded = self.request.data.get('updated_at')
         if loaded in (None, ''):
-            raise CollabError(
+            raise CodedError(
                 'Reload the essay before changing it, so newer changes are not overwritten.',
                 'precondition_required', 428,
             )
@@ -102,7 +102,7 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
         except serializers.ValidationError as exc:
             raise serializers.ValidationError({'updated_at': exc.detail})
         if loaded_at != essay.updated_at:
-            raise CollabError(
+            raise CodedError(
                 'This essay changed since you opened it. Reload it to see the latest version, then make your edit again.',
                 'essay_changed', 409,
             )
