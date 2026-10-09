@@ -1,7 +1,12 @@
 """University search ignores accents, reads Cyrillic and knows every spelling of a country."""
 import importlib
+import json
+import tempfile
+from io import StringIO
+from pathlib import Path
 
 from django.apps import apps as django_apps
+from django.core.management import call_command
 from rest_framework.test import APITestCase
 
 from apps.admissions.models import University
@@ -83,3 +88,15 @@ class SearchEndpointTests(AuditBaseMixin, APITestCase):
 
     def test_the_detail_does_not_expose_search_text(self):
         self.assertNotIn('search_text', self.client.get(f'/api/universities/{self.koc.id}/').data)
+
+    def test_a_city_filled_by_the_scorecard_load_is_searchable_unaccented(self):
+        university = University.objects.create(name='Example Polytechnic University', country='United States')
+        with tempfile.TemporaryDirectory() as folder:
+            snapshot = Path(folder) / 'scorecard.json'
+            snapshot.write_text(json.dumps({'source': 'College Scorecard', 'universities': [
+                {'name': university.name, 'city': 'Mayagüez, PR'},
+            ]}), encoding='utf-8')
+            call_command('load_college_scorecard', file=str(snapshot), stdout=StringIO())
+        university.refresh_from_db()
+        self.assertEqual(university.city, 'Mayagüez, PR')
+        self.assertEqual(self.found('Mayaguez'), {university.name})

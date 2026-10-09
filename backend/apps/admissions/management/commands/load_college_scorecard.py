@@ -20,6 +20,7 @@ from django.utils import timezone
 from apps.admissions.catalog_cache import bump_version
 from apps.admissions.catalog_match import university_key
 from apps.admissions.models import University
+from apps.admissions.search_text import university_search_text
 
 DATA_FILE = Path(__file__).resolve().parents[2] / 'catalog_data' / 'college_scorecard_2026.json'
 # Snapshot field -> University field.
@@ -58,12 +59,14 @@ class Command(BaseCommand):
             if row.get('test_optional') and not university.test_optional:
                 university.test_optional = True
                 fields.append('test_optional')
+            if 'city' in fields:
+                # bulk_update skips University.save(), which keeps search_text in step with the city.
+                university.search_text = university_search_text(university.name, university.city, university.country)
+                fields.append('search_text')
             if fields:
                 university.updated_at = now
                 changed.append(university)
                 written.update(fields)
-        # TODO(search_text): once University.search_text lands (fix/college-search-ui), refresh it
-        # for the rows whose city changed here, since bulk_update skips save().
         with transaction.atomic():
             University.objects.bulk_update(changed, sorted(written), batch_size=200)
         # Bulk writes skip the save signals that refresh the cached catalogue lists.
