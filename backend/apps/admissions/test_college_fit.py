@@ -47,7 +47,8 @@ class InternationalCostTests(FitFixture, APITestCase):
         self.assertNotIn('after aid', gap['text'])
         # Outside the US a row keeps its own price.
         self.assertIn('cost_within_budget', codes(self.fit(self.tashkent), 'reasons'))
-        self.assertEqual(self.names('price=budget'), [self.tashkent.name])
+        # MIT and Ohio State are over budget; Oxford and Quiet College have no cost, so they stay.
+        self.assertEqual(set(self.names('price=budget')), {self.tashkent.name, self.oxford.name, self.unranked.name})
 
     def test_the_net_price_counts_only_where_international_students_get_aid(self):
         aided = University.objects.create(
@@ -59,7 +60,10 @@ class InternationalCostTests(FitFixture, APITestCase):
         reason = next(entry for entry in self.fit(aided)['reasons'] if entry['code'] == 'net_after_aid_within_budget')
         self.assertEqual(reason['text'], 'Estimated net price after aid is within your budget')
         self.assertIn('cost_missing', codes(self.fit(unpriced), 'gaps'))
-        self.assertEqual(set(self.names('price=budget')), {self.tashkent.name, aided.name})
+        # A US row without an international cost and no international aid is unpriced: it stays.
+        self.assertEqual(
+            set(self.names('price=budget')), {self.tashkent.name, aided.name, unpriced.name, self.oxford.name, self.unranked.name},
+        )
         prices = self.names('sort=price')
         self.assertEqual(prices[:4], [self.tashkent.name, aided.name, self.state.name, self.mit.name])
         self.assertEqual(set(prices[4:]), {unpriced.name, self.oxford.name, self.unranked.name})

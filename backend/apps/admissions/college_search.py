@@ -495,9 +495,11 @@ def filtered_catalog(params, profile):
         queryset = queryset.filter(term_query(SEARCH_FIELDS, term))
     if params['country']:
         queryset = queryset.filter(country_q(params['country']))
-    if params['price'] != 'all':
-        cap = int(profile.budget_usd or 0) if params['price'] == 'budget' else PRICE_CAPS[params['price']]
-        queryset = queryset.filter(cost__isnull=False, cost__lte=cap)
+    # A row without a known cost stays: no published price is not "too expensive". "Within
+    # budget" without a budget in the profile has no cap; the page asks for the budget instead.
+    cap = profile.budget_usd if params['price'] == 'budget' else PRICE_CAPS.get(params['price'])
+    if cap:
+        queryset = queryset.filter(Q(cost__isnull=True) | Q(cost__lte=cap))
     for flag in params['aid']:
         queryset = queryset.filter(**{flag: True})
     if params['test_optional']:
@@ -590,6 +592,8 @@ def college_search(profile, params):
         'page_size': size,
         'next': params['page'] + 1 if start + size < count else None,
         'results': serialize_rows(page, ctx),
+        # Matching rows without a known cost: kept by the price filter, sorted last by price.
+        'unpriced_count': queryset.filter(cost__isnull=True).count(),
     }
     if params['facets']:
         data['facets'] = student_facets(profile, scores)

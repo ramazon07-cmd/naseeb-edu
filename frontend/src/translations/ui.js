@@ -2366,6 +2366,9 @@ export const UI_TRANSLATIONS = {
   "Cost per year": ["Yillik xarajat", "Стоимость в год"],
   "Estimated cost per year": ["Yillik taxminiy xarajat", "Ориентировочная стоимость в год"],
   "US universities: cost for international students, or the net price after aid where the university aids international students.": ["AQSh universitetlari: xalqaro talabalar uchun xarajat yoki universitet xalqaro talabalarga yordam bersa, yordamdan keyingi sof narx.", "Университеты США: стоимость для иностранных студентов или итоговая стоимость после помощи, если университет помогает иностранным студентам."],
+  "Add your budget in your profile to filter by price": ["Narx bo‘yicha saralash uchun profilingizga budjetingizni kiriting", "Добавьте бюджет в профиль, чтобы фильтровать по цене"],
+  "Open profile": ["Profilni ochish", "Открыть профиль"],
+  "{n} university has no published price|{n} universities have no published price": ["{n} ta universitet narxini e’lon qilmagan", "У {n} университета нет опубликованной цены|У {n} университетов нет опубликованной цены|У {n} университетов нет опубликованной цены"],
 }
 
 export function uiMessages(language) {

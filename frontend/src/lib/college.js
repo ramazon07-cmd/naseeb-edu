@@ -97,6 +97,16 @@ export function priceInfo(university) {
 
 export const afterAidText = (amount) => tx`${money(amount)} after aid`;
 
+// What the page says under a price filter. The server keeps universities without a published
+// price in every price filter and gives "Within budget" no cap until the profile has a budget
+// (college_search.filtered_catalog), so the student is told both.
+export function priceFilterNotes(price, budget, unpricedCount) {
+  return {
+    budgetMissing: price === 'budget' && !(Number(budget) > 0),
+    unpriced: price !== 'all' && unpricedCount > 0 ? tp('{n} university has no published price|{n} universities have no published price', unpricedCount, { n: formatNumberLocale(unpricedCount) }) : '',
+  };
+}
+
 export const priceCapLabel = (cap) => cap === 'all' ? t("Any price") : cap === 'budget' ? t("Within budget") : tx`Up to ${money(Number(cap))}`;
 
 export function collegeFilterChips(filters, setFilters, budget) {
@@ -104,7 +114,7 @@ export function collegeFilterChips(filters, setFilters, budget) {
   const chips = [];
   if (filters.country) chips.push({ key: 'country', text: filters.country, clear: reset({ country: '' }) });
   if (!allBands(filters.bands)) chips.push({ key: 'bands', text: filters.bands.map(bandLabel).join(', ') || t("No band"), clear: reset({ bands: DEFAULT_COLLEGE_FILTERS.bands }) });
-  if (filters.price !== 'all') chips.push({ key: 'price', text: filters.price === 'budget' ? `${t("Within budget")} ${money(budget)}` : priceCapLabel(filters.price), clear: reset({ price: 'all' }) });
+  if (filters.price !== 'all') chips.push({ key: 'price', text: filters.price === 'budget' && budget ? `${t("Within budget")} ${money(budget)}` : priceCapLabel(filters.price), clear: reset({ price: 'all' }) });
   COLLEGE_AID_FLAGS.filter(([flag]) => filters.aid.includes(flag)).forEach(([flag, title]) => chips.push({ key: flag, text: t(title), clear: reset({ aid: filters.aid.filter((item) => item !== flag) }) }));
   if (filters.testOptional) chips.push({ key: 'testOptional', text: t("Test optional"), clear: reset({ testOptional: false }) });
   if (filters.satFit) chips.push({ key: 'satFit', text: t("My SAT is in range"), clear: reset({ satFit: false }) });

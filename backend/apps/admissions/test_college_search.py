@@ -116,15 +116,48 @@ class FilterAndSortTests(CollegeSearchFixture, APITestCase):
 
     def test_price_aid_testing_and_type_filters(self):
         # US rows are priced at the international cost of attendance, not the domestic net price.
-        self.assertEqual(set(self.names('price=25000')), {self.tashkent.name})
-        self.assertEqual(set(self.names('price=40000')), {self.tashkent.name})
+        # Oxford and Quiet College publish no price, so no price filter hides them.
+        unpriced = {self.oxford.name, self.unranked.name}
+        self.assertEqual(set(self.names('price=25000')), {self.tashkent.name, *unpriced})
+        self.assertEqual(set(self.names('price=40000')), {self.tashkent.name, *unpriced})
         self.ready_profile(budget_usd=5000)
-        self.assertEqual(self.names('price=budget'), [self.tashkent.name])
+        self.assertEqual(set(self.names('price=budget')), {self.tashkent.name, *unpriced})
         self.assertEqual(self.names('aid=offers_need_based_aid,meets_full_need'), [self.mit.name])
         self.assertEqual(set(self.names('test_optional=true')), {self.state.name, self.tashkent.name})
         self.assertEqual(set(self.names('public=true')), {self.state.name, self.oxford.name})
         self.assertEqual(self.names('region=Europe'), [self.oxford.name])
         self.assertEqual(self.names('size=XL&region=Americas'), [self.state.name])
+
+    def test_within_budget_without_a_budget_has_no_cap(self):
+        self.ready_profile(budget_usd=None)
+        data = self.search('price=budget&page_size=25')
+        self.assertEqual(data['count'], University.objects.count())
+        self.assertEqual(data['unpriced_count'], 2)
+
+    def test_a_price_cap_keeps_unpriced_rows_and_counts_them(self):
+        self.ready_profile(budget_usd=50000)
+        data = self.search('price=budget&page_size=25')
+        self.assertEqual(
+            {row['name'] for row in data['results']},
+            {self.tashkent.name, self.state.name, self.oxford.name, self.unranked.name},
+        )
+        self.assertEqual(data['unpriced_count'], 2)
+        self.assertEqual(self.search('price=25000&search=oxford')['unpriced_count'], 1)
+        self.assertEqual(self.search('price=25000&search=tashkent')['unpriced_count'], 0)
+        # The same filter with a fit sort and a band filter: the unpriced rows still count.
+        self.assertEqual(self.search('price=budget&sort=fit&bands=reach,target,safety,unknown')['unpriced_count'], 2)
+
+    def test_price_sort_puts_unpriced_rows_last(self):
+        names = self.names('sort=price&price=40000')
+        self.assertEqual(names[0], self.tashkent.name)
+        self.assertEqual(set(names[1:]), {self.oxford.name, self.unranked.name})
+        names = self.names('sort=price')
+        self.assertEqual(set(names[-2:]), {self.oxford.name, self.unranked.name})
+
+    def test_the_fit_budget_factor_still_scores_an_unknown_cost_as_missing(self):
+        self.ready_profile(budget_usd=5000)
+        fit = next(row for row in self.search('search=oxford')['results'])['fit']
+        self.assertIn('cost_missing', [gap['code'] for gap in fit['gaps']])
 
     def test_sat_in_range_means_a_met_minimum_or_test_optional_without_one(self):
         self.ready_profile(sat_score=1300)
