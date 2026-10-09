@@ -9,7 +9,7 @@ import { api } from './api';
 import { AssistantCenter } from './components/AssistantCenter';
 import { canUseAssistant } from './lib/assistantAccess';
 import { ScreenTimeTracker, flushActiveScreenTime } from './components/ScreenTimeTracker';
-import { AppBootLoader, BootstrapError, BrandLockup, LanguageSelector, ThemeToggle } from './components/brand';
+import { AppBootLoader, BootstrapError, BrandLockup, LanguageSelector, SignOutFailed, ThemeToggle } from './components/brand';
 import { ProfileCard, StudentAvatar } from './components/records';
 import { LazyBoundary, PageSkeleton } from './components/states';
 import { lazyWithRetry } from './lib/retryableLazy';
@@ -528,6 +528,8 @@ export default function App() {
   const [bootstrapBusy, setBootstrapBusy] = useState(false);
   const bootstrapAttempted = useRef(false);
   const [signOutPrompt, setSignOutPrompt] = useState(false);
+  // { keepDrafts, retrying }: the server did not confirm the sign-out.
+  const [signOutFailure, setSignOutFailure] = useState(null);
   const signingOut = useRef(false);
   // Also ends the server session (the cookie may still be valid, e.g. after a
   // revoked access token), unless another tab already did.
@@ -693,7 +695,16 @@ export default function App() {
     const signedOut = user?.id;
     setSignOutPrompt(false);
     resetWorkspace();
-    const ended = api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);await ended;setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
+    const ended = api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);
+    if (await ended) leaveWorkspace(keepDrafts);else setSignOutFailure({ keepDrafts, retrying: false });}
+  function leaveWorkspace(keepDrafts) {
+    setSignOutFailure(null);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
+  async function retrySignOut() {
+    setSignOutFailure((current) => current && { ...current, retrying: true });
+    const ok = await api.retrySignOut();
+    if (ok) leaveWorkspace(signOutFailure?.keepDrafts);else setSignOutFailure((current) => current && { ...current, retrying: false });}
+  function dismissSignOutFailure() {
+    api.forgetSession();leaveWorkspace(signOutFailure?.keepDrafts);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
   const loadResources = useCallback((keys) => ensureLoaded(user, keys), [ensureLoaded, user]);
 
@@ -745,6 +756,7 @@ export default function App() {
     };
   }, [counselorLive, loadData, refreshStats, user]);
 
+  if (signOutFailure) return <SignOutFailed retrying={signOutFailure.retrying} onRetry={retrySignOut} onDismiss={dismissSignOutFailure} />;
   if (bootstrapping) return <AppBootLoader message={bootstrapBusy ? t('Busy, retrying…') : 'Checking your secure session…'} />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={() => bootstrapSession()} onSignOut={logout} />;
   if (publicPage === 'join') return <LazyBoundary fallback={<AppBootLoader />}><JoinPage token={joinTokenFor(location.pathname)} onSignIn={() => showPublicPage('login')} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;

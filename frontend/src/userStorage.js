@@ -22,7 +22,7 @@ export function userStorageKey(base, userId) {
   return `${base}:${userId}`
 }
 
-function safeStorage(storage) {
+export function safeStorage(storage) {
   try { return typeof storage === 'function' ? storage() : storage } catch { return null }
 }
 
