@@ -4,11 +4,11 @@ import { t } from '../i18n';
 import { Trash2, X, ShieldCheck, WifiOff, ChevronRight, Square, Send, Info } from 'lucide-react';
 import { initials, fullName } from '../lib/labels';
 import { assistantSource } from '../lib/assistantSource';
-import { isAssistantSwitchedOff } from '../lib/assistantAccess';
+import { assistantFailureReason, failedSend } from '../lib/assistantAccess';
 
 // `launcher`: false drops the floating button (the counselor workspace opens the
 // assistant from its account menu); `openRequest` opens it when the number changes.
-export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openRequest = 0, onSwitchedOff }) {
+export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openRequest = 0, onUnavailable }) {
   const welcome = useMemo(() => ({
     id: `welcome-${user.id}`,
     role: 'assistant',
@@ -91,12 +91,20 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
       if (requestError?.name === 'AbortError') {
         if (!received) setMessages((current) => current.filter((message) => message.id !== assistantId));
         setStatus('ready');
-      } else if (isAssistantSwitchedOff(requestError)) {
-        onSwitchedOff?.();
       } else {
-        setMessages((current) => current.filter((message) => message.id !== assistantId));
-        setError(requestError?.status === 429 ? t("You have reached the assistant limit. Please try again later.") : requestError?.status === 503 ? t("The assistant is unavailable right now. Please try again later.") : t("The assistant could not respond. Check your connection and try again."));
-        setStatus('error');
+        const reason = assistantFailureReason(requestError);
+        const { status: nextStatus, unavailable } = failedSend([], assistantId, reason);
+        const message = {
+          switched_off: t("The AI assistant has been turned off."),
+          not_in_plan: t("Your school's plan does not include the AI assistant."),
+          limit: t("You have reached the assistant limit. Please try again later."),
+          busy: t("The assistant is unavailable right now. Please try again later."),
+          connection: t("The assistant could not respond. Check your connection and try again.")
+        }[reason];
+        setMessages((current) => failedSend(current, assistantId, reason).messages);
+        setError(message);
+        setStatus(nextStatus);
+        if (unavailable) onUnavailable?.(message);
       }
     } finally {
       abortRef.current = null;

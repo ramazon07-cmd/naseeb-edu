@@ -1416,6 +1416,7 @@ export const UI_TRANSLATIONS = {
   'Student updated.': ['O‘quvchi yangilandi.', 'Данные ученика обновлены.'],
   'The assistant could not respond. Check your connection and try again.': ['AI yordamchi javob bera olmadi. Internetni tekshirib, qayta urining.', 'ИИ-помощник не смог ответить. Проверьте соединение и повторите попытку.'],
   'Unable to connect to the server. Check your connection and retry.': ['Serverga ulanib bo‘lmadi. Internetni tekshirib, qayta urining.', 'Не удалось подключиться к серверу. Проверьте соединение и повторите попытку.'],
+  "Your school's plan does not include the AI assistant.": ['Maktabingiz tarifiga AI yordamchi kirmaydi.', 'Тариф вашей школы не включает ИИ-помощника.'],
   'The AI assistant has been turned off.': ['AI yordamchi o‘chirildi.', 'ИИ-помощник отключён.'],
   'The assistant is unavailable right now. Please try again later.': ['AI yordamchi hozir mavjud emas. Keyinroq qayta urining.', 'ИИ-помощник сейчас недоступен. Попробуйте позже.'],
   'You have reached the assistant limit. Please try again later.': ['AI yordamchi limitiga yetdingiz. Keyinroq qayta urining.', 'Лимит обращений к ИИ-помощнику исчерпан. Попробуйте позже.'],
