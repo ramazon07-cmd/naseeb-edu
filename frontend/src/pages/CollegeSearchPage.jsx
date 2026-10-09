@@ -177,6 +177,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [listOpen, setListOpen] = useState(false);
   const [listFits, setListFits] = useState(() => new Map());
   const [opened, setOpened] = useState(null);
+  const [openedFit, setOpenedFit] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [tierFor, setTierFor] = useState(null);
   // Rows are slim; the QS panel loads the university's full record.
@@ -196,8 +197,8 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const budget = Number(student?.budget_usd) || 0;
   const search = useCollegeSearch(collegeSearchQuery({ query: searchTerm, filters, qsFilters, sort, view, pageSize }), researchVersion);
   const rows = search.rows;
-  const rowsRef = useRef(rows);
-  rowsRef.current = rows;
+  // The open university's fit as its row on screen has it, when that row is for the current profile.
+  const rowFit = universityId != null && search.version === researchVersion ? rows.find((item) => item.id === universityId)?.fit : undefined;
   const facets = search.facets || EMPTY_FACETS;
   const listed = useMemo(() => new Map(data.applications.map((item) => [item.university, item])), [data.applications]);
 
@@ -210,7 +211,8 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   }, []);
   useEffect(() => { if (view === 'qs') loadDetail(expandedId); }, [view, expandedId, loadDetail]);
 
-  useEffect(() => { setLocalQuery(query || ''); setSearchTerm(query || ''); }, [query]);
+  // The header search fills the box; the list follows through the same debounce as typing.
+  useEffect(() => { setLocalQuery(query || ''); }, [query]);
   // The list follows the search box once typing pauses: one request, not one per key.
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchTerm(localQuery), SEARCH_DEBOUNCE_MS);
@@ -253,15 +255,25 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       return undefined;
     }
     let active = true;
-    const row = rowsRef.current.find((item) => item.id === universityId);
     setOpened((current) => current?.id === universityId ? current : { id: universityId });
-    Promise.all([
-      api.retrieve('universities', universityId),
-      row ? row.fit : api.collegeSearch(`ids=${universityId}`).then((payload) => payload.results[0]?.fit),
-    ]).then(([university, fit]) => {if (active) setOpened({ id: universityId, university, fit });}).
+    api.retrieve('universities', universityId).then((university) => {if (active) setOpened((current) => ({ ...current, id: universityId, university }));}).
     catch((error) => {if (active) setOpened({ id: universityId, error: error.status === 404 ? t("University not found.") : error.message });});
     return () => {active = false;};
-  }, [universityId, researchVersion]);
+  }, [universityId]);
+
+  // Its fit comes from the row when that row is current; otherwise (another page,
+  // or the profile just changed) the row is fetched again for this profile.
+  useEffect(() => {
+    if (universityId == null) return undefined;
+    if (rowFit) {
+      setOpenedFit({ id: universityId, version: researchVersion, fit: rowFit });
+      return undefined;
+    }
+    let active = true;
+    api.collegeSearch(`ids=${universityId}`).then((payload) => {if (active) setOpenedFit({ id: universityId, version: researchVersion, fit: payload.results[0]?.fit });}).catch(() => {});
+    return () => {active = false;};
+  }, [universityId, researchVersion, rowFit]);
+  const fit = openedFit?.id === universityId && openedFit.version === researchVersion ? openedFit.fit : undefined;
 
   // The fit of each university on the student's list, fetched when the list opens.
   useEffect(() => {
@@ -327,7 +339,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
 
   const tierPicker = tierFor && <TierPicker university={tierFor.university} busy={busyId === tierFor.university.id} onPick={(tier) => addToList(tierFor.university, tierFor.fit, tier)} onClose={() => setTierFor(null)} />;
   if (universityId != null) {
-    if (opened?.university) return <><UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={opened.fit} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, opened.fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} />{tierPicker}</>;
+    if (opened?.university) return <><UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} />{tierPicker}</>;
     if (opened?.error) return <div className="section-stack student-portal college-page"><div className="college-research-state error"><X size={22} /><div><b>{t("This university could not be opened")}</b><p>{opened.error}</p></div><button className="button quiet small" onClick={closeUniversity}>{t("Back to College Search")}</button></div></div>;
     return <PageSkeleton />;
   }

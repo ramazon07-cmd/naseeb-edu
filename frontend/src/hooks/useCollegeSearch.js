@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { createPageCache, mergePage } from '../lib/pagedList';
 
 // After a page arrives, the next one waits this long before it is fetched, so on
 // a slow connection the rows on screen always come first.
 const PREFETCH_DELAY_MS = 800;
-// Pages kept in memory, so going back to an earlier filter is instant.
-const CACHED_PAGES = 40;
 
-const INITIAL = { query: null, rows: [], count: 0, next: null, facets: null, loading: true, loadingMore: false, error: '' };
+const INITIAL = { query: null, version: null, rows: [], count: 0, next: null, facets: null, loading: true, loadingMore: false, error: '' };
 
 /**
  * College Search, one page at a time. `query` comes from collegeSearchQuery();
@@ -19,7 +18,12 @@ const INITIAL = { query: null, rows: [], count: 0, next: null, facets: null, loa
 export function useCollegeSearch(query, version = 0) {
   const [state, setState] = useState(INITIAL);
   const [attempt, setAttempt] = useState(0);
-  const pages = useRef(new Map());
+  // Pages kept in memory (lib/pagedList), so going back to an earlier filter is instant.
+  const pages = useRef(null);
+  pages.current ??= createPageCache();
+  // Facets count the whole catalogue, so filters and sorting do not change them:
+  // they are asked for once per profile version, not with every first page.
+  const facets = useRef(new Map());
   const controller = useRef(null);
   const prefetchTimer = useRef(0);
 
@@ -29,13 +33,16 @@ export function useCollegeSearch(query, version = 0) {
   const page = useCallback((number) => {
     const key = `${version}|${query}|${number}`;
     const cached = pages.current.get(key);
-    if (cached && (cached.done || !cached.signal?.aborted)) return cached.promise;
+    if (cached && !cached.failed && (cached.done || !cached.signal?.aborted)) return cached.promise;
     const signal = controller.current?.signal;
-    const promise = api.collegeSearch(`${query}&page=${number}${number === 1 ? '&facets=true' : ''}`, signal);
-    const entry = { promise, signal };
-    pages.current.set(key, entry);
-    promise.then(() => {entry.done = true;}, () => {if (pages.current.get(key) === entry) pages.current.delete(key);});
-    if (pages.current.size > CACHED_PAGES) pages.current.delete(pages.current.keys().next().value);
+    const withFacets = number === 1 && !facets.current.has(version);
+    const promise = api.collegeSearch(`${query}&page=${number}${withFacets ? '&facets=true' : ''}`, signal);
+    pages.current.set(key, { promise, signal });
+    const entry = pages.current.get(key);
+    promise.then((payload) => {
+      entry.done = true;
+      if (payload.facets) facets.current.set(version, payload.facets);
+    }, () => {entry.failed = true;});
     return promise;
   }, [query, version]);
 
@@ -53,8 +60,8 @@ export function useCollegeSearch(query, version = 0) {
     page(1).then((payload) => {
       if (own.signal.aborted) return;
       setState((previous) => ({
-        query, rows: payload.results, count: payload.count, next: payload.next,
-        facets: payload.facets || previous.facets, loading: false, loadingMore: false, error: '',
+        query, version, rows: payload.results, count: payload.count, next: payload.next,
+        facets: facets.current.get(version) || payload.facets || previous.facets, loading: false, loadingMore: false, error: '',
       }));
       prefetch(payload.next);
     }).catch((error) => {
@@ -64,7 +71,7 @@ export function useCollegeSearch(query, version = 0) {
       own.abort();
       window.clearTimeout(prefetchTimer.current);
     };
-  }, [page, prefetch, query, attempt]);
+  }, [page, prefetch, query, version, attempt]);
 
   const loadMore = useCallback(() => {
     const number = state.next;
@@ -75,8 +82,7 @@ export function useCollegeSearch(query, version = 0) {
       if (own?.signal.aborted) return;
       setState((previous) => {
         if (previous.next !== number) return previous;
-        const seen = new Set(previous.rows.map((row) => row.id));
-        return { ...previous, rows: [...previous.rows, ...payload.results.filter((row) => !seen.has(row.id))], count: payload.count, next: payload.next, loadingMore: false };
+        return { ...previous, rows: mergePage(previous.rows, payload.results), count: payload.count, next: payload.next, loadingMore: false };
       });
       prefetch(payload.next);
     }).catch((error) => {
