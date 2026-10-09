@@ -17,9 +17,11 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from apps.users.cache_safety import cache_get, cache_set
 from apps.users.throttles import UserRateThrottle
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.views import APIView
+from core.ai_policy import outbound_ai_allowed
 
-from apps.users.entitlements import require_feature
+from apps.users.entitlements import ASSISTANT_ROLES, require_feature
 from apps.users.models import User
 from . import ai_budget
 from .streaming import GuardedStream, acquire_stream_slot, release_db_connection
@@ -299,20 +301,26 @@ def _close(iterator):
         close()
 
 
+class AssistantDisabled(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+
 class AssistantChatView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [AssistantRateThrottle]
 
+    def check_throttles(self, request):
+        # Refusals that don't depend on the message come first, so a switched-off
+        # or not-included assistant never uses up the user's rate limit.
+        if not outbound_ai_allowed():
+            raise AssistantDisabled({'detail': 'Assistant is currently unavailable.', 'code': 'assistant_disabled'})
+        if request.user.role not in ASSISTANT_ROLES:
+            raise PermissionDenied('Assistant access is currently limited to students and counselors.')
+        require_feature(request, 'ai_assistant')
+        super().check_throttles(request)
+
     def post(self, request):
         user = request.user
-        if not settings.AI_ASSISTANT_ENABLED:
-            return Response({'detail': 'Assistant is currently unavailable.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        if user.role not in {User.Role.STUDENT, User.Role.COUNSELOR}:
-            return Response(
-                {'detail': 'Assistant access is currently limited to students and counselors.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        require_feature(request, 'ai_assistant')
         try:
             messages = _validated_messages(request.data, user_id=user.id)
         except ValueError as error:

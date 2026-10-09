@@ -39,14 +39,17 @@ jobs:
         env:
           APP_ENV: test
           SECRET_KEY: ci-only-secret
+      # From backend/ (no label) so discovery covers apps/ and core/.
       - name: Django tests (SQLite)
-        run: python backend/manage.py test apps -v 2
+        run: python manage.py test --parallel
+        working-directory: backend
         env:
           SECRET_KEY: ci-only-secret
           DEBUG: "True"
           ALLOWED_HOSTS: localhost,testserver
       - name: Django tests (PostgreSQL, matches production)
-        run: python backend/manage.py test apps -v 2 --noinput
+        run: python manage.py test --parallel --noinput
+        working-directory: backend
         env:
           SECRET_KEY: ci-only-secret
           DEBUG: "True"

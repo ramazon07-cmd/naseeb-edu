@@ -236,6 +236,8 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 school_id=request.user.school_id,
             ).first()
         data['workspace'] = entitlements.workspace_summary(subscription)
+        # Same rules as the chat view, so the frontend only offers what will work.
+        data['assistant_enabled'] = entitlements.assistant_available(request.user, subscription)
         return Response(data)
 
     @action(

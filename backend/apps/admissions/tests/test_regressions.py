@@ -1,5 +1,6 @@
 """Regression tests for past security and correctness bugs."""
 from django.core.cache import cache
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -431,6 +432,7 @@ class UploadHardeningTests(AuditFixtureMixin, APITestCase):
         self.assertEqual(response.status_code, 413)
 
 
+@override_settings(OUTBOUND_AI_ENABLED=True)
 class AssistantHardeningTests(AuditFixtureMixin, APITestCase):
     """Daily budget, forged assistant turns and network errors."""
 
@@ -492,6 +494,7 @@ class AssistantHardeningTests(AuditFixtureMixin, APITestCase):
         self.assertIn('temporarily unavailable', body)
 
 
+@override_settings(OUTBOUND_AI_ENABLED=True)
 class AssistantStreamFailureTests(AuditFixtureMixin, APITestCase):
     """A stream that fails midway must not get fallback text glued on."""
 

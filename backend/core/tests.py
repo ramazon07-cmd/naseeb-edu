@@ -175,7 +175,7 @@ class PgBouncerSettingsTests(SimpleTestCase):
         )
         result = subprocess.run(
             [sys.executable, '-c', script], cwd=settings.BASE_DIR, capture_output=True, text=True, timeout=120,
-            env={**env, 'DJANGO_SETTINGS_MODULE': 'core.settings'},
+            env={**env, 'DJANGO_SETTINGS_MODULE': 'core.settings', 'NASEEB_IGNORE_DOTENV': '1'},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout.strip().splitlines()[-1])
@@ -208,6 +208,7 @@ class FreshCheckoutMessageTests(SimpleTestCase):
         import sys
         from django.conf import settings
         env = {key: value for key, value in os.environ.items() if key in {'PATH', 'HOME', 'SYSTEMROOT'}}
+        env['NASEEB_IGNORE_DOTENV'] = '1'  # a developer's backend/.env must not supply APP_ENV
         result = subprocess.run(
             [sys.executable, 'manage.py', 'check'],
             cwd=settings.BASE_DIR, env=env, capture_output=True, text=True, timeout=120,
@@ -215,6 +216,44 @@ class FreshCheckoutMessageTests(SimpleTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('APP_ENV=development', result.stderr)
         self.assertIn('.env.example', result.stderr)
+
+
+def load_settings_in_subprocess(expression, **env_vars):
+    """Evaluate `expression` against freshly loaded settings, ignoring any backend/.env."""
+    import os
+    import subprocess
+    import sys
+    from django.conf import settings
+    env = {key: value for key, value in os.environ.items() if key in {'PATH', 'HOME', 'SYSTEMROOT'}}
+    env.update({'NASEEB_IGNORE_DOTENV': '1', 'DJANGO_SETTINGS_MODULE': 'core.settings', **env_vars})
+    return subprocess.run(
+        [sys.executable, '-c', f'import django; django.setup(); from django.conf import settings; print({expression})'],
+        cwd=settings.BASE_DIR, env=env, capture_output=True, text=True, timeout=120,
+    )
+
+
+class OutboundAiSwitchTests(SimpleTestCase):
+    DEV = {'APP_ENV': 'development', 'DEBUG': 'True'}
+
+    def switch(self, **env_vars):
+        result = load_settings_in_subprocess('settings.OUTBOUND_AI_ENABLED', **self.DEV, **env_vars)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def test_off_by_default_and_the_old_name_still_works(self):
+        self.assertEqual(self.switch(), 'False')
+        self.assertEqual(self.switch(AI_ASSISTANT_ENABLED='True'), 'True')
+        self.assertEqual(self.switch(AI_ASSISTANT_ENABLED='True', OUTBOUND_AI_ENABLED='False'), 'False')
+        self.assertEqual(self.switch(OUTBOUND_AI_ENABLED='True'), 'True')
+
+    def test_unused_provider_keys_are_reported(self):
+        from core.checks import unused_ai_keys_check
+        with override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='key', GROQ_API_KEY=''):
+            self.assertEqual([item.id for item in unused_ai_keys_check(None)], ['naseeb.W002'])
+        with override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='key', GROQ_API_KEY='key'):
+            self.assertEqual(unused_ai_keys_check(None), [])
+        with override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='', GROQ_API_KEY=''):
+            self.assertEqual(unused_ai_keys_check(None), [])
 
 
 class RedisTimeoutTests(SimpleTestCase):
@@ -270,6 +309,7 @@ class ApiCompressionTests(TestCase):
         response = self.client.get('/api/users/accounts/me/')
         self.assertFalse(response.has_header('Content-Encoding'))
 
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='')
     def test_streams_are_not_compressed(self):
         response = self.client.post(
             '/api/assistant/chat/', {'messages': [{'role': 'user', 'content': 'Help with my tasks ' * 30}]},

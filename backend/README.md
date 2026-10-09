@@ -39,6 +39,33 @@ These accounts are only available when `ENABLE_DEMO_ACCOUNTS=True`. Production m
 
 If `APP_ENV` is not set, the backend fails closed to production (it refuses to start without real secrets) unless `DEBUG=True` is set explicitly on a non-hosted machine or the test runner is used. There is no built-in default `SECRET_KEY`; development without one gets a random per-process key.
 
+## Outbound AI switch
+
+`OUTBOUND_AI_ENABLED` (default `False`) is the one switch for every call that
+sends user data to an outside AI provider (`core/ai_policy.outbound_ai_allowed`).
+Its older name, `AI_ASSISTANT_ENABLED`, is still read when `OUTBOUND_AI_ENABLED`
+is not set.
+It stays off until production use has legal sign-off (open item H8 in
+`docs/product-vision-and-stages.md`), because these calls carry students'
+(minors') data. While it is off:
+
+- the Naseeb AI assistant is unavailable: `POST /api/assistant/chat/` answers
+  `503` with `"code": "assistant_disabled"`, and the frontend shows no launcher;
+- Essay Coach depth checks use the built-in rule-based coach (`model: "local"`);
+- education-match guidance uses its deterministic fallback (`provider_available: false`).
+
+`GET /api/users/accounts/me/` reports `assistant_enabled`, which is true only when
+the switch is on, the user is a student or counselor and the school plan includes
+`ai_assistant`. With the switch on, the provider keys (`AI_GATEWAY_API_KEY`,
+`GROQ_API_KEY`) still decide whether outside calls happen; without a key each
+feature uses its local fallback. `manage.py check` warns (`naseeb.W002`) when a
+provider key is set while the switch is off, since the key is then unused.
+
+Setting `NASEEB_IGNORE_DOTENV=1` makes the settings read only the process
+environment and skip `backend/.env`; the tests that boot settings in a
+subprocess use it, so a local `.env` copied from `.env.example` cannot change
+their result.
+
 ## API Docs
 
 ```text

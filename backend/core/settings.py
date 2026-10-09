@@ -1,9 +1,10 @@
+import os
 import secrets
 import sys
 from datetime import timedelta
 from pathlib import Path
 from corsheaders.defaults import default_headers
-from decouple import config, Csv
+from decouple import Config, Csv, RepositoryEmpty, config
 from core.environment import (
     build_cache_settings,
     build_database_settings,
@@ -17,6 +18,10 @@ from core.observability import init_sentry
 from core.storage_config import FILESYSTEM_STORAGE, build_storages
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# NASEEB_IGNORE_DOTENV=1 reads only the process environment, never backend/.env;
+# tests that boot these settings in a subprocess set it so a local .env can't leak in.
+if os.environ.get('NASEEB_IGNORE_DOTENV'):
+    config = Config(RepositoryEmpty())
 
 HOSTED_RUNTIME = config('RENDER', default=False, cast=bool)
 APP_ENV = resolve_app_environment(
@@ -44,7 +49,14 @@ DOCUMENT_STORAGE_ROOT_VALUE = config('DOCUMENT_STORAGE_ROOT', default='').strip(
 
 # H8 assistant configuration. Provider credentials are backend-only secrets and
 # must never be mirrored into a VITE_* build variable.
-AI_ASSISTANT_ENABLED = config('AI_ASSISTANT_ENABLED', default=True, cast=bool)
+# OUTBOUND_AI_ENABLED is the one switch for all outbound AI (assistant, Essay
+# Coach, education guidance; see core/ai_policy.py). These send students'
+# (minors') data to outside providers, and production use is waiting on legal
+# sign-off (H8), so it is off unless set. AI_ASSISTANT_ENABLED is its older name
+# and is used only when OUTBOUND_AI_ENABLED is not set.
+OUTBOUND_AI_ENABLED = config(
+    'OUTBOUND_AI_ENABLED', default=config('AI_ASSISTANT_ENABLED', default=False, cast=bool), cast=bool,
+)
 AI_GATEWAY_API_KEY = config('AI_GATEWAY_API_KEY', default='').strip()
 AI_GATEWAY_URL = config(
     'AI_GATEWAY_URL',

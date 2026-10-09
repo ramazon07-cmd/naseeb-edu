@@ -19,7 +19,7 @@ def fresh_fallback():
 
 
 @override_settings(
-    AI_ASSISTANT_DAILY_BUDGET=100, AI_ASSISTANT_SCHOOL_DAILY_BUDGET=100, AI_ASSISTANT_USER_DAILY_LIMIT=100,
+    OUTBOUND_AI_ENABLED=True, AI_ASSISTANT_DAILY_BUDGET=100, AI_ASSISTANT_SCHOOL_DAILY_BUDGET=100, AI_ASSISTANT_USER_DAILY_LIMIT=100,
     AI_FALLBACK_PROCESS_DAILY_BUDGET=2,
 )
 class AiBudgetTests(APITestCase):
@@ -97,7 +97,8 @@ class AiBudgetTests(APITestCase):
         self.assertEqual(gateway.call_count, 1)
 
 
-@override_settings(AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0, ESSAY_COACH_USER_DAILY_LIMIT=1)
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0,
+                   ESSAY_COACH_USER_DAILY_LIMIT=1)
 class EssayCoachBudgetTests(EssayLabTestCase):
     def test_per_user_daily_limit(self):
         essay = self.make_essay()

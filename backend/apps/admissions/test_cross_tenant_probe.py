@@ -13,6 +13,7 @@ student, record, staff member or channel.
 """
 from datetime import timedelta
 
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
@@ -651,6 +652,7 @@ class CrossTenantEndpointSweepTests(CrossTenantFixture, APITestCase):
 
     # -- assistant ----------------------------------------------------------------
 
+    @override_settings(OUTBOUND_AI_ENABLED=True)
     def test_assistant_context_holds_only_the_callers_own_aggregates(self):
         for counselor, profile in ((self.counselor_a, self.student_a), (self.solo, self.student_w)):
             context = build_role_context(self.fresh(counselor))
@@ -679,4 +681,4 @@ class CrossTenantEndpointSweepTests(CrossTenantFixture, APITestCase):
             self.client.force_authenticate(self.fresh(account))
             response = self.client.post('/api/assistant/chat/', {'messages': [{'role': 'user', 'content': 'hi'}]},
                                         format='json')
-            self.assertIn(response.status_code, {403, 503}, account.username)
+            self.assertEqual(response.status_code, 403, account.username)

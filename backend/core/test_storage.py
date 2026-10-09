@@ -176,7 +176,8 @@ class ProductionStartupTests(SimpleTestCase):
         return subprocess.run(
             [sys.executable, '-c', 'import django; django.setup(); from django.conf import settings; '
              'print(settings.STORAGES["private_documents"]["BACKEND"])'],
-            cwd=settings.BASE_DIR, env={**env, 'DJANGO_SETTINGS_MODULE': 'core.settings'},
+            # NASEEB_IGNORE_DOTENV: a developer's backend/.env must not change the result.
+            cwd=settings.BASE_DIR, env={**env, 'DJANGO_SETTINGS_MODULE': 'core.settings', 'NASEEB_IGNORE_DOTENV': '1'},
             capture_output=True, text=True, timeout=120,
         )
 

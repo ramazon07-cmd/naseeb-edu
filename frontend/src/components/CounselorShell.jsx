@@ -4,6 +4,7 @@ import { Bell, Calendar, CheckSquare, Compass, Ellipsis, LayoutDashboard, LifeBu
 import { LANGUAGE_OPTIONS, formatNumberLocale, t } from '../i18n';
 import { fullName, initials } from '../lib/labels';
 import { counselorCounts } from '../lib/counselorCounts';
+import { canUseAssistant } from '../lib/assistantAccess';
 import { COUNSELOR_NAV } from '../lib/routes';
 import { CounselorUiContext } from './counselorUi';
 import { useAccountPhoto } from './records';
@@ -73,7 +74,7 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
       </div>
       <button type="button" role="menuitem" aria-pressed={dark} onClick={toggleTheme}>{dark ? <Sun size={17} /> : <Moon size={17} />}{dark ? t('Light mode') : t('Dark mode')}</button>
       <button type="button" role="menuitem" onClick={() => { setOpen(false); openAccountSettings(); }}><Settings size={17} />{t('Account settings')}</button>
-      <button type="button" role="menuitem" onClick={() => { setOpen(false); openAssistant(); }}><span className="cx-bird" aria-hidden="true" />{t('Naseeb AI assistant')}</button>
+      {openAssistant && <button type="button" role="menuitem" onClick={() => { setOpen(false); openAssistant(); }}><span className="cx-bird" aria-hidden="true" />{t('Naseeb AI assistant')}</button>}
       {openSupport && <button type="button" role="menuitem" onClick={() => { setOpen(false); openSupport(); }}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <i className="cx-count">{formatNumberLocale(supportBadge)}</i>}</button>}
       <div ref={attachActions} />
       <button type="button" role="menuitem" onClick={logout}><LogOut size={17} />{t('Logout')}</button>
@@ -95,7 +96,7 @@ export function CounselorLayout({ user, data, stats, page, title, setPage, setQu
     return () => document.removeEventListener('keydown', escape);
   }, [drawer]);
   const go = (next) => { setPage(next); setQuery(''); setDrawer(false); };
-  const account = { user, theme, toggleTheme, language, changeLanguage, logout, openAssistant, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), openAccountSettings: () => go('account_settings'), supportBadge, setAccountActionsHost };
+  const account = { user, theme, toggleTheme, language, changeLanguage, logout, openAssistant: canUseAssistant(user) ? openAssistant : null, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), openAccountSettings: () => go('account_settings'), supportBadge, setAccountActionsHost };
   const item = (next, className = 'cx-nav-item', badges = true) => {
     const { label, icon: Icon, badge } = NAV[next];
     const active = page === next;

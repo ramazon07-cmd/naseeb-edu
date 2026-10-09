@@ -13,6 +13,8 @@ from django.db.models import Count, IntegerField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from rest_framework.exceptions import PermissionDenied
 
+from core.ai_policy import outbound_ai_allowed
+
 from .localization import localized_message
 from .models import PLAN_FEATURES, Plan, User, WorkspaceSubscription
 
@@ -184,7 +186,12 @@ def loaded_school_is_read_only(school):
     return subscription.is_read_only
 
 
-def feature_enabled(user, key):
+_NOT_LOADED = object()
+
+
+def feature_enabled(user, key, subscription=_NOT_LOADED):
+    """`subscription`: the user's school subscription (with its plan) or None, when
+    the caller already loaded it; otherwise it is read here."""
     if key not in PLAN_FEATURES:
         raise KeyError(key)
     if user.is_product_admin:
@@ -193,9 +200,23 @@ def feature_enabled(user, key):
         return parent_feature_enabled(user, key)
     if not user.school_id:
         return True
+    if subscription is not _NOT_LOADED:
+        return True if subscription is None else subscription.plan.has_feature(key)
     row = subscription_row(user.school_id)
     # Workspaces without a subscription predate plans and keep full access.
     return True if row is None else bool((row[2] or {}).get(key))
+
+
+ASSISTANT_ROLES = frozenset({User.Role.STUDENT, User.Role.COUNSELOR})
+
+
+def assistant_available(user, subscription=_NOT_LOADED):
+    """What the assistant chat allows: the outbound-AI switch, the role and the plan."""
+    return (
+        outbound_ai_allowed()
+        and user.role in ASSISTANT_ROLES
+        and feature_enabled(user, 'ai_assistant', subscription)
+    )
 
 
 def parent_feature_enabled(user, key):
