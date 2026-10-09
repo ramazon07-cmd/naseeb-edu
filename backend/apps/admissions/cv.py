@@ -8,9 +8,11 @@ Records the student keeps in the portfolio (Activity, Internship, Research,
 Project, Honor, Achievement) are the source of truth: they carry dates and
 places. The onboarding answers (application_profile.activities / .honors)
 fill in only what no record already covers, so one olympiad entered in both
-places prints once: an onboarding honor is dropped when an Honor or
-Achievement has the same name, an onboarding activity when any record or an
-honor does. An Achievement that repeats an Honor is dropped as well. The frontend formats the dates (frontend/src/lib/cv.js).
+places prints once: an onboarding row is dropped when a record names the same
+item (see same_item), never because of another onboarding row. An Achievement
+that repeats an Honor is dropped as well. Entries of one section that name the
+same organization print once, with one role line per role (President, Grade 11
+above Secretary, Grade 9). The frontend formats the dates (frontend/src/lib/cv.js).
 """
 import math
 import re
@@ -35,9 +37,13 @@ GRADE_LABELS = {'8': 'Grade 8', '9': 'Grade 9', '10': 'Grade 10', '11': 'Grade 1
 
 _BULLET = re.compile(r'^\s*(?:[-*•●▪◦]|\d+[.)])\s*')
 _NOT_WORD = re.compile(r'[^\w]+')
-# A shorter name counts as the same item inside a longer one only from this length,
-# so "Club" never swallows "Chess club" and "Robotics club".
-MIN_CONTAINED = 8
+_NUMBER = re.compile(r'\d+')
+# A shorter name is the same item as a longer one that contains it only when it
+# has this many words and covers this share of the longer one's words, so
+# "Volunteering" never matches "Red Crescent Volunteering" while "Regional Math
+# Olympiad" matches "Regional Math Olympiad - Gold medal".
+MIN_CONTAINED_WORDS = 3
+MIN_CONTAINED_SHARE = 0.6
 
 
 def text(value):
@@ -60,17 +66,20 @@ def norm(value):
 
 
 def same_item(a, b):
-    a, b = norm(a), norm(b)
+    """Equal names (case, punctuation and word order aside), or one inside the other by enough words."""
+    a, b = norm(a).split(), norm(b).split()
     if not a or not b:
         return False
-    if a == b:
+    if sorted(a) == sorted(b):
         return True
     short, long = sorted((a, b), key=len)
-    return len(short) >= MIN_CONTAINED and f' {short} ' in f' {long} '
+    if len(short) < MIN_CONTAINED_WORDS or len(short) < MIN_CONTAINED_SHARE * len(long):
+        return False
+    return any(long[i:i + len(short)] == short for i in range(len(long) - len(short) + 1))
 
 
 class Dedup:
-    """Names already printed; an onboarding answer that matches one is dropped."""
+    """Names of portfolio records; an onboarding answer that matches one is dropped."""
 
     def __init__(self):
         self.names = []
@@ -100,14 +109,50 @@ def entry(*, organization='', location='', title='', note='', link='', start=Non
         'date': iso(date),
         'date_text': text(date_text),
         'bullets': [item for item in items if item],
+        'roles': [],
     }
 
 
+ROLE_KEYS = ('title', 'note', 'start', 'end', 'current', 'date', 'date_text', 'bullets')
+
+
+def grade_rank(label):
+    """How recent a school-year label is: Gap year > Grade 12 > … > Grade 9; "Grades 9, 10" counts as 10."""
+    words = norm(label)
+    if 'gap' in words:
+        return 13
+    numbers = [int(n) for n in _NUMBER.findall(words) if int(n) <= 13]
+    return max(numbers, default=0)
+
+
 def sort_key(item):
-    """Newest first: an ongoing entry, then by end (or single) date, then start; undated last."""
+    """Newest first: ongoing, then by end (or single) date and start, then by school year; undated last."""
+    if item['roles']:
+        item = item['roles'][0]
     end = item['date'] or item['end'] or item['start'] or ''
     dated = 0 if end else 1 if item['date_text'] else 2
-    return (not item['current'], dated, _desc(end), _desc(item['start'] or ''), _desc(item['date_text']))
+    return (not item['current'], dated, _desc(end), _desc(item['start'] or ''), -grade_rank(item['date_text']))
+
+
+def merge_organizations(items):
+    """Sorted entries, those naming one organization merged into one with a role line each."""
+    groups = {}
+    for item in sorted(items, key=sort_key):
+        groups.setdefault(norm(item['organization']) or id(item), []).append(item)
+    merged = []
+    for group in groups.values():
+        if len(group) == 1:
+            merged.append(group[0])
+            continue
+        first = group[0]
+        combined = entry(
+            organization=first['organization'],
+            location=next((item['location'] for item in group if item['location']), ''),
+            link=next((item['link'] for item in group if item['link']), ''),
+        )
+        combined['roles'] = [{key: item[key] for key in ROLE_KEYS} for item in group]
+        merged.append(combined)
+    return sorted(merged, key=sort_key)
 
 
 def _desc(value):
@@ -125,9 +170,12 @@ def location_of(answers):
 def gpa_text(profile):
     if profile.gpa is None:
         return ''
-    value = f'{profile.gpa.normalize():f}'
     scale = profile.effective_gpa_scale
-    return f'GPA: {value}/{scale}.0' if scale in (4, 5) else f'GPA: {value}/{scale}' if scale else f'GPA: {value}'
+    if scale in (4, 5):
+        return f'GPA: {profile.gpa:.2f}/{scale}.00'
+    # A 100-point GPA keeps the student's decimals, without padding whole numbers.
+    value = f'{profile.gpa:.2f}'.rstrip('0').rstrip('.') if scale == 100 else f'{profile.gpa:.2f}'
+    return f'GPA: {value}/{scale}' if scale else f'GPA: {value}'
 
 
 def rank_text(answers):
@@ -177,7 +225,7 @@ def experience(profile, dedup):
     for row in profile.researches.all():
         items.append(entry(
             organization=row.title, link=row.link, title=joined(row.role, row.field),
-            start=row.start_date, end=row.end_date, current=bool(row.start_date and not row.end_date),
+            start=row.start_date, end=row.end_date,
             items=[*bullets(row.summary), f'Outcome: {text(row.outcome)}' if text(row.outcome) else ''],
         ))
         dedup.add(row.title)
@@ -203,7 +251,7 @@ def leadership(profile, dedup):
         )
         items.append(entry(
             organization=row.name, location=row.location, title=row.role,
-            start=row.start_date, end=row.end_date, current=bool(row.start_date and not row.end_date),
+            start=row.start_date, end=row.end_date,
             items=[*bullets(row.description), text(row.impact), hours],
         ))
         dedup.add(row.name)
@@ -218,7 +266,6 @@ def onboarding_activities(answers, dedup, awards, experience_items, leadership_i
         keys = (row.get('organization'), joined(row.get('position'), row.get('organization'), sep=' '))
         if not name or dedup.seen(*keys) or awards.seen(*keys):
             continue
-        dedup.add(name)
         hours = joined(
             f"{row['hours']} hours/week" if row.get('hours') else '',
             f"{row['weeks']} weeks/year" if row.get('weeks') else '', sep=', ',
@@ -226,7 +273,7 @@ def onboarding_activities(answers, dedup, awards, experience_items, leadership_i
         grades = text(row.get('grades'))
         item = entry(
             organization=name, title=row.get('position') if text(row.get('organization')) else '',
-            date_text=f'Grades {grades}' if grades and grades[0].isdigit() else grades,
+            date_text=(f'Grade {grades}' if grades.isdigit() else f'Grades {grades}') if grades[:1].isdigit() else grades,
             items=[*bullets(row.get('description')), hours],
         )
         (experience_items if row.get('type') in EXPERIENCE_TYPES else leadership_items).append(item)
@@ -254,7 +301,6 @@ def honors(profile, answers, awards):
         name = text(row.get('project')) or text(row.get('role'))
         if not name or awards.seen(row.get('project'), joined(row.get('role'), row.get('project'), sep=' ')):
             continue
-        awards.add(name)
         grade = text(row.get('grade'))
         items.append(entry(
             organization=name, location=row.get('recognition'),
@@ -274,7 +320,7 @@ def test_scores(profile, answers):
         )
         scores.append(f'SAT {profile.sat_score}' + (f' ({sections})' if sections else ''))
     if profile.ielts_status == 'taken' and profile.ielts_score is not None:
-        scores.append(f'IELTS {profile.ielts_score.normalize():f}')
+        scores.append(f'IELTS {profile.ielts_score:.1f}')
     for row in answers.get('certificates') or []:
         if not isinstance(row, dict) or text(row.get('score')) == '':
             continue
@@ -310,9 +356,9 @@ def build_cv(profile):
     onboarding_activities(answers, dedup, awards, experience_items, leadership_items)
     sections = {
         'education': education(profile, answers),
-        'experience': sorted(experience_items, key=sort_key),
-        'leadership': sorted(leadership_items, key=sort_key),
-        'honors': sorted(honor_items, key=sort_key),
+        'experience': merge_organizations(experience_items),
+        'leadership': merge_organizations(leadership_items),
+        'honors': merge_organizations(honor_items),
     }
     name = ' '.join(part for part in (text(user.first_name), text(answers.get('middle_name')), text(user.last_name)) if part)
     return {

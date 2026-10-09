@@ -2,9 +2,13 @@
 import datetime
 import json
 
+from django.db import transaction
+from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
 from apps.users.models import User
+from .cv import grade_rank, same_item, sort_key
+from .section_review import set_review
 from .models import (
     Achievement, Activity, Application, Essay, Honor, Internship, ParentStudentLink, Project, Research, School,
     StudentProfile, Task, University,
@@ -108,7 +112,7 @@ class StudentCvContentTests(CvTestBase):
         self.assertNotIn('12345', body)
         self.assertEqual(set(response.data), {'header', 'sections', 'additional'})
         self.assertEqual(set(response.data['header']), {'name', 'email', 'phone', 'location', 'links'})
-        entry_keys = {'organization', 'location', 'title', 'note', 'link', 'start', 'end', 'current', 'date', 'date_text', 'bullets'}
+        entry_keys = {'organization', 'location', 'title', 'note', 'link', 'start', 'end', 'current', 'date', 'date_text', 'bullets', 'roles'}
         for section in response.data['sections']:
             self.assertEqual(set(section), {'key', 'entries'})
             for entry in section['entries']:
@@ -125,7 +129,7 @@ class StudentCvContentTests(CvTestBase):
         school = education['entries'][0]
         self.assertEqual((school['organization'], school['location'], school['date_text']), ('Example Lyceum No. 1', 'Namangan, Uzbekistan', 'Class of 2027'))
         self.assertEqual(school['note'], 'Intended fields of study: Computer Technologies, Engineering')
-        self.assertEqual(school['bullets'], ['GPA: 4.85/5.0', 'Class rank: 6 of 200 (Top 3%)', 'AP: Calculus BC (5)'])
+        self.assertEqual(school['bullets'], ['GPA: 4.85/5.00', 'Class rank: 6 of 200 (Top 3%)', 'AP: Calculus BC (5)'])
         self.assertEqual(data['additional'], [
             {'key': 'languages', 'value': 'Uzbek (Native), English (Fluent)'},
             {'key': 'test_scores', 'value': 'SAT 1480 (Reading and Writing 700, Math 780), IELTS 7.5, TOEFL iBT 104, CS50x Certificate Pass'},
@@ -146,7 +150,9 @@ class StudentCvContentTests(CvTestBase):
         self.assertEqual((bank['location'], bank['title'], bank['start'], bank['end'], bank['current']), ('Tashkent, Uzbekistan', 'Data Intern', '2024-06-01', '2024-12-01', False))
         self.assertEqual(bank['bullets'], ['Cleaned data', 'Built a dashboard'])
         self.assertTrue(sections['experience'][0]['current'])
-        self.assertTrue(sections['leadership'][0]['current'])
+        # No model field says an activity is ongoing: a start without an end is just the start.
+        debate = sections['leadership'][0]
+        self.assertEqual((debate['current'], debate['start'], debate['end']), (False, '2022-09-01', None))
         self.assertEqual(sections['experience'][2]['link'], 'https://example.com/bot')
         self.assertEqual(sections['experience'][3]['bullets'], ['Measured PM2.5.', 'Outcome: Published in a school journal'])
         honor = sections['honors'][1]
@@ -155,13 +161,50 @@ class StudentCvContentTests(CvTestBase):
     def test_onboarding_answers_fill_in_without_records(self):
         sections = {section['key']: section['entries'] for section in self.client.get(ME).data['sections']}
         self.assertEqual([e['organization'] for e in sections['experience']], ['Startup Hub'])
-        self.assertEqual([e['organization'] for e in sections['leadership']], ['Debate Society'])
+        # Onboarding rows are never dropped because of other onboarding rows: the olympiad
+        # is both an activity and an honor here, and no record covers it.
+        self.assertEqual([e['organization'] for e in sections['leadership']], ['Debate Society', 'Regional Math Olympiad'])
         debate = sections['leadership'][0]
         self.assertEqual((debate['title'], debate['date_text']), ('Founder', 'Grades 9, 10, 11'))
         self.assertEqual(debate['bullets'], ['Weekly debates.', '3 hours/week, 30 weeks/year'])
-        # Onboarding honors: the olympiad activity repeats an onboarding honor and is dropped.
+        self.assertEqual(sections['leadership'][1]['date_text'], 'Grade 10')
         self.assertEqual([e['organization'] for e in sections['honors']], ['Hackathon Tashkent', 'Regional Math Olympiad'])
         self.assertEqual(sections['honors'][0]['date_text'], 'Grade 11')
+
+    def test_one_organization_prints_once_with_every_role(self):
+        self.onboard(
+            activities=[
+                dict(type='Club', position='Secretary', organization='Student Council', description='Took minutes.', grades='9', hours=2, weeks=30),
+                dict(type='Club', position='President', organization='Student Council', description='Led 15 members.', grades='11', hours=4, weeks=30),
+                dict(type='Volunteer', position='Volunteer', organization='Red Crescent Volunteering', description='Weekly shifts.', grades='10', hours=2, weeks=20),
+            ],
+            honors=[
+                dict(role='Bronze medal', project='National Physics Olympiad', description='Third place.', grade='9', recognition='National'),
+                dict(role='Gold medal', project='National Physics Olympiad', description='First place.', grade='10', recognition='National'),
+            ],
+        )
+        Activity.objects.create(student=self.profile, name='Volunteering', role='Helper', start_date=datetime.date(2020, 1, 1))
+        sections = {section['key']: section['entries'] for section in self.client.get(ME).data['sections']}
+        council = next(e for e in sections['leadership'] if e['organization'] == 'Student Council')
+        self.assertEqual([(r['title'], r['date_text']) for r in council['roles']], [('President', 'Grade 11'), ('Secretary', 'Grade 9')])
+        self.assertEqual(council['roles'][0]['bullets'], ['Led 15 members.', '4 hours/week, 30 weeks/year'])
+        self.assertEqual((council['title'], council['bullets']), ('', []))
+        # A generic record name does not swallow a longer, different organization.
+        self.assertIn('Red Crescent Volunteering', [e['organization'] for e in sections['leadership']])
+        self.assertIn('Volunteering', [e['organization'] for e in sections['leadership']])
+        olympiad = next(e for e in sections['honors'] if e['organization'] == 'National Physics Olympiad')
+        self.assertEqual(olympiad['location'], 'National')
+        self.assertEqual([(r['title'], r['date_text']) for r in olympiad['roles']], [('Gold medal', 'Grade 10'), ('Bronze medal', 'Grade 9')])
+
+    def test_numbers_keep_their_precision(self):
+        self.profile.gpa, self.profile.gpa_scale, self.profile.ielts_score = 4, 4, 7
+        self.profile.save()
+        data = self.client.get(ME).data
+        self.assertEqual(data['sections'][0]['entries'][0]['bullets'][0], 'GPA: 4.00/4.00')
+        self.assertIn('IELTS 7.0', data['additional'][1]['value'])
+        self.profile.gpa, self.profile.gpa_scale = 92.5, 100
+        self.profile.save()
+        self.assertEqual(self.client.get(ME).data['sections'][0]['entries'][0]['bullets'][0], 'GPA: 92.5/100')
 
     def test_empty_sections_are_omitted(self):
         self.profile.application_profile = {}
@@ -181,7 +224,26 @@ class StudentCvContentTests(CvTestBase):
         Activity.objects.create(student=self.profile, name='Old club', start_date=datetime.date(2020, 1, 1), end_date=datetime.date(2020, 6, 1))
         Activity.objects.create(student=self.profile, name='Newer club', start_date=datetime.date(2021, 1, 1), end_date=datetime.date(2022, 6, 1))
         sections = {section['key']: section['entries'] for section in self.client.get(ME).data['sections']}
-        self.assertEqual([e['organization'] for e in sections['leadership']], ['Newer club', 'Old club', 'Debate Society', 'Undated club'])
+        self.assertEqual([e['organization'] for e in sections['leadership']], ['Newer club', 'Old club', 'Debate Society', 'Regional Math Olympiad', 'Undated club'])
+
+
+class CvMatchingTests(SimpleTestCase):
+    def test_same_item_needs_equal_names_or_a_large_overlap(self):
+        self.assertTrue(same_item('Debate Society', 'debate  society!'))
+        self.assertTrue(same_item('Society Debate', 'Debate Society'))
+        self.assertTrue(same_item('Regional Math Olympiad', 'Regional Math Olympiad - Gold medal'))
+        self.assertFalse(same_item('Volunteering', 'Red Crescent Volunteering'))
+        self.assertFalse(same_item('Chess club', 'School chess club of Namangan region'))
+        self.assertFalse(same_item('Math Olympiad', 'Regional Math Olympiad'))
+        self.assertFalse(same_item('', 'Anything'))
+
+    def test_school_years_sort_newest_first(self):
+        self.assertEqual([grade_rank(label) for label in ('Gap year', 'Grade 12', 'Grades 9, 10', 'Grade 9', 'Class of 2027', '')], [13, 12, 10, 9, 0, 0])
+        rows = [
+            {'roles': [], 'current': False, 'date': None, 'end': None, 'start': None, 'date_text': label}
+            for label in ('Grade 9', 'Grades 9, 10, 11', 'Gap year', '', 'Grade 10')
+        ]
+        self.assertEqual([row['date_text'] for row in sorted(rows, key=sort_key)], ['Gap year', 'Grades 9, 10, 11', 'Grade 10', 'Grade 9', ''])
 
 
 class StudentCvAccessTests(CvTestBase):
@@ -217,6 +279,18 @@ class StudentCvAccessTests(CvTestBase):
         self.assertEqual(self.client.post(self.url(), {}).status_code, 405)
 
 
+class CvQueryTests(CvTestBase):
+    def test_staff_cv_reads_the_profile_once(self):
+        self.add_records()
+        self.client.force_authenticate(self.counselor)
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(self.client.get(f'/api/students/{self.profile.id}/cv/').status_code, 200)
+        profile_reads = [q['sql'] for q in queries.captured_queries if 'FROM "admissions_studentprofile"' in q['sql']]
+        self.assertEqual(len(profile_reads), 1, profile_reads)
+
+
 class CvAnswerValidationTests(CvTestBase):
     def test_links_languages_skills_are_validated(self):
         bad = self.client.patch(ONBOARDING, {'linkedin_url': 'javascript:alert(1)'}, format='json')
@@ -233,6 +307,36 @@ class CvAnswerValidationTests(CvTestBase):
         self.profile.refresh_from_db()
         answers = self.profile.application_profile
         self.assertEqual((answers['website_url'], answers['skills'], answers['languages'][0]['name']), ('https://example.com/me', ['Go'], 'Uzbek'))
+
+    def test_links_without_a_scheme_or_that_cannot_be_parsed(self):
+        ok = self.client.patch(ONBOARDING, {'website_url': 'www.example.com:8080/me'}, format='json')
+        self.assertEqual(ok.status_code, 200, ok.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.application_profile['website_url'], 'https://www.example.com:8080/me')
+        for bad in ('https://[::1', '[::1', 'http://exa mple.com', 'mailto:me@example.com', 'javascript:alert(1)', 'ftp://example.com', 'https://user:pass@example.com'):
+            response = self.client.patch(ONBOARDING, {'website_url': bad}, format='json')
+            self.assertEqual(response.status_code, 400, bad)
+            self.assertIn('website_url', response.data)
+
+    def test_saving_an_unchanged_section_keeps_its_approval(self):
+        # A profile saved before the CV answers existed has none of their keys.
+        answers = dict(self.profile.application_profile)
+        for key in ('languages', 'skills', 'hobbies', 'linkedin_url', 'website_url', 'program_strengths'):
+            answers.pop(key, None)
+        self.profile.application_profile = answers
+        self.profile.save()
+        with transaction.atomic():
+            set_review(self.profile, 'goal', 'approved', '', self.counselor)
+            set_review(self.profile, 'personal', 'approved', '', self.counselor)
+        goal = {
+            'target_countries': self.profile.target_countries, 'interests': answers['interests'],
+            'program_strengths': answers.get('program_strengths', []), 'personal_story': answers['personal_story'],
+            'languages': [], 'skills': [], 'hobbies': [],
+        }
+        self.assertEqual(self.client.patch(ONBOARDING, goal, format='json').status_code, 200)
+        self.assertEqual(self.client.patch(ONBOARDING, {'linkedin_url': '', 'website_url': ''}, format='json').status_code, 200)
+        statuses = dict(self.profile.section_reviews.values_list('section', 'status'))
+        self.assertEqual((statuses['goal'], statuses['personal']), ('approved', 'approved'))
 
     def test_editing_languages_sends_the_goal_section_back_for_review(self):
         self.client.patch(ONBOARDING, {'languages': [{'name': 'Russian', 'level': 'Advanced'}]}, format='json')

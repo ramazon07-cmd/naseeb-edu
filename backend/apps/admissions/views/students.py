@@ -93,6 +93,8 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         if self.action == 'list':
             # Deactivated students drop out of every list; admins still open them.
             queryset = queryset.filter(user__is_active=True)
+        elif self.action in ('cv', 'my_cv'):
+            queryset = queryset.prefetch_related(None).prefetch_related(*self.CV_PREFETCH)
         return queryset
 
     @action(detail=False, methods=['get', 'post', 'patch'], url_path='onboarding')
@@ -178,7 +180,7 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         """The signed-in student's own CV (only whitelisted résumé fields)."""
         if request.user.role != User.Role.STUDENT:
             return Response({'detail': 'Only students have their own CV.'}, status=403)
-        profile = self.get_queryset().filter(user=request.user).prefetch_related(None).prefetch_related(*self.CV_PREFETCH).first()
+        profile = self.get_queryset().filter(user=request.user).first()
         if not profile:
             return Response({'detail': 'Student profile not found.'}, status=404)
         return self._cv_response(profile)
@@ -192,7 +194,6 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         if request.user.role == User.Role.PARENT:
             return Response({'detail': 'Not found.'}, status=404)
         profile = self.get_object()
-        profile = StudentProfile.objects.select_related('user').prefetch_related(*self.CV_PREFETCH).get(pk=profile.pk)
         audit_staff_read(request, profile, 'student_cv.viewed')
         return self._cv_response(profile)
 

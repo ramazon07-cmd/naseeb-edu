@@ -175,6 +175,9 @@ MAX_LANGUAGES = 10
 MAX_SKILLS = 30
 MAX_HOBBIES = 20
 _http_url = URLValidator(schemes=['http', 'https'])
+_HAS_SCHEME = re.compile(r'^[a-z][a-z0-9+.-]*://', re.IGNORECASE)
+# "mailto:…", "javascript:…": another scheme. "example.com:8080" (a port) is not one.
+_OTHER_SCHEME = re.compile(r'^[a-z][a-z0-9+.-]*:(?!\d)', re.IGNORECASE)
 
 
 class LanguageSerializer(serializers.Serializer):
@@ -184,6 +187,7 @@ class LanguageSerializer(serializers.Serializer):
 
 # An http(s) link; "linkedin.com/in/name" is saved as "https://linkedin.com/in/name".
 class PublicLinkField(serializers.CharField):
+    INVALID = 'Enter a valid link, like https://linkedin.com/in/your-name.'
 
     def __init__(self, **kwargs):
         super().__init__(max_length=300, required=False, allow_blank=True, **kwargs)
@@ -192,12 +196,18 @@ class PublicLinkField(serializers.CharField):
         value = super().to_internal_value(data)
         if not value:
             return ''
-        if not urlsplit(value).scheme:
+        # "www.example.com:8080" has no "://", so it is a host, not a scheme.
+        if not _HAS_SCHEME.match(value):
+            if _OTHER_SCHEME.match(value):
+                raise serializers.ValidationError(self.INVALID)
             value = f'https://{value}'
         try:
             _http_url(value)
-        except DjangoValidationError:
-            raise serializers.ValidationError('Enter a valid link, like https://linkedin.com/in/your-name.')
+            # A public link never carries a user name or password.
+            if '@' in urlsplit(value).netloc:
+                raise DjangoValidationError(self.INVALID)
+        except (DjangoValidationError, ValueError):
+            raise serializers.ValidationError(self.INVALID)
         return value
 
 
@@ -235,6 +245,12 @@ def current_answers(profile):
     # Profiles saved before certificates existed have no entry. An absent list is an empty list, so
     # saving "none" for the first time is not an edit of the tests section (it would lose its review).
     answers.setdefault('certificates', [])
+    # Likewise for every list the form always sends (the CV answers were added later still,
+    # and an older onboarding could leave out e.g. program_strengths).
+    for key in ('subjects', 'interests', 'program_strengths', 'honors', 'activities', 'languages', 'skills', 'hobbies'):
+        answers.setdefault(key, [])
+    for key in ('linkedin_url', 'website_url'):
+        answers.setdefault(key, '')
     answers.update(
         first_name=profile.user.first_name, last_name=profile.user.last_name, grade=profile.grade,
         school_name=profile.school_name, gpa=profile.gpa, target_countries=profile.target_countries,
