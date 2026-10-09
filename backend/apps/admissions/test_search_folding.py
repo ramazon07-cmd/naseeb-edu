@@ -10,7 +10,7 @@ from django.core.management import call_command
 from rest_framework.test import APITestCase
 
 from apps.admissions.models import University
-from apps.admissions.search_text import fold, search_variants, university_search_text
+from apps.admissions.search_text import MAX_VARIANTS, fold, search_variants, university_search_text
 from apps.admissions.test_audit_base import AuditBaseMixin
 
 
@@ -23,6 +23,14 @@ class FoldingTests(APITestCase):
         self.assertIn('columbia', search_variants('Колумбия'))
         self.assertIn('oxford', search_variants('Оксфорд'))
         self.assertEqual(search_variants('Sao'), ['sao'])
+
+    def test_an_early_ambiguous_letter_gets_its_alternatives_under_the_cap(self):
+        # Eight ambiguous letters: 384 spellings, past the cap. Г -> h must still be tried.
+        variants = search_variants('гвкйхцюя')
+        self.assertLessEqual(len(variants), MAX_VARIANTS + 1)
+        self.assertEqual(variants[1], 'gvkykhtsyuya')
+        self.assertIn('hvkykhtsyuya', variants)
+        self.assertIn('gvkykhtsyua', variants)
 
     def test_search_text_lists_every_spelling_of_the_country(self):
         text = university_search_text('Koç University', 'İstanbul', 'Türkiye').split('\n')
@@ -44,6 +52,27 @@ class FoldingTests(APITestCase):
         migration = importlib.import_module('apps.admissions.migrations.0070_university_search_text')
         migration.fill_search_text(django_apps, None)
         self.assertIn('koc university', University.objects.get(name='Koç University').search_text)
+
+
+class IntlCostMigrationTests(APITestCase):
+    def test_the_migration_fills_the_international_cost_of_the_qs_rows(self):
+        call_command('load_qs_rankings', stdout=StringIO())
+        mit = University.objects.get(name='Massachusetts Institute of Technology', market=University.Market.US)
+        self.assertIsNone(mit.intl_cost_usd)
+        # A curated value stays; an empty city is filled and searchable.
+        harvard = University.objects.get(name='Harvard University', market=University.Market.US)
+        University.objects.filter(pk=harvard.pk).update(intl_cost_usd=90000, city='')
+        migration = importlib.import_module('apps.admissions.migrations.0071_fill_intl_cost')
+        migration.fill_intl_cost(django_apps, None)
+        mit.refresh_from_db()
+        harvard.refresh_from_db()
+        self.assertEqual(mit.intl_cost_usd, 85960)
+        self.assertEqual((harvard.intl_cost_usd, harvard.city), (90000, 'Cambridge, MA'))
+        self.assertIn('cambridge, ma', harvard.search_text)
+        # Running it again changes nothing.
+        migration.fill_intl_cost(django_apps, None)
+        mit.refresh_from_db()
+        self.assertEqual(mit.intl_cost_usd, 85960)
 
 
 class SearchEndpointTests(AuditBaseMixin, APITestCase):

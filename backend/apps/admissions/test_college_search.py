@@ -146,6 +146,9 @@ class FilterAndSortTests(CollegeSearchFixture, APITestCase):
         self.assertEqual(self.search('price=25000&search=tashkent')['unpriced_count'], 0)
         # The same filter with a fit sort and a band filter: the unpriced rows still count.
         self.assertEqual(self.search('price=budget&sort=fit&bands=reach,target,safety,unknown')['unpriced_count'], 2)
+        # Only the first page of a price filter counts them.
+        self.assertNotIn('unpriced_count', self.search('price=budget&page_size=10&page=2'))
+        self.assertNotIn('unpriced_count', self.search())
 
     def test_price_sort_puts_unpriced_rows_last(self):
         names = self.names('sort=price&price=40000')

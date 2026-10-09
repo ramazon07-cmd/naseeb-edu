@@ -37,7 +37,7 @@ export const COLLEGE_PRICE_CAPS = ['all', 'budget', '25000', '40000'];
 
 export const COLLEGE_AID_FLAGS = [['offers_need_based_aid', 'Need-based'], ['offers_merit_aid', 'Merit'], ['offers_international_aid', 'International aid'], ['meets_full_need', 'Meets full need']];
 
-export const COLLEGE_SORTS = [['fit', 'Best fit'], ['price', 'Lowest net price'], ['deadline', 'Nearest deadline'], ['acceptance', 'Highest acceptance rate'], ['ranking', 'Best ranking']];
+export const COLLEGE_SORTS = [['fit', 'Best fit'], ['price', 'Lowest cost'], ['deadline', 'Nearest deadline'], ['acceptance', 'Highest acceptance rate'], ['ranking', 'Best ranking']];
 
 // How many universities one College Search page holds; the first is the default,
 // so a slow connection gets its first rows quickly.
@@ -80,22 +80,25 @@ export const satLabel = (university) => university.sat_min ? satText(university.
 
 export const scalePercent = (value, min, max) => `${Math.max(0, Math.min(100, (Number(value) - min) / (max - min) * 100))}%`;
 
-// The yearly price shown for a university. A US row's net price is Scorecard's average for
-// domestic aid recipients, so the headline is the cost of attendance for a student from abroad,
-// and the net price is only an "after aid" line where the university aids international
-// students. `cost` is what the price filter and the fit compare with the budget
-// (backend college_search.COST / cost_of_attendance). Other rows keep their net price.
+// The yearly price the server sends (backend pricing.py): `cost` is what the price filter, the
+// sort and the fit compare with the budget, `cost_label` says what it is, and `after_aid_usd`
+// (US universities that aid international students) is US students' average after aid, shown
+// only as a secondary line.
 export function priceInfo(university) {
-  if (university?.market !== 'us') {
-    const amount = university?.net_price_usd ?? null;
-    return { label: t("Net price"), amount, afterAid: null, cost: amount };
-  }
-  const amount = university.intl_cost_usd ?? null;
-  const afterAid = university.offers_international_aid && university.net_price_usd != null ? university.net_price_usd : null;
-  return { label: t("Estimated cost for international students"), amount, afterAid, cost: afterAid ?? amount };
+  const international = university?.cost_label === 'international_cost';
+  const amount = university?.cost ?? null;
+  return { label: international ? t("Estimated cost for international students") : t("Net price"), international, amount, afterAid: university?.after_aid_usd ?? null, cost: amount };
 }
 
-export const afterAidText = (amount) => tx`${money(amount)} after aid`;
+export const afterAidText = (amount) => tx`${money(amount)}: US students' average after aid; international aid varies`;
+
+// What the tier picker says: the fit is still loading, failed, waits for the research profile,
+// or is there but has no admission data to place the university.
+export function tierPickerState({ research, loading, error }) {
+  if (error) return 'error';
+  if (loading || !research) return 'loading';
+  return research.ready ? 'no_data' : 'incomplete';
+}
 
 // What the page says under a price filter. The server keeps universities without a published
 // price in every price filter and gives "Within budget" no cap until the profile has a budget

@@ -1,5 +1,7 @@
 """Admissions API serializers — catalog."""
 from rest_framework import serializers
+
+from ..pricing import cost_fields, forget_cost
 from ..models import (
     OpportunityProgram,
     Scholarship,
@@ -22,6 +24,14 @@ class UniversitySerializer(serializers.ModelSerializer):
         model = University
         exclude = ('search_text',)
         read_only_fields = ('qs_data',)
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        forget_cost(instance)
+        return instance
+
+    def to_representation(self, instance):
+        return {**super().to_representation(instance), **cost_fields(instance)}
 
     def get_programs(self, obj):
         programs = [
@@ -53,6 +63,9 @@ class UniversityRowSerializer(serializers.ModelSerializer):
             'acceptance_rate', 'sat_min', 'sat_max', 'test_optional', 'net_price_usd', 'intl_cost_usd', 'offers_international_aid',
             'application_deadline', 'scholarship_deadline',
         )
+
+    def to_representation(self, instance):
+        return {**super().to_representation(instance), **cost_fields(instance)}
 
     def get_qs_data(self, obj):
         data = obj.qs_data or {}

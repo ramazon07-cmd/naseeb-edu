@@ -16,6 +16,7 @@ from apps.admissions.college_search import (
     IELTS_CONCORDANCE, evidence_counts, fit_context, has_aid_data, ielts_equivalent, score_university,
 )
 from apps.admissions.models import Honor, Project, University
+from apps.admissions.pricing import with_cost
 from apps.admissions.test_college_search import URL, CollegeSearchFixture
 
 FIT_REASONS_JS = Path(__file__).resolve().parents[3] / 'frontend' / 'src' / 'translations' / 'fitReasons.js'
@@ -50,23 +51,45 @@ class InternationalCostTests(FitFixture, APITestCase):
         # MIT and Ohio State are over budget; Oxford and Quiet College have no cost, so they stay.
         self.assertEqual(set(self.names('price=budget')), {self.tashkent.name, self.oxford.name, self.unranked.name})
 
-    def test_the_net_price_counts_only_where_international_students_get_aid(self):
-        aided = University.objects.create(
-            name='Aided College', country='United States', net_price_usd=18000, intl_cost_usd=70000,
-            offers_international_aid=True, acceptance_rate='30.00',
+    def test_the_aided_net_price_is_never_the_cost(self):
+        # Princeton: Scorecard's $6,128 is US students' average after aid, not what a student from abroad pays.
+        princeton = University.objects.create(
+            name='Princeton University', country='United States', net_price_usd=6128, intl_cost_usd=86000,
+            offers_international_aid=True, acceptance_rate='4.00',
         )
         unpriced = University.objects.create(name='Unpriced College', country='USA', net_price_usd=9000, acceptance_rate='30.00')
-        self.ready_profile(budget_usd=20000)
-        reason = next(entry for entry in self.fit(aided)['reasons'] if entry['code'] == 'net_after_aid_within_budget')
-        self.assertEqual(reason['text'], 'Estimated net price after aid is within your budget')
-        self.assertIn('cost_missing', codes(self.fit(unpriced), 'gaps'))
-        # A US row without an international cost and no international aid is unpriced: it stays.
+        self.ready_profile(budget_usd=10000)
+        fit = self.fit(princeton)
+        self.assertIn('cost_far_above_budget', codes(fit, 'gaps'))
+        gap = next(entry for entry in fit['gaps'] if entry['code'] == 'cost_far_above_budget')
+        self.assertEqual(gap['params'], {'cost': 86000, 'budget': 10000})
+        self.assertNotIn('cost_within_budget', codes(fit, 'reasons'))
+        row = self.search(f'ids={princeton.id}')['results'][0]
         self.assertEqual(
-            set(self.names('price=budget')), {self.tashkent.name, aided.name, unpriced.name, self.oxford.name, self.unranked.name},
+            (row['cost'], row['cost_label'], row['after_aid_usd']), (86000, 'international_cost', 6128),
         )
-        prices = self.names('sort=price')
-        self.assertEqual(prices[:4], [self.tashkent.name, aided.name, self.state.name, self.mit.name])
+        # A US row without an international cost is unpriced, whatever its domestic net price.
+        self.assertIn('cost_missing', codes(self.fit(unpriced), 'gaps'))
+        self.assertEqual(self.search(f'ids={unpriced.id}')['results'][0]['cost'], None)
+        within = set(self.names('price=budget&page_size=25'))
+        self.assertNotIn(princeton.name, within)
+        self.assertEqual(within, {self.tashkent.name, unpriced.name, self.oxford.name, self.unranked.name})
+        prices = self.names('sort=price&page_size=25')
+        self.assertEqual(prices[:4], [self.tashkent.name, self.state.name, self.mit.name, princeton.name])
         self.assertEqual(set(prices[4:]), {unpriced.name, self.oxford.name, self.unranked.name})
+
+    def test_every_university_payload_carries_the_same_cost(self):
+        self.ready_profile()
+        application = self.student.applications.create(university=self.state, program='Computer Science')
+        expected = {'cost': 48000, 'cost_label': 'international_cost', 'after_aid_usd': None}
+        search_row = self.search(f'ids={self.state.id}')['results'][0]
+        list_row = next(row for row in self.client.get('/api/universities/?search=ohio').data['results'])
+        detail = self.client.get(f'/api/universities/{self.state.id}/').data
+        nested = self.client.get(f'/api/applications/{application.id}/').data['university_detail']
+        for data in (search_row, list_row, detail, nested):
+            self.assertEqual({key: data[key] for key in expected}, expected)
+        tashkent = self.client.get(f'/api/universities/{self.tashkent.id}/').data
+        self.assertEqual((tashkent['cost'], tashkent['cost_label'], tashkent['after_aid_usd']), (4000, 'net_price', None))
 
     def test_the_shipped_scorecard_puts_mit_stanford_and_georgia_tech_above_a_20k_budget(self):
         University.objects.filter(pk__in=[self.mit.pk, self.state.pk]).delete()
@@ -100,7 +123,7 @@ class OtherTestsTests(FitFixture, APITestCase):
     def test_missing_tests_take_the_missing_weight_path(self):
         self.ready_profile(sat_score=None, ielts_score=None)
         ctx = fit_context(self.student)
-        university = University.objects.prefetch_related(college_search.eligible_programs()).get(pk=self.mit.pk)
+        university = with_cost(University.objects.prefetch_related(college_search.eligible_programs())).get(pk=self.mit.pk)
         fit = score_university(university, ctx)
         breakdown = fit['score_breakdown']
         earned = sum(breakdown.values())
@@ -169,6 +192,13 @@ class OtherTestsTests(FitFixture, APITestCase):
             for score, band in scores.items():
                 self.assertEqual(ielts_equivalent(test, score), band, (test, score))
 
+    def test_a_score_below_the_lowest_row_gets_the_lowest_band(self):
+        self.assertEqual(ielts_equivalent('duolingo', 5), 1.5)
+        self.ready_profile(ielts_score=None)
+        self.certificates({'type': 'duolingo', 'score': 5})
+        fit = self.fit(self.mit)
+        self.assertIn('english_check', codes(fit, 'gaps'))
+
     def test_every_test_input_is_in_the_fit_cache_key(self):
         self.ready_profile()
         before = fit_context(self.student)
@@ -205,6 +235,38 @@ class UnknownBandTests(FitFixture, APITestCase):
         self.assertEqual(self.search('bands=unknown')['count'], 5)
         self.assertEqual(self.search('bands=reach,target,safety')['count'], 0)
         self.assertEqual(self.search('facets=true')['facets']['bands'], {'reach': 0, 'target': 0, 'safety': 0, 'unknown': 5})
+
+    def test_a_test_required_university_is_unknown_without_a_score(self):
+        required = University.objects.create(
+            name='Required College', country='USA', sat_min=1100, sat_max=1300, acceptance_rate='60.00',
+        )
+        middling = University.objects.create(
+            name='Middling College', country='USA', sat_min=1100, sat_max=1300, acceptance_rate='30.00',
+        )
+        optional = University.objects.create(
+            name='Optional College', country='USA', sat_min=1100, sat_max=1300, acceptance_rate='60.00', test_optional=True,
+        )
+        for status in ('not_taken', 'not_required'):
+            self.ready_profile(sat_score=None, sat_status=status)
+            self.assertIsNone(self.fit(required)['admission_band'], status)
+            self.assertIsNone(self.fit(middling)['admission_band'], status)
+            # Selective enough to be a reach whatever the score.
+            self.assertEqual(self.fit(self.mit)['admission_band'], 'reach', status)
+            # Test-optional: the acceptance rate still places it.
+            self.assertEqual(self.fit(optional)['admission_band'], 'safety', status)
+        self.ready_profile(sat_score=1350)
+        self.assertEqual(self.fit(required)['admission_band'], 'safety')
+        self.assertEqual(self.fit(middling)['admission_band'], 'target')
+
+    def test_no_acceptance_rate_and_nothing_compared_is_unknown(self):
+        ranged = University.objects.create(name='Ranged College', country='USA', sat_min=1100, sat_max=1300)
+        self.ready_profile(sat_score=None)
+        self.assertIsNone(self.fit(ranged)['admission_band'])
+        self.certificates({'type': 'act', 'score': 30})
+        # An ACT score cannot be compared with an SAT-only range.
+        self.assertIsNone(self.fit(ranged)['admission_band'])
+        self.ready_profile(sat_score=1350)
+        self.assertEqual(self.fit(ranged)['admission_band'], 'target')
 
     def test_facets_count_unknown_as_the_rest_of_the_catalogue(self):
         self.ready_profile()
@@ -298,7 +360,6 @@ FIT_CODES = {
     'english_strong', 'english_suitable', 'english_check', 'english_missing',
     'country_match', 'major_match', 'major_check',
     'cost_within_budget', 'cost_above_budget', 'cost_far_above_budget', 'cost_missing',
-    'net_after_aid_within_budget', 'net_after_aid_above_budget', 'net_after_aid_far_above_budget',
     'aid_available', 'aid_not_offered', 'aid_unknown',
 }
 
@@ -306,7 +367,7 @@ FIT_CODES = {
 def stub_university(**values):
     fields = dict(
         country='United States', market='us', sat_min=None, sat_max=None, act_min=None, act_max=None,
-        test_optional=False, popular_majors='', net_price_usd=None, intl_cost_usd=None, acceptance_rate=None,
+        test_optional=False, popular_majors='', cost=None, acceptance_rate=None,
         offers_international_aid=False, offers_merit_aid=False, offers_need_based_aid=False,
         **dict.fromkeys(college_search.AID_DETAILS),
     )
@@ -338,12 +399,9 @@ class ReasonCodeTests(APITestCase):
             (dict(sat_min=1200), dict()),
             (dict(sat_min=1200), dict(act=30)),
             (dict(), dict(sat=1400)),
-            (dict(intl_cost_usd=15000), dict()),
-            (dict(intl_cost_usd=25000), dict()),
-            (dict(intl_cost_usd=90000), dict()),
-            (dict(net_price_usd=15000, offers_international_aid=True), dict()),
-            (dict(net_price_usd=25000, offers_international_aid=True), dict()),
-            (dict(net_price_usd=90000, offers_international_aid=True), dict()),
+            (dict(cost=15000, offers_international_aid=True), dict()),
+            (dict(cost=25000), dict()),
+            (dict(cost=90000), dict()),
             (dict(financial_aid_url='https://example.edu/aid', popular_majors='Computer Science'), dict(sat=1400, english=english(7))),
         ]
         seen = set()

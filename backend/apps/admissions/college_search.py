@@ -13,7 +13,7 @@ profile answers and catalogue version, then cached.
 import hashlib
 import json
 
-from django.db.models import Case, Count, F, IntegerField, OuterRef, Prefetch, Q, Subquery, When
+from django.db.models import Count, F, IntegerField, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Coalesce
 from rest_framework import serializers
 
@@ -23,6 +23,7 @@ from .catalog_cache import CACHE_SECONDS, VERSION_KEY
 from .countries import country_key, country_name, country_spellings
 from .listing import MAX_SEARCH_LENGTH, search_terms, term_query
 from .models import StudentProfile, University, UniversityProgram
+from .pricing import with_cost
 
 PAGE_SIZES = (10, 25, 50, 100)
 MAX_IDS = 100
@@ -44,16 +45,6 @@ BANDS = ('reach', 'target', 'safety')
 UNKNOWN_BAND = 'unknown'
 BAND_CHOICES = (*BANDS, UNKNOWN_BAND)
 QS_FILTERS = ('region', 'size', 'focus', 'research')
-# What a student from abroad pays per year. A US row's net price is Scorecard's average for
-# domestic aid recipients (in-state ones at a public university), so it is only used where the
-# university gives international students aid; otherwise the international cost of attendance.
-# Rows outside the US keep their own price. ``cost_of_attendance`` is the same rule in Python.
-COST = Case(
-    When(market=University.Market.US, offers_international_aid=True, net_price_usd__isnull=False, then=F('net_price_usd')),
-    When(market=University.Market.US, then=F('intl_cost_usd')),
-    default=F('net_price_usd'),
-    output_field=IntegerField(),
-)
 ORDERINGS = {
     'ranking': (F('ranking').asc(nulls_last=True), 'name', 'id'),
     'price': (F('cost').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
@@ -77,7 +68,7 @@ AID_POINTS = 8
 NEAR_MINIMUM = {'SAT': 80, 'ACT': 2}
 ENGLISH_TESTS = {'toefl': 'TOEFL', 'duolingo': 'Duolingo', 'pte': 'PTE', 'cambridge': 'Cambridge'}
 # Lowest score for each IELTS Academic band, highest first, from each test owner's published
-# concordance. A score below a table's lowest row is given the band under it.
+# concordance. A score below a table's lowest row is given the table's lowest band.
 IELTS_CONCORDANCE = {
     # ETS, "Linking TOEFL iBT Scores to IELTS Scores" (2010).
     'toefl': ((118, 9), (115, 8.5), (110, 8), (102, 7.5), (94, 7), (79, 6.5), (60, 6), (46, 5.5), (35, 5), (32, 4.5), (0, 4)),
@@ -119,7 +110,9 @@ def missing_fields(profile):
 
 
 def ielts_equivalent(test, score):
-    return next(band for low, band in IELTS_CONCORDANCE[test] if score >= low)
+    """The IELTS band for ``score``; a score under the table's lowest row gets its lowest band."""
+    table = IELTS_CONCORDANCE[test]
+    return next((band for low, band in table if score >= low), table[-1][1])
 
 
 def certificates(profile, *types):
@@ -169,15 +162,6 @@ def item(code, text, **params):
     return {'code': code, 'params': params, 'text': text}
 
 
-def cost_of_attendance(university):
-    """``(yearly cost or None, after_aid)``: the Python side of ``COST``."""
-    if university.market == University.Market.US:
-        if university.offers_international_aid and university.net_price_usd is not None:
-            return university.net_price_usd, True
-        return university.intl_cost_usd, False
-    return university.net_price_usd, False
-
-
 def has_aid_data(university):
     """Whether the catalogue says anything about this university's aid (see ``AID_DETAILS``)."""
     if any(getattr(university, name) for name in OFFERED_AID):
@@ -202,7 +186,8 @@ def range_fit(test, score, low, high):
 
 
 def score_university(university, ctx):
-    """One university's fit for a ready profile. ``university.programs`` must be the eligible ones."""
+    """One university's fit for a ready profile. ``university.programs`` must be the eligible ones
+    and ``university.cost`` the ``pricing.with_cost`` annotation."""
     reasons = []
     gaps = []
     # Points of factors with no data (the catalogue's or the student's): they are left out, not guessed.
@@ -273,19 +258,18 @@ def score_university(university, ctx):
         gaps.append(item('major_check', 'Check the exact program requirements for your selected major'))
 
     budget = ctx['budget']
-    cost, after_aid = cost_of_attendance(university)
+    cost = university.cost
     if cost is not None:
-        prefix, label = ('net_after_aid', 'Estimated net price after aid') if after_aid else (
-            'cost', 'Estimated cost of attendance for international students')
+        label = 'Estimated cost of attendance for international students'
         if cost <= budget:
             financial = 12
-            reasons.append(item(f'{prefix}_within_budget', f'{label} is within your budget', cost=cost, budget=budget))
+            reasons.append(item('cost_within_budget', f'{label} is within your budget', cost=cost, budget=budget))
         elif cost <= budget * 1.5:
             financial = 7
-            gaps.append(item(f'{prefix}_above_budget', f'{label} is above your budget', cost=cost, budget=budget))
+            gaps.append(item('cost_above_budget', f'{label} is above your budget', cost=cost, budget=budget))
         else:
             financial = 2
-            gaps.append(item(f'{prefix}_far_above_budget', f'{label} is significantly above your budget', cost=cost, budget=budget))
+            gaps.append(item('cost_far_above_budget', f'{label} is significantly above your budget', cost=cost, budget=budget))
     else:
         financial = 0
         missing += PRICE_POINTS
@@ -308,11 +292,14 @@ def score_university(university, ctx):
     # a row without admissions data never outscores the same row with data that fits.
     total = min(100, round(earned * 100 / (100 - missing) * (1 - missing / 200)))
     rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
-    if rate is None and not ranges:
-        # No admission data in the catalogue (e.g. a QS-only row): unknown, not "target".
+    if rate is None and not tests:
+        # No acceptance rate and no score compared with a range: nothing places the row.
         band = None
     elif (rate is not None and rate < 15) or below:
         band = 'reach'
+    elif ranges and not university.test_optional and not taken:
+        # The university requires a test the student has not sent: no better than unknown.
+        band = None
     elif rate is not None and rate >= 45:
         band = 'safety'
     else:
@@ -348,7 +335,7 @@ def fit_scores(profile, ctx):
     key = f'college-fit:{fit_key(profile, ctx)}'
     scores = cache_get(key)
     if scores is None:
-        universities = University.objects.only(*SCORING_FIELDS).prefetch_related(
+        universities = with_cost(University.objects.only(*SCORING_FIELDS)).prefetch_related(
             eligible_programs('id', 'university_id', 'canonical_major'),
         )
         scores = {}
@@ -490,9 +477,9 @@ class CollegeSearchParams(serializers.Serializer):
 
 
 def filtered_catalog(params, profile):
-    queryset = University.objects.annotate(cost=COST)
+    queryset = with_cost(University.objects.all())
     for term in params['search'].split():
-        queryset = queryset.filter(term_query(SEARCH_FIELDS, term))
+        queryset = queryset.filter(term_query(SEARCH_FIELDS, term, 'search_text'))
     if params['country']:
         queryset = queryset.filter(country_q(params['country']))
     # A row without a known cost stays: no published price is not "too expensive". "Within
@@ -551,7 +538,7 @@ def college_search(profile, params):
     needs fit: rows to score, fit sorting, a band filter or the band facets.
     """
     ready = not missing_fields(profile)
-    rows = University.objects.prefetch_related(eligible_programs())
+    rows = with_cost(University.objects.prefetch_related(eligible_programs()))
     if params['ids']:
         # Rows the page already knows by id (the student's list, a university page).
         page = list(rows.filter(pk__in=params['ids']).order_by(*ORDERINGS['ranking']))
@@ -592,9 +579,10 @@ def college_search(profile, params):
         'page_size': size,
         'next': params['page'] + 1 if start + size < count else None,
         'results': serialize_rows(page, ctx),
-        # Matching rows without a known cost: kept by the price filter, sorted last by price.
-        'unpriced_count': queryset.filter(cost__isnull=True).count(),
     }
+    if params['price'] != 'all' and params['page'] == 1:
+        # Matching rows without a known cost, which the price filter keeps (the first page says it once).
+        data['unpriced_count'] = queryset.filter(cost__isnull=True).count()
     if params['facets']:
         data['facets'] = student_facets(profile, scores)
     return data

@@ -122,21 +122,6 @@ export const FIT_REASON_TEMPLATES = {
     uz: 'Xalqaro talabalar uchun taxminiy o‘qish xarajati katalogda ko‘rsatilmagan',
     ru: 'Ориентировочной стоимости обучения для иностранных студентов нет в каталоге',
   },
-  net_after_aid_within_budget: {
-    en: 'Estimated net price after aid is within your budget',
-    uz: 'Yordamdan keyingi taxminiy narx byudjetingizga sig‘adi',
-    ru: 'Ориентировочная цена с учётом помощи укладывается в ваш бюджет',
-  },
-  net_after_aid_above_budget: {
-    en: 'Estimated net price after aid is above your budget',
-    uz: 'Yordamdan keyingi taxminiy narx byudjetingizdan yuqori',
-    ru: 'Ориентировочная цена с учётом помощи выше вашего бюджета',
-  },
-  net_after_aid_far_above_budget: {
-    en: 'Estimated net price after aid is significantly above your budget',
-    uz: 'Yordamdan keyingi taxminiy narx byudjetingizdan ancha yuqori',
-    ru: 'Ориентировочная цена с учётом помощи значительно выше вашего бюджета',
-  },
   aid_available: {
     en: 'A suitable type of financial aid is available',
     uz: 'Mos moliyaviy yordam turi mavjud',

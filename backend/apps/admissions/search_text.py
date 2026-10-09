@@ -44,12 +44,21 @@ def university_search_text(name, city, country):
 
 
 def _transliterations(term):
+    """Latin spellings of ``term``: the usual one, then one letter changed (earliest letter
+    first), then two, and so on, so a cap on the count still tries every ambiguous letter."""
     options, index = [], 0
     while index < len(term):
         size = 2 if term[index:index + 2] in _CYRILLIC else 1
         options.append(_CYRILLIC.get(term[index:index + size], (term[index:index + size],)))
         index += size
-    return (''.join(choice) for choice in itertools.product(*options))
+    ambiguous = [position for position, choices in enumerate(options) if len(choices) > 1]
+    for changed in range(len(ambiguous) + 1):
+        for positions in itertools.combinations(ambiguous, changed):
+            for alternatives in itertools.product(*(options[position][1:] for position in positions)):
+                spelling = [choices[0] for choices in options]
+                for position, alternative in zip(positions, alternatives):
+                    spelling[position] = alternative
+                yield ''.join(spelling)
 
 
 def search_variants(term):

@@ -26,6 +26,7 @@ from apps.users.admin_permissions import has_tier
 from apps.users.services import audit_product_action
 from ..catalog_cache import CachedCatalogListMixin
 from ..college_search import SEARCH_FIELDS
+from ..pricing import with_cost
 from ..listing import ListQueryMixin
 from .common import CounselorOrOwnerPermission, ProductAdminPermission
 from .portal import StudentPortalPermission
@@ -136,13 +137,14 @@ class UniversityViewSet(ListQueryMixin, CachedCatalogListMixin, viewsets.ModelVi
     queryset = University.objects.prefetch_related('programs').all()
     permission_classes = [permissions.IsAuthenticated]
     search_fields = SEARCH_FIELDS
+    search_folded_field = 'search_text'
     ordering_options = {'name': ('name', 'id')}
     default_cursor_ordering = 'name'
 
     def get_queryset(self):
         if self.action == 'list':
-            return University.objects.all()
-        return super().get_queryset()
+            return with_cost(University.objects.all())
+        return with_cost(super().get_queryset())
 
     def get_serializer_class(self):
         return UniversityRowSerializer if self.action == 'list' else UniversitySerializer

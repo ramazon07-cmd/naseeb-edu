@@ -8,7 +8,7 @@ import { money } from '../lib/format';
 import { label } from '../lib/labels';
 import { institutionStatus } from '../lib/qs';
 import { matchesQuery } from '../lib/searchIndex';
-import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, satLabel, scalePercent, shortDate, stageOf } from '../lib/college';
+import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, priceInfo, satLabel, scalePercent, shortDate, stageOf } from '../lib/college';
 import { ResourceForm } from './ResourceSection';
 
 function ApplicationSummary({ applications, essays, letters, openUniversity }) {
@@ -90,7 +90,7 @@ function ApplicationBrief({ id, briefRef, application, info, essays, name, onOpe
     <dl className="app-brief-facts">
       <div><dt>{t("Acceptance")}</dt><dd>{percentText(info.acceptance_rate)}</dd></div>
       <div><dt>{t("SAT")}</dt><dd>{satLabel(info)}</dd></div>
-      <div><dt>{t("Net price")}</dt><dd>{money(info.net_price_usd)}</dd></div>
+      <div><dt>{priceInfo(info).label}</dt><dd>{money(priceInfo(info).amount)}</dd></div>
     </dl>
     <section className="app-brief-block">
       <div className="app-brief-eyebrow"><span>{decided || stage === 'submitted' ? t("Status") : t("Deadlines")}</span></div>

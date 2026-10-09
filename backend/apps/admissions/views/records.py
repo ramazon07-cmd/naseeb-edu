@@ -1,6 +1,6 @@
 """Admissions API views — records."""
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import Http404
 from django.utils import timezone
 from rest_framework import viewsets
@@ -24,8 +24,10 @@ from ..models import (
     Research,
     StudentMessage,
     Task,
+    University,
     XPTransaction,
 )
+from ..pricing import with_cost
 from ..serializers import (
     AchievementSerializer,
     ActivitySerializer,
@@ -66,9 +68,10 @@ def bounded_count(queryset, limit=SUMMARY_COUNT_LIMIT):
 
 class ApplicationViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = ApplicationSerializer
-    queryset = Application.objects.select_related(
-        'student__user', 'student__assigned_counselor', 'university',
-    ).prefetch_related('status_history__changed_by', 'university__programs').all()
+    # The university comes with its cost annotation (pricing.py) for university_detail.
+    queryset = Application.objects.select_related('student__user', 'student__assigned_counselor').prefetch_related(
+        'status_history__changed_by', Prefetch('university', queryset=with_cost(University.objects.prefetch_related('programs'))),
+    ).all()
     search_fields = ('program', 'university__name')
     choice_filters = {'status': ('status', Application.Status.choices), 'tier': ('tier', Application._meta.get_field('tier').choices)}
     date_filters = {**StudentRecordListMixin.date_filters, 'deadline': 'deadline'}

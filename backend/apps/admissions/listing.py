@@ -7,10 +7,11 @@ scan). Pagination (page-number or keyset cursor) lives in core.pagination.
 * ``?search=`` — whitespace-separated terms (up to ``MAX_SEARCH_TERMS``); every
   term must match one of ``search_fields`` (case-insensitive substring) or,
   with ``search_student_path``, the student's name/email. Same-table
-  ``search_fields`` keep PostgreSQL on the trigram indexes. University search
-  (``name``/``city``/``country``) also matches the folded ``search_text``
-  column, so accents, Cyrillic spellings and country aliases find the row
-  (``search_text``).
+  ``search_fields`` keep PostgreSQL on the trigram indexes. A view that sets
+  ``search_folded_field`` (University: ``search_text``) also matches each folded
+  variant of the term against that column (``search_text.search_variants``), so
+  accents, Cyrillic spellings and country aliases find the row; on PostgreSQL a
+  pg_trgm GIN index serves it (migration 0072).
 * ``int_filters`` — ``{param: orm_path}``, parsed with ``int_param``.
 * ``choice_filters`` — ``{param: (orm_path, choices)}``.
 * ``bool_filters`` — ``{param: orm_path}``; ``true``/``false``.
@@ -32,8 +33,6 @@ from .search_text import search_variants
 MAX_SEARCH_LENGTH = 100
 MAX_SEARCH_TERMS = 4
 STUDENT_SEARCH_FIELDS = ('user__first_name', 'user__last_name', 'user__email', 'user__username')
-# Search fields whose model keeps a folded copy of them (search_text.py).
-FOLDED_SEARCH_COLUMNS = {('name', 'city', 'country'): 'search_text'}
 
 
 def search_terms(raw):
@@ -43,14 +42,14 @@ def search_terms(raw):
     return text.split()[:MAX_SEARCH_TERMS]
 
 
-def term_query(fields, term):
+def term_query(fields, term, folded_field=None):
+    """``term`` in any of ``fields``, or a folded variant of it in ``folded_field`` (search_text.py)."""
     query = Q()
     for field in fields:
         query |= Q(**{f'{field}__icontains': term})
-    column = FOLDED_SEARCH_COLUMNS.get(tuple(fields))
-    if column:
+    if folded_field:
         for variant in search_variants(term):
-            query |= Q(**{f'{column}__contains': variant})
+            query |= Q(**{f'{folded_field}__contains': variant})
     return query
 
 
@@ -76,6 +75,8 @@ def _date_bound(value, param, *, is_datetime, end):
 
 class ListQueryMixin:
     search_fields = ()
+    # A column holding a folded copy of the searched fields (University.search_text).
+    search_folded_field = None
     search_student_path = None
     int_filters = {}
     choice_filters = {}
@@ -107,7 +108,7 @@ class ListQueryMixin:
         from .models import StudentProfile
 
         for term in terms:
-            condition = term_query(self.search_fields, term)
+            condition = term_query(self.search_fields, term, self.search_folded_field)
             if self.search_student_path:
                 # A subquery on the (indexed) user columns, so the outer table
                 # can combine it with its own indexes instead of joining.

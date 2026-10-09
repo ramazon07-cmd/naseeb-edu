@@ -6,7 +6,7 @@ import { Empty, Modal } from '../components/ui';
 import { FilterOption, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { BAND_TIERS, COLLEGE_AID_FLAGS, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceFilterNotes, priceInfo, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
+import { BAND_TIERS, COLLEGE_AID_FLAGS, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 import { useCollegeSearch } from '../hooks/useCollegeSearch';
@@ -34,7 +34,7 @@ function CollegeFilters({ filters, setFilters, facets, budget, showBands, chips 
   const groups = <>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Where")}</legend><select className="filter-country" aria-label={t("Country")} value={filters.country} onChange={(event) => patch({ country: event.target.value })}><option value="">{t("All countries")}</option>{Object.entries(facets.countries).sort(([a], [b]) => a.localeCompare(b)).map(([country, count]) => <option key={country} value={country}>{`${country} (${formatNumberLocale(count)})`}</option>)}</select></fieldset>
     {showBands && <fieldset className="filter-set"><legend className="college-filter-legend">{t("Admission band")}</legend>{COLLEGE_BANDS.map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={facets.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
-    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Estimated cost per year")}</legend><small className="college-filter-hint">{t("US universities: cost for international students, or the net price after aid where the university aids international students.")}</small>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Estimated cost per year")}</legend><small className="college-filter-hint">{t("US universities: cost of attendance for international students, before any aid.")}</small>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={facets.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Testing & type")}</legend>
       <FilterOption checked={filters.testOptional} onChange={() => patch({ testOptional: !filters.testOptional })} count={facets.test_optional}>{t("Test optional")}</FilterOption>
@@ -146,9 +146,12 @@ function CollegeListDrawer({ applications, fits, fitsError, onRetryFits, busyId,
 }
 
 // Without a fit band (no admission data, or no complete research profile yet) the student picks it.
-function TierPicker({ university, needsProfile, busy, onPick, onCompleteProfile, onClose }) {
+function TierPicker({ university, state, busy, onPick, onCompleteProfile, onRetry, onClose }) {
   return <Modal title="Pick a band" onClose={onClose}><div className="tier-picker">
-    {needsProfile ? <p>{t("Complete your research profile to see your fit.")} <button type="button" className="link-button" onClick={onCompleteProfile}>{t("Complete profile")}</button></p> : <p>{tx`There is no admission data to tell whether ${university.name} is a reach, target or safety for you. Pick one; you can change it later in Applications.`}</p>}
+    {state === 'loading' ? <p role="status"><RefreshCw className="spin" size={14} aria-hidden="true" /> {t("Checking fit…")}</p> :
+    state === 'error' ? <p role="alert">{t("Couldn't load fit")} <button type="button" className="link-button" onClick={onRetry}>{t("Retry")}</button></p> :
+    state === 'incomplete' ? <p>{t("Complete your research profile to see your fit.")} <button type="button" className="link-button" onClick={onCompleteProfile}>{t("Complete profile")}</button></p> :
+    <p>{tx`There is no admission data to tell whether ${university.name} is a reach, target or safety for you. Pick one; you can change it later in Applications.`}</p>}
     <div className="chip-row">{Object.entries(BAND_TIERS).map(([band, tier]) => <button type="button" key={tier} className="button quiet small" disabled={busy} aria-busy={busy} onClick={() => onPick(tier)}><TierBand value={band} /></button>)}</div>
   </div></Modal>;
 }
@@ -322,7 +325,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   // Without a known band the student picks the tier: an unknown band is never filed as "target".
   async function addToList(university, fit, pickedTier) {
     const tier = pickedTier || BAND_TIERS[fit?.admission_band];
-    if (!tier) {setTierFor({ university, fit, needsProfile: !research?.ready });return;}
+    if (!tier) {setTierFor({ university, fit });return;}
     const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
     setBusyId(university.id);
     try {
@@ -359,7 +362,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }
 
-  const tierPicker = tierFor && <TierPicker university={tierFor.university} needsProfile={tierFor.needsProfile} busy={busyId === tierFor.university.id} onPick={(tier) => addToList(tierFor.university, tierFor.fit, tier)} onCompleteProfile={completeProfileFirst} onClose={() => setTierFor(null)} />;
+  const tierPicker = tierFor && <TierPicker university={tierFor.university} state={tierPickerState({ research, loading: researchLoading, error: researchError })} onRetry={refreshResearch} busy={busyId === tierFor.university.id} onPick={(tier) => addToList(tierFor.university, tierFor.fit, tier)} onCompleteProfile={completeProfileFirst} onClose={() => setTierFor(null)} />;
   if (universityId != null) {
     if (opened?.university) return <><UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} fitStatus={fitState.status} onRetryFit={() => setOpenedFitAttempt((value) => value + 1)} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} />{tierPicker}</>;
     if (opened?.error) return <div className="section-stack student-portal college-page"><div className="college-research-state error"><X size={22} /><div><b>{t("This university could not be opened")}</b><p>{opened.error}</p></div><button className="button quiet small" onClick={closeUniversity}>{t("Back to College Search")}</button></div></div>;
