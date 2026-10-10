@@ -91,6 +91,19 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
         self.assertFalse(University.objects.filter(pk=unused.pk).exists())
         self.assertTrue(ProductAuditEvent.objects.filter(action='university.deleted', target_id=str(unused.pk)).exists())
 
+    def test_the_legacy_universities_endpoint_uses_the_same_guard(self):
+        superadmin = self.make_user('base-super', User.Role.ADMIN, None, admin_tier=User.AdminTier.SUPERADMIN)
+        client = self.as_user(superadmin)
+        program = UniversityProgram.objects.create(university=self.university, name='BSc Biology', canonical_major='Biology')
+        refused = client.delete(f'/api/universities/{self.university.id}/')
+        self.assertEqual((refused.status_code, refused.data['code']), (409, 'university_in_use'))
+        self.assertTrue(UniversityProgram.objects.filter(pk=program.pk).exists())
+        self.assertFalse(ProductAuditEvent.objects.filter(action='university.deleted').exists())
+
+        unused = University.objects.create(name='Typo Universty', country='Canada')
+        self.assertEqual(client.delete(f'/api/universities/{unused.id}/').status_code, 204)
+        self.assertEqual(ProductAuditEvent.objects.filter(action='university.deleted', target_id=str(unused.pk)).count(), 1)
+
     def test_programs_belong_to_a_university_and_are_unique_there(self):
         client = self.as_user(self.ops)
         payload = {'university': self.university.id, 'name': 'BSc Biology', 'canonical_major': 'Biology'}

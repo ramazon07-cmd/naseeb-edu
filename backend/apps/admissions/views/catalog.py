@@ -228,10 +228,7 @@ class UniversityViewSet(ListQueryMixin, CachedCatalogListMixin, viewsets.ModelVi
         )
 
     def perform_destroy(self, instance):
-        # Recorded before the row goes, so the event keeps the university's id.
-        with transaction.atomic():
-            audit_product_action(actor=self.request.user, action='university.deleted', target=instance)
-            instance.delete()
+        delete_unused_university(instance, self.request.user)
 
 
 class ScholarshipViewSet(CachedCatalogListMixin, viewsets.ReadOnlyModelViewSet):
@@ -341,6 +338,32 @@ NO_DELETE = ['get', 'post', 'put', 'patch', 'head', 'options']
 UNIVERSITY_IN_USE_MESSAGE = 'This university has linked student applications, programs or scholarships. Edit it instead.'
 
 
+def delete_unused_university(instance, actor):
+    """Delete a university nothing points at, audited; otherwise a coded 409.
+
+    Linked scholarships would silently become open to any university, and
+    programs (with the students' saved choices) would go with it. The row lock
+    makes a concurrent insert that references this university (which takes a
+    key-share lock on it) wait until the check and the delete are done;
+    Application.university is PROTECT, so the database refuses whatever slips past.
+    """
+    in_use = CodedError(UNIVERSITY_IN_USE_MESSAGE, 'university_in_use', status.HTTP_409_CONFLICT)
+    with transaction.atomic():
+        university = University.objects.select_for_update().get(pk=instance.pk)
+        if (
+            Application.objects.filter(university=university).exists()
+            or Scholarship.objects.filter(university=university).exists()
+            or UniversityProgram.objects.filter(university=university).exists()
+        ):
+            raise in_use
+        # Recorded before the row goes, so the event keeps the university's id.
+        audit_product_action(actor=actor, action='university.deleted', target=university)
+        try:
+            university.delete()
+        except ProtectedError:
+            raise in_use from None
+
+
 def linked_count(model):
     """Rows of ``model`` pointing at the university, one small subquery each (no join fan-out)."""
     rows = model.objects.filter(university=OuterRef('pk')).order_by().values('university').annotate(total=Count('pk')).values('total')
@@ -360,25 +383,7 @@ class CatalogUniversityViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
     audit_name = 'university'
 
     def perform_destroy(self, instance):
-        # Linked scholarships would silently become open to any university, and
-        # programs would go with it. The row lock makes a concurrent insert that
-        # references this university (which takes a key-share lock on it) wait
-        # until the check and the delete are done; Application.university is
-        # PROTECT, so the database refuses whatever slips past.
-        in_use = CodedError(UNIVERSITY_IN_USE_MESSAGE, 'university_in_use', status.HTTP_409_CONFLICT)
-        with transaction.atomic():
-            university = University.objects.select_for_update().get(pk=instance.pk)
-            if (
-                Application.objects.filter(university=university).exists()
-                or Scholarship.objects.filter(university=university).exists()
-                or UniversityProgram.objects.filter(university=university).exists()
-            ):
-                raise in_use
-            audit_product_action(actor=self.request.user, action=f'{self.audit_name}.deleted', target=university)
-            try:
-                university.delete()
-            except ProtectedError:
-                raise in_use from None
+        delete_unused_university(instance, self.request.user)
 
 
 class CatalogProgramViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
