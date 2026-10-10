@@ -144,16 +144,39 @@ STORAGE_CATEGORIES = (
 JOB_OVERDUE_AFTER = timedelta(hours=26)
 
 
+# Summing every upload's size reads whole tables, so the result is kept for
+# STORAGE_CACHE_SECONDS; "Check again" recounts at most once per STORAGE_RECHECK_SECONDS.
+STORAGE_CACHE_KEY = 'admin-storage:v1'
+STORAGE_CACHE_SECONDS = 10 * 60
+STORAGE_RECHECK_SECONDS = 60
+
+
 def storage_usage():
     rows = []
     for category, sources in STORAGE_CATEGORIES:
         files = size = 0
         for model, field in sources:
-            totals = model.objects.filter(**{f'{field}__gt': 0}).aggregate(files=Count('pk'), size=Sum(field))
+            # One pass per table, no WHERE on the unindexed size column: sizes are
+            # never negative, so the plain sum already leaves out files without one.
+            totals = model.objects.aggregate(files=Count('pk', filter=Q(**{f'{field}__gt': 0})), size=Sum(field))
             files += totals['files']
             size += totals['size'] or 0
         rows.append({'category': category, 'files': files, 'bytes': size})
     return rows
+
+
+def cached_storage_usage(recheck=False):
+    """``(rows, checked_at)``, recounted when the cached count is gone, or on a
+    recheck when it is older than STORAGE_RECHECK_SECONDS."""
+    cached = cache_get(STORAGE_CACHE_KEY)
+    now = timezone.now()
+    if cached is not None and not (
+        recheck and (now - cached['checked_at']).total_seconds() >= STORAGE_RECHECK_SECONDS
+    ):
+        return cached['rows'], cached['checked_at']
+    rows = storage_usage()
+    cache_set(STORAGE_CACHE_KEY, {'rows': rows, 'checked_at': now}, STORAGE_CACHE_SECONDS)
+    return rows, now
 
 
 class AdminHealthView(APIView):
@@ -186,9 +209,11 @@ class AdminHealthView(APIView):
                 ).count(),
                 'overdue': last_success is None or last_success.started_at < overdue_before,
             })
+        storage, storage_checked_at = cached_storage_usage(recheck=request.query_params.get('refresh') == 'storage')
         return Response({
             'readiness': {'status': overall, **checks},
             'jobs': jobs,
-            'storage': storage_usage(),
+            'storage': storage,
+            'storage_checked_at': storage_checked_at,
             'error_tracking': {'enabled': settings.SENTRY_ENABLED, 'url': settings.ERROR_TRACKER_URL or None},
         })

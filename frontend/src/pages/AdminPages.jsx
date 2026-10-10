@@ -2,7 +2,7 @@ import { Stat } from '../components/records';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
 import { Panel, Badge, Empty, Modal } from '../components/ui';
 import { AlertTriangle, Building2, ChevronRight, ExternalLink, Fingerprint, RefreshCw, UserRound, Compass, ShieldAlert, Plus, Pencil, Trash2, ShieldCheck, LifeBuoy } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { auditActionLabel, auditGroupOptions, fullName, initials, label } from '../lib/labels';
 import { auditDetailLines } from '../lib/auditDetails';
 import { api } from '../api';
@@ -194,7 +194,6 @@ function AiUsageRow({ title, usage }) {
 
 const loadSummary = () => api.adminSummary();
 const loadAiUsage = () => api.adminAiUsage();
-const loadHealth = () => api.adminHealth();
 const loadPlans = () => api.plans();
 
 // One admin request with loading, error and retry; the data stays on screen while it refreshes.
@@ -345,7 +344,15 @@ const JOB_RESULT_TONES = { ok: 'success', failed: 'urgent', skipped: 'reviewing'
 
 // Readiness, scheduled jobs, storage and error tracking; ops tier and above (#40).
 export function AdminHealthPage() {
+  // Storage totals are cached on the server; its own "Check again" asks for a recount.
+  const recountStorage = useRef(false);
+  const loadHealth = useCallback(() => {
+    const refreshStorage = recountStorage.current;
+    recountStorage.current = false;
+    return api.adminHealth({ refreshStorage });
+  }, []);
   const health = useAdminRequest(loadHealth);
+  const checkStorage = () => {recountStorage.current = true; health.retry();};
   const { data } = health;
   if (health.error) return <Panel title={t("Platform health")}><InlineLoadError message={health.error} onRetry={health.retry} /></Panel>;
   if (!data) return <Panel title={t("Platform health")}><p className="paged-list-loading" role="status">{t("Loading…")}</p></Panel>;
@@ -353,7 +360,7 @@ export function AdminHealthPage() {
   return <div className="section-stack">
     <Panel title={t("Readiness")} action={<button type="button" className="button quiet small" onClick={health.retry} aria-busy={health.loading}><RefreshCw size={14} /> {t("Check again")}</button>}><div className="record-meta"><Badge tone={readiness.status === 'ok' ? 'success' : 'urgent'}>{readiness.status === 'ok' ? t("Ready") : readiness.status === 'degraded' ? t("Degraded") : t("Unavailable")}</Badge><span>{t("Database")}: {readiness.database === 'ok' ? t("OK") : t("Not answering")}</span><span>{t("Cache")}: {readiness.cache === 'ok' ? t("OK") : t("Not answering")}</span></div></Panel>
     <Panel title={t("Scheduled jobs")}><div className="record-list">{data.jobs.map((job) => <article className={`record health-job ${job.overdue ? 'overdue' : ''}`} key={job.name}><div className="record-main"><h3>{t(JOB_LABELS[job.name] || job.name)}</h3><div className="record-meta">{job.last_run ? <><Badge tone={JOB_RESULT_TONES[job.last_run.result]}>{t(JOB_RESULT_LABELS[job.last_run.result])}</Badge><span>{dateTimeText(job.last_run.started_at)}</span><span>{tx`${formatNumberLocale(job.last_run.duration_seconds)} s`}</span>{job.last_run.processed !== null && <span>{tx`${formatNumberLocale(job.last_run.processed)} processed`}</span>}{job.last_run.error && <span>{job.last_run.error}</span>}</> : <span>{t("No run recorded yet")}</span>}{job.last_run && job.last_run.result !== 'ok' && job.last_success_at && <span>{tx`Last success ${dateTimeText(job.last_success_at)}`}</span>}{job.skipped_recently > 0 && <span>{tx`${formatNumberLocale(job.skipped_recently)} skipped: already running`}</span>}{job.overdue && <Badge tone="urgent">{t("No successful run in the last 26 hours")}</Badge>}</div></div></article>)}</div></Panel>
-    <Panel title={t("File storage")}><div className="table-wrap"><table><thead><tr><th>{t("Kind")}</th><th>{t("Files")}</th><th>{t("Size")}</th></tr></thead><tbody>{data.storage.map((row) => <tr key={row.category}><td>{t(STORAGE_LABELS[row.category] || row.category)}</td><td>{formatNumberLocale(row.files)}</td><td>{formatFileSize(row.bytes)}</td></tr>)}</tbody></table></div><p className="form-note"><ShieldCheck size={16} /> {t("Sizes come from the uploads' saved sizes; profile photos and avatars are not counted.")}</p></Panel>
+    <Panel title={t("File storage")} action={<button type="button" className="button quiet small" onClick={checkStorage} aria-busy={health.loading}><RefreshCw size={14} /> {t("Check again")}</button>}>{data.storage_checked_at && <p className="form-note">{tx`Counted ${dateTimeText(data.storage_checked_at)}; recounted at most once a minute.`}</p>}<div className="table-wrap"><table><thead><tr><th>{t("Kind")}</th><th>{t("Files")}</th><th>{t("Size")}</th></tr></thead><tbody>{data.storage.map((row) => <tr key={row.category}><td>{t(STORAGE_LABELS[row.category] || row.category)}</td><td>{formatNumberLocale(row.files)}</td><td>{formatFileSize(row.bytes)}</td></tr>)}</tbody></table></div><p className="form-note"><ShieldCheck size={16} /> {t("Sizes come from the uploads' saved sizes; profile photos and avatars are not counted.")}</p></Panel>
     <Panel title={t("Error tracking")}><div className="record-meta"><Badge tone={data.error_tracking.enabled ? 'success' : 'reviewing'}>{data.error_tracking.enabled ? t("On") : t("Off")}</Badge>{data.error_tracking.url ? <a href={data.error_tracking.url} target="_blank" rel="noreferrer">{t("Open the error tracker")} <ExternalLink size={14} /></a> : <span>{t("No error tracker link is configured.")}</span>}</div></Panel>
   </div>;
 }

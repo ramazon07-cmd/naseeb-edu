@@ -536,7 +536,7 @@ export const api = {
   plans: () => request('/users/plans/'),
   adminSummary: () => request('/admin/summary/'),
   adminAiUsage: () => request('/admin/ai-usage/'),
-  adminHealth: () => request('/admin/health/'),
+  adminHealth: ({ refreshStorage = false } = {}) => request(`/admin/health/${refreshStorage ? '?refresh=storage' : ''}`),
   planImpact: (id, limits) => request(`/users/plans/${id}/impact/?${new URLSearchParams(limits)}`),
   createStaff: (payload) => request('/users/accounts/create-staff/', { method: 'POST', body: JSON.stringify(payload) }),
   updateSubscription: (schoolId, payload) => request(`/users/workspace-subscriptions/${schoolId}/`, {

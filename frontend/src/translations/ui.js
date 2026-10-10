@@ -2532,6 +2532,7 @@ export const UI_TRANSLATIONS = {
   "Scheduled jobs": ["Rejalashtirilgan ishlar", "Плановые задачи"],
   "No run recorded yet": ["Hali bajarilish qayd etilmagan", "Запусков пока нет"],
   "No successful run in the last 26 hours": ["Oxirgi 26 soatda muvaffaqiyatli bajarilmagan", "Ни одного успешного запуска за последние 26 часов"],
+  "Counted {0}; recounted at most once a minute.": ["{0} da hisoblangan; daqiqasiga ko‘pi bilan bir marta qayta hisoblanadi.", "Подсчитано {0}; пересчёт не чаще раза в минуту."],
   "Changed fields": ["O‘zgargan maydonlar", "Изменённые поля"],
   "Django admin access": ["Django admin kirishi", "Доступ к админке Django"],
   "Changed: {0}": ["O‘zgardi: {0}", "Изменено: {0}"],

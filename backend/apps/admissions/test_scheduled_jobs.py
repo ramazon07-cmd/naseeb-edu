@@ -206,6 +206,30 @@ class AdminHealthTests(AuditBaseMixin, APITestCase):
         job = self.job('purge_screen_time')
         self.assertEqual((job['last_run'], job['last_success_at'], job['overdue']), (None, None, True))
 
+    def test_storage_is_cached_and_check_again_recounts_at_most_once_a_minute(self):
+        from django.core.cache import cache
+
+        from apps.admissions.views import admin_portal
+
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.client.force_authenticate(self.ops)
+
+        def documents(query=''):
+            data = self.client.get(f'/api/admin/health/{query}').data
+            return next(row for row in data['storage'] if row['category'] == 'documents')['files'], data['storage_checked_at']
+
+        with mock.patch.object(admin_portal, 'storage_usage', wraps=admin_portal.storage_usage) as counted:
+            first, checked_at = documents()
+            Document.objects.create(student=self.student, title='Passport', document_type='passport', file_size=2048)
+            self.assertEqual(documents(), (first, checked_at))
+            # A recheck within the minute keeps the count.
+            self.assertEqual(documents('?refresh=storage'), (first, checked_at))
+            self.assertEqual(counted.call_count, 1)
+            with mock.patch.object(admin_portal.timezone, 'now', return_value=timezone.now() + timedelta(seconds=61)):
+                self.assertEqual(documents('?refresh=storage')[0], first + 1)
+            self.assertEqual(counted.call_count, 2)
+
     def test_support_staff_cannot_open_the_health_page(self):
         support = User.objects.create_user(
             username='health-support', email='health-support@example.com', password='StrongPass123!',
