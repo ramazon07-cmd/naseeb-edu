@@ -212,10 +212,14 @@ const PAGE_RESOURCE_KEYS = {
 };
 
 // `lazy`: a student's page waits for exactly the collections it fetches.
+// Student pages that cannot render without these collections. Essays, documents and
+// letters only feed counts there; when one of them fails the page stays up with a retry.
+const STUDENT_PRIMARY_KEYS = { college_search: ['students', 'applications'], applications: ['students', 'applications'] };
+
 function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, retry, children }) {
   const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
-  const requireComplete = lazy && ['college_search', 'applications'].includes(page);
-  const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, requireComplete });
+  const primaryKeys = lazy ? STUDENT_PRIMARY_KEYS[page] || [] : [];
+  const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys });
 
   if (initialLoading) return <PageSkeleton />;
   return <>
