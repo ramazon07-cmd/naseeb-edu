@@ -10,6 +10,8 @@ import { LoadMore, PagedListError } from '../components/paged';
 import { PageSkeleton } from '../components/states';
 import { TemporaryCredentialModal } from '../components/TemporaryCredentialModal';
 import { DownloadCvButton } from '../components/CvDocument';
+import { mergeSaved } from '../lib/mergeSaved';
+import { RecommendationLetters } from '../components/RecommendationLetters';
 import { useStudentRecords } from '../hooks/useStudentRecords';
 import { usePagedList } from '../hooks/usePagedList';
 import { activityText } from '../lib/activityText';
@@ -152,13 +154,14 @@ function CounselorStudentList({ user, data, stats, query, setQuery, students, on
 
 // -- Student 360 ---------------------------------------------------------------
 
-const TABS = (student, records) => [
+const TABS = (student, records, letters) => [
   ['overview', 'Overview'],
   ['review', 'To review', student.to_review_total ?? 0],
   ['roadmap', 'Roadmap'],
   ['documents', 'Documents', (records.documents || []).length],
   ['essays', 'Essays', (records.essays || []).length],
   ['applications', 'Applications', (records.applications || []).length],
+  ['letters', 'Recommendations', letters.length],
   ['meetings', 'Meetings'],
   ['notes', 'Private notes'],
 ];
@@ -342,6 +345,14 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
   const [noteFor, setNoteFor] = useState(null);
   const loaded = useStudentRecords(student.id, true);
   const records = loaded.records;
+  // Letters saved here show over the loaded list until a refresh brings them (or newer).
+  const [savedLetters, setSavedLetters] = useState({ studentId: null, items: [] });
+  const ownSaved = savedLetters.studentId === student.id ? savedLetters.items : [];
+  const letters = mergeSaved(records.recommendations || [], ownSaved);
+  const letterSaved = (saved) => setSavedLetters({
+    studentId: student.id,
+    items: [saved, ...ownSaved.filter((item) => item.id !== saved.id)],
+  });
   const name = fullName(student.user_detail);
   const meetings = (data.bookings || []).filter((item) => Number(item.student) === Number(student.id));
   const upcoming = upcomingMeetings(meetings);
@@ -357,7 +368,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
   }, [records, name]);
   const readiness = student.profile_readiness || { percent: 0, missing: [] };
   const meta = joinParts(gradeText(student.grade), student.school_name, student.target_major, listText(student.target_countries));
-  const tabs = TABS(student, records);
+  const tabs = TABS(student, records, letters);
 
   return <div className="cx-page cx-student-360">
     <div className="cx-s360-top">
@@ -409,6 +420,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     {tab === 'applications' && <RecordCard title={t("Applications")} count={(records.applications || []).length} empty={t("The student has not added any universities to the college list yet.")}>
       {(records.applications || []).map((item) => <RecordRow key={item.id} title={item.university_detail?.name || t("University")} meta={joinParts(item.program, label(item.tier), item.deadline && tx`Deadline: ${dateText(item.deadline)}`)} status={item.status} />)}
     </RecordCard>}
+    {tab === 'letters' && <RecommendationLetters student={student} user={user} letters={letters} loading={loaded.loading} notify={notify} onSaved={letterSaved} />}
     {tab === 'meetings' && <RecordCard title={t("Meetings")} count={meetings.length} empty={t("No meetings scheduled.")}>
       {meetings.map((item) => <RecordRow key={item.id} title={item.topic} meta={joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)} status={meetingBadgeStatus(meetingStatus(item, now, { student: false }))}>
         <button type="button" className="cx-btn" onClick={() => setNoteFor(item)}>{t("Notes")}</button>

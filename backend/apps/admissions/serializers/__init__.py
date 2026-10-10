@@ -24,6 +24,10 @@ from .students import (  # noqa: F401
     LevelApprovalSerializer,
 )
 from .catalog import (  # noqa: F401
+    CatalogOpportunityProgramSerializer,
+    CatalogProgramSerializer,
+    CatalogScholarshipSerializer,
+    CatalogUniversitySerializer,
     UniversityProgramSerializer,
     UniversitySerializer,
     UniversityRowSerializer,
@@ -47,6 +51,8 @@ from .records import (  # noqa: F401
     ActivitySerializer,
     HonorSerializer,
     RecommendationLetterSerializer,
+    LetterStudentReviewSerializer,
+    LetterSuggestionRequestSerializer,
     MeetingNoteSerializer,
     NotificationSerializer,
     ActivityLogSerializer,

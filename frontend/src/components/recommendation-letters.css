@@ -1,0 +1,326 @@
+/* Counselor letter editor and the student's read view (RecommendationLetters.jsx). */
+.modal.letter-editor-modal {
+  width: min(1120px, 100%);
+}
+
+.letter-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: var(--space-5) var(--space-6);
+  align-items: start;
+}
+
+.letter-editor-main {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.letter-editor-for {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.letter-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+}
+
+.letter-editor-fields > .field:last-child {
+  grid-column: 1 / -1;
+}
+
+.field textarea.letter-editor-text {
+  min-height: 340px;
+  resize: vertical;
+  font-size: var(--text-base);
+  line-height: 1.65;
+}
+
+.letter-editor-privacy {
+  margin: calc(var(--space-2) * -1) 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.letter-suggestions {
+  max-height: min(680px, calc(100dvh - 200px));
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-inset);
+}
+
+.letter-suggestions header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.letter-suggestions h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--text-md);
+}
+
+.letter-suggestions header small {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.letter-suggestions ul {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.letter-suggestion {
+  display: grid;
+  gap: var(--space-1-5);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-base);
+  background: var(--surface);
+}
+
+.letter-suggestion p,
+.letter-suggestion b {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.letter-suggestion.is-sentence p {
+  padding-left: var(--space-2-5);
+  border-left: 2px solid var(--accent);
+}
+
+.letter-suggestion.is-fact p,
+.letter-suggestion.is-tip p {
+  color: var(--muted);
+}
+
+.letter-suggestion .cx-btn {
+  justify-self: start;
+  height: 30px;
+}
+
+.letter-suggestion-source,
+.letter-suggestions-group {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.letter-suggestions-group {
+  margin: var(--space-1) 0 0;
+}
+
+.letter-suggestions-note,
+.letter-suggestions-error {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.letter-suggestions-error {
+  color: var(--danger);
+}
+
+.letter-read {
+  display: grid;
+  gap: var(--space-4);
+  padding: 22px;
+}
+
+@media (max-width: 820px) {
+  .letter-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .letter-suggestions {
+    max-height: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .letter-editor-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field textarea.letter-editor-text {
+    min-height: 260px;
+  }
+}
+
+.letter-private-note {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* The student's answer about a shared letter: confirmed, or what to change. */
+.letter-review {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  align-items: start;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.letter-review > svg {
+  margin-top: 2px;
+}
+
+.letter-review.is-ok {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+}
+
+.letter-review.is-ok > svg {
+  color: var(--success);
+}
+
+.letter-review.is-warn {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+}
+
+.letter-review.is-warn > svg {
+  color: var(--warning-text);
+}
+
+.letter-review div {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.letter-review small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.letter-review-note {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.letter-review-prompt {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.letter-read .letter-review-form {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0;
+}
+
+.letter-review-form textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+/* Keep the document and its review controls in one readable column. */
+.modal.letter-read-modal {
+  width: min(800px, 100%);
+}
+
+.letter-editor > .form-actions,
+.letter-editor-error {
+  grid-column: 1 / -1;
+}
+
+.letter-editor > .form-actions {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.letter-read-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.letter-read-meta strong {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.letter-read-text {
+  color: var(--text);
+  font-size: var(--text-base);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 65ch;
+  margin: var(--space-2) auto;
+  padding: clamp(16px, 3vw, 28px);
+  border-left: 2px solid var(--border);
+  background: var(--surface-inset);
+  line-height: 1.8;
+}
+
+.letter-read > .form-actions {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.letter-list .cx-row {
+  flex-wrap: wrap;
+  text-align: left;
+}
+
+.letter-list .cx-row-copy {
+  min-width: min(100%, 180px);
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .letter-read {
+    padding: var(--space-4);
+  }
+
+  .letter-read .form-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .letter-read .form-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+}

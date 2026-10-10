@@ -1,7 +1,12 @@
 """Role isolation: support tickets."""
+from datetime import timedelta
+from importlib import import_module
+
+from django.apps import apps
+from django.utils import timezone
 from rest_framework import status
 from apps.users.models import User
-from ..models import SupportTicket
+from ..models import SupportTicket, SupportTicketReply
 from .base import RoleIsolationBase
 
 
@@ -127,3 +132,92 @@ class SupportRoleIsolationTests(RoleIsolationBase):
             self.client.get('/api/support-tickets/').status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+    def test_every_support_answer_is_kept_in_order(self):
+        admin_user = User.objects.create_user(username='support-admin', email='support-admin@example.com', password=None, role=User.Role.ADMIN)
+        ticket = SupportTicket.objects.create(
+            requester=self.student_a_user, category=SupportTicket.Category.TECHNICAL, subject='Login', message='I cannot sign in.',
+        )
+        url = f'/api/support-tickets/{ticket.id}/'
+        self.client.force_authenticate(admin_user)
+        self.client.patch(url, {'status': SupportTicket.Status.IN_PROGRESS, 'admin_response': 'Please clear your cache.'}, format='json')
+        # A status change alone, or the same answer sent again, adds nothing.
+        self.client.patch(url, {'status': SupportTicket.Status.IN_PROGRESS}, format='json')
+        self.client.patch(url, {'admin_response': 'Please clear your cache.'}, format='json')
+        last = self.client.patch(url, {'status': SupportTicket.Status.RESOLVED, 'admin_response': 'We sent a new sign-in link.'}, format='json')
+        self.assertEqual(last.status_code, status.HTTP_200_OK, last.data)
+        self.assertEqual([reply['body'] for reply in last.data['replies']], ['Please clear your cache.', 'We sent a new sign-in link.'])
+        self.assertEqual({reply['author_name'] for reply in last.data['replies']}, {'support-admin'})
+        self.assertEqual(last.data['admin_response'], 'We sent a new sign-in link.')
+
+        self.client.force_authenticate(self.student_a_user)
+        own = self.client.get(url)
+        self.assertEqual(len(own.data['replies']), 2)
+        self.assertTrue(own.data['has_unread_response'])
+        self.client.force_authenticate(self.student_b_user)
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_answers_given_before_the_history_start_it_with_their_own_date(self):
+        answered = timezone.now() - timedelta(days=30)
+        old = SupportTicket.objects.create(
+            requester=self.student_a_user, category=SupportTicket.Category.ACCOUNT, subject='Old', message='Old question',
+            admin_response='Old answer', responded_by=self.counselor, responded_at=answered,
+        )
+        SupportTicket.objects.create(requester=self.student_a_user, category=SupportTicket.Category.OTHER, subject='Open', message='No answer yet')
+        backfill = import_module('apps.admissions.migrations.0075_support_ticket_reply_history').backfill_replies
+        backfill(apps, None)
+        # A second run (a re-applied or interrupted migration) adds nothing.
+        backfill(apps, None)
+        self.assertEqual(
+            [(reply.ticket_id, reply.author_id, reply.body, reply.created_at) for reply in SupportTicketReply.objects.all()],
+            [(old.id, self.counselor.id, 'Old answer', answered)],
+        )
+
+    def test_the_reply_box_adds_a_reply_on_every_submit_even_the_same_text(self):
+        admin_user = User.objects.create_user(username='support-admin', email='support-admin@example.com', password=None, role=User.Role.ADMIN)
+        ticket = SupportTicket.objects.create(
+            requester=self.student_a_user, category=SupportTicket.Category.TECHNICAL, subject='Login', message='I cannot sign in.',
+        )
+        url = f'/api/support-tickets/{ticket.id}/'
+        self.client.force_authenticate(admin_user)
+        self.client.patch(url, {'reply': 'Please try again now.'}, format='json')
+        self.client.force_authenticate(self.student_a_user)
+        self.client.post(f'{url}mark-viewed/', {}, format='json')
+        first = SupportTicket.objects.get(pk=ticket.pk)
+        self.assertIsNotNone(first.requester_viewed_at)
+
+        self.client.force_authenticate(admin_user)
+        again = self.client.patch(url, {'status': SupportTicket.Status.RESOLVED, 'reply': 'Please try again now.'}, format='json')
+        self.assertEqual(again.status_code, status.HTTP_200_OK, again.data)
+        self.assertEqual([reply['body'] for reply in again.data['replies']], ['Please try again now.'] * 2)
+        ticket.refresh_from_db()
+        self.assertGreater(ticket.responded_at, first.responded_at)
+        self.assertIsNone(ticket.requester_viewed_at)
+        self.client.force_authenticate(self.student_a_user)
+        self.assertTrue(self.client.get(url).data['has_unread_response'])
+        # Only support staff write replies.
+        refused = self.client.patch(url, {'reply': 'Me again.'}, format='json')
+        self.assertIn(refused.status_code, (status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN))
+        self.assertEqual(SupportTicketReply.objects.filter(ticket=ticket).count(), 2)
+
+    def test_an_answer_written_in_django_admin_joins_the_history(self):
+        from django.contrib.admin.sites import site
+        from django.test import RequestFactory
+
+        superuser = User.objects.create_superuser(username='root-admin', email='root@example.com', password='x')
+        ticket = SupportTicket.objects.create(
+            requester=self.student_a_user, category=SupportTicket.Category.TECHNICAL, subject='Login', message='I cannot sign in.',
+        )
+        model_admin = site._registry[SupportTicket]
+        request = RequestFactory().post('/admin/')
+        request.user = superuser
+        form_class = model_admin.get_form(request, ticket, change=True)
+        data = {field: getattr(ticket, field) for field in form_class.base_fields}
+        data.update(admin_response='Your account is unlocked.', responded_by='')
+        form = form_class(data, instance=ticket)
+        self.assertTrue(form.is_valid(), form.errors)
+        model_admin.save_model(request, form.save(commit=False), form, change=True)
+        ticket.refresh_from_db()
+        self.assertEqual(list(ticket.replies.values_list('body', 'author')), [('Your account is unlocked.', superuser.id)])
+        self.assertIsNotNone(ticket.responded_at)
+        self.assertIsNone(ticket.requester_viewed_at)

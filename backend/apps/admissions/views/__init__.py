@@ -18,6 +18,10 @@ from .students import (  # noqa: F401
     StudentProfileViewSet,
 )
 from .catalog import (  # noqa: F401
+    CatalogOpportunityProgramViewSet,
+    CatalogProgramViewSet,
+    CatalogScholarshipViewSet,
+    CatalogUniversityViewSet,
     SchoolViewSet,
     UniversityViewSet,
     ScholarshipViewSet,

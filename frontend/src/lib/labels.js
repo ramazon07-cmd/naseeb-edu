@@ -50,7 +50,12 @@ export const AUDIT_ACTIONS = {
   'student.counselor_assigned': 'Counselor assigned to student', 'student_360.viewed': 'Student 360 profile viewed',
   'student_visibility.viewed': 'Student 360 profile viewed', 'student_account.viewed': 'Student account viewed',
   'student_photo.viewed': 'Student photo viewed', 'student_xp.viewed': 'Student XP viewed',
-  'subscription.changed': 'Workspace plan changed', 'support.profile_viewed': 'Support view opened'
+  'subscription.changed': 'Workspace plan changed', 'support.profile_viewed': 'Support view opened',
+  'university.created': 'University added', 'university.updated': 'University updated', 'university.deleted': 'University deleted',
+  'university_program.created': 'University program added', 'university_program.updated': 'University program updated',
+  'university_program.deleted': 'University program deleted', 'scholarship.created': 'Scholarship added',
+  'scholarship.updated': 'Scholarship updated', 'opportunity_program.created': 'Opportunity program added',
+  'opportunity_program.updated': 'Opportunity program updated'
 };
 
 export const label = (value) => t(LABELS[value] || value || '—');

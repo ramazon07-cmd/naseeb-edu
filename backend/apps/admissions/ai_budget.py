@@ -38,6 +38,13 @@ def _limits(feature):
             settings.ESSAY_COACH_SCHOOL_DAILY_BUDGET or None,
             settings.ESSAY_COACH_USER_DAILY_LIMIT or None,
         )
+    if feature == 'recommendation_letter':
+        # Like the coach: a platform budget of 0 turns AI suggestions off.
+        return (
+            settings.REC_LETTER_AI_DAILY_BUDGET,
+            settings.REC_LETTER_AI_SCHOOL_DAILY_BUDGET or None,
+            settings.REC_LETTER_AI_USER_DAILY_LIMIT or None,
+        )
     raise ValueError(f'Unknown AI feature: {feature}')
 
 

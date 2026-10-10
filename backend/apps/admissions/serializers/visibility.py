@@ -146,11 +146,13 @@ class SchoolVisibilityRecommendationSerializer(serializers.ModelSerializer):
 class SchoolVisibilityBookingSerializer(serializers.ModelSerializer):
     participant_name = serializers.SerializerMethodField()
     participant_role = serializers.CharField(source='participant.role', read_only=True)
+    # A request nobody confirmed before it started (Booking.is_expired).
+    is_expired = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Booking
         fields = (
-            'id', 'topic', 'starts_at', 'duration_minutes', 'status', 'participant_name',
+            'id', 'topic', 'starts_at', 'duration_minutes', 'status', 'is_expired', 'participant_name',
             'participant_role', 'created_at', 'updated_at',
         )
 

@@ -415,6 +415,50 @@ EXACT = {
         'uz': 'Bir so‘rovda ko‘pi bilan 100 ta universitet so‘rang.',
         'ru': 'Запрашивайте не больше 100 университетов за раз.',
     },
+    'Only a counselor can write the letter text.': {
+        'uz': 'Tavsiyanoma matnini faqat maslahatchi yoza oladi.',
+        'ru': 'Текст рекомендательного письма может писать только консультант.',
+    },
+    'Only a counselor can share the letter with the student.': {
+        'uz': 'Tavsiyanomani o‘quvchiga faqat maslahatchi ko‘rsata oladi.',
+        'ru': 'Показать письмо ученику может только консультант.',
+    },
+    'Only a counselor can ask for letter suggestions.': {
+        'uz': 'Tavsiyanoma bo‘yicha takliflarni faqat maslahatchi so‘ray oladi.',
+        'ru': 'Запросить подсказки для письма может только консультант.',
+    },
+    'This letter has changed. Reopen it and read the latest text before reviewing.': {
+        'uz': 'Xat o‘zgartirildi. Uni qayta ochib, baholashdan oldin so‘nggi matnni o‘qing.',
+        'ru': 'Письмо изменилось. Откройте его заново и прочитайте актуальный текст перед проверкой.',
+    },
+    'The maximum must not be below the minimum.': {
+        'uz': 'Eng katta qiymat eng kichigidan kam bo‘lmasin.',
+        'ru': 'Максимум не может быть меньше минимума.',
+    },
+    'This university has linked student applications, programs or scholarships. Edit it instead.': {
+        'uz': 'Bu universitetga o‘quvchilar arizalari, ta’lim dasturlari yoki stipendiyalar bog‘langan. O‘chirish o‘rniga tahrirlang.',
+        'ru': 'К этому университету привязаны заявки учеников, программы или стипендии. Отредактируйте его вместо удаления.',
+    },
+    'The fields name, country must make a unique set.': {
+        'uz': 'Bu davlatda shu nomli universitet allaqachon bor.',
+        'ru': 'Университет с таким названием в этой стране уже есть.',
+    },
+    'The fields university, name, degree_level must make a unique set.': {
+        'uz': 'Bu universitetda shu nomli dastur allaqachon bor.',
+        'ru': 'Программа с таким названием в этом университете уже есть.',
+    },
+    'Only the student can review their letter.': {
+        'uz': 'Tavsiyanomani faqat o‘quvchining o‘zi tekshira oladi.',
+        'ru': 'Проверить письмо может только сам ученик.',
+    },
+    'Your counselor has not shared this letter with you yet.': {
+        'uz': 'Maslahatchingiz bu tavsiyanomani hali sizga ko‘rsatmagan.',
+        'ru': 'Консультант ещё не показал вам это письмо.',
+    },
+    'Tell your counselor what to change.': {
+        'uz': 'Maslahatchingizga nimani o‘zgartirish kerakligini yozing.',
+        'ru': 'Напишите консультанту, что нужно изменить.',
+    },
     'Use true or false.': {
         'uz': '“Ha” yoki “Yo‘q” qiymatini yuboring.',
         'ru': 'Укажите «Да» или «Нет».',
@@ -770,9 +814,9 @@ PATTERNS = (
         'uz': 'Boshqa test natijalari yoki sertifikatlardan ko‘pi bilan {0} tasini qo‘shish mumkin.',
         'ru': 'Можно добавить не более {0} других результатов тестов или сертификатов.',
     }),
-    (_P(r'^Answer .+ must be a whole number from 1 to 5\.$'), {
-        'uz': 'Har bir javob 1 dan 5 gacha butun son bo‘lishi kerak.',
-        'ru': 'Каждый ответ должен быть целым числом от 1 до 5.',
+    (_P(r'^Answer .+ must be a whole number from 1 to (\d+)\.$'), {
+        'uz': 'Har bir javob 1 dan {0} gacha butun son bo‘lishi kerak.',
+        'ru': 'Каждый ответ должен быть целым числом от 1 до {0}.',
     }),
     (_P(r'^You are muted in this channel until .+\.$'), {
         'uz': 'Bu kanalda vaqtincha xabar yoza olmaysiz.',

@@ -1,6 +1,7 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -143,6 +144,22 @@ class SchoolStudentVisibilityTests(APITestCase):
         self.assertEqual(other.status_code, status.HTTP_200_OK)
         self.assertEqual(own.data['policy']['access_scope'], 'global')
         self.assert_sensitive_values_absent(own.data)
+
+    def test_school_360_marks_meeting_requests_nobody_confirmed_before_they_started(self):
+        Booking.objects.create(
+            student=self.student, participant=self.organization, topic='Unconfirmed past request',
+            starts_at=timezone.now() - timedelta(days=1),
+        )
+        Booking.objects.create(
+            student=self.student, participant=self.organization, topic='Confirmed past meeting',
+            starts_at=timezone.now() - timedelta(days=2), status=Booking.Status.APPROVED,
+        )
+        self.client.force_authenticate(self.organization)
+        payload = self.client.get(f'/api/students/{self.student.id}/data-visibility/').data
+        expired = {item['topic']: item['is_expired'] for item in payload['meetings']}
+        self.assertEqual(expired, {
+            'Visible meeting schedule': False, 'Unconfirmed past request': True, 'Confirmed past meeting': False,
+        })
 
     def test_organization_direct_admissions_serializers_redact_sensitive_fields(self):
         self.client.force_authenticate(self.organization)
