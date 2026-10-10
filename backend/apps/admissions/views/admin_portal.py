@@ -169,14 +169,22 @@ class AdminHealthView(APIView):
         overdue_before = timezone.now() - JOB_OVERDUE_AFTER
         jobs = []
         for name in SCHEDULED_JOBS:
-            last = JobRun.objects.filter(name=name).first()
+            runs = JobRun.objects.filter(name=name)
+            # A run skipped because another instance held the lock did no work: it
+            # must not hide the real last run, and only a success keeps a job on time.
+            last = runs.exclude(result=JobRun.Result.SKIPPED).first()
+            last_success = runs.filter(result=JobRun.Result.OK).only('started_at').first()
             jobs.append({
                 'name': name,
                 'last_run': {
                     'started_at': last.started_at, 'duration_seconds': last.duration_seconds,
                     'result': last.result, 'processed': last.processed, 'error': last.error,
                 } if last else None,
-                'overdue': last is None or last.started_at < overdue_before,
+                'last_success_at': last_success.started_at if last_success else None,
+                'skipped_recently': runs.filter(
+                    result=JobRun.Result.SKIPPED, started_at__gte=overdue_before,
+                ).count(),
+                'overdue': last_success is None or last_success.started_at < overdue_before,
             })
         return Response({
             'readiness': {'status': overall, **checks},

@@ -173,6 +173,39 @@ class AdminHealthTests(AuditBaseMixin, APITestCase):
         documents = next(row for row in data['storage'] if row['category'] == 'documents')
         self.assertEqual((documents['files'], documents['bytes']), (1, 2048))
 
+    def job(self, name):
+        self.client.force_authenticate(self.ops)
+        return next(job for job in self.client.get('/api/admin/health/').data['jobs'] if job['name'] == name)
+
+    def test_a_skipped_run_does_not_hide_the_last_real_run(self):
+        from apps.users.models import JobRun
+
+        now = timezone.now()
+        JobRun.objects.create(name='purge_screen_time', started_at=now - timedelta(hours=2), result='ok', processed=4)
+        JobRun.objects.create(name='purge_screen_time', started_at=now - timedelta(minutes=5), result='skipped')
+        job = self.job('purge_screen_time')
+        self.assertEqual((job['last_run']['result'], job['last_run']['processed']), ('ok', 4))
+        self.assertEqual(job['skipped_recently'], 1)
+        self.assertFalse(job['overdue'])
+
+    def test_a_failed_run_is_shown_and_overdue_without_a_recent_success(self):
+        from apps.users.models import JobRun
+
+        now = timezone.now()
+        JobRun.objects.create(name='purge_screen_time', started_at=now - timedelta(hours=30), result='ok')
+        JobRun.objects.create(name='purge_screen_time', started_at=now - timedelta(hours=1), result='failed', error='RuntimeError')
+        job = self.job('purge_screen_time')
+        self.assertEqual((job['last_run']['result'], job['last_run']['error']), ('failed', 'RuntimeError'))
+        self.assertEqual(job['last_success_at'], now - timedelta(hours=30))
+        self.assertTrue(job['overdue'])
+
+    def test_only_skipped_runs_mean_no_run_and_overdue(self):
+        from apps.users.models import JobRun
+
+        JobRun.objects.create(name='purge_screen_time', started_at=timezone.now(), result='skipped')
+        job = self.job('purge_screen_time')
+        self.assertEqual((job['last_run'], job['last_success_at'], job['overdue']), (None, None, True))
+
     def test_support_staff_cannot_open_the_health_page(self):
         support = User.objects.create_user(
             username='health-support', email='health-support@example.com', password='StrongPass123!',
