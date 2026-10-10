@@ -75,40 +75,44 @@ TOP_SCHOOLS = 5
 
 
 def _note(keys):
-    """Usage and refusal counters read by the admin portal. Best effort: a cache
-    failure here never blocks or refuses a call."""
+    """Refusal counters read by the admin portal. Best effort: a cache failure
+    here never blocks or refuses a call."""
     count_hits(keys, TTL_SECONDS)
 
 
 def consume(feature, user):
-    """Count one paid call for ``user``; ``False`` when any daily cap is reached."""
+    """Count one paid call for ``user``; ``False`` when any daily cap is reached.
+
+    The platform and school counters are counted on every call, capped or not:
+    they are also today's usage on the admin portal, so one atomic step both
+    checks the caps and records the call.
+    """
     day = timezone.localdate().isoformat()
     global_cap, school_cap, user_cap = _limits(feature)
     prefix = f'ai-budget:{feature}:{day}'
-    used = [f'{prefix}:used'] + ([f'{prefix}:used:school:{user.school_id}'] if user.school_id else [])
-    caps = [(prefix, global_cap), (f'{prefix}:user:{user.pk}', user_cap)]
+    counters = [(prefix, global_cap)]
     if user.school_id:
-        caps.append((f'{prefix}:school:{user.school_id}', school_cap))
-    caps = [(key, limit) for key, limit in caps if limit is not None]
-    if not caps:
-        _note(used)
-        return True
-    if any(limit <= 0 for _, limit in caps):
+        counters.append((f'{prefix}:school:{user.school_id}', school_cap))
+    if user_cap is not None:
+        counters.append((f'{prefix}:user:{user.pk}', user_cap))
+    capped = [limit for _, limit in counters if limit is not None]
+    if any(limit <= 0 for limit in capped):
         _note([f'{prefix}:refused'])
         return False
 
-    counts = count_hits([key for key, _ in caps], TTL_SECONDS)
+    counts = count_hits([key for key, _ in counters], TTL_SECONDS)
     if counts is None:
+        if not capped:
+            return True
         local_caps = [(f'{feature}:process', settings.AI_FALLBACK_PROCESS_DAILY_BUDGET)]
         if user_cap is not None:
             local_caps.append((f'{feature}:user:{user.pk}', user_cap))
         allowed = _fallback.consume(day, local_caps)
         logger.warning('ai_budget_cache_down feature=%s allowed=%s: using the per-process allowance', feature, allowed)
         return allowed
-    if all(count <= limit for count, (_, limit) in zip(counts, caps)):
-        _note(used)
+    if all(limit is None or count <= limit for count, (_, limit) in zip(counts, counters)):
         return True
-    for key, _ in caps:
+    for key, _ in counters:
         cache_decrement(key)
     _note([f'{prefix}:refused'])
     return False
@@ -123,8 +127,8 @@ def usage_today(school_ids):
     report = {}
     for feature in FEATURES:
         prefix = f'ai-budget:{feature}:{day}'
-        school_keys = {f'{prefix}:used:school:{pk}': pk for pk in school_ids}
-        values = cache_get_many([f'{prefix}:used', f'{prefix}:refused', *school_keys])
+        school_keys = {f'{prefix}:school:{pk}': pk for pk in school_ids}
+        values = cache_get_many([prefix, f'{prefix}:refused', *school_keys])
         if values is None:
             return None
         global_cap, school_cap, user_cap = _limits(feature)
@@ -133,7 +137,7 @@ def usage_today(school_ids):
             key=lambda item: -item[1],
         )[:TOP_SCHOOLS]
         report[feature] = {
-            'used': int(values.get(f'{prefix}:used') or 0),
+            'used': int(values.get(prefix) or 0),
             'limit': global_cap,
             'school_limit': school_cap,
             'user_limit': user_cap,

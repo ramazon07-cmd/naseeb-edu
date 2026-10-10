@@ -99,6 +99,22 @@ class AiBudgetTests(APITestCase):
         self.assertEqual(data['features']['essay_coach']['used'], 0)
         self.assertEqual(data['features']['recommendation_letter']['used'], 0)
 
+    def test_an_allowed_call_is_one_cache_step_and_usage_has_no_duplicate_counter(self):
+        with mock.patch.object(ai_budget, 'count_hits', wraps=ai_budget.count_hits) as hits:
+            self.assertEqual(self.spend(self.a1), [True])
+        self.assertEqual(hits.call_count, 1)
+        day = timezone.localdate().isoformat()
+        self.assertIsNone(cache.get(f'ai-budget:assistant:{day}:used'))
+        self.assertEqual(ai_budget.usage_today([self.school_a.id])['assistant']['used'], 1)
+
+    @override_settings(AI_ASSISTANT_DAILY_BUDGET=0, AI_ASSISTANT_SCHOOL_DAILY_BUDGET=0, AI_ASSISTANT_USER_DAILY_LIMIT=0)
+    def test_uncapped_calls_are_still_counted_as_usage(self):
+        self.spend(self.a1, 2)
+        self.spend(self.b1)
+        usage = ai_budget.usage_today([self.school_a.id, self.school_b.id])['assistant']
+        self.assertEqual((usage['used'], usage['limit'], usage['refused']), (3, None, 0))
+        self.assertEqual([row['used'] for row in usage['top_schools']], [2, 1])
+
     def test_usage_is_unavailable_not_zero_when_the_cache_is_down(self):
         admin = User.objects.create_user(username='usage-admin', email='usage-admin@example.com', role=User.Role.ADMIN)
         self.client.force_authenticate(admin)
