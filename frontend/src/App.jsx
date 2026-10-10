@@ -2,7 +2,7 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import './mind-section.css';
-import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
+import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
@@ -55,6 +55,9 @@ const AdminAuditPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminAudit
 const AdminControlDashboard = lazyNamed(() => import('./pages/AdminPages'), 'AdminControlDashboard');
 const AdminCounselorsPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminCounselorsPage');
 const CounselorRoadmapPage = lazyNamed(() => import('./pages/AdminPages'), 'CounselorRoadmapPage');
+const AdminPlansPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminPlansPage');
+const AdminStaffPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminStaffPage');
+const AdminHealthPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminHealthPage');
 const ApplicationsPortalPage = lazyNamed(() => import('./pages/ApplicationsPortalPage'), 'ApplicationsPortalPage');
 const BookingsPage = lazyNamed(() => import('./pages/BookingsPage'), 'BookingsPage');
 const CollegeSearchPage = lazyNamed(() => import('./pages/CollegeSearchPage'), 'CollegeSearchPage');
@@ -127,7 +130,10 @@ const PAGE_META = {
   admin_counselors: { label: 'Counselors', icon: UserRound, description: 'Provision, transfer, and deactivate counselors' },
   admin_students: { label: 'Student 360', icon: Users, description: 'Open every permitted student profile' },
   counselor_roadmap: { label: 'Counselor Roadmap', icon: Compass, description: 'Professional and school-management milestones' },
-  admin_audit: { label: 'Audit Log', icon: ShieldAlert, description: 'Review product administration actions' }
+  admin_audit: { label: 'Audit Log', icon: ShieldAlert, description: 'Review product administration actions' },
+  admin_plans: { label: 'Plans', icon: Layers, description: 'Seat limits and features of every plan' },
+  admin_staff: { label: 'Staff', icon: UserCog, description: 'Product staff and their access tiers' },
+  admin_health: { label: 'Health', icon: HeartPulse, description: 'Readiness, scheduled jobs and file storage' }
 };
 
 const GLOBAL_SEARCH_RESOURCES = {
@@ -408,12 +414,15 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
     finally {openingDirect.current = false;}
   }
   if (user.role === 'parent') return <ParentPortalPage {...{ page, user, data, reload, notify }} />;
-  if (isPlatformAdmin(user) && page === 'admin_dashboard') return <AdminControlDashboard data={data} stats={stats} setPage={setPage} />;
+  if (isPlatformAdmin(user) && page === 'admin_dashboard') return <AdminControlDashboard user={user} stats={stats} setPage={setPage} />;
   if (isPlatformAdmin(user) && page === 'admin_schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_counselors') return <AdminCounselorsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (isCounselor(user) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
-  if (isPlatformAdmin(user) && page === 'admin_audit') return <AdminAuditPage data={data} query={query} />;
+  if (isPlatformAdmin(user) && page === 'admin_audit') return <AdminAuditPage query={query} />;
+  if (isPlatformAdmin(user) && page === 'admin_plans') return <AdminPlansPage user={user} notify={notify} />;
+  if (isPlatformAdmin(user) && page === 'admin_staff') return <AdminStaffPage user={user} query={query} notify={notify} reload={reload} />;
+  if (isPlatformAdmin(user) && page === 'admin_health') return <AdminHealthPage />;
   if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources }} />;
   if (user.role === 'student' && page === 'student_center') {
     const editSection = new URLSearchParams(search).get('edit');

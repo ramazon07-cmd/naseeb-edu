@@ -1,5 +1,15 @@
 // Seat usage rows for a school card: [key, used, limit (null = unlimited), over].
-const SEATS = [['max_counselors', 'Counselors'], ['max_students', 'Students'], ['max_teachers', 'Teachers']];
+export const SEATS = [['max_counselors', 'Counselors'], ['max_students', 'Students'], ['max_teachers', 'Teachers']];
+
+// Plan feature flags in display order (backend PLAN_FEATURES).
+export const PLAN_FEATURES = [['ai_assistant', 'AI assistant'], ['essay_coach', 'Essay coach'], ['parent_portal', 'Parent portal'], ['reports', 'Reports'], ['organization_accounts', 'School logins']];
+
+// Plans a workspace can be put on: its current plan (even a retired one) and
+// the active plans made for its kind of workspace.
+export function plansFor(plans, school) {
+  const current = school?.subscription?.plan;
+  return plans.filter((plan) => plan.code === current || (plan.is_active && plan.workspace_type === school?.workspace_type));
+}
 
 export function seatUsage(school) {
   const usage = school?.seat_usage;

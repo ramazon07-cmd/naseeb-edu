@@ -521,6 +521,11 @@ export const api = {
   createCounselor: (payload) => request('/users/accounts/create-counselor/', { method: 'POST', body: JSON.stringify(payload) }),
   deactivateAccount: (id) => request(`/users/accounts/${id}/deactivate/`, { method: 'POST' }),
   plans: () => request('/users/plans/'),
+  adminSummary: () => request('/admin/summary/'),
+  adminAiUsage: () => request('/admin/ai-usage/'),
+  adminHealth: () => request('/admin/health/'),
+  planImpact: (id, limits) => request(`/users/plans/${id}/impact/?${new URLSearchParams(limits)}`),
+  createStaff: (payload) => request('/users/accounts/create-staff/', { method: 'POST', body: JSON.stringify(payload) }),
   updateSubscription: (schoolId, payload) => request(`/users/workspace-subscriptions/${schoolId}/`, {
     method: 'PATCH',
     body: JSON.stringify(payload),

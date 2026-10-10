@@ -1,3 +1,5 @@
+import { fieldErrorsFrom } from './onboardingDraft.js';
+
 // Turns a DRF validation payload into a sentence a person can act on:
 // {"target_countries": ["This field is required."], "non_field_errors": [...]}
 // -> "Target countries: This field is required. • ..."
@@ -62,4 +64,17 @@ export function errorPayloadMessage(payload, translate = (text) => text) {
   if (listed) return listed;
   if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail;
   return formatValidationErrors(payload.detail ?? {}, translate);
+}
+
+// Per-field messages for a form: the body's own field errors, plus those of one
+// nested serializer ({"account": {"password": [...]}} -> account_password). A
+// string `code` is the error's code, never a message for a field named "code".
+export function formFieldErrors(details, nestedKey = '') {
+  const found = fieldErrorsFrom(details);
+  if (typeof details?.code === 'string') delete found.code;
+  if (nestedKey) {
+    delete found[nestedKey];
+    for (const [field, message] of Object.entries(fieldErrorsFrom(details?.[nestedKey]))) found[`${nestedKey}_${field}`] = message;
+  }
+  return found;
 }

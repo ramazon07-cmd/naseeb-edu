@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { t, tx, formatNumberLocale } from '../i18n';
-import { fullName } from '../lib/labels';
+import { fullName, label as roleLabel } from '../lib/labels';
 import { usePagedList } from '../hooks/usePagedList';
 
 // Error banner for a paged list; keeps already loaded rows visible.
@@ -36,25 +36,27 @@ export const firstPageLoading = (list) => list.loading && !list.items.length;
 // A <select> backed by server search over `resource`, for forms whose options are
 // too many to load at once. `value`/`onChange` make it controlled; `name` keeps it
 // working inside a plain <form> submitted with FormData. `copy` holds its
-// translated texts: search, loading, select, more and selected.
-function SearchSelect({ resource, pageSize, toText, copy, name, label, hint = '', required = false, value = '', onChange, selectedLabel = '', disabled = false }) {
+// translated texts: search, loading, select, more and selected. `emptyOption`
+// makes "nothing chosen" selectable (a filter's "Everyone"); `filters` narrow the search.
+function SearchSelect({ resource, pageSize, toText, copy, name, label, hint = '', required = false, value = '', onChange, selectedLabel = '', disabled = false, emptyOption = '', filters }) {
   const [search, setSearch] = useState('');
   const [current, setCurrent] = useState(value ? String(value) : '');
   const labelId = useId();
-  const list = usePagedList(resource, { search, ordering: 'name', pageSize });
+  const list = usePagedList(resource, { search, filters, ordering: 'name', pageSize });
   useEffect(() => {setCurrent(value ? String(value) : '');}, [value]);
   const options = list.items.map((item) => ({ id: String(item.id), text: toText(item) }));
   // Keep the chosen option selectable even when the search hides it.
   if (current && !options.some((option) => option.id === current)) options.unshift({ id: current, text: selectedLabel || copy.selected });
   function choose(event) {
     setCurrent(event.target.value);
-    onChange?.(event.target.value);
+    // The chosen record too, for forms that show more than its id.
+    onChange?.(event.target.value, list.items.find((item) => String(item.id) === event.target.value) || null);
   }
   return <div className="field student-picker">
     <span id={labelId}>{t(label)}</span>
     <label className="member-search"><Search size={15} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={copy.search} aria-label={copy.search} disabled={disabled} /></label>
     <select name={name} value={current} onChange={choose} required={required} aria-labelledby={labelId} aria-busy={list.loading} disabled={disabled}>
-      <option value="" disabled>{list.loading && !options.length ? copy.loading : copy.select}</option>
+      {emptyOption ? <option value="">{emptyOption}</option> : <option value="" disabled>{list.loading && !options.length ? copy.loading : copy.select}</option>}
       {options.map((option) => <option key={option.id} value={option.id}>{option.text}</option>)}
     </select>
     {list.hasMore && <small className="field-hint">{copy.more}</small>}
@@ -70,6 +72,18 @@ function SearchSelect({ resource, pageSize, toText, copy, name, label, hint = ''
 export function StudentPicker({ name = 'student', label = 'Student', ...props }) {
   const copy = { search: t("Search students"), loading: t("Loading students…"), select: t("Select student"), more: t("Type a name to find more students."), selected: t("Selected student") };
   return <SearchSelect resource="students" pageSize={50} toText={(student) => fullName(student.user_detail)} copy={copy} name={name} label={label} {...props} />;
+}
+
+// Accounts (any role, or those `filters` allow) searched on the server.
+export function AccountPicker({ name = 'account', label = 'Account', ...props }) {
+  const copy = { search: t("Search people"), loading: t("Loading people…"), select: t("Select a person"), more: t("Type a name to find more people."), selected: t("Selected person") };
+  return <SearchSelect resource="users/accounts" pageSize={25} toText={(account) => `${fullName(account)} · ${roleLabel(account.role)}`} copy={copy} name={name} label={label} {...props} />;
+}
+
+// Schools and workspaces searched on the server, never loaded whole.
+export function SchoolPicker({ name = 'school', label = 'School', ...props }) {
+  const copy = { search: t("Search schools"), loading: t("Loading schools…"), select: t("Select a school"), more: t("Type a name to find more schools."), selected: t("Selected school") };
+  return <SearchSelect resource="schools" pageSize={25} toText={(school) => school.name} copy={copy} name={name} label={label} {...props} />;
 }
 
 // A university <select> searching the ~1,500-row catalogue on the server instead

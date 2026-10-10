@@ -1,6 +1,6 @@
 // Path <-> page mapping for the signed-in workspace (History API routing).
 // Framework-free so the mapping and the role guards are unit tested.
-import { isCounselor, isPlatformAdmin } from './roles.js';
+import { canManageWorkspaces, isCounselor, isPlatformAdmin, isSuperAdmin } from './roles.js';
 
 // Product-admin pages live under /platform: /admin/ is Django's admin site.
 export const PAGE_PATHS = {
@@ -40,6 +40,9 @@ export const PAGE_PATHS = {
   admin_students: '/platform/students',
   counselor_roadmap: '/counselor-roadmap',
   admin_audit: '/platform/audit',
+  admin_plans: '/platform/plans',
+  admin_staff: '/platform/staff',
+  admin_health: '/platform/health',
 };
 
 const PATH_PAGES = new Map(Object.entries(PAGE_PATHS).map(([page, path]) => [path, page]));
@@ -125,7 +128,8 @@ const COUNSELOR_DIRECT_LINK_PAGES = ['academics', 'portfolio', 'activities', 're
 
 // Sidebar order per role.
 export function navigationFor(user) {
-  if (isPlatformAdmin(user)) return ['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'counselor_roadmap', 'admin_audit', 'support'];
+  // Health is for ops and above; staff accounts are managed by super admins only.
+  if (isPlatformAdmin(user)) return ['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'counselor_roadmap', 'admin_plans', ...(canManageWorkspaces(user) ? ['admin_health'] : []), ...(isSuperAdmin(user) ? ['admin_staff'] : []), 'admin_audit', 'support'];
   if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings'];
   // The counselor sidebar is the "Counselor Dashboard" design: seven destinations.
   // Tasks, documents, roadmap, portfolio and the rest are reviewed in Review and

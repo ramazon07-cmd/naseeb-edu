@@ -21,7 +21,8 @@ test('student rows offer deactivate, not delete', () => {
 });
 
 test('the students page confirms that data is kept', () => {
-  assert.match(studentsPage, /<StudentTable [^]*?onDeactivate=\{isPlatformAdmin\(user\) \? deactivate : undefined\}/);
+  // Admins below the ops tier only read Student 360, so they get no deactivate button.
+  assert.match(studentsPage, /<StudentTable [^]*?onDeactivate=\{isPlatformAdmin\(user\) && !staffReadOnly \? deactivate : undefined\}/);
   const confirm = studentsPage.match(/async function deactivate\(student\) \{\s*if \(!window\.confirm\(tx`([^`]*)`/)[1];
   assert.match(confirm, /Their data is kept\./);
   assert.doesNotMatch(studentsPage, /onDelete=/);
