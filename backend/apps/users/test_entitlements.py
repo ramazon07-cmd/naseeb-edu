@@ -507,3 +507,117 @@ class TenancyServiceSeatTests(APITestCase):
                 school=self.full, full_name='Over Limit', password='StrongPass123!', created_by=self.admin,
             )
         self.assertFalse(User.objects.filter(first_name='Over').exists())
+
+
+class PlanChoiceTests(APITestCase):
+    def setUp(self):
+        self.school = School.objects.create(name='Renewal School', code='renewal-school')
+        self.individual = School.objects.create(
+            name='Renewal Solo', code='renewal-solo', workspace_type=School.WorkspaceType.INDIVIDUAL,
+        )
+        self.admin = User.objects.create_user(
+            username='renewal-ops', email='renewal-ops@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.OPS,
+        )
+        self.client.force_authenticate(self.admin)
+
+    def change(self, school, **payload):
+        return self.client.patch(f'/api/users/workspace-subscriptions/{school.id}/', payload, format='json')
+
+    def test_seeded_plans_know_their_workspace_type(self):
+        types = dict(Plan.objects.values_list('code', 'workspace_type'))
+        self.assertEqual(types[entitlements.INDIVIDUAL_COUNSELOR], Plan.WorkspaceType.INDIVIDUAL)
+        self.assertEqual(types[entitlements.SCHOOL_STANDARD], Plan.WorkspaceType.SCHOOL)
+        self.assertEqual(types[entitlements.CENTER], Plan.WorkspaceType.SCHOOL)
+        listed = {row['code']: row['workspace_type'] for row in self.client.get('/api/users/plans/').data}
+        self.assertEqual(listed[entitlements.INDIVIDUAL_COUNSELOR], 'individual')
+
+    def test_a_school_on_a_retired_plan_can_still_be_renewed(self):
+        Plan.objects.filter(code=entitlements.SCHOOL_STANDARD).update(is_active=False)
+        renewed = self.change(self.school, plan=entitlements.SCHOOL_STANDARD, status='active', period_end='2027-06-30')
+        self.assertEqual(renewed.status_code, status.HTTP_200_OK, renewed.data)
+        self.assertEqual(ProductAuditEvent.objects.filter(action='subscription.changed').count(), 1)
+
+    def test_only_active_plans_for_the_same_workspace_type_can_be_chosen(self):
+        use_plan(self.school, code='old-school-plan', is_active=False)
+        Plan.objects.filter(code='old-school-plan').update(is_active=False)
+        WorkspaceSubscription.objects.filter(school=self.school).update(
+            plan=Plan.objects.get(code=entitlements.SCHOOL_STANDARD),
+        )
+        cases = [
+            (self.school, 'old-school-plan', 'Select an active plan.'),
+            (self.school, entitlements.INDIVIDUAL_COUNSELOR, 'This plan is for a different kind of workspace.'),
+            (self.individual, entitlements.CENTER, 'This plan is for a different kind of workspace.'),
+        ]
+        for school, plan, message in cases:
+            with self.subTest(school=school.code, plan=plan):
+                response = self.change(school, plan=plan)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(response.data['plan'], [message])
+        self.assertEqual(self.change(self.school, plan=entitlements.CENTER).status_code, status.HTTP_200_OK)
+
+
+class PlanManagementTests(APITestCase):
+    def setUp(self):
+        self.school = School.objects.create(name='Plan Admin School', code='plan-admin-school')
+        self.superadmin = User.objects.create_user(
+            username='plan-root', email='plan-root@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPERADMIN,
+        )
+        self.ops = User.objects.create_user(
+            username='plan-ops', email='plan-ops@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.OPS,
+        )
+        for index in range(3):
+            make_user(f'plan-counselor-{index}', User.Role.COUNSELOR, self.school)
+        self.plan = Plan.objects.get(code=entitlements.SCHOOL_STANDARD)
+
+    def test_staff_read_plans_but_only_superadmins_change_them(self):
+        self.client.force_authenticate(self.ops)
+        listed = {row['code']: row for row in self.client.get('/api/users/plans/').data}
+        self.assertGreaterEqual(listed[entitlements.SCHOOL_STANDARD]['workspaces_count'], 1)
+        self.assertEqual(
+            self.client.patch(f'/api/users/plans/{self.plan.id}/', {'max_counselors': 9}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.post('/api/users/plans/', {'code': 'x', 'name': 'X'}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_superadmin_creates_a_plan_with_known_features_only(self):
+        self.client.force_authenticate(self.superadmin)
+        bad = self.client.post('/api/users/plans/', {
+            'code': 'bad-plan', 'name': 'Bad', 'features': {'teleport': True},
+        }, format='json')
+        self.assertEqual(bad.status_code, status.HTTP_400_BAD_REQUEST)
+        created = self.client.post('/api/users/plans/', {
+            'code': 'school-plus', 'name': 'School Plus', 'max_counselors': 6,
+            'features': {'ai_assistant': True, 'reports': True},
+        }, format='json')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        plan = Plan.objects.get(code='school-plus')
+        self.assertEqual(plan.features['parent_portal'], False)
+        self.assertTrue(ProductAuditEvent.objects.filter(action='plan.created', target_id=str(plan.id)).exists())
+        renamed = self.client.patch(f'/api/users/plans/{plan.id}/', {'code': 'other-code'}, format='json')
+        self.assertEqual(renamed.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_lowering_a_limit_lists_schools_over_it_and_removes_nobody(self):
+        self.client.force_authenticate(self.superadmin)
+        impact = self.client.get(f'/api/users/plans/{self.plan.id}/impact/', {'max_counselors': 2})
+        self.assertEqual(impact.status_code, status.HTTP_200_OK)
+        self.assertIn(
+            {'id': self.school.id, 'name': self.school.name, 'seats': {'max_counselors': {'used': 3, 'limit': 2}}},
+            impact.data['over_limit'],
+        )
+        # Only the limits a workspace is over are listed, not every limit sent.
+        both = self.client.get(f'/api/users/plans/{self.plan.id}/impact/', {'max_counselors': 2, 'max_students': 100})
+        self.assertEqual([row['seats'] for row in both.data['over_limit']], [{'max_counselors': {'used': 3, 'limit': 2}}])
+        saved = self.client.patch(f'/api/users/plans/{self.plan.id}/', {'max_counselors': 2}, format='json')
+        self.assertEqual(saved.status_code, status.HTTP_200_OK, saved.data)
+        self.assertEqual(User.objects.filter(school=self.school, role=User.Role.COUNSELOR, is_active=True).count(), 3)
+        row = ProductAuditEvent.objects.get(action='plan.updated')
+        self.assertEqual(row.metadata['changes'], {'max_counselors': {'from': 3, 'to': 2}})
+        retired = self.client.patch(f'/api/users/plans/{self.plan.id}/', {'is_active': False}, format='json')
+        self.assertEqual(retired.status_code, status.HTTP_200_OK)
+        self.assertTrue(ProductAuditEvent.objects.filter(action='plan.retired').exists())

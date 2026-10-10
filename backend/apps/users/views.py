@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
@@ -10,12 +10,13 @@ from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from apps.admissions.listing import ListQueryMixin
 from . import entitlements
-from .admin_permissions import IsSupportStaff, SupportReadOpsWrite, has_tier
-from .audit import audit_staff_read, recorded_actions
-from .models import CredentialAuditEvent, Plan, ProductAuditEvent, User, WorkspaceSubscription
+from .admin_permissions import IsSupportStaff, SupportReadOpsWrite, SupportReadSuperadminWrite, has_tier, staff_tier_denied
+from .audit import audit_staff_read, field_changes, recorded_actions
+from .models import PLAN_LIMITS, CredentialAuditEvent, Plan, ProductAuditEvent, User, WorkspaceSubscription
 from .auth_views import token_pair_for_user
 from .credentials import change_own_password, complete_password_change, issue_temporary_credential
 from .serializers import (
+    AUDIT_SCHOOL_KEYS,
     AccountEmailChangeSerializer,
     AccountPasswordChangeSerializer,
     CounselorTransferSerializer,
@@ -25,6 +26,7 @@ from .serializers import (
     PasswordChangeSerializer,
     PlanSerializer,
     ProductAuditEventSerializer,
+    StaffCreateSerializer,
     SupportViewRequestSerializer,
     TemporaryCredentialIssueSerializer,
     UserSerializer,
@@ -37,8 +39,10 @@ from .uploads import limit_upload_size
 
 OPS = User.AdminTier.OPS
 SUPPORT = User.AdminTier.SUPPORT
+SUPERADMIN = User.AdminTier.SUPERADMIN
 TENANCY_AUDIT_ACTIONS = frozenset({
     'student.moved', 'student.deactivated', 'student.reactivated', 'account.moved', 'account.deactivated',
+    'account.reactivated', 'staff.tier_changed',
 })
 
 
@@ -69,6 +73,8 @@ class IsRoleScopedUserAccess(permissions.BasePermission):
     organization accounts may read and edit students of their own school.
     Deleting an account is reserved for product admins. Support staff only
     read, reset credentials and open support views; changes need ops.
+    Another staff account (admin role or superuser) is changed, deactivated
+    or opened in a support view by super admins only.
     """
 
     support_actions = {'me', 'change_password', 'temporary_credential', 'support_view'}
@@ -90,6 +96,13 @@ class IsRoleScopedUserAccess(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         user = request.user
         if user.is_product_admin:
+            if (
+                request.method not in permissions.SAFE_METHODS
+                and obj.pk != user.pk
+                and obj.is_product_admin
+                and not has_tier(user, SUPERADMIN)
+            ):
+                raise staff_tier_denied(request)
             return True
         if view.action == 'destroy':
             return False
@@ -162,6 +175,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
         previous_school = serializer.instance.school
         previous_active = serializer.instance.is_active
+        previous_tier = serializer.instance.admin_tier
         role = serializer.validated_data.get('role', serializer.instance.role)
         moving_student = role == User.Role.STUDENT and 'school' in serializer.validated_data
         new_school = serializer.validated_data.pop('school', None) if moving_student else None
@@ -195,6 +209,13 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                         )
                     if previous_active and not account.is_active:
                         audit_product_action(actor=self.request.user, action='account.deactivated', target=account)
+                    elif not previous_active and account.is_active:
+                        audit_product_action(actor=self.request.user, action='account.reactivated', target=account)
+                    if account.admin_tier != previous_tier:
+                        audit_product_action(
+                            actor=self.request.user, action='staff.tier_changed', target=account,
+                            metadata={'from': previous_tier, 'to': account.admin_tier},
+                        )
         except DjangoValidationError as exc:
             raise ValidationError(exc.message_dict) from exc
         # One audit row per change: a move or (de)activation already has its own.
@@ -208,7 +229,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         """Soft-delete: deactivate instead of cascading away the student's records."""
         if instance == self.request.user:
-            raise ValidationError({'detail': 'You cannot delete your own account.'})
+            raise ValidationError({'detail': 'You cannot delete your own account.', 'code': 'own_account'})
         self._deactivate(instance)
 
     def _deactivate(self, account):
@@ -333,12 +354,15 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def temporary_credential(self, request, pk=None):
         target = self.get_object()
         if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION}:
-            return Response({'detail': 'Temporary credentials are only available for student and school accounts.'}, status=400)
+            return Response({
+                'detail': 'Temporary credentials are only available for student and school accounts.',
+                'code': 'credential_role_unsupported',
+            }, status=400)
         allowed = has_tier(request.user, SUPPORT) or (
             target.role == User.Role.STUDENT and student_account_in_scope(target, request.user)
         )
         if not allowed:
-            return Response({'detail': 'You cannot issue credentials for this account.'}, status=403)
+            return Response({'detail': 'You cannot issue credentials for this account.', 'code': 'credential_forbidden'}, status=403)
 
         serializer = TemporaryCredentialIssueSerializer(
             data=request.data,
@@ -375,7 +399,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='create-counselor')
     def create_counselor(self, request):
         if not self.is_product_admin(request.user):
-            return Response({'detail': 'Only a product admin can create counselors.'}, status=403)
+            return Response({'detail': 'Only a product admin can create counselors.', 'code': 'product_admin_required'}, status=403)
         serializer = CounselorProvisionSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         counselor = serializer.save()
@@ -384,7 +408,9 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='create-individual-counselor')
     def create_individual_counselor(self, request):
         if not self.is_product_admin(request.user):
-            return Response({'detail': 'Only a product admin can create individual counselors.'}, status=403)
+            return Response({
+                'detail': 'Only a product admin can create individual counselors.', 'code': 'product_admin_required',
+            }, status=403)
         serializer = IndividualCounselorCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         counselor = serializer.save()
@@ -399,13 +425,32 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='create-staff',
+        throttle_classes=[ScopedRateThrottle],
+        throttle_scope='credential_issue',
+    )
+    def create_staff(self, request):
+        if not has_tier(request.user, SUPERADMIN):
+            raise staff_tier_denied(request)
+        serializer = StaffCreateSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        staff = serializer.save()
+        return Response({
+            'user': UserSerializer(staff, context={'request': request}).data,
+            'temporary_password': serializer.temporary_password,
+            'credential': {'status': serializer.credential.status, 'expires_at': serializer.credential.expires_at},
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'], url_path='transfer-school')
     def transfer_school(self, request, pk=None):
         if not self.is_product_admin(request.user):
-            return Response({'detail': 'Only a product admin can transfer counselors.'}, status=403)
+            return Response({'detail': 'Only a product admin can transfer counselors.', 'code': 'product_admin_required'}, status=403)
         counselor = self.get_object()
         if counselor.role != User.Role.COUNSELOR:
-            return Response({'detail': 'Only counselor accounts can be transferred.'}, status=400)
+            return Response({'detail': 'Only counselor accounts can be transferred.', 'code': 'not_a_counselor'}, status=400)
         serializer = CounselorTransferSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         from apps.admissions.models import School
@@ -420,7 +465,8 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         mismatched_students = counselor.assigned_students.exclude(school=target)
         if mismatched_students.exists():
             return Response({
-                'detail': 'Reassign or move the counselor’s students before transferring the counselor.'
+                'detail': 'Reassign or move the counselor’s students before transferring the counselor.',
+                'code': 'counselor_has_students',
             }, status=409)
         try:
             counselor, _ = transfer_counselor(
@@ -435,10 +481,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def deactivate(self, request, pk=None):
         if not self.is_product_admin(request.user):
-            return Response({'detail': 'Only a product admin can deactivate accounts.'}, status=403)
+            return Response({'detail': 'Only a product admin can deactivate accounts.', 'code': 'product_admin_required'}, status=403)
         account = self.get_object()
         if account == request.user:
-            return Response({'detail': 'You cannot deactivate your own account.'}, status=400)
+            return Response({'detail': 'You cannot deactivate your own account.', 'code': 'own_account'}, status=400)
         self._deactivate(account)
         return Response(UserSerializer(account, context={'request': request}).data)
 
@@ -453,7 +499,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         content (messages, essays, notes).
         """
         if not has_tier(request.user, SUPPORT):
-            return Response({'detail': 'Only product staff can open a support view.'}, status=403)
+            return Response({'detail': 'Only product staff can open a support view.', 'code': 'product_admin_required'}, status=403)
         serializer = SupportViewRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         account = self.get_object()
@@ -506,6 +552,22 @@ class ProductAuditEventViewSet(ListQueryMixin, viewsets.ReadOnlyModelViewSet):
     ordering_options = {'-created': ('-created_at', '-id')}
     default_cursor_ordering = '-created'
 
+    def get_serializer(self, *args, **kwargs):
+        # One query per page resolves the school ids that metadata mentions.
+        if kwargs.get('many') and args:
+            from apps.admissions.models import School
+
+            events = list(args[0])
+            ids = {
+                value for event in events if isinstance(event.metadata, dict)
+                for key in AUDIT_SCHOOL_KEYS if isinstance(value := event.metadata.get(key), int)
+            }
+            context = self.get_serializer_context()
+            context['school_names'] = dict(School.objects.filter(id__in=ids).values_list('id', 'name')) if ids else {}
+            kwargs['context'] = context
+            args = (events, *args[1:])
+        return super().get_serializer(*args, **kwargs)
+
     def get_queryset(self):
         queryset = ProductAuditEvent.objects.select_related('actor', 'school').all()
         params = self.request.query_params
@@ -522,11 +584,66 @@ class ProductAuditEventViewSet(ListQueryMixin, viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-class PlanViewSet(viewsets.ReadOnlyModelViewSet):
+class PlanViewSet(
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.ReadOnlyModelViewSet,
+):
+    """Plans and their limits and features. Support staff read; super admins
+    create, edit and retire (no delete: subscriptions keep pointing at a plan)."""
+
     serializer_class = PlanSerializer
-    permission_classes = [IsSupportStaff]
+    permission_classes = [SupportReadSuperadminWrite]
     pagination_class = None
-    queryset = Plan.objects.order_by('name', 'id')
+    queryset = Plan.objects.annotate(workspaces_count=Count('subscriptions')).order_by('name', 'id')
+
+    def perform_create(self, serializer):
+        plan = serializer.save()
+        audit_product_action(
+            actor=self.request.user, action='plan.created', target=plan,
+            metadata={'workspace_type': plan.workspace_type, 'features': plan.features},
+        )
+
+    def perform_update(self, serializer):
+        was_active = serializer.instance.is_active
+        changes = field_changes(serializer.instance, serializer.validated_data)
+        plan = serializer.save()
+        action_name = 'plan.retired' if was_active and not plan.is_active else 'plan.updated'
+        audit_product_action(actor=self.request.user, action=action_name, target=plan, metadata={'changes': changes})
+
+    @action(detail=True, methods=['get'])
+    def impact(self, request, pk=None):
+        """Workspaces on this plan, and those whose current seats exceed the given limits.
+
+        Lowering a limit never removes accounts; it only blocks new ones, so
+        this is what an admin should know before saving lower numbers.
+        """
+        from apps.admissions.models import School
+        from apps.admissions.params import int_param
+
+        plan = self.get_object()
+        limits = {key: int_param(request.query_params, key) for key in PLAN_LIMITS}
+        limits = {key: value for key, value in limits.items() if value is not None}
+        if any(value < 0 for value in limits.values()):
+            raise ValidationError({'detail': 'Limits cannot be negative.'})
+        schools = entitlements.annotate_seat_usage(School.objects.filter(subscription__plan=plan)).order_by('name')
+        over = Q()
+        for key, value in limits.items():
+            over |= Q(**{f'{key}_used__gt': value})
+        over_limit = schools.filter(over) if limits else School.objects.none()
+        return Response({
+            'workspaces': schools.count(),
+            'over_limit': [
+                {
+                    'id': school.id, 'name': school.name,
+                    'seats': {
+                        key: {'used': getattr(school, f'{key}_used'), 'limit': value}
+                        for key, value in limits.items() if getattr(school, f'{key}_used') > value
+                    },
+                }
+                for school in over_limit[:50]
+            ],
+        })
 
 
 class WorkspaceSubscriptionViewSet(

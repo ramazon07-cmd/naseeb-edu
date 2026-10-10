@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from .telegram_feed import TelegramFeedView
 from .assistant import AssistantChatView
+from .views.admin_portal import AdminAiUsageView, AdminHealthView, AdminSummaryView
 from .views import (
     AchievementViewSet,
     ActivityViewSet,
@@ -87,6 +88,9 @@ urlpatterns = [
     path('assistant/chat/', AssistantChatView.as_view(), name='assistant-chat'),
     path('public/reach/', PublicReachView.as_view(), name='public-reach'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('admin/summary/', AdminSummaryView.as_view(), name='admin-summary'),
+    path('admin/ai-usage/', AdminAiUsageView.as_view(), name='admin-ai-usage'),
+    path('admin/health/', AdminHealthView.as_view(), name='admin-health'),
     path('search/', GlobalSearchView.as_view(), name='global-search'),
     path('college-research/', CollegeResearchView.as_view(), name='college-research'),
     path('college-search/', CollegeSearchView.as_view(), name='college-search'),

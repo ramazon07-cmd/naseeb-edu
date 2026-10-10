@@ -1,8 +1,11 @@
 """Admissions API views — catalog."""
+from django.db import transaction
 from django.db.models import Count, Prefetch
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
+from apps.users.audit import field_changes
 from apps.users.models import User
 from ..models import (
     OpportunityProgram,
@@ -30,6 +33,12 @@ from ..pricing import with_cost
 from ..listing import ListQueryMixin
 from .common import CounselorOrOwnerPermission, ProductAdminPermission
 from .portal import StudentPortalPermission
+
+
+NO_SCHOOL_ACCOUNTS = {
+    'detail': 'An individual counselor workspace has no school accounts.',
+    'code': 'individual_workspace_no_school_accounts',
+}
 
 
 class SavedProgramPermission(StudentPortalPermission):
@@ -73,10 +82,34 @@ class SchoolViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def can_manage(user):
         return has_tier(user, User.AdminTier.OPS)
 
+    @staticmethod
+    def forbidden(message):
+        return Response({'detail': message, 'code': 'product_admin_required'}, status=403)
+
     def create(self, request, *args, **kwargs):
         if not self.can_manage(request.user):
-            return Response({'detail': 'Only a product admin can create schools.'}, status=403)
-        return super().create(request, *args, **kwargs)
+            return self.forbidden('Only a product admin can create schools.')
+        if 'account' not in request.data:
+            return super().create(request, *args, **kwargs)
+        # A school and its login are created together or not at all. It is audited
+        # as two rows, school.created and organization_account.created, the same
+        # rows as when the login is added later.
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if serializer.validated_data.get('workspace_type') == School.WorkspaceType.INDIVIDUAL:
+            return Response(NO_SCHOOL_ACCOUNTS, status=400)
+        account = OrganizationAccountSerializer(data=request.data['account'], context={'request': request})
+        if not account.is_valid():
+            raise ValidationError({'account': account.errors})
+        try:
+            with transaction.atomic():
+                school = serializer.save()
+                audit_product_action(actor=request.user, action='school.created', target=school)
+                entitlements.require_school_feature(school, 'organization_accounts')
+                login = self._create_login(school, account)
+        except entitlements.EntitlementError as exc:
+            return Response(exc.response_data(), status=400)
+        return Response({**self.get_serializer(school).data, 'account': login}, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         school = serializer.save()
@@ -84,48 +117,61 @@ class SchoolViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         if not self.can_manage(request.user):
-            return Response({'detail': 'Only a product admin can edit schools.'}, status=403)
+            return self.forbidden('Only a product admin can edit schools.')
         return super().update(request, *args, **kwargs)
 
     def perform_update(self, serializer):
+        previous_active = serializer.instance.is_active
+        changes = field_changes(serializer.instance, serializer.validated_data)
         school = serializer.save()
-        audit_product_action(actor=self.request.user, action='school.updated', target=school)
+        action_name = 'school.updated'
+        if school.is_active != previous_active:
+            action_name = 'school.reactivated' if school.is_active else 'school.deactivated'
+            changes.pop('is_active', None)
+        audit_product_action(actor=self.request.user, action=action_name, target=school, metadata={'changes': changes})
 
     def destroy(self, request, *args, **kwargs):
         if not self.can_manage(request.user):
-            return Response({'detail': 'Only a product admin can deactivate schools.'}, status=403)
+            return self.forbidden('Only a product admin can deactivate schools.')
         school = self.get_object()
         school.is_active = False
         school.save(update_fields=['is_active', 'updated_at'])
         audit_product_action(actor=request.user, action='school.deactivated', target=school)
         return Response(status=204)
 
-    @action(detail=True, methods=['post'], url_path='create-account')
-    def create_account(self, request, pk=None):
-        school = self.get_object()
-        if not self.can_manage(request.user):
-            return Response({'detail': 'Only a product admin can create organization accounts.'}, status=403)
-        try:
-            entitlements.require_school_feature(school, 'organization_accounts')
-        except entitlements.EntitlementError as exc:
-            return Response(exc.response_data(), status=400)
-        if school.workspace_type == School.WorkspaceType.INDIVIDUAL:
-            return Response({'detail': 'An individual counselor workspace has no school accounts.'}, status=400)
-        serializer = OrganizationAccountSerializer(
-            data=request.data,
-            context={'school': school, 'request': request},
-        )
-        serializer.is_valid(raise_exception=True)
+    def _create_login(self, school, serializer):
+        """The school's organization login; runs inside the caller's transaction."""
+        serializer.context['school'] = school
         user = serializer.save()
-        audit_product_action(actor=request.user, action='organization_account.created', target=user, metadata={'school': school.pk})
-        return Response({
+        audit_product_action(actor=self.request.user, action='organization_account.created', target=user, metadata={'school': school.pk})
+        return {
             'id': user.id,
             'username': user.username,
             'email': user.email,
             'role': user.role,
             'school': school.id,
             'school_name': school.name,
-        }, status=201)
+            # Shown once; only when the server generated it.
+            'temporary_password': serializer.temporary_password,
+            'credential': {'status': serializer.credential.status, 'expires_at': serializer.credential.expires_at},
+        }
+
+    @action(detail=True, methods=['post'], url_path='create-account')
+    def create_account(self, request, pk=None):
+        school = self.get_object()
+        if not self.can_manage(request.user):
+            return self.forbidden('Only a product admin can create organization accounts.')
+        try:
+            entitlements.require_school_feature(school, 'organization_accounts')
+        except entitlements.EntitlementError as exc:
+            return Response(exc.response_data(), status=400)
+        if school.workspace_type == School.WorkspaceType.INDIVIDUAL:
+            return Response(NO_SCHOOL_ACCOUNTS, status=400)
+        serializer = OrganizationAccountSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            login = self._create_login(school, serializer)
+        return Response(login, status=201)
 
 
 class UniversityViewSet(ListQueryMixin, CachedCatalogListMixin, viewsets.ModelViewSet):
@@ -158,6 +204,23 @@ class UniversityViewSet(ListQueryMixin, CachedCatalogListMixin, viewsets.ModelVi
         if self.request.method in permissions.SAFE_METHODS:
             return [permissions.IsAuthenticated()]
         return [ProductAdminPermission()]
+
+    def perform_create(self, serializer):
+        university = serializer.save()
+        audit_product_action(actor=self.request.user, action='university.created', target=university)
+
+    def perform_update(self, serializer):
+        changes = field_changes(serializer.instance, serializer.validated_data)
+        university = serializer.save()
+        audit_product_action(
+            actor=self.request.user, action='university.updated', target=university, metadata={'changes': changes},
+        )
+
+    def perform_destroy(self, instance):
+        # Recorded before the row goes, so the event keeps the university's id.
+        with transaction.atomic():
+            audit_product_action(actor=self.request.user, action='university.deleted', target=instance)
+            instance.delete()
 
 
 class ScholarshipViewSet(CachedCatalogListMixin, viewsets.ReadOnlyModelViewSet):

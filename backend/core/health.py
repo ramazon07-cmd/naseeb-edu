@@ -44,6 +44,14 @@ def _check_cache():
         return 'error'
 
 
+def readiness():
+    """``(status, checks)``: the database answers, and whether the shared cache does."""
+    checks = {'database': _check_database(), 'cache': _check_cache()}
+    if checks['database'] != 'ok':
+        return 'unavailable', checks
+    return ('ok' if checks['cache'] == 'ok' else 'degraded'), checks
+
+
 def readiness_check(request):
     """Readiness: the database answers, and whether the shared cache does.
 
@@ -51,9 +59,6 @@ def readiness_check(request):
     open without the cache, so a Redis outage reports ``degraded`` with 200
     instead of taking every instance out of rotation at once.
     """
-    checks = {'database': _check_database(), 'cache': _check_cache()}
-    if checks['database'] != 'ok':
-        overall, code = 'unavailable', 503
-    else:
-        overall, code = ('ok' if checks['cache'] == 'ok' else 'degraded'), 200
+    overall, checks = readiness()
+    code = 503 if overall == 'unavailable' else 200
     return _no_store(JsonResponse({'status': overall, 'checks': checks}, status=code))

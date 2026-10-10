@@ -1,6 +1,7 @@
 """Admissions API serializers — schools."""
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.users import entitlements
 from apps.users.models import User
 from apps.users.credentials import issue_temporary_credential
@@ -105,11 +106,16 @@ class SchoolSerializer(serializers.ModelSerializer):
 
 
 class OrganizationAccountSerializer(serializers.Serializer):
+    """A school's organization login. A blank password gets a generated one-time
+    password, available once as ``temporary_password`` after ``save()``."""
+
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True, trim_whitespace=False)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    temporary_password = None
+    credential = None
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
@@ -121,18 +127,34 @@ class OrganizationAccountSerializer(serializers.Serializer):
             raise serializers.ValidationError('This email is already in use.')
         return value.lower()
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # Checked against the new login's own details here, so saving never
+        # fails on the password after the school or the account was written.
+        if attrs.get('password'):
+            candidate = User(
+                username=attrs['username'], email=attrs['email'],
+                first_name=attrs.get('first_name', ''), last_name=attrs.get('last_name', ''),
+            )
+            try:
+                validate_password(attrs['password'], user=candidate)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError({'password': list(exc.messages)}) from exc
+        return attrs
+
     def create(self, validated_data):
-        password = validated_data.pop('password')
+        password = validated_data.pop('password', '') or None
         user = User.objects.create_user(
             **validated_data,
             password=None,
             role=User.Role.ORGANIZATION,
             school=self.context['school'],
         )
-        user, _, _, _ = issue_temporary_credential(
+        user, self.credential, issued_password, generated = issue_temporary_credential(
             user=user,
             issued_by=self.context['request'].user,
             raw_password=password,
             request=self.context['request'],
         )
+        self.temporary_password = issued_password if generated else None
         return user

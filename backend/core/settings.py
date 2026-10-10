@@ -484,7 +484,9 @@ LOGGING = {
     },
 }
 
-# Error reporting is off unless SENTRY_DSN is set.
+# Error reporting is off unless SENTRY_DSN is set. ERROR_TRACKER_URL is the
+# tracker's web dashboard, linked from the admin health page.
+ERROR_TRACKER_URL = config('ERROR_TRACKER_URL', default='').strip()
 SENTRY_ENABLED = init_sentry(
     config('SENTRY_DSN', default='').strip(),
     environment=config('SENTRY_ENVIRONMENT', default=APP_ENV),

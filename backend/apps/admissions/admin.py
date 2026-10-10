@@ -1,4 +1,5 @@
 from django.contrib import admin
+from apps.users.audit import ProductAuditAdminMixin
 from .models import (
     Achievement,
     Activity,
@@ -63,7 +64,8 @@ class StudentRecordAdmin(ScaledModelAdmin):
 
 
 @admin.register(School)
-class SchoolAdmin(admin.ModelAdmin):
+class SchoolAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
+    audit_prefix = 'school'
     list_display = ('name', 'code', 'region', 'workspace_type', 'owner_counselor', 'contact_email', 'is_active')
     search_fields = ('name', 'code', 'contact_email')
     list_filter = ('workspace_type', 'region', 'is_active')
@@ -88,28 +90,32 @@ class StudentProfileAdmin(ScaledModelAdmin):
 
 
 @admin.register(University)
-class UniversityAdmin(admin.ModelAdmin):
+class UniversityAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
+    audit_prefix = 'university'
     list_display = ('name', 'market', 'country', 'institution_type', 'acceptance_rate', 'net_price_usd', 'ranking', 'catalog_verified_at')
     search_fields = ('name', 'country', 'city')
     list_filter = ('market', 'country', 'institution_type', 'degree_type', 'test_optional', 'offers_international_aid')
 
 
 @admin.register(UniversityProgram)
-class UniversityProgramAdmin(admin.ModelAdmin):
+class UniversityProgramAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
+    audit_prefix = 'university_program'
     list_display = ('name', 'university', 'canonical_major', 'degree_level', 'teaching_language', 'tuition_usd', 'verified_at', 'is_active')
     search_fields = ('name', 'canonical_major', 'university__name')
     list_filter = ('university__market', 'degree_level', 'teaching_language', 'international_students_eligible', 'is_active')
 
 
 @admin.register(Scholarship)
-class ScholarshipAdmin(admin.ModelAdmin):
+class ScholarshipAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
+    audit_prefix = 'scholarship'
     list_display = ('title', 'provider', 'scholarship_type', 'funding_level', 'scope', 'deadline', 'is_active')
     search_fields = ('title', 'provider', 'university__name')
     list_filter = ('scholarship_type', 'funding_level', 'scope', 'is_active')
 
 
 @admin.register(OpportunityProgram)
-class OpportunityProgramAdmin(admin.ModelAdmin):
+class OpportunityProgramAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
+    audit_prefix = 'opportunity_program'
     list_display = ('title', 'provider', 'program_type', 'category', 'country', 'deadline', 'scholarship_available')
     search_fields = ('title', 'provider', 'country', 'city')
     list_filter = ('program_type', 'category', 'delivery_mode', 'scholarship_available', 'is_active')
@@ -206,7 +212,8 @@ admin.site.register(Booking, ScaledModelAdmin)
 admin.site.register(StudentMessage, ScaledModelAdmin)
 admin.site.register(ProgramService, ScaledModelAdmin)
 @admin.register(StoreItem)
-class StoreItemAdmin(admin.ModelAdmin):
+class StoreItemAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
+    audit_prefix = 'store_item'
     list_display = ('title', 'provider_name', 'price_amount', 'currency', 'is_sample', 'is_active')
     list_filter = ('is_sample', 'is_active', 'category', 'currency')
     search_fields = ('title', 'provider_name', 'provider_role')

@@ -4,6 +4,7 @@ from rest_framework import mixins, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from apps.users.models import User
+from apps.users.services import audit_product_action
 from ..models import SupportTicket
 from ..listing import ListQueryMixin
 from ..serializers import SupportTicketSerializer
@@ -73,14 +74,28 @@ class SupportTicketViewSet(
 
     def perform_update(self, serializer):
         previous_response = serializer.instance.admin_response
+        previous_status = serializer.instance.status
         ticket = serializer.save()
-        if ticket.admin_response and ticket.admin_response != previous_response:
+        responded = bool(ticket.admin_response) and ticket.admin_response != previous_response
+        if responded:
             ticket.responded_by = self.request.user
             ticket.responded_at = timezone.now()
             ticket.requester_viewed_at = None
             ticket.save(update_fields=[
                 'responded_by', 'responded_at', 'requester_viewed_at', 'updated_at',
             ])
+        if responded or ticket.status != previous_status:
+            # The response text stays out of the audit log; only the change is recorded.
+            metadata = {'category': ticket.category}
+            if ticket.status != previous_status:
+                metadata['status'] = {'from': previous_status, 'to': ticket.status}
+            audit_product_action(
+                actor=self.request.user,
+                action='support_ticket.responded' if responded else 'support_ticket.status_changed',
+                target=ticket,
+                school=ticket.requester.school_id,
+                metadata=metadata,
+            )
 
     @action(detail=True, methods=['post'], url_path='mark-viewed')
     def mark_viewed(self, request, pk=None):

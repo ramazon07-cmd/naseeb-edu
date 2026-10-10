@@ -23,6 +23,7 @@ from rest_framework.response import Response
 from rest_framework import serializers as drf_serializers
 from apps.users.models import User
 from apps.users.serializers import ContactSerializer
+from apps.users.services import audit_product_action
 from core.pagination import BoundedCountPaginator, keyset_filter
 from core.storage import delete_file_on_commit
 from ..models import (
@@ -686,6 +687,17 @@ class MessageReportPermission(permissions.BasePermission):
         ).exists()
 
 
+def audit_report_decision(actor, report, action, **metadata):
+    """One audit row per moderation decision: the sanction, never the message text."""
+    audit_product_action(
+        actor=actor,
+        action=action,
+        target=report,
+        school=report.message.channel.school_id,
+        metadata={'sanction': report.action, 'channel': report.message.channel_id, **metadata},
+    )
+
+
 class MessageReportViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = MessageReportSerializer
     permission_classes = [MessageReportPermission]
@@ -749,6 +761,7 @@ class MessageReportViewSet(viewsets.ReadOnlyModelViewSet):
         report.save(update_fields=[
             'status', 'action', 'moderator_note', 'reviewed_by', 'reviewed_at', 'updated_at',
         ])
+        audit_report_decision(request.user, report, 'message_report.dismissed')
         return Response(self.get_serializer(report).data)
 
     @action(detail=True, methods=['post'])
@@ -788,7 +801,7 @@ class MessageReportViewSet(viewsets.ReadOnlyModelViewSet):
                 if not membership.muted_until or membership.muted_until < mute_until:
                     membership.muted_until = mute_until
                     membership.save(update_fields=['muted_until'])
-            MessageReport.objects.filter(
+            closed = MessageReport.objects.filter(
                 message=message,
                 status__in=[MessageReport.Status.PENDING, MessageReport.Status.REVIEWING],
             ).update(
@@ -799,5 +812,7 @@ class MessageReportViewSet(viewsets.ReadOnlyModelViewSet):
                 reviewed_at=now,
                 updated_at=now,
             )
+            report.action = selected_action
+            audit_report_decision(request.user, report, 'message_report.resolved', reports_closed=closed)
         report.refresh_from_db()
         return Response(self.get_serializer(report).data)

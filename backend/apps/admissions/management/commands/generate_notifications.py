@@ -35,6 +35,7 @@ class Command(ScheduledJobCommand):
             last_id = student_ids[-1]
             created_or_updated += self.refresh(student_ids, today)
         self.stdout.write(self.style.SUCCESS(f'Generated or refreshed {created_or_updated} notifications.'))
+        return created_or_updated
 
     def wanted(self, student_ids, today):
         """{(student_id, title): message} for one batch, in a fixed number of queries."""

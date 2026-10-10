@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from . import entitlements
+from .audit import ProductAuditAdminMixin
 from .models import CredentialAuditEvent, Plan, ProductAuditEvent, TemporaryCredential, User, WorkspaceSubscription
 from .credentials import issue_temporary_credential
 
@@ -59,6 +60,9 @@ class CustomUserAdmin(UserAdmin):
     )
 
     def save_model(self, request, obj, form, change):
+        # Admin access granted here starts at the lowest staff tier unless one is chosen.
+        if obj.role == User.Role.ADMIN and not obj.is_superuser and not form.cleaned_data.get('admin_tier'):
+            obj.admin_tier = User.AdminTier.SUPPORT
         super().save_model(request, obj, form, change)
         if change and 'school' in form.changed_data and obj.role != User.Role.STUDENT:
             from apps.admissions.models import School
@@ -122,13 +126,17 @@ class ProductAuditEventAdmin(admin.ModelAdmin):
 
 
 @admin.register(Plan)
-class PlanAdmin(admin.ModelAdmin):
+class PlanAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
+    audit_prefix = 'plan'
     list_display = ('name', 'code', 'max_counselors', 'max_students', 'max_teachers', 'is_active')
     search_fields = ('name', 'code')
 
 
 @admin.register(WorkspaceSubscription)
-class WorkspaceSubscriptionAdmin(admin.ModelAdmin):
+class WorkspaceSubscriptionAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
+    # Same action as a plan change made in the admin portal.
+    audit_prefix = 'subscription'
+    audit_update_verb = 'changed'
     list_display = ('school', 'plan', 'status', 'period_start', 'period_end', 'updated_at')
     list_filter = ('status', 'plan')
     search_fields = ('school__name', 'school__code')

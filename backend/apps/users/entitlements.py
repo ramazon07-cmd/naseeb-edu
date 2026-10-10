@@ -40,6 +40,7 @@ DEFAULT_PLANS = {
     INDIVIDUAL_COUNSELOR: {
         'name': 'Individual Counselor',
         'description': 'Private workspace for one counselor.',
+        'workspace_type': Plan.WorkspaceType.INDIVIDUAL,
         'max_counselors': 1,
         'max_students': None,
         'max_teachers': 0,
