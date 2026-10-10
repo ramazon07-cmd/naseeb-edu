@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const { TRANSLATIONS } = await import('../src/i18n.js');
@@ -43,7 +44,7 @@ function backendFiles(dir) {
 }
 
 test('every audit action the backend writes has a label and a group', () => {
-  const apps = new URL('../../backend/apps/', import.meta.url).pathname;
+  const apps = fileURLToPath(new URL('../../backend/apps/', import.meta.url));
   const codes = new Set();
   for (const file of backendFiles(apps)) {
     const source = readFileSync(file, 'utf8');
