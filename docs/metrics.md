@@ -89,6 +89,26 @@ The summary is cached per scope. Every save or delete of a task, mission,
 application, document, letter, student profile, school, or of a user's
 active flag, school or role clears it at once.
 
+## Admin Control (`/api/admin/summary/`)
+
+Product staff of every tier read it; other roles get 403. Counts cover the
+whole platform. The result is cached for 30 seconds, so a change can take up
+to half a minute to show on the tiles.
+
+| Field | Label | Formula |
+|---|---|---|
+| `schools_active` | Schools | Active organization schools (`workspace_type=school`). |
+| `individual_workspaces_active` | — | Active individual counselor workspaces. |
+| `counselors_active`, `counselors_inactive` | Counselors | Counselor accounts by `is_active`. |
+| `roadmap_missions_submitted` | Roadmap reviews | Counselor roadmap missions with status submitted. |
+| `support_open`, `support_in_progress` | Support | Support tickets in that status. |
+| `message_reports_pending` | Needs attention | Message reports with status pending, across every channel. |
+| `attention.expiring` | Needs attention | Active workspaces whose subscription is suspended or expired, or whose period ends within 30 days (or has already ended). |
+| `attention.seats_full` | Needs attention | Active organization schools where any seat count is at or over its plan limit. Individual workspaces are left out: their one counselor always fills the plan. |
+| `attention.missing_login` | Needs attention | Active organization schools without an organization (school) login. |
+
+Each `attention` entry is `{count, items}`: the full count and at most 10 rows.
+
 ## Student dashboard and roadmap
 
 Two different numbers, each always with its own label:

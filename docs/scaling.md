@@ -340,6 +340,7 @@ migrations and the cron jobs, which connect directly.
 | `SENTRY_DSN` | unset | Turns on Sentry. |
 | `SENTRY_TRACES_SAMPLE_RATE` | 0 | Share of requests traced for performance (0–1); start at 0.01–0.05. |
 | `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | `APP_ENV`, `RENDER_GIT_COMMIT` | Labels on each event. |
+| `ERROR_TRACKER_URL` | unset | Link to the error tracker's dashboard on the admin Health page. |
 | `AI_ASSISTANT_SCHOOL_DAILY_BUDGET` | 1000 | Paid assistant calls per school per day (0 = no cap). |
 | `ESSAY_COACH_SCHOOL_DAILY_BUDGET` | 1000 | Paid coach checks per school per day (0 = no cap). |
 | `ESSAY_COACH_USER_DAILY_LIMIT` | 40 | Paid coach checks per student per day (0 = no cap). |
