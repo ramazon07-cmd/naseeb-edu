@@ -11,6 +11,7 @@ from apps.users import api_messages
 from ..essay_lab.tabs import tab_from_text
 from ..models import Achievement, Essay
 from ..serializers.common import STUDENT_AUTHORED_MESSAGE
+from ..views.catalog import UNIVERSITY_IN_USE_MESSAGE
 from ..views.common import STUDENT_AUTHORED_DELETE_MESSAGE
 from ..views.essays import ESSAY_CHANGED_MESSAGE, PRECONDITION_REQUIRED_MESSAGE
 from .base import RoleIsolationBase
@@ -22,6 +23,7 @@ MESSAGES_BY_CODE = {
     'precondition_required': PRECONDITION_REQUIRED_MESSAGE,
     'student_authored': STUDENT_AUTHORED_MESSAGE,
     'student_authored_delete': STUDENT_AUTHORED_DELETE_MESSAGE,
+    'university_in_use': UNIVERSITY_IN_USE_MESSAGE,
 }
 
 

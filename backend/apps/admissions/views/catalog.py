@@ -1,12 +1,14 @@
 """Admissions API views — catalog."""
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, IntegerField, OuterRef, Prefetch, ProtectedError, Q, Subquery
+from django.db.models.functions import Coalesce
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from apps.users.models import User
+from core.exceptions import CodedError
 from ..models import (
+    Application,
     OpportunityProgram,
     SavedOpportunityProgram,
     School,
@@ -213,15 +215,55 @@ class OpportunityProgramViewSet(CachedCatalogListMixin, viewsets.ReadOnlyModelVi
 # product admin reads, ops and superadmins write (OPS_WRITE_ROUTES), and every
 # write is audited. A save bumps the catalogue cache version (catalog_cache).
 
+# A changed text longer than this is recorded cut short; a changed JSON field
+# (qs_data, source_metadata) records only which of its keys changed.
+AUDIT_TEXT_LIMIT = 200
+
+
+def _audit_value(value):
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    text = str(value)
+    return text if len(text) <= AUDIT_TEXT_LIMIT else f'{text[:AUDIT_TEXT_LIMIT]}…'
+
+
+def _field_values(instance):
+    return {field.attname: getattr(instance, field.attname) for field in instance._meta.concrete_fields}
+
+
+def audit_changes(before, after):
+    """{field: [before, after]} for every changed field, kept small for the audit log."""
+    changes = {}
+    for name, old in before.items():
+        new = after.get(name)
+        if name == 'updated_at' or old == new:
+            continue
+        if isinstance(old, (dict, list)) or isinstance(new, (dict, list)):
+            old_map = old if isinstance(old, dict) else {}
+            new_map = new if isinstance(new, dict) else {}
+            changes[name] = {'changed_keys': sorted(str(key) for key in set(old_map) | set(new_map) if old_map.get(key) != new_map.get(key))}
+        else:
+            changes[name] = [_audit_value(old), _audit_value(new)]
+    return changes
+
+
 class CatalogAdminMixin(ListQueryMixin):
     permission_classes = [SupportReadOpsWrite]
     audit_name = ''
 
+    # A write and its audit row commit together, or neither does.
     def perform_create(self, serializer):
-        audit_product_action(actor=self.request.user, action=f'{self.audit_name}.created', target=serializer.save())
+        with transaction.atomic():
+            audit_product_action(actor=self.request.user, action=f'{self.audit_name}.created', target=serializer.save())
 
     def perform_update(self, serializer):
-        audit_product_action(actor=self.request.user, action=f'{self.audit_name}.updated', target=serializer.save())
+        with transaction.atomic():
+            before = _field_values(serializer.instance)
+            instance = serializer.save()
+            audit_product_action(
+                actor=self.request.user, action=f'{self.audit_name}.updated', target=instance,
+                metadata={'changes': audit_changes(before, _field_values(instance))},
+            )
 
     def perform_destroy(self, instance):
         with transaction.atomic():
@@ -234,12 +276,21 @@ class CatalogAdminMixin(ListQueryMixin):
 NO_DELETE = ['get', 'post', 'put', 'patch', 'head', 'options']
 
 
+UNIVERSITY_IN_USE_MESSAGE = 'This university has linked student applications, programs or scholarships. Edit it instead.'
+
+
+def linked_count(model):
+    """Rows of ``model`` pointing at the university, one small subquery each (no join fan-out)."""
+    rows = model.objects.filter(university=OuterRef('pk')).order_by().values('university').annotate(total=Count('pk')).values('total')
+    return Coalesce(Subquery(rows, output_field=IntegerField()), 0)
+
+
 class CatalogUniversityViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
     serializer_class = CatalogUniversitySerializer
     queryset = University.objects.annotate(
-        programs_count=Count('programs', distinct=True),
-        applications_count=Count('applications', distinct=True),
-        scholarships_count=Count('scholarships', distinct=True),
+        programs_count=linked_count(UniversityProgram),
+        applications_count=linked_count(Application),
+        scholarships_count=linked_count(Scholarship),
     ).order_by('name', 'id')
     search_fields = ('name', 'city', 'country')
     ordering_options = {'name': ('name', 'id')}
@@ -247,11 +298,25 @@ class CatalogUniversityViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
     audit_name = 'university'
 
     def perform_destroy(self, instance):
-        # Applications are deleted with their university, and linked scholarships
-        # would silently become open to any university.
-        if instance.applications.exists() or instance.scholarships.exists() or instance.programs.exists():
-            raise ValidationError({'detail': ['This university has linked student applications, programs or scholarships. Edit it instead.']})
-        super().perform_destroy(instance)
+        # Linked scholarships would silently become open to any university, and
+        # programs would go with it. The row lock makes a concurrent insert that
+        # references this university (which takes a key-share lock on it) wait
+        # until the check and the delete are done; Application.university is
+        # PROTECT, so the database refuses whatever slips past.
+        in_use = CodedError(UNIVERSITY_IN_USE_MESSAGE, 'university_in_use', status.HTTP_409_CONFLICT)
+        with transaction.atomic():
+            university = University.objects.select_for_update().get(pk=instance.pk)
+            if (
+                Application.objects.filter(university=university).exists()
+                or Scholarship.objects.filter(university=university).exists()
+                or UniversityProgram.objects.filter(university=university).exists()
+            ):
+                raise in_use
+            audit_product_action(actor=self.request.user, action=f'{self.audit_name}.deleted', target=university)
+            try:
+                university.delete()
+            except ProtectedError:
+                raise in_use from None
 
 
 class CatalogProgramViewSet(CatalogAdminMixin, viewsets.ModelViewSet):

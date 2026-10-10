@@ -19,6 +19,10 @@ export const ERROR_CODE_TRANSLATIONS = {
     'O‘z ishini faqat o‘quvchi o‘chira oladi. Buning o‘rniga izoh bilan qaytaring.',
     'Удалить свою работу может только ученик. Вместо этого верните её с комментарием.',
   ],
+  university_in_use: [
+    'Bu universitetga o‘quvchilar arizalari, ta’lim dasturlari yoki stipendiyalar bog‘langan. O‘chirish o‘rniga tahrirlang.',
+    'К этому университету привязаны заявки учеников, программы или стипендии. Отредактируйте его вместо удаления.',
+  ],
 };
 
 export const errorCodeKey = (code) => `error_code.${code}`;

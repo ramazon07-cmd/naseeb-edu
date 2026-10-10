@@ -38,7 +38,7 @@ test('only stale-copy codes trigger a reload', () => {
 
 test('error messages are keyed by code; English uses the server text', () => {
   const error = (code) => ({ details: { code, detail: 'Server sentence.' }, message: 'Server sentence.' });
-  for (const code of ['essay_changed', 'precondition_required', 'student_authored', 'student_authored_delete']) {
+  for (const code of Object.keys(ERROR_CODE_TRANSLATIONS)) {
     for (const [language, index] of [['uz', 0], ['ru', 1]]) {
       setLanguage(language);
       assert.equal(recordErrorMessage(error(code)), ERROR_CODE_TRANSLATIONS[code][index], `${language}: ${code}`);

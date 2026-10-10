@@ -1,4 +1,9 @@
 """The admin catalogue editor (/api/catalog/...): who reads, who writes, and what a write may not break."""
+from unittest import mock
+
+from django.db import DatabaseError, connection
+from django.db.models import ProtectedError, QuerySet
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from apps.admissions.models import Application, OpportunityProgram, Scholarship, University, UniversityProgram
@@ -74,10 +79,11 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
     def test_a_university_in_use_is_never_deleted(self):
         client = self.as_user(self.ops)
         Application.objects.create(student=self.student, university=self.university, program='Biology')
-        self.assertEqual(client.delete(f'{UNIVERSITIES}{self.university.id}/').status_code, 400)
+        refused = client.delete(f'{UNIVERSITIES}{self.university.id}/')
+        self.assertEqual((refused.status_code, refused.data['code']), (409, 'university_in_use'))
         linked = University.objects.create(name='Linked College', country='Canada')
         Scholarship.objects.create(title='Linked Award', provider='Linked', scholarship_type='merit', university=linked)
-        self.assertEqual(client.delete(f'{UNIVERSITIES}{linked.id}/').status_code, 400)
+        self.assertEqual(client.delete(f'{UNIVERSITIES}{linked.id}/').status_code, 409)
         self.assertEqual(University.objects.filter(pk__in=[self.university.pk, linked.pk]).count(), 2)
 
         unused = University.objects.create(name='Typo Universty', country='Canada')
@@ -135,7 +141,7 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
         detail = client.get(f'{UNIVERSITIES}{self.university.id}/')
         self.assertEqual(detail.data['programs_count'], 1)
         self.assertEqual(detail.data['scholarships_count'], 0)
-        self.assertEqual(client.delete(f'{UNIVERSITIES}{self.university.id}/').status_code, 400)
+        self.assertEqual(client.delete(f'{UNIVERSITIES}{self.university.id}/').status_code, 409)
         self.assertTrue(UniversityProgram.objects.filter(pk=program.pk).exists())
 
     def test_opportunity_dates_cannot_be_reversed_even_on_partial_edit(self):
@@ -146,3 +152,75 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
         self.assertIn('end_date', response.data)
         self.assertEqual(client.patch(url, {'start_date': '2027-06-01', 'end_date': '2027-07-01'}, format='json').status_code, 200)
         self.assertEqual(client.patch(url, {'end_date': '2027-05-01'}, format='json').status_code, 400)
+
+    def test_the_database_refuses_to_delete_a_university_with_applications(self):
+        application = Application.objects.create(student=self.student, university=self.university, program='Biology')
+        with self.assertRaises(ProtectedError):
+            self.university.delete()
+        # An application that appears after the check (the guard sees none) still stops the delete.
+        with mock.patch.object(QuerySet, 'exists', return_value=False):
+            response = self.as_user(self.ops).delete(f'{UNIVERSITIES}{self.university.id}/')
+        self.assertEqual((response.status_code, response.data['code']), (409, 'university_in_use'))
+        self.assertTrue(Application.objects.filter(pk=application.pk).exists())
+        self.assertFalse(ProductAuditEvent.objects.filter(action='university.deleted').exists())
+
+    def test_an_edit_records_what_changed(self):
+        University.objects.filter(pk=self.university.pk).update(qs_data={'rank': 50, 'overall': 70.1, 'region': 'Americas'})
+        response = self.as_user(self.ops).patch(
+            f'{UNIVERSITIES}{self.university.id}/', {'city': 'Ottawa', 'notes': 'x' * 300}, format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        changes = ProductAuditEvent.objects.get(action='university.updated').metadata['changes']
+        self.assertEqual(changes['city'], ['Toronto', 'Ottawa'])
+        self.assertEqual(changes['notes'][0], '')
+        self.assertTrue(changes['notes'][1].endswith('…') and len(changes['notes'][1]) == 201)
+        self.assertNotIn('qs_data', changes)
+        self.assertNotIn('updated_at', changes)
+
+    def test_a_changed_json_field_records_only_its_keys(self):
+        from apps.admissions.views.catalog import audit_changes
+
+        changes = audit_changes(
+            {'qs_data': {'rank': 50, 'overall': 70.1, 'region': 'Americas'}, 'name': 'A'},
+            {'qs_data': {'rank': 45, 'overall': 70.1, 'subject': 'CS'}, 'name': 'A'},
+        )
+        self.assertEqual(changes, {'qs_data': {'changed_keys': ['rank', 'region', 'subject']}})
+
+    def test_a_failed_audit_write_undoes_the_change(self):
+        client = self.as_user(self.ops)
+        client.raise_request_exception = False
+        with mock.patch('apps.admissions.views.catalog.audit_product_action', side_effect=DatabaseError('audit down')):
+            edited = client.patch(f'{UNIVERSITIES}{self.university.id}/', {'city': 'Ottawa'}, format='json')
+            created = client.post(UNIVERSITIES, {'name': 'Harbor Institute', 'country': 'USA'}, format='json')
+        self.assertEqual((edited.status_code, created.status_code), (500, 500))
+        self.university.refresh_from_db()
+        self.assertEqual(self.university.city, 'Toronto')
+        self.assertFalse(University.objects.filter(name='Harbor Institute').exists())
+
+    def test_linked_counts_are_exact_and_cost_one_query_per_page(self):
+        other = University.objects.create(name='Mountain College', country='Canada')
+        for name in ('BSc Biology', 'BSc Physics', 'BA History'):
+            UniversityProgram.objects.create(university=self.university, name=name, canonical_major=name)
+        Application.objects.create(student=self.student, university=self.university, program='Biology')
+        Application.objects.create(student=self.student, university=self.university, program='Physics')
+        Scholarship.objects.create(title='Second Award', provider='Lakeside', scholarship_type='merit', university=self.university)
+        Scholarship.objects.create(title='Third Award', provider='Lakeside', scholarship_type='merit', university=self.university)
+        self.scholarship.university = self.university
+        self.scholarship.save(update_fields=['university'])
+
+        client = self.as_user(self.support)
+        rows = {row['name']: row for row in self.results(client.get(UNIVERSITIES))}
+        counts = lambda row: (row['programs_count'], row['applications_count'], row['scholarships_count'])  # noqa: E731
+        self.assertEqual(counts(rows['Lakeside University']), (3, 2, 3))
+        self.assertEqual(counts(rows['Mountain College']), (0, 0, 0))
+
+        with CaptureQueriesContext(connection) as small:
+            client.get(UNIVERSITIES)
+        for index in range(8):
+            University.objects.create(name=f'Extra {index}', country='Canada')
+        with CaptureQueriesContext(connection) as large:
+            client.get(UNIVERSITIES)
+        self.assertEqual(len(small), len(large))
+        listing = next(query['sql'] for query in large.captured_queries if 'admissions_university' in query['sql'] and 'programs_count' in query['sql'])
+        self.assertNotIn('DISTINCT', listing.upper())
+        self.assertNotIn('GROUP BY "ADMISSIONS_UNIVERSITY"."ID"', listing.upper())

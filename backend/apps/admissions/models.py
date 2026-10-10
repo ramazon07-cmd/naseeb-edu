@@ -626,7 +626,8 @@ class Application(TimeStampedModel):
         WAITLISTED = 'waitlisted', 'Waitlisted'
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='applications')
-    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name='applications')
+    # PROTECT: deleting a university must never take students' applications with it.
+    university = models.ForeignKey(University, on_delete=models.PROTECT, related_name='applications')
     program = models.CharField(max_length=220)
     tier = models.CharField(max_length=20, choices=University.Tier.choices, default=University.Tier.TARGET)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.RESEARCHING)

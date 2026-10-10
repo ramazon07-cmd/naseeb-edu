@@ -10,6 +10,7 @@ import { rankText } from '../lib/college';
 import { dateText, joinParts, money } from '../lib/format';
 import { label } from '../lib/labels';
 import { canManageWorkspaces } from '../lib/roles';
+import { recordErrorMessage } from '../lib/recordRights';
 import './catalog-admin.css';
 
 // The shared catalogue students search: universities, their programs,
@@ -303,7 +304,7 @@ export function CatalogAdminPage({ user, query = '', notify }) {
       notify(message);
       refresh();
     } catch (err) {
-      notify(err.message, 'error');
+      notify(recordErrorMessage(err), 'error');
     } finally {
       setBusyId(null);
     }
