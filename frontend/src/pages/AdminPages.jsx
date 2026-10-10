@@ -266,7 +266,7 @@ function PlanForm({ plan, onClose, onSaved, notify }) {
   }
   return <Modal title={plan ? tx`Edit plan · ${plan.name}` : t("New plan")} onClose={onClose}><form className="form-grid" onSubmit={submit} onChange={() => overLimit && setOverLimit(null)}>
     <Field label={t("Plan name")}><input name="name" defaultValue={plan?.name || ''} placeholder={t("e.g. School Plus")} required /></Field>
-    {plan ? <Field label={t("Code")}><input value={plan.code} disabled /></Field> : <Field label={t("Code")} hint={t("Lowercase letters, numbers and dashes. It cannot be changed later.")}><input name="code" pattern="[a-z0-9-]+" placeholder={t("e.g. school-plus")} required /></Field>}
+    {plan ? <Field label={t("Code")}><input value={plan.code} disabled /></Field> : <Field label={t("Code")} hint={t("Lowercase letters, numbers and dashes. It cannot be changed later.")}><input name="code" pattern="[a-z0-9\-]+" placeholder={t("e.g. school-plus")} required /></Field>}
     {!plan && <Field label={t("Workspace type")} hint={t("It cannot be changed later.")}><select name="workspace_type" defaultValue="school"><option value="school">{t("Organization schools")}</option><option value="individual">{t("Individual workspaces")}</option></select></Field>}
     <Field label={t("Description")}><input name="description" defaultValue={plan?.description || ''} placeholder={t("e.g. For schools with up to six counselors")} /></Field>
     {PLAN_LIMIT_FIELDS.map(([key, title]) => <Field key={key} label={t(title)} hint={t("Leave empty for no limit.")}><input name={key} type="number" min="0" defaultValue={plan?.[key] ?? ''} /></Field>)}
