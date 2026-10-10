@@ -10,6 +10,7 @@ import { LoadMore, PagedListError } from '../components/paged';
 import { PageSkeleton } from '../components/states';
 import { TemporaryCredentialModal } from '../components/TemporaryCredentialModal';
 import { DownloadCvButton } from '../components/CvDocument';
+import { mergeSaved } from '../lib/mergeSaved';
 import { RecommendationLetters } from '../components/RecommendationLetters';
 import { useStudentRecords } from '../hooks/useStudentRecords';
 import { usePagedList } from '../hooks/usePagedList';
@@ -344,12 +345,13 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
   const [noteFor, setNoteFor] = useState(null);
   const loaded = useStudentRecords(student.id, true);
   const records = loaded.records;
-  // Letters saved here replace the loaded list until another student opens.
+  // Letters saved here show over the loaded list until a refresh brings them (or newer).
   const [savedLetters, setSavedLetters] = useState({ studentId: null, items: [] });
-  const letters = savedLetters.studentId === student.id ? savedLetters.items : records.recommendations || [];
+  const ownSaved = savedLetters.studentId === student.id ? savedLetters.items : [];
+  const letters = mergeSaved(records.recommendations || [], ownSaved);
   const letterSaved = (saved) => setSavedLetters({
     studentId: student.id,
-    items: letters.some((item) => item.id === saved.id) ? letters.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...letters],
+    items: [saved, ...ownSaved.filter((item) => item.id !== saved.id)],
   });
   const name = fullName(student.user_detail);
   const meetings = (data.bookings || []).filter((item) => Number(item.student) === Number(student.id));
