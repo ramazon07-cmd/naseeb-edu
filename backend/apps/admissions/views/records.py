@@ -6,13 +6,14 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import get_language
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from apps.users.entitlements import feature_enabled
 from apps.users.models import User
 from apps.users.throttles import WindowRateThrottle
+from core.exceptions import CodedError
 from .. import ai_budget, rec_letter_ai
 from ..models import (
     Achievement,
@@ -365,6 +366,10 @@ class HonorViewSet(PrivateEvidenceViewSetMixin, StudentRecordListMixin, ScopedQu
         return self.filter_for_user(self.queryset)
 
 
+# Translated by code in the app (translations/errorCodes.js) and by text for older clients (api_messages).
+LETTER_CHANGED_MESSAGE = 'This letter has changed. Reopen it and read the latest text before reviewing.'
+
+
 class LetterSuggestThrottle(WindowRateThrottle):
     """Suggestions follow the counselor's typing: a short minimum interval plus an hourly cap."""
 
@@ -402,7 +407,9 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
         if not throttle.allow_request(request, self):
             self.throttled(request, throttle.wait())
         data = payload.validated_data
-        student = get_object_or_404(scope_students(StudentProfile.objects.select_related('user'), request.user), pk=data['student'])
+        # The school name is read during the AI call (to keep it out of the prompt),
+        # which runs after the connection is released: load it now.
+        student = get_object_or_404(scope_students(StudentProfile.objects.select_related('user', 'school'), request.user), pk=data['student'])
         facts = rec_letter_ai.profile_facts(student)
         if (
             rec_letter_ai.gateway_configured()
@@ -428,8 +435,9 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             raise ValidationError({'detail': ['Your counselor has not shared this letter with you yet.']})
         payload = LetterStudentReviewSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        if payload.validated_data.get('reviewed_body', letter.body) != letter.body:
-            raise ValidationError({'detail': ['This letter has changed. Reopen it and read the latest text before reviewing.']})
+        # The decision is about the exact text the student read.
+        if payload.validated_data['reviewed_body'] != letter.body:
+            raise CodedError(LETTER_CHANGED_MESSAGE, 'letter_changed', status.HTTP_409_CONFLICT)
         decision = payload.validated_data['decision']
         changes = decision == RecommendationLetter.StudentReview.CHANGES_REQUESTED
         now = timezone.now()
@@ -442,7 +450,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             updated_at=now,
         )
         if not updated:
-            raise ValidationError({'detail': ['This letter has changed. Reopen it and read the latest text before reviewing.']})
+            raise CodedError(LETTER_CHANGED_MESSAGE, 'letter_changed', status.HTTP_409_CONFLICT)
         letter.refresh_from_db()
         return Response(self.get_serializer(letter).data)
 

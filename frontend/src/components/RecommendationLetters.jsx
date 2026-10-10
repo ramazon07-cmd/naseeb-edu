@@ -4,6 +4,7 @@ import { api } from '../api';
 import { formatNumberLocale, t, tp, tx } from '../i18n';
 import { dateText, joinParts } from '../lib/format';
 import { fullName, label } from '../lib/labels';
+import { recordErrorMessage } from '../lib/recordRights';
 import { CxCard, CxTag } from './counselorUi';
 import { CheckboxControl, Field } from './forms';
 import { Modal } from './ui';
@@ -267,7 +268,7 @@ export function LetterTextModal({ letter, onClose, onReviewed, notify }) {
       setAsking(false);
       onReviewed(updated);
     } catch (err) {
-      setError(err.message);
+      setError(recordErrorMessage(err));
     } finally {
       setSending('');
     }

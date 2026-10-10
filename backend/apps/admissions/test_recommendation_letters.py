@@ -103,6 +103,26 @@ class StudentLetterWriteTests(LetterFixture, APITestCase):
         letter.refresh_from_db()
         self.assertEqual((letter.status, letter.body), ('drafting', LETTER_TEXT))
 
+    def test_a_student_edit_never_writes_back_a_stale_letter_text(self):
+        from apps.admissions.serializers.records import RecommendationLetterSerializer
+
+        tracked = RecommendationLetter.objects.create(student=self.student, recommender_name='Physics teacher')
+        validate = RecommendationLetterSerializer.validate
+
+        def counselor_writes_meanwhile(serializer, attrs):
+            # The counselor writes and shares the letter after this request loaded its copy.
+            RecommendationLetter.objects.filter(pk=tracked.pk).update(body=LETTER_TEXT, shared_with_student=True)
+            return validate(serializer, attrs)
+
+        with mock.patch.object(RecommendationLetterSerializer, 'validate', counselor_writes_meanwhile):
+            update = self.client.put(f'/api/recommendations/{tracked.id}/', {
+                'student': self.student.id, 'recommender_name': 'Physics teacher', 'status': 'requested',
+                'notes': 'Sent my CV.', 'body': '', 'shared_with_student': False,
+            }, format='json')
+        self.assertEqual(update.status_code, 200, update.data)
+        tracked.refresh_from_db()
+        self.assertEqual((tracked.notes, tracked.body, tracked.shared_with_student), ('Sent my CV.', LETTER_TEXT, True))
+
     def test_student_still_manages_letters_nobody_has_written(self):
         tracked = RecommendationLetter.objects.create(student=self.student, recommender_name='Physics teacher')
         update = self.client.patch(f'/api/recommendations/{tracked.id}/', {'notes': 'Sent my CV.'}, format='json')
@@ -172,6 +192,28 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
             self.assertNotIn(private, sent)
 
     @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_the_ai_call_runs_without_touching_the_database(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from apps.admissions import rec_letter_ai
+
+        real = rec_letter_ai.ai_suggestions
+        during = []
+
+        def counted(*args, **kwargs):
+            with CaptureQueriesContext(connection) as queries:
+                result = real(*args, **kwargs)
+            during.append(len(queries))
+            return result
+
+        answer = {'suggestions': [{'kind': 'idea', 'text': 'Mention the robotics cup.'}]}
+        with mock.patch.object(rec_letter_ai, 'ai_suggestions', counted), \
+                mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
+            response = self.suggest(draft=f'Malika studies at {self.school_a.name}.')
+        self.assertEqual(response.data['source'], 'ai')
+        self.assertEqual(during, [0])
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
     def test_a_failing_provider_falls_back_to_the_profile(self):
         with mock.patch('urllib.request.urlopen', side_effect=urllib.error.URLError('down')):
             response = self.suggest()
@@ -196,8 +238,19 @@ class StudentLetterReviewTests(LetterFixture, APITestCase):
     """The student checks a letter their counselor shared: it is right, or what to change."""
 
     def review(self, user, letter, **payload):
+        # The app always sends the text the student read.
+        payload.setdefault('reviewed_body', letter.body)
         self.client.force_authenticate(user)
         return self.client.post(f'/api/recommendations/{letter.id}/student-review/', payload, format='json')
+
+    def test_a_decision_must_name_the_text_it_is_about(self):
+        letter = self.write_letter(shared_with_student=True)
+        self.client.force_authenticate(self.student_user)
+        missing = self.client.post(f'/api/recommendations/{letter.id}/student-review/', {'decision': 'confirmed'}, format='json')
+        self.assertEqual(missing.status_code, 400)
+        self.assertIn('reviewed_body', missing.data)
+        letter.refresh_from_db()
+        self.assertEqual(letter.student_review, '')
 
     def test_student_confirms_or_asks_for_changes_and_the_counselor_reads_it(self):
         letter = self.write_letter(shared_with_student=True)
@@ -214,7 +267,8 @@ class StudentLetterReviewTests(LetterFixture, APITestCase):
     def test_a_student_cannot_confirm_text_changed_since_they_opened_it(self):
         letter = self.write_letter(shared_with_student=True)
         response = self.review(self.student_user, letter, decision='confirmed', reviewed_body='An older draft.')
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'letter_changed')
         letter.refresh_from_db()
         self.assertEqual(letter.student_review, '')
         response = self.review(self.student_user, letter, decision='confirmed', reviewed_body=LETTER_TEXT)
@@ -232,7 +286,8 @@ class StudentLetterReviewTests(LetterFixture, APITestCase):
 
         with mock.patch.object(LetterStudentReviewSerializer, 'validate', edit_during_validation):
             response = self.review(self.student_user, letter, decision='confirmed', reviewed_body=LETTER_TEXT)
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['code'], 'letter_changed')
         letter.refresh_from_db()
         self.assertEqual(letter.student_review, '')
 
