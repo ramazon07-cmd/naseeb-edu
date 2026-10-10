@@ -28,6 +28,11 @@ export function BootstrapError({ message, onRetry, onSignOut }) {
   return <main className="app-boot"><section className="bootstrap-error" role="alert"><WifiOff size={30} /><span className="eyebrow">{t("CONNECTION INTERRUPTED")}</span><h1>{t("We could not open your workspace.")}</h1><p>{message}</p><div><button type="button" className="button primary" onClick={onRetry}><RefreshCw size={16} /> {t("Retry")}</button><button type="button" className="button quiet" onClick={onSignOut}>{t("Return to sign in")}</button></div></section></main>;
 }
 
+// The server did not confirm a sign-out: say so instead of pretending.
+export function SignOutFailed({ retrying, onRetry, onDismiss }) {
+  return <main className="app-boot"><section className="bootstrap-error" role="alert"><WifiOff size={30} /><span className="eyebrow">{t("SIGN-OUT NOT CONFIRMED")}</span><h1>{t("Couldn’t reach the server; you may still be signed in on this device.")}</h1><p>{t("On a shared computer, retry when you are back online so the session ends on the server too.")}</p><div><button type="button" className="button primary" onClick={onRetry} disabled={retrying}><RefreshCw size={16} /> {t("Retry")}</button><button type="button" className="button quiet" onClick={onDismiss} disabled={retrying}>{t("Sign out on this device only")}</button></div></section></main>;
+}
+
 export function ThemeToggle({ theme, onToggle }) {
   const isDark = theme === 'dark';
   return <button type="button" className="icon-button theme-toggle" onClick={onToggle} title={isDark ? t("Light mode") : t("Dark mode")} aria-label={isDark ? t("Switch to light mode") : t("Switch to dark mode")} aria-pressed={isDark}>{isDark ? <Sun size={18} /> : <Moon size={18} />}</button>;

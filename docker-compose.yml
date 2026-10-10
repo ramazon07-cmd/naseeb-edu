@@ -42,7 +42,10 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://127.0.0.1:8000/api
+        # Same origin as the app: nginx proxies /api to the backend, so the
+        # refresh cookie works on localhost and 127.0.0.1 alike.
+        VITE_API_URL: /api
+        API_UPSTREAM: http://backend:8000
         VITE_SHOW_DEMO_ACCOUNTS: "true"
     ports:
       - "3000:80"

@@ -1,5 +1,9 @@
 import { getLanguage, t } from './i18n'
-import { TOKEN_KEYS, browserLock, createRefresher, createTokenStore } from './authTokens'
+import {
+  AUTH_CHANNEL, AUTH_LOCK, browserLock, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
+  migrateLegacyTokens,
+} from './authTokens'
+import { readPayload } from './lib/payload.js'
 import { UNTRACKED_ENDPOINTS, createMutationTracker } from './lib/reloadPlan'
 import { errorPayloadMessage } from './lib/apiErrors'
 import { firstListPath } from './lib/listPath.js'
@@ -8,11 +12,15 @@ import { protectedFileUrl, readProtectedFile } from './lib/protectedFile.js'
 import { sendWithProgress } from './lib/fileUpload.js'
 import { hasUserDrafts, removeUserDrafts } from './essayLab/drafts.js'
 
-const DEFAULT_API_URL = 'http://127.0.0.1:8000/api'
+// Same origin by default: the Vite dev server, the nginx image (API_UPSTREAM)
+// and Vercel (NASEEB_API_ORIGIN, middleware.js) proxy /api to Django, so the
+// refresh cookie is first-party. An absolute URL is the cross-site setup
+// (AUTH_REFRESH_COOKIE_SAMESITE=None on the backend); see docs/deployment-auth.md.
+const DEFAULT_API_URL = '/api'
 const API_URL = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '')
 const REQUEST_TIMEOUT_MS = 15_000
 
-const tokens = createTokenStore(() => window.localStorage)
+const session = createSessionStore(() => window.localStorage)
 // Successful writes are recorded so the app can reload only what changed.
 const mutations = createMutationTracker(UNTRACKED_ENDPOINTS)
 
@@ -25,8 +33,22 @@ export class ApiError extends Error {
   }
 }
 
-const getToken = (key) => tokens.get(key)
-const saveTokens = (payload) => tokens.save(payload)
+const getToken = (key) => session.get(key)
+// Every token pair outside a refresh comes from a new sign-in (a new server session).
+const saveTokens = (payload) => session.save(payload, { signIn: true })
+const hasSession = () => session.hasSession()
+
+// Fresh access tokens from other tabs (see createRefresher in authTokens.js).
+const authChannel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(AUTH_CHANNEL)
+authChannel?.addEventListener('message', (event) => {
+  if (event.data?.type === 'access') session.adopt(event.data.access)
+})
+
+// The in-memory access token, or a fresh one from the refresh cookie after a
+// reload (null when signed out).
+async function accessToken() {
+  return getToken('access') || (hasSession() ? refreshAccessToken() : null)
+}
 
 async function fetchWithTimeout(url, options = {}) {
   const { timeoutMs = REQUEST_TIMEOUT_MS, localize = true, ...fetchOptions } = options
@@ -97,10 +119,10 @@ const fetchStoredFile = (url) => fetchWithTimeout(url, {
 
 async function protectedFileRequest(path, { download = false, query } = {}, retry = true) {
   const headers = new Headers()
-  const access = getToken('access')
+  const access = await accessToken()
   if (access) headers.set('Authorization', `Bearer ${access}`)
   const response = await fetchWithTimeout(protectedFileUrl(API_URL, path, download, query), { headers, timeoutMs: 120_000 })
-  if (response.status === 401 && retry && getToken('refresh')) {
+  if (response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)
     return protectedFileRequest(path, { download, query }, false)
   }
@@ -177,13 +199,15 @@ async function saveOpenEditors(timeoutMs) {
 const SESSION_ENDED_EVENT = 'naseeb:session-ended'
 
 // Fires when this tab is left without a session: a request came back 401 with
-// no tokens to refresh, the refresh token was rejected, or another tab signed
-// out (it clears the shared tokens).
+// no session to refresh, the refresh cookie was rejected, or another tab signed
+// out (it removes the shared, non-secret session flag).
 // Without it, parts that fetch on their own (screen time, chat polling) keep
 // running on a dead session and show the raw 401.
+// The callback gets { fromOtherTab: true } when another tab signed out: that
+// tab already ended the server session.
 function onSessionEnded(callback) {
   const onStorage = (event) => {
-    if ((event.key === TOKEN_KEYS.access || event.key === null) && event.newValue === null) callback()
+    if (isSignOutSignal(event)) callback({ fromOtherTab: true })
   }
   window.addEventListener(SESSION_ENDED_EVENT, callback)
   window.addEventListener('storage', onStorage)
@@ -193,8 +217,62 @@ function onSessionEnded(callback) {
   }
 }
 
-export function clearTokens() {
-  tokens.clear()
+const authLock = browserLock(AUTH_LOCK)
+
+// The refresh and logout calls, authenticated by the HttpOnly cookie.
+const cookieAuth = createCookieAuth({
+  apiUrl: API_URL,
+  request: fetchWithTimeout,
+  store: session,
+  lock: authLock,
+  settleRefreshes: () => refreshAccessToken.settled(),
+})
+
+// The previous frontend kept tokens in localStorage: revoke them, then drop them.
+migrateLegacyTokens(() => window.localStorage, (token) => cookieAuth.revokeLegacy(token))
+
+// The session ended on its own (expired, revoked, another tab signed out):
+// end it here and, unless another tab already did, on the server too.
+function logout({ server = true } = {}) {
+  // The user's own sign-out is in progress: it decides when the counter goes.
+  if (userSignOut) return userSignOut
+  const signInId = session.endHere()
+  if (!server) {
+    session.clear(signInId)
+    return Promise.resolve(true)
+  }
+  return cookieAuth.logout(signInId).then((ok) => {
+    session.clear(signInId)
+    return ok
+  })
+}
+
+// The user signs out. Resolves true once the server ended the session; only
+// then is the session counter removed (signing the other tabs out). On false
+// (server unreachable after one retry) this tab is signed out locally but the
+// cookie may still work: the caller offers retrySignOut() or forgetSession().
+let userSignOut = null
+let pendingSignInId
+function endUserSession() {
+  pendingSignInId = session.endHere()
+  return retrySignOut()
+}
+
+function retrySignOut() {
+  userSignOut = cookieAuth.logout(pendingSignInId).then((ok) => {
+    if (ok) {
+      session.clear(pendingSignInId)
+      userSignOut = null
+    }
+    return ok
+  })
+  return userSignOut
+}
+
+// Gives up on the server: the session ends on this device only.
+function forgetSession() {
+  session.clear(pendingSignInId)
+  userSignOut = null
 }
 
 // keepDrafts: "Sign in again" — end the session but leave this user's
@@ -205,21 +283,14 @@ function signOut(userId, { keepDrafts = false } = {}) {
       try { entry.forget() } catch { /* best effort */ }
     }
   }
-  clearTokens()
+  const ended = endUserSession()
   if (!keepDrafts && userId != null) {
     try { removeUserDrafts(window.localStorage, userId) } catch { /* storage unavailable */ }
   }
+  return ended
 }
 
-async function parseResponse(response) {
-  const text = await response.text()
-  if (!text) return null
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
-  }
-}
+const parseResponse = readPayload
 
 function errorMessage(payload) {
   if (!payload) return t('Unable to connect to the server.')
@@ -234,22 +305,17 @@ function errorMessage(payload) {
 // (rotating, blacklisted-after-use) refresh token and then wipe the new pair.
 const refreshAccessToken = createRefresher({
   store: {
-    ...tokens,
+    ...session,
     clear() {
-      tokens.clear()
+      session.clear()
       window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
     },
   },
-  lock: browserLock('naseeb-token-refresh'),
+  lock: authLock,
   jitterMs: 300,
-  send: async (refresh) => {
-    const response = await fetchWithTimeout(`${API_URL}/auth/token/refresh/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh }),
-    })
-    return { ok: response.ok, status: response.status, payload: await parseResponse(response) }
-  },
+  send: () => cookieAuth.refresh(),
+  share: (access) => authChannel?.postMessage({ type: 'access', access }),
+  warn: (message, payload) => console.warn(message, payload),
   expired: (status, payload) => new ApiError(t('Your session has expired. Sign in again.'), status, payload),
   failed: (status, payload) => new ApiError(errorMessage(payload), status, payload),
 })
@@ -263,15 +329,15 @@ export async function request(path, options = {}, retry = true, unwrapPagination
   if (etag) headers.set('If-None-Match', etag)
   const isFormData = fetchOptions.body instanceof FormData
   if (!isFormData && fetchOptions.body !== undefined) headers.set('Content-Type', 'application/json')
-  const access = auth ? getToken('access') : null
+  const access = auth ? await accessToken() : null
   if (access) headers.set('Authorization', `Bearer ${access}`)
 
   const response = await fetchWithRetry(`${API_URL}${path}`, { ...fetchOptions, headers, retries })
-  if (auth && response.status === 401 && retry && getToken('refresh')) {
+  if (auth && response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)
     return request(path, options, false, unwrapPagination)
   }
-  if (auth && response.status === 401 && !getToken('access') && !getToken('refresh')) window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
+  if (auth && response.status === 401 && !hasSession()) window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
   if (etag !== undefined && response.status === 304) return { notModified: true }
   const payload = await parseResponse(response)
   if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
@@ -287,7 +353,7 @@ const UPLOAD_TIMEOUT_MS = 10 * 60_000
 // aborted upload rejects with an AbortError.
 async function uploadRequest(method, path, body, { onProgress, signal } = {}, retry = true) {
   const headers = { 'Accept-Language': getLanguage() }
-  const access = getToken('access')
+  const access = await accessToken()
   if (access) headers.Authorization = `Bearer ${access}`
   let response
   try {
@@ -307,7 +373,7 @@ async function uploadRequest(method, path, body, { onProgress, signal } = {}, re
     if (typeof navigator !== 'undefined' && !navigator.onLine) throw new ApiError(t('You appear to be offline. Reconnect and retry.'), 0, null)
     throw new ApiError(t('Unable to connect to the server. Check your connection and retry.'), 0, null)
   }
-  if (response.status === 401 && retry && getToken('refresh')) {
+  if (response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)
     onProgress?.(0)
     return uploadRequest(method, path, body, { onProgress, signal }, false)
@@ -323,7 +389,7 @@ async function uploadRequest(method, path, body, { onProgress, signal } = {}, re
 
 async function streamRequest(path, payload, signal, retry = true) {
   const headers = new Headers({ 'Content-Type': 'application/json' })
-  const access = getToken('access')
+  const access = await accessToken()
   if (access) headers.set('Authorization', `Bearer ${access}`)
   const response = await fetchWithTimeout(`${API_URL}${path}`, {
     method: 'POST',
@@ -331,7 +397,7 @@ async function streamRequest(path, payload, signal, retry = true) {
     body: JSON.stringify(payload),
     signal,
   })
-  if (response.status === 401 && retry && getToken('refresh')) {
+  if (response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)
     return streamRequest(path, payload, signal, false)
   }
@@ -376,10 +442,14 @@ const listPage = (resource, query, signal) => request(`/${resource}/${query}`, {
 export const api = {
   baseUrl: API_URL,
   takeMutations: () => mutations.take(),
-  hasSession: () => Boolean(getToken('access') || getToken('refresh')),
-  login: async (username, password) => {
+  hasSession,
+  // After any sign-out (this tab or another) has finished, so its response
+  // cannot delete the cookie this sign-in sets.
+  login: (username, password) => cookieAuth.signIn(async () => {
+    // credentials: the response sets the refresh cookie (cross-origin API too).
     const response = await fetchWithTimeout(`${API_URL}/auth/token/`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     })
@@ -387,14 +457,17 @@ export const api = {
     if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
     saveTokens(payload)
     return payload
-  },
-  logout: clearTokens,
+  }),
+  logout,
   onSessionEnded,
   signOut,
+  retrySignOut,
+  forgetSession,
   syncBeforeSignOut,
   changePassword: async (newPassword, confirmPassword) => {
     const payload = await request('/users/accounts/change-password/', {
       method: 'POST',
+      credentials: 'include',
       body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
     })
     saveTokens(payload)
@@ -406,10 +479,11 @@ export const api = {
   }),
   me: () => request('/users/accounts/me/'),
   // Account settings. A password change ends the other sessions and hands this
-  // one a new token pair, stored here so the user stays signed in.
+  // one a new access token (kept here) and refresh cookie, so it stays signed in.
   changeOwnPassword: async (currentPassword, newPassword, confirmPassword) => {
     const payload = await request('/users/accounts/me/password/', {
       method: 'POST',
+      credentials: 'include',
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword }),
     })
     saveTokens(payload)
