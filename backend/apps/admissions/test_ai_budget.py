@@ -97,6 +97,7 @@ class AiBudgetTests(APITestCase):
             {'id': self.school_a.id, 'used': 2, 'name': 'Budget A'}, {'id': self.school_b.id, 'used': 1, 'name': 'Budget B'},
         ])
         self.assertEqual(data['features']['essay_coach']['used'], 0)
+        self.assertEqual(data['features']['recommendation_letter']['used'], 0)
 
     def test_usage_is_unavailable_not_zero_when_the_cache_is_down(self):
         admin = User.objects.create_user(username='usage-admin', email='usage-admin@example.com', role=User.Role.ADMIN)

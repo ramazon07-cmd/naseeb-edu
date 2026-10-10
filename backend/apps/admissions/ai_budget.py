@@ -70,7 +70,7 @@ class _ProcessFallback:
 _fallback = _ProcessFallback()
 
 
-FEATURES = ('assistant', 'essay_coach')
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter')
 TOP_SCHOOLS = 5
 
 

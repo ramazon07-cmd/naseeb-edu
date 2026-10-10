@@ -2392,6 +2392,7 @@ export const UI_TRANSLATIONS = {
   "{0} (retired)": ["{0} (eskirgan)", "{0} (снят с продажи)"],
   "AI assistant": ["AI yordamchi", "ИИ-помощник"],
   "Essay coach": ["Esse murabbiyi", "Помощник по эссе"],
+  "Letter suggestions": ["Tavsiyanoma takliflari", "Подсказки для писем"],
   "Parent portal": ["Ota-onalar portali", "Портал для родителей"],
   "Reports": ["Hisobotlar", "Отчёты"],
   "School logins": ["Maktab loginlari", "Входы для школ"],
