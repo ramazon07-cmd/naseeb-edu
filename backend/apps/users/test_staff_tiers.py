@@ -204,6 +204,19 @@ class StaffTierTests(APITestCase):
         self.assertFalse(self.student.is_active)
         self.assertEqual(ProductAuditEvent.objects.filter(action='student.deactivated').count(), 1)
 
+    def test_every_tier_writes_its_own_activity_and_settings(self):
+        for user in (self.support, self.ops):
+            self.login(user)
+            tracked = self.client.post('/api/screen-time/track/', {'entries': [{'page': 'admin_dashboard', 'seconds': 30}]}, format='json')
+            self.assertNotEqual(tracked.status_code, status.HTTP_403_FORBIDDEN, (user.username, tracked.data))
+            layout = self.client.put('/api/users/accounts/me/dashboard-layout/', {'layout': {}}, format='json')
+            self.assertNotEqual(layout.status_code, status.HTTP_403_FORBIDDEN, (user.username, layout.data))
+            email = self.client.post('/api/users/accounts/me/email/', {'email': f'{user.username}-new@example.com', 'current_password': 'StrongPass123!'}, format='json')
+            self.assertNotEqual(email.status_code, status.HTTP_403_FORBIDDEN, (user.username, email.data))
+            # Someone else's account is still out of reach.
+            other = self.client.patch(f'/api/users/accounts/{self.superadmin.id}/', {'first_name': 'X'}, format='json')
+            self.assertEqual(other.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_no_staff_tier_rewrites_the_requesters_question(self):
         ticket = SupportTicket.objects.create(
             requester=self.student, category=SupportTicket.Category.TECHNICAL, subject='Cannot sign in',

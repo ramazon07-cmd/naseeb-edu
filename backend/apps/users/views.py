@@ -85,7 +85,11 @@ class IsRoleScopedUserAccess(permissions.BasePermission):
     or opened in a support view by super admins only.
     """
 
-    support_actions = {'me', 'change_password', 'temporary_credential', 'support_view'}
+    # Support staff may also manage their own account (password, email, dashboard).
+    support_actions = {
+        'me', 'change_password', 'temporary_credential', 'support_view', 'account_password', 'account_email',
+        'dashboard_layout',
+    }
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:

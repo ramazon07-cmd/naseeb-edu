@@ -24,6 +24,10 @@ SUPPORT_WRITE_ROUTES = frozenset({
     'accounts-temporary-credential',
     'accounts-support-view',
     'accounts-change-password',
+    # The signed-in staff member's own account and activity, never anyone else's.
+    'accounts-account-email',
+    'accounts-dashboard-layout',
+    'screen-time-track',
     # Answering a ticket (status and reply) is the support tier's job; the
     # requester's subject, message and category are read-only for all staff.
     'support-tickets-detail',
