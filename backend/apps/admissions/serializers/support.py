@@ -1,5 +1,6 @@
 """Admissions API serializers — support."""
 from rest_framework import serializers
+from rest_framework.exceptions import ErrorDetail
 from apps.users.models import User
 from ..models import SupportTicket, SupportTicketReply
 
@@ -15,6 +16,11 @@ class SupportTicketReplySerializer(serializers.ModelSerializer):
         if not obj.author:
             return None
         return obj.author.get_full_name() or obj.author.username
+
+
+# What the requester wrote. Staff answer a ticket (reply, status); they never
+# rewrite the question, whatever their tier.
+REQUESTER_FIELDS = ('category', 'subject', 'message')
 
 
 class SupportTicketSerializer(serializers.ModelSerializer):
@@ -40,6 +46,13 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             'requester_viewed_at', 'has_unread_response', 'created_at', 'updated_at',
         )
 
+    def get_fields(self):
+        fields = super().get_fields()
+        if isinstance(self.instance, SupportTicket):
+            for name in REQUESTER_FIELDS:
+                fields[name].read_only = True
+        return fields
+
     def get_requester_name(self, obj):
         return obj.requester.get_full_name() or obj.requester.username
 
@@ -58,4 +71,12 @@ class SupportTicketSerializer(serializers.ModelSerializer):
         )
         if not is_product_admin and {'status', 'admin_response', 'reply'}.intersection(self.initial_data):
             raise serializers.ValidationError('Only an admin can set ticket status or support response.')
+        if isinstance(self.instance, SupportTicket):
+            edited = {
+                name: [ErrorDetail('The requester’s question cannot be changed; reply to it instead.', code='ticket_question_read_only')]
+                for name in REQUESTER_FIELDS
+                if name in self.initial_data and str(self.initial_data[name]) != str(getattr(self.instance, name))
+            }
+            if edited:
+                raise serializers.ValidationError(edited)
         return attrs

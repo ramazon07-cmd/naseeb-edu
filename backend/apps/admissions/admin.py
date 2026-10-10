@@ -233,7 +233,10 @@ class SupportTicketAdmin(ScaledModelAdmin):
     list_display = ('id', 'subject', 'category', 'requester', 'status', 'responded_by', 'updated_at')
     search_fields = ('subject', 'message', 'requester__username', 'requester__email')
     list_filter = ('status', 'category', 'created_at')
-    readonly_fields = ('requester', 'created_at', 'updated_at', 'responded_at', 'requester_viewed_at')
+    # The requester's question stays as they wrote it (serializers.support.REQUESTER_FIELDS).
+    readonly_fields = (
+        'requester', 'category', 'subject', 'message', 'created_at', 'updated_at', 'responded_at', 'requester_viewed_at',
+    )
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)

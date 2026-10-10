@@ -24,7 +24,8 @@ SUPPORT_WRITE_ROUTES = frozenset({
     'accounts-temporary-credential',
     'accounts-support-view',
     'accounts-change-password',
-    # Answering a ticket (status and response) is the support tier's job.
+    # Answering a ticket (status and reply) is the support tier's job; the
+    # requester's subject, message and category are read-only for all staff.
     'support-tickets-detail',
 })
 OPS_WRITE_ROUTES = SUPPORT_WRITE_ROUTES | frozenset({

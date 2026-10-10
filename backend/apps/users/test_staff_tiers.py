@@ -204,6 +204,32 @@ class StaffTierTests(APITestCase):
         self.assertFalse(self.student.is_active)
         self.assertEqual(ProductAuditEvent.objects.filter(action='student.deactivated').count(), 1)
 
+    def test_no_staff_tier_rewrites_the_requesters_question(self):
+        ticket = SupportTicket.objects.create(
+            requester=self.student, category=SupportTicket.Category.TECHNICAL, subject='Cannot sign in',
+            message='The login page keeps reloading.',
+        )
+        for user in (self.support, self.ops, self.superadmin):
+            self.login(user)
+            for field, value in (('subject', 'Edited'), ('message', 'Edited text'), ('category', 'billing')):
+                response = self.client.patch(
+                    f'/api/support-tickets/{ticket.id}/', {field: value, 'reply': 'Answer'}, format='json',
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, (user.username, field))
+                self.assertEqual(response.data[field][0].code, 'ticket_question_read_only')
+        ticket.refresh_from_db()
+        self.assertEqual(
+            (ticket.subject, ticket.message, ticket.category, ticket.replies.count()),
+            ('Cannot sign in', 'The login page keeps reloading.', 'technical', 0),
+        )
+        self.login(self.support)
+        unchanged = self.client.patch(
+            f'/api/support-tickets/{ticket.id}/',
+            {'subject': 'Cannot sign in', 'status': 'in_progress', 'reply': 'Looking into it.'}, format='json',
+        )
+        self.assertEqual(unchanged.status_code, status.HTTP_200_OK, unchanged.data)
+        self.assertEqual(ProductAuditEvent.objects.filter(action='support_ticket.responded').count(), 1)
+
     def test_a_new_admin_grant_starts_at_the_support_tier(self):
         teacher = User.objects.create_user(
             username='tier-teacher', email='tier-teacher@example.com', password='StrongPass123!',
