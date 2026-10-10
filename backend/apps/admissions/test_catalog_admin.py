@@ -184,16 +184,16 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
         changes = ProductAuditEvent.objects.get(action='university.updated').metadata['changes']
-        self.assertEqual(changes['city'], ['Toronto', 'Ottawa'])
-        self.assertEqual(changes['notes'][0], '')
-        self.assertTrue(changes['notes'][1].endswith('…') and len(changes['notes'][1]) == 201)
+        self.assertEqual(changes['city'], {'from': 'Toronto', 'to': 'Ottawa'})
+        self.assertEqual(changes['notes']['from'], '')
+        self.assertTrue(changes['notes']['to'].endswith('…') and len(changes['notes']['to']) == 201)
         self.assertNotIn('qs_data', changes)
         self.assertNotIn('updated_at', changes)
 
     def test_a_changed_json_field_records_only_its_keys(self):
-        from apps.admissions.views.catalog import audit_changes
+        from apps.users.audit import audit_diff
 
-        changes = audit_changes(
+        changes = audit_diff(
             {'qs_data': {'rank': 50, 'overall': 70.1, 'region': 'Americas'}, 'name': 'A'},
             {'qs_data': {'rank': 45, 'overall': 70.1, 'subject': 'CS'}, 'name': 'A'},
         )

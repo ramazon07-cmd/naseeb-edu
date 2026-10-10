@@ -33,6 +33,20 @@ test('metadata reads as labelled lines, with changes and school names', () => {
   assert.deepEqual(auditDetailLines({}), []);
 });
 
+test('old and new change shapes all read as from → to', () => {
+  const rows = (event) => auditDetailLines(event).map(({ label, value }) => [label, value]);
+  assert.deepEqual(rows({ metadata: { changes: { city: ['Toronto', 'Ottawa'], is_active: [true, false] } } }), [
+    ['City', 'Toronto → Ottawa'],
+    ['Active', 'Yes → No'],
+  ]);
+  assert.deepEqual(rows({ metadata: { changes: { city: { from: 'Toronto', to: 'Ottawa' }, qs_data: { changed_keys: ['rank', 'region'] } } } }), [
+    ['City', 'Toronto → Ottawa'],
+    ['Qs data', 'Changed: rank, region'],
+  ]);
+  assert.deepEqual(rows({ action: 'staff.tier_changed', metadata: { from: 'support', to: 'ops' } }), [['Staff tier', 'Support → Operations']]);
+  assert.deepEqual(rows({ action: 'staff.tier_changed', metadata: { changes: { admin_tier: { from: 'support', to: 'ops' } } } }), [['Staff tier', 'Support → Operations']]);
+});
+
 // Every action code the backend writes (literal, conditional or Django-admin
 // mixin) needs a label, so uz/ru readers never see a raw code.
 function backendFiles(dir) {

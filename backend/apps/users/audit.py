@@ -50,7 +50,11 @@ def audit_product_action(*, actor, action, target, metadata=None, school=None):
     return event
 
 
+# Every "what changed" in the audit log has one shape, written by audit_diff:
+#   {field: {'from': old, 'to': new}}       for plain values (text cut at AUDIT_VALUE_MAX)
+#   {field: {'changed_keys': [key, ...]}}   for JSON values: which keys changed, never their content
 AUDIT_VALUE_MAX = 200
+AUDIT_IGNORED_FIELDS = frozenset({'updated_at'})
 
 
 def audit_value(value):
@@ -61,29 +65,51 @@ def audit_value(value):
     if value is None or isinstance(value, (int, float)):
         return value
     text = value.isoformat() if hasattr(value, 'isoformat') else str(value)
-    return text[:AUDIT_VALUE_MAX]
+    return text if len(text) <= AUDIT_VALUE_MAX else f'{text[:AUDIT_VALUE_MAX]}…'
+
+
+def _as_map(value):
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list):
+        return dict(enumerate(value))
+    return {}
+
+
+def audit_diff(before, after):
+    """The audit shape above for every key of ``before`` whose value in ``after`` differs."""
+    changes = {}
+    for name, old in before.items():
+        if name in AUDIT_IGNORED_FIELDS or name not in after:
+            continue
+        new = after[name]
+        if isinstance(old, (dict, list)) or isinstance(new, (dict, list)):
+            if old != new:
+                old_map, new_map = _as_map(old), _as_map(new)
+                keys = set(old_map) | set(new_map)
+                changes[name] = {'changed_keys': sorted(str(key) for key in keys if old_map.get(key) != new_map.get(key))}
+            continue
+        if getattr(old, 'pk', old) != getattr(new, 'pk', new):
+            changes[name] = {'from': audit_value(old), 'to': audit_value(new)}
+    return changes
+
+
+def audit_snapshot(instance, names=None):
+    """``{field name: value}`` of ``instance``'s concrete fields (``names`` only, when given)."""
+    return {
+        field.name: getattr(instance, field.attname)
+        for field in instance._meta.concrete_fields
+        if names is None or field.name in names
+    }
 
 
 def field_changes(instance, data):
-    """``{field: {'from', 'to'}}`` for the concrete fields ``data`` changes on ``instance``.
+    """:func:`audit_diff` of the concrete fields ``data`` sets on ``instance``.
 
     Call it before saving; nested and many-to-many values are left out.
     """
-    from django.core.exceptions import FieldDoesNotExist
-
-    changes = {}
-    for name, value in data.items():
-        try:
-            field = instance._meta.get_field(name)
-        except FieldDoesNotExist:
-            continue
-        if not field.concrete or field.many_to_many:
-            continue
-        before = audit_value(getattr(instance, field.attname))
-        after = audit_value(value)
-        if before != after:
-            changes[name] = {'from': before, 'to': after}
-    return changes
+    before = audit_snapshot(instance, set(data))
+    return audit_diff(before, {name: data[name] for name in before})
 
 
 class ProductAuditAdminMixin:
@@ -108,10 +134,10 @@ class ProductAuditAdminMixin:
         if not change:
             self._audit(request, obj, 'created')
             return
-        changes = {
-            name: {'from': audit_value(form.initial.get(name)), 'to': audit_value(form.cleaned_data.get(name))}
-            for name in form.changed_data
-        }
+        changes = audit_diff(
+            {name: form.initial.get(name) for name in form.changed_data},
+            {name: form.cleaned_data.get(name) for name in form.changed_data},
+        )
         self._audit(request, obj, self.audit_update_verb, changes=changes)
 
     def delete_model(self, request, obj):

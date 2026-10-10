@@ -1,10 +1,10 @@
 // An audit event's metadata as readable "label: value" lines for the audit log.
-import { t } from '../i18n.js';
+import { t, tx } from '../i18n.js';
 import { label } from './labels.js';
 
 const SCHOOL_KEYS = ['school', 'from_school', 'to_school'];
 // Values that are stable codes with a LABELS entry (statuses, tiers, roles, sanctions).
-const CODED_KEYS = ['status', 'staff_tier', 'role', 'sanction', 'category', 'access', 'section', 'workspace_type'];
+const CODED_KEYS = ['status', 'staff_tier', 'admin_tier', 'role', 'sanction', 'category', 'access', 'section', 'workspace_type'];
 const KEY_LABELS = {
   reason: 'Reason', status: 'Status', staff_tier: 'Staff tier', role: 'Role', sanction: 'Sanction', category: 'Category',
   school: 'School', from_school: 'From school', to_school: 'To school', source: 'Source', channel: 'Channel',
@@ -16,6 +16,10 @@ const KEY_LABELS = {
 
 const keyLabel = (key) => (KEY_LABELS[key] ? t(KEY_LABELS[key]) : String(key).replace(/_/g, ' ').replace(/^./, (first) => first.toUpperCase()));
 const isChange = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value) && 'from' in value && 'to' in value;
+// Rows written before the shapes were unified: catalogue edits stored [old, new],
+// and staff.tier_changed stored {from, to} as the whole metadata.
+const isLegacyPair = (value) => Array.isArray(value) && value.length === 2;
+const LEGACY_TOP_LEVEL_FIELD = { 'staff.tier_changed': 'admin_tier' };
 
 function valueText(key, value, names) {
   if (value === null || value === undefined || value === '') return '—';
@@ -25,14 +29,28 @@ function valueText(key, value, names) {
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 
+function changeText(field, change, names) {
+  if (isChange(change)) return `${valueText(field, change.from, names)} → ${valueText(field, change.to, names)}`;
+  if (isLegacyPair(change)) return `${valueText(field, change[0], names)} → ${valueText(field, change[1], names)}`;
+  if (change && typeof change === 'object' && Array.isArray(change.changed_keys)) {
+    return tx`Changed: ${change.changed_keys.join(', ') || '—'}`;
+  }
+  return valueText(field, change, names);
+}
+
 export function auditDetailLines(event) {
-  const metadata = event?.metadata && typeof event.metadata === 'object' && !Array.isArray(event.metadata) ? event.metadata : {};
+  let metadata = event?.metadata && typeof event.metadata === 'object' && !Array.isArray(event.metadata) ? event.metadata : {};
+  const legacyField = LEGACY_TOP_LEVEL_FIELD[event?.action];
+  if (legacyField && isChange(metadata) && !metadata.changes) {
+    const { from, to, ...rest } = metadata;
+    metadata = { ...rest, changes: { [legacyField]: { from, to } } };
+  }
   const names = event?.school_names || {};
   const lines = [];
   for (const [key, value] of Object.entries(metadata)) {
     if (key === 'changes' && value && typeof value === 'object') {
       for (const [field, change] of Object.entries(value)) {
-        lines.push({ key: `changes.${field}`, label: keyLabel(field), value: isChange(change) ? `${valueText(field, change.from, names)} → ${valueText(field, change.to, names)}` : valueText(field, change, names) });
+        lines.push({ key: `changes.${field}`, label: keyLabel(field), value: changeText(field, change, names) });
       }
     } else if (isChange(value)) {
       lines.push({ key, label: keyLabel(key), value: `${valueText(key, value.from, names)} → ${valueText(key, value.to, names)}` });

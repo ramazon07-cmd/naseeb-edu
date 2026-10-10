@@ -226,6 +226,32 @@ class ProductAuditTests(APITestCase):
         self.assertEqual(row.metadata['changes'], {'max_counselors': {'from': 3, 'to': 5}})
         self.assertEqual((row.actor, row.metadata['source']), (root, 'django_admin'))
 
+    def test_a_json_field_change_has_the_same_shape_from_the_api_and_django_admin(self):
+        plan = Plan.objects.get(code=SCHOOL_STANDARD)
+        features = dict(plan.features)
+        superadmin = User.objects.create_user(
+            username='audit-super', email='audit-super@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPERADMIN,
+        )
+        self.client.force_authenticate(superadmin)
+        toggled = {**features, 'parent_portal': not features.get('parent_portal')}
+        response = self.client.patch(f'/api/users/plans/{plan.id}/', {'features': toggled}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(self.events('plan.updated').get().metadata['changes'], {'features': {'changed_keys': ['parent_portal']}})
+
+        root = User.objects.create_superuser('audit-root', 'audit-root@example.com', 'StrongPass123!')
+        self.client.force_authenticate(None)
+        self.client.force_login(root)
+        plan.refresh_from_db()
+        response = self.client.post(f'/admin/users/plan/{plan.pk}/change/', {
+            'code': plan.code, 'name': plan.name, 'description': plan.description, 'workspace_type': plan.workspace_type,
+            'max_counselors': plan.max_counselors or '', 'max_students': plan.max_students or '', 'max_teachers': plan.max_teachers or '',
+            'features': json.dumps(features), 'initial-features': json.dumps(plan.features), 'is_active': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        admin_row = self.events('plan.updated').order_by('-id').first()
+        self.assertEqual(admin_row.metadata['changes'], {'features': {'changed_keys': ['parent_portal']}})
+
     def test_school_create_and_update_are_audited_with_the_school(self):
         self.client.force_authenticate(self.admin)
         created = self.client.post('/api/schools/', {'name': 'Fresh', 'code': 'fresh'}, format='json')

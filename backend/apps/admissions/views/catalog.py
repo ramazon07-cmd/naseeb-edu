@@ -6,7 +6,7 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
-from apps.users.audit import field_changes
+from apps.users.audit import audit_diff, audit_snapshot, field_changes
 from apps.users.models import User
 from core.exceptions import CodedError
 from ..models import (
@@ -272,39 +272,9 @@ class OpportunityProgramViewSet(CachedCatalogListMixin, viewsets.ReadOnlyModelVi
 # The public catalogue endpoints above stay read-only and cached; these list
 # every row (hidden ones too) a page at a time for the admin portal. Every
 # product admin reads, ops and superadmins write (OPS_WRITE_ROUTES), and every
-# write is audited. A save bumps the catalogue cache version (catalog_cache).
-
-# A changed text longer than this is recorded cut short; a changed JSON field
-# (qs_data, source_metadata) records only which of its keys changed.
-AUDIT_TEXT_LIMIT = 200
-
-
-def _audit_value(value):
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-    text = str(value)
-    return text if len(text) <= AUDIT_TEXT_LIMIT else f'{text[:AUDIT_TEXT_LIMIT]}…'
-
-
-def _field_values(instance):
-    return {field.attname: getattr(instance, field.attname) for field in instance._meta.concrete_fields}
-
-
-def audit_changes(before, after):
-    """{field: [before, after]} for every changed field, kept small for the audit log."""
-    changes = {}
-    for name, old in before.items():
-        new = after.get(name)
-        if name == 'updated_at' or old == new:
-            continue
-        if isinstance(old, (dict, list)) or isinstance(new, (dict, list)):
-            old_map = old if isinstance(old, dict) else {}
-            new_map = new if isinstance(new, dict) else {}
-            changes[name] = {'changed_keys': sorted(str(key) for key in set(old_map) | set(new_map) if old_map.get(key) != new_map.get(key))}
-        else:
-            changes[name] = [_audit_value(old), _audit_value(new)]
-    return changes
-
+# write is audited (apps.users.audit.audit_diff: a changed JSON field such as
+# qs_data records only which keys changed). A save bumps the catalogue cache
+# version (catalog_cache).
 
 class CatalogAdminMixin(ListQueryMixin):
     permission_classes = [SupportReadOpsWrite]
@@ -317,11 +287,11 @@ class CatalogAdminMixin(ListQueryMixin):
 
     def perform_update(self, serializer):
         with transaction.atomic():
-            before = _field_values(serializer.instance)
+            before = audit_snapshot(serializer.instance)
             instance = serializer.save()
             audit_product_action(
                 actor=self.request.user, action=f'{self.audit_name}.updated', target=instance,
-                metadata={'changes': audit_changes(before, _field_values(instance))},
+                metadata={'changes': audit_diff(before, audit_snapshot(instance))},
             )
 
     def perform_destroy(self, instance):

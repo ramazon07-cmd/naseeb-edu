@@ -214,7 +214,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                     if account.admin_tier != previous_tier:
                         audit_product_action(
                             actor=self.request.user, action='staff.tier_changed', target=account,
-                            metadata={'from': previous_tier, 'to': account.admin_tier},
+                            metadata={'changes': {'admin_tier': {'from': previous_tier, 'to': account.admin_tier}}},
                         )
         except DjangoValidationError as exc:
             raise ValidationError(exc.message_dict) from exc
