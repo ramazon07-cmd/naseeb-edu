@@ -242,7 +242,8 @@ class StaffTierTests(APITestCase):
         self.assertEqual((teacher.role, teacher.admin_tier), (User.Role.ADMIN, User.AdminTier.SUPPORT))
         change = ProductAuditEvent.objects.get(action='staff.tier_changed')
         self.assertEqual(change.metadata, {'changes': {'admin_tier': {'from': '', 'to': 'support'}}})
-        self.assertFalse(ProductAuditEvent.objects.filter(action='account.updated').exists())
+        updated = ProductAuditEvent.objects.get(action='account.updated')
+        self.assertEqual(updated.metadata['changes'], {'role': {'from': 'teacher', 'to': 'admin'}})
 
     def test_a_tier_change_is_one_staff_tier_changed_row(self):
         self.client.force_authenticate(self.superadmin)

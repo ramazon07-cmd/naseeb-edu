@@ -47,6 +47,14 @@ test('old and new change shapes all read as from → to', () => {
   assert.deepEqual(rows({ action: 'staff.tier_changed', metadata: { changes: { admin_tier: { from: 'support', to: 'ops' } } } }), [['Staff tier', 'Support → Operations']]);
 });
 
+test('account.updated lists the changed fields by name', () => {
+  const lines = auditDetailLines({ metadata: { fields: ['email', 'first_name', 'avatar'], changes: { email: { from: 'a@x.uz', to: 'b@x.uz' } } } });
+  assert.deepEqual(lines.map(({ label, value }) => [label, value]), [
+    ['Changed fields', 'Email, First name, Avatar'],
+    ['Email', 'a@x.uz → b@x.uz'],
+  ]);
+});
+
 // Every action code the backend writes (literal, conditional or Django-admin
 // mixin) needs a label, so uz/ru readers never see a raw code.
 function backendFiles(dir) {

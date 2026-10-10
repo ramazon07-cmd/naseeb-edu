@@ -11,7 +11,7 @@ from apps.users.throttles import ScopedRateThrottle
 from apps.admissions.listing import ListQueryMixin
 from . import entitlements
 from .admin_permissions import IsSupportStaff, SupportReadOpsWrite, SupportReadSuperadminWrite, has_tier, staff_tier_denied
-from .audit import audit_staff_read, field_changes, recorded_actions
+from .audit import ACCOUNT_OWN_ROW_FIELDS, account_update_metadata, audit_staff_read, field_changes, recorded_actions
 from .models import PLAN_LIMITS, CredentialAuditEvent, Plan, ProductAuditEvent, User, WorkspaceSubscription
 from .auth_views import token_pair_for_user
 from .credentials import change_own_password, complete_password_change, issue_temporary_credential
@@ -182,6 +182,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         # A student's move and activation go through the tenancy services,
         # which also write their audit events; other accounts are audited here.
         activation = serializer.validated_data.pop('is_active', None) if role == User.Role.STUDENT else None
+        other_changes = {
+            name: change for name, change in field_changes(serializer.instance, serializer.validated_data).items()
+            if name not in ACCOUNT_OWN_ROW_FIELDS
+        }
         try:
             with transaction.atomic(), recorded_actions() as audited:
                 account = serializer.save()
@@ -218,12 +222,14 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                         )
         except DjangoValidationError as exc:
             raise ValidationError(exc.message_dict) from exc
-        # One audit row per change: a move or (de)activation already has its own.
-        if self.request.user.is_product_admin and not TENANCY_AUDIT_ACTIONS.intersection(audited):
+        # A move, (de)activation or tier change has its own row; every other changed
+        # field (email, username, names...) is listed on one update row next to it.
+        if self.request.user.is_product_admin and (other_changes or not TENANCY_AUDIT_ACTIONS.intersection(audited)):
             audit_product_action(
                 actor=self.request.user,
                 action='counselor.updated' if account.role == User.Role.COUNSELOR else 'account.updated',
                 target=account,
+                metadata=account_update_metadata(other_changes),
             )
 
     def perform_destroy(self, instance):

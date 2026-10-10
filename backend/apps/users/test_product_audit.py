@@ -116,7 +116,7 @@ class ProductAuditTests(APITestCase):
         ProductAuditEvent.objects.all().delete()
         response = self.client.patch(f'/api/users/accounts/{account.id}/', payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        return list(ProductAuditEvent.objects.values_list('action', flat=True))
+        return list(ProductAuditEvent.objects.order_by('id').values_list('action', flat=True))
 
     def test_each_account_change_by_an_admin_is_audited_once(self):
         teacher = User.objects.create_user(
@@ -132,7 +132,7 @@ class ProductAuditTests(APITestCase):
             (student, {'first_name': 'Renamed'}, ['account.updated']),
             # Nothing changes school or activation: a plain update.
             (student, {'school': self.other_school.id, 'is_active': True}, ['account.updated']),
-            (student, {'school': self.school.id, 'first_name': 'Moved'}, ['student.moved']),
+            (student, {'school': self.school.id, 'first_name': 'Moved'}, ['student.moved', 'account.updated']),
             (teacher, {'school': self.other_school.id}, ['account.moved']),
             (teacher, {'is_active': False}, ['account.deactivated']),
             (teacher, {'last_name': 'Renamed'}, ['account.updated']),
@@ -141,6 +141,37 @@ class ProductAuditTests(APITestCase):
         for account, payload, expected in cases:
             with self.subTest(account=account.username, payload=payload):
                 self.assertEqual(self.account_patch(account, payload), expected)
+
+    def test_a_tier_change_or_reactivation_with_other_edits_writes_every_row(self):
+        staff_account = User.objects.create_user(
+            username='audit-ops', email='audit-ops@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPPORT, is_active=False,
+        )
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(f'/api/users/accounts/{staff_account.id}/', {
+            'admin_tier': 'ops', 'is_active': True, 'email': 'ops-new@example.com', 'username': 'audit-ops-2',
+            'first_name': 'Olga',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        rows = {row.action: row.metadata for row in ProductAuditEvent.objects.filter(target_id=str(staff_account.id))}
+        self.assertEqual(set(rows), {'staff.tier_changed', 'account.reactivated', 'account.updated'})
+        self.assertEqual(rows['staff.tier_changed'], {'changes': {'admin_tier': {'from': 'support', 'to': 'ops'}}})
+        self.assertEqual(rows['account.updated'], {
+            'fields': ['email', 'first_name', 'username'],
+            'changes': {
+                'email': {'from': 'audit-ops@example.com', 'to': 'ops-new@example.com'},
+                'first_name': {'from': '', 'to': 'Olga'},
+                'username': {'from': 'audit-ops', 'to': 'audit-ops-2'},
+            },
+        })
+
+    def test_an_unchanged_field_is_not_listed(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            f'/api/users/accounts/{self.counselor.id}/', {'email': self.counselor.email, 'last_name': 'New'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(self.events('counselor.updated').get().metadata['fields'], ['last_name'])
 
     def test_a_repeated_parent_invitation_is_audited_once(self):
         self.client.force_authenticate(self.counselor)
@@ -153,13 +184,17 @@ class ProductAuditTests(APITestCase):
         invite = self.events('parent.invited').get()
         self.assertTrue(invite.metadata['created_account'])
 
-    def test_reactivating_a_staff_account_is_one_reactivation_row(self):
+    def test_reactivating_a_staff_account_is_one_reactivation_row_plus_the_other_edits(self):
         self.client.force_authenticate(self.admin)
         User.objects.filter(pk=self.counselor.pk).update(is_active=False)
         self.counselor.refresh_from_db()
+        self.assertEqual(self.account_patch(self.counselor, {'is_active': True}), ['account.reactivated'])
+        User.objects.filter(pk=self.counselor.pk).update(is_active=False)
         self.assertEqual(
-            self.account_patch(self.counselor, {'is_active': True, 'phone': '+998901112233'}), ['account.reactivated'],
+            self.account_patch(self.counselor, {'is_active': True, 'phone': '+998901112233'}),
+            ['account.reactivated', 'counselor.updated'],
         )
+        self.assertEqual(self.events('counselor.updated').get().metadata['fields'], ['phone'])
 
     def test_support_answers_and_status_changes_are_audited_without_the_text(self):
         ticket = SupportTicket.objects.create(

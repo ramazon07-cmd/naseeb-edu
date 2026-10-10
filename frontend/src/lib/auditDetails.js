@@ -11,7 +11,9 @@ const KEY_LABELS = {
   reports_closed: 'Reports closed', name: 'Name', code: 'Code', contact_email: 'Contact email', contact_phone: 'Contact phone',
   is_active: 'Active', plan: 'Plan', period_start: 'Period start', period_end: 'Period end', description: 'Description',
   max_counselors: 'Counselor limit', max_students: 'Student limit', max_teachers: 'Teacher limit', features: 'Features',
-  workspace_type: 'Workspace type', admin_tier: 'Staff tier', email: 'Email', username: 'Username',
+  workspace_type: 'Workspace type', admin_tier: 'Staff tier', email: 'Email', username: 'Username', fields: 'Changed fields',
+  first_name: 'First name', last_name: 'Last name', phone: 'Phone', position: 'Position', is_superuser: 'Super admin',
+  is_staff: 'Django admin access',
 };
 
 const keyLabel = (key) => (KEY_LABELS[key] ? t(KEY_LABELS[key]) : String(key).replace(/_/g, ' ').replace(/^./, (first) => first.toUpperCase()));
@@ -26,6 +28,7 @@ function valueText(key, value, names) {
   if (typeof value === 'boolean') return value ? t('Yes') : t('No');
   if (SCHOOL_KEYS.includes(key)) return names[String(value)] || `#${value}`;
   if (CODED_KEYS.includes(key)) return label(String(value));
+  if (key === 'fields' && Array.isArray(value)) return value.map(keyLabel).join(', ') || '—';
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 

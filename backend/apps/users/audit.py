@@ -112,6 +112,21 @@ def field_changes(instance, data):
     return audit_diff(before, {name: data[name] for name in before})
 
 
+# Account fields audited by name only: their values never go into the log.
+ACCOUNT_VALUELESS_FIELDS = frozenset({'password', 'avatar'})
+# Account changes with an audit action of their own (account.moved,
+# account.deactivated / reactivated, staff.tier_changed).
+ACCOUNT_OWN_ROW_FIELDS = frozenset({'school', 'is_active', 'admin_tier'})
+
+
+def account_update_metadata(changes):
+    """account.updated metadata: every changed field by name, values where safe to keep."""
+    return {
+        'fields': sorted(changes),
+        'changes': {name: change for name, change in changes.items() if name not in ACCOUNT_VALUELESS_FIELDS},
+    }
+
+
 class ProductAuditAdminMixin:
     """Django-admin edits of product data write the same audit rows as the API.
 
