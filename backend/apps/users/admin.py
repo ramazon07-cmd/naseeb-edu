@@ -195,5 +195,5 @@ class WorkspaceSubscriptionAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
         super(ProductAuditAdminMixin, self).save_model(request, obj, form, change)
         audit_subscription_change(actor=request.user, before=before, subscription=obj, source='django_admin')
 
-    def _audit(self, request, obj, verb, **metadata):
-        super()._audit(request, obj, verb, plan=obj.plan.code if obj.plan_id else None, **metadata)
+    def audit_metadata(self, obj):
+        return {'plan': obj.plan.code if obj.plan_id else None}

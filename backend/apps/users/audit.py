@@ -2,6 +2,8 @@
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from django.db import transaction
+
 from .models import ProductAuditEvent
 
 _recording = ContextVar('audit_recording', default=None)
@@ -155,8 +157,9 @@ class ProductAuditAdminMixin:
     """Django-admin edits of product data write the same audit rows as the API.
 
     ``audit_prefix`` names the record (``'plan'`` -> ``plan.created``,
-    ``plan.updated``, ``plan.deleted``). The admin wraps each save and delete
-    in a transaction, so the row and the change commit together.
+    ``plan.updated``, ``plan.deleted``). The admin wraps each save in a
+    transaction, and the deletes below take their own, so the row and the
+    change commit together.
     """
 
     audit_prefix = ''
@@ -165,11 +168,17 @@ class ProductAuditAdminMixin:
     def audit_target(self, obj):
         return obj
 
+    def audit_metadata(self, obj):
+        return {}
+
+    def _audit_fields(self, request, obj, verb, **metadata):
+        return {
+            'actor': request.user, 'action': f'{self.audit_prefix}.{verb}', 'target': self.audit_target(obj),
+            'metadata': {'source': 'django_admin', **self.audit_metadata(obj), **metadata},
+        }
+
     def _audit(self, request, obj, verb, **metadata):
-        audit_product_action(
-            actor=request.user, action=f'{self.audit_prefix}.{verb}', target=self.audit_target(obj),
-            metadata={'source': 'django_admin', **metadata},
-        )
+        audit_product_action(**self._audit_fields(request, obj, verb, **metadata))
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -182,14 +191,19 @@ class ProductAuditAdminMixin:
         )
         self._audit(request, obj, self.audit_update_verb, changes=changes)
 
+    # The rows are built while the records still have their ids and written once
+    # the delete has succeeded, in the same transaction: both happen or neither.
     def delete_model(self, request, obj):
-        self._audit(request, obj, 'deleted')
-        super().delete_model(request, obj)
+        with transaction.atomic():
+            event = build_event(**self._audit_fields(request, obj, 'deleted'))
+            super().delete_model(request, obj)
+            event.save(force_insert=True)
 
     def delete_queryset(self, request, queryset):
-        for obj in queryset:
-            self._audit(request, obj, 'deleted')
-        super().delete_queryset(request, queryset)
+        with transaction.atomic():
+            events = [build_event(**self._audit_fields(request, obj, 'deleted')) for obj in queryset]
+            super().delete_queryset(request, queryset)
+            audit_many(events)
 
 
 def audit_many(events):

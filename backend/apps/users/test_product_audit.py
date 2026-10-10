@@ -331,6 +331,30 @@ class ProductAuditTests(APITestCase):
         self.assertEqual(self.admin_user_change(staff_account).status_code, 302)
         self.assertFalse(ProductAuditEvent.objects.exists())
 
+    def test_a_django_admin_bulk_delete_and_its_audit_rows_commit_together(self):
+        from unittest import mock
+
+        from django.contrib.admin.sites import site
+        from django.db import DatabaseError
+        from django.test import RequestFactory
+
+        root = User.objects.create_superuser('audit-root', 'audit-root@example.com', 'StrongPass123!')
+        request = RequestFactory().post('/admin/users/plan/')
+        request.user = root
+        plans = [Plan.objects.create(code=f'bulk-{n}', name=f'Bulk {n}') for n in range(2)]
+        plan_admin = site._registry[Plan]
+        queryset = Plan.objects.filter(code__startswith='bulk-')
+        with mock.patch('apps.users.audit.audit_many', side_effect=DatabaseError('audit down')), self.assertRaises(DatabaseError):
+            plan_admin.delete_queryset(request, queryset)
+        self.assertEqual(queryset.count(), 2)
+        self.assertFalse(self.events('plan.deleted').exists())
+
+        plan_admin.delete_queryset(request, queryset)
+        self.assertFalse(queryset.exists())
+        self.assertEqual(
+            set(self.events('plan.deleted').values_list('target_id', flat=True)), {str(plan.pk) for plan in plans},
+        )
+
     def test_school_create_and_update_are_audited_with_the_school(self):
         self.client.force_authenticate(self.admin)
         created = self.client.post('/api/schools/', {'name': 'Fresh', 'code': 'fresh'}, format='json')
