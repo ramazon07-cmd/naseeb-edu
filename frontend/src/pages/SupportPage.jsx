@@ -60,7 +60,7 @@ export function SupportResponseModal({ ticket, onClose, onSaved, notify }) {
   async function submit(event) {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    const reply = String(values.get('admin_response') || '').trim();
+    const reply = String(values.get('reply') || '').trim();
     const status = values.get('status');
     // A new answer is added to the history; changing only the status is fine too.
     if (!reply && status === ticket.status) {
@@ -69,7 +69,7 @@ export function SupportResponseModal({ ticket, onClose, onSaved, notify }) {
     }
     setSaving(true);
     try {
-      await api.update('support-tickets', ticket.id, reply ? { status, admin_response: reply } : { status });
+      await api.update('support-tickets', ticket.id, reply ? { status, reply } : { status });
       notify(t("Support response saved."));
       onSaved();
     } catch (error) {
@@ -82,7 +82,7 @@ export function SupportResponseModal({ ticket, onClose, onSaved, notify }) {
     <div className="support-request-preview form-wide"><span><Badge>{ticket.category}</Badge><Badge>{ticket.status}</Badge></span><h3>{ticket.subject}</h3><p>{ticket.message}</p><small>{joinParts(ticket.requester_name, ticket.requester_role && label(ticket.requester_role), dateTimeText(ticket.created_at))}</small></div>
     {replies.map((item) => <div className="support-request-preview form-wide" key={item.id}><p>{item.body}</p><small>{joinParts(item.author_name || t("Naseeb Edu Support"), dateTimeText(item.created_at))}</small></div>)}
     <Field label={t("Status")}><select name="status" defaultValue={ticket.status}>{SUPPORT_STATUSES.map((status) => <option key={status} value={status}>{label(status)}</option>)}</select></Field>
-    <Field label={t("New reply")}><textarea name="admin_response" maxLength="5000" rows="7" placeholder={t("Write a clear resolution or next step.")} /></Field>
+    <Field label={t("New reply")}><textarea name="reply" maxLength="5000" rows="7" placeholder={t("Write a clear resolution or next step.")} /></Field>
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : <><Send size={16} /> {t("Save response")}</>}</button></div>
   </form></Modal>;
 }

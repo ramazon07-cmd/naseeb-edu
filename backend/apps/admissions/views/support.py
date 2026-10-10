@@ -77,17 +77,15 @@ class SupportTicketViewSet(
 
     @transaction.atomic
     def perform_update(self, serializer):
+        # `reply` is the reply box: every submit is a new answer, even one that
+        # repeats the last. An edited admin_response (older clients) counts too.
+        reply = serializer.validated_data.pop('reply', '')
         previous_response = serializer.instance.admin_response
         ticket = serializer.save()
-        if ticket.admin_response and ticket.admin_response != previous_response:
-            # A new answer joins the history; admin_response only mirrors the latest.
-            reply = ticket.replies.create(author=self.request.user, body=ticket.admin_response)
-            ticket.responded_by = self.request.user
-            ticket.responded_at = reply.created_at
-            ticket.requester_viewed_at = None
-            ticket.save(update_fields=[
-                'responded_by', 'responded_at', 'requester_viewed_at', 'updated_at',
-            ])
+        if not reply and ticket.admin_response and ticket.admin_response != previous_response:
+            reply = ticket.admin_response
+        if reply:
+            ticket.add_reply(self.request.user, reply)
 
     @action(detail=True, methods=['post'], url_path='mark-viewed')
     def mark_viewed(self, request, pk=None):

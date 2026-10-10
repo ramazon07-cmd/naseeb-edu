@@ -1329,6 +1329,17 @@ class SupportTicket(TimeStampedModel):
     def __str__(self):
         return f'#{self.pk} {self.subject}'
 
+    def add_reply(self, author, body):
+        """Keep ``body`` as a new answer in the history. admin_response mirrors the
+        latest one, and the requester sees it as unread."""
+        reply = self.replies.create(author=author, body=body)
+        self.admin_response = body
+        self.responded_by = author
+        self.responded_at = reply.created_at
+        self.requester_viewed_at = None
+        self.save(update_fields=['admin_response', 'responded_by', 'responded_at', 'requester_viewed_at', 'updated_at'])
+        return reply
+
 
 class SupportTicketReply(TimeStampedModel):
     """One support answer on a ticket. A new answer is added, never written over

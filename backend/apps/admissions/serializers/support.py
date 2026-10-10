@@ -24,6 +24,8 @@ class SupportTicketSerializer(serializers.ModelSerializer):
     has_unread_response = serializers.BooleanField(read_only=True)
     # Every support answer in order, oldest first.
     replies = SupportTicketReplySerializer(many=True, read_only=True)
+    # The admin's reply box: each submit adds a reply (SupportTicketViewSet.perform_update).
+    reply = serializers.CharField(write_only=True, required=False, max_length=5000)
 
     class Meta:
         model = SupportTicket
@@ -31,7 +33,7 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             'id', 'requester', 'requester_name', 'requester_role', 'category',
             'subject', 'message', 'status', 'admin_response', 'responded_by',
             'responded_by_name', 'responded_at', 'requester_viewed_at',
-            'has_unread_response', 'replies', 'created_at', 'updated_at',
+            'has_unread_response', 'replies', 'reply', 'created_at', 'updated_at',
         )
         read_only_fields = (
             'requester', 'responded_by', 'responded_by_name', 'responded_at',
@@ -54,6 +56,6 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             and user.is_authenticated
             and (user.is_superuser or user.role == User.Role.ADMIN)
         )
-        if not is_product_admin and {'status', 'admin_response'}.intersection(self.initial_data):
+        if not is_product_admin and {'status', 'admin_response', 'reply'}.intersection(self.initial_data):
             raise serializers.ValidationError('Only an admin can set ticket status or support response.')
         return attrs
