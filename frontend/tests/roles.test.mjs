@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canDownloadCv, isCounselor, isPlatformAdmin, isTaskManager, workspaceRole } from '../src/lib/roles.js';
+import { canDownloadCv, canManageWorkspaces, hasStaffTier, isCounselor, isPlatformAdmin, isSuperAdmin, isTaskManager, workspaceRole } from '../src/lib/roles.js';
 import { resourcesFor } from '../src/lib/workspaceResources.js';
 
 test('admins and superusers of any role are platform admins', () => {
@@ -29,4 +29,19 @@ test('the CV button shows for every staff role the CV endpoint lets in', () => {
   for (const role of ['counselor', 'admin', 'teacher', 'organization']) assert.equal(canDownloadCv({ role }), true, role);
   for (const role of ['student', 'parent', undefined]) assert.equal(canDownloadCv(role ? { role } : null), false, String(role));
   assert.equal(canDownloadCv({ role: 'student', is_superuser: true }), isPlatformAdmin({ role: 'student', is_superuser: true }));
+});
+
+test('staff tiers rank support < ops < superadmin, and only staff have one', () => {
+  const support = { role: 'admin', staff_tier: 'support' };
+  const ops = { role: 'admin', staff_tier: 'ops' };
+  const superadmin = { role: 'admin', staff_tier: 'superadmin' };
+  assert.deepEqual([support, ops, superadmin].map((user) => hasStaffTier(user, 'support')), [true, true, true]);
+  assert.deepEqual([support, ops, superadmin].map(canManageWorkspaces), [false, true, true]);
+  assert.deepEqual([support, ops, superadmin].map(isSuperAdmin), [false, false, true]);
+  // Accounts from before tiers existed, and superusers, keep full access.
+  assert.equal(isSuperAdmin({ role: 'admin' }), true);
+  assert.equal(isSuperAdmin({ role: 'student', is_superuser: true, staff_tier: 'superadmin' }), true);
+  for (const role of ['counselor', 'teacher', 'organization', 'student', 'parent']) {
+    assert.equal(hasStaffTier({ role, staff_tier: 'superadmin' }, 'support'), false, role);
+  }
 });

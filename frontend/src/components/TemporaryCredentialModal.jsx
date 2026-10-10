@@ -21,16 +21,6 @@ export function TemporaryCredentialModal({ account, onClose, notify }) {
     }
   }
 
-  async function copyPassword() {
-    if (!result?.temporary_password) return;
-    try {
-      await navigator.clipboard.writeText(result.temporary_password);
-      notify(t('Copied'));
-    } catch {
-      notify(t('Copy password'), 'error');
-    }
-  }
-
   return <Modal title={`${t('Reset login')} · ${fullName(account)}`} onClose={onClose}>
     <div className="credential-modal">
       <div className="credential-account"><Fingerprint size={21} /><div><b>{account.username}</b><small>{account.email || label(account.role)}</small></div></div>
@@ -38,11 +28,27 @@ export function TemporaryCredentialModal({ account, onClose, notify }) {
         <p>{t('This revokes existing sessions and any previous temporary password.')}</p>
         <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button type="button" className="button primary" onClick={issue} disabled={saving} aria-busy={saving}><Fingerprint size={16} />{t('Generate temporary password')}</button></div>
       </> : <>
-        <p className="credential-delivery"><ShieldAlert size={17} />{t('The password is shown once. Send it through an approved secure channel.')}</p>
-        <div className="credential-secret"><span>{t('Generated password')}</span><code>{result.temporary_password}</code><button type="button" className="button quiet" onClick={copyPassword}><ClipboardCheck size={16} />{t('Copy password')}</button></div>
-        <small>{t('expires')}: {dateTimeText(result.credential?.expires_at)}</small>
+        <OneTimePassword password={result.temporary_password} expiresAt={result.credential?.expires_at} notify={notify} />
         <div className="form-actions"><button type="button" className="button primary" onClick={onClose}>{t('Close')}</button></div>
       </>}
     </div>
   </Modal>;
+}
+
+// A server-generated password, shown once with a copy button.
+export function OneTimePassword({ password, expiresAt, notify }) {
+  async function copyPassword() {
+    if (!password) return;
+    try {
+      await navigator.clipboard.writeText(password);
+      notify(t('Copied'));
+    } catch {
+      notify(t('Copy password'), 'error');
+    }
+  }
+  return <>
+    <p className="credential-delivery"><ShieldAlert size={17} />{t('The password is shown once. Send it through an approved secure channel.')}</p>
+    <div className="credential-secret"><span>{t('Generated password')}</span><code>{password}</code><button type="button" className="button quiet" onClick={copyPassword}><ClipboardCheck size={16} />{t('Copy password')}</button></div>
+    {expiresAt && <small>{t('expires')}: {dateTimeText(expiresAt)}</small>}
+  </>;
 }

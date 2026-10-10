@@ -18,3 +18,4 @@ class Command(ScheduledJobCommand):
         cutoff = timezone.localdate() - timedelta(days=max(1, days))
         deleted = delete_in_batches(ScreenTimeDaily.objects.filter(date__lt=cutoff), batch_size)
         self.stdout.write(self.style.SUCCESS(f'Deleted {deleted} screen-time rows older than {cutoff}.'))
+        return deleted

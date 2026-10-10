@@ -24,6 +24,13 @@ SUPPORT_WRITE_ROUTES = frozenset({
     'accounts-temporary-credential',
     'accounts-support-view',
     'accounts-change-password',
+    # The signed-in staff member's own account and activity, never anyone else's.
+    'accounts-account-email',
+    'accounts-dashboard-layout',
+    'screen-time-track',
+    # Answering a ticket (status and reply) is the support tier's job; the
+    # requester's subject, message and category are read-only for all staff.
+    'support-tickets-detail',
 })
 OPS_WRITE_ROUTES = SUPPORT_WRITE_ROUTES | frozenset({
     'schools-list',
@@ -37,6 +44,8 @@ OPS_WRITE_ROUTES = SUPPORT_WRITE_ROUTES | frozenset({
     'accounts-deactivate',
     'students-quick-create',
     'students-assign-counselor',
+    # Edit and deactivate (DELETE) a student from Student 360.
+    'students-detail',
     'workspace-subscriptions-detail',
     # The admin catalogue editor (apps/admissions/views/catalog.py).
     'catalog-universities-list',
@@ -60,6 +69,13 @@ def has_tier(user, tier):
     return TIER_RANK.get(user.staff_tier, 0) >= TIER_RANK[tier]
 
 
+def staff_tier_denied(request):
+    return PermissionDenied({
+        'detail': localized_message('staff_tier_forbidden', request),
+        'code': 'staff_tier_forbidden',
+    })
+
+
 def enforce_staff_write_scope(request, user):
     """Reject a write outside the routes the caller's staff tier may use."""
     if not user.is_product_admin:
@@ -70,10 +86,7 @@ def enforce_staff_write_scope(request, user):
     match = getattr(request, 'resolver_match', None)
     if match is not None and match.url_name in allowed:
         return
-    raise PermissionDenied({
-        'detail': localized_message('staff_tier_forbidden', request),
-        'code': 'staff_tier_forbidden',
-    })
+    raise staff_tier_denied(request)
 
 
 class StaffTierPermission(permissions.BasePermission):
@@ -102,3 +115,12 @@ class SupportReadOpsWrite(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return has_tier(request.user, User.AdminTier.SUPPORT)
         return has_tier(request.user, User.AdminTier.OPS)
+
+
+class SupportReadSuperadminWrite(permissions.BasePermission):
+    """Support staff read; only super admins write (plans and other platform settings)."""
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return has_tier(request.user, User.AdminTier.SUPPORT)
+        return has_tier(request.user, User.AdminTier.SUPERADMIN)

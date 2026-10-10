@@ -73,6 +73,80 @@ class AdminControlTests(APITestCase):
         self.assertFalse(School.objects.get(pk=school_id).is_active)
         self.assertTrue(ProductAuditEvent.objects.filter(action='school.deactivated', target_id=str(school_id)).exists())
 
+    def test_editing_an_inactive_school_keeps_it_inactive_and_reactivation_is_explicit(self):
+        counselor = self.create_counselor(1)
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.delete(f'/api/schools/{self.school.id}/').status_code, status.HTTP_204_NO_CONTENT)
+        locked = self.client_with_token(counselor).get('/api/users/accounts/me/')
+        self.assertEqual(locked.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        ProductAuditEvent.objects.all().delete()
+        renamed = self.client.patch(f'/api/schools/{self.school.id}/', {'name': 'Control School Two'}, format='json')
+        self.assertEqual(renamed.status_code, status.HTTP_200_OK, renamed.data)
+        self.school.refresh_from_db()
+        self.assertFalse(self.school.is_active)
+        updated = ProductAuditEvent.objects.get()
+        self.assertEqual(updated.action, 'school.updated')
+        self.assertEqual(updated.metadata['changes'], {'name': {'from': 'Control School', 'to': 'Control School Two'}})
+
+        inactive = self.client.get('/api/schools/', {'is_active': 'false'})
+        self.assertEqual([row['id'] for row in inactive.data['results']], [self.school.id])
+
+        reactivated = self.client.patch(f'/api/schools/{self.school.id}/', {'is_active': True}, format='json')
+        self.assertEqual(reactivated.status_code, status.HTTP_200_OK)
+        self.assertEqual(ProductAuditEvent.objects.filter(action='school.reactivated').count(), 1)
+        self.assertEqual(self.client_with_token(counselor).get('/api/users/accounts/me/').status_code, status.HTTP_200_OK)
+
+    def client_with_token(self, user):
+        from rest_framework.test import APIClient
+
+        from apps.users.auth_views import token_pair_for_user
+
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {token_pair_for_user(user)["access"]}')
+        return client
+
+    def test_a_school_and_its_login_are_created_together_or_not_at_all(self):
+        self.client.force_authenticate(self.admin)
+        payload = {
+            'name': 'Atomic School', 'code': 'atomic-school',
+            'account': {'username': 'atomic-login', 'email': 'atomic-login@example.com', 'password': 'password'},
+        }
+        rejected = self.client.post('/api/schools/', payload, format='json')
+        self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', rejected.data['account'])
+        self.assertFalse(School.objects.filter(code='atomic-school').exists())
+        self.assertFalse(User.objects.filter(username='atomic-login').exists())
+
+        payload['account']['password'] = ''
+        created = self.client.post('/api/schools/', payload, format='json')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        login = User.objects.get(username='atomic-login')
+        self.assertEqual((login.role, login.school_id), (User.Role.ORGANIZATION, created.data['id']))
+        self.assertTrue(login.must_change_password)
+        self.assertTrue(login.check_password(created.data['account']['temporary_password']))
+        self.assertEqual(created.data['organization_account_id'], login.id)
+        actions = list(ProductAuditEvent.objects.order_by('id').values_list('action', flat=True))
+        self.assertEqual(actions, ['school.created', 'organization_account.created'])
+
+    def test_staff_add_a_login_to_a_school_without_one(self):
+        support = User.objects.create_user(
+            username='control-support', email='control-support@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPPORT,
+        )
+        login = {'username': 'control-login', 'email': 'control-login@example.com'}
+        self.client.force_authenticate(support)
+        denied = self.client.post(f'/api/schools/{self.school.id}/create-account/', login, format='json')
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.admin)
+        added = self.client.post(f'/api/schools/{self.school.id}/create-account/', login, format='json')
+        self.assertEqual(added.status_code, status.HTTP_201_CREATED, added.data)
+        account = User.objects.get(username='control-login')
+        self.assertTrue(account.check_password(added.data['temporary_password']))
+        listed = self.client.get(f'/api/schools/{self.school.id}/')
+        self.assertEqual(listed.data['organization_account_username'], 'control-login')
+
     def test_fourth_active_school_counselor_is_rejected_and_deactivation_releases_slot(self):
         counselors = [self.create_counselor(index) for index in range(3)]
         self.client.force_authenticate(self.admin)
@@ -254,3 +328,70 @@ class AdminControlTests(APITestCase):
             'kind': 'school_management', 'title': 'Dup', 'missions': ['One'],
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+
+class AdminSummaryTests(APITestCase):
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.core.cache import cache
+        from django.utils import timezone
+
+        from apps.admissions.models import SupportTicket
+        from apps.users.models import WorkspaceSubscription
+
+        cache.clear()
+        # Migrations seed a default school; counts are relative to it.
+        self.baseline = School.objects.filter(is_active=True, workspace_type=School.WorkspaceType.SCHOOL).count()
+        self.full = School.objects.create(name='Full School', code='full-school')
+        self.expiring = School.objects.create(name='Expiring School', code='expiring-school')
+        School.objects.create(name='Closed School', code='closed-school', is_active=False)
+        solo = School.objects.create(name='Solo', code='solo-summary', workspace_type=School.WorkspaceType.INDIVIDUAL)
+        self.support = User.objects.create_user(
+            username='summary-support', email='summary-support@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPPORT,
+        )
+        for index in range(3):
+            User.objects.create_user(
+                username=f'summary-counselor-{index}', email=f'summary-counselor-{index}@example.com',
+                password='StrongPass123!', role=User.Role.COUNSELOR, school=self.full,
+            )
+        owner = User.objects.create_user(
+            username='summary-solo', email='summary-solo@example.com', password='StrongPass123!',
+            role=User.Role.COUNSELOR, school=solo, is_active=False,
+        )
+        solo.owner_counselor = owner
+        solo.save(update_fields=['owner_counselor'])
+        User.objects.create_user(
+            username='summary-org', email='summary-org@example.com', password='StrongPass123!',
+            role=User.Role.ORGANIZATION, school=self.full,
+        )
+        WorkspaceSubscription.objects.filter(school=self.expiring).update(
+            period_end=timezone.localdate() + timedelta(days=10),
+        )
+        SupportTicket.objects.create(requester=owner, category='technical', subject='Help', message='Help me')
+        self.client.force_authenticate(self.support)
+
+    def test_tiles_and_attention_lists_come_from_one_request(self):
+        response = self.client.get('/api/admin/summary/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertEqual(
+            (data['schools_active'], data['individual_workspaces_active'], data['counselors_active'], data['counselors_inactive']),
+            (self.baseline + 2, 1, 3, 1),
+        )
+        self.assertEqual((data['support_open'], data['support_in_progress'], data['message_reports_pending']), (1, 0, 0))
+        attention = data['attention']
+        self.assertEqual([row['name'] for row in attention['expiring']['items']], ['Expiring School'])
+        self.assertEqual(attention['seats_full']['items'], [{
+            'id': self.full.id, 'name': 'Full School', 'seats': {'max_counselors': {'used': 3, 'limit': 3}},
+        }])
+        missing = [row['name'] for row in attention['missing_login']['items']]
+        self.assertIn('Expiring School', missing)
+        self.assertNotIn('Full School', missing)
+        self.assertEqual(attention['missing_login']['count'], self.baseline + 1)
+
+    def test_only_product_staff_read_the_summary(self):
+        counselor = User.objects.get(username='summary-counselor-0')
+        self.client.force_authenticate(counselor)
+        self.assertEqual(self.client.get('/api/admin/summary/').status_code, status.HTTP_403_FORBIDDEN)

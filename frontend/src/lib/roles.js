@@ -10,6 +10,9 @@ export const hasStaffTier = (user, tier) => isPlatformAdmin(user)
 // Creating and changing schools, plans and counselor accounts needs the ops tier.
 export const canManageWorkspaces = (user) => hasStaffTier(user, 'ops');
 
+// Writes no lower tier's route list allows: roadmap templates and reviews, level approvals, staff accounts.
+export const isSuperAdmin = (user) => hasStaffTier(user, 'superadmin');
+
 export const isCounselor = (user) => isPlatformAdmin(user) || user?.role === 'counselor';
 
 // Staff the student CV endpoint lets in (CounselorOrOwnerPermission): counselors

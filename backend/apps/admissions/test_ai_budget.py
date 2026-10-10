@@ -80,6 +80,56 @@ class AiBudgetTests(APITestCase):
                 self.assertLogs('naseeb.ai_budget', level='WARNING'):
             self.assertEqual(self.spend(self.a1), [False])
 
+    @override_settings(AI_ASSISTANT_SCHOOL_DAILY_BUDGET=2)
+    def test_admins_see_todays_usage_refusals_and_busiest_schools(self):
+        self.spend(self.a1, 3)
+        self.spend(self.b1)
+        admin = User.objects.create_user(
+            username='usage-support', email='usage-support@example.com', role=User.Role.ADMIN,
+            admin_tier=User.AdminTier.SUPPORT,
+        )
+        self.client.force_authenticate(admin)
+        data = self.client.get('/api/admin/ai-usage/').data
+        self.assertTrue(data['cache_available'])
+        assistant = data['features']['assistant']
+        self.assertEqual((assistant['used'], assistant['limit'], assistant['refused']), (3, 100, 1))
+        self.assertEqual(assistant['top_schools'], [
+            {'id': self.school_a.id, 'used': 2, 'name': 'Budget A'}, {'id': self.school_b.id, 'used': 1, 'name': 'Budget B'},
+        ])
+        self.assertEqual(data['features']['essay_coach']['used'], 0)
+        self.assertEqual(data['features']['recommendation_letter']['used'], 0)
+
+    def test_an_allowed_call_is_one_cache_step_and_usage_has_no_duplicate_counter(self):
+        with mock.patch.object(ai_budget, 'count_hits', wraps=ai_budget.count_hits) as hits:
+            self.assertEqual(self.spend(self.a1), [True])
+        self.assertEqual(hits.call_count, 1)
+        day = timezone.localdate().isoformat()
+        self.assertIsNone(cache.get(f'ai-budget:assistant:{day}:used'))
+        self.assertEqual(ai_budget.usage_today([self.school_a.id])['assistant']['used'], 1)
+
+    @override_settings(AI_ASSISTANT_DAILY_BUDGET=0, AI_ASSISTANT_SCHOOL_DAILY_BUDGET=0, AI_ASSISTANT_USER_DAILY_LIMIT=0)
+    def test_uncapped_calls_are_still_counted_as_usage(self):
+        self.spend(self.a1, 2)
+        self.spend(self.b1)
+        usage = ai_budget.usage_today([self.school_a.id, self.school_b.id])['assistant']
+        self.assertEqual((usage['used'], usage['limit'], usage['refused']), (3, None, 0))
+        self.assertEqual([row['used'] for row in usage['top_schools']], [2, 1])
+
+    def test_usage_is_unavailable_not_zero_when_the_cache_is_down(self):
+        admin = User.objects.create_user(username='usage-admin', email='usage-admin@example.com', role=User.Role.ADMIN)
+        self.client.force_authenticate(admin)
+        with mock.patch.object(ai_budget, 'cache_get_many', return_value=None):
+            data = self.client.get('/api/admin/ai-usage/').data
+        self.assertEqual((data['cache_available'], data['features']), (False, None))
+
+    def test_only_product_staff_read_ai_usage(self):
+        counselor = User.objects.create_user(
+            username='usage-counselor', email='usage-counselor@example.com', role=User.Role.COUNSELOR, school=self.school_a,
+        )
+        for user in (self.a1, counselor):
+            self.client.force_authenticate(user)
+            self.assertEqual(self.client.get('/api/admin/ai-usage/').status_code, status.HTTP_403_FORBIDDEN, user.role)
+
     @override_settings(
         AI_GATEWAY_API_KEY='test-key', AI_FALLBACK_PROCESS_DAILY_BUDGET=1,
         CACHES={'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache',

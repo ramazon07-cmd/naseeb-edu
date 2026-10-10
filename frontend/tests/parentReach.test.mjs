@@ -25,5 +25,7 @@ test('parent navigation has no messaging or school pages', () => {
 
 test('only product admins are offered student deactivation', () => {
   const page = readFileSync(new URL('../src/pages/StudentsPage.jsx', import.meta.url), 'utf8');
-  assert.match(page, /onDeactivate=\{isPlatformAdmin\(user\) \? deactivate : undefined\}/);
+  // And among them only the ops tier and above (support staff read and reset logins).
+  assert.match(page, /onDeactivate=\{isPlatformAdmin\(user\) && !staffReadOnly \? deactivate : undefined\}/);
+  assert.match(page, /const staffReadOnly = isPlatformAdmin\(user\) && !canManageWorkspaces\(user\);/);
 });

@@ -15,8 +15,10 @@ test('staff roles never load a staff-wide collection into memory', () => {
   }
 });
 
-test('the admin keeps only the counselor roster, not every account', () => {
-  assert.deepEqual(resourcesFor({ role: 'admin' }).find(([key]) => key === 'accounts'), ['accounts', 'users/accounts', '?role=counselor']);
+test('the admin loads no school or account list at sign-in', () => {
+  // Admin Control reads /api/admin/summary/; schools and counselors are paged and searched.
+  const keys = resourcesFor({ role: 'admin' }).map(([key]) => key);
+  for (const key of ['schools', 'accounts']) assert.ok(!keys.includes(key), key);
   assert.ok(!resourcesFor({ role: 'admin' }).some(([key]) => key === 'supportTickets'));
 });
 

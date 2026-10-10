@@ -14,3 +14,4 @@ class Command(ScheduledJobCommand):
         # Blacklist rows go with their token (on_delete=CASCADE).
         deleted = delete_in_batches(OutstandingToken.objects.filter(expires_at__lte=timezone.now()), batch_size)
         self.stdout.write(self.style.SUCCESS(f'Deleted {deleted} expired refresh tokens.'))
+        return deleted

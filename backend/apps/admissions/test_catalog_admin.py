@@ -91,6 +91,19 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
         self.assertFalse(University.objects.filter(pk=unused.pk).exists())
         self.assertTrue(ProductAuditEvent.objects.filter(action='university.deleted', target_id=str(unused.pk)).exists())
 
+    def test_the_legacy_universities_endpoint_uses_the_same_guard(self):
+        superadmin = self.make_user('base-super', User.Role.ADMIN, None, admin_tier=User.AdminTier.SUPERADMIN)
+        client = self.as_user(superadmin)
+        program = UniversityProgram.objects.create(university=self.university, name='BSc Biology', canonical_major='Biology')
+        refused = client.delete(f'/api/universities/{self.university.id}/')
+        self.assertEqual((refused.status_code, refused.data['code']), (409, 'university_in_use'))
+        self.assertTrue(UniversityProgram.objects.filter(pk=program.pk).exists())
+        self.assertFalse(ProductAuditEvent.objects.filter(action='university.deleted').exists())
+
+        unused = University.objects.create(name='Typo Universty', country='Canada')
+        self.assertEqual(client.delete(f'/api/universities/{unused.id}/').status_code, 204)
+        self.assertEqual(ProductAuditEvent.objects.filter(action='university.deleted', target_id=str(unused.pk)).count(), 1)
+
     def test_programs_belong_to_a_university_and_are_unique_there(self):
         client = self.as_user(self.ops)
         payload = {'university': self.university.id, 'name': 'BSc Biology', 'canonical_major': 'Biology'}
@@ -171,16 +184,16 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
         changes = ProductAuditEvent.objects.get(action='university.updated').metadata['changes']
-        self.assertEqual(changes['city'], ['Toronto', 'Ottawa'])
-        self.assertEqual(changes['notes'][0], '')
-        self.assertTrue(changes['notes'][1].endswith('…') and len(changes['notes'][1]) == 201)
+        self.assertEqual(changes['city'], {'from': 'Toronto', 'to': 'Ottawa'})
+        self.assertEqual(changes['notes']['from'], '')
+        self.assertTrue(changes['notes']['to'].endswith('…') and len(changes['notes']['to']) == 201)
         self.assertNotIn('qs_data', changes)
         self.assertNotIn('updated_at', changes)
 
     def test_a_changed_json_field_records_only_its_keys(self):
-        from apps.admissions.views.catalog import audit_changes
+        from apps.users.audit import audit_diff
 
-        changes = audit_changes(
+        changes = audit_diff(
             {'qs_data': {'rank': 50, 'overall': 70.1, 'region': 'Americas'}, 'name': 'A'},
             {'qs_data': {'rank': 45, 'overall': 70.1, 'subject': 'CS'}, 'name': 'A'},
         )

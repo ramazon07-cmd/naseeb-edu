@@ -1,11 +1,13 @@
 """Cron commands: batched, idempotent, bounded queries, and one run at a time."""
 from datetime import timedelta
 from io import StringIO
+from unittest import mock
 from unittest import skipUnless
 
 from django.core.management import call_command
 from django.db import connection, connections
 from django.test import TestCase
+from rest_framework.test import APITestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -118,3 +120,120 @@ class JobLockTests(AuditBaseMixin, TestCase):
             self.assertIn('Deleted 1 screen-time rows', run('purge_screen_time'))
         finally:
             other.close()
+
+
+class JobRunHistoryTests(AuditBaseMixin, TestCase):
+    def test_each_run_is_recorded_with_its_result_and_count(self):
+        from apps.users.models import JobRun
+
+        ScreenTimeDaily.objects.create(user=self.student_user, date=timezone.localdate() - timedelta(days=900), page='x')
+        run('purge_screen_time')
+        recorded = JobRun.objects.get(name='purge_screen_time')
+        self.assertEqual((recorded.result, recorded.processed), ('ok', 1))
+
+        from apps.admissions.management.commands.purge_screen_time import Command
+
+        with mock.patch.object(Command, 'run', side_effect=RuntimeError('boom')), self.assertRaises(RuntimeError):
+            run('purge_screen_time')
+        failed = JobRun.objects.filter(name='purge_screen_time').first()
+        self.assertEqual((failed.result, failed.error), ('failed', 'RuntimeError'))
+
+    def test_the_health_page_knows_every_scheduled_job(self):
+        from pathlib import Path
+
+        from core.jobs import SCHEDULED_JOBS
+
+        root = Path(__file__).resolve().parents[1]
+        found = {
+            path.stem for path in root.glob('*/management/commands/*.py')
+            if 'ScheduledJobCommand' in path.read_text(encoding='utf-8')
+        }
+        self.assertEqual(found, set(SCHEDULED_JOBS))
+
+
+class AdminHealthTests(AuditBaseMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.ops = User.objects.create_user(
+            username='health-ops', email='health-ops@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.OPS,
+        )
+
+    def test_ops_see_readiness_jobs_and_storage(self):
+        Document.objects.create(student=self.student, title='Passport', document_type='passport', file_size=2048)
+        run('flush_expired_tokens')
+        self.client.force_authenticate(self.ops)
+        data = self.client.get('/api/admin/health/').data
+        self.assertEqual(data['readiness']['database'], 'ok')
+        jobs = {job['name']: job for job in data['jobs']}
+        self.assertFalse(jobs['flush_expired_tokens']['overdue'])
+        self.assertEqual(jobs['flush_expired_tokens']['last_run']['result'], 'ok')
+        self.assertTrue(jobs['generate_notifications']['overdue'])
+        self.assertIsNone(jobs['generate_notifications']['last_run'])
+        documents = next(row for row in data['storage'] if row['category'] == 'documents')
+        self.assertEqual((documents['files'], documents['bytes']), (1, 2048))
+
+    def job(self, name):
+        self.client.force_authenticate(self.ops)
+        return next(job for job in self.client.get('/api/admin/health/').data['jobs'] if job['name'] == name)
+
+    def test_a_skipped_run_does_not_hide_the_last_real_run(self):
+        from apps.users.models import JobRun
+
+        now = timezone.now()
+        JobRun.objects.create(name='purge_screen_time', started_at=now - timedelta(hours=2), result='ok', processed=4)
+        JobRun.objects.create(name='purge_screen_time', started_at=now - timedelta(minutes=5), result='skipped')
+        job = self.job('purge_screen_time')
+        self.assertEqual((job['last_run']['result'], job['last_run']['processed']), ('ok', 4))
+        self.assertEqual(job['skipped_recently'], 1)
+        self.assertFalse(job['overdue'])
+
+    def test_a_failed_run_is_shown_and_overdue_without_a_recent_success(self):
+        from apps.users.models import JobRun
+
+        now = timezone.now()
+        JobRun.objects.create(name='purge_screen_time', started_at=now - timedelta(hours=30), result='ok')
+        JobRun.objects.create(name='purge_screen_time', started_at=now - timedelta(hours=1), result='failed', error='RuntimeError')
+        job = self.job('purge_screen_time')
+        self.assertEqual((job['last_run']['result'], job['last_run']['error']), ('failed', 'RuntimeError'))
+        self.assertEqual(job['last_success_at'], now - timedelta(hours=30))
+        self.assertTrue(job['overdue'])
+
+    def test_only_skipped_runs_mean_no_run_and_overdue(self):
+        from apps.users.models import JobRun
+
+        JobRun.objects.create(name='purge_screen_time', started_at=timezone.now(), result='skipped')
+        job = self.job('purge_screen_time')
+        self.assertEqual((job['last_run'], job['last_success_at'], job['overdue']), (None, None, True))
+
+    def test_storage_is_cached_and_check_again_recounts_at_most_once_a_minute(self):
+        from django.core.cache import cache
+
+        from apps.admissions.views import admin_portal
+
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.client.force_authenticate(self.ops)
+
+        def documents(query=''):
+            data = self.client.get(f'/api/admin/health/{query}').data
+            return next(row for row in data['storage'] if row['category'] == 'documents')['files'], data['storage_checked_at']
+
+        with mock.patch.object(admin_portal, 'storage_usage', wraps=admin_portal.storage_usage) as counted:
+            first, checked_at = documents()
+            Document.objects.create(student=self.student, title='Passport', document_type='passport', file_size=2048)
+            self.assertEqual(documents(), (first, checked_at))
+            # A recheck within the minute keeps the count.
+            self.assertEqual(documents('?refresh=storage'), (first, checked_at))
+            self.assertEqual(counted.call_count, 1)
+            with mock.patch.object(admin_portal.timezone, 'now', return_value=timezone.now() + timedelta(seconds=61)):
+                self.assertEqual(documents('?refresh=storage')[0], first + 1)
+            self.assertEqual(counted.call_count, 2)
+
+    def test_support_staff_cannot_open_the_health_page(self):
+        support = User.objects.create_user(
+            username='health-support', email='health-support@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPPORT,
+        )
+        self.client.force_authenticate(support)
+        self.assertEqual(self.client.get('/api/admin/health/').status_code, 403)

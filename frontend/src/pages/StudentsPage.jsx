@@ -16,12 +16,16 @@ import { SupportViewModal } from '../components/SupportViewModal';
 import { TestScoreSummary } from '../components/testScores';
 import { PageSkeleton } from '../components/states';
 import { createLatestRequest } from '../lib/latestRequest';
-import { canDownloadCv, isCounselor, isPlatformAdmin, isTaskManager } from '../lib/roles';
+import { canDownloadCv, canManageWorkspaces, isCounselor, isPlatformAdmin, isSuperAdmin, isTaskManager } from '../lib/roles';
 import { usePagedList } from '../hooks/usePagedList';
 import { useStudentRecords } from '../hooks/useStudentRecords';
 import { usesPagedLists } from '../lib/workspaceResources';
 import { DownloadCvButton } from '../components/CvDocument';
-import { LoadMore, PagedListError } from '../components/paged';
+import { AccountPicker, LoadMore, PagedListError, SchoolPicker } from '../components/paged';
+
+// Admin pickers search the server; product staff never hold every school or counselor.
+const ACTIVE_COUNSELORS = { role: 'counselor', is_active: 'true' };
+const ACTIVE_SCHOOLS = { is_active: 'true' };
 
 export const STUDENT_RESOURCE_GROUPS = [
 ['Research', 'researches'], ['Projects', 'projects'], ['Internships', 'internships'],
@@ -150,7 +154,7 @@ export function visibilityPolicyLabel(item) {
 }
 
 export function VisibilitySection({ title, items = [], onDocument, onEvidence, emptyText }) {
-  return <Panel title={title}><div className="visibility-records">{items.slice(0, 8).map((item) => <article key={`${item.proof_resource || 'record'}-${item.id}`}><div><b>{visibilityItemTitle(item)}</b><small>{label(item.status || item.category || item.document_type || item.activity_type || item.level || '')}</small></div><div className="panel-actions">{onDocument && (item.has_file || item.google_docs_preview_url) && <button className="button quiet" onClick={() => onDocument(item)}><Eye size={15} /> {t("Preview")}</button>}{onEvidence && item.has_proof_file && <button className="button quiet" onClick={() => onEvidence(item)}><ShieldCheck size={15} /> {t("Evidence")}</button>}</div></article>)}{!items.length && <Empty text={emptyText} />}</div></Panel>;
+  return <Panel title={title}><div className="visibility-records">{items.slice(0, 8).map((item, index) => <article key={`${item.proof_resource || 'record'}-${item.id}-${index}`}><div><b>{visibilityItemTitle(item)}</b><small>{label(item.status || item.category || item.document_type || item.activity_type || item.level || '')}</small></div><div className="panel-actions">{onDocument && (item.has_file || item.google_docs_preview_url) && <button className="button quiet" onClick={() => onDocument(item)}><Eye size={15} /> {t("Preview")}</button>}{onEvidence && item.has_proof_file && <button className="button quiet" onClick={() => onEvidence(item)}><ShieldCheck size={15} /> {t("Evidence")}</button>}</div></article>)}{!items.length && <Empty text={emptyText} />}</div></Panel>;
 }
 
 export function SchoolStudent360({ visibility, student, loading, error, onBack, user, notify }) {
@@ -171,8 +175,8 @@ export function SchoolStudent360({ visibility, student, loading, error, onBack, 
 
 export function StudentAssignmentModal({ user, data, onClose, onSaved, notify }) {
   const admin = isPlatformAdmin(user);
-  const counselors = (data.accounts || []).filter((account) => account.role === 'counselor' && account.is_active && account.school);
   const [counselorId, setCounselorId] = useState(admin ? '' : String(user.id));
+  const [pickedCounselor, setPickedCounselor] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [selected, setSelected] = useState([]);
   const [search, setSearch] = useState('');
@@ -202,7 +206,7 @@ export function StudentAssignmentModal({ user, data, onClose, onSaved, notify })
   }, [admin, counselorId, search]);
 
   const visible = candidates;
-  const target = admin ? counselors.find((account) => String(account.id) === String(counselorId)) : user;
+  const target = admin ? pickedCounselor : user;
   const targetRoleLabel = label(target?.role || user.role);
   const toggle = (studentId) => setSelected((current) => current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]);
 
@@ -219,7 +223,7 @@ export function StudentAssignmentModal({ user, data, onClose, onSaved, notify })
   }
 
   return <Modal title={admin ? t("Assign counselor") : t("Connect students")} onClose={onClose}><form className="student-assignment-form" onSubmit={submit}>
-    {admin && <Field label={t("Counselor")}><select value={counselorId} onChange={(event) => setCounselorId(event.target.value)} required><option value="">{t("Select a counselor")}</option>{counselors.map((account) => <option key={account.id} value={account.id}>{fullName(account)} · {account.school_name}</option>)}</select></Field>}
+    {admin && <AccountPicker name="counselor" label="Counselor" value={counselorId} onChange={(value, account) => {setCounselorId(value);setPickedCounselor(account);}} required filters={ACTIVE_COUNSELORS} />}
     <p className="form-note form-wide"><ShieldCheck size={16} />{admin ? t("Admins can reassign students only to an active counselor from the same school.") : t("You can connect only unassigned students from your own school.")}</p>
     {target && <div className="assignment-target form-wide"><span className="avatar">{initials(fullName(target))}</span><div><b>{fullName(target)}</b><small>{target.school_name || targetRoleLabel}</small></div><Badge>{`${formatNumberLocale(candidates.length)} ${t("available")}`}</Badge></div>}
     {(counselorId || !admin) && <fieldset className="member-picker assignment-picker form-wide"><legend>{formatNumberLocale(selected.length)} {t("selected")}</legend><div className="assignment-tools"><label className="member-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search students")} /></label><div className="audience-shortcuts"><button type="button" onClick={() => setSelected(visible.map((student) => student.id))}>{t("Select all")}</button><button type="button" onClick={() => setSelected([])}>{t("Clear")}</button></div></div><div className="assignment-candidate-list">{visible.map((student) => <CheckboxControl key={student.id} checked={selected.includes(student.id)} onChange={() => toggle(student.id)}><span className="assignment-candidate-copy"><b>{fullName(student.user_detail)}</b><small>{joinParts(student.user_detail?.email, gradeText(student.grade))}</small></span><Badge>{student.counselor_name ? t("Reassign") : t("Unassigned")}</Badge></CheckboxControl>)}</div>{loading && <small>{t("Loading students…")}</small>}{!loading && !visible.length && <small>{admin && !counselorId ? t("Select a counselor first.") : t("No students are available for assignment in this school.")}</small>}</fieldset>}
@@ -296,14 +300,18 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
   if (studentId && selected?.id !== studentId) return <PageSkeleton />;
   if (studentId) return <StudentOverview student={students.items.find((item) => item.id === studentId) || selected} data={data} onBack={closeStudent} user={user} notify={notify} />;
 
-  const actions = user.role !== 'teacher' && <div className="panel-actions">{isCounselor(user) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {isPlatformAdmin(user) ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
+  // Product staff below the ops tier read and reset logins only; level approvals need a super admin.
+  const staffReadOnly = isPlatformAdmin(user) && !canManageWorkspaces(user);
+  const canApproveLevels = isTaskManager(user) && (!isPlatformAdmin(user) || isSuperAdmin(user));
+  const actions = user.role !== 'teacher' && !staffReadOnly && <div className="panel-actions">{isCounselor(user) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {isPlatformAdmin(user) ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
   return <>
-    <Panel title={t("Students")} action={actions}>
+    <Panel title={t("Students")} action={actions} className={isPlatformAdmin(user) ? 'admin-students-panel' : ''}>
+      {staffReadOnly && <p className="form-note staff-tier-note"><ShieldCheck size={16} /> {t("Only operations staff and super admins can add, assign, edit or deactivate students. You can view profiles and reset logins.")}</p>}
       <div className="paged-list-filters">
-        {isPlatformAdmin(user) && <label><span>{t("School")}</span><select value={school} onChange={(event) => setSchool(event.target.value)}><option value="">{t("All schools")}</option>{data.schools.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+        {isPlatformAdmin(user) && <SchoolPicker label="School" value={school} onChange={setSchool} emptyOption={t("All schools")} />}
         <label><span>{t("Grade")}</span><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">{t("All grades")}</option>{['8', '9', '10', '11', 'gap'].map((value) => <option key={value} value={value}>{value === 'gap' ? t("Gap year") : value}</option>)}</select></label>
       </div>
-      {students.loading && !students.items.length ? <PageSkeleton /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={isTaskManager(user) ? approveLevel : undefined} onEdit={user.role !== 'teacher' ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) ? deactivate : undefined} />}
+      {students.loading && !students.items.length ? <PageSkeleton /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
       <PagedListError list={students} />
       <LoadMore list={students} />
     </Panel>
@@ -330,7 +338,7 @@ export function StudentForm({ user, data, student, onClose, onSaved, notify }) {
         <Field label={t('Student name')}><input name="name" placeholder={t('e.g. Aziza Karimova')} required autoComplete="off" /></Field>
         <Field label={t('Email')}><input name="email" type="email" placeholder={t('e.g. name@example.com')} /></Field>
         <Field label={t('Temporary password')} hint={t('Use at least 8 characters.')}><input name="password" type="password" minLength={8} required autoComplete="new-password" /></Field>
-        {isPlatformAdmin(user) && <Field label={t('School')}><select name="school" required defaultValue=""><option value="">{t('Select school')}</option>{data.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>}
+        {isPlatformAdmin(user) && <SchoolPicker label="School" required filters={ACTIVE_SCHOOLS} />}
         <p className="form-wide">{t('The student completes their profile after signing in.')}</p>
       </>}
       <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving}>{saving ? t('Saving…') : t(student ? 'Save' : 'Create login')}</button></div>

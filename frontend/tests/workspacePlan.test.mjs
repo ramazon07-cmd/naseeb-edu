@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { seatUsage, subscriptionPayload } from '../src/lib/workspacePlan.js';
+import { plansFor, seatUsage, subscriptionPayload } from '../src/lib/workspacePlan.js';
 import { canManageWorkspaces, hasStaffTier } from '../src/lib/roles.js';
 
 test('seat usage marks full and over-limit plans and treats null as unlimited', () => {
@@ -29,4 +29,17 @@ test('only ops and super admins manage workspaces', () => {
   assert.equal(canManageWorkspaces({ role: 'student', is_superuser: true, staff_tier: 'superadmin' }), true);
   assert.equal(canManageWorkspaces({ role: 'counselor' }), false);
   assert.equal(hasStaffTier({ role: 'admin', staff_tier: 'support' }, 'support'), true);
+});
+
+test('a workspace is offered its current plan and the active plans of its type', () => {
+  const plans = [
+    { code: 'school-standard', workspace_type: 'school', is_active: false },
+    { code: 'center', workspace_type: 'school', is_active: true },
+    { code: 'old-center', workspace_type: 'school', is_active: false },
+    { code: 'individual-counselor', workspace_type: 'individual', is_active: true },
+  ];
+  const school = { workspace_type: 'school', subscription: { plan: 'school-standard' } };
+  assert.deepEqual(plansFor(plans, school).map((plan) => plan.code), ['school-standard', 'center']);
+  const solo = { workspace_type: 'individual', subscription: { plan: 'individual-counselor' } };
+  assert.deepEqual(plansFor(plans, solo).map((plan) => plan.code), ['individual-counselor']);
 });

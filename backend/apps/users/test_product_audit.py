@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
@@ -5,9 +6,19 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.admissions.models import School, StudentProfile
+from apps.admissions.models import (
+    ChannelMembership,
+    ChannelMessage,
+    CounselorRoadmapTemplate,
+    MessageChannel,
+    MessageReport,
+    School,
+    StudentProfile,
+    SupportTicket,
+)
 from apps.users.audit import audit_product_action
-from apps.users.models import ProductAuditEvent, User
+from apps.users.entitlements import SCHOOL_STANDARD
+from apps.users.models import Plan, ProductAuditEvent, User
 
 
 class ProductAuditTests(APITestCase):
@@ -105,7 +116,7 @@ class ProductAuditTests(APITestCase):
         ProductAuditEvent.objects.all().delete()
         response = self.client.patch(f'/api/users/accounts/{account.id}/', payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        return list(ProductAuditEvent.objects.values_list('action', flat=True))
+        return list(ProductAuditEvent.objects.order_by('id').values_list('action', flat=True))
 
     def test_each_account_change_by_an_admin_is_audited_once(self):
         teacher = User.objects.create_user(
@@ -121,7 +132,7 @@ class ProductAuditTests(APITestCase):
             (student, {'first_name': 'Renamed'}, ['account.updated']),
             # Nothing changes school or activation: a plain update.
             (student, {'school': self.other_school.id, 'is_active': True}, ['account.updated']),
-            (student, {'school': self.school.id, 'first_name': 'Moved'}, ['student.moved']),
+            (student, {'school': self.school.id, 'first_name': 'Moved'}, ['student.moved', 'account.updated']),
             (teacher, {'school': self.other_school.id}, ['account.moved']),
             (teacher, {'is_active': False}, ['account.deactivated']),
             (teacher, {'last_name': 'Renamed'}, ['account.updated']),
@@ -130,6 +141,37 @@ class ProductAuditTests(APITestCase):
         for account, payload, expected in cases:
             with self.subTest(account=account.username, payload=payload):
                 self.assertEqual(self.account_patch(account, payload), expected)
+
+    def test_a_tier_change_or_reactivation_with_other_edits_writes_every_row(self):
+        staff_account = User.objects.create_user(
+            username='audit-ops', email='audit-ops@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPPORT, is_active=False,
+        )
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(f'/api/users/accounts/{staff_account.id}/', {
+            'admin_tier': 'ops', 'is_active': True, 'email': 'ops-new@example.com', 'username': 'audit-ops-2',
+            'first_name': 'Olga',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        rows = {row.action: row.metadata for row in ProductAuditEvent.objects.filter(target_id=str(staff_account.id))}
+        self.assertEqual(set(rows), {'staff.tier_changed', 'account.reactivated', 'account.updated'})
+        self.assertEqual(rows['staff.tier_changed'], {'changes': {'admin_tier': {'from': 'support', 'to': 'ops'}}})
+        self.assertEqual(rows['account.updated'], {
+            'fields': ['email', 'first_name', 'username'],
+            'changes': {
+                'email': {'from': 'audit-ops@example.com', 'to': 'ops-new@example.com'},
+                'first_name': {'from': '', 'to': 'Olga'},
+                'username': {'from': 'audit-ops', 'to': 'audit-ops-2'},
+            },
+        })
+
+    def test_an_unchanged_field_is_not_listed(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            f'/api/users/accounts/{self.counselor.id}/', {'email': self.counselor.email, 'last_name': 'New'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(self.events('counselor.updated').get().metadata['fields'], ['last_name'])
 
     def test_a_repeated_parent_invitation_is_audited_once(self):
         self.client.force_authenticate(self.counselor)
@@ -141,6 +183,177 @@ class ProductAuditTests(APITestCase):
             self.assertEqual(self.client.post('/api/parent-links/invite/', payload, format='json').status_code, 201)
         invite = self.events('parent.invited').get()
         self.assertTrue(invite.metadata['created_account'])
+
+    def test_reactivating_a_staff_account_is_one_reactivation_row_plus_the_other_edits(self):
+        self.client.force_authenticate(self.admin)
+        User.objects.filter(pk=self.counselor.pk).update(is_active=False)
+        self.counselor.refresh_from_db()
+        self.assertEqual(self.account_patch(self.counselor, {'is_active': True}), ['account.reactivated'])
+        User.objects.filter(pk=self.counselor.pk).update(is_active=False)
+        self.assertEqual(
+            self.account_patch(self.counselor, {'is_active': True, 'phone': '+998901112233'}),
+            ['account.reactivated', 'counselor.updated'],
+        )
+        self.assertEqual(self.events('counselor.updated').get().metadata['fields'], ['phone'])
+
+    def test_support_answers_and_status_changes_are_audited_without_the_text(self):
+        ticket = SupportTicket.objects.create(
+            requester=self.student_user, category=SupportTicket.Category.ACCOUNT, subject='Locked out',
+            message='Please help me sign in.',
+        )
+        self.client.force_authenticate(self.admin)
+        self.client.patch(f'/api/support-tickets/{ticket.id}/', {'status': 'in_progress'}, format='json')
+        self.client.patch(
+            f'/api/support-tickets/{ticket.id}/', {'status': 'resolved', 'admin_response': 'Password reset sent.'},
+            format='json',
+        )
+        moved = self.events('support_ticket.status_changed').get()
+        self.assertEqual(moved.metadata['status'], {'from': 'open', 'to': 'in_progress'})
+        answered = self.events('support_ticket.responded').get()
+        self.assertEqual((answered.target_id, answered.school_id), (str(ticket.id), self.school.id))
+        self.assertEqual(answered.metadata['status'], {'from': 'in_progress', 'to': 'resolved'})
+        self.assertNotIn('Password reset sent.', str(answered.metadata))
+
+    def test_template_and_catalog_writes_are_audited(self):
+        self.client.force_authenticate(self.admin)
+        template = CounselorRoadmapTemplate.objects.create(name='Old template', kind='school_management')
+        self.assertEqual(self.client.delete(f'/api/counselor-roadmap-templates/{template.id}/').status_code, 204)
+        self.assertEqual(self.events('counselor_roadmap_template.deleted').get().target_id, str(template.id))
+
+        created = self.client.post('/api/universities/', {'name': 'Audit University', 'country': 'Uzbekistan'}, format='json')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        university_id = created.data['id']
+        self.client.patch(f'/api/universities/{university_id}/', {'city': 'Tashkent'}, format='json')
+        self.assertEqual(self.client.delete(f'/api/universities/{university_id}/').status_code, 204)
+        self.assertEqual(self.events('university.created').get().target_id, str(university_id))
+        self.assertEqual(self.events('university.updated').get().metadata['changes']['city']['to'], 'Tashkent')
+        self.assertEqual(self.events('university.deleted').get().target_id, str(university_id))
+
+    def test_moderation_decisions_are_audited_with_the_sanction_only(self):
+        channel = MessageChannel.objects.create(kind=MessageChannel.Kind.GROUP, name='Audit group', school=self.school)
+        ChannelMembership.objects.create(channel=channel, user=self.student_user)
+        ChannelMembership.objects.create(channel=channel, user=self.counselor, role=ChannelMembership.Role.OWNER)
+        rude = ChannelMessage.objects.create(channel=channel, sender=self.student_user, body='Secret rude words')
+        spam = ChannelMessage.objects.create(channel=channel, sender=self.student_user, body='Buy now')
+        reported = MessageReport.objects.create(message=rude, reporter=self.counselor, reason=MessageReport.Reason.HARASSMENT)
+        dismissed = MessageReport.objects.create(message=spam, reporter=self.counselor, reason=MessageReport.Reason.SPAM)
+        self.client.force_authenticate(self.admin)
+        resolved = self.client.post(f'/api/message-reports/{reported.id}/resolve/', {'action': 'muted_24h'}, format='json')
+        self.assertEqual(resolved.status_code, status.HTTP_200_OK, resolved.data)
+        self.client.post(f'/api/message-reports/{dismissed.id}/dismiss/', {}, format='json')
+        decision = self.events('message_report.resolved').get()
+        self.assertEqual((decision.metadata['sanction'], decision.school_id), ('muted_24h', self.school.id))
+        self.assertNotIn('Secret rude words', str(decision.metadata) + decision.target_label)
+        self.assertEqual(self.events('message_report.dismissed').get().metadata['sanction'], 'none')
+
+    def test_django_admin_edits_of_plans_are_audited(self):
+        root = User.objects.create_superuser('audit-root', 'audit-root@example.com', 'StrongPass123!')
+        plan = Plan.objects.get(code=SCHOOL_STANDARD)
+        self.client.force_login(root)
+        response = self.client.post(f'/admin/users/plan/{plan.pk}/change/', {
+            'code': plan.code, 'name': plan.name, 'description': plan.description, 'workspace_type': plan.workspace_type,
+            'max_counselors': 5, 'max_students': '', 'max_teachers': '',
+            # A field with a callable default posts its initial value in a hidden input.
+            'features': json.dumps(plan.features), 'initial-features': json.dumps(plan.features), 'is_active': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        row = self.events('plan.updated').get()
+        self.assertEqual(row.metadata['changes'], {'max_counselors': {'from': 3, 'to': 5}})
+        self.assertEqual((row.actor, row.metadata['source']), (root, 'django_admin'))
+
+    def test_a_json_field_change_has_the_same_shape_from_the_api_and_django_admin(self):
+        plan = Plan.objects.get(code=SCHOOL_STANDARD)
+        features = dict(plan.features)
+        superadmin = User.objects.create_user(
+            username='audit-super', email='audit-super@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPERADMIN,
+        )
+        self.client.force_authenticate(superadmin)
+        toggled = {**features, 'parent_portal': not features.get('parent_portal')}
+        response = self.client.patch(f'/api/users/plans/{plan.id}/', {'features': toggled}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(self.events('plan.updated').get().metadata['changes'], {'features': {'changed_keys': ['parent_portal']}})
+
+        root = User.objects.create_superuser('audit-root', 'audit-root@example.com', 'StrongPass123!')
+        self.client.force_authenticate(None)
+        self.client.force_login(root)
+        plan.refresh_from_db()
+        response = self.client.post(f'/admin/users/plan/{plan.pk}/change/', {
+            'code': plan.code, 'name': plan.name, 'description': plan.description, 'workspace_type': plan.workspace_type,
+            'max_counselors': plan.max_counselors or '', 'max_students': plan.max_students or '', 'max_teachers': plan.max_teachers or '',
+            'features': json.dumps(features), 'initial-features': json.dumps(plan.features), 'is_active': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        admin_row = self.events('plan.updated').order_by('-id').first()
+        self.assertEqual(admin_row.metadata['changes'], {'features': {'changed_keys': ['parent_portal']}})
+
+    def admin_user_change(self, account, **values):
+        joined = timezone.localtime(account.date_joined)
+        data = {
+            'username': account.username, 'first_name': account.first_name, 'last_name': account.last_name,
+            'email': account.email, 'role': account.role, 'admin_tier': account.admin_tier,
+            'school': account.school_id or '', 'phone': account.phone, 'position': account.position,
+            'date_joined_0': joined.strftime('%Y-%m-%d'), 'date_joined_1': joined.strftime('%H:%M:%S'),
+            'is_active': 'on' if account.is_active else '',
+        }
+        for name, value in values.items():
+            data[name] = 'on' if value is True else '' if value is False else value
+        return self.client.post(f'/admin/users/user/{account.pk}/change/', {k: v for k, v in data.items() if v != ''})
+
+    def test_django_admin_account_changes_are_audited_like_the_api(self):
+        root = User.objects.create_superuser('audit-root', 'audit-root@example.com', 'StrongPass123!')
+        staff_account = User.objects.create_user(
+            username='audit-staff', email='audit-staff@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPPORT,
+        )
+        self.client.force_login(root)
+        response = self.admin_user_change(
+            staff_account, admin_tier='superadmin', email='staff-new@example.com', username='audit-staff-2',
+            is_staff=True, is_superuser=True, is_active=False,
+        )
+        self.assertEqual(response.status_code, 302, getattr(response, 'context', None) and response.context['adminform'].form.errors)
+        rows = {row.action: row for row in ProductAuditEvent.objects.filter(target_id=str(staff_account.pk))}
+        self.assertEqual(set(rows), {'staff.tier_changed', 'account.deactivated', 'account.updated'})
+        self.assertTrue(all(row.actor == root and row.metadata['source'] == 'django_admin' for row in rows.values()))
+        self.assertEqual(rows['staff.tier_changed'].metadata['changes'], {'admin_tier': {'from': 'support', 'to': 'superadmin'}})
+        self.assertEqual(rows['account.updated'].metadata['fields'], ['email', 'is_staff', 'is_superuser', 'username'])
+        self.assertEqual(rows['account.updated'].metadata['changes']['is_superuser'], {'from': False, 'to': True})
+
+        ProductAuditEvent.objects.all().delete()
+        staff_account.refresh_from_db()
+        self.assertEqual(self.admin_user_change(staff_account, is_active=True, role='counselor', school=self.school.id).status_code, 302)
+        actions = set(ProductAuditEvent.objects.values_list('action', flat=True))
+        self.assertEqual(actions, {'account.reactivated', 'account.moved', 'staff.tier_changed', 'account.updated'})
+        self.assertEqual(self.events('account.updated').get().metadata['changes']['role'], {'from': 'admin', 'to': 'counselor'})
+
+        ProductAuditEvent.objects.all().delete()
+        staff_account.refresh_from_db()
+        self.assertEqual(self.admin_user_change(staff_account).status_code, 302)
+        self.assertFalse(ProductAuditEvent.objects.exists())
+
+    def test_a_django_admin_bulk_delete_and_its_audit_rows_commit_together(self):
+        from unittest import mock
+
+        from django.contrib.admin.sites import site
+        from django.db import DatabaseError
+        from django.test import RequestFactory
+
+        root = User.objects.create_superuser('audit-root', 'audit-root@example.com', 'StrongPass123!')
+        request = RequestFactory().post('/admin/users/plan/')
+        request.user = root
+        plans = [Plan.objects.create(code=f'bulk-{n}', name=f'Bulk {n}') for n in range(2)]
+        plan_admin = site._registry[Plan]
+        queryset = Plan.objects.filter(code__startswith='bulk-')
+        with mock.patch('apps.users.audit.audit_many', side_effect=DatabaseError('audit down')), self.assertRaises(DatabaseError):
+            plan_admin.delete_queryset(request, queryset)
+        self.assertEqual(queryset.count(), 2)
+        self.assertFalse(self.events('plan.deleted').exists())
+
+        plan_admin.delete_queryset(request, queryset)
+        self.assertFalse(queryset.exists())
+        self.assertEqual(
+            set(self.events('plan.deleted').values_list('target_id', flat=True)), {str(plan.pk) for plan in plans},
+        )
 
     def test_school_create_and_update_are_audited_with_the_school(self):
         self.client.force_authenticate(self.admin)
@@ -203,6 +416,17 @@ class AuditListTests(APITestCase):
         ids = [row['id'] for row in first.data['results'] + second.data['results']]
         self.assertEqual(len(set(ids)), 30)
         self.assertEqual(self.fetch(cursor='', search='list-support', school=self.other.id).data['results'][0]['action'], 'support.profile_viewed')
+
+    def test_school_ids_in_metadata_come_with_their_names(self):
+        ProductAuditEvent.objects.all().delete()
+        audit_product_action(
+            actor=self.admin, action='account.moved', target=self.admin,
+            metadata={'from_school': self.school.id, 'to_school': self.other.id},
+        )
+        self.client.force_authenticate(self.support)
+        with self.assertNumQueries(3):
+            row = self.client.get('/api/users/audit-events/').data['results'][0]
+        self.assertEqual(row['school_names'], {str(self.school.id): 'List School', str(self.other.id): 'List Other'})
 
     def test_invalid_dates_are_rejected(self):
         response = self.fetch(date_from='yesterday')

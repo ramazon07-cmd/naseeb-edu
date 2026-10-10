@@ -9,7 +9,7 @@ from rest_framework import serializers
 from . import entitlements
 from .admin_permissions import has_tier
 from .images import AvatarField
-from .models import Plan, ProductAuditEvent, User, WorkspaceSubscription
+from .models import Plan, ProductAuditEvent, User, WorkspaceSubscription, normalize_plan_features
 from .services import audit_product_action, validate_counselor_capacity, validate_workspace_membership
 from core.storage import delete_file_on_commit
 
@@ -149,6 +149,9 @@ class UserSerializer(serializers.ModelSerializer):
             validate_workspace_membership(role=role, school=school, user=self.instance)
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict) from exc
+        # A new grant of admin access starts at the lowest staff tier unless one is chosen.
+        if role == User.Role.ADMIN and getattr(self.instance, 'role', None) != User.Role.ADMIN and not attrs.get('admin_tier'):
+            attrs['admin_tier'] = User.AdminTier.SUPPORT
         if not self.instance and role == User.Role.STUDENT:
             # Quick-create is the only path that gives a student a school,
             # a profile and an issued credential together.
@@ -257,9 +260,19 @@ class CounselorProvisionSerializer(serializers.Serializer):
             raise serializers.ValidationError(exc.message_dict) from exc
 
 
+AUDIT_SCHOOL_KEYS = ('school', 'from_school', 'to_school')
+
+
 class ProductAuditEventSerializer(serializers.ModelSerializer):
     actor_name = serializers.SerializerMethodField()
     school_name = serializers.CharField(source='school.name', read_only=True, default=None)
+    # Names of the schools the metadata refers to by id, filled in by the list view.
+    school_names = serializers.SerializerMethodField()
+
+    def get_school_names(self, obj) -> dict:
+        names = self.context.get('school_names') or {}
+        metadata = obj.metadata if isinstance(obj.metadata, dict) else {}
+        return {str(metadata[key]): names[metadata[key]] for key in AUDIT_SCHOOL_KEYS if metadata.get(key) in names}
 
     class Meta:
         model = ProductAuditEvent
@@ -330,6 +343,46 @@ class IndividualCounselorCreateSerializer(serializers.Serializer):
             workspace.owner_counselor = counselor
             workspace.save(update_fields=['owner_counselor', 'updated_at'])
         return counselor
+
+
+class StaffCreateSerializer(serializers.Serializer):
+    """A new product-staff account with a generated one-time password.
+
+    After ``save()`` the password is on ``temporary_password`` (shown once) and
+    the credential on ``credential``.
+    """
+
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    admin_tier = serializers.ChoiceField(choices=User.AdminTier.choices, default=User.AdminTier.SUPPORT)
+    temporary_password = None
+    credential = None
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError('This username is already in use.')
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('This email is already in use.')
+        return value.lower()
+
+    def create(self, validated_data):
+        from .credentials import issue_temporary_credential
+
+        request = self.context['request']
+        with transaction.atomic():
+            staff = User.objects.create_user(**validated_data, password=None, role=User.Role.ADMIN)
+            staff, self.credential, self.temporary_password, _ = issue_temporary_credential(
+                user=staff, issued_by=request.user, request=request,
+            )
+            audit_product_action(
+                actor=request.user, action='staff.created', target=staff, metadata={'staff_tier': staff.admin_tier},
+            )
+        return staff
 
 
 class CounselorTransferSerializer(serializers.Serializer):
@@ -440,17 +493,38 @@ class TemporaryCredentialIssueSerializer(serializers.Serializer):
 
 
 class PlanSerializer(serializers.ModelSerializer):
+    """Plans are written by super admins only (PlanViewSet). The code and the
+    kind of workspace are fixed once a plan exists: subscriptions refer to them."""
+
+    workspaces_count = serializers.IntegerField(read_only=True, default=None)
+
     class Meta:
         model = Plan
         fields = (
-            'id', 'code', 'name', 'description', 'max_counselors', 'max_students', 'max_teachers',
-            'features', 'is_active',
+            'id', 'code', 'name', 'description', 'workspace_type', 'max_counselors', 'max_students', 'max_teachers',
+            'features', 'is_active', 'workspaces_count',
         )
-        read_only_fields = fields
+        read_only_fields = ('id', 'workspaces_count')
+
+    FIXED_AFTER_CREATE = ('code', 'workspace_type')
+
+    def validate_features(self, value):
+        try:
+            return normalize_plan_features(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict.get('features', exc.messages)) from exc
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is not None:
+            changed = [field for field in self.FIXED_AFTER_CREATE if field in attrs and attrs[field] != getattr(self.instance, field)]
+            if changed:
+                raise serializers.ValidationError({field: 'This plan setting cannot be changed after creation.' for field in changed})
+        return attrs
 
 
 class WorkspaceSubscriptionSerializer(serializers.ModelSerializer):
-    plan = serializers.SlugRelatedField(slug_field='code', queryset=Plan.objects.filter(is_active=True))
+    plan = serializers.SlugRelatedField(slug_field='code', queryset=Plan.objects.all())
     school_name = serializers.CharField(source='school.name', read_only=True)
     read_only = serializers.BooleanField(source='is_read_only', read_only=True)
     workspace = serializers.SerializerMethodField()
@@ -465,6 +539,16 @@ class WorkspaceSubscriptionSerializer(serializers.ModelSerializer):
 
     def get_workspace(self, obj):
         return entitlements.workspace_summary(obj)
+
+    def validate_plan(self, plan):
+        # Keeping the current plan is always allowed, even after it was retired.
+        if self.instance is not None and plan.pk == self.instance.plan_id:
+            return plan
+        if not plan.is_active:
+            raise serializers.ValidationError('Select an active plan.', code='plan_retired')
+        if self.instance is not None and plan.workspace_type != self.instance.school.workspace_type:
+            raise serializers.ValidationError('This plan is for a different kind of workspace.', code='plan_workspace_mismatch')
+        return plan
 
     def validate(self, attrs):
         start = attrs.get('period_start', getattr(self.instance, 'period_start', None))

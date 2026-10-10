@@ -180,3 +180,15 @@ test('account settings open from the account menu for students and counselors on
   }
   assert.deepEqual(resolveRoute(parsePath('/account'), teacher), { page: 'dashboard', params: {} });
 });
+
+test('staff pages open only for the tiers that use them', () => {
+  const support = { id: 21, role: 'admin', staff_tier: 'support' };
+  const ops = { id: 22, role: 'admin', staff_tier: 'ops' };
+  const superadmin = { id: 23, role: 'admin', staff_tier: 'superadmin' };
+  assert.deepEqual(resolveRoute({ page: 'admin_staff', params: {} }, ops), { page: 'admin_dashboard', params: {} });
+  assert.equal(buildPath(resolveRoute(parsePath('/platform/staff'), ops)), '/platform');
+  assert.deepEqual(resolveRoute({ page: 'admin_health', params: {} }, support), { page: 'admin_dashboard', params: {} });
+  assert.equal(resolveRoute({ page: 'admin_health', params: {} }, ops).page, 'admin_health');
+  for (const page of ['admin_staff', 'admin_health', 'admin_plans']) assert.equal(resolveRoute({ page, params: {} }, superadmin).page, page);
+  assert.equal(resolveRoute({ page: 'admin_plans', params: {} }, support).page, 'admin_plans');
+});

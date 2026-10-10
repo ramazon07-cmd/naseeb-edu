@@ -247,7 +247,18 @@ def normalize_plan_features(value):
 class Plan(models.Model):
     """A named set of entitlements. Prices and billing live elsewhere."""
 
+    # Same values and labels as School.WorkspaceType (one enum in the API schema).
+    class WorkspaceType(models.TextChoices):
+        SCHOOL = 'school', 'Organization school'
+        INDIVIDUAL = 'individual', 'Individual counselor workspace'
+
     code = models.SlugField(max_length=60, unique=True)
+    workspace_type = models.CharField(
+        max_length=16,
+        choices=WorkspaceType.choices,
+        default=WorkspaceType.SCHOOL,
+        help_text='The kind of workspace this plan can be given to.',
+    )
     name = models.CharField(max_length=120)
     description = models.CharField(max_length=255, blank=True)
     max_counselors = models.PositiveIntegerField(null=True, blank=True)
@@ -338,3 +349,26 @@ class WorkspaceSubscription(models.Model):
 
     def __str__(self):
         return f'{self.school} · {self.plan} ({self.status})'
+
+
+class JobRun(models.Model):
+    """One run of a scheduled (cron) command, for the operator health page."""
+
+    class Result(models.TextChoices):
+        OK = 'ok', 'Finished'
+        FAILED = 'failed', 'Failed'
+        SKIPPED = 'skipped', 'Skipped: already running'
+
+    name = models.CharField(max_length=80)
+    started_at = models.DateTimeField()
+    duration_seconds = models.FloatField(default=0)
+    result = models.CharField(max_length=16, choices=Result.choices)
+    processed = models.PositiveIntegerField(null=True, blank=True)
+    error = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+        indexes = [models.Index(fields=['name', '-started_at'], name='job_run_name_started_idx')]
+
+    def __str__(self):
+        return f'{self.name} {self.result} at {self.started_at:%Y-%m-%d %H:%M}'

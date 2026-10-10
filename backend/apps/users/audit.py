@@ -2,6 +2,8 @@
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from django.db import transaction
+
 from .models import ProductAuditEvent
 
 _recording = ContextVar('audit_recording', default=None)
@@ -48,6 +50,160 @@ def audit_product_action(*, actor, action, target, metadata=None, school=None):
     if recording is not None:
         recording.append(action)
     return event
+
+
+# Every "what changed" in the audit log has one shape, written by audit_diff:
+#   {field: {'from': old, 'to': new}}       for plain values (text cut at AUDIT_VALUE_MAX)
+#   {field: {'changed_keys': [key, ...]}}   for JSON values: which keys changed, never their content
+AUDIT_VALUE_MAX = 200
+AUDIT_IGNORED_FIELDS = frozenset({'updated_at'})
+
+
+def audit_value(value):
+    """A JSON-safe, bounded form of a field value for audit metadata."""
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    value = getattr(value, 'pk', value)
+    if value is None or isinstance(value, (int, float)):
+        return value
+    text = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+    return text if len(text) <= AUDIT_VALUE_MAX else f'{text[:AUDIT_VALUE_MAX]}…'
+
+
+def _as_map(value):
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list):
+        return dict(enumerate(value))
+    return {}
+
+
+def audit_diff(before, after):
+    """The audit shape above for every key of ``before`` whose value in ``after`` differs."""
+    changes = {}
+    for name, old in before.items():
+        if name in AUDIT_IGNORED_FIELDS or name not in after:
+            continue
+        new = after[name]
+        if isinstance(old, (dict, list)) or isinstance(new, (dict, list)):
+            if old != new:
+                old_map, new_map = _as_map(old), _as_map(new)
+                keys = set(old_map) | set(new_map)
+                changes[name] = {'changed_keys': sorted(str(key) for key in keys if old_map.get(key) != new_map.get(key))}
+            continue
+        if getattr(old, 'pk', old) != getattr(new, 'pk', new):
+            changes[name] = {'from': audit_value(old), 'to': audit_value(new)}
+    return changes
+
+
+def audit_snapshot(instance, names=None):
+    """``{field name: value}`` of ``instance``'s concrete fields (``names`` only, when given)."""
+    return {
+        field.name: getattr(instance, field.attname)
+        for field in instance._meta.concrete_fields
+        if names is None or field.name in names
+    }
+
+
+def field_changes(instance, data):
+    """:func:`audit_diff` of the concrete fields ``data`` sets on ``instance``.
+
+    Call it before saving; nested and many-to-many values are left out.
+    """
+    before = audit_snapshot(instance, set(data))
+    return audit_diff(before, {name: data[name] for name in before})
+
+
+# Account fields audited by name only: their values never go into the log.
+ACCOUNT_VALUELESS_FIELDS = frozenset({'password', 'avatar'})
+# Account changes with an audit action of their own (account.moved,
+# account.deactivated / reactivated, staff.tier_changed).
+ACCOUNT_OWN_ROW_FIELDS = frozenset({'school', 'is_active', 'admin_tier'})
+
+
+def account_update_metadata(changes):
+    """account.updated metadata: every changed field by name, values where safe to keep."""
+    return {
+        'fields': sorted(changes),
+        'changes': {name: change for name, change in changes.items() if name not in ACCOUNT_VALUELESS_FIELDS},
+    }
+
+
+def subscription_audit_state(subscription):
+    """What a subscription.changed row compares: the plan by its code, never its id."""
+    return {
+        'plan': subscription.plan.code if subscription.plan_id else None,
+        'status': subscription.status,
+        'period_start': subscription.period_start,
+        'period_end': subscription.period_end,
+    }
+
+
+def audit_subscription_change(*, actor, before, subscription, **metadata):
+    """One subscription.changed row on the workspace's School, when anything changed.
+
+    ``before`` is :func:`subscription_audit_state` taken before the save.
+    """
+    changes = audit_diff(before, subscription_audit_state(subscription))
+    if not changes:
+        return None
+    return audit_product_action(
+        actor=actor, action='subscription.changed', target=subscription.school,
+        metadata={**metadata, 'changes': changes},
+    )
+
+
+class ProductAuditAdminMixin:
+    """Django-admin edits of product data write the same audit rows as the API.
+
+    ``audit_prefix`` names the record (``'plan'`` -> ``plan.created``,
+    ``plan.updated``, ``plan.deleted``). The admin wraps each save in a
+    transaction, and the deletes below take their own, so the row and the
+    change commit together.
+    """
+
+    audit_prefix = ''
+    audit_update_verb = 'updated'
+
+    def audit_target(self, obj):
+        return obj
+
+    def audit_metadata(self, obj):
+        return {}
+
+    def _audit_fields(self, request, obj, verb, **metadata):
+        return {
+            'actor': request.user, 'action': f'{self.audit_prefix}.{verb}', 'target': self.audit_target(obj),
+            'metadata': {'source': 'django_admin', **self.audit_metadata(obj), **metadata},
+        }
+
+    def _audit(self, request, obj, verb, **metadata):
+        audit_product_action(**self._audit_fields(request, obj, verb, **metadata))
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if not change:
+            self._audit(request, obj, 'created')
+            return
+        changes = audit_diff(
+            {name: form.initial.get(name) for name in form.changed_data},
+            {name: form.cleaned_data.get(name) for name in form.changed_data},
+        )
+        self._audit(request, obj, self.audit_update_verb, changes=changes)
+
+    # The rows are built while the records still have their ids and written once
+    # the delete has succeeded, in the same transaction: both happen or neither.
+    def delete_model(self, request, obj):
+        with transaction.atomic():
+            event = build_event(**self._audit_fields(request, obj, 'deleted'))
+            super().delete_model(request, obj)
+            event.save(force_insert=True)
+
+    def delete_queryset(self, request, queryset):
+        with transaction.atomic():
+            events = [build_event(**self._audit_fields(request, obj, 'deleted')) for obj in queryset]
+            super().delete_queryset(request, queryset)
+            audit_many(events)
 
 
 def audit_many(events):

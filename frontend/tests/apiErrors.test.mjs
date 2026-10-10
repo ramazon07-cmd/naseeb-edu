@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { errorPayloadMessage, formatValidationErrors, humanizeField } from '../src/lib/apiErrors.js';
+import { errorPayloadMessage, formFieldErrors, formatValidationErrors, humanizeField } from '../src/lib/apiErrors.js';
 
 test('field names become readable labels', () => {
   assert.equal(humanizeField('target_countries'), 'Target countries');
@@ -46,4 +46,17 @@ test('student form fields in a server error are named in the reader language', a
   const payload = { detail: 'Это поле обязательно.', starts_at: ['Это поле обязательно.'], duration_minutes: ['Введите целое число.'] };
   assert.equal(errorPayloadMessage(payload, t), 'Время начала: Это поле обязательно. • Длительность (мин): Введите целое число.');
   setLanguage('en');
+});
+
+test('form field errors include a nested serializer and skip an error code', () => {
+  assert.deepEqual(formFieldErrors({
+    detail: 'This password is too common.', code: ['school with this code already exists.'],
+    account: { password: ['This password is too common.'], username: ['This username is already in use.'] },
+  }, 'account'), {
+    code: 'school with this code already exists.',
+    account_password: 'This password is too common.',
+    account_username: 'This username is already in use.',
+  });
+  assert.deepEqual(formFieldErrors({ detail: 'Not allowed.', code: 'feature_not_in_plan', school: ['Not in plan.'] }), { school: 'Not in plan.' });
+  assert.deepEqual(formFieldErrors(undefined, 'account'), {});
 });

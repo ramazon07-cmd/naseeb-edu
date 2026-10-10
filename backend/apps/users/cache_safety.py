@@ -30,6 +30,15 @@ def cache_get(key, default=None):
         return default
 
 
+def cache_get_many(keys):
+    """``{key: value}`` for the keys that exist; ``None`` when the cache is down."""
+    try:
+        return cache.get_many(keys)
+    except CACHE_ERRORS as exc:
+        _warn('get_many', exc)
+        return None
+
+
 def cache_set(key, value, timeout=None):
     try:
         cache.set(key, value, timeout)

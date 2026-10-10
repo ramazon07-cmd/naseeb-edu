@@ -18,7 +18,9 @@ const PORTAL_RESOURCES = [
   ['storeItems', 'store-items'], ['team', 'student-team'], ['supportTickets', 'support-tickets'],
 ];
 const ROADMAP_ADMIN = [['counselorRoadmapTemplates', 'counselor-roadmap-templates'], ['counselorRoadmaps', 'counselor-roadmaps']];
-const ADMIN_RESOURCES = [['schools', 'schools'], ['accounts', 'users/accounts', '?role=counselor'], ...ROADMAP_ADMIN];
+// Schools and counselors are paged and searched on the server; Admin Control
+// reads its numbers from /api/admin/summary/.
+const ADMIN_RESOURCES = [...ROADMAP_ADMIN];
 const COUNSELOR_RESOURCES = [['schools', 'schools'], ...ROADMAP_ADMIN, ['programServices', 'program-services'], ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']];
 
 export function resourcesFor(user) {

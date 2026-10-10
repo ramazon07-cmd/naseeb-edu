@@ -136,17 +136,23 @@ class CounselorRoadmapTemplateViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         if not request.user.is_product_admin:
-            return Response({'detail': 'Only a product admin can create roadmap templates.'}, status=403)
+            return Response({
+                'detail': 'Only a product admin can create roadmap templates.', 'code': 'product_admin_required',
+            }, status=403)
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
         if not request.user.is_product_admin:
-            return Response({'detail': 'Only a product admin can edit roadmap templates.'}, status=403)
+            return Response({
+                'detail': 'Only a product admin can edit roadmap templates.', 'code': 'product_admin_required',
+            }, status=403)
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         if not request.user.is_product_admin:
-            return Response({'detail': 'Only a product admin can delete roadmap templates.'}, status=403)
+            return Response({
+                'detail': 'Only a product admin can delete roadmap templates.', 'code': 'product_admin_required',
+            }, status=403)
         return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
@@ -156,6 +162,12 @@ class CounselorRoadmapTemplateViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         template = serializer.save()
         audit_product_action(actor=self.request.user, action='counselor_roadmap_template.updated', target=template)
+
+    def perform_destroy(self, instance):
+        # Recorded before the row goes, so the event keeps the template's id.
+        with transaction.atomic():
+            audit_product_action(actor=self.request.user, action='counselor_roadmap_template.deleted', target=instance)
+            instance.delete()
 
 
 class CounselorRoadmapViewSet(viewsets.ModelViewSet):

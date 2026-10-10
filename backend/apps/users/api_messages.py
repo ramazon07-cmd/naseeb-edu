@@ -718,6 +718,203 @@ EXACT = {
         'uz': 'Javobni ko‘rilgan deb faqat so‘rov muallifi belgilay oladi.',
         'ru': 'Отметить ответ просмотренным может только автор запроса.',
     },
+    # Admin portal: provisioning, schools, plans and staff tiers
+    'You cannot delete your own account.': {
+        'uz': 'O‘z hisobingizni o‘chira olmaysiz.',
+        'ru': 'Нельзя удалить собственную учётную запись.',
+    },
+    'You cannot deactivate your own account.': {
+        'uz': 'O‘z hisobingizni faolsizlantira olmaysiz.',
+        'ru': 'Нельзя деактивировать собственную учётную запись.',
+    },
+    'Temporary credentials are only available for student and school accounts.': {
+        'uz': 'Vaqtinchalik parol faqat o‘quvchi va maktab hisoblari uchun beriladi.',
+        'ru': 'Временный пароль выдаётся только ученикам и школам.',
+    },
+    'You cannot issue credentials for this account.': {
+        'uz': 'Bu hisob uchun vaqtinchalik parol bera olmaysiz.',
+        'ru': 'Вы не можете выдать временный пароль для этой учётной записи.',
+    },
+    'Only a product admin can create counselors.': {
+        'uz': 'Maslahatchilarni faqat platforma administratori yarata oladi.',
+        'ru': 'Создавать консультантов может только администратор платформы.',
+    },
+    'Only a product admin can create individual counselors.': {
+        'uz': 'Individual maslahatchilarni faqat platforma administratori yarata oladi.',
+        'ru': 'Создавать индивидуальных консультантов может только администратор платформы.',
+    },
+    'Only a product admin can transfer counselors.': {
+        'uz': 'Maslahatchilarni faqat platforma administratori boshqa maktabga o‘tkaza oladi.',
+        'ru': 'Переводить консультантов может только администратор платформы.',
+    },
+    'Only counselor accounts can be transferred.': {
+        'uz': 'Boshqa maktabga faqat maslahatchi hisoblarini o‘tkazish mumkin.',
+        'ru': 'Переводить можно только учётные записи консультантов.',
+    },
+    'Select an active organization school.': {
+        'uz': 'Faol tashkilot maktabini tanlang.',
+        'ru': 'Выберите активную школу организации.',
+    },
+    'Reassign or move the counselor’s students before transferring the counselor.': {
+        'uz': 'Maslahatchini o‘tkazishdan oldin uning o‘quvchilarini boshqa maslahatchiga biriktiring yoki ko‘chiring.',
+        'ru': 'Перед переводом консультанта переназначьте или переведите его учеников.',
+    },
+    'Only a product admin can deactivate accounts.': {
+        'uz': 'Hisoblarni faqat platforma administratori faolsizlantira oladi.',
+        'ru': 'Деактивировать учётные записи может только администратор платформы.',
+    },
+    'Only product staff can open a support view.': {
+        'uz': 'Yordam ko‘rinishini faqat platforma xodimlari ocha oladi.',
+        'ru': 'Открыть просмотр поддержки могут только сотрудники платформы.',
+    },
+    'Only a product admin can activate or deactivate accounts.': {
+        'uz': 'Hisoblarni faqat platforma administratori faollashtira yoki faolsizlantira oladi.',
+        'ru': 'Активировать или деактивировать учётные записи может только администратор платформы.',
+    },
+    'Only a product admin can change user roles.': {
+        'uz': 'Foydalanuvchi rolini faqat platforma administratori o‘zgartira oladi.',
+        'ru': 'Менять роли пользователей может только администратор платформы.',
+    },
+    'Only a super admin can grant or remove product admin access.': {
+        'uz': 'Administrator huquqini faqat bosh administrator bera yoki olib tashlay oladi.',
+        'ru': 'Выдавать и отзывать права администратора может только главный администратор.',
+    },
+    'Only a super admin can change staff access levels.': {
+        'uz': 'Xodimlarning kirish darajasini faqat bosh administrator o‘zgartira oladi.',
+        'ru': 'Менять уровень доступа сотрудников может только главный администратор.',
+    },
+    'Counselors must be connected to a school.': {
+        'uz': 'Maslahatchi maktabga biriktirilgan bo‘lishi kerak.',
+        'ru': 'Консультант должен быть привязан к школе.',
+    },
+    'Parent accounts are not connected to a school.': {
+        'uz': 'Ota-ona hisoblari maktabga biriktirilmaydi.',
+        'ru': 'Учётные записи родителей не привязываются к школе.',
+    },
+    'Create students with quick-create so they get a school, a profile and a credential.': {
+        'uz': 'O‘quvchini tezkor qo‘shish orqali yarating: shunda unga maktab, profil va parol beriladi.',
+        'ru': 'Создавайте учеников через быстрое добавление — так они получат школу, профиль и пароль.',
+    },
+    'This username is already in use.': {
+        'uz': 'Bu login nomi band.',
+        'ru': 'Этот логин уже занят.',
+    },
+    'This email is already in use.': {
+        'uz': 'Bu email allaqachon ishlatilmoqda.',
+        'ru': 'Этот email уже используется.',
+    },
+    'The period cannot end before it starts.': {
+        'uz': 'Davr boshlanishidan oldin tugay olmaydi.',
+        'ru': 'Период не может закончиться раньше, чем начнётся.',
+    },
+    'An individual counselor workspace has no school or teacher accounts.': {
+        'uz': 'Individual maslahatchi ish maydonida maktab yoki o‘qituvchi hisoblari bo‘lmaydi.',
+        'ru': 'В личном пространстве консультанта нет учётных записей школы и учителей.',
+    },
+    'An individual counselor workspace belongs to its owner counselor only.': {
+        'uz': 'Individual ish maydoni faqat uning egasi bo‘lgan maslahatchiga tegishli.',
+        'ru': 'Личное пространство принадлежит только консультанту-владельцу.',
+    },
+    'An individual counselor workspace has no school accounts.': {
+        'uz': 'Individual maslahatchi ish maydonida maktab hisoblari bo‘lmaydi.',
+        'ru': 'В личном пространстве консультанта нет учётных записей школы.',
+    },
+    'This workspace is read-only until its subscription is renewed.': {
+        'uz': 'Obuna yangilanmaguncha bu ish maydoni faqat o‘qish rejimida.',
+        'ru': 'Пока подписка не продлена, рабочее пространство доступно только для чтения.',
+    },
+    'This workspace plan does not include this feature.': {
+        'uz': 'Bu imkoniyat ish maydoni tarifiga kiritilmagan.',
+        'ru': 'Эта функция не входит в тариф рабочего пространства.',
+    },
+    'This workspace setting cannot be changed after creation.': {
+        'uz': 'Bu ish maydoni sozlamasini yaratilgandan keyin o‘zgartirib bo‘lmaydi.',
+        'ru': 'Эту настройку рабочего пространства нельзя изменить после создания.',
+    },
+    'Only a product admin can create schools.': {
+        'uz': 'Maktablarni faqat platforma administratori yarata oladi.',
+        'ru': 'Создавать школы может только администратор платформы.',
+    },
+    'Only a product admin can edit schools.': {
+        'uz': 'Maktablarni faqat platforma administratori tahrirlay oladi.',
+        'ru': 'Редактировать школы может только администратор платформы.',
+    },
+    'Only a product admin can deactivate schools.': {
+        'uz': 'Maktablarni faqat platforma administratori faolsizlantira oladi.',
+        'ru': 'Деактивировать школы может только администратор платформы.',
+    },
+    'Only a product admin can create organization accounts.': {
+        'uz': 'Maktab loginlarini faqat platforma administratori yarata oladi.',
+        'ru': 'Создавать учётные записи школ может только администратор платформы.',
+    },
+    'school with this code already exists.': {
+        'uz': 'Bu kodli maktab allaqachon mavjud.',
+        'ru': 'Школа с таким кодом уже существует.',
+    },
+    'school with this name already exists.': {
+        'uz': 'Bu nomli maktab allaqachon mavjud.',
+        'ru': 'Школа с таким названием уже существует.',
+    },
+    'Only a product admin can create roadmap templates.': {
+        'uz': 'Yo‘l xaritasi shablonlarini faqat platforma administratori yarata oladi.',
+        'ru': 'Создавать шаблоны планов может только администратор платформы.',
+    },
+    'Only a product admin can edit roadmap templates.': {
+        'uz': 'Yo‘l xaritasi shablonlarini faqat platforma administratori tahrirlay oladi.',
+        'ru': 'Редактировать шаблоны планов может только администратор платформы.',
+    },
+    'Only a product admin can delete roadmap templates.': {
+        'uz': 'Yo‘l xaritasi shablonlarini faqat platforma administratori o‘chira oladi.',
+        'ru': 'Удалять шаблоны планов может только администратор платформы.',
+    },
+    'Only a product admin can deactivate a student.': {
+        'uz': 'O‘quvchini faqat platforma administratori faolsizlantira oladi.',
+        'ru': 'Деактивировать ученика может только администратор платформы.',
+    },
+    'Only a product admin can edit counselor roadmaps.': {
+        'uz': 'Maslahatchi yo‘l xaritalarini faqat platforma administratori tahrirlay oladi.',
+        'ru': 'Редактировать планы консультантов может только администратор платформы.',
+    },
+    'Only a product admin can cancel counselor roadmaps.': {
+        'uz': 'Maslahatchi yo‘l xaritalarini faqat platforma administratori bekor qila oladi.',
+        'ru': 'Отменять планы консультантов может только администратор платформы.',
+    },
+    'Only a product admin can review counselor missions.': {
+        'uz': 'Maslahatchi vazifalarini faqat platforma administratori ko‘rib chiqa oladi.',
+        'ru': 'Проверять задания консультантов может только администратор платформы.',
+    },
+    'This counselor already has an active roadmap of this type.': {
+        'uz': 'Bu maslahatchida shu turdagi faol yo‘l xaritasi allaqachon bor.',
+        'ru': 'У этого консультанта уже есть активный план этого типа.',
+    },
+    'Choose approve or request_changes.': {
+        'uz': 'Tasdiqlashni yoki o‘zgartirish so‘rashni tanlang.',
+        'ru': 'Выберите: одобрить или запросить изменения.',
+    },
+    'Missions can only be reviewed on an active roadmap.': {
+        'uz': 'Vazifalarni faqat faol yo‘l xaritasida ko‘rib chiqish mumkin.',
+        'ru': 'Проверять задания можно только в активном плане.',
+    },
+    'Select a submitted mission from this roadmap.': {
+        'uz': 'Shu yo‘l xaritasidan topshirilgan vazifani tanlang.',
+        'ru': 'Выберите отправленное задание из этого плана.',
+    },
+    'Explain the requested changes.': {
+        'uz': 'So‘ralayotgan o‘zgarishlarni tushuntiring.',
+        'ru': 'Объясните, какие изменения нужны.',
+    },
+    'Select an active roadmap template.': {
+        'uz': 'Faol yo‘l xaritasi shablonini tanlang.',
+        'ru': 'Выберите активный шаблон плана.',
+    },
+    'Select an active plan.': {
+        'uz': 'Faol tarifni tanlang.',
+        'ru': 'Выберите действующий тариф.',
+    },
+    'This plan is for a different kind of workspace.': {
+        'uz': 'Bu tarif boshqa turdagi ish maydoni uchun.',
+        'ru': 'Этот тариф предназначен для другого типа рабочего пространства.',
+    },
 }
 
 _P = re.compile
@@ -825,6 +1022,18 @@ PATTERNS = (
     (_P(r'^An? \w+ meeting cannot be changed to \w+\.$'), {
         'uz': 'Uchrashuvning hozirgi holatida bu amalni bajarib bo‘lmaydi.',
         'ru': 'В текущем статусе встречи это действие недоступно.',
+    }),
+    (_P(r'^This workspace plan allows at most (\d+) active counselors\.$'), {
+        'uz': 'Ish maydoni tarifi ko‘pi bilan {0} ta faol maslahatchiga ruxsat beradi.',
+        'ru': 'Тариф рабочего пространства допускает не более {0} активных консультантов.',
+    }),
+    (_P(r'^This workspace plan allows at most (\d+) active student accounts\.$'), {
+        'uz': 'Ish maydoni tarifi ko‘pi bilan {0} ta faol o‘quvchi hisobiga ruxsat beradi.',
+        'ru': 'Тариф рабочего пространства допускает не более {0} активных учеников.',
+    }),
+    (_P(r'^This workspace plan allows at most (\d+) active teachers\.$'), {
+        'uz': 'Ish maydoni tarifi ko‘pi bilan {0} ta faol o‘qituvchiga ruxsat beradi.',
+        'ru': 'Тариф рабочего пространства допускает не более {0} активных учителей.',
     }),
 )
 
