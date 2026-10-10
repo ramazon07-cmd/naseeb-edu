@@ -388,6 +388,22 @@ class SubscriptionApiTests(APITestCase):
         self.client.patch(self.url, {'plan': entitlements.CENTER}, format='json')
         self.assertEqual(ProductAuditEvent.objects.filter(action='subscription.changed').count(), 1)
 
+    def test_a_django_admin_plan_change_is_audited_like_the_api(self):
+        subscription = WorkspaceSubscription.objects.get(school=self.school)
+        root = User.objects.create_superuser('sub-root', 'sub-root@example.com', 'StrongPass123!')
+        self.client.force_login(root)
+        response = self.client.post(f'/admin/users/workspacesubscription/{subscription.pk}/change/', {
+            'school': self.school.pk, 'plan': Plan.objects.get(code=entitlements.CENTER).pk, 'status': 'suspended',
+            'period_start': subscription.period_start or '', 'period_end': '2027-06-30',
+        })
+        self.assertEqual(response.status_code, 302, getattr(response, 'context', None) and response.context['adminform'].form.errors)
+        event = ProductAuditEvent.objects.get(action='subscription.changed')
+        self.assertEqual((event.target_type, event.target_id, event.school_id), ('admissions.school', str(self.school.pk), self.school.pk))
+        self.assertEqual(event.metadata['source'], 'django_admin')
+        self.assertEqual(event.metadata['changes']['plan'], {'from': entitlements.SCHOOL_STANDARD, 'to': entitlements.CENTER})
+        self.assertEqual(event.metadata['changes']['period_end']['to'], '2027-06-30')
+        self.assertFalse(ProductAuditEvent.objects.exclude(action='subscription.changed').exists())
+
     def test_period_must_not_end_before_it_starts(self):
         self.client.force_authenticate(self.ops)
         response = self.client.patch(self.url, {

@@ -127,6 +127,30 @@ def account_update_metadata(changes):
     }
 
 
+def subscription_audit_state(subscription):
+    """What a subscription.changed row compares: the plan by its code, never its id."""
+    return {
+        'plan': subscription.plan.code if subscription.plan_id else None,
+        'status': subscription.status,
+        'period_start': subscription.period_start,
+        'period_end': subscription.period_end,
+    }
+
+
+def audit_subscription_change(*, actor, before, subscription, **metadata):
+    """One subscription.changed row on the workspace's School, when anything changed.
+
+    ``before`` is :func:`subscription_audit_state` taken before the save.
+    """
+    changes = audit_diff(before, subscription_audit_state(subscription))
+    if not changes:
+        return None
+    return audit_product_action(
+        actor=actor, action='subscription.changed', target=subscription.school,
+        metadata={**metadata, 'changes': changes},
+    )
+
+
 class ProductAuditAdminMixin:
     """Django-admin edits of product data write the same audit rows as the API.
 
@@ -138,9 +162,12 @@ class ProductAuditAdminMixin:
     audit_prefix = ''
     audit_update_verb = 'updated'
 
+    def audit_target(self, obj):
+        return obj
+
     def _audit(self, request, obj, verb, **metadata):
         audit_product_action(
-            actor=request.user, action=f'{self.audit_prefix}.{verb}', target=obj,
+            actor=request.user, action=f'{self.audit_prefix}.{verb}', target=self.audit_target(obj),
             metadata={'source': 'django_admin', **metadata},
         )
 

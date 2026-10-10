@@ -9,6 +9,8 @@ from .audit import (
     audit_diff,
     audit_product_action,
     audit_snapshot,
+    audit_subscription_change,
+    subscription_audit_state,
 )
 from .models import CredentialAuditEvent, Plan, ProductAuditEvent, TemporaryCredential, User, WorkspaceSubscription
 from .credentials import issue_temporary_credential
@@ -172,7 +174,7 @@ class PlanAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
 
 @admin.register(WorkspaceSubscription)
 class WorkspaceSubscriptionAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
-    # Same action as a plan change made in the admin portal.
+    # Same rows as a plan change made in the admin portal: on the School, plans by code.
     audit_prefix = 'subscription'
     audit_update_verb = 'changed'
     list_display = ('school', 'plan', 'status', 'period_start', 'period_end', 'updated_at')
@@ -180,3 +182,18 @@ class WorkspaceSubscriptionAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
     search_fields = ('school__name', 'school__code')
     raw_id_fields = ('school',)
     readonly_fields = ('updated_by', 'created_at', 'updated_at')
+
+    def audit_target(self, obj):
+        return obj.school
+
+    def save_model(self, request, obj, form, change):
+        if change:
+            before = subscription_audit_state(WorkspaceSubscription.objects.select_related('plan').get(pk=obj.pk))
+        else:
+            before = dict.fromkeys(subscription_audit_state(obj))
+        # The mixin's generic row is replaced by the API's subscription.changed row.
+        super(ProductAuditAdminMixin, self).save_model(request, obj, form, change)
+        audit_subscription_change(actor=request.user, before=before, subscription=obj, source='django_admin')
+
+    def _audit(self, request, obj, verb, **metadata):
+        super()._audit(request, obj, verb, plan=obj.plan.code if obj.plan_id else None, **metadata)

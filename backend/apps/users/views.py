@@ -11,7 +11,15 @@ from apps.users.throttles import ScopedRateThrottle
 from apps.admissions.listing import ListQueryMixin
 from . import entitlements
 from .admin_permissions import IsSupportStaff, SupportReadOpsWrite, SupportReadSuperadminWrite, has_tier, staff_tier_denied
-from .audit import ACCOUNT_OWN_ROW_FIELDS, account_update_metadata, audit_staff_read, field_changes, recorded_actions
+from .audit import (
+    ACCOUNT_OWN_ROW_FIELDS,
+    account_update_metadata,
+    audit_staff_read,
+    audit_subscription_change,
+    field_changes,
+    recorded_actions,
+    subscription_audit_state,
+)
 from .models import PLAN_LIMITS, CredentialAuditEvent, Plan, ProductAuditEvent, User, WorkspaceSubscription
 from .auth_views import token_pair_for_user
 from .credentials import change_own_password, complete_password_change, issue_temporary_credential
@@ -676,29 +684,7 @@ class WorkspaceSubscriptionViewSet(
             subscription = WorkspaceSubscription.objects.select_for_update().select_related('plan').get(
                 pk=serializer.instance.pk,
             )
-            before = {
-                'plan': subscription.plan.code,
-                'status': subscription.status,
-                'period_start': subscription.period_start,
-                'period_end': subscription.period_end,
-            }
+            before = subscription_audit_state(subscription)
             serializer.instance = subscription
             updated = serializer.save(updated_by=self.request.user)
-            after = {
-                'plan': updated.plan.code,
-                'status': updated.status,
-                'period_start': updated.period_start,
-                'period_end': updated.period_end,
-            }
-            changes = {
-                key: {'from': str(before[key] or ''), 'to': str(after[key] or '')}
-                for key in before
-                if before[key] != after[key]
-            }
-            if changes:
-                audit_product_action(
-                    actor=self.request.user,
-                    action='subscription.changed',
-                    target=updated.school,
-                    metadata={'changes': changes},
-                )
+            audit_subscription_change(actor=self.request.user, before=before, subscription=updated)
