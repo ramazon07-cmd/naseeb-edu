@@ -2,9 +2,21 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from . import entitlements
-from .audit import ProductAuditAdminMixin
+from .audit import (
+    ACCOUNT_OWN_ROW_FIELDS,
+    ProductAuditAdminMixin,
+    account_update_metadata,
+    audit_diff,
+    audit_product_action,
+    audit_snapshot,
+)
 from .models import CredentialAuditEvent, Plan, ProductAuditEvent, TemporaryCredential, User, WorkspaceSubscription
 from .credentials import issue_temporary_credential
+
+
+# Bookkeeping, not an account change: the password has its own form and audit
+# trail, and the admin form drops date_joined's microseconds on every save.
+ADMIN_UNAUDITED_FIELDS = ('password', 'last_login', 'password_changed_at', 'dashboard_layout', 'date_joined')
 
 
 class SeatCheckedFormMixin:
@@ -63,7 +75,11 @@ class CustomUserAdmin(UserAdmin):
         # Admin access granted here starts at the lowest staff tier unless one is chosen.
         if obj.role == User.Role.ADMIN and not obj.is_superuser and not form.cleaned_data.get('admin_tier'):
             obj.admin_tier = User.AdminTier.SUPPORT
+        # The form's changed fields, plus the tier, which the role or the line above may set.
+        audited = set(form.changed_data) | {'admin_tier'}
+        before = audit_snapshot(User.objects.get(pk=obj.pk), audited) if change else None
         super().save_model(request, obj, form, change)
+        self._audit_account(request, obj, before)
         if change and 'school' in form.changed_data and obj.role != User.Role.STUDENT:
             from apps.admissions.models import School
             from apps.admissions.tenancy import user_left_school
@@ -81,6 +97,28 @@ class CustomUserAdmin(UserAdmin):
                 raw_password=form.cleaned_data['password1'],
                 request=request,
             )
+
+
+    def _audit_account(self, request, account, before):
+        """The same rows as an account change through the admin portal (UserViewSet)."""
+        def audit(action, **metadata):
+            audit_product_action(actor=request.user, action=action, target=account, metadata={'source': 'django_admin', **metadata})
+
+        if before is None:
+            audit('account.created', role=account.role, admin_tier=account.admin_tier)
+            return
+        changes = audit_diff(before, audit_snapshot(account, set(before)))
+        for name in ADMIN_UNAUDITED_FIELDS:
+            changes.pop(name, None)
+        if 'school' in changes:
+            audit('account.moved', from_school=changes['school']['from'], to_school=changes['school']['to'])
+        if 'is_active' in changes:
+            audit('account.reactivated' if account.is_active else 'account.deactivated')
+        if 'admin_tier' in changes:
+            audit('staff.tier_changed', changes={'admin_tier': changes['admin_tier']})
+        other = {name: change for name, change in changes.items() if name not in ACCOUNT_OWN_ROW_FIELDS}
+        if other:
+            audit('account.updated', **account_update_metadata(other))
 
 
 @admin.register(TemporaryCredential)

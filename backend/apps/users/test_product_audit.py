@@ -287,6 +287,50 @@ class ProductAuditTests(APITestCase):
         admin_row = self.events('plan.updated').order_by('-id').first()
         self.assertEqual(admin_row.metadata['changes'], {'features': {'changed_keys': ['parent_portal']}})
 
+    def admin_user_change(self, account, **values):
+        joined = timezone.localtime(account.date_joined)
+        data = {
+            'username': account.username, 'first_name': account.first_name, 'last_name': account.last_name,
+            'email': account.email, 'role': account.role, 'admin_tier': account.admin_tier,
+            'school': account.school_id or '', 'phone': account.phone, 'position': account.position,
+            'date_joined_0': joined.strftime('%Y-%m-%d'), 'date_joined_1': joined.strftime('%H:%M:%S'),
+            'is_active': 'on' if account.is_active else '',
+        }
+        for name, value in values.items():
+            data[name] = 'on' if value is True else '' if value is False else value
+        return self.client.post(f'/admin/users/user/{account.pk}/change/', {k: v for k, v in data.items() if v != ''})
+
+    def test_django_admin_account_changes_are_audited_like_the_api(self):
+        root = User.objects.create_superuser('audit-root', 'audit-root@example.com', 'StrongPass123!')
+        staff_account = User.objects.create_user(
+            username='audit-staff', email='audit-staff@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPPORT,
+        )
+        self.client.force_login(root)
+        response = self.admin_user_change(
+            staff_account, admin_tier='superadmin', email='staff-new@example.com', username='audit-staff-2',
+            is_staff=True, is_superuser=True, is_active=False,
+        )
+        self.assertEqual(response.status_code, 302, getattr(response, 'context', None) and response.context['adminform'].form.errors)
+        rows = {row.action: row for row in ProductAuditEvent.objects.filter(target_id=str(staff_account.pk))}
+        self.assertEqual(set(rows), {'staff.tier_changed', 'account.deactivated', 'account.updated'})
+        self.assertTrue(all(row.actor == root and row.metadata['source'] == 'django_admin' for row in rows.values()))
+        self.assertEqual(rows['staff.tier_changed'].metadata['changes'], {'admin_tier': {'from': 'support', 'to': 'superadmin'}})
+        self.assertEqual(rows['account.updated'].metadata['fields'], ['email', 'is_staff', 'is_superuser', 'username'])
+        self.assertEqual(rows['account.updated'].metadata['changes']['is_superuser'], {'from': False, 'to': True})
+
+        ProductAuditEvent.objects.all().delete()
+        staff_account.refresh_from_db()
+        self.assertEqual(self.admin_user_change(staff_account, is_active=True, role='counselor', school=self.school.id).status_code, 302)
+        actions = set(ProductAuditEvent.objects.values_list('action', flat=True))
+        self.assertEqual(actions, {'account.reactivated', 'account.moved', 'staff.tier_changed', 'account.updated'})
+        self.assertEqual(self.events('account.updated').get().metadata['changes']['role'], {'from': 'admin', 'to': 'counselor'})
+
+        ProductAuditEvent.objects.all().delete()
+        staff_account.refresh_from_db()
+        self.assertEqual(self.admin_user_change(staff_account).status_code, 302)
+        self.assertFalse(ProductAuditEvent.objects.exists())
+
     def test_school_create_and_update_are_audited_with_the_school(self):
         self.client.force_authenticate(self.admin)
         created = self.client.post('/api/schools/', {'name': 'Fresh', 'code': 'fresh'}, format='json')
