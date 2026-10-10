@@ -7,10 +7,11 @@ from django.db import migrations, models
 
 def backfill_replies(apps, schema_editor):
     """Tickets kept only their latest answer until now: it starts each history,
-    dated when it was given (auto_now_add would stamp the migration time)."""
+    dated when it was given (auto_now_add would stamp the migration time).
+    A ticket that already has a reply is skipped, so a second run adds nothing."""
     SupportTicket = apps.get_model("admissions", "SupportTicket")
     SupportTicketReply = apps.get_model("admissions", "SupportTicketReply")
-    for ticket in SupportTicket.objects.exclude(admin_response="").iterator():
+    for ticket in SupportTicket.objects.exclude(admin_response="").filter(replies__isnull=True).iterator():
         reply = SupportTicketReply.objects.create(
             ticket_id=ticket.pk, author_id=ticket.responded_by_id, body=ticket.admin_response,
         )

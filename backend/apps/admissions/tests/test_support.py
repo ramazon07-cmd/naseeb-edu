@@ -164,7 +164,10 @@ class SupportRoleIsolationTests(RoleIsolationBase):
             admin_response='Old answer', responded_by=self.counselor, responded_at=answered,
         )
         SupportTicket.objects.create(requester=self.student_a_user, category=SupportTicket.Category.OTHER, subject='Open', message='No answer yet')
-        import_module('apps.admissions.migrations.0075_support_ticket_reply_history').backfill_replies(apps, None)
+        backfill = import_module('apps.admissions.migrations.0075_support_ticket_reply_history').backfill_replies
+        backfill(apps, None)
+        # A second run (a re-applied or interrupted migration) adds nothing.
+        backfill(apps, None)
         self.assertEqual(
             [(reply.ticket_id, reply.author_id, reply.body, reply.created_at) for reply in SupportTicketReply.objects.all()],
             [(old.id, self.counselor.id, 'Old answer', answered)],
