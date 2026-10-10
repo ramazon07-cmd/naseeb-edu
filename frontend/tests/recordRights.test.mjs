@@ -38,7 +38,7 @@ test('only stale-copy codes trigger a reload', () => {
 
 test('error messages are keyed by code; English uses the server text', () => {
   const error = (code) => ({ details: { code, detail: 'Server sentence.' }, message: 'Server sentence.' });
-  for (const code of ['essay_changed', 'precondition_required', 'student_authored', 'student_authored_delete']) {
+  for (const code of Object.keys(ERROR_CODE_TRANSLATIONS)) {
     for (const [language, index] of [['uz', 0], ['ru', 1]]) {
       setLanguage(language);
       assert.equal(recordErrorMessage(error(code)), ERROR_CODE_TRANSLATIONS[code][index], `${language}: ${code}`);
@@ -53,8 +53,10 @@ test('error messages are keyed by code; English uses the server text', () => {
 
 test('the record form uses these rules', () => {
   const source = readFileSync(new URL('../src/pages/ResourceSection.jsx', import.meta.url), 'utf8');
-  assert.match(source, /const itemEditable = allowEdit && editableFields\(item, RESOURCE_FIELDS\[resource\] \|\| \[\]\)\.length > 0;/);
+  assert.match(source, /const itemEditable = allowEdit && !counselorLetter && editableFields\(item, RESOURCE_FIELDS\[resource\] \|\| \[\]\)\.length > 0;/);
   assert.match(source, /allowCreate && canDelete\(item, true\)/);
+  // A letter the counselor wrote stays read-only for the student whatever the record allows.
+  assert.match(source, /const allowDelete = !counselorLetter && \(/);
   assert.match(source, /item \? editableFields\(item, allFields\) : allFields/);
   assert.match(source, /if \(base\) payload = changedPayload\(payload, base\)/);
   // Each changed essay field carries the value it was loaded with; a conflict reloads the copy, keeping what was typed.

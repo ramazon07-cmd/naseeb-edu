@@ -626,7 +626,8 @@ class Application(TimeStampedModel):
         WAITLISTED = 'waitlisted', 'Waitlisted'
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='applications')
-    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name='applications')
+    # PROTECT: deleting a university must never take students' applications with it.
+    university = models.ForeignKey(University, on_delete=models.PROTECT, related_name='applications')
     program = models.CharField(max_length=220)
     tier = models.CharField(max_length=20, choices=University.Tier.choices, default=University.Tier.TARGET)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.RESEARCHING)
@@ -1328,6 +1329,38 @@ class SupportTicket(TimeStampedModel):
     def __str__(self):
         return f'#{self.pk} {self.subject}'
 
+    def add_reply(self, author, body):
+        """Keep ``body`` as a new answer in the history. admin_response mirrors the
+        latest one, and the requester sees it as unread."""
+        reply = self.replies.create(author=author, body=body)
+        self.admin_response = body
+        self.responded_by = author
+        self.responded_at = reply.created_at
+        self.requester_viewed_at = None
+        self.save(update_fields=['admin_response', 'responded_by', 'responded_at', 'requester_viewed_at', 'updated_at'])
+        return reply
+
+
+class SupportTicketReply(TimeStampedModel):
+    """One support answer on a ticket. A new answer is added, never written over
+    an older one; SupportTicket.admin_response mirrors the latest."""
+
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name='replies')
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='support_ticket_replies',
+    )
+    body = models.TextField()
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return f'#{self.ticket_id} reply {self.pk}'
+
 
 def student_document_upload_path(instance, filename):
     """Keep private uploads collision-free and grouped by student."""
@@ -1577,6 +1610,10 @@ class RecommendationLetter(TimeStampedModel):
         SUBMITTED = 'submitted', 'Submitted'
         APPROVED = 'approved', 'Approved'
 
+    class StudentReview(models.TextChoices):
+        CONFIRMED = 'confirmed', 'Confirmed'
+        CHANGES_REQUESTED = 'changes_requested', 'Changes requested'
+
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='recommendations')
     recommender_name = models.CharField(max_length=180)
     recommender_title = models.CharField(max_length=180, blank=True)
@@ -1595,6 +1632,15 @@ class RecommendationLetter(TimeStampedModel):
     file_size = models.PositiveBigIntegerField(default=0)
     google_docs_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
+    # The letter itself, written by the counselor in Student 360. Only
+    # counselors write it, and the student reads it only once it is shared.
+    body = models.TextField(blank=True)
+    shared_with_student = models.BooleanField(default=False)
+    # The student's check of the shared text: it is right, or what to change.
+    # A new text clears it, so it always refers to the words the student read.
+    student_review = models.CharField(max_length=20, choices=StudentReview.choices, blank=True)
+    student_review_note = models.TextField(blank=True)
+    student_reviewed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['deadline', 'recommender_name']

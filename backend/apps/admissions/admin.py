@@ -235,6 +235,12 @@ class SupportTicketAdmin(ScaledModelAdmin):
     list_filter = ('status', 'category', 'created_at')
     readonly_fields = ('requester', 'created_at', 'updated_at', 'responded_at', 'requester_viewed_at')
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        # An answer written here joins the reply history like one from the app.
+        if 'admin_response' in form.changed_data and obj.admin_response.strip():
+            obj.add_reply(request.user, obj.admin_response)
+
 
 @admin.register(ScreenTimeDaily)
 class ScreenTimeDailyAdmin(ScaledModelAdmin):

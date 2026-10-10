@@ -3,7 +3,9 @@ import { AlertTriangle, BrainCircuit, Check, CheckCircle2, ChevronRight, CloudOf
 import { api } from '../api';
 import { t } from '../i18n';
 import { Panel } from '../components/ui';
-import { ownStudent } from '../lib/labels';
+import { ProfileResultCard } from '../components/ProfileResultCard';
+import { fullName, ownStudent } from '../lib/labels';
+import { profileCardData } from '../lib/profileCard';
 import { USER_STORAGE, userStorageKey } from '../userStorage';
 import {
   assessmentLockReason, isRetryableSaveError, loadPendingAttempts, mergeServerAnswers, saveRetryDelay, storePendingAttempts } from
@@ -387,10 +389,11 @@ function AIEducationGuidance({ majors, subjects, lockReason, student, reload, no
   </section>
 }
 
-function MajorMatches({ results, lockReason, student, reload, notify }) {
-  const scored = Object.fromEntries(results.filter(([, r]) => r).map(([c, r]) => [c.scoring, r]))
-  if (!scored.riasec) return <AIEducationGuidance majors={[]} subjects={[]} lockReason={lockReason || 'incomplete'} student={student} reload={reload} notify={notify} />
+// Finished results by scoring kind ('riasec', 'bigfive', 'subjects', ...).
+const scoredBy = (results) => Object.fromEntries(results.filter(([, r]) => r).map(([c, r]) => [c.scoring, r]))
 
+// The deterministic major shortlist: interests lead, subjects and personality sharpen it.
+function majorShortlist(scored, limit) {
   const signals = recSignals(
     scored.riasec.means,
     // The ability/interest/cost composite, not a bare confidence rating -- still
@@ -399,7 +402,14 @@ function MajorMatches({ results, lockReason, student, reload, notify }) {
     scored.subjects ? subjectPerformance(scored.subjects.bySubject) : null,
     scored.bigfive || null,
   )
-  const majors = recRank(MAJOR_ENTRIES, signals, 'major', 5)
+  return recRank(MAJOR_ENTRIES, signals, 'major', limit)
+}
+
+function MajorMatches({ results, lockReason, student, reload, notify }) {
+  const scored = scoredBy(results)
+  if (!scored.riasec) return <AIEducationGuidance majors={[]} subjects={[]} lockReason={lockReason || 'incomplete'} student={student} reload={reload} notify={notify} />
+
+  const majors = majorShortlist(scored, 5)
   if (!majors.length) return null
 
   return <AIEducationGuidance
@@ -412,9 +422,9 @@ function MajorMatches({ results, lockReason, student, reload, notify }) {
     />
 }
 
-function ResultsSummary({ results }) {
+// The score behind every finished challenge, as columns of label and value.
+function ResultNumbers({ results }) {
   const done = results.filter(([, r]) => r)
-  if (!done.length) return null
   const personality = done.find(([c]) => c.scoring === 'bigfive')
   const interests = done.find(([c]) => c.scoring === 'riasec')
   const subjects = done.find(([c]) => c.scoring === 'subjects')
@@ -423,6 +433,21 @@ function ResultsSummary({ results }) {
     interests && ['INTERESTS', RIASEC_ORDER.slice(0, 6).map((scale) => [RIASEC_NAME[scale], interests[1].means[scale]])],
     subjects && ['STRONGEST SUBJECTS', subjects[1].ranked.slice(0, 6).map((subject) => [SUBJECT_NAME[subject], subjects[1].bySubject[subject]])],
   ].filter(Boolean)
+  if (!numberColumns.length) return null
+  return <div className="assessment-number-breakdown" aria-label={t('Assessment score details')}>
+    {numberColumns.map(([title, rows]) => <article className="assessment-number-column" key={title}>
+      <h3>{t(title)}</h3>
+      <div>{rows.map(([label, value]) => <div key={label}><span>{t(label)}</span><strong>{Number(value).toFixed(1)}</strong></div>)}</div>
+    </article>)}
+  </div>
+}
+
+// Before Interests is finished there is no card yet: the hexagon placeholder
+// and whatever numbers exist stand in for it.
+function ResultsSummary({ results }) {
+  const done = results.filter(([, r]) => r)
+  if (!done.length) return null
+  const interests = done.find(([c]) => c.scoring === 'riasec')
 
   return <section className="assessment-number-summary">
     <div className="assessment-number-hexagon">
@@ -432,12 +457,7 @@ function ResultsSummary({ results }) {
       />}
       {!interests && <div className="assessment-number-placeholder"><Hexagon size={38} /><span>{t('Complete Interests to reveal your hexagon.')}</span></div>}
     </div>
-    {numberColumns.length > 0 && <div className="assessment-number-breakdown" aria-label={t('Assessment score details')}>
-      {numberColumns.map(([title, rows]) => <article className="assessment-number-column" key={title}>
-        <h4>{t(title)}</h4>
-        <div>{rows.map(([label, value]) => <div key={label}><span>{t(label)}</span><strong>{Number(value).toFixed(1)}</strong></div>)}</div>
-      </article>)}
-    </div>}
+    <ResultNumbers results={results} />
   </section>
 }
 
@@ -646,6 +666,15 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
   const student = ownStudent(data)
   const open = CHALLENGES.find((challenge) => challenge.key === openKey)
   const resultByKey = Object.fromEntries(results.map(([challenge, result]) => [challenge.key, { challenge, result }]))
+  const scored = scoredBy(results)
+  // Majors join the card only once recommendations unlock, as they do on the page.
+  const person = student?.user_detail || user
+  const card = profileCardData({
+    results,
+    majors: scored.riasec && !lockReason ? majorShortlist(scored, 3).map((row) => NAMES.majors[row.key]) : null,
+    firstName: person?.first_name || fullName(person),
+    lastName: person?.last_name || '',
+  })
 
   if (open) return <ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} />
 
@@ -673,7 +702,7 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
     </div>
 
     {doneCount > 0 && <div id="assessment-results" className="assessment-results-stack">
-      <ResultsSummary results={results} />
+      {card ? <ProfileResultCard card={card} student={student}><ResultNumbers results={results} /></ProfileResultCard> : <ResultsSummary results={results} />}
     </div>}
   </div>
 }

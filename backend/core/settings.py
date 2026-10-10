@@ -97,6 +97,14 @@ ESSAY_COACH_SCHOOL_DAILY_BUDGET = config('ESSAY_COACH_SCHOOL_DAILY_BUDGET', defa
 ESSAY_COACH_USER_DAILY_LIMIT = config('ESSAY_COACH_USER_DAILY_LIMIT', default=40, cast=int)
 ESSAY_COACH_MIN_INTERVAL_SECONDS = config('ESSAY_COACH_MIN_INTERVAL_SECONDS', default=15, cast=int)
 ESSAY_COACH_HOURLY_LIMIT = config('ESSAY_COACH_HOURLY_LIMIT', default=120, cast=int)
+# Recommendation-letter suggestions for counselors use the assistant's gateway
+# and models. The platform-wide budget is required (0 = AI off; profile-based
+# suggestions remain); school and user caps use 0 = no cap.
+REC_LETTER_AI_DAILY_BUDGET = config('REC_LETTER_AI_DAILY_BUDGET', default=3000, cast=int)
+REC_LETTER_AI_SCHOOL_DAILY_BUDGET = config('REC_LETTER_AI_SCHOOL_DAILY_BUDGET', default=600, cast=int)
+REC_LETTER_AI_USER_DAILY_LIMIT = config('REC_LETTER_AI_USER_DAILY_LIMIT', default=150, cast=int)
+REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS = config('REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS', default=4, cast=int)
+REC_LETTER_SUGGEST_HOURLY_LIMIT = config('REC_LETTER_SUGGEST_HOURLY_LIMIT', default=180, cast=int)
 ESSAY_AUTOSAVE_LIMIT = config('ESSAY_AUTOSAVE_LIMIT', default=1200, cast=int)
 ESSAY_AUTOSAVE_WINDOW_SECONDS = config('ESSAY_AUTOSAVE_WINDOW_SECONDS', default=600, cast=int)
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)
@@ -429,6 +437,9 @@ SPECTACULAR_SETTINGS = {
         'RecommendationStatusEnum': [
             ('requested', 'Requested'), ('drafting', 'Drafting'),
             ('submitted', 'Submitted'), ('approved', 'Approved'),
+        ],
+        'RecommendationStudentReviewEnum': [
+            ('confirmed', 'Confirmed'), ('changes_requested', 'Changes requested'),
         ],
         'SchoolRegionEnum': [
             ('karakalpakstan', 'Republic of Karakalpakstan'), ('andijan', 'Andijan'),

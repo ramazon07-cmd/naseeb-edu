@@ -4,7 +4,8 @@ import { t, tp, tx } from '../i18n';
 import { Modal, Badge, Empty } from '../components/ui';
 import { Field, PortalTabs } from '../components/forms';
 import { label, initials } from '../lib/labels';
-import { ShieldCheck, Send, MessageSquareText, Plus, Eye } from 'lucide-react';
+import { ShieldCheck, Send, MessageSquareText, Plus, Eye, LifeBuoy } from 'lucide-react';
+import { SupportViewModal } from '../components/SupportViewModal';
 import { dateTimeText, dateText, joinParts } from '../lib/format';
 import { matchesQuery } from '../lib/searchIndex';
 import { isPlatformAdmin } from '../lib/roles';
@@ -45,17 +46,30 @@ export function SupportTicketForm({ onClose, onSaved, notify }) {
   </form></Modal>;
 }
 
+// Each support answer, oldest first; earlier tickets fall back to their single answer.
+const repliesOf = (ticket) => ticket.replies?.length ? ticket.replies : ticket.admin_response ? [{ id: 'latest', body: ticket.admin_response, author_name: ticket.responded_by_name, created_at: ticket.responded_at }] : [];
+
+// The requester's account, opened in the audited read-only support view.
+function RequesterAccount({ ticket, onOpenAccount }) {
+  return <div className="support-requester"><span className="avatar">{initials(ticket.requester_name)}</span><div><b>{ticket.requester_name}</b><small>{label(ticket.requester_role)}</small></div>{onOpenAccount && <button type="button" className="button quiet small" onClick={() => onOpenAccount({ id: ticket.requester, full_name: ticket.requester_name, role: ticket.requester_role })}><LifeBuoy size={14} /> {t("Open account")}</button>}</div>;
+}
+
 export function SupportResponseModal({ ticket, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
+  const replies = repliesOf(ticket);
   async function submit(event) {
     event.preventDefault();
-    setSaving(true);
     const values = new FormData(event.currentTarget);
+    const reply = String(values.get('reply') || '').trim();
+    const status = values.get('status');
+    // A new answer is added to the history; changing only the status is fine too.
+    if (!reply && status === ticket.status) {
+      notify(t("Write a reply or change the status."), 'error');
+      return;
+    }
+    setSaving(true);
     try {
-      await api.update('support-tickets', ticket.id, {
-        status: values.get('status'),
-        admin_response: String(values.get('admin_response') || '').trim()
-      });
+      await api.update('support-tickets', ticket.id, reply ? { status, reply } : { status });
       notify(t("Support response saved."));
       onSaved();
     } catch (error) {
@@ -66,19 +80,22 @@ export function SupportResponseModal({ ticket, onClose, onSaved, notify }) {
   }
   return <Modal title={t("Respond to support request")} onClose={onClose}><form className="form-grid support-form" onSubmit={submit}>
     <div className="support-request-preview form-wide"><span><Badge>{ticket.category}</Badge><Badge>{ticket.status}</Badge></span><h3>{ticket.subject}</h3><p>{ticket.message}</p><small>{joinParts(ticket.requester_name, ticket.requester_role && label(ticket.requester_role), dateTimeText(ticket.created_at))}</small></div>
+    {replies.map((item) => <div className="support-request-preview form-wide" key={item.id}><p>{item.body}</p><small>{joinParts(item.author_name || t("Naseeb Edu Support"), dateTimeText(item.created_at))}</small></div>)}
     <Field label={t("Status")}><select name="status" defaultValue={ticket.status}>{SUPPORT_STATUSES.map((status) => <option key={status} value={status}>{label(status)}</option>)}</select></Field>
-    <Field label={t("Admin response")}><textarea name="admin_response" defaultValue={ticket.admin_response} maxLength="5000" rows="7" placeholder={t("Write a clear resolution or next step.")} required /></Field>
+    <Field label={t("New reply")}><textarea name="reply" maxLength="5000" rows="7" placeholder={t("Write a clear resolution or next step.")} /></Field>
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : <><Send size={16} /> {t("Save response")}</>}</button></div>
   </form></Modal>;
 }
 
-export function SupportTicketDetail({ ticket, user, onClose, onRespond }) {
+export function SupportTicketDetail({ ticket, user, onClose, onRespond, onOpenAccount }) {
   const admin = isPlatformAdmin(user);
+  const replies = repliesOf(ticket);
   return <Modal title={ticket.subject} onClose={onClose}><div className="support-ticket-detail">
     <header><div><Badge>{ticket.category}</Badge><Badge>{ticket.status}</Badge>{ticket.has_unread_response && !admin && <Badge tone="unread">{t("New response")}</Badge>}</div><small>{joinParts(tx`Created ${dateTimeText(ticket.created_at)}`, ticket.updated_at && ticket.updated_at !== ticket.created_at && tx`Updated ${dateTimeText(ticket.updated_at)}`)}</small></header>
-    {admin && <div className="support-requester"><span className="avatar">{initials(ticket.requester_name)}</span><div><b>{ticket.requester_name}</b><small>{label(ticket.requester_role)}</small></div></div>}
+    {admin && <RequesterAccount ticket={ticket} onOpenAccount={onOpenAccount} />}
     <section><span className="eyebrow">{t("REQUEST")}</span><p>{ticket.message}</p></section>
-    <section className={`support-response ${ticket.admin_response ? 'answered' : ''}`}><span className="eyebrow">{t("SUPPORT RESPONSE")}</span>{ticket.admin_response ? <><p>{ticket.admin_response}</p><small>{joinParts(ticket.responded_by_name || t("Naseeb Edu Support"), dateTimeText(ticket.responded_at))}</small></> : <p className="muted-copy">{t("Support has not responded yet. Return to this page later; a badge will appear in the Support menu when a response is ready.")}</p>}</section>
+    {replies.map((item) => <section className="support-response answered" key={item.id}><span className="eyebrow">{t("SUPPORT RESPONSE")}</span><p>{item.body}</p><small>{joinParts(item.author_name || t("Naseeb Edu Support"), dateTimeText(item.created_at))}</small></section>)}
+    {!replies.length && <section className="support-response"><span className="eyebrow">{t("SUPPORT RESPONSE")}</span><p className="muted-copy">{t("Support has not responded yet. Return to this page later; a badge will appear in the Support menu when a response is ready.")}</p></section>}
     <footer><button className="button quiet" onClick={onClose}>{t("Close")}</button>{admin && <button className="button primary" onClick={onRespond}><MessageSquareText size={16} /> {t("Respond")}</button>}</footer>
   </div></Modal>;
 }
@@ -88,6 +105,7 @@ export function SupportPage({ user, data, query, reload, notify }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [responding, setResponding] = useState(null);
+  const [account, setAccount] = useState(null);
   const [countsVersion, setCountsVersion] = useState(0);
   const admin = isPlatformAdmin(user);
   const search = query.trim().toLowerCase();
@@ -130,7 +148,8 @@ export function SupportPage({ user, data, query, reload, notify }) {
       {admin && <><PagedListError list={queue} /><LoadMore list={queue} /></>}
     </section>
     {creating && <SupportTicketForm onClose={() => setCreating(false)} onSaved={saved} notify={notify} />}
-    {selected && <SupportTicketDetail ticket={selected} user={user} onClose={() => setSelected(null)} onRespond={() => {setResponding(selected);setSelected(null);}} />}
+    {selected && <SupportTicketDetail ticket={selected} user={user} onClose={() => setSelected(null)} onRespond={() => {setResponding(selected);setSelected(null);}} onOpenAccount={(requester) => {setAccount(requester);setSelected(null);}} />}
     {responding && <SupportResponseModal ticket={responding} onClose={() => setResponding(null)} onSaved={saved} notify={notify} />}
+    {account && <SupportViewModal account={account} onClose={() => setAccount(null)} notify={notify} />}
   </div>;
 }

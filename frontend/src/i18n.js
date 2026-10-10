@@ -8,6 +8,8 @@ import { essayLabPagesMessages } from "./translations/essayLabPages.js";
 import { accountMessages } from "./translations/account.js";
 import { errorCodeMessages } from "./translations/errorCodes.js";
 import { fitReasonMessages } from "./translations/fitReasons.js";
+import { letterMessages } from "./translations/letters.js";
+import { catalogAdminMessages } from "./translations/catalogAdmin.js";
 
 import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
 
@@ -33,6 +35,8 @@ export const TRANSLATIONS = {
     ...accountMessages("uz"),
     ...errorCodeMessages("uz"),
     ...fitReasonMessages("uz"),
+    ...letterMessages("uz"),
+    ...catalogAdminMessages("uz"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
@@ -220,6 +224,8 @@ export const TRANSLATIONS = {
     ...accountMessages("ru"),
     ...errorCodeMessages("ru"),
     ...fitReasonMessages("ru"),
+    ...letterMessages("ru"),
+    ...catalogAdminMessages("ru"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",

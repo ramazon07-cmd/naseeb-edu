@@ -50,8 +50,9 @@ test('each student page fetches its own collections the first time it opens, onc
   s.signIn();
   s.open('dashboard');
   assert.deepEqual(s.open('programs'), ['opportunity-programs']);
-  // College Search pages the university catalogue itself (/api/college-search/).
-  assert.deepEqual(s.open('college_search').sort(), ['applications', 'scholarships']);
+  // College Search pages the university catalogue itself (/api/college-search/);
+  // essays came with the dashboard, and the page adds what "What you need" counts.
+  assert.deepEqual(s.open('college_search').sort(), ['applications', 'documents', 'recommendations', 'scholarships']);
   // Applications' collections came with College Search: nothing new to fetch.
   assert.deepEqual(s.open('applications'), []);
   assert.deepEqual(s.open('store'), ['store-items']);
@@ -154,4 +155,37 @@ test('the app starts students with the shell and loads pages as they open', () =
   assert.doesNotMatch(app, /await loadData\(current\)/, 'sign-in goes through loadInitial');
   assert.match(app, /await loadInitial\(current\)/);
   assert.match(app, /ensureLoaded\(user, studentPageKeys\(page\)\)/);
+  // College Search and Applications block only on their primary data.
+  assert.match(app, /STUDENT_PRIMARY_KEYS = \{ college_search: \['students', 'applications'\], applications: \['students', 'applications'\] \}/);
 });
+
+for (const [page, dependencies] of [
+  ['college_search', ['essays', 'documents', 'recommendations']],
+  ['applications', ['essays', 'recommendations']],
+]) {
+  test(`${page} waits for each readiness dependency; only its primary data blocks it`, () => {
+    const s = session(student);
+    s.signIn();
+    const fetched = s.open(page);
+    for (const dependency of dependencies) assert.ok(fetched.includes(dependency));
+    const keys = studentPageKeys(page);
+    const success = Object.fromEntries(keys.map((key) => [key, { status: 'success', loaded: true }]));
+    const primaryKeys = ['students', 'applications'];
+    const state = (resourceStatus) => pageLoadState({ keys, data: { students: [{ id: 1 }] }, stats: null, loading: false, resourceStatus, lazy: true, primaryKeys });
+    for (const dependency of dependencies) {
+      const absent = { ...success };
+      delete absent[dependency];
+      assert.equal(state(absent).initialLoading, true, dependency);
+      assert.equal(state({ ...success, [dependency]: { status: 'loading', loaded: false } }).initialLoading, true, dependency);
+      // A failed count source leaves the page up, with the failure listed for the retry notice.
+      const failed = state({ ...success, [dependency]: { status: 'error', loaded: false, error: 'Failed' } });
+      assert.equal(failed.contentBlocked, false, dependency);
+      assert.deepEqual(failed.failedKeys, [dependency]);
+    }
+    const noApplications = state({ ...success, applications: { status: 'error', loaded: false, error: 'Failed' } });
+    assert.equal(noApplications.contentBlocked, true);
+    assert.equal(state({ ...success, applications: { status: 'error', loaded: true, error: 'Failed refresh' } }).contentBlocked, false);
+    assert.equal(state(success).initialLoading, false);
+    assert.equal(state(success).contentBlocked, false);
+  });
+}

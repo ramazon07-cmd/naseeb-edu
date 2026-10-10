@@ -7,16 +7,20 @@
 // skeleton stays until every one of the page's keys has arrived or failed, so
 // the page never flashes "nothing here yet" for a list that is still on its
 // way; a background refresh of an already-loaded key keeps the page shown.
-export function pageLoadState({ keys, data, stats, loading, resourceStatus, lazy = false }) {
+export function pageLoadState({ keys, data, stats, loading, resourceStatus, lazy = false, primaryKeys = [] }) {
   const tracked = keys.filter((key) => resourceStatus[key]);
   const loadingKeys = tracked.filter((key) => resourceStatus[key].status === 'loading');
   const failedKeys = tracked.filter((key) => resourceStatus[key].status === 'error');
+  // A page cannot stand in for its primary data: a failed first request for it is
+  // not an empty list. Other failed keys leave the page up beside the retry notice,
+  // and a failed refresh still has its previous value.
+  const contentBlocked = failedKeys.some((key) => primaryKeys.includes(key) && !resourceStatus[key].loaded);
   const hasVisibleData = keys.some((key) => key === 'dashboard' ? Boolean(stats) : Boolean(data[key]?.length));
   if (lazy) {
     const firstLoadKeys = keys.filter((key) => !resourceStatus[key] || (resourceStatus[key].status === 'loading' && !resourceStatus[key].loaded));
-    return { loadingKeys, failedKeys, hasVisibleData, initialLoading: firstLoadKeys.length > 0 };
+    return { loadingKeys, failedKeys, hasVisibleData, contentBlocked, initialLoading: firstLoadKeys.length > 0 };
   }
   const firstLoad = loading && Object.keys(resourceStatus).length === 0;
   const initialLoading = (loadingKeys.length > 0 || firstLoad) && !hasVisibleData;
-  return { loadingKeys, failedKeys, hasVisibleData, initialLoading };
+  return { loadingKeys, failedKeys, hasVisibleData, contentBlocked, initialLoading };
 }

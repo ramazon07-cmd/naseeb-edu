@@ -1,11 +1,13 @@
 """Admissions API views — support."""
+from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from apps.users.models import User
 from apps.users.services import audit_product_action
-from ..models import SupportTicket
+from ..models import SupportTicket, SupportTicketReply
 from ..listing import ListQueryMixin
 from ..serializers import SupportTicketSerializer
 
@@ -48,7 +50,9 @@ class SupportTicketViewSet(
 ):
     serializer_class = SupportTicketSerializer
     permission_classes = [SupportTicketPermission]
-    queryset = SupportTicket.objects.select_related('requester', 'responded_by').all()
+    queryset = SupportTicket.objects.select_related('requester', 'responded_by').prefetch_related(
+        Prefetch('replies', queryset=SupportTicketReply.objects.select_related('author')),
+    )
     search_fields = ('subject',)
     choice_filters = {
         'status': ('status', SupportTicket.Status.choices),
@@ -72,26 +76,26 @@ class SupportTicketViewSet(
             admin_response='',
         )
 
+    @transaction.atomic
     def perform_update(self, serializer):
+        # `reply` is the reply box: every submit is a new answer, even one that
+        # repeats the last. An edited admin_response (older clients) counts too.
+        reply = serializer.validated_data.pop('reply', '')
         previous_response = serializer.instance.admin_response
         previous_status = serializer.instance.status
         ticket = serializer.save()
-        responded = bool(ticket.admin_response) and ticket.admin_response != previous_response
-        if responded:
-            ticket.responded_by = self.request.user
-            ticket.responded_at = timezone.now()
-            ticket.requester_viewed_at = None
-            ticket.save(update_fields=[
-                'responded_by', 'responded_at', 'requester_viewed_at', 'updated_at',
-            ])
-        if responded or ticket.status != previous_status:
-            # The response text stays out of the audit log; only the change is recorded.
+        if not reply and ticket.admin_response and ticket.admin_response != previous_response:
+            reply = ticket.admin_response
+        if reply:
+            ticket.add_reply(self.request.user, reply)
+        if reply or ticket.status != previous_status:
+            # The reply text stays out of the audit log; only the change is recorded.
             metadata = {'category': ticket.category}
             if ticket.status != previous_status:
                 metadata['status'] = {'from': previous_status, 'to': ticket.status}
             audit_product_action(
                 actor=self.request.user,
-                action='support_ticket.responded' if responded else 'support_ticket.status_changed',
+                action='support_ticket.responded' if reply else 'support_ticket.status_changed',
                 target=ticket,
                 school=ticket.requester.school_id,
                 metadata=metadata,

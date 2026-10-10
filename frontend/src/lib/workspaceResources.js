@@ -82,8 +82,10 @@ export const STUDENT_PAGE_KEYS = {
   messages: ['messageChannels'],
   programs: ['opportunityPrograms'],
   essay_lab: [],
-  applications: ['applications'],
-  college_search: ['applications', 'scholarships'],
+  // The board counts essays and letters; a university's "What you need" tab
+  // counts documents too, so neither may render before they arrive.
+  applications: ['applications', 'essays', 'recommendations'],
+  college_search: ['applications', 'scholarships', 'essays', 'documents', 'recommendations'],
   store: ['storeItems'],
   screen_time: [],
   support: ['supportTickets'],

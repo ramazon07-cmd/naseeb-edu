@@ -425,14 +425,37 @@ class RecommendationLetterSerializer(StudentRecordSerializerMixin, GoogleDocsMod
     has_file = serializers.SerializerMethodField()
     file_name = serializers.CharField(source='original_file_name', read_only=True)
     file_previewable = serializers.SerializerMethodField()
+    # Whether a counselor has written the letter, even while its text is hidden.
+    has_body = serializers.SerializerMethodField()
 
     class Meta:
         model = RecommendationLetter
         fields = '__all__'
-        read_only_fields = ('original_file_name', 'file_content_type', 'file_size')
+        # The student's review is written only through the student-review action.
+        read_only_fields = (
+            'original_file_name', 'file_content_type', 'file_size',
+            'student_review', 'student_review_note', 'student_reviewed_at',
+        )
+        extra_kwargs = {'body': {'max_length': 20000}}
 
     def get_student_name(self, obj) -> str | None:
         return obj.student.user.get_full_name() or obj.student.user.username
+
+    def get_has_body(self, obj) -> bool:
+        return bool(obj.body)
+
+    def _counselor_only(self, name, value, message):
+        request = self.context.get('request')
+        current = getattr(self.instance, name) if self.instance else RecommendationLetter._meta.get_field(name).get_default()
+        if request and not request.user.is_counselor_like and value != current:
+            raise serializers.ValidationError(message)
+        return value
+
+    def validate_body(self, value):
+        return self._counselor_only('body', value, 'Only a counselor can write the letter text.')
+
+    def validate_shared_with_student(self, value):
+        return self._counselor_only('shared_with_student', value, 'Only a counselor can share the letter with the student.')
 
     def validate_file(self, upload):
         if upload is None:
@@ -457,6 +480,16 @@ class RecommendationLetterSerializer(StudentRecordSerializerMixin, GoogleDocsMod
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
+        request = self.context.get('request')
+        student_edit = bool(request and not request.user.is_counselor_like)
+        if student_edit:
+            # Validation kept these at the copy this request loaded; saving that copy
+            # would undo a letter the counselor wrote or shared in the meantime.
+            validated_data.pop('body', None)
+            validated_data.pop('shared_with_student', None)
+        # The student checked the old words; a new text needs a new check.
+        if 'body' in validated_data and validated_data['body'] != instance.body:
+            validated_data.update(student_review='', student_review_note='', student_reviewed_at=None)
         file_supplied = 'file' in validated_data
         upload = validated_data.get('file')
         old_name = instance.file.name if file_supplied and instance.file else ''
@@ -469,7 +502,14 @@ class RecommendationLetterSerializer(StudentRecordSerializerMixin, GoogleDocsMod
                 'file_content_type': '',
                 'file_size': 0,
             })
-        updated = super().update(instance, validated_data)
+        if student_edit:
+            # Write only what the student sent, never the rest of a stale copy.
+            for name, value in validated_data.items():
+                setattr(instance, name, value)
+            instance.save(update_fields=[*validated_data, 'updated_at'])
+            updated = instance
+        else:
+            updated = super().update(instance, validated_data)
         updated_name = updated.file.name if updated.file else ''
         if old_name and old_name != updated_name:
             delete_file_on_commit(old_storage, old_name)
@@ -482,9 +522,11 @@ class RecommendationLetterSerializer(StudentRecordSerializerMixin, GoogleDocsMod
             for field in (
                 'recommender_email', 'file', 'google_docs_url', 'google_docs_preview_url', 'notes',
                 'has_file', 'file_name', 'file_previewable', 'original_file_name', 'file_content_type',
-                'file_size',
+                'file_size', 'body', 'student_review', 'student_review_note', 'student_reviewed_at',
             ):
                 data.pop(field, None)
+        elif request and not request.user.is_counselor_like and not instance.shared_with_student:
+            data.pop('body', None)
         return data
 
     def validate_status(self, value):
@@ -496,6 +538,29 @@ class RecommendationLetterSerializer(StudentRecordSerializerMixin, GoogleDocsMod
             if current == RecommendationLetter.Status.APPROVED and value != current:
                 raise serializers.ValidationError('An approved recommendation letter cannot be reopened by a student.')
         return value
+
+
+class LetterStudentReviewSerializer(serializers.Serializer):
+    """The student's answer to a letter their counselor shared."""
+
+    # Compare the exact text the student saw, preserving paragraph whitespace.
+    reviewed_body = serializers.CharField(max_length=20000, trim_whitespace=False)
+    decision = serializers.ChoiceField(choices=RecommendationLetter.StudentReview.choices)
+    note = serializers.CharField(max_length=2000, allow_blank=True, required=False, default='')
+
+    def validate(self, attrs):
+        if attrs['decision'] == RecommendationLetter.StudentReview.CHANGES_REQUESTED and not attrs['note'].strip():
+            raise serializers.ValidationError({'note': ['Tell your counselor what to change.']})
+        return attrs
+
+
+class LetterSuggestionRequestSerializer(serializers.Serializer):
+    """What the letter editor sends with each request for suggestions."""
+
+    student = serializers.IntegerField(min_value=1)
+    draft = serializers.CharField(max_length=20000, allow_blank=True, required=False, default='', trim_whitespace=False)
+    recommender_title = serializers.CharField(max_length=180, allow_blank=True, required=False, default='')
+    relationship = serializers.CharField(max_length=180, allow_blank=True, required=False, default='')
 
 
 class MeetingNoteSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):

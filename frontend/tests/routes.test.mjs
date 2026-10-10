@@ -77,6 +77,9 @@ test('product admins follow staff links to their own copy of the page', () => {
   const superuser = { role: 'student', is_superuser: true };
   assert.equal(homePage(superuser), 'admin_dashboard');
   assert.ok(navigationFor(superuser).includes('admin_audit'));
+  // The catalog editor is product staff only.
+  assert.deepEqual(resolveRoute(parsePath('/platform/catalog'), admin), { page: 'admin_catalog', params: {} });
+  for (const user of [student, counselor, teacher, parent, organization]) assert.equal(canOpenPage('admin_catalog', user), false, user.role);
 });
 
 test('pages a role cannot open are refused before navigating', () => {
