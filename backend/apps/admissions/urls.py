@@ -3,6 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .telegram_feed import TelegramFeedView
 from .assistant import AssistantChatView
 from .views.admin_portal import AdminAiUsageView, AdminHealthView, AdminSummaryView
+from .views.review_today import ReviewedTodayView
+from .views.invites import PendingStudentViewSet, PublicInviteAcceptView, PublicInviteView, StudentInviteViewSet
 from .views import (
     AchievementViewSet,
     ActivityViewSet,
@@ -90,15 +92,20 @@ router.register('support-tickets', SupportTicketViewSet, basename='support-ticke
 router.register('screen-time', ScreenTimeViewSet, basename='screen-time')
 router.register('parent-links', ParentStudentLinkViewSet, basename='parent-links')
 router.register('challenge-attempts', ChallengeAttemptViewSet, basename='challenge-attempts')
+router.register('student-invites', StudentInviteViewSet, basename='student-invites')
+router.register('pending-students', PendingStudentViewSet, basename='pending-students')
 
 urlpatterns = [
     path('telegram-feed/', TelegramFeedView.as_view(), name='telegram-feed'),
     path('assistant/chat/', AssistantChatView.as_view(), name='assistant-chat'),
     path('public/reach/', PublicReachView.as_view(), name='public-reach'),
+    path('public/invites/<str:token>/', PublicInviteView.as_view(), name='public-invite'),
+    path('public/invites/<str:token>/accept/', PublicInviteAcceptView.as_view(), name='public-invite-accept'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('admin/summary/', AdminSummaryView.as_view(), name='admin-summary'),
     path('admin/ai-usage/', AdminAiUsageView.as_view(), name='admin-ai-usage'),
     path('admin/health/', AdminHealthView.as_view(), name='admin-health'),
+    path('review/today/', ReviewedTodayView.as_view(), name='review-today'),
     path('search/', GlobalSearchView.as_view(), name='global-search'),
     path('college-research/', CollegeResearchView.as_view(), name='college-research'),
     path('college-search/', CollegeSearchView.as_view(), name='college-search'),

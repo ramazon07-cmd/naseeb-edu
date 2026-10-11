@@ -4,7 +4,7 @@ import { t, tp, tx } from '../i18n';
 import { label, fullName, initials } from '../lib/labels';
 import { Modal, Empty, Badge } from '../components/ui';
 import { Search, Plus, Pin, Trash2, ShieldCheck, Flag, ShieldAlert, MessageCircle, UsersRound, Globe2, BookOpen, Bookmark, FolderKanban, Pencil, ArrowLeft, Info, X, CheckCircle2, Check, Smile, Send, Paperclip } from 'lucide-react';
-import { ChannelListSkeleton, InlineLoadError, StaffStatsSkeleton, MessageListSkeleton } from '../components/states';
+import { ChannelListSkeleton, InlineLoadError, MessageListSkeleton } from '../components/states';
 import { Field, CheckboxControl, PortalTabs } from '../components/forms';
 import { dateTimeText, chatStampText, dateText, clockText } from '../lib/format';
 import { isTaskManager } from '../lib/roles';
@@ -14,41 +14,93 @@ import { announceNotificationsChanged } from '../lib/notifications';
 import { mergeNewestPage, prependOlder, restoredScrollTop, scrollAnchor } from '../lib/messageHistory';
 import { createRevalidation } from '../lib/revalidation';
 import ChatDetails from '../ChatDetails';
-import { channelListEmpty } from '../lib/channelList';
+import { channelListEmpty, mergeChannelPage } from '../lib/channelList';
 import { TelegramChannel } from '../components/TelegramChannel';
 import { MessageAttachment } from '../components/MessageAttachment';
 import { AttachmentPreviewModal } from '../components/documents';
 import { uploadProblemMessage, FileTypeIcon } from '../components/files';
 import { UPLOAD_ACCEPT, toFormData, uploadProblem } from '../lib/fileUpload';
 import { formatFileSize } from '../lib/format';
+import { unreadConversations } from '../lib/counselorCounts';
+import { nextMenuIndex } from '../lib/menuNavigation';
+
+const CONTACT_PAGE = 30;
+const CONTACT_SEARCH_DELAY_MS = 250;
+
+// Contacts matching what is typed, searched on the server (debounced) a page
+// at a time: a school can hold thousands, and the picker renders only these.
+function useContactSearch(search) {
+  const [term, setTerm] = useState(() => search.trim());
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState({ items: [], next: null, loading: true, error: '' });
+  const [loadingMore, setLoadingMore] = useState(false);
+  // A failed "Load more" is its own error: the first page is still good, so it
+  // must not read as the whole list failing (that blocks the picker).
+  const [moreError, setMoreError] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTerm(search.trim()), CONTACT_SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    let active = true;
+    setMoreError('');
+    setState((current) => ({ ...current, loading: true, error: '' }));
+    api.messageContactsPage(term, CONTACT_PAGE).then(
+      (page) => active && setState({ items: page?.results || [], next: page?.next || null, loading: false, error: '' }),
+      // The last search's results do not answer this one: show the error alone.
+      (err) => active && setState({ items: [], next: null, loading: false, error: err.message }),
+    );
+    return () => {active = false;};
+  }, [term, attempt]);
+  const { next } = state;
+  const loadMore = useCallback(async () => {
+    if (!next) return;
+    setLoadingMore(true);
+    setMoreError('');
+    try {
+      const page = await api.pageAt(next);
+      // A newer search replaced the list meanwhile: this page belongs to the old one.
+      setState((current) => (current.next !== next ? current : {
+        ...current,
+        items: [...current.items, ...(page?.results || []).filter((item) => !current.items.some((known) => known.id === item.id))],
+        next: page?.next || null,
+      }));
+    } catch (err) {
+      setMoreError(err.message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [next]);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  return { ...state, loadingMore, moreError, loadMore, retry };
+}
+
+function MoreContacts({ contacts }) {
+  if (!contacts.next) return null;
+  if (contacts.moreError && !contacts.loadingMore) return <InlineLoadError message={contacts.moreError} onRetry={contacts.loadMore} />;
+  return <button type="button" className="button quiet small" onClick={contacts.loadMore} disabled={contacts.loadingMore} aria-busy={contacts.loadingMore}>{contacts.loadingMore ? t("Loading…") : t("Load more")}</button>;
+}
 
 export function MessageChannelForm({ kind, user, onClose, onSaved, notify }) {
-  const [contacts, setContacts] = useState([]);
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [saving, setSaving] = useState(false);
-  const [contactsLoading, setContactsLoading] = useState(true);
-  const [contactsError, setContactsError] = useState('');
-  const [contactsAttempt, setContactsAttempt] = useState(0);
   const [recipient, setRecipient] = useState('');
-  useEffect(() => {
-    let active = true;
-    setContactsLoading(true);
-    setContactsError('');
-    api.messageContacts().then((items) => active && setContacts(items || []))
-      .catch((err) => active && setContactsError(err.message))
-      .finally(() => active && setContactsLoading(false));
-    return () => {active = false;};
-  }, [contactsAttempt]);
+  const contacts = useContactSearch(memberSearch);
+  const visibleContacts = contacts.items;
+  const contactsLoading = contacts.loading && !visibleContacts.length;
+  const contactsError = contacts.error;
+  // As in ChannelMembersModal: a search that hides the picked person unpicks them.
+  const chosenRecipient = visibleContacts.some((contact) => String(contact.id) === recipient) ? recipient : '';
 
   async function submit(event) {
     event.preventDefault();
-    if (saving || kind === 'direct' && !recipient) return;
+    if (saving || kind === 'direct' && !chosenRecipient) return;
     setSaving(true);
     const values = new FormData(event.currentTarget);
     try {
       const channel = kind === 'direct' ?
-      await api.openDirectChannel(Number(recipient)) :
+      await api.openDirectChannel(Number(chosenRecipient)) :
       await api.create('message-channels', {
         kind,
         name: values.get('name')?.trim(),
@@ -65,12 +117,14 @@ export function MessageChannelForm({ kind, user, onClose, onSaved, notify }) {
   }
 
   const staffInterface = ['counselor', 'organization'].includes(user.role);
-  const normalizedSearch = memberSearch.trim().toLowerCase();
-  const visibleContacts = contacts.filter((contact) => !normalizedSearch || `${fullName(contact)} ${contact.role} ${contact.school_name || ''}`.toLowerCase().includes(normalizedSearch));
-  function chooseAudience(audience) {
+  // A whole audience at once is asked for only when chosen (the server caps it).
+  async function chooseAudience(audience) {
     if (audience === 'clear') {setSelectedMembers([]);return;}
-    const matches = contacts.filter((contact) => audience === 'all' || (audience === 'students' ? contact.role === 'student' : contact.role !== 'student'));
-    setSelectedMembers(matches.map((contact) => contact.id));
+    try {
+      const everyone = await api.messageContacts();
+      const matches = (everyone || []).filter((contact) => audience === 'all' || (audience === 'students' ? contact.role === 'student' : contact.role !== 'student'));
+      setSelectedMembers(matches.map((contact) => contact.id));
+    } catch (err) {notify(err.message, 'error');}
   }
   function toggleMember(contactId) {
     setSelectedMembers((current) => current.includes(contactId) ? current.filter((id) => id !== contactId) : [...current, contactId]);
@@ -79,39 +133,43 @@ export function MessageChannelForm({ kind, user, onClose, onSaved, notify }) {
   const title = kind === 'direct' ? 'Start a direct conversation' : kind === 'discussion' ? 'Start a discussion' : `Create a ${kind}`;
   return <Modal title={t(title)} onClose={onClose}><form className="form-grid" onSubmit={submit}>
     {kind === 'direct' ?
-      <div className="direct-picker"><label className="channel-search"><Search size={16} /><input aria-label={t("Search contacts")} placeholder={t("Search contacts")} value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} /></label><div className="direct-contact-list">{contactsLoading ? <ChannelListSkeleton count={3} /> : contactsError ? <InlineLoadError message={contactsError} onRetry={() => setContactsAttempt((value) => value + 1)} /> : visibleContacts.length ? visibleContacts.map((contact) => <label className="direct-contact" key={contact.id}><input type="radio" name="contact" value={contact.id} checked={recipient === String(contact.id)} onChange={(event) => setRecipient(event.target.value)} /><span className="avatar">{initials(fullName(contact))}</span><span><b>{fullName(contact)}</b><small>{label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</small></span></label>) : <Empty text={t("No matching contacts.")} />}</div></div> :
+      <div className="direct-picker"><label className="channel-search"><Search size={16} /><input aria-label={t("Search contacts")} placeholder={t("Search contacts")} value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} /></label><div className="direct-contact-list" aria-busy={contacts.loading}>{contactsLoading ? <ChannelListSkeleton count={3} /> : contactsError && !visibleContacts.length ? <InlineLoadError message={contactsError} onRetry={contacts.retry} /> : visibleContacts.length ? visibleContacts.map((contact) => <label className="direct-contact" key={contact.id}><input type="radio" name="contact" value={contact.id} checked={recipient === String(contact.id)} onChange={(event) => setRecipient(event.target.value)} /><span className="avatar">{initials(fullName(contact))}</span><span><b>{fullName(contact)}</b><small>{label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</small></span></label>) : <Empty text={t("No matching contacts.")} />}<MoreContacts contacts={contacts} /></div></div> :
       <><Field label={kind === 'discussion' ? t("Question or topic") : t("Channel name")}><input name="name" required maxLength="160" /></Field><Field label={t("Description")}><textarea name="description" maxLength="2000" /></Field></>}
-    {['group', 'community'].includes(kind) && <fieldset className="form-wide member-picker"><legend>{tx`Initial members · ${selectedMembers.length} selected`}</legend><p>{t("Choose contacts to add to this group.")}</p>{staffInterface && <div className="audience-shortcuts"><button type="button" onClick={() => chooseAudience('students')}>{user.role === 'counselor' ? t("Assigned students") : t("School students")}</button><button type="button" onClick={() => chooseAudience('staff')}>{t("School staff")}</button><button type="button" onClick={() => chooseAudience('all')}>{t("All contacts")}</button><button type="button" onClick={() => chooseAudience('clear')}>{t("Clear")}</button></div>}<label className="member-search"><Search size={15} /><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={t("Search contacts")} /></label><div>{visibleContacts.map((contact) => <CheckboxControl key={contact.id} name="members" value={contact.id} checked={selectedMembers.includes(contact.id)} onChange={() => toggleMember(contact.id)}>{fullName(contact)} · {label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</CheckboxControl>)}</div>{!visibleContacts.length && <small>{t("No matching contacts.")}</small>}</fieldset>}
+    {['group', 'community'].includes(kind) && <fieldset className="form-wide member-picker"><legend>{tx`Initial members · ${selectedMembers.length} selected`}</legend><p>{t("Choose contacts to add to this group.")}</p>{staffInterface && <div className="audience-shortcuts"><button type="button" onClick={() => chooseAudience('students')}>{user.role === 'counselor' ? t("Assigned students") : t("School students")}</button><button type="button" onClick={() => chooseAudience('staff')}>{t("School staff")}</button><button type="button" onClick={() => chooseAudience('all')}>{t("All contacts")}</button><button type="button" onClick={() => chooseAudience('clear')}>{t("Clear")}</button></div>}<label className="member-search"><Search size={15} /><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={t("Search contacts")} /></label><div>{visibleContacts.map((contact) => <CheckboxControl key={contact.id} name="members" value={contact.id} checked={selectedMembers.includes(contact.id)} onChange={() => toggleMember(contact.id)}>{fullName(contact)} · {label(contact.role)}{contact.school_name ? ` · ${contact.school_name}` : ''}</CheckboxControl>)}<MoreContacts contacts={contacts} /></div>{contactsError ? <InlineLoadError message={contactsError} onRetry={contacts.retry} /> : !contacts.loading && !visibleContacts.length && <small>{t("No matching contacts.")}</small>}</fieldset>}
     {kind === 'discussion' && <div className="alert warning form-wide">{t("Discussions are public. A user must join before posting.")}</div>}
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || kind === 'direct' && (!recipient || contactsLoading || !!contactsError)} aria-busy={saving}>{saving ? t("Saving…") : t("Continue")}</button></div>
+    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || kind === 'direct' && !chosenRecipient} aria-busy={saving}>{saving ? t("Saving…") : t("Continue")}</button></div>
   </form></Modal>;
 }
 
 export function ChannelMembersModal({ channel, user, onClose, onChanged, notify }) {
   const [members, setMembers] = useState([]);
-  const [contacts, setContacts] = useState([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const contacts = useContactSearch(contactSearch);
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedRole, setSelectedRole] = useState('member');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [memberItems, contactItems] = await Promise.all([api.channelMembers(channel.id), api.messageContacts()]);
-      setMembers(memberItems || []);
-      setContacts(contactItems || []);
+      setMembers((await api.channelMembers(channel.id)) || []);
     } catch (err) {notify(err.message, 'error');}
   }, [channel.id, notify]);
 
   useEffect(() => {load();}, [load]);
-  const memberIds = new Set(members.map((membership) => membership.user));
-  const available = contacts.filter((contact) => !memberIds.has(contact.id));
+  const available = useMemo(() => {
+    const memberIds = new Set(members.map((membership) => membership.user));
+    return contacts.items.filter((contact) => !memberIds.has(contact.id));
+  }, [members, contacts.items]);
+  // A new search can hide the chosen contact: then nothing is chosen, so Add
+  // never adds someone the list no longer shows.
+  const chosenUser = available.some((contact) => String(contact.id) === selectedUser) ? selectedUser : '';
 
   async function addMember(event) {
     event.preventDefault();
-    if (!selectedUser) return;
+    if (!chosenUser) return;
     setSaving(true);
     try {
-      await api.addChannelMember(channel.id, Number(selectedUser), selectedRole);
+      await api.addChannelMember(channel.id, Number(chosenUser), selectedRole);
       setSelectedUser('');
       await load();
       await onChanged();
@@ -138,7 +196,7 @@ export function ChannelMembersModal({ channel, user, onClose, onChanged, notify 
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
 
-  return <Modal title={tx`Manage ${channel.display_name}`} onClose={onClose}><div className="member-manager"><form onSubmit={addMember}><Field label={t("Add a contact")}><select value={selectedUser} onChange={(event) => setSelectedUser(event.target.value)} required><option value="">{t("Select a contact")}</option>{available.map((contact) => <option key={contact.id} value={contact.id}>{fullName(contact)} · {label(contact.role)}</option>)}</select></Field><Field label={t("Channel role")}><select value={selectedRole} onChange={(event) => setSelectedRole(event.target.value)}><option value="member">{t("Member")}</option><option value="moderator">{t("Moderator")}</option></select></Field><button className="button primary" disabled={saving || !selectedUser}><Plus size={16} /> {t("Add")}</button></form><div className="member-manager-list">{members.map((membership) => <article key={membership.id}><span className="avatar">{initials(fullName(membership.user_detail))}</span><div><b>{fullName(membership.user_detail)}</b><small>{label(membership.user_detail?.role)}{membership.user_detail?.school_name ? ` · ${membership.user_detail.school_name}` : ''}</small></div><Badge>{membership.role}</Badge>{membership.role !== 'owner' && membership.user !== user.id && <div>{membership.role === 'member' ? <button type="button" className="button quiet small" disabled={saving} onClick={() => changeRole(membership, 'moderator')}>{t("Make moderator")}</button> : <button type="button" className="button quiet small" disabled={saving} onClick={() => changeRole(membership, 'member')}>{t("Make member")}</button>}<button type="button" className="icon-button danger" disabled={saving} onClick={() => removeMember(membership)} aria-label={tx`Remove ${fullName(membership.user_detail)}`}><Trash2 size={15} /></button></div>}</article>)}</div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Done")}</button></div></div></Modal>;
+  return <Modal title={tx`Manage ${channel.display_name}`} onClose={onClose}><div className="member-manager"><form onSubmit={addMember}><label className="member-search"><Search size={15} /><input value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} placeholder={t("Search contacts")} aria-label={t("Search contacts")} /></label><Field label={t("Add a contact")}><select value={chosenUser} onChange={(event) => setSelectedUser(event.target.value)} required><option value="">{t("Select a contact")}</option>{available.map((contact) => <option key={contact.id} value={contact.id}>{fullName(contact)} · {label(contact.role)}</option>)}</select></Field><MoreContacts contacts={contacts} />{contacts.error && <InlineLoadError message={contacts.error} onRetry={contacts.retry} />}<Field label={t("Channel role")}><select value={selectedRole} onChange={(event) => setSelectedRole(event.target.value)}><option value="member">{t("Member")}</option><option value="moderator">{t("Moderator")}</option></select></Field><button className="button primary" disabled={saving || !chosenUser}><Plus size={16} /> {t("Add")}</button></form><div className="member-manager-list">{members.map((membership) => <article key={membership.id}><span className="avatar">{initials(fullName(membership.user_detail))}</span><div><b>{fullName(membership.user_detail)}</b><small>{label(membership.user_detail?.role)}{membership.user_detail?.school_name ? ` · ${membership.user_detail.school_name}` : ''}</small></div><Badge>{membership.role}</Badge>{membership.role !== 'owner' && membership.user !== user.id && <div>{membership.role === 'member' ? <button type="button" className="button quiet small" disabled={saving} onClick={() => changeRole(membership, 'moderator')}>{t("Make moderator")}</button> : <button type="button" className="button quiet small" disabled={saving} onClick={() => changeRole(membership, 'member')}>{t("Make member")}</button>}<button type="button" className="icon-button danger" disabled={saving} onClick={() => removeMember(membership)} aria-label={tx`Remove ${fullName(membership.user_detail)}`}><Trash2 size={15} /></button></div>}</article>)}</div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Done")}</button></div></div></Modal>;
 }
 
 export function ReportMessageModal({ message, onClose, onReported, notify }) {
@@ -191,7 +249,7 @@ export function ModerationQueueModal({ onClose, onChanged, notify }) {
   return <Modal title={t("Anonymous moderation queue")} onClose={onClose}><div className="moderation-queue"><PortalTabs active={statusFilter} onChange={setStatusFilter} items={[["pending", "Pending"], ["reviewing", "Reviewing"], ["resolved", "Resolved"], ["dismissed", "Dismissed"]]} /><div className="moderation-list">{loading && <ChannelListSkeleton count={3} />}{!loading && reports.map((report) => <article className="moderation-card" key={report.id}><header><div><Badge>{report.reason}</Badge>{report.message_is_anonymous && <span className="anonymous-report-badge"><ShieldAlert size={13} /> {t("Anonymous post")}</span>}</div><time>{dateTimeText(report.created_at)}</time></header><blockquote>{report.message_body}</blockquote><div className="moderation-identities"><span>{t("Author")} <b>{report.sender_name}</b></span><span>{t("Reporter")} <b>{report.reporter_name}</b></span><span>{t("Channel")} <b>{report.channel_name}</b></span></div>{report.details && <p className="report-details"><b>{t("Report details:")}</b> {report.details}</p>}{openStatuses.includes(report.status) ? <><Field label={t("Moderator note")}><textarea value={notes[report.id] || ''} onChange={(event) => setNotes((current) => ({ ...current, [report.id]: event.target.value }))} maxLength="2000" rows="2" /></Field><footer>{report.status === 'pending' && <button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'review')}>{t("Start review")}</button>}<button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'dismiss')}>{t("Dismiss")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'none')}>{t("Resolve only")}</button><button className="button danger small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'content_removed')}>{t("Remove content")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'muted_24h')}>{t("Mute 24h")}</button><button className="button quiet small" disabled={savingId === report.id} onClick={() => moderate(report, 'resolve', 'muted_7d')}>{t("Mute 7d")}</button></footer></> : <div className="moderation-result"><Badge>{report.status}</Badge><span>{label(report.action)}{report.reviewed_by_name ? ` · ${report.reviewed_by_name}` : ''}</span>{report.moderator_note && <p>{report.moderator_note}</p>}</div>}</article>)}{!loading && !reports.length && <Empty text={t("No reports with this status.")} />}</div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Done")}</button></div></div></Modal>;
 }
 
-export const CHANNEL_TABS = [["direct", "Private"], ["group", "Groups"], ["discussion", "Discussions"]];
+export const CHANNEL_TABS = [["direct", "Private"], ["group", "Groups"], ["community", "Communities"], ["discussion", "Discussions"]];
 
 export const CHANNEL_SPACES = {
   direct: { icon: MessageCircle, placeholder: 'Write a message…', note: 'No messages yet. Say hello.' },
@@ -217,7 +275,37 @@ function previewSender(channel, user) {
   return `${senderId != null && senderId === user.id ? t('You') : sender.split(' ')[0]}: `;
 }
 
-export function MessagesPage({ user, data, notify, initialChannel, channelId, onChannelOpened }) {
+// Staff start either a direct chat or a group from the same pencil, the way a
+// messenger's compose button asks what to start.
+function ComposeMenu({ onSelect }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef(null);
+  const trigger = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => { if (!root.current?.contains(event.target)) setOpen(false); };
+    document.addEventListener('pointerdown', close);
+    root.current?.querySelector('[role="menuitem"]')?.focus();
+    return () => document.removeEventListener('pointerdown', close);
+  }, [open]);
+  function onMenuKeyDown(event) {
+    const entries = [...(root.current?.querySelectorAll('[role="menuitem"]') || [])];
+    const move = nextMenuIndex(event.key, entries.indexOf(document.activeElement), entries.length);
+    if (move !== null) {event.preventDefault();entries[move]?.focus();}
+    else if (event.key === 'Escape') {event.preventDefault();event.stopPropagation();setOpen(false);trigger.current?.focus();}
+    else if (event.key === 'Tab') setOpen(false);
+  }
+  function choose(kind) {setOpen(false);onSelect(kind);}
+  return <div className="add-menu chat-compose-menu" ref={root}>
+    <button ref={trigger} type="button" className="chat-new-button" aria-haspopup="menu" aria-expanded={open} aria-label={t("New message")} title={t("New message")} onClick={() => setOpen((value) => !value)}><Pencil size={18} /></button>
+    {open && <><div className="add-menu-backdrop" aria-hidden="true" onClick={() => setOpen(false)} /><div className="add-menu-list" role="menu" aria-label={t("New message")} onKeyDown={onMenuKeyDown}>
+      <button type="button" role="menuitem" onClick={() => choose('direct')}><MessageCircle size={18} aria-hidden="true" /><span><b>{t("New message")}</b></span></button>
+      <button type="button" role="menuitem" onClick={() => choose('group')}><UsersRound size={18} aria-hidden="true" /><span><b>{t("New group")}</b></span></button>
+    </div></>}
+  </div>;
+}
+
+export function MessagesPage({ user, data, stats = null, notify, initialChannel, channelId, onChannelOpened }) {
   const [tab, setTab] = useState(initialChannel?.kind || 'direct');
   const [moreFolders, setMoreFolders] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -237,6 +325,9 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
   const [replyTo, setReplyTo] = useState(null);
   const [search, setSearch] = useState('');
   const [loadingChannels, setLoadingChannels] = useState(false);
+  // Each folder lists a page of chats at a time: the next page's link per kind.
+  const [channelNext, setChannelNext] = useState({});
+  const [loadingMoreChannels, setLoadingMoreChannels] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [channelError, setChannelError] = useState('');
   const [messageError, setMessageError] = useState('');
@@ -246,12 +337,14 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
   const [reportingMessage, setReportingMessage] = useState(null);
   const [moderationOpen, setModerationOpen] = useState(false);
   const [overview, setOverview] = useState(null);
-  const [overviewError, setOverviewError] = useState('');
   // Older history is a student-portal feature; staff keep the newest page.
   const olderEnabled = user.role === 'student';
   const messageListRef = useRef(null);
   const composerRef = useRef(null);
   const channelRequest = useRef(0);
+  // The search each folder's listed chats were loaded for: a refresh of the same
+  // view keeps the chats "Load more" added; a new search replaces them.
+  const listedTerm = useRef({});
   const initialChannelView = useRef({ tab, search });
   const messageRequest = useRef(0);
   const sendLock = useRef(false);
@@ -269,7 +362,7 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
   const olderRequest = useRef(false);
   const keepScroll = useRef(null);
 
-  const visibleChannels = channels.filter((channel) => channel.kind === tab).sort((a, b) => Number(b.is_saved_messages) - Number(a.is_saved_messages) || new Date(b.last_message_at || b.created_at) - new Date(a.last_message_at || a.created_at));
+  const visibleChannels = useMemo(() => channels.filter((channel) => channel.kind === tab).sort((a, b) => Number(b.is_saved_messages) - Number(a.is_saved_messages) || new Date(b.last_message_at || b.created_at) - new Date(a.last_message_at || a.created_at)), [channels, tab]);
   const telegramOpen = tab === 'group' && user.role === 'student' && activeId === TELEGRAM_CHANNEL_ID;
   const showTelegram = tab === 'group' && user.role === 'student' && (!search || 'naseeb edu telegram naseeb_edu'.includes(search.trim().toLowerCase()));
   const listEmpty = channelListEmpty(tab, search, visibleChannels.length);
@@ -288,6 +381,9 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
     merged.forEach((channel) => {if (channel.unread_count > 0) counts[channel.kind] = (counts[channel.kind] || 0) + channel.unread_count;});
     return counts;
   }, [data.messageChannels, channels]);
+  // The folders count the chats loaded so far; whether anything is unread at all
+  // is the server's count (stats.badges), which also sees chats on later pages.
+  const anyUnread = useMemo(() => unreadConversations(stats, [...channels, ...(data.messageChannels || [])]) > 0, [stats, channels, data.messageChannels]);
   useLayoutEffect(() => {
     activeChannelRef.current = activeChannel?.id;
     messageRequest.current += 1;
@@ -317,37 +413,50 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
   const canManageMembers = activeChannel?.kind !== 'direct' && activeChannel?.is_member && (isTaskManager(user) || user.role === 'organization' || ['owner', 'moderator'].includes(activeChannel?.my_role));
 
   const refreshOverview = useCallback(async () => {
-    if (!moderationEnabled && !staffInterface) return null;
-    setOverviewError('');
+    if (!moderationEnabled) return null;
     try {
       const nextOverview = await api.messagingOverview();
       setOverview(nextOverview);
       return nextOverview;
     } catch (err) {
       notify(err.message, 'error');
-      setOverviewError(err.message);
       return null;
     }
-  }, [moderationEnabled, staffInterface, notify]);
+  }, [moderationEnabled, notify]);
 
-  const refreshChannels = useCallback(async (kind = tab, term = search, preferredId = activeId) => {
+  // `recheckId`: a chat to fetch on its own when page 1 does not hold it (the
+  // open one by default, or one just left), so it is updated, not lost.
+  const refreshChannels = useCallback(async (kind = tab, term = search, preferredId = activeId, recheckId = preferredId) => {
     const requestId = ++channelRequest.current;
     setLoadingChannels(true);
     setChannelError('');
     try {
-      const items = await api.messageChannels(kind, term);
+      const page = await api.messageChannels(kind, term);
       if (requestId !== channelRequest.current) return [];
+      const items = page.results || [];
+      const wanted = [...new Set([preferredId, recheckId])].filter((id) => typeof id === 'number' && !items.some((item) => item.id === id));
+      const fetched = [];
+      const gone = [];
+      await Promise.all(wanted.map((id) => api.retrieve('message-channels', id).then(
+        (channel) => {fetched.push(channel);},
+        (err) => {if ([403, 404].includes(err?.status)) gone.push(id);},
+      )));
+      if (requestId !== channelRequest.current) return [];
+      const keepLoaded = listedTerm.current[kind] === term;
+      listedTerm.current[kind] = term;
+      const listed = [...items, ...fetched.filter((channel) => channel.kind === kind)];
+      if (!keepLoaded) setChannelNext((current) => ({ ...current, [kind]: page.next }));
       // Keep the other folders: dropping them loses the unread counts behind
       // their tabs, and a folder you just read would light up again.
-      setChannels((current) => [...current.filter((item) => item.kind !== kind), ...(items || [])]);
+      setChannels((current) => mergeChannelPage(current, kind, items, { keepLoaded, fetched, gone }));
       setActiveId((current) => {
         if (kind === 'group' && current === TELEGRAM_CHANNEL_ID) return current;
         if (current === 'list' && preferredId === 'list') return 'list';
-        if (items.some((item) => item.id === preferredId)) return preferredId;
-        if (items.some((item) => item.id === current)) return current;
+        if (listed.some((item) => item.id === preferredId)) return preferredId;
+        if (listed.some((item) => item.id === current)) return current;
         return null;
       });
-      return items || [];
+      return listed;
     } catch (err) {
       if (requestId !== channelRequest.current) return [];
       setChannelError(err.message);
@@ -422,14 +531,35 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
   useEffect(() => {
     const requestId = channelRequest.current;
     const kind = tab;
-    api.messageChannels(kind).then((items) => {
+    api.messageChannels(kind).then((page) => {
       if (requestId !== channelRequest.current) return;
-      setChannels((current) => [...current.filter((item) => item.kind !== kind), ...(items || [])]);
+      // Keeps a chat opened from a link that is not on page 1.
+      listedTerm.current[kind] = '';
+      setChannels((current) => mergeChannelPage(current, kind, page.results, { keepLoaded: true }));
+      setChannelNext((current) => ({ ...current, [kind]: page.next }));
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per visit
   }, []);
 
   useEffect(() => {refreshOverview();}, [refreshOverview]);
+
+  async function loadMoreChannels() {
+    const kind = tab;
+    const next = channelNext[kind];
+    if (!next || loadingMoreChannels) return;
+    const requestId = channelRequest.current;
+    setLoadingMoreChannels(true);
+    try {
+      const page = await api.pageAt(next);
+      if (requestId !== channelRequest.current) return;
+      setChannels((current) => [...current, ...(page?.results || []).filter((item) => !current.some((known) => known.id === item.id))]);
+      setChannelNext((current) => ({ ...current, [kind]: page?.next || null }));
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      setLoadingMoreChannels(false);
+    }
+  }
 
   // A link to one chat (/messages/9, e.g. from the notification bell): open
   // it, then drop the id from the URL so picking another chat is not undone
@@ -577,7 +707,7 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
     try {
       await api.leaveChannel(activeChannel.id);
       setMessages([]);
-      await refreshChannels(tab, search, null);
+      await refreshChannels(tab, search, null, activeChannel.id);
       await refreshOverview();
       notify(t("You left the channel."));
     } catch (err) {notify(err.message, 'error');}
@@ -609,16 +739,16 @@ export function MessagesPage({ user, data, notify, initialChannel, channelId, on
   }
 
   return <div className={`messaging-page section-stack kind-${tab} ${user.role === 'student' ? 'student-portal' : ''}`}>
-    {staffInterface && <section className="staff-messaging-overview"><div className="staff-messaging-copy"><span><MessageCircle size={22} /></span><div><small>{user.role === 'counselor' ? t("COUNSELOR INBOX") : t("SCHOOL COMMUNICATIONS")}</small><h2>{user.role === 'counselor' ? t("Student and school conversations") : t("Keep your school connected")}</h2><p>{user.role === 'counselor' ? t("Message assigned students, coordinate with school staff and moderate shared channels.") : t("Contact your students, teachers and assigned counselors from one secure inbox.")}</p></div></div>{overview ? <div className="staff-messaging-stats"><div><strong>{overview.unread_total || 0}</strong><span>{t("Unread")}</span></div><div><strong>{overview.students_total || 0}</strong><span>{user.role === 'counselor' ? t("Assigned students") : t("School students")}</span></div><div><strong>{overview.channel_counts?.direct || 0}</strong><span>{t("Direct chats")}</span></div><div><strong>{(overview.channel_counts?.group || 0) + (overview.channel_counts?.community || 0)}</strong><span>{t("Managed spaces")}</span></div><div className={overview.pending_reports ? "attention" : ''}><strong>{overview.pending_reports || 0}</strong><span>{t("Open reports")}</span></div></div> : overviewError ? <InlineLoadError message={overviewError} onRetry={refreshOverview} /> : <StaffStatsSkeleton />}<div className="staff-messaging-actions"><button className="button primary" onClick={() => {setTab('direct');setActiveId(null);setOpen(true);}}><MessageCircle size={16} /> {t("Message a student")}</button><button className="button quiet" onClick={() => {setTab('group');setActiveId(null);setOpen(true);}}><UsersRound size={16} /> {t("Create group")}</button><button className="button quiet" onClick={() => setModerationOpen(true)}><ShieldAlert size={16} /> {t("Moderation queue")}{overview?.pending_reports ? ` · ${overview.pending_reports}` : ''}</button></div></section>}
     <div className={`messages-shell ${activeChannel || telegramOpen ? 'has-active-channel' : ''} ${activeChannel && detailsOpen ? 'has-details' : ''}`}>
       <aside className="channel-sidebar">
         <header className="chat-sidebar-header">
-          <div><h2>{t("Chat")}</h2><p>{Object.values(folderUnread).some(Boolean) ? t("Unread conversations") : t("All caught up")}</p></div>
-          <button type="button" className="chat-new-button" aria-label={staffInterface || isTaskManager(user) ? t("New group") : t("New message")} title={staffInterface || isTaskManager(user) ? t("New group") : t("New message")} onClick={() => {setTab(staffInterface || isTaskManager(user) ? 'group' : 'direct');setOpen(true);}}><Pencil size={18} /></button>
+          <div><h2>{t("Chat")}</h2><p>{anyUnread || Object.values(folderUnread).some(Boolean) ? t("Unread conversations") : t("All caught up")}</p></div>
+          {moderationEnabled && <button type="button" className="chat-new-button chat-moderation-button" onClick={() => setModerationOpen(true)} title={t("Moderation queue")}><ShieldAlert size={18} aria-hidden="true" /><span className="sr-only">{t("Moderation queue")}</span>{overview?.pending_reports ? <em>{overview.pending_reports > 99 ? '99+' : overview.pending_reports}</em> : null}</button>}
+          {staffInterface || isTaskManager(user) ? <ComposeMenu onSelect={(kind) => {setTab(kind);setOpen(true);}} /> : <button type="button" className="chat-new-button" aria-label={t("New message")} title={t("New message")} onClick={() => {setTab('direct');setOpen(true);}}><Pencil size={18} /></button>}
         </header>
-        <div className="channel-folders" role="tablist" aria-label={t("Messages")}>{CHANNEL_TABS.filter(([kind]) => moreFolders || ['direct', 'group', tab].includes(kind)).map(([kind, title]) => <button key={kind} type="button" role="tab" aria-selected={tab === kind} className={`channel-folder folder-${kind} ${tab === kind ? 'active' : ''}`} onClick={() => {setTab(kind);setActiveId(null);setSearch('');}}>{t(title)}{folderUnread[kind] ? <em className="folder-count" aria-label={tx`${folderUnread[kind]} unread`}>{folderUnread[kind] > 99 ? '99+' : folderUnread[kind]}</em> : null}</button>)}<button type="button" className="channel-folder channel-more-folders" aria-expanded={moreFolders} aria-label={t("More folders")} title={t("More folders")} onClick={() => setMoreFolders(!moreFolders)}><FolderKanban size={17} /></button>{moderationEnabled && !staffInterface && <button type="button" className="channel-folder channel-moderation" onClick={() => setModerationOpen(true)} aria-label={t("Moderation")} title={t("Moderation")}><ShieldAlert size={16} />{overview?.pending_reports ? <em>{overview.pending_reports}</em> : null}</button>}</div>
+        <div className="channel-folders" role="tablist" aria-label={t("Messages")}>{CHANNEL_TABS.filter(([kind]) => moreFolders || ['direct', 'group', tab].includes(kind)).map(([kind, title]) => <button key={kind} type="button" role="tab" aria-selected={tab === kind} className={`channel-folder folder-${kind} ${tab === kind ? 'active' : ''}`} onClick={() => {setTab(kind);setActiveId(null);setSearch('');}}>{t(title)}{folderUnread[kind] ? <em className="folder-count" aria-label={tx`${folderUnread[kind]} unread`}>{folderUnread[kind] > 99 ? '99+' : folderUnread[kind]}</em> : null}</button>)}<button type="button" className="channel-folder channel-more-folders" aria-expanded={moreFolders} aria-label={t("More folders")} title={t("More folders")} onClick={() => setMoreFolders(!moreFolders)}><FolderKanban size={17} /></button></div>
         <label className="channel-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search chats…")} aria-label={tx`Search ${channelTabLabel(tab)} channels`} /></label>
-        <div className="channel-list" aria-busy={loadingChannels}>{tab === 'direct' && !search && !visibleChannels.some((channel) => channel.is_saved_messages) && <button type="button" className="channel-item saved-messages" disabled={openingSaved} onClick={openSavedMessages}><span className="avatar saved-avatar"><Bookmark size={23} /></span><span className="channel-item-copy"><b>{t("Saved Messages")}</b><small>{openingSaved ? t("Opening…") : t("Your notes and links")}</small></span></button>}{showTelegram && <button type="button" className={`channel-item saved-messages pinned-channel ${telegramOpen ? 'active' : ''}`} aria-current={telegramOpen ? 'true' : undefined} onClick={() => setActiveId(TELEGRAM_CHANNEL_ID)}><span className="avatar saved-avatar"><Send size={22} /></span><span className="channel-item-copy"><span className="channel-item-top"><b>{t("Naseeb Edu")}</b><Pin size={13} className="pinned-mark" role="img" aria-label={t("Pinned")} /></span><small>{t("Official Telegram channel")}</small></span></button>}{loadingChannels && !visibleChannels.length ? <ChannelListSkeleton /> : channelError ? <InlineLoadError message={channelError} onRetry={() => refreshChannels(tab, search, activeId)} /> : <>{visibleChannels.map((channel) => <button type="button" key={channel.id} className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''} ${channel.unread_count > 0 ? 'unread' : ''} ${channel.is_saved_messages ? 'saved-messages' : ''}`} aria-current={activeChannel?.id === channel.id ? 'true' : undefined} onClick={() => setActiveId(channel.id)}><span className={`avatar ${channel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(channel.id)}`}`}>{channel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(channel.display_name) : <SpaceIcon size={20} />}</span><span className="channel-item-copy"><span className="channel-item-top"><b>{channel.is_saved_messages ? t("Saved Messages") : channel.display_name}</b>{channel.last_message?.created_at && <time>{chatStampText(channel.last_message.created_at)}</time>}</span><span className="channel-item-bottom"><small>{channel.last_message?.body ? `${previewSender(channel, user)}${channel.last_message.body}` : channel.last_message?.attachment_name || (channel.is_saved_messages ? t("Your notes and links") : tab === 'direct' ? t("No messages yet") : channel.description || tp('{n} member|{n} members', channel.members_count, { n: channel.members_count }))}</small>{channel.unread_count > 0 && <strong aria-label={tx`${channel.unread_count} unread`}>{channel.unread_count > 99 ? '99+' : channel.unread_count}</strong>}</span></span></button>)}{listEmpty && !showTelegram && <div className="channel-list-empty"><SpaceIcon size={26} /><p>{listEmpty === 'search' ? t("No conversation matches your search.") : t("No conversations here yet.")}</p></div>}</>}</div>
+        <div className="channel-list" aria-busy={loadingChannels}>{tab === 'direct' && !search && !visibleChannels.some((channel) => channel.is_saved_messages) && <button type="button" className="channel-item saved-messages" disabled={openingSaved} onClick={openSavedMessages}><span className="avatar saved-avatar"><Bookmark size={23} /></span><span className="channel-item-copy"><b>{t("Saved Messages")}</b><small>{openingSaved ? t("Opening…") : t("Your notes and links")}</small></span></button>}{showTelegram && <button type="button" className={`channel-item saved-messages pinned-channel ${telegramOpen ? 'active' : ''}`} aria-current={telegramOpen ? 'true' : undefined} onClick={() => setActiveId(TELEGRAM_CHANNEL_ID)}><span className="avatar saved-avatar"><Send size={22} /></span><span className="channel-item-copy"><span className="channel-item-top"><b>{t("Naseeb Edu")}</b><Pin size={13} className="pinned-mark" role="img" aria-label={t("Pinned")} /></span><small>{t("Official Telegram channel")}</small></span></button>}{loadingChannels && !visibleChannels.length ? <ChannelListSkeleton /> : channelError ? <InlineLoadError message={channelError} onRetry={() => refreshChannels(tab, search, activeId)} /> : <>{visibleChannels.map((channel) => <button type="button" key={channel.id} className={`channel-item ${activeChannel?.id === channel.id ? 'active' : ''} ${channel.unread_count > 0 ? 'unread' : ''} ${channel.is_saved_messages ? 'saved-messages' : ''}`} aria-current={activeChannel?.id === channel.id ? 'true' : undefined} onClick={() => setActiveId(channel.id)}><span className={`avatar ${channel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(channel.id)}`}`}>{channel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(channel.display_name) : <SpaceIcon size={20} />}</span><span className="channel-item-copy"><span className="channel-item-top"><b>{channel.is_saved_messages ? t("Saved Messages") : channel.display_name}</b>{channel.last_message?.created_at && <time>{chatStampText(channel.last_message.created_at)}</time>}</span><span className="channel-item-bottom"><small>{channel.last_message?.body ? `${previewSender(channel, user)}${channel.last_message.body}` : channel.last_message?.attachment_name || (channel.is_saved_messages ? t("Your notes and links") : tab === 'direct' ? t("No messages yet") : channel.description || tp('{n} member|{n} members', channel.members_count, { n: channel.members_count }))}</small>{channel.unread_count > 0 && <strong aria-label={tx`${channel.unread_count} unread`}>{channel.unread_count > 99 ? '99+' : channel.unread_count}</strong>}</span></span></button>)}{channelNext[tab] && <button type="button" className="button quiet small channel-load-more" onClick={loadMoreChannels} disabled={loadingMoreChannels} aria-busy={loadingMoreChannels}>{loadingMoreChannels ? t("Loading…") : t("Load more")}</button>}{listEmpty && !showTelegram && <div className="channel-list-empty"><SpaceIcon size={26} /><p>{listEmpty === 'search' ? t("No conversation matches your search.") : t("No conversations here yet.")}</p></div>}</>}</div>
         {canCreate && <button type="button" className="channel-compose" onClick={() => setOpen(true)} aria-label={newChannelLabel} title={newChannelLabel}><Pencil size={19} /></button>}
       </aside>
       {telegramOpen ? <TelegramChannel onClose={() => setActiveId('list')} /> : activeChannel ? <section className="message-thread"><header><div><button type="button" className="icon-button message-back" onClick={() => setActiveId('list')} aria-label={t("Back to conversations")}><ArrowLeft size={18} /></button><span className={`avatar ${activeChannel.is_saved_messages ? 'saved-avatar' : `tint-${channelTint(activeChannel.id)}`}`}>{activeChannel.is_saved_messages ? <Bookmark size={23} /> : tab === 'direct' ? initials(activeChannel.display_name) : <SpaceIcon size={22} />}</span><div><b>{activeChannel.is_saved_messages ? t("Saved Messages") : activeChannel.display_name}</b><small>{activeChannel.is_saved_messages ? t("Your personal notebook") : activeChannel.kind === 'direct' ? t("Direct conversation") : tp('{n} member|{n} members', activeChannel.members_count, { n: activeChannel.members_count })}</small></div></div><div className="channel-actions"><button type="button" className="icon-button" onClick={() => setDetailsOpen(!detailsOpen)} aria-label={t("Contact info")} title={t("Contact info")} aria-expanded={detailsOpen}><Info size={19} /></button><button type="button" className="icon-button close-chat" onClick={() => setActiveId(null)} aria-label={t("Close chat")} title={t("Close chat")}><X size={18} /></button>{canManageMembers && <button className="button quiet small" onClick={() => setMembersOpen(true)}><UsersRound size={15} /> {t("Manage members")}</button>}{activeChannel.is_public && !activeChannel.is_member && <button className="button primary small" onClick={join}>{t("Join")}</button>}{activeChannel.is_member && activeChannel.kind !== 'direct' && activeChannel.my_role !== 'owner' && <button className="button quiet small" onClick={leave}>{t("Leave")}</button>}</div></header>

@@ -5,6 +5,8 @@ import { Modal, Badge, Empty } from './ui';
 import { label } from '../lib/labels';
 import { dateText, dateTimeText, formatFileSize } from '../lib/format';
 import { api } from '../api';
+import './documents.css';
+import { hasSubmission } from '../lib/reviewSubmission';
 import { FileTypeIcon, documentAttachment, downloadAttachment, evidenceAttachment, noPreviewText } from './files';
 
 export function GoogleDocsPreview({ previewUrl, title }) {
@@ -103,9 +105,39 @@ export function EvidencePreviewModal({ item, onClose, notify }) {
   return <AttachmentPreviewModal title={tx`Evidence · ${visibilityItemTitle(item)}`} attachment={evidenceAttachment(item)} onClose={onClose} notify={notify} />;
 }
 
-export function DocumentPreviewModal({ document: doc, onClose, notify }) {
+export function DocumentPreviewModal({ document: doc, onClose, notify, history = null, onDecide = null }) {
   const attachment = documentAttachment(doc);
-  return <Modal title={doc.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{doc.status}</Badge><span>{label(doc.document_type)}</span></div><div className="detail-actions"><GoogleDocsActions item={doc} /></div></div>{attachment && <AttachmentToolbar attachment={attachment} notify={notify} />}{doc.counselor_comment && <section><span className="detail-label">{t("Counselor comment")}</span><p>{doc.counselor_comment}</p></section>}{attachment ? <AttachmentBody attachment={attachment} title={doc.title} /> : doc.google_docs_preview_url ? <GoogleDocsPreview previewUrl={doc.google_docs_preview_url} title={doc.title} /> : <Empty text={t("No file or Google Docs link has been added for preview.")} />}</div></Modal>;
+  const awaiting = ['uploaded', 'reviewing'].includes(doc.status);
+  return <Modal title={doc.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{doc.status}</Badge><span>{label(doc.document_type)}</span></div><div className="detail-actions"><GoogleDocsActions item={doc} /></div></div>{attachment && <AttachmentToolbar attachment={attachment} notify={notify} />}{doc.counselor_comment && <section><span className="detail-label">{t("Counselor comment")}</span><p>{doc.counselor_comment}</p></section>}{history?.length > 0 && <DocumentHistory entries={history} />}{onDecide && awaiting && <DocumentDecision approvable={hasSubmission('document', doc)} onDecide={onDecide} notify={notify} />}{attachment ? <AttachmentBody attachment={attachment} title={doc.title} /> : doc.google_docs_preview_url ? <GoogleDocsPreview previewUrl={doc.google_docs_preview_url} title={doc.title} /> : <Empty text={t("No file uploaded yet.")} />}</div></Modal>;
+}
+
+const REVIEW_VERBS = [[/^Document approved: /, 'Approved'], [/^Document sent back: /, 'Sent back']];
+
+function DocumentHistory({ entries }) {
+  return <section><span className="detail-label">{t("History")}</span><ul className="document-history">{entries.map((entry) => {
+    const verb = REVIEW_VERBS.find(([pattern]) => pattern.test(entry.action))?.[1];
+    return <li key={entry.id}>{[verb ? t(verb) : entry.action, entry.actor_name, dateTimeText(entry.created_at)].filter(Boolean).join(' · ')}</li>;
+  })}</ul></section>;
+}
+
+function DocumentDecision({ approvable, onDecide, notify }) {
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  async function decide(action) {
+    const text = note.trim();
+    if (action === 'sendBack' && !text) {
+      notify(t("Add a note explaining what needs to change."), 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await onDecide(action, text);
+    } catch (error) {
+      notify(error.message, 'error');
+      setSaving(false);
+    }
+  }
+  return <section className="document-decision"><label className="detail-label" htmlFor="document-decision-note">{t("Note to the student (optional for approve, required to send back)")}</label><textarea id="document-decision-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} />{!approvable && <p role="status"><b>{t("No file attached yet")}</b> {t("There is nothing to approve until the student adds it. You can send it back with a note.")}</p>}<div className="detail-actions"><button type="button" className="button quiet" disabled={saving} onClick={() => decide('sendBack')}>{t("Send back with note")}</button><button type="button" className="button primary" disabled={saving || !approvable} aria-busy={saving} onClick={() => decide('approve')}>{t("Approve")}</button></div></section>;
 }
 
 export function visibilityItemTitle(item) {

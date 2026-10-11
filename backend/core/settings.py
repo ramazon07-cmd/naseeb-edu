@@ -110,6 +110,10 @@ ESSAY_AUTOSAVE_WINDOW_SECONDS = config('ESSAY_AUTOSAVE_WINDOW_SECONDS', default=
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)
 PUBLIC_REACH_MIN_CELL = config('PUBLIC_REACH_MIN_CELL', default=5, cast=int)
 TEMPORARY_CREDENTIAL_TTL_HOURS = config('TEMPORARY_CREDENTIAL_TTL_HOURS', default=72, cast=int)
+# How long a personal student invite stays valid (magic links set their own, 1-7 days).
+STUDENT_INVITE_TTL_DAYS = config('STUDENT_INVITE_TTL_DAYS', default=7, cast=int)
+# Students waiting for confirmation a school may hold; joins pause beyond it.
+MAX_PENDING_STUDENTS_PER_SCHOOL = config('MAX_PENDING_STUDENTS_PER_SCHOOL', default=100, cast=int)
 # Domain for students created without an email (.invalid never routes mail).
 PLACEHOLDER_EMAIL_DOMAIN = config('PLACEHOLDER_EMAIL_DOMAIN', default='students.naseeb.invalid')
 
@@ -365,10 +369,20 @@ REST_FRAMEWORK = {
         # O(1) window counters that fail open: a Redis outage must not 500 every request.
         'apps.users.throttles.AnonRateThrottle',
         'apps.users.throttles.UserRateThrottle',
+        'apps.users.throttles.UploadRateThrottle',
     ),
     'DEFAULT_THROTTLE_RATES': {
         'anon': config('API_ANON_RATE', default='60/hour'),
-        'user': config('API_USER_RATE', default='1200/hour'),
+        # Per signed-in user, sliding minute. A full page load is ~15 requests
+        # (Student 360: 13) and background polls add ~4-12 a minute (stats and
+        # bell every 60 s, screen time every 30 s, an open chat every 8-30 s),
+        # so even 20 reloads a minute stays under half of it, while a runaway
+        # script is held to 10 requests a second. The old 1200/hour ran out
+        # after ~60 page loads in an hour and locked the workspace for minutes.
+        'user': config('API_USER_RATE', default='600/minute'),
+        # Multipart writes (documents, evidence, photos, attachments), which the
+        # generous user rate would otherwise leave unbounded.
+        'upload': config('API_UPLOAD_RATE', default='120/hour'),
         'assistant': config('AI_ASSISTANT_RATE', default='20/hour'),
         # Sign-in is limited per (account, IP) and token refresh per token, with
         # only a generous per-IP ceiling (schools and carriers share IPs). The
@@ -385,6 +399,14 @@ REST_FRAMEWORK = {
         'account_change': config('AUTH_ACCOUNT_CHANGE_RATE', default='10/hour'),
         'public_reach': config('PUBLIC_REACH_RATE', default='60/minute'),
         'telegram_feed': config('TELEGRAM_FEED_RATE', default='60/minute'),
+        # The public join page. Per client IP: page loads, successful sign-ups
+        # (failures are not counted) and every attempt; plus attempts per
+        # invite token. A class joining from one school address fits, a
+        # script guessing tokens or creating accounts does not.
+        'invite_public': config('INVITE_PUBLIC_RATE', default='300/hour'),
+        'invite_accept': config('INVITE_ACCEPT_RATE', default='60/hour'),
+        'invite_attempt': config('INVITE_ATTEMPT_RATE', default='300/hour'),
+        'invite_token': config('INVITE_TOKEN_RATE', default='200/hour'),
     },
     # Number of trusted reverse proxies in front of Django (Render's edge = 1).
     # With 0, X-Forwarded-For is ignored and REMOTE_ADDR is used; never leave it

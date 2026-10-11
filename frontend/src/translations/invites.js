@@ -1,0 +1,139 @@
+// Student invites, magic links, the join page and Recently joined:
+// English key -> [Uzbek (Latin), Russian]. Russian plurals: "one|few|many".
+export const INVITE_TRANSLATIONS = {
+  // Add student modal
+  'Invite by email/details': ['Email/ma’lumotlar orqali taklif', 'Приглашение по email/данным'],
+  'Magic link': ['Sehrli havola', 'Волшебная ссылка'],
+  'How to add the student': ['O‘quvchini qanday qo‘shish', 'Как добавить ученика'],
+  'Phone (optional)': ['Telefon (ixtiyoriy)', 'Телефон (необязательно)'],
+  'Not set': ['Belgilanmagan', 'Не указан'],
+  'The student opens the link, checks these details and chooses their own username and password. They must use this email.': [
+    'O‘quvchi havolani ochadi, ushbu ma’lumotlarni tekshiradi va o‘z foydalanuvchi nomi hamda parolini tanlaydi. U aynan shu emaildan foydalanishi kerak.',
+    'Ученик открывает ссылку, проверяет эти данные и сам выбирает имя пользователя и пароль. Он должен использовать именно этот email.',
+  ],
+  'Create invitation': ['Taklif yaratish', 'Создать приглашение'],
+  'Invitation for {name}': ['{name} uchun taklif', 'Приглашение для {name}'],
+  'Send this link to {email} yourself. It works once and expires on {date}. It is shown only now.': [
+    'Bu havolani {email} manziliga o‘zingiz yuboring. U bir marta ishlaydi va {date} da muddati tugaydi. Havola faqat hozir ko‘rsatiladi.',
+    'Отправьте эту ссылку на {email} сами. Она работает один раз и действует до {date}. Ссылка показывается только сейчас.',
+  ],
+  'Invite another student': ['Yana bir o‘quvchini taklif qilish', 'Пригласить ещё одного ученика'],
+  'Invitation link': ['Taklif havolasi', 'Ссылка-приглашение'],
+  'Copy': ['Nusxalash', 'Копировать'],
+  'Link copied': ['Havola nusxalandi', 'Ссылка скопирована'],
+  'Select the link and copy it': ['Havolani belgilab, nusxalang', 'Выделите ссылку и скопируйте её'],
+  'Anyone with this link can join your school as your student until it expires or you revoke it. Each student enters their name and email, then sets a username and password. You confirm everyone who joins.': [
+    'Muddati tugaguncha yoki uni bekor qilguningizcha bu havolaga ega har kim maktabingizga sizning o‘quvchingiz sifatida qo‘shila oladi. Har bir o‘quvchi ismi va emailini kiritadi, so‘ng foydalanuvchi nomi va parol o‘rnatadi. Qo‘shilgan har kimni siz tasdiqlaysiz.',
+    'Любой, у кого есть эта ссылка, может присоединиться к вашей школе как ваш ученик, пока срок не истёк или вы её не отозвали. Каждый ученик вводит имя и email, затем задаёт имя пользователя и пароль. Каждого присоединившегося подтверждаете вы.',
+  ],
+  'Link expires after': ['Havola amal qilish muddati', 'Ссылка действует'],
+  '1 day': ['1 kun', '1 день'],
+  '3 days': ['3 kun', '3 дня'],
+  '7 days': ['7 kun', '7 дней'],
+  'Create magic link': ['Sehrli havola yaratish', 'Создать волшебную ссылку'],
+  'Creating…': ['Yaratilmoqda…', 'Создаём…'],
+  'Your magic link': ['Sehrli havolangiz', 'Ваша волшебная ссылка'],
+  'Expires on {date}. Copy it now: the link is shown only once.': [
+    'Muddati: {date}. Hozir nusxalang: havola faqat bir marta ko‘rsatiladi.',
+    'Действует до {date}. Скопируйте сейчас: ссылка показывается только один раз.',
+  ],
+  'Revoke': ['Bekor qilish', 'Отозвать'],
+  'Link revoked': ['Havola bekor qilindi', 'Ссылка отозвана'],
+  'Active magic links': ['Faol sehrli havolalar', 'Активные волшебные ссылки'],
+  'Expires {date}': ['Muddati: {date}', 'Действует до {date}'],
+  'Created {date}': ['Yaratilgan: {date}', 'Создана {date}'],
+  '{n} student joined|{n} students joined': ['{n} o‘quvchi qo‘shildi', '{n} ученик присоединился|{n} ученика присоединились|{n} учеников присоединились'],
+  'Students who join wait for your confirmation in Recently joined.': [
+    'Qo‘shilgan o‘quvchilar «Yangi qo‘shilganlar» bo‘limida tasdiqlashingizni kutadi.',
+    'Присоединившиеся ученики ждут вашего подтверждения в разделе «Недавно присоединились».',
+  ],
+  'Open Recently joined': ['«Yangi qo‘shilganlar»ni ochish', 'Открыть «Недавно присоединились»'],
+  // Recently joined
+  'Recently joined': ['Yangi qo‘shilganlar', 'Недавно присоединились'],
+  'Students who joined with your invitation or magic link': ['Taklifingiz yoki sehrli havolangiz orqali qo‘shilgan o‘quvchilar', 'Ученики, присоединившиеся по вашему приглашению или волшебной ссылке'],
+  'Students who joined with your invitation or magic link. Confirm the ones who are yours.': [
+    'Taklifingiz yoki sehrli havolangiz orqali qo‘shilgan o‘quvchilar. O‘zingiznikilarini tasdiqlang.',
+    'Ученики, присоединившиеся по вашему приглашению или волшебной ссылке. Подтвердите своих.',
+  ],
+  'Waiting for you': ['Sizni kutmoqda', 'Ждут вас'],
+  'Joined {date}': ['Qo‘shilgan: {date}', 'Присоединился {date}'],
+  'Personal invite': ['Shaxsiy taklif', 'Личное приглашение'],
+  'Invite': ['Taklif', 'Приглашение'],
+  'Remove this account?': ['Bu hisob o‘chirilsinmi?', 'Удалить этот аккаунт?'],
+  'Reject': ['Rad etish', 'Отклонить'],
+  'Confirm · my student': ['Tasdiqlash · mening o‘quvchim', 'Подтвердить · мой ученик'],
+  '{name} is now your student.': ['{name} endi sizning o‘quvchingiz.', '{name} теперь ваш ученик.'],
+  '{name} was removed.': ['{name} o‘chirildi.', '{name} удалён.'],
+  'Nobody is waiting. Students who join with your links appear here.': [
+    'Hech kim kutmayapti. Havolalaringiz orqali qo‘shilgan o‘quvchilar shu yerda chiqadi.',
+    'Никто не ждёт. Здесь появятся ученики, присоединившиеся по вашим ссылкам.',
+  ],
+  '{n} student joined and waits for your confirmation.|{n} students joined and wait for your confirmation.': [
+    '{n} o‘quvchi qo‘shildi va tasdiqlashingizni kutmoqda.',
+    '{n} ученик присоединился и ждёт вашего подтверждения.|{n} ученика присоединились и ждут вашего подтверждения.|{n} учеников присоединились и ждут вашего подтверждения.',
+  ],
+  // Create account now (quick-create)
+  'Create account now': ['Hisobni hozir yaratish', 'Создать аккаунт сейчас'],
+  'Create login': ['Login yaratish', 'Создать логин'],
+  'Creates the account right away with a temporary password you set: for students without email or a class signing in together. The student is your confirmed student at once.': [
+    'Hisob siz belgilagan vaqtinchalik parol bilan darhol yaratiladi: emaili yo‘q o‘quvchilar yoki birga kirayotgan sinf uchun. O‘quvchi darhol sizning tasdiqlangan o‘quvchingiz bo‘ladi.',
+    'Аккаунт создаётся сразу с временным паролем, который задаёте вы: для учеников без email или класса, который входит вместе. Ученик сразу становится вашим подтверждённым учеником.',
+  ],
+  'Login created for {name}': ['{name} uchun login yaratildi', 'Логин для {name} создан'],
+  'Select the text and copy it': ['Matnni belgilab, nusxalang', 'Выделите текст и скопируйте его'],
+  'The student signs in with this temporary password and must change it. It expires on {date}.': [
+    'O‘quvchi shu vaqtinchalik parol bilan kiradi va uni o‘zgartirishi kerak. Muddati: {date}.',
+    'Ученик входит с этим временным паролем и должен его сменить. Пароль действует до {date}.',
+  ],
+  'The student signs in with this temporary password and must change it.': [
+    'O‘quvchi shu vaqtinchalik parol bilan kiradi va uni o‘zgartirishi kerak.',
+    'Ученик входит с этим временным паролем и должен его сменить.',
+  ],
+  'Create another account': ['Yana bir hisob yaratish', 'Создать ещё один аккаунт'],
+  'Invite students': ['O‘quvchilarni taklif qilish', 'Пригласить учеников'],
+  'Choose a counselor': ['Maslahatchini tanlang', 'Выберите консультанта'],
+  'Invite students with a personal invitation or a magic link.': [
+    'O‘quvchilarni shaxsiy taklif yoki sehrli havola orqali taklif qiling.',
+    'Пригласите учеников личным приглашением или волшебной ссылкой.',
+  ],
+  '{name} was already confirmed and stays a student.': ['{name} allaqachon tasdiqlangan va o‘quvchi bo‘lib qoladi.', '{name} уже подтверждён и остаётся учеником.'],
+  // Join page
+  'You are joining': ['Siz qo‘shilyapsiz', 'Вы присоединяетесь к'],
+  'Counselor: {name}': ['Maslahatchi: {name}', 'Консультант: {name}'],
+  'Personal invitation': ['Shaxsiy taklif', 'Личное приглашение'],
+  'Join link': ['Qo‘shilish havolasi', 'Ссылка для присоединения'],
+  'Create your student account': ['O‘quvchi hisobingizni yarating', 'Создайте аккаунт ученика'],
+  'Check your details, then choose a username and password.': ['Ma’lumotlaringizni tekshiring, so‘ng foydalanuvchi nomi va parol tanlang.', 'Проверьте свои данные, затем выберите имя пользователя и пароль.'],
+  'Enter your name and email, then choose a username and password.': ['Ismingiz va emailingizni kiriting, so‘ng foydalanuvchi nomi va parol tanlang.', 'Введите имя и email, затем выберите имя пользователя и пароль.'],
+  'I already have an account': ['Menda hisob bor', 'У меня уже есть аккаунт'],
+  'Create account': ['Hisob yaratish', 'Создать аккаунт'],
+  'Checking your invitation…': ['Taklif tekshirilmoqda…', 'Проверяем приглашение…'],
+  'This link does not work': ['Bu havola ishlamaydi', 'Эта ссылка не работает'],
+  'Your counselor confirms you before you can use Naseeb Edu.': ['Naseeb Edu’dan foydalanishdan oldin maslahatchingiz sizni tasdiqlaydi.', 'Прежде чем вы сможете пользоваться Naseeb Edu, консультант подтвердит вас.'],
+  'Your account is ready': ['Hisobingiz tayyor', 'Ваш аккаунт готов'],
+  '{counselor} will confirm you as a student of {school}. Until then you can sign in and see only a waiting screen.': [
+    '{counselor} sizni {school} o‘quvchisi sifatida tasdiqlaydi. Ungacha tizimga kirib, faqat kutish sahifasini ko‘rasiz.',
+    '{counselor} подтвердит вас как ученика {school}. До этого после входа вы увидите только экран ожидания.',
+  ],
+  'Your username: {username}': ['Foydalanuvchi nomingiz: {username}', 'Ваше имя пользователя: {username}'],
+  // Waiting screen
+  'Waiting for your counselor to confirm you': ['Maslahatchingiz sizni tasdiqlashini kutmoqdamiz', 'Ждём, когда консультант подтвердит вас'],
+  'Your account is ready. As soon as your counselor confirms you, your workspace opens here.': [
+    'Hisobingiz tayyor. Maslahatchingiz tasdiqlashi bilan ish maydoningiz shu yerda ochiladi.',
+    'Ваш аккаунт готов. Как только консультант подтвердит вас, здесь откроется ваше рабочее пространство.',
+  ],
+  'Checking…': ['Tekshirilmoqda…', 'Проверяем…'],
+  'Check again': ['Qayta tekshirish', 'Проверить снова'],
+  // Audit log
+  'Student invites': ['O‘quvchi takliflari', 'Приглашения учеников'],
+  'Student invite created': ['O‘quvchi taklifi yaratildi', 'Создано приглашение ученика'],
+  'Student invite revoked': ['O‘quvchi taklifi bekor qilindi', 'Приглашение ученика отозвано'],
+  'Student joined by invite': ['O‘quvchi taklif orqali qo‘shildi', 'Ученик присоединился по приглашению'],
+  'Student join confirmed': ['O‘quvchining qo‘shilishi tasdiqlandi', 'Присоединение ученика подтверждено'],
+  'Student join rejected': ['O‘quvchining qo‘shilishi rad etildi', 'Присоединение ученика отклонено'],
+};
+
+export function inviteMessages(language) {
+  const index = language === 'uz' ? 0 : 1;
+  return Object.fromEntries(Object.entries(INVITE_TRANSLATIONS).map(([key, values]) => [key, values[index]]));
+}

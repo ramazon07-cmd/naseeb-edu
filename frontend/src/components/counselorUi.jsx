@@ -2,7 +2,8 @@ import { createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { formatNumberLocale, t, tp } from '../i18n';
 import { initials } from '../lib/labels';
-import { joinParts, relativeDayText } from '../lib/format';
+import { joinParts } from '../lib/format';
+import { serverRelativeDayText } from '../lib/serverTime';
 
 // Building blocks of the counselor workspace ("Counselor Dashboard" design):
 // a page head, initials avatars, status tags, filter pills and a progress bar.
@@ -56,7 +57,7 @@ export function ReasonTags({ reasons }) {
 export function CxQueueRow({ item, active, onClick }) {
   return <button type="button" className={`cx-row${active ? ' active' : ''}`} aria-pressed={active === undefined ? undefined : active} onClick={onClick}>
     <CxAvatar name={item.studentName} />
-    <span className="cx-row-copy"><b>{item.title}</b><small>{joinParts(item.studentName, t(item.when, { when: relativeDayText(item.at).toLowerCase() }))}</small></span>
+    <span className="cx-row-copy"><b>{item.title}</b><small>{joinParts(item.studentName, t(item.when, { when: serverRelativeDayText(item.at).toLowerCase() }))}</small></span>
     <CxTag tone={item.kind} small>{t(item.label)}</CxTag>
   </button>;
 }

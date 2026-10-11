@@ -68,7 +68,9 @@ export const AUDIT_ACTIONS = {
   'scholarship.created': 'Scholarship added', 'scholarship.updated': 'Scholarship updated', 'scholarship.deleted': 'Scholarship deleted',
   'opportunity_program.created': 'Opportunity program added', 'opportunity_program.updated': 'Opportunity program updated', 'opportunity_program.deleted': 'Opportunity program deleted',
   'store_item.created': 'Store item added', 'store_item.updated': 'Store item updated', 'store_item.deleted': 'Store item deleted',
-  'staff.created': 'Staff account added', 'staff.tier_changed': 'Staff access tier changed'
+  'staff.created': 'Staff account added', 'staff.tier_changed': 'Staff access tier changed',
+  'student_invite.created': 'Student invite created', 'student_invite.revoked': 'Student invite revoked',
+  'student.joined_by_invite': 'Student joined by invite', 'student.join_confirmed': 'Student join confirmed', 'student.join_rejected': 'Student join rejected'
 };
 
 // The audit filter picks a group: the API matches every action under the prefix.
@@ -79,7 +81,7 @@ export const AUDIT_GROUPS = {
   opportunity_program: 'Opportunity programs', organization_account: 'School logins', parent: 'Parent invitations',
   plan: 'Plans', profile: 'Profile reviews', scholarship: 'Scholarships', school: 'Schools', staff: 'Staff accounts', store_item: 'Store items',
   student: 'Students', student_360: 'Student 360 views', student_account: 'Student account views',
-  student_cv: 'Student CV views', student_photo: 'Student photo views', student_visibility: 'Data visibility views',
+  student_cv: 'Student CV views', student_invite: 'Student invites', student_photo: 'Student photo views', student_visibility: 'Data visibility views',
   student_xp: 'Student XP views', subscription: 'Workspace plans', support: 'Support views',
   support_ticket: 'Support tickets', university: 'Universities', university_program: 'University programs'
 };

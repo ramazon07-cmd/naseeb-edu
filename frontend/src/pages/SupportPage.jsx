@@ -100,8 +100,9 @@ export function SupportTicketDetail({ ticket, user, onClose, onRespond, onOpenAc
   </div></Modal>;
 }
 
-export function SupportPage({ user, data, query, reload, notify }) {
+export function SupportPage({ user, data, query, reload, notify, moreTickets = false, loadMoreTickets }) {
   const [tab, setTab] = useState('all');
+  const [loadingMore, setLoadingMore] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [responding, setResponding] = useState(null);
@@ -146,6 +147,7 @@ export function SupportPage({ user, data, query, reload, notify }) {
     <section className="support-list"><div className="support-toolbar"><PortalTabs active={tab} onChange={setTab} items={[["all", "All"], ["open", "Open"], ["in_progress", "In progress"], ["resolved", "Resolved"], ["closed", "Closed"]]} /><small>{tp('{n} request|{n} requests', tickets.length, { n: `${tickets.length}${admin && queue.hasMore ? '+' : ''}` })}</small></div>
       <div className="support-ticket-grid">{tickets.map((ticket) => <article className={`support-ticket-card ${ticket.has_unread_response && !admin ? 'has-new-response' : ''}`} key={ticket.id}><div className="support-ticket-copy"><header><div><Badge>{ticket.category}</Badge><Badge>{ticket.status}</Badge>{ticket.has_unread_response && !admin && <Badge tone="unread">{t("New response")}</Badge>}</div><time>{dateText(ticket.updated_at)}</time></header><h3>{ticket.subject}</h3><p>{ticket.message}</p>{admin && <div className="support-requester compact"><span className="avatar">{initials(ticket.requester_name)}</span><div><b>{ticket.requester_name}</b><small>{label(ticket.requester_role)}</small></div></div>}</div><footer><small>{ticket.admin_response ? tx`Answered by ${ticket.responded_by_name || t("Support")}` : t("Awaiting support response")}</small><div><button className="button quiet small" onClick={() => openTicket(ticket)}><Eye size={14} /> {ticket.has_unread_response && !admin ? t("Read response") : t("View")}</button>{admin && <button className="button primary small" onClick={() => setResponding(ticket)}><MessageSquareText size={14} /> {t("Respond")}</button>}</div></footer></article>)}{admin && firstPageLoading(queue) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{(!admin || queue.loaded) && !tickets.length && <Empty text={totalCount ? t("No requests match this filter.") : admin ? t("No support requests have been submitted.") : t("You have not sent a support request yet.")} />}</div>
       {admin && <><PagedListError list={queue} /><LoadMore list={queue} /></>}
+      {!admin && moreTickets && <div className="paged-list-footer"><button type="button" className="button quiet small" disabled={loadingMore} aria-busy={loadingMore} onClick={() => {setLoadingMore(true);loadMoreTickets().catch((err) => notify(err.message, 'error')).finally(() => setLoadingMore(false));}}>{loadingMore ? t("Loading…") : t("Load more")}</button></div>}
     </section>
     {creating && <SupportTicketForm onClose={() => setCreating(false)} onSaved={saved} notify={notify} />}
     {selected && <SupportTicketDetail ticket={selected} user={user} onClose={() => setSelected(null)} onRespond={() => {setResponding(selected);setSelected(null);}} onOpenAccount={(requester) => {setAccount(requester);setSelected(null);}} />}

@@ -1,10 +1,12 @@
 from datetime import timedelta
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 from django.utils import timezone
 from apps.users.models import User
 from apps.admissions.models import (
-    Achievement, Activity, Application, Booking, Document, Essay,
+    Achievement, Activity, ActivityLog, Application, Booking, Document, Essay,
     ChannelMembership, ChannelMessage, Honor, Internship, MeetingNote, MessageChannel,
     Notification, OpportunityProgram, ParentStudentLink, ProfileSectionReview, ProgramService, Project,
     RecommendationLetter, Research, RoadmapMission, School,
@@ -317,14 +319,7 @@ class Command(BaseCommand):
                     defaults={'assigned_by': counselor, 'due_date': due, 'priority': priority, 'status': status},
                 )
 
-            for doc_title, doc_type, status in [
-                ('Passport scan', 'passport', 'approved'),
-                ('Academic transcript', 'transcript', 'reviewing'),
-                ('IELTS certificate', 'ielts', 'required'),
-                ('Academic excellence certificate', 'certificate', 'approved'),
-                ('CV / Resume', 'cv', 'uploaded'),
-            ]:
-                Document.objects.get_or_create(student=student, title=doc_title, defaults={'document_type': doc_type, 'status': status})
+            self.seed_documents(student, user, counselor)
 
             Achievement.objects.get_or_create(
                 student=student,
@@ -413,19 +408,19 @@ class Command(BaseCommand):
             )
 
             first_app = Application.objects.filter(student=student).first()
-            Essay.objects.get_or_create(
+            essay, _ = Essay.objects.get_or_create(
                 student=student,
                 application=first_app,
                 title='Main Personal Statement',
                 defaults={
                     'prompt': 'Tell us about your academic journey, motivation, and future goals.',
-                    'content': 'Draft is being prepared by the student.',
                     'status': 'needs_revision',
                     'counselor_comment': 'Needs a stronger opening story and clearer impact metrics.',
                     'shared_with_counselor': True,
                     'shared_at': timezone.now(),
                 },
             )
+            self.seed_essay_draft(essay, self.DEMO_DRAFTS[username])
 
             MeetingNote.objects.get_or_create(
                 student=student,
@@ -577,6 +572,7 @@ class Command(BaseCommand):
         )
         group_channel.last_message_at = group_message.created_at
         group_channel.save(update_fields=['last_message_at', 'updated_at'])
+        self.mark_read_through_own_messages(group_channel, counselor)
 
         if student_users:
             discussion_channel, _ = MessageChannel.objects.get_or_create(
@@ -610,6 +606,7 @@ class Command(BaseCommand):
             )
             discussion_channel.last_message_at = answer.created_at
             discussion_channel.save(update_fields=['last_message_at', 'updated_at'])
+            self.mark_read_through_own_messages(discussion_channel, counselor)
 
             first_id, second_id = sorted([counselor.id, student_users[0].id])
             direct_channel, _ = MessageChannel.objects.get_or_create(
@@ -634,6 +631,7 @@ class Command(BaseCommand):
             )
             direct_channel.last_message_at = direct_message.created_at
             direct_channel.save(update_fields=['last_message_at', 'updated_at'])
+            self.mark_read_through_own_messages(direct_channel, counselor)
 
         parent, _ = User.objects.get_or_create(
             username='parent',
@@ -679,6 +677,126 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             'Demo data created. Credentials are configured through local DEMO_*_PASSWORD variables.'
         ))
+
+    @staticmethod
+    def mark_read_through_own_messages(channel, user):
+        """Someone who replied has read the thread up to their reply; later messages stay unread."""
+        last_sent = (
+            channel.messages.filter(sender=user, deleted_at__isnull=True)
+            .order_by('-created_at').values_list('created_at', flat=True).first()
+        )
+        if last_sent:
+            ChannelMembership.objects.filter(channel=channel, user=user).filter(
+                Q(last_read_at__isnull=True) | Q(last_read_at__lt=last_sent),
+            ).update(last_read_at=last_sent)
+
+    DEMO_DRAFT_PLACEHOLDER = 'Draft is being prepared by the student.'
+    DEMO_DRAFTS = {
+        'ramazon': (
+            'I have always been interested in computers, and I want to study Computer Science.\n\n'
+            'In ninth grade our lyceum posted the class timetable as a photo in a Telegram group. Every week '
+            'someone missed a room change because the photo was out of date. I taught myself Python from free '
+            'videos and wrote a small bot that answered "Where is my next lesson?" for each class. The first '
+            'version crashed whenever two teachers swapped rooms, so I rewrote it around a shared spreadsheet the '
+            'deputy director could edit herself.\n\n'
+            'By the end of the year about 300 students used the bot. What I learned was less about code than about '
+            'people: the best feature was the one the deputy director asked for, not the one I thought was clever. '
+            'I want to study Computer Science to build tools like this for schools across Uzbekistan.'
+        ),
+        'aziza': (
+            'Economics is everywhere in our daily life, and that is why I want to study it.\n\n'
+            'On weekends I help my mother at her dried-fruit stall at Chorsu Bazaar. In 2022 the price of apricots '
+            'changed almost every week, and I started writing our buying and selling prices in a notebook. After '
+            'three months I could see that we lost money every time we bought in small amounts, so I suggested '
+            'that we buy together with two neighbouring stalls.\n\n'
+            'Our costs fell by about 12 percent that season. The notebook made me curious about why prices move, '
+            'which led me to read about inflation and supply chains far beyond our bazaar. I want to study '
+            'Economics to understand how small sellers like my mother can plan with more certainty.'
+        ),
+        'muhammad': (
+            'Data is the most important resource of the 21st century.\n\n'
+            'My grandfather has grown cotton near Kokand for forty years and decides when to water by looking at '
+            'the sky. Last summer I downloaded ten years of free weather data and compared it with his notebook of '
+            'harvest dates. He laughed at my charts at first, but he became interested when they showed that his '
+            'worst years all followed unusually dry Mays.\n\n'
+            'This year we tried watering one field earlier and kept the other as before. The early field gave a '
+            'slightly better harvest, although one season proves very little. I want to study Data Science so I '
+            'can answer questions like this properly, and so that farmers like my grandfather can trust the answers.'
+        ),
+        'sevara': (
+            'I am a hard-working student who loves business and numbers.\n\n'
+            'In tenth grade I joined our school book club, which had no money to buy new books. I proposed a small '
+            'café at parents\' evenings selling tea and homemade pastries. I tracked every sale in a spreadsheet '
+            'and noticed that we sold almost nothing after 19:00, so we started baking less and closing earlier.\n\n'
+            'After four evenings we had raised enough for 35 new books, and the club grew from 8 to 21 members. '
+            'The spreadsheet taught me that good decisions come from simple, honest data. I want to study Business '
+            'Analytics to help organisations, from school clubs to companies, decide with evidence.'
+        ),
+    }
+
+    def seed_essay_draft(self, essay, draft):
+        """Write the demo draft into an essay that is still empty or holds the old placeholder; real edits are kept."""
+        from django.db import transaction
+        from apps.admissions.essay_lab.tabs import ensure_first_tab, refresh_essay_text, tab_from_text
+        from apps.admissions.models import EssayTab
+
+        with transaction.atomic():
+            essay = Essay.objects.select_for_update().get(pk=essay.pk)
+            tab = ensure_first_tab(essay)
+            if EssayTab.objects.filter(essay=essay).count() != 1:
+                return
+            if tab.content.strip() not in ('', self.DEMO_DRAFT_PLACEHOLDER):
+                return
+            fresh = tab_from_text(essay, draft)
+            tab.doc = None
+            tab.content = fresh.content
+            tab.word_count = fresh.word_count
+            tab.char_count = fresh.char_count
+            tab.char_count_no_spaces = fresh.char_count_no_spaces
+            tab.save_seq += 1
+            tab.save(update_fields=['doc', 'content', 'word_count', 'char_count', 'char_count_no_spaces', 'save_seq', 'updated_at'])
+            refresh_essay_text(essay)
+
+    # (title, type, status, counselor comment). A reviewed document has a file, the
+    # counselor's comment and the ActivityLog entry the approve/send-back APIs write;
+    # a required one has no file yet.
+    DEMO_DOCUMENTS = (
+        ('Passport scan', 'passport', 'approved', 'Clear scan; the name matches your application.'),
+        ('Academic transcript', 'transcript', 'reviewing', ''),
+        ('IELTS certificate', 'ielts', 'required', ''),
+        ('Academic excellence certificate', 'certificate', 'approved', 'Approved. The certificate is dated and signed.'),
+        ('CV / Resume', 'cv', 'uploaded', ''),
+    )
+
+    def seed_documents(self, student, user, counselor):
+        """Idempotent: existing rows are completed (file, comment, log), never duplicated or re-statused."""
+        for index, (title, doc_type, status, comment) in enumerate(self.DEMO_DOCUMENTS):
+            doc, _ = Document.objects.get_or_create(
+                student=student, title=title, defaults={'document_type': doc_type, 'status': status},
+            )
+            if doc.status == Document.Status.REQUIRED:
+                continue
+            if not doc.file:
+                pdf = sample_pdf(f'{title} - {user.get_full_name() or user.username}')
+                doc.file.save(f'{doc_type}.pdf', ContentFile(pdf), save=False)
+                doc.original_file_name = f'{title.replace(" / ", "-").replace(" ", "-").lower()}.pdf'
+                doc.file_content_type = 'application/pdf'
+                doc.file_size = len(pdf)
+                doc.uploaded_by = user
+                doc.save(update_fields=['file', 'original_file_name', 'file_content_type', 'file_size', 'uploaded_by', 'updated_at'])
+            if doc.status not in (Document.Status.APPROVED, Document.Status.REJECTED):
+                continue
+            # A logged review is a real one (or already seeded): its comment is left as it is.
+            if not ActivityLog.objects.filter(student=student, metadata__kind='document', metadata__record=doc.pk).exists():
+                if not doc.counselor_comment:
+                    doc.counselor_comment = comment or 'Please upload a clearer copy.'
+                    doc.save(update_fields=['counselor_comment', 'updated_at'])
+                verb = 'approved' if doc.status == Document.Status.APPROVED else 'sent back'
+                log = ActivityLog.objects.create(
+                    actor=counselor, student=student, action=f'Document {verb}: {doc.title}',
+                    metadata={'record': doc.pk, 'kind': 'document'},
+                )
+                ActivityLog.objects.filter(pk=log.pk).update(created_at=timezone.now() - timedelta(days=3 + index))
 
     DEMO_FEEDBACK_ESSAY = 'Why I rebuild radios'
     DEMO_FEEDBACK_TEXT = (
@@ -753,3 +871,26 @@ class Command(BaseCommand):
                 student=student, title='New feedback on your essay', kind=Notification.Kind.ESSAY, target_id=essay.pk,
                 message=f'{counselor.get_full_name() or counselor.username} suggested 2 edits to your essay.',
             )
+
+
+def sample_pdf(text):
+    """A one-page PDF showing `text`, built byte by byte (valid xref offsets)."""
+    safe = text.encode('latin-1', 'replace').replace(b'\\', b'\\\\').replace(b'(', b'\\(').replace(b')', b'\\)')
+    stream = b'BT /F1 18 Tf 72 720 Td (' + safe + b') Tj 0 -28 Td /F1 11 Tf (Naseeb Edu demo document) Tj ET'
+    objects = [
+        b'<< /Type /Catalog /Pages 2 0 R >>',
+        b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+        b'<< /Length ' + str(len(stream)).encode() + b' >>\nstream\n' + stream + b'\nendstream',
+        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ]
+    out = bytearray(b'%PDF-1.4\n')
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f'{number} 0 obj\n'.encode() + body + b'\nendobj\n'
+    xref = len(out)
+    out += f'xref\n0 {len(objects) + 1}\n0000000000 65535 f \n'.encode()
+    out += b''.join(f'{offset:010d} 00000 n \n'.encode() for offset in offsets)
+    out += f'trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n'.encode()
+    return bytes(out)

@@ -104,10 +104,17 @@ class WindowRateThrottle(BaseThrottle):
             wait = _retry_after(limit, window, elapsed, current - 1, previous, self.sliding)
             self.wait_seconds = max(1, math.ceil(wait))
             return False
+        self.counted_keys = counted
         return True
 
     def wait(self):
         return self.wait_seconds
+
+    def refund(self):
+        """Take back the request just allowed, for limits that count only successes."""
+        for key in getattr(self, 'counted_keys', ()):
+            cache_decrement(key)
+        self.counted_keys = []
 
 
 class UserRateThrottle(WindowRateThrottle):
@@ -130,6 +137,20 @@ class AnonRateThrottle(WindowRateThrottle):
         if user is not None and user.is_authenticated:
             return None
         return self.get_ident(request)
+
+
+class UploadRateThrottle(WindowRateThrottle):
+    """Multipart writes per user (or IP), on top of the general user rate."""
+
+    scope = 'upload'
+
+    def get_cache_key(self, request, view):
+        if request.method not in ('POST', 'PUT', 'PATCH') or not (request.content_type or '').startswith('multipart/'):
+            return None
+        user = getattr(request, 'user', None)
+        if user is not None and user.is_authenticated:
+            return f'user:{user.pk}'
+        return f'ip:{self.get_ident(request)}'
 
 
 class ScopedRateThrottle(WindowRateThrottle):
@@ -196,6 +217,30 @@ class LoginAccountCeilingThrottle(WindowRateThrottle):
         if not account or is_known_login_device(account, self.get_ident(request)):
             return None
         return hashed(account)
+
+
+class InviteAcceptIPThrottle(IPCeilingThrottle):
+    """Accounts created through invite links, per client IP. The view counts only
+    successful sign-ups (it refunds failures), so a class joining from one
+    school address is not locked out by its own typos."""
+
+    scope = 'invite_accept'
+
+
+class InviteAttemptIPThrottle(IPCeilingThrottle):
+    """Every join attempt per client IP, failures included: bounds guessing."""
+
+    scope = 'invite_attempt'
+
+
+class InviteTokenThrottle(WindowRateThrottle):
+    """Join attempts per invite token, whichever address they come from."""
+
+    scope = 'invite_token'
+
+    def get_cache_key(self, request, view):
+        token = getattr(view, 'kwargs', {}).get('token')
+        return hashed(token) if token else None
 
 
 class RefreshIPThrottle(IPCeilingThrottle):

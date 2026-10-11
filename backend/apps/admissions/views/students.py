@@ -2,6 +2,12 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from datetime import timedelta
+from functools import reduce
+from operator import or_
+
+from django.db.models import Case, CharField, Count, Exists, F, IntegerField, OuterRef, Q, Value, When
+from django.db.models.functions import Concat, Lower, Replace, Trim
 from django.utils import timezone
 from pathlib import Path
 from rest_framework import viewsets
@@ -13,11 +19,15 @@ from apps.users.serializers import UserSerializer
 from apps.users.images import serve_private_image
 from apps.users.uploads import limit_upload_size, verify_image
 from ..models import (
+    Achievement,
     ActivityLog,
+    Document,
     LevelApproval,
     ProfileSectionReview,
+    RoadmapMission,
     School,
     StudentProfile,
+    Task,
 )
 from ..serializers import (
     LevelApprovalSerializer,
@@ -48,13 +58,79 @@ from apps.users.services import audit_product_action
 from ..params import int_param
 from ..section_review import SECTION_KEYS, changed_sections, mark_waiting, set_review
 from ..listing import STUDENT_SEARCH_FIELDS, ListQueryMixin
-from ..progress import attach_progress_stats
+from ..progress import DOCUMENT_AWAITING_REVIEW, attach_progress_stats
+from ..counselor_summary import _attention_sources, _count_of, _sort_name
+from ..countries import country_key, country_spellings
+from ..onboarding import COUNTRIES
 from .common import ScopedQuerysetMixin
 from ..services import send_reminder
 from core.storage import delete_file_on_commit
 
 
 ASSIGNMENT_CANDIDATE_LIMIT = 200
+# The Students page's "Quiet for 14+ days" (lib/studentReasons.js QUIET_DAYS).
+QUIET_DAYS = 14
+STUDENT_STATUSES = ('need_you', 'late', 'missing_documents', 'quiet', 'on_track')
+MAX_COUNTRY_LENGTH = 80
+
+
+def _country_list():
+    """target_countries as ",us,hong kong,": lower case, one comma between names, so
+    "US, UK", "USA,Canada" and "uk" all match a ",<spelling>," substring."""
+    joined = Trim('target_countries')
+    # SQL REPLACE is one pass: repeat so runs of spaces around commas collapse too.
+    for _ in range(4):
+        joined = Replace(Replace(joined, Value(', '), Value(',')), Value(' ,'), Value(','))
+    return Concat(Value(','), Lower(joined), Value(','), output_field=CharField())
+
+
+def target_country_choices(students):
+    """Every target country the students name, once each, in onboarding's spelling when it has one."""
+    canonical = {country_key(name): name for name in COUNTRIES}
+    found = {}
+    for value in students.order_by().values_list('target_countries', flat=True).distinct():
+        for part in str(value or '').split(','):
+            name = part.strip()
+            key = country_key(name)
+            if name and len(name) <= MAX_COUNTRY_LENGTH and key not in found:
+                found[key] = canonical.get(key, name)
+    ordered = [name for name in COUNTRIES if country_key(name) in found]
+    return ordered + sorted((name for key, name in found.items() if key not in canonical), key=str.lower)
+
+
+def student_status_conditions(today, now):
+    """``{status: condition on StudentProfile rows}``: the Students page pills, in SQL.
+
+    The same rules as lib/studentReasons.js: "need you" is late work or a
+    missing document (Home's rule), "quiet" no sign-in for 14+ days, and
+    "on track" none of those and nothing waiting for review.
+    """
+    exists = {key: Exists(rows.filter(student=OuterRef('pk'))) for key, rows in _attention_sources(today)}
+    late = exists['late_task'] | exists['late_mission']
+    need_you = late | exists['missing_document']
+    to_review = (
+        Exists(Task.objects.filter(student=OuterRef('pk'), status=Task.Status.SUBMITTED))
+        | Exists(RoadmapMission.objects.filter(student=OuterRef('pk'), status=RoadmapMission.Status.SUBMITTED))
+        | Exists(Document.objects.filter(DOCUMENT_AWAITING_REVIEW, student=OuterRef('pk')))
+        | Exists(Achievement.objects.filter(student=OuterRef('pk'), verified=False, counselor_comment=''))
+    )
+    quiet = Q(user__last_login__lte=now - timedelta(days=QUIET_DAYS))
+    return {
+        'need_you': need_you,
+        'late': late,
+        'missing_documents': Q(exists['missing_document']),
+        'quiet': quiet,
+        'on_track': ~(need_you | to_review | quiet),
+    }
+
+
+def _roadmap_percent():
+    """Completed missions over all missions, rounded half up like ProgressStats.roadmap_progress_percent."""
+    done, total = F('sort_missions_done'), F('sort_missions_total')
+    return Case(
+        When(sort_missions_total__gt=0, then=(Value(200) * done + total) / (Value(2) * total)),
+        default=Value(0), output_field=IntegerField(),
+    )
 
 
 class SectionReviewSerializer(drf_serializers.Serializer):
@@ -69,7 +145,7 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         'user', 'user__school', 'assigned_counselor', 'school',
     ).prefetch_related('user__temporary_credentials', 'section_reviews').order_by('user__first_name', 'user__last_name', 'id')
     search_fields = STUDENT_SEARCH_FIELDS
-    int_filters = {'school': 'school_id', 'counselor': 'assigned_counselor_id'}
+    int_filters = {'school': 'school_id', 'counselor': 'assigned_counselor_id', 'level': 'level'}
     choice_filters = {'grade': ('grade', StudentProfile.Grade.choices)}
     bool_filters = {'unassigned': 'assigned_counselor__isnull'}
     date_filters = {'created': 'created_at', 'updated': 'updated_at'}
@@ -78,6 +154,14 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         '-updated': ('-updated_at', '-id'),
         '-created': ('-created_at', '-id'),
     }
+    # ``?ordering=need_you``: Home's "Students who need you" order (most reasons,
+    # most late items, then name), on annotations that are never NULL, so the
+    # keyset cursor can seek on them. Not a model column, so not in ordering_options.
+    need_you_ordering = ('-need_you_reasons', '-need_you_late', 'need_you_name', 'id')
+    # ``?ordering=late``: most late tasks and missions first. ``?ordering=progress``:
+    # lowest roadmap completion first, as Home's "Student progress" lists them.
+    late_ordering = ('-sort_late', 'sort_name', 'id')
+    progress_ordering = ('sort_progress', '-sort_late', 'sort_name', 'id')
     default_cursor_ordering = 'name'
     # Per-action scopes (remind) are named on @action; ScopedRateThrottle reads this.
     throttle_scope = None
@@ -88,6 +172,47 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
             attach_progress_stats(page)
         return page
 
+    def apply_filters(self, queryset, params):
+        queryset = super().apply_filters(queryset, params)
+        country = str(params.get('country') or '').strip()
+        if country:
+            if len(country) > MAX_COUNTRY_LENGTH or ',' in country:
+                raise drf_serializers.ValidationError({'country': ['Choose one country.']})
+            queryset = queryset.alias(country_list=_country_list()).filter(reduce(or_, (
+                Q(country_list__contains=f',{spelling},') for spelling in country_spellings(country) if ',' not in spelling
+            )))
+        status = params.get('status')
+        if status not in (None, ''):
+            if status not in STUDENT_STATUSES:
+                raise drf_serializers.ValidationError({'status': [f'Choose one of: {", ".join(STUDENT_STATUSES)}.']})
+            queryset = queryset.filter(student_status_conditions(timezone.localdate(), timezone.now())[status])
+        return queryset
+
+    def apply_ordering(self, queryset, params):
+        name = params.get('ordering')
+        if name in ('late', 'progress'):
+            late = {f'{key}_n': _count_of(rows) for key, rows in _attention_sources(timezone.localdate()) if key != 'missing_document'}
+            queryset = queryset.annotate(**late).annotate(sort_late=F('late_task_n') + F('late_mission_n'), sort_name=_sort_name())
+            ordering = self.late_ordering
+            if name == 'progress':
+                queryset = queryset.annotate(
+                    sort_missions_done=_count_of(RoadmapMission.objects.filter(status=RoadmapMission.Status.COMPLETED)),
+                    sort_missions_total=_count_of(RoadmapMission.objects.all()),
+                ).annotate(sort_progress=_roadmap_percent())
+                ordering = self.progress_ordering
+            self.keyset_ordering = ordering
+            return queryset.order_by(*ordering)
+        if name != 'need_you':
+            return super().apply_ordering(queryset, params)
+        counts = {f'{key}_n': _count_of(rows) for key, rows in _attention_sources(timezone.localdate())}
+        queryset = queryset.annotate(**counts).annotate(
+            need_you_reasons=sum((Case(When(**{f'{name}__gt': 0}, then=1), default=0) for name in counts), Value(0)),
+            need_you_late=F('late_task_n') + F('late_mission_n'),
+            need_you_name=_sort_name(),
+        )
+        self.keyset_ordering = self.need_you_ordering
+        return queryset.order_by(*self.need_you_ordering)
+
     def get_queryset(self):
         queryset = self.filter_for_user(self.queryset)
         if self.action == 'list':
@@ -96,6 +221,29 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         elif self.action in ('cv', 'my_cv'):
             queryset = queryset.prefetch_related(None).prefetch_related(*self.CV_PREFETCH)
         return queryset
+
+    @action(detail=False, methods=['get'], url_path='summary')
+    def summary(self, request):
+        """The Students page's pill counts and filter choices, for the list's scope.
+
+        Counts follow ``?search=`` and every filter except ``?status=`` (each
+        pill is one status); the level and country choices cover every listed
+        student. Three queries whatever the number of students.
+        """
+        scoped = self.filter_for_user(StudentProfile.objects.all()).filter(user__is_active=True)
+        params = request.query_params.copy()
+        params.pop('status', None)
+        filtered = self.apply_filters(self.apply_search(scoped, params.get('search')), params)
+        conditions = student_status_conditions(timezone.localdate(), timezone.now())
+        counts = filtered.order_by().aggregate(
+            all=Count('pk'), **{key: Count('pk', filter=condition) for key, condition in conditions.items()},
+        )
+        return Response({
+            'counts': counts,
+            'levels': list(scoped.order_by('level').values_list('level', flat=True).distinct()),
+            'grades': [value for value, _ in StudentProfile.Grade.choices],
+            'countries': target_country_choices(scoped),
+        })
 
     @action(detail=False, methods=['get', 'post', 'patch'], url_path='onboarding')
     def onboarding(self, request):

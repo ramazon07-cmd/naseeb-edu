@@ -51,7 +51,7 @@ class QueryCountMixin(AuditBaseMixin):
                 ApplicationStatusHistory.objects.create(
                     application=application, status=status_value, changed_by=self.counselor,
                 )
-            Document.objects.create(student=profile, title='Doc', status='uploaded')
+            Document.objects.create(student=profile, title='Doc', status='uploaded', google_docs_url='https://docs.google.com/document/d/x')
             Essay.objects.create(student=profile, title='Essay', status='needs_revision', shared_with_counselor=True)
             # Not shared, so it stays out of every staff count.
             Essay.objects.create(student=profile, title='Private', status='needs_revision')
@@ -101,7 +101,8 @@ class DashboardQueryCountTests(QueryCountMixin, APITestCase):
         return super().get_counted(url, expected_status)
 
     def test_counselor(self):
-        response = self.assert_constant(self.counselor, self.URL, bound=13)
+        # 14: the counselor badges plus the Support badge's unread count (support_unread).
+        response = self.assert_constant(self.counselor, self.URL, bound=14)
         self.assertEqual(response.data['students_total'], 3 * N + 1)
         self.assertEqual(response.data['tasks_total'], 2 * 3 * N)
         self.assertEqual(response.data['tasks_late'], 3 * N)

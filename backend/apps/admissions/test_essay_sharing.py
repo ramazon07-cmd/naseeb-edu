@@ -251,7 +251,7 @@ class SharedEssayListQueryCountTests(EssaySharingTestCase):
                 )
 
     def test_staff_lists_are_filtered_in_constant_queries(self):
-        for url, bound in (('/api/essays/', 6), ('/api/dashboard/stats/', 13)):
+        for url, bound in (('/api/essays/', 6), ('/api/dashboard/stats/', 14)):
             for user in (self.counselor, self.admin):
                 self.client.force_authenticate(user)
                 with self.subTest(url=url, user=user.username):

@@ -194,6 +194,8 @@ function recordTitle(resource, item) {
 
 // A student's own records skip their name; staff lists (which never hold the
 // students collection in memory) name the student on every row.
+const PORTFOLIO_RESOURCES = new Set(['researches', 'projects', 'internships', 'activities', 'honors', 'achievements']);
+
 export function RecordRow({ resource, item, data, attachment, actions, showStudent = true }) {
   const own = (data.students || []).some((student) => Number(student.id) === Number(item.student));
   const student = showStudent && !own ? item.student_name || studentName(data, item.student) : '';
@@ -211,7 +213,9 @@ export function RecordRow({ resource, item, data, attachment, actions, showStude
     essays: [item.title, joinParts(student, tx`Version ${item.version}`, item.university_name || t('General essay')), item.counselor_comment || item.prompt, item.status],
     bookings: [item.topic, joinParts(student, dateTimeText(item.starts_at), item.participant_name), item.notes, item.status]
   };
-  const [title, meta, description, badge] = map[resource] || [t('Record'), student, '', null];
+  const [title, meta, base, badge] = map[resource] || [t('Record'), student, '', null];
+  const note = PORTFOLIO_RESOURCES.has(resource) && item.counselor_comment ? `${t('Counselor note:')} ${item.counselor_comment}` : '';
+  const description = joinParts(base, note);
   return <Record title={title} meta={meta} description={description} badge={badge} attachment={attachment} actions={actions} />;
 }
 

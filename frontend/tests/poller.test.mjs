@@ -162,3 +162,14 @@ test('poke stays immediate right after a run', async () => {
   assert.deepEqual(h.runs, [0, 10]);
   h.poller.stop();
 });
+
+test('a failure with retryAfter waits at least that long before the next run', async () => {
+  const limited = Object.assign(new Error('Too many requests'), { status: 429, retryAfter: 45000 });
+  const h = harness({ results: [limited, false], random: () => 0 });
+  h.poller.start({ immediate: true });
+  await h.advance(44999);
+  assert.deepEqual(h.runs, [0], 'no run before Retry-After');
+  await h.advance(1);
+  assert.deepEqual(h.runs, [0, 45000]);
+  h.poller.stop();
+});

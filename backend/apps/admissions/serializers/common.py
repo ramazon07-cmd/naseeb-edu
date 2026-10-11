@@ -308,6 +308,13 @@ class VerifiedStudentRecordMixin(StudentAuthoredMixin, StudentRecordSerializerMi
             if edited and getattr(instance, 'counselor_comment', ''):
                 # A record sent back with a note returns to the counselor's queue once its owner changes it.
                 attrs['counselor_comment'] = ''
+        if (
+            request and request.user.is_counselor_like and instance is not None and instance.verified
+            and attrs.get('verified') is False and 'counselor_comment' not in attrs
+            and getattr(instance, 'counselor_comment', '')
+        ):
+            # An approval note left on an un-verified record would read as a send-back and hide it from review.
+            attrs['counselor_comment'] = ''
         return attrs
 
 

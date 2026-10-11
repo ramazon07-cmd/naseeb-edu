@@ -1,12 +1,14 @@
 // Path <-> page mapping for the signed-in workspace (History API routing).
 // Framework-free so the mapping and the role guards are unit tested.
 import { canManageWorkspaces, isCounselor, isPlatformAdmin, isSuperAdmin } from './roles.js';
+import { FEATURES } from './features.js';
 
 // Product-admin pages live under /platform: /admin/ is Django's admin site.
 export const PAGE_PATHS = {
   dashboard: '/dashboard',
   schools: '/schools',
   students: '/students',
+  students_joined: '/students/joined',
   review: '/review',
   academics: '/academics',
   portfolio: '/portfolio',
@@ -44,6 +46,7 @@ export const PAGE_PATHS = {
   admin_plans: '/platform/plans',
   admin_staff: '/platform/staff',
   admin_health: '/platform/health',
+  notifications: '/notifications',
 };
 
 const PATH_PAGES = new Map(Object.entries(PAGE_PATHS).map(([page, path]) => [path, page]));
@@ -80,6 +83,7 @@ const RECORD_ROUTES = {
 };
 
 const ID_PATTERN = /^[1-9]\d{0,9}$/;
+export const REVIEW_ITEM_PATTERN = /^[a-z]+-[1-9]\d{0,9}$/;
 
 function normalizePath(pathname) {
   const path = String(pathname || '/').replace(/\/{2,}/g, '/');
@@ -115,6 +119,8 @@ export function buildPath({ page, params = {} } = {}) {
   const tabs = TAB_PAGES[page];
   // Every section card is on the overview tab.
   if (page === 'student_center' && STUDENT_CENTER_EDIT_SECTIONS.includes(params.edit)) return `${base}?edit=${params.edit}`;
+  // One queue item opened from Home (?item=document-12).
+  if (page === 'review' && REVIEW_ITEM_PATTERN.test(String(params.item ?? ''))) return `${base}?item=${params.item}`;
   if (tabs && tabs.includes(params.tab) && params.tab !== DEFAULT_TAB[page]) return `${base}/${params.tab}`;
   const record = RECORD_ROUTES[page];
   const id = record ? params[record.param] : null;
@@ -124,13 +130,17 @@ export function buildPath({ page, params = {} } = {}) {
 
 // Sidebar order of the counselor workspace, and the pages that left it: still
 // openable by a direct link (search results, old bookmarks), just not listed.
-export const COUNSELOR_NAV = ['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap'];
-const COUNSELOR_DIRECT_LINK_PAGES = ['academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates'];
+// Pages turned off in features.js: in no sidebar, so no role can open them.
+const OFF_PAGES = new Set(FEATURES.counselorRoadmapTemplates ? [] : ['counselor_roadmap']);
+const offered = (pages) => pages.filter((page) => !OFF_PAGES.has(page));
+
+export const COUNSELOR_NAV = offered(['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap']);
+const COUNSELOR_DIRECT_LINK_PAGES = ['students_joined', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates'];
 
 // Sidebar order per role.
 export function navigationFor(user) {
   // Health is for ops and above; staff accounts are managed by super admins only.
-  if (isPlatformAdmin(user)) return ['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'admin_catalog', 'counselor_roadmap', 'admin_plans', ...(canManageWorkspaces(user) ? ['admin_health'] : []), ...(isSuperAdmin(user) ? ['admin_staff'] : []), 'admin_audit', 'support'];
+  if (isPlatformAdmin(user)) return offered(['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'admin_catalog', 'counselor_roadmap', 'admin_plans', ...(canManageWorkspaces(user) ? ['admin_health'] : []), ...(isSuperAdmin(user) ? ['admin_staff'] : []), 'admin_audit', 'support']);
   if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings'];
   // The counselor sidebar is the "Counselor Dashboard" design: seven destinations.
   // Tasks, documents, roadmap, portfolio and the rest are reviewed in Review and
@@ -152,14 +162,17 @@ export function lockedPages(user) {
 
 export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
-// Pages opened from the account menu rather than the sidebar list.
-const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings'] };
+// Pages opened from the account menu (or, for counselors, the shell's
+// Notifications item) rather than the sidebar list.
+const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'] };
 
 export function reachablePages(user) {
   if (!user) return new Set();
   const extra = user.role === 'parent' && !isPlatformAdmin(user) ? [] : ['screen_time'];
   if (!isPlatformAdmin(user)) extra.push(...(ACCOUNT_MENU_PAGES[user.role] || []));
   if (user.role === 'counselor' && !isPlatformAdmin(user)) extra.push(...COUNSELOR_DIRECT_LINK_PAGES);
+  // Organization accounts confirm the students who joined by invite.
+  if (user.role === 'organization' && !isPlatformAdmin(user)) extra.push('students_joined');
   const locked = lockedPages(user);
   return new Set([...navigationFor(user), ...extra].filter((page) => !locked.has(page)));
 }
@@ -208,10 +221,17 @@ export function loginPath(next) {
   return target ? `${LOGIN_PATH}?next=${encodeURIComponent(target)}` : LOGIN_PATH;
 }
 
-// Public pages: '/login' (and the old '#/login' link) or the landing page.
+// A student invite or magic link: '/join/<token>' -> the token, else null.
+const JOIN_PATTERN = /^\/join\/([A-Za-z0-9_-]{16,128})$/;
+export function joinTokenFor(pathname) {
+  return normalizePath(pathname).match(JOIN_PATTERN)?.[1] || null;
+}
+
+// Public pages: '/login' (and the old '#/login' link), a join link or the landing page.
 export function publicPageFor(pathname, hash = '') {
   const path = normalizePath(pathname);
   if (path === LOGIN_PATH || (path === LANDING_PATH && hash === '#/login')) return 'login';
+  if (joinTokenFor(path)) return 'join';
   if (path === LANDING_PATH) return 'landing';
   return null;
 }

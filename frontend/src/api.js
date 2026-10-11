@@ -3,7 +3,7 @@ import { TOKEN_KEYS, browserLock, createRefresher, createTokenStore } from './au
 import { UNTRACKED_ENDPOINTS, createMutationTracker } from './lib/reloadPlan'
 import { errorPayloadMessage } from './lib/apiErrors'
 import { firstListPath } from './lib/listPath.js'
-import { requestRetryDelay } from './lib/backoff.js'
+import { requestRetryDelay, retryAfterMs } from './lib/backoff.js'
 import { protectedFileUrl, readProtectedFile } from './lib/protectedFile.js'
 import { sendWithProgress } from './lib/fileUpload.js'
 import { hasUserDrafts, removeUserDrafts } from './essayLab/drafts.js'
@@ -17,11 +17,13 @@ const tokens = createTokenStore(() => window.localStorage)
 const mutations = createMutationTracker(UNTRACKED_ENDPOINTS)
 
 export class ApiError extends Error {
-  constructor(message, status, details) {
+  // retryAfter: ms the server asked to wait (a 429's Retry-After), or null.
+  constructor(message, status, details, retryAfter = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.details = details
+    this.retryAfter = retryAfter
   }
 }
 
@@ -64,7 +66,8 @@ function sleep(ms, signal) {
 }
 
 // GETs are retried on transient failures with jittered backoff (lib/backoff.js);
-// writes never are, since a write that timed out may still have landed.
+// writes never are (sign-in, credentials and uploads included), since a write
+// that timed out may still have landed.
 async function fetchWithRetry(url, options) {
   const { retries, ...fetchOptions } = options
   const method = (fetchOptions.method || 'GET').toUpperCase()
@@ -274,7 +277,7 @@ export async function request(path, options = {}, retry = true, unwrapPagination
   if (auth && response.status === 401 && !getToken('access') && !getToken('refresh')) window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
   if (etag !== undefined && response.status === 304) return { notModified: true }
   const payload = await parseResponse(response)
-  if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload)
+  if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload, retryAfterMs(response.headers.get('Retry-After')))
   if (fetchOptions.method && fetchOptions.method !== 'GET') mutations.note(path)
   const data = unwrapPagination ? payload?.results ?? payload : payload
   return etag !== undefined ? { notModified: false, etag: response.headers.get('ETag'), data } : data
@@ -405,6 +408,17 @@ export const api = {
     body: JSON.stringify(password ? { password } : {}),
   }),
   me: () => request('/users/accounts/me/'),
+  // Student invites and magic links. The token comes back only from create.
+  studentInvites: (query = '') => request(`/student-invites/${query}`),
+  createStudentInvite: (payload) => request('/student-invites/', { method: 'POST', body: JSON.stringify(payload) }),
+  revokeStudentInvite: (id) => request(`/student-invites/${id}/revoke/`, { method: 'POST' }),
+  studentInviteCounselors: () => request('/student-invites/counselors/'),
+  pendingStudents: () => request('/pending-students/'),
+  confirmPendingStudent: (id) => request(`/pending-students/${id}/confirm/`, { method: 'POST' }),
+  rejectPendingStudent: (id) => request(`/pending-students/${id}/reject/`, { method: 'POST' }),
+  // The public join page: no session is sent, whoever is signed in on this device.
+  joinInvite: (token) => request(`/public/invites/${encodeURIComponent(token)}/`, { auth: false }),
+  acceptInvite: (token, payload) => request(`/public/invites/${encodeURIComponent(token)}/accept/`, { auth: false, method: 'POST', body: JSON.stringify(payload) }),
   // Account settings. A password change ends the other sessions and hands this
   // one a new token pair, stored here so the user stays signed in.
   changeOwnPassword: async (currentPassword, newPassword, confirmPassword) => {
@@ -427,6 +441,17 @@ export const api = {
   myParents: () => request('/my-parents/'),
   health: () => request('/health/'),
   dashboard: () => request('/dashboard/stats/'),
+  // Counselor Home: the stats plus everything Home lists, in one call (counselor_summary.counselor_home).
+  counselorHome: () => request('/dashboard/stats/?include=home'),
+  // Home's check-in grid past its first rows, one page at a time.
+  counselorCheckIns: (offset, limit) => request(`/dashboard/stats/?check_ins=all&limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}`),
+  // Home's "Student snapshot": one of the counselor's students, as they see their Home.
+  counselorSnapshot: (student) => request(`/dashboard/stats/?snapshot=${encodeURIComponent(student)}`),
+  // Tick or un-tick a day of this week's check-ins for one student.
+  counselorCheckIn: (student, date, checked) => request('/dashboard/stats/', {
+    method: 'POST',
+    body: JSON.stringify({ student, date, checked }),
+  }),
   collegeResearch: () => request('/college-research/'),
   // One College Search page (filters, sort and page size in `query`); never the whole catalogue.
   collegeSearch: (query, signal) => request(`/college-search/?${query}`, { signal }, true, false),
@@ -440,6 +465,8 @@ export const api = {
   }),
   list: listAll,
   page: listPage,
+  // The page a list response's `next` link names: { results, next }.
+  pageAt: (next) => request(nextApiPath(next), {}, true, false),
   count: async (resource, query = '') => {
     const params = new URLSearchParams(query.replace(/^\?/, ''))
     params.set('page_size', '1')
@@ -473,6 +500,8 @@ export const api = {
     if (search.trim()) query.set('search', search.trim())
     return request(`/students/assignment-candidates/${query.size ? `?${query}` : ''}`, { signal })
   },
+  // One task for many students; all are in scope or nothing is created.
+  bulkCreateTasks: (payload) => request('/tasks/bulk/', { method: 'POST', body: JSON.stringify(payload) }),
   assignCounselorStudents: (payload) => request('/students/assign-counselor/', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -573,7 +602,11 @@ export const api = {
   // Documents and achievements: accept them, optionally with a note for the student.
   approveRecord: (endpoint, id, note = '') => request(`/${endpoint}/${id}/approve/`, { method: 'POST', body: JSON.stringify({ note }) }),
   // A counselor returns submitted work (tasks, roadmap-missions, documents, achievements) with a note.
+  // A shared Essay Lab essay as its counselor reads it: current tab, comment threads, suggested edits.
+  reviewEssay: (id) => request(`/essay-lab/review/essays/${id}/`, {}, true, false),
   sendBack: (endpoint, id, note) => request(`/${endpoint}/${id}/send-back/`, { method: 'POST', body: JSON.stringify({ note }) }),
+  // What this counselor approved or sent back since midnight in Tashkent, newest first.
+  reviewedToday: () => request('/review/today/', {}, true, false),
   approveStudentLevel: (id) => request(`/students/${id}/approve-level/`, { method: 'POST' }),
   // A counselor's nudge about one open item (topic: task | mission | document | profile).
   remindStudent: (id, payload) => request(`/students/${id}/remind/`, { method: 'POST', body: JSON.stringify(payload) }),
@@ -583,17 +616,23 @@ export const api = {
   bookingAvailability: (participant) => request(`/bookings/availability/${participant ? `?participant=${participant}` : ''}`),
   addBookingAvailability: (payload) => request('/bookings/availability/', { method: 'POST', body: JSON.stringify(payload) }),
   removeBookingAvailability: (id) => request('/bookings/availability/', { method: 'DELETE', body: JSON.stringify({ id }) }),
+  editBookingAvailability: (id, payload) => request('/bookings/availability/', { method: 'PATCH', body: JSON.stringify({ ...payload, id }) }),
+  // { weekdays: [0-6, Monday = 0], time: 'HH:MM', duration_minutes, start_date, end_date, timezone } → { created, skipped, slots }
+  repeatBookingAvailability: (payload) => request('/bookings/availability/repeat/', { method: 'POST', body: JSON.stringify(payload) }),
   approveBooking: (id) => request(`/bookings/${id}/approve/`, { method: 'POST' }),
   rejectBooking: (id) => request(`/bookings/${id}/reject/`, { method: 'POST' }),
   completeBooking: (id) => request(`/bookings/${id}/complete/`, { method: 'POST' }),
   cancelBooking: (id) => request(`/bookings/${id}/cancel/`, { method: 'POST' }),
   rescheduleBooking: (id, payload) => request(`/bookings/${id}/reschedule/`, { method: 'POST', body: JSON.stringify(payload) }),
   telegramFeed: (before) => request(`/telegram-feed/${before ? `?before=${encodeURIComponent(before)}` : ''}`, {}, true, false),
-  messageChannels: (kind = '', search = '') => {
+  // One page of channels: { results, next }; follow `next` with api.pageAt.
+  messageChannels: (kind = '', search = '', { unread = false } = {}) => {
     const query = new URLSearchParams()
     if (kind) query.set('kind', kind)
     if (search) query.set('search', search)
-    return request(`/message-channels/${query.size ? `?${query}` : ''}`)
+    if (unread) query.set('unread', 'true')
+    return request(`/message-channels/${query.size ? `?${query}` : ''}`, {}, true, false)
+      .then((payload) => (Array.isArray(payload) ? { results: payload, next: null } : { results: payload?.results || [], next: payload?.next || null }))
   },
   channelMessages: (channelId) => request(`/channel-messages/?channel=${encodeURIComponent(channelId)}&page_size=50`),
   // Polling: pass the ETag of the last load; { notModified: true } when nothing changed.
@@ -602,6 +641,12 @@ export const api = {
   // The page before message `beforeId`: { results (newest first), next }.
   channelMessagesBefore: (channelId, beforeId) => request(`/channel-messages/?channel=${encodeURIComponent(channelId)}&page_size=50&before=${encodeURIComponent(beforeId)}`, {}, true, false),
   messageContacts: () => request('/message-channels/contacts/'),
+  // One page of contacts matching `search`: { results, next }.
+  messageContactsPage: (search = '', pageSize = 30) => {
+    const query = new URLSearchParams({ page_size: String(pageSize) })
+    if (search) query.set('search', search)
+    return request(`/message-channels/contacts/?${query}`, {}, true, false)
+  },
   messagingOverview: () => request('/message-channels/overview/'),
   channelMembers: (id) => request(`/message-channels/${id}/members/`),
   savedMessages: () => request('/message-channels/saved/', { method: 'POST' }),

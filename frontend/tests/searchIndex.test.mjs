@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildIndex, matchesQuery, mergeSearchResults, remoteSearchEntries, searchIndex, searchText } from '../src/lib/searchIndex.js';
+import { buildIndex, matchesQuery, mergeSearchResults, remoteSearchEntries, searchIndex, searchResultTarget, searchText } from '../src/lib/searchIndex.js';
 
 test('record text is computed once per object and matches like the old filter', () => {
   const item = { title: 'IELTS Upload', nested: { note: 'Deadline' } };
@@ -33,7 +33,7 @@ test('header search merges server matches with in-memory pages and records', () 
     accounts: [{ id: 9, title: 'Hidden' }],
     tasks: [{ id: 1, title: '' }],
   }, { students: 'students', accounts: null, tasks: 'tasks' });
-  assert.deepEqual(remote, [{ id: 'students-4', kind: 'record', destination: 'students', title: 'Zafar Aliyev', subtitle: 'School A', filterQuery: 'Zafar Aliyev' }]);
+  assert.deepEqual(remote, [{ id: 'students-4', kind: 'record', type: 'students', recordId: 4, destination: 'students', title: 'Zafar Aliyev', subtitle: 'School A', filterQuery: 'Zafar Aliyev' }]);
   const local = [
     { id: 'students-4', kind: 'record', title: 'Zafar Aliyev (local)' },
     { id: 'page-students', kind: 'page', title: 'Students' },
@@ -41,4 +41,15 @@ test('header search merges server matches with in-memory pages and records', () 
   ];
   assert.deepEqual(mergeSearchResults(local, remote).map((entry) => entry.id), ['page-students', 'students-4', 'tasks-2']);
   assert.equal(mergeSearchResults(local, remote, 2).length, 2);
+});
+
+test('a student result opens their Student 360; other records open their filtered page', () => {
+  const [student, essay] = remoteSearchEntries({
+    students: [{ id: 4, title: 'Zafar Aliyev', subtitle: 'School A' }],
+    essays: [{ id: 7, title: 'Why medicine', subtitle: 'Zafar Aliyev' }],
+  }, { students: 'students', essays: 'essays' });
+  assert.deepEqual(searchResultTarget(student), { page: 'students', params: { studentId: 4 }, query: '' });
+  assert.deepEqual(searchResultTarget(essay), { page: 'essays', params: {}, query: 'Why medicine' });
+  assert.equal(essay.subtitle, 'Zafar Aliyev');
+  assert.deepEqual(searchResultTarget({ kind: 'page', destination: 'review' }), { page: 'review', params: {}, query: '' });
 });

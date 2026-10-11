@@ -36,3 +36,4 @@ PROJECT_CHECKLIST.md
 skills-lock.json
 scripts/loadtest/.accounts/
 scripts/loadtest/results/
+.gstack/

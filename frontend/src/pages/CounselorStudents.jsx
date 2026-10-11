@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, ChevronLeft, MessageCircle, Plus, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
 import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag, ReasonTags } from '../components/counselorUi';
@@ -9,33 +9,30 @@ import { DocumentPreviewModal, EssayDetailModal, TaskSubmissionModal } from '../
 import { LoadMore, PagedListError } from '../components/paged';
 import { PageSkeleton } from '../components/states';
 import { TemporaryCredentialModal } from '../components/TemporaryCredentialModal';
+import { StudentQuickPanel } from '../components/StudentQuickPanel';
 import { DownloadCvButton } from '../components/CvDocument';
 import { mergeSaved } from '../lib/mergeSaved';
 import { RecommendationLetters } from '../components/RecommendationLetters';
 import { useStudentRecords } from '../hooks/useStudentRecords';
-import { usePagedList } from '../hooks/usePagedList';
+import { invalidatePagedLists, usePagedList } from '../hooks/usePagedList';
 import { activityText } from '../lib/activityText';
 import { clockText, dateText, dateTimeText, dayLabel, dayMonthText, gradeText, joinParts, localDateKey, relativeDayText } from '../lib/format';
 import { fullName, initials, label } from '../lib/labels';
 import { createLatestRequest } from '../lib/latestRequest';
-import { listText } from '../lib/profileSections';
+import { splitList } from '../lib/profileSections';
 import { meetingBadgeStatus, meetingStatus, upcomingMeetings } from '../lib/meetings';
 import { mergeReviewQueue } from '../lib/reviewQueue';
-import { isOnTrack, isQuiet, needsAttention, studentReasons, urgency } from '../lib/studentReasons';
+import { hasSubmission } from '../lib/reviewSubmission';
+import { failedPage, pageAfterLoad, pageCount } from '../lib/studentListPage';
+import { isQuiet, needsAttention, studentReasons } from '../lib/studentReasons';
 import { BookingForm, MeetingNoteForm } from './BookingsPage';
 import { ReviewWorkspace } from './ReviewPage';
+import './counselor-students.css';
 import { ParentInviteModal, StudentAssignmentModal, StudentForm } from './StudentsPage';
 
 // A status word's colour: done and confirmed are green, waiting is amber, late or missing red.
 const STATUS_TONE = { approved: 'ok', completed: 'ok', confirmed: 'ok', verified: 'ok', submitted: 'warn', uploaded: 'warn', reviewing: 'warn', pending: 'warn', late: 'late', rejected: 'late', required: 'late', expired_unconfirmed: 'quiet' };
 const statusTone = (status) => STATUS_TONE[status] || 'quiet';
-
-function DeadlineCell({ deadline }) {
-  if (!deadline) return <span className="cx-faint">—</span>;
-  const title = deadline.kind === 'application' ? t('{name} application', { name: deadline.title }) : deadline.kind === 'letter' ? t('Recommendation letter') : deadline.title;
-  const date = dayMonthText(deadline.due);
-  return <span className="cx-deadline-cell"><span>{title}</span><span className="cx-deadline-when">{deadline.late ? t('{date} (late)', { date }) : date}</span></span>;
-}
 
 // One task, assigned to one or several students at once.
 function BulkTaskForm({ studentIds, onClose, onSaved, notify }) {
@@ -46,10 +43,12 @@ function BulkTaskForm({ studentIds, onClose, onSaved, notify }) {
     const values = new FormData(event.currentTarget);
     const payload = { title: values.get('title'), due_date: values.get('due_date'), priority: values.get('priority') };
     try {
-      const results = await Promise.allSettled(studentIds.map((id) => api.create('tasks', { ...payload, student: id })));
-      const failed = results.filter((result) => result.status === 'rejected').length;
-      notify(failed ? tx`Assigned to ${studentIds.length - failed} of ${studentIds.length} students; ${failed} failed.` : tp('Task assigned to {n} student.|Task assigned to {n} students.', studentIds.length, { n: studentIds.length }), failed ? 'error' : undefined);
+      // One request, all or nothing: a rejected student creates no task for anyone.
+      const { created } = await api.bulkCreateTasks({ ...payload, students: studentIds });
+      notify(tp('Task assigned to {n} student.|Task assigned to {n} students.', created, { n: created }));
       onSaved();
+    } catch (failure) {
+      notify(failure.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -62,22 +61,209 @@ function BulkTaskForm({ studentIds, onClose, onSaved, notify }) {
   </form></Modal>;
 }
 
-// "Students": who is assigned to you, and for each one why they need you.
-function CounselorStudentList({ user, data, stats, query, setQuery, students, onOpen, notify, reload }) {
-  const [filter, setFilter] = useState('all');
+// "Students": who is assigned to you and what they need from you, one server page
+// at a time (GET /api/students/?page=&status=&level=&grade=&country=&ordering=).
+const PAGE_SIZE = 25;
+const VIEW_KEY = 'naseeb-counselor-students-view';
+const STATUS_PILLS = [['all', 'All'], ['need_you', 'Need you'], ['late', 'Late work'], ['missing_documents', 'Missing documents'], ['quiet', 'Quiet for 14+ days'], ['on_track', 'On track']];
+const SORTS = [['need_you', 'Needs you first'], ['late', 'Most late work'], ['progress', 'Lowest progress'], ['name', 'Name A–Z']];
+const GRADES = ['8', '9', '10', '11', 'gap'];
+const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
+export const STUDENT_LIST_DEFAULTS = Object.freeze({ status: 'all', level: '', grade: '', country: '', ordering: 'need_you', page: 1, search: '' });
+
+function readView() {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'cards' ? 'cards' : 'table';
+  } catch {
+    return 'table';
+  }
+}
+
+function saveView(view) {
+  try {
+    window.localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // The choice just isn't remembered.
+  }
+}
+
+// `flush(next)` sets the value at once and drops the pending one, so a cleared
+// search never comes back from the timer.
+function useDebounced(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  const timer = useRef(null);
+  useEffect(() => {
+    timer.current = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer.current);
+  }, [value, delay]);
+  const flush = useCallback((next) => {
+    clearTimeout(timer.current);
+    setDebounced(next);
+  }, []);
+  return [debounced, flush];
+}
+
+function filterParams(state) {
+  const params = new URLSearchParams();
+  if (state.search.trim()) params.set('search', state.search.trim());
+  for (const key of ['level', 'grade', 'country']) if (state[key]) params.set(key, state[key]);
+  return params;
+}
+
+// One page of students and the pill counts (GET /api/students/summary/).
+function useStudentPage(state, version) {
+  const [page, setPage] = useState({ key: '', items: [], count: 0, loading: true, error: '', status: 0 });
+  const [summary, setSummary] = useState(null);
+  const filters = filterParams(state);
+  const summaryKey = `?${filters}`;
+  const params = new URLSearchParams(filters);
+  params.set('page', String(state.page));
+  params.set('page_size', String(PAGE_SIZE));
+  params.set('ordering', state.ordering);
+  if (state.status !== 'all') params.set('status', state.status);
+  const pageKey = `?${params}`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setPage((current) => ({ ...current, loading: true, error: '' }));
+    api.page('students', pageKey, controller.signal).then(
+      (result) => setPage({ key: pageKey, items: result?.results || [], count: result?.count ?? 0, loading: false, error: '', status: 0 }),
+      (failure) => { if (!controller.signal.aborted) setPage(failedPage(pageKey, failure)); },
+    );
+    return () => controller.abort();
+  }, [pageKey, version]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api.page('students/summary', summaryKey, controller.signal).then(setSummary, () => {});
+    return () => controller.abort();
+  }, [summaryKey, version]);
+
+  return { ...page, summary, stale: page.key !== pageKey };
+}
+
+function StatusTag({ reasons }) {
+  if (needsAttention(reasons)) return <CxTag tone="late">{t("Needs you")}</CxTag>;
+  if (reasons.some((reason) => reason.key === 'to_review')) return <CxTag tone="warn">{t("To review")}</CxTag>;
+  if (isQuiet(reasons)) return <CxTag tone="quiet">{t("Quiet")}</CxTag>;
+  return <CxTag tone="ok">{t("On track")}</CxTag>;
+}
+
+function LateWork({ reasons }) {
+  const late = reasons.filter((reason) => reason.key === 'late_task' || reason.key === 'late_mission' || reason.key === 'missing_document');
+  return late.length ? <ReasonTags reasons={late} /> : <span className="cx-faint">{t("No late work")}</span>;
+}
+
+const targetText = (student) => splitList(student.target_countries).map((country) => t(country)).join(', ') || student.target_major || '';
+
+function ProgressCell({ student }) {
+  const percent = student.roadmap_progress_percent || 0;
+  return <span className="cs-progress"><CxProgress value={percent} label={t("Roadmap")} /><b>{formatPercentLocale(percent)}</b></span>;
+}
+
+function StudentTable({ rows, selecting, selected, toggle, onPreview }) {
+  return <div className="cx-card cs-table-card">
+    <table className="cs-table">
+      <thead><tr>
+        {selecting && <th scope="col" className="cs-check-col"><span className="sr-only">{t("Select")}</span></th>}
+        <th scope="col">{t("Student")}</th><th scope="col">{t("Progress")}</th><th scope="col">{t("Late work")}</th><th scope="col">{t("Target")}</th><th scope="col">{t("Status")}</th>
+      </tr></thead>
+      <tbody>
+        {rows.map(({ student, reasons, name }) => <tr key={student.id} className={selecting && selected.has(student.id) ? 'selected' : ''} onClick={() => (selecting ? toggle(student.id) : onPreview(student))}>
+          {selecting && <td className="cs-check-col"><input type="checkbox" checked={selected.has(student.id)} onChange={() => toggle(student.id)} onClick={(event) => event.stopPropagation()} aria-label={tx`Select ${name}`} /></td>}
+          <td>
+            <div className="cx-person">
+              <CxAvatar name={name} />
+              <span className="cx-row-copy">
+                <button type="button" className="cx-name-link" onClick={(event) => { event.stopPropagation(); if (selecting) toggle(student.id); else onPreview(student); }}>{name}</button>
+                <small>{joinParts(gradeText(student.grade), tx`Level ${student.level ?? 1}`)}</small>
+              </span>
+            </div>
+          </td>
+          <td data-label={t("Progress")}><ProgressCell student={student} /></td>
+          <td data-label={t("Late work")}><LateWork reasons={reasons} /></td>
+          <td data-label={t("Target")}>{targetText(student) || <span className="cx-faint">—</span>}</td>
+          <td data-label={t("Status")}><StatusTag reasons={reasons} /></td>
+        </tr>)}
+      </tbody>
+    </table>
+  </div>;
+}
+
+function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
+  return <div className="cs-cards">
+    {rows.map(({ student, reasons, name }) => {
+      const body = <>
+        <span className="cs-card-top">
+          <CxAvatar name={name} />
+          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeText(student.grade), tx`Level ${student.level ?? 1}`, targetText(student))}</small></span>
+        </span>
+        <ProgressCell student={student} />
+        <span className="cs-card-foot"><LateWork reasons={reasons} /><StatusTag reasons={reasons} /></span>
+      </>;
+      return selecting
+        ? <label key={student.id} className={`cs-card${selected.has(student.id) ? ' selected' : ''}`}><input type="checkbox" className="cs-card-check" checked={selected.has(student.id)} onChange={() => toggle(student.id)} aria-label={tx`Select ${name}`} />{body}</label>
+        : <button key={student.id} type="button" className="cs-card" onClick={() => onPreview(student)} aria-label={t('Quick look at {name}', { name })}>{body}</button>;
+    })}
+  </div>;
+}
+
+function CounselorStudentList({ user, data, query, setQuery, listState, setListState, onItems, onOpen, onDirect, onAddStudent, notify, reload }) {
+  const [view, setView] = useState(readView);
+  const [version, setVersion] = useState(0);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [assigning, setAssigning] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [preview, setPreview] = useState(null);
   const [adding, setAdding] = useState(false);
-  const now = new Date();
-  const rows = students.items
-    .map((student) => ({ student, reasons: studentReasons(student, now) }))
-    .sort((a, b) => urgency(b.reasons) - urgency(a.reasons) || fullName(a.student.user_detail).localeCompare(fullName(b.student.user_detail)));
-  const counts = { all: rows.length, need_you: rows.filter(({ reasons }) => needsAttention(reasons)).length, quiet: rows.filter(({ reasons }) => isQuiet(reasons)).length, on_track: rows.filter(({ reasons }) => isOnTrack(reasons)).length };
-  const shown = rows.filter(({ reasons }) => (filter === 'need_you' ? needsAttention(reasons) : filter === 'quiet' ? isQuiet(reasons) : filter === 'on_track' ? isOnTrack(reasons) : true));
-  const total = stats?.students_total ?? rows.length;
-  const needYou = stats?.students_need_you ?? counts.need_you;
+  const closePreview = useCallback(() => setPreview(null), []);
+  const [search, flushSearch] = useDebounced(query, 250);
+  const state = listState;
+  const update = (patch) => setListState((current) => ({ ...current, page: 1, ...patch }));
+
+  // A new search starts again on page 1; reopening the list keeps the page it was on.
+  useEffect(() => {
+    if (search !== listState.search) setListState((current) => ({ ...current, search, page: 1 }));
+  }, [search, listState.search, setListState]);
+
+  const list = useStudentPage(state, version);
+  const rows = useMemo(() => {
+    const now = new Date();
+    return list.items.map((student) => ({ student, reasons: studentReasons(student, now), name: fullName(student.user_detail) }));
+  }, [list.items]);
+  useEffect(() => { onItems(list.items); }, [list.items, onItems]);
+
+  const pages = pageCount(list.count, PAGE_SIZE);
+  const counts = list.summary?.counts || {};
+  const total = counts[state.status];
+  // A page past the end (students left the filter, or Back to a page that is gone): go to the last one.
+  useEffect(() => {
+    if (list.loading || list.stale) return;
+    const next = pageAfterLoad({ page: state.page, pageSize: PAGE_SIZE, count: list.count, status: list.status, error: list.error, total });
+    if (next !== null) setListState((current) => ({ ...current, page: next }));
+  }, [list.loading, list.stale, list.status, list.error, list.count, state.page, total, setListState]);
+  const moving = Boolean(list.error) && pageAfterLoad({ page: state.page, pageSize: PAGE_SIZE, count: 0, status: list.status, error: list.error, total }) !== null;
+
+  const levels = list.summary?.levels || [];
+  const filtered = Boolean(query.trim() || state.level || state.grade || state.country || state.status !== 'all');
+  const from = list.count ? (state.page - 1) * PAGE_SIZE + 1 : 0;
+  const to = Math.min(list.count, (state.page - 1) * PAGE_SIZE + list.items.length);
+
+  function changeView(next) {
+    setView(next);
+    saveView(next);
+  }
+
+  function clearSearch() {
+    flushSearch('');
+    setQuery('');
+  }
+
+  function clearFilters() {
+    clearSearch();
+    setListState((current) => ({ ...STUDENT_LIST_DEFAULTS, ordering: current.ordering }));
+  }
 
   function toggle(id) {
     setSelected((current) => {
@@ -92,63 +278,102 @@ function CounselorStudentList({ user, data, stats, query, setQuery, students, on
     setSelected(new Set());
   }
 
-  return <div className="cx-page cx-students">
-    <CxHead
-      title={t("Students")}
-      subtitle={joinParts(tp('{n} student assigned to you|{n} students assigned to you', total, { n: total }), tp('{n} needs you|{n} need you', needYou, { n: needYou }))}
-    >
-      <label className="cx-search">
-        <Search size={16} aria-hidden="true" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search by name…")} aria-label={t("Search by name…")} />
-      </label>
+  function refresh() {
+    setVersion((value) => value + 1);
+    reload();
+  }
+
+  const chips = [
+    query.trim() && ['search', `“${query.trim()}”`, clearSearch],
+    state.status !== 'all' && ['status', t(STATUS_PILLS.find(([key]) => key === state.status)?.[1] || ''), () => update({ status: 'all' })],
+    state.level && ['level', tx`Level ${state.level}`, () => update({ level: '' })],
+    state.grade && ['grade', gradeText(state.grade), () => update({ grade: '' })],
+    state.country && ['country', t(state.country), () => update({ country: '' })],
+  ].filter(Boolean);
+
+  const shown = { rows, selecting, selected, toggle, onPreview: setPreview };
+
+  return <div className="cx-page cx-students cs-page">
+    <CxHead title={t("Students")} subtitle={t("Your students and what they need from you")}>
       {selecting && <button type="button" className="cx-btn" onClick={stopSelecting}>{t("Cancel")}</button>}
-      <button type="button" className="cx-btn primary" disabled={selecting && !selected.size} onClick={() => (selecting ? setAssigning(true) : setSelecting(true))}>
-        <Plus size={15} aria-hidden="true" />{selecting ? tp('Assign task to {n} student|Assign task to {n} students', selected.size || 1, { n: selected.size || 1 }) : t("Assign task to several")}
+      <button type="button" className="cx-btn" disabled={selecting && !selected.size} onClick={() => (selecting ? setAssigning(true) : setSelecting(true))}>
+        <Plus size={15} aria-hidden="true" />{selecting && selected.size ? tp('Assign task to {n} student|Assign task to {n} students', selected.size, { n: selected.size }) : t("Assign task to several")}
       </button>
+      {/* "Add student" slot: the page's onAddStudent decides what adding a student means. */}
+      <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>
     </CxHead>
 
-    <CxPills label={t("Filter students")} active={filter} onChange={setFilter} items={[['all', 'All', counts.all], ['need_you', 'Need you', counts.need_you], ['quiet', 'Quiet for 14+ days', counts.quiet], ['on_track', 'On track', counts.on_track]]} />
+    <CxPills label={t("Filter students")} active={state.status} onChange={(status) => update({ status })} items={STATUS_PILLS.map(([key, title]) => [key, title, counts[key]])} />
 
-    <div className="cx-card cx-table-card">
-      {students.loading && !students.items.length ? <PageSkeleton /> : <table className="cx-table">
-        <colgroup><col className="c-student" /><col className="c-ready" /><col className="c-road" /><col className="c-why" /><col className="c-next" /><col className="c-last" /></colgroup>
-        <thead><tr><th scope="col">{t("Student")}</th><th scope="col">{t("Readiness")}</th><th scope="col">{t("Roadmap")}</th><th scope="col">{t("Why they need you")}</th><th scope="col">{t("Next deadline")}</th><th scope="col">{t("Last active")}</th></tr></thead>
-        <tbody>
-          {shown.map(({ student, reasons }) => {
-            const name = fullName(student.user_detail);
-            const quietDays = reasons.find((reason) => reason.key === 'quiet')?.quietDays;
-            return <tr key={student.id} className={selecting && selected.has(student.id) ? 'selected' : ''} onClick={() => (selecting ? toggle(student.id) : onOpen(student))}>
-              <td>
-                <div className="cx-person">
-                  {selecting && <input type="checkbox" checked={selected.has(student.id)} onChange={() => toggle(student.id)} onClick={(event) => event.stopPropagation()} aria-label={tx`Select ${name}`} />}
-                  <CxAvatar name={name} />
-                  <span className="cx-row-copy">
-                    <button type="button" className="cx-name-link" onClick={(event) => { event.stopPropagation(); onOpen(student); }}>{name}</button>
-                    <small>{joinParts(gradeText(student.grade), student.target_major)}</small>
-                  </span>
-                </div>
-              </td>
-              <td data-label={t("Readiness")}><b>{formatPercentLocale(student.progress_percent || 0)}</b><CxProgress value={student.progress_percent} label={t("Readiness")} /></td>
-              <td data-label={t("Roadmap")}>{t('{done} of {total} missions', { done: student.level_missions_approved ?? 0, total: student.level_missions_total ?? 0 })}</td>
-              <td data-label={t("Why they need you")}>{reasons.length ? <ReasonTags reasons={reasons} /> : <CxTag tone="ok">{t("On track")}</CxTag>}</td>
-              <td data-label={t("Next deadline")}><DeadlineCell deadline={student.next_deadline} /></td>
-              <td className="cx-muted" data-label={t("Last active")}>{quietDays != null ? tp('{n} day ago|{n} days ago', quietDays, { n: quietDays }) : student.user_detail?.last_login ? relativeDayText(student.user_detail.last_login) : t("Never")}</td>
-            </tr>;
-          })}
-        </tbody>
-      </table>}
-      {students.loaded && !shown.length && <p className="cx-empty">{t("No students in this view.")}</p>}
+    <div className="cs-filters">
+      <div className="cs-filter-row">
+        <label className="cx-search cs-search">
+          <Search size={16} aria-hidden="true" />
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search by name…")} aria-label={t("Search by name…")} autoComplete="off" />
+        </label>
+        <label className="cs-field"><span>{t("Level")}</span>
+          <select value={state.level} onChange={(event) => update({ level: event.target.value })}>
+            <option value="">{t("Any level")}</option>
+            {[...new Set([...levels.map(String), ...(state.level ? [state.level] : [])])].map((level) => <option key={level} value={level}>{tx`Level ${level}`}</option>)}
+          </select>
+        </label>
+        <label className="cs-field"><span>{t("Grade")}</span>
+          <select value={state.grade} onChange={(event) => update({ grade: event.target.value })}>
+            <option value="">{t("Any grade")}</option>
+            {(list.summary?.grades || GRADES).map((grade) => <option key={grade} value={grade}>{gradeText(grade)}</option>)}
+          </select>
+        </label>
+        <label className="cs-field"><span>{t("Target country")}</span>
+          <select value={state.country} onChange={(event) => update({ country: event.target.value })}>
+            <option value="">{t("Any country")}</option>
+            {(list.summary?.countries || COUNTRIES).map((country) => <option key={country} value={country}>{t(country)}</option>)}
+          </select>
+        </label>
+        <label className="cs-field"><span>{t("Sort by")}</span>
+          <select value={state.ordering} onChange={(event) => update({ ordering: event.target.value })}>
+            {SORTS.map(([key, title]) => <option key={key} value={key}>{t(title)}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="cs-filter-row cs-filter-foot">
+        <div className="cs-chips">
+          {chips.map(([key, text, remove]) => <button key={key} type="button" className="cs-chip" onClick={remove} aria-label={t('Remove filter: {name}', { name: text })}>{text}<X size={13} aria-hidden="true" /></button>)}
+          {filtered && <button type="button" className="cx-btn cs-clear" onClick={clearFilters}>{t("Clear filters")}</button>}
+        </div>
+        <div className="cs-view" role="group" aria-label={t("View")}>
+          <button type="button" aria-pressed={view === 'table'} onClick={() => changeView('table')}><Rows3 size={15} aria-hidden="true" />{t("Table")}</button>
+          <button type="button" aria-pressed={view === 'cards'} onClick={() => changeView('cards')}><LayoutGrid size={15} aria-hidden="true" />{t("Cards")}</button>
+        </div>
+      </div>
     </div>
-    {(students.error || students.hasMore) && <div><PagedListError list={students} /><LoadMore list={students} /></div>}
-    <p className="cx-footnote">{t("Click a student to open their Student 360.")}</p>
+
+    {list.error && !moving && <div className="alert error" role="alert">{list.error} <button type="button" className="cx-btn" onClick={() => setVersion((value) => value + 1)}>{t("Retry")}</button></div>}
+    <div className="cs-results" aria-busy={list.loading}>
+      {(list.loading || moving) && !list.items.length ? <PageSkeleton /> : rows.length
+        ? (view === 'cards' ? <StudentCards {...shown} /> : <StudentTable {...shown} />)
+        : !list.error && <div className="cx-card cs-empty">
+          <p>{filtered ? t("No students match these filters.") : t("No students assigned to you yet.")}</p>
+          {filtered && <button type="button" className="cx-btn" onClick={clearFilters}>{t("Clear filters")}</button>}
+        </div>}
+    </div>
+
+    {list.count > 0 && <nav className="cs-pager" aria-label={t("Pages")}>
+      <span role="status">{tp('Showing {from}–{to} of {n} student|Showing {from}–{to} of {n} students', list.count, { from, to, n: list.count })}</span>
+      <div className="cs-pager-buttons">
+        <button type="button" className="cx-btn" disabled={state.page <= 1 || list.loading} onClick={() => setListState((current) => ({ ...current, page: current.page - 1 }))}><ChevronLeft size={15} aria-hidden="true" />{t("Previous")}</button>
+        <span>{t('Page {p} of {total}', { p: state.page, total: pages })}</span>
+        <button type="button" className="cx-btn" disabled={state.page >= pages || list.loading} onClick={() => setListState((current) => ({ ...current, page: current.page + 1 }))}>{t("Next")}<ChevronRight size={15} aria-hidden="true" /></button>
+      </div>
+    </nav>}
+    <p className="cx-footnote">{t("Click a student for a quick look; “Open student” shows their Student 360.")}</p>
     <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setConnecting(true)}>{t("Connect students")}</button>
-      <button type="button" role="menuitem" onClick={() => setAdding(true)}>{t("Add student")}</button>
     </CxAccountActions>
 
-    {assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); reload(); }} notify={notify} />}
-    {connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); reload(); }} notify={notify} />}
-    {adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); reload(); }} notify={notify} />}
+    {preview && <StudentQuickPanel student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
+    {assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
+    {adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
+    {connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
   </div>;
 }
 
@@ -186,7 +411,7 @@ function needsYouRows({ student, records, remind, goTo, approveLevel }) {
   (records['roadmap-missions'] || []).filter((mission) => ['planned', 'in_progress'].includes(mission.status) && mission.due_date && mission.due_date < today).slice(0, 1).forEach((mission) => rows.push({
     key: `mission-${mission.id}`, tone: 'late', tag: t('Late'), text: t('{title} · due {date}', { title: mission.title, date: dayMonthText(mission.due_date) }), action: t('Remind'), run: () => remind({ topic: 'mission', record: mission.id }),
   }));
-  (records.documents || []).filter((doc) => doc.status === 'required').slice(0, 1).forEach((doc) => rows.push({
+  (records.documents || []).filter((doc) => doc.status === 'required' || (['uploaded', 'reviewing'].includes(doc.status) && !hasSubmission('document', doc))).slice(0, 1).forEach((doc) => rows.push({
     key: `doc-${doc.id}`, tone: 'late', tag: t('Missing'), text: t('{title} not uploaded', { title: doc.title }), action: t('Remind'), run: () => remind({ topic: 'document', record: doc.id }),
   }));
   if (student.to_review_total > 0) rows.push({
@@ -233,6 +458,7 @@ function Overview({ student, records, meetings, name, notify, reload, goTo }) {
       const result = await api.remindStudent(student.id, payload);
       notify(result.sent ? t('Reminder sent to {name}.', { name }) : t('{name} was reminded recently.', { name }));
       activity.reload();
+      reload();
     } catch (err) {
       notify(err.message, 'error');
     } finally {
@@ -245,7 +471,9 @@ function Overview({ student, records, meetings, name, notify, reload, goTo }) {
     try {
       const result = await api.approveStudentLevel(student.id);
       notify(tx`Level ${result.level} approved.`);
-      reload();
+      // The row's pending flag goes at once, so "Approve level" can't be clicked twice.
+      reload({ patch: { level_up_pending: false, level: result.level }, workspace: true });
+      activity.reload();
     } catch (err) {
       notify(err.message, 'error');
     } finally {
@@ -319,7 +547,47 @@ function RecordCard({ title, empty, children, count }) {
   </CxCard>;
 }
 
-function StudentNotes({ student, notify }) {
+function useDocumentHistory(studentId, version) {
+  const [state, setState] = useState({ studentId: null, byDocument: new Map(), error: '' });
+  useEffect(() => {
+    let active = true;
+    api.page('activity', `?student=${encodeURIComponent(studentId)}&kind=document&cursor=&page_size=100`).then((payload) => {
+      if (!active) return;
+      const byDocument = new Map();
+      for (const entry of payload?.results || []) {
+        byDocument.set(entry.metadata.record, [...(byDocument.get(entry.metadata.record) || []), entry]);
+      }
+      setState({ studentId, byDocument, error: '' });
+    }, (error) => {
+      if (active) setState((previous) => ({ ...previous, studentId, error: error.message }));
+    });
+    return () => {active = false;};
+  }, [studentId, version]);
+  return state.studentId === studentId ? state : { byDocument: new Map(), error: '' };
+}
+
+const REVIEW_ENDPOINTS = ['tasks', 'documents', 'roadmap-missions', 'achievements'];
+const DECISION_ACTIONS = { approved: /^Document approved: /, rejected: /^Document sent back: / };
+
+function documentWhen(doc, history) {
+  const pattern = DECISION_ACTIONS[doc.status];
+  if (pattern) {
+    const decision = history.find((entry) => pattern.test(entry.action));
+    if (!decision) return '';
+    return joinParts(doc.status === 'approved' ? tx`Approved ${dateText(decision.created_at)}` : tx`Sent back ${dateText(decision.created_at)}`, decision.actor_name);
+  }
+  if (!hasSubmission('document', doc)) return t("No file uploaded yet.");
+  return '';
+}
+
+function StudentDocuments({ documents, history, onOpen }) {
+  return <RecordCard title={t("Documents")} count={documents.length} empty={t("No documents yet.")}>
+    {history.error && <p className="alert error" role="alert">{tx`Review history could not be loaded: ${history.error}`}</p>}
+    {documents.map((doc) => <RecordRow key={doc.id} title={doc.title} meta={joinParts(label(doc.document_type), documentWhen(doc, history.byDocument.get(doc.id) || []), doc.counselor_comment && `“${doc.counselor_comment}”`)} status={doc.status} onClick={() => onOpen(doc)} />)}
+  </RecordCard>;
+}
+
+function StudentNotes({ student, notify, onSaved }) {
   const [adding, setAdding] = useState(false);
   const notes = usePagedList('meetings', { filters: { student: student.id }, pageSize: 20 });
   return <CxCard title={t("Private notes")} action={<button type="button" className="cx-btn" onClick={() => setAdding(true)}><Plus size={15} aria-hidden="true" />{t("Add note")}</button>}>
@@ -328,12 +596,22 @@ function StudentNotes({ student, notify }) {
       {notes.loaded && !notes.items.length && <p className="cx-empty">{t("No private notes yet.")}</p>}
     </div>
     <LoadMore list={notes} />
-    {adding && <MeetingNoteForm booking={{ student: student.id, topic: '', starts_at: new Date().toISOString() }} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); notes.reload(); }} notify={notify} />}
+    {adding && <MeetingNoteForm booking={{ student: student.id, topic: '', starts_at: localDateKey() }} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); notes.reload(); onSaved(); }} notify={notify} />}
   </CxCard>;
 }
 
 // A single student, as the "Counselor Dashboard" design's Student 360.
-function CounselorStudent360({ student, user, data, onBack, onDirect, notify, reload, setPage }) {
+// A student's meetings, from the server (?student=): the workspace holds only
+// the counselor's recent window. Upcoming ones (Overview) and the whole
+// history (Meetings tab, newest first, a page at a time).
+function useStudentMeetings(studentId, tab) {
+  const today = localDateKey();
+  const upcoming = usePagedList('bookings', { filters: { student: studentId, starts_from: today }, ordering: 'starts', pageSize: 10 });
+  const history = usePagedList('bookings', { filters: { student: studentId }, ordering: '-starts', pageSize: 20, enabled: tab === 'meetings' });
+  return { upcoming, history };
+}
+
+function CounselorStudent360({ student, user, data, onBack, onDirect, notify, reload: reloadWorkspace, setPage, refreshStudent }) {
   const [tab, setTab] = useState('overview');
   const [booking, setBooking] = useState(false);
   const [assigning, setAssigning] = useState(false);
@@ -345,29 +623,59 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
   const [noteFor, setNoteFor] = useState(null);
   const loaded = useStudentRecords(student.id, true);
   const records = loaded.records;
+  const [historyVersion, setHistoryVersion] = useState(0);
+  // Only review decisions and level approvals change the workspace's stats and badges.
+  // Without that reload, other pages' cached copies of the touched sections are dropped here.
+  const reload = ({ endpoints = [], patch = null, workspace = false } = {}) => {
+    if (endpoints.length) {
+      loaded.reload(endpoints);
+      invalidatePagedLists(endpoints);
+    }
+    if (endpoints.includes('documents')) setHistoryVersion((value) => value + 1);
+    refreshStudent(patch);
+    if (workspace) reloadWorkspace();
+  };
   // Letters saved here show over the loaded list until a refresh brings them (or newer).
   const [savedLetters, setSavedLetters] = useState({ studentId: null, items: [] });
   const ownSaved = savedLetters.studentId === student.id ? savedLetters.items : [];
   const letters = mergeSaved(records.recommendations || [], ownSaved);
-  const letterSaved = (saved) => setSavedLetters({
-    studentId: student.id,
-    items: [saved, ...ownSaved.filter((item) => item.id !== saved.id)],
-  });
+  const letterSaved = (saved) => {
+    setSavedLetters({
+      studentId: student.id,
+      items: [saved, ...ownSaved.filter((item) => item.id !== saved.id)],
+    });
+    reload({ endpoints: ['recommendations'] });
+  };
   const name = fullName(student.user_detail);
-  const meetings = (data.bookings || []).filter((item) => Number(item.student) === Number(student.id));
-  const upcoming = upcomingMeetings(meetings);
+  const documentHistory = useDocumentHistory(student.id, historyVersion);
+  // The open document is read from the loaded records, so a decision shows its new status.
+  const openDocument = (records.documents || []).find((doc) => doc.id === document) || null;
+  async function decideDocument(action, note) {
+    if (action === 'sendBack') {
+      await api.sendBack('documents', openDocument.id, note);
+      notify(t("Sent back to the student."));
+    } else {
+      await api.approveRecord('documents', openDocument.id, note);
+      notify(t("Document approved."));
+    }
+    setDocument(null);
+    reload({ endpoints: ['documents'], workspace: true });
+  }
+  const studentMeetings = useStudentMeetings(student.id, tab);
+  const meetings = studentMeetings.history.items;
+  const upcoming = useMemo(() => upcomingMeetings(studentMeetings.upcoming.items), [studentMeetings.upcoming.items]);
   const now = new Date();
   const reviewItems = useMemo(() => {
     const named = (items) => items.map((item) => ({ ...item, student_name: item.student_name || name }));
     return mergeReviewQueue({
       tasks: named((records.tasks || []).filter((item) => item.status === 'submitted')),
-      documents: named((records.documents || []).filter((item) => ['uploaded', 'reviewing'].includes(item.status))),
+      documents: named((records.documents || []).filter((item) => ['uploaded', 'reviewing'].includes(item.status) && hasSubmission('document', item))),
       roadmapMissions: named((records['roadmap-missions'] || []).filter((item) => item.status === 'submitted')),
       achievements: named((records.achievements || []).filter((item) => !item.verified && !item.counselor_comment)),
     });
   }, [records, name]);
   const readiness = student.profile_readiness || { percent: 0, missing: [] };
-  const meta = joinParts(gradeText(student.grade), student.school_name, student.target_major, listText(student.target_countries));
+  const meta = joinParts(gradeText(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
   const tabs = TABS(student, records, letters);
 
   return <div className="cx-page cx-student-360">
@@ -402,7 +710,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
       <button type="button" role="menuitem" onClick={() => setCredential(true)}>{t("Reset login")}</button>
       <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>
     </CxAccountActions>
-    {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={reload} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}
+    {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={() => reload({ endpoints: REVIEW_ENDPOINTS, workspace: true })} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}
     {tab === 'roadmap' && <div className="cx-two">
       <RecordCard title={t("Roadmap missions")} count={(records['roadmap-missions'] || []).length} empty={t("No roadmap missions assigned yet.")}>
         {(records['roadmap-missions'] || []).map((mission) => <RecordRow key={mission.id} title={mission.title} meta={joinParts(tx`Level ${mission.level}`, mission.due_date && tx`Due ${dateText(mission.due_date)}`)} status={mission.status} />)}
@@ -411,9 +719,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
         {(records.tasks || []).map((item) => <RecordRow key={item.id} title={item.title} meta={joinParts(item.due_date && tx`Due ${dateText(item.due_date)}`, label(item.priority))} status={item.status === 'todo' && item.due_date < localDateKey() ? 'late' : item.status} onClick={item.status === 'submitted' || item.status === 'approved' ? () => setTask(item) : undefined} />)}
       </RecordCard>
     </div>}
-    {tab === 'documents' && <RecordCard title={t("Documents")} count={(records.documents || []).length} empty={t("No documents yet.")}>
-      {(records.documents || []).map((doc) => <RecordRow key={doc.id} title={doc.title} meta={joinParts(label(doc.document_type), doc.counselor_comment)} status={doc.status} onClick={doc.has_file || doc.google_docs_url ? () => setDocument(doc) : undefined} />)}
-    </RecordCard>}
+    {tab === 'documents' && <StudentDocuments documents={records.documents || []} history={documentHistory} onOpen={(doc) => setDocument(doc.id)} />}
     {tab === 'essays' && <RecordCard title={t("Essays")} count={(records.essays || []).length} empty={t("This student hasn’t shared any essays yet.")}>
       {(records.essays || []).map((item) => <RecordRow key={item.id} title={item.title} meta={joinParts(tx`Version ${item.version}`, item.university_name || t("General essay"))} status={item.status} onClick={() => setEssay(item)} />)}
     </RecordCard>}
@@ -421,32 +727,37 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
       {(records.applications || []).map((item) => <RecordRow key={item.id} title={item.university_detail?.name || t("University")} meta={joinParts(item.program, label(item.tier), item.deadline && tx`Deadline: ${dateText(item.deadline)}`)} status={item.status} />)}
     </RecordCard>}
     {tab === 'letters' && <RecommendationLetters student={student} user={user} letters={letters} loading={loaded.loading} notify={notify} onSaved={letterSaved} />}
-    {tab === 'meetings' && <RecordCard title={t("Meetings")} count={meetings.length} empty={t("No meetings scheduled.")}>
+    {tab === 'meetings' && <RecordCard title={t("Meetings")} count={studentMeetings.history.loaded ? meetings.length : 1} empty={t("No meetings scheduled.")}>
       {meetings.map((item) => <RecordRow key={item.id} title={item.topic} meta={joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)} status={meetingBadgeStatus(meetingStatus(item, now, { student: false }))}>
         <button type="button" className="cx-btn" onClick={() => setNoteFor(item)}>{t("Notes")}</button>
       </RecordRow>)}
+      <PagedListError list={studentMeetings.history} />
+      <LoadMore list={studentMeetings.history} />
     </RecordCard>}
-    {tab === 'notes' && <StudentNotes student={student} notify={notify} />}
+    {tab === 'notes' && <StudentNotes student={student} notify={notify} onSaved={() => reload()} />}
 
-    {booking && <BookingForm staff defaultStudentId={student.id} onClose={() => setBooking(false)} onSaved={() => { setBooking(false); reload(); }} notify={notify} />}
-    {assigning && <BulkTaskForm studentIds={[student.id]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); reload(); }} notify={notify} />}
+    {booking && <BookingForm staff defaultStudentId={student.id} onClose={() => setBooking(false)} onSaved={() => { setBooking(false); invalidatePagedLists(['bookings']); reload(); }} notify={notify} />}
+    {assigning && <BulkTaskForm studentIds={[student.id]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); reload({ endpoints: ['tasks'] }); }} notify={notify} />}
     {credential && <TemporaryCredentialModal account={student.user_detail} onClose={() => setCredential(false)} notify={notify} />}
     {invite && <ParentInviteModal student={student} onClose={() => setInvite(false)} notify={notify} />}
-    {document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}
+    {openDocument && <DocumentPreviewModal document={openDocument} history={documentHistory.error ? null : documentHistory.byDocument.get(openDocument.id) || []} onDecide={decideDocument} onClose={() => setDocument(null)} notify={notify} />}
     {essay && <EssayDetailModal essay={essay} onClose={() => setEssay(null)} />}
     {task && <TaskSubmissionModal task={task} onClose={() => setTask(null)} notify={notify} />}
-    {noteFor && <MeetingNoteForm booking={noteFor} onClose={() => setNoteFor(null)} onSaved={() => setNoteFor(null)} notify={notify} />}
+    {noteFor && <MeetingNoteForm booking={noteFor} onClose={() => setNoteFor(null)} onSaved={() => { setNoteFor(null); invalidatePagedLists(['meetings', 'bookings']); reload(); }} notify={notify} />}
   </div>;
 }
 
 // The counselor's Students page: the list, or one student's 360 when the URL names one
-// (/students/15), so a reload, a bookmark or Back reopens the same profile.
-export function CounselorStudentsPage({ user, data, stats, query, setQuery, reload, notify, studentId = null, onStudent, onDirect, setPage }) {
-  const students = usePagedList('students', { search: query, ordering: 'name', pageSize: 50 });
+// (/students/15), so a reload, a bookmark or Back reopens the same profile. The list's
+// filters and page live here, so Back from a profile returns to the same view.
+// `onAddStudent` replaces the header's "Add student" (default: the quick-create form).
+export function CounselorStudentsPage({ user, data, query, setQuery, reload, notify, studentId = null, onStudent, onDirect, setPage, onAddStudent }) {
+  const [listState, setListState] = useState(() => ({ ...STUDENT_LIST_DEFAULTS, search: query }));
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
   const listed = useRef([]);
-  listed.current = students.items;
+  const onItems = useCallback((items) => { listed.current = items; }, []);
   // Opening student B while A's record is still loading must never show A's.
   const request = useRef(createLatestRequest()).current;
   useEffect(() => {
@@ -462,10 +773,22 @@ export function CounselorStudentsPage({ user, data, stats, query, setQuery, relo
       (student) => { if (isCurrent()) setSelected(student); },
       (failure) => { if (isCurrent()) setError(failure.status === 404 ? t("Student profile not found.") : failure.message); },
     );
-  }, [studentId, request]);
+  }, [studentId, request, attempt]);
 
-  if (studentId && error) return <div className="cx-page"><button type="button" className="cx-back" onClick={() => onStudent(null)}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button><div className="alert error" role="alert">{error}</div></div>;
+  // After an action in the 360: show what is already known (`patch`), then the
+  // server's row (to-review total, level, readiness). A failed refresh keeps the profile open.
+  function refreshStudent(patch = null) {
+    if (!studentId) return;
+    if (patch) setSelected((current) => (current?.id === studentId ? { ...current, ...patch } : current));
+    const isCurrent = request.start();
+    api.retrieve('students', studentId).then(
+      (student) => { if (isCurrent()) setSelected(student); },
+      (failure) => { if (isCurrent()) notify(failure.message, 'error'); },
+    );
+  }
+
+  if (studentId && error) return <div className="cx-page"><button type="button" className="cx-back" onClick={() => onStudent(null)}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button><div className="alert error" role="alert">{error} <button type="button" className="cx-btn" onClick={() => setAttempt((n) => n + 1)}>{t("Retry")}</button></div></div>;
   if (studentId && selected?.id !== studentId) return <PageSkeleton />;
-  if (studentId) return <CounselorStudent360 student={selected} {...{ user, data, onDirect, notify, reload, setPage }} onBack={() => onStudent(null)} />;
-  return <CounselorStudentList {...{ user, data, stats, query, setQuery, students, notify, reload }} onOpen={(student) => onStudent(student.id)} />;
+  if (studentId) return <CounselorStudent360 student={selected} {...{ user, data, onDirect, notify, reload, setPage, refreshStudent }} onBack={() => onStudent(null)} />;
+  return <CounselorStudentList {...{ user, data, query, setQuery, listState, setListState, onItems, onDirect, onAddStudent, notify, reload }} onOpen={(student) => onStudent(student.id)} />;
 }

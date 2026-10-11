@@ -1,6 +1,6 @@
 import {
   Activity, Award, BookOpen, CalendarDays, ChevronDown, ChevronRight,
-  ClipboardCheck, Clock3, Compass, ExternalLink, Eye,
+  ClipboardCheck, Clock3, Compass, Contact, ExternalLink, Eye,
   FileText, Fingerprint, FolderOpen, Globe2, GraduationCap, LayoutDashboard,
   LifeBuoy, ListChecks, LogOut, MessageSquareText, Moon, Pencil,
   PenLine, Plus, RefreshCw, School, Search, ShoppingCart, Sun, Target,
@@ -72,7 +72,7 @@ const STUDENT_NAV = [
   [CalendarDays, 'Meetings'], [MessageSquareText, 'Messages'],
   [ListChecks, 'Program Usage'], [Globe2, 'Programs'],
   [PenLine, 'Essay Lab'], [Target, 'Applications'], [School, 'College Search'],
-  [ShoppingCart, 'Naseeb Store'], ['Contacts'], [Clock3, 'Screen Time'],
+  [ShoppingCart, 'Naseeb Store'], [Contact, 'Contacts'], [Clock3, 'Screen Time'],
   [LifeBuoy, 'Support'],
 ]
 

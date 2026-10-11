@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 
 from apps.users.models import User
-from ..models import Booking, Notification, StudentProfile
+from ..models import Booking, MeetingAvailability, Notification, StudentProfile
 from .base import RoleIsolationBase
 
 
@@ -33,7 +33,7 @@ class BookingChangeTests(RoleIsolationBase):
         response = self.post(self.student_a_user, 'cancel')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], Booking.Status.CANCELLED)
-        notice = Notification.objects.get(student=self.student_a, title='Meeting cancelled')
+        notice = Notification.objects.get(student=self.student_a, recipient__isnull=True, title='Meeting cancelled')
         self.assertIn('Essay review', notice.message)
         # The counselor sees the cancelled meeting and the notice.
         self.client.force_authenticate(self.counselor)
@@ -46,7 +46,7 @@ class BookingChangeTests(RoleIsolationBase):
         again = self.post(self.student_a_user, 'cancel')
         self.assertEqual(again.status_code, status.HTTP_200_OK)
         self.assertEqual(again.data['status'], Booking.Status.CANCELLED)
-        self.assertEqual(Notification.objects.filter(title='Meeting cancelled').count(), 1)
+        self.assertEqual(Notification.objects.filter(recipient__isnull=True, title='Meeting cancelled').count(), 1)
 
     def test_approved_meeting_can_be_cancelled_by_student_or_participant(self):
         self.booking.status = Booking.Status.APPROVED
@@ -66,15 +66,23 @@ class BookingChangeTests(RoleIsolationBase):
         self.booking.status = Booking.Status.APPROVED
         self.booking.save()
         later = (self.soon + timedelta(days=2)).replace(microsecond=0)
-        response = self.post(self.student_a_user, 'reschedule', {'starts_at': later.isoformat(), 'duration_minutes': 60})
+        slot = MeetingAvailability.objects.create(participant=self.counselor, starts_at=later, duration_minutes=60)
+        proposal = {'starts_at': later.isoformat(), 'duration_minutes': 60, 'availability_slot': slot.id}
+        response = self.post(self.student_a_user, 'reschedule', proposal)
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.booking.refresh_from_db()
         self.assertEqual((self.booking.status, self.booking.starts_at, self.booking.duration_minutes),
                          (Booking.Status.PENDING, later, 60))
-        self.assertTrue(Notification.objects.filter(student=self.student_a, title='Meeting reschedule requested').exists())
+        # The student reads about their own request in the second person; the participant is asked to confirm.
+        own = Notification.objects.get(student=self.student_a, recipient__isnull=True, title='Meeting reschedule requested')
+        counselor_name = self.counselor.get_full_name() or self.counselor.username
+        moved_to = f"{timezone.localtime(later).strftime('%d %b %Y, %H:%M')} (Tashkent time)"
+        self.assertEqual(own.message, f'You asked to move "{self.booking.topic}" to {moved_to}. Waiting for {counselor_name} to confirm.')
+        theirs = Notification.objects.get(recipient=self.counselor, title='Meeting reschedule requested')
+        self.assertIn(f'asked to move "{self.booking.topic}" to {moved_to}.', theirs.message)
         # Repeating the same proposal changes nothing and sends no second notice.
-        self.post(self.student_a_user, 'reschedule', {'starts_at': later.isoformat(), 'duration_minutes': 60})
-        self.assertEqual(Notification.objects.filter(title='Meeting reschedule requested').count(), 1)
+        self.post(self.student_a_user, 'reschedule', proposal)
+        self.assertEqual(Notification.objects.filter(recipient__isnull=True, title='Meeting reschedule requested').count(), 1)
         self.assertEqual(self.post(self.counselor, 'approve').data['status'], Booking.Status.APPROVED)
 
     def test_reschedule_uses_the_create_rules(self):
@@ -91,17 +99,50 @@ class BookingChangeTests(RoleIsolationBase):
         self.assertIn('participant', response.data)
 
     def test_participant_staff_can_suggest_another_time(self):
-        # "Suggest another time": the participant proposes a new slot, the
-        # request goes back to PENDING, and the student reads it as a staff
-        # move — not the "asked to move" wording used for a student's own proposal.
+        # "Suggest another time": the participant moves the meeting and it is
+        # confirmed at once (as when staff book); the student is told it moved —
+        # not the "asked to move" wording used for a student's own proposal.
         later = (self.soon + timedelta(days=1)).replace(microsecond=0)
         response = self.post(self.counselor, 'reschedule', {'starts_at': later.isoformat()})
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.booking.refresh_from_db()
-        self.assertEqual((self.booking.status, self.booking.starts_at), (Booking.Status.PENDING, later))
-        notice = Notification.objects.get(student=self.student_a, title='Meeting reschedule requested')
-        self.assertIn('was moved to', notice.message)
+        self.assertEqual((self.booking.status, self.booking.starts_at), (Booking.Status.APPROVED, later))
+        self.assertFalse(Notification.objects.filter(title='Meeting reschedule requested').exists())
+        notice = Notification.objects.get(student=self.student_a, title='Meeting moved')
+        self.assertTrue(notice.message.endswith(f"was moved to {timezone.localtime(later).strftime('%d %b %Y, %H:%M')} (Tashkent time)."))
         self.assertNotIn('asked to move', notice.message)
+
+    def test_participant_moving_a_pending_request_confirms_it(self):
+        later = (self.soon + timedelta(days=1)).replace(microsecond=0)
+        self.assertEqual(self.booking.status, Booking.Status.PENDING)
+        response = self.post(self.counselor, 'reschedule', {'starts_at': later.isoformat()})
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.booking.refresh_from_db()
+        self.assertEqual((self.booking.status, self.booking.starts_at), (Booking.Status.APPROVED, later))
+        self.assertTrue(Notification.objects.filter(student=self.student_a, recipient__isnull=True, title='Meeting moved').exists())
+
+    def test_participant_moving_a_confirmed_meeting_keeps_it_confirmed(self):
+        Booking.objects.filter(pk=self.booking.pk).update(status=Booking.Status.APPROVED)
+        later = (self.soon + timedelta(days=2)).replace(microsecond=0)
+        response = self.post(self.counselor, 'reschedule', {'starts_at': later.isoformat(), 'duration_minutes': 30})
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.booking.refresh_from_db()
+        self.assertEqual((self.booking.status, self.booking.starts_at, self.booking.duration_minutes),
+                         (Booking.Status.APPROVED, later, 30))
+        self.assertEqual(Notification.objects.filter(student=self.student_a, recipient__isnull=True, title='Meeting moved').count(), 1)
+        # The mover is the participant: nobody else is asked to confirm.
+        self.assertFalse(Notification.objects.filter(recipient__isnull=False).exists())
+
+    def test_an_admin_who_is_not_in_the_meeting_cannot_move_it(self):
+        admin = User.objects.create_user(
+            username='booking-admin', email='booking-admin@example.com', password='StrongPass123!', role=User.Role.ADMIN,
+        )
+        later = (self.soon + timedelta(days=1)).replace(microsecond=0)
+        response = self.post(admin, 'reschedule', {'starts_at': later.isoformat()})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.booking.refresh_from_db()
+        self.assertEqual((self.booking.status, self.booking.starts_at), (Booking.Status.PENDING, self.soon))
+        self.assertFalse(Notification.objects.filter(title='Meeting moved').exists())
 
     def test_other_students_and_staff_get_404(self):
         later = (self.soon + timedelta(days=1)).isoformat()

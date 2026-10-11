@@ -277,6 +277,13 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         data['workspace'] = entitlements.workspace_summary(subscription)
         # Same rules as the chat view, so the frontend only offers what will work.
         data['assistant_enabled'] = entitlements.assistant_available(request.user, subscription)
+        from apps.admissions.invites import pending_join_info
+
+        # A student who joined by invite sees only the waiting screen until confirmed.
+        data['pending_join'] = pending_join_info(request.user)
+        data['awaiting_confirmation'] = data['pending_join'] is not None
+        if data['awaiting_confirmation']:
+            data.update(workspace=None, assistant_enabled=False)
         return Response(data)
 
     @action(

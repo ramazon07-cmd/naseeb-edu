@@ -16,7 +16,8 @@ export function Modal({ title, onClose, children, className = '', backdropClassN
     const previous = document.activeElement;
     const modal = modalRef.current;
     const focusable = () => [...(modal?.querySelectorAll('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])') || [])];
-    focusable()[0]?.focus();
+    // An autoFocus field inside (the search box) keeps its focus.
+    if (!modal?.contains(document.activeElement)) focusable()[0]?.focus();
     function handleKeyDown(event) {
       if (event.key === 'Escape') {event.preventDefault();onCloseRef.current();return;}
       if (event.key !== 'Tab') return;

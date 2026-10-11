@@ -47,9 +47,18 @@ export function remoteSearchEntries(remote, destinations) {
     const destination = destinations[type];
     if (!destination || !Array.isArray(items)) return [];
     return items.filter((item) => item?.title).map((item) => ({
-      id: `${type}-${item.id}`, kind: 'record', destination, title: String(item.title), subtitle: item.subtitle || '', filterQuery: String(item.title),
+      id: `${type}-${item.id}`, kind: 'record', type, recordId: item.id, destination, title: String(item.title), subtitle: item.subtitle || '', filterQuery: String(item.title),
     }));
   });
+}
+
+// Where a header search result leads: a student opens their Student 360,
+// any other record its page, filtered to that record.
+export function searchResultTarget(result) {
+  if (result.kind === 'record' && result.type === 'students' && result.recordId != null) {
+    return { page: result.destination, params: { studentId: result.recordId }, query: '' };
+  }
+  return { page: result.destination, params: {}, query: result.kind === 'record' ? result.filterQuery : '' };
 }
 
 // Pages first, then records; a record found both locally and on the server

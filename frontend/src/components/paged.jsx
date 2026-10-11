@@ -3,6 +3,7 @@ import { RefreshCw, Search } from 'lucide-react';
 import { t, tx, formatNumberLocale } from '../i18n';
 import { fullName, label as roleLabel } from '../lib/labels';
 import { usePagedList } from '../hooks/usePagedList';
+import { StudentSearchInput } from './StudentSearchInput';
 
 // Error banner for a paged list; keeps already loaded rows visible.
 export function PagedListError({ list }) {
@@ -66,12 +67,21 @@ function SearchSelect({ resource, pageSize, toText, copy, name, label, hint = ''
 }
 
 /**
- * A student <select> backed by server search, for forms used by staff with
- * thousands of students.
+ * One search box that picks a student on the server, for forms used by staff
+ * with thousands of students. `value` is the student id (`selectedLabel` its
+ * name, if known); `onChange` gets the new id, or '' when cleared; `name`
+ * submits the id with the form.
  */
-export function StudentPicker({ name = 'student', label = 'Student', ...props }) {
-  const copy = { search: t("Search students"), loading: t("Loading students…"), select: t("Select student"), more: t("Type a name to find more students."), selected: t("Selected student") };
-  return <SearchSelect resource="students" pageSize={50} toText={(student) => fullName(student.user_detail)} copy={copy} name={name} label={label} {...props} />;
+export function StudentPicker({ name = 'student', label = 'Student', value = '', selectedLabel = '', onChange, ...props }) {
+  const [student, setStudent] = useState(value ? { id: Number(value), name: selectedLabel } : null);
+  useEffect(() => {
+    setStudent((current) => (!value ? null : current && String(current.id) === String(value) ? current : { id: Number(value), name: selectedLabel }));
+  }, [value, selectedLabel]);
+  function choose(next) {
+    setStudent(next);
+    onChange?.(next ? String(next.id) : '');
+  }
+  return <StudentSearchInput name={name} label={label} value={student} onChange={choose} {...props} />;
 }
 
 // Accounts (any role, or those `filters` allow) searched on the server.

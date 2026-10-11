@@ -38,6 +38,15 @@ test('Essay Lab autosaves and edits never trigger a workspace reload', () => {
   assert.deepEqual(planReload(tracker.take(), RESOURCES, ['dashboard']).sort(), ['dashboard', 'tasks']);
 });
 
+test("a Home check-in is not a write the next save reloads everything for", () => {
+  const tracker = createMutationTracker(UNTRACKED_ENDPOINTS);
+  tracker.note('/dashboard/stats/');
+  assert.deepEqual(tracker.take(), []);
+  tracker.note('/dashboard/stats/');
+  tracker.note('/tasks/12/');
+  assert.deepEqual(planReload(tracker.take(), RESOURCES, ['dashboard']).sort(), ['dashboard', 'tasks']);
+});
+
 test('unknown writes or no recorded write fall back to a full reload', () => {
   assert.equal(planReload([], RESOURCES), null);
   assert.equal(planReload(['assistant'], RESOURCES), null);

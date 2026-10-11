@@ -254,6 +254,13 @@ class DocumentSerializer(StudentRecordSerializerMixin, GoogleDocsModelSerializer
                 raise serializers.ValidationError({
                     'status': 'Upload a new file to resubmit a document that is under review or approved.'
                 })
+        current = getattr(self.instance, 'status', None)
+        if 'status' in attrs and attrs['status'] != current:
+            if user and user.role == User.Role.STUDENT and attrs['status'] not in {Document.Status.REQUIRED, Document.Status.UPLOADED}:
+                raise serializers.ValidationError({'status': 'Only a counselor can review a document.'})
+            # Approval follows the approve action's rule: only work the student submitted.
+            if attrs['status'] == Document.Status.APPROVED and current not in {Document.Status.UPLOADED, Document.Status.REVIEWING}:
+                raise serializers.ValidationError({'status': 'The student must submit this before approval.'})
         if status_value != Document.Status.REQUIRED and not file_value and not docs_value:
             raise serializers.ValidationError({
                 'file': 'Upload a file or add a Google Docs link before marking this document as uploaded.'

@@ -54,8 +54,10 @@ from ..serializers import (
     StudentProfileSerializer,
     TaskSerializer,
 )
-from ..progress import OPEN_TASK_STATUSES
-from ..scoping import scope_students
+from ..serializers.common import UNAVAILABLE_STUDENT
+from ..progress import DOCUMENT_AWAITING_REVIEW, OPEN_TASK_STATUSES
+from ..progress_cache import invalidate_progress_summary
+from ..scoping import scope_students, without_deactivated_students
 from ..streaming import release_db_connection
 from ..services import TASK_XP_BY_PRIORITY, award_approval_xp, record_approval_note
 from .common import (
@@ -72,6 +74,8 @@ from .messaging import unread_channel_messages
 
 # Badges show "99+" past this, so counting further is wasted work.
 SUMMARY_COUNT_LIMIT = 100
+# Students one bulk task assignment may name.
+BULK_TASK_LIMIT = 500
 
 
 def bounded_count(queryset, limit=SUMMARY_COUNT_LIMIT):
@@ -132,6 +136,9 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixi
 
     def apply_filters(self, queryset, params):
         queryset = super().apply_filters(queryset, params)
+        if params.get('status') == Task.Status.SUBMITTED and not params.get('student'):
+            # The review queue: it matches the dashboard count, which skips deactivated students.
+            queryset = without_deactivated_students(queryset)
         value = params.get('open')
         if value in (None, ''):
             return queryset
@@ -160,6 +167,39 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixi
             serializer.instance.status != Task.Status.SUBMITTED or response_changed
         )
         serializer.save(submitted_at=timezone.now() if submitted_now else serializer.instance.submitted_at)
+
+    @action(detail=False, methods=['post'], url_path='bulk')
+    def bulk(self, request):
+        """One task for many students: ``{students: [ids], title, due_date, ...}``.
+
+        The task fields are validated as a single create validates them. Every
+        student must be in the caller's scope, or nothing is created.
+        """
+        if not request.user.is_task_manager:
+            return Response({'detail': 'Only a teacher or counselor can assign tasks.'}, status=403)
+        raw = request.data.get('students')
+        if not isinstance(raw, list) or not raw:
+            raise ValidationError({'students': ['Choose at least one student.']})
+        if len(raw) > BULK_TASK_LIMIT:
+            raise ValidationError({'students': [f'Assign to {BULK_TASK_LIMIT} students or fewer at once.']})
+        if not all(isinstance(value, int) and not isinstance(value, bool) for value in raw):
+            raise ValidationError({'students': ['Use student ids.']})
+        ids = list(dict.fromkeys(raw))
+        found = set(scope_students(StudentProfile.objects.filter(pk__in=ids), request.user).values_list('pk', flat=True))
+        if len(found) != len(ids):
+            raise ValidationError({'students': [UNAVAILABLE_STUDENT]})
+        fields = {key: value for key, value in request.data.items() if key not in {'students', 'student', 'submission_file'}}
+        serializer = self.get_serializer(data={**fields, 'student': ids[0]})
+        serializer.is_valid(raise_exception=True)
+        values = {key: value for key, value in serializer.validated_data.items() if key != 'student'}
+        values.setdefault('status', Task.Status.TODO)
+        with transaction.atomic():
+            tasks = Task.objects.bulk_create([
+                Task(student_id=student_id, assigned_by=request.user, is_self_assigned=False, **values) for student_id in ids
+            ])
+            # bulk_create skips post_save, which drops the cached progress summary on a single create.
+            transaction.on_commit(invalidate_progress_summary)
+        return Response({'created': len(tasks), 'ids': [task.pk for task in tasks]}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -226,6 +266,9 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixi
 
 
 
+DOCUMENT_REVIEW_STATUSES = (Document.Status.UPLOADED, Document.Status.REVIEWING)
+
+
 class DocumentViewSet(StudentRecordListMixin, ScopedQuerysetMixin, ApproveMixin, SendBackMixin, viewsets.ModelViewSet):
     serializer_class = DocumentSerializer
     approve_notice_kind = 'document'
@@ -234,7 +277,14 @@ class DocumentViewSet(StudentRecordListMixin, ScopedQuerysetMixin, ApproveMixin,
     def apply_approval(self, record):
         record.status = Document.Status.APPROVED
         return ['status']
-    send_back_statuses = (Document.Status.UPLOADED, Document.Status.REVIEWING)
+
+    def is_approved(self, record):
+        return record.status == Document.Status.APPROVED
+
+    def awaiting_review(self, record):
+        # A document is its file: nothing to approve until one is attached.
+        return record.status in DOCUMENT_REVIEW_STATUSES and bool(record.file or record.google_docs_url)
+    send_back_statuses = DOCUMENT_REVIEW_STATUSES
     send_back_to = Document.Status.REJECTED
     send_back_notice_kind = 'document'
     send_back_label = 'Document'
@@ -246,8 +296,11 @@ class DocumentViewSet(StudentRecordListMixin, ScopedQuerysetMixin, ApproveMixin,
             return queryset
         if value not in {'true', 'false', '1', '0'}:
             raise ValidationError({'awaiting_review': ['Use true or false.']})
-        waiting = Q(status__in=(Document.Status.UPLOADED, Document.Status.REVIEWING))
-        return queryset.filter(waiting) if value in {'true', '1'} else queryset.exclude(waiting)
+        waiting = DOCUMENT_AWAITING_REVIEW
+        if value in {'true', '1'}:
+            waiting_qs = queryset.filter(waiting)
+            return waiting_qs if params.get('student') else without_deactivated_students(waiting_qs)
+        return queryset.exclude(waiting)
     queryset = Document.objects.select_related('student__user', 'student__assigned_counselor').all()
     search_fields = ('title',)
     choice_filters = {
@@ -296,6 +349,13 @@ class AchievementViewSet(PrivateEvidenceViewSetMixin, StudentRecordListMixin, Sc
     def apply_approval(self, record):
         record.verified = True
         return ['verified']
+
+    def is_approved(self, record):
+        return record.verified
+
+    def awaiting_review(self, record):
+        # Any unverified record may be approved, including one sent back or un-verified with a note.
+        return not record.verified
     queryset = Achievement.objects.select_related('student__user', 'student__assigned_counselor').all()
     search_fields = ('title',)
     choice_filters = {'category': ('category', Achievement.Category.choices)}
@@ -314,10 +374,22 @@ class AchievementViewSet(PrivateEvidenceViewSetMixin, StudentRecordListMixin, Sc
             raise ValidationError({'awaiting_review': ['Use true or false.']})
         # Waiting for the counselor: not verified, and not already sent back.
         waiting = Q(verified=False, counselor_comment='')
-        return queryset.filter(waiting) if value in {'true', '1'} else queryset.exclude(waiting)
+        if value in {'true', '1'}:
+            waiting_qs = queryset.filter(waiting)
+            return waiting_qs if params.get('student') else without_deactivated_students(waiting_qs)
+        return queryset.exclude(waiting)
 
-    def can_send_back(self, record):
-        return not record.verified
+    def send_back_refusal(self, record):
+        if record.verified:
+            return 'This work is not waiting for review.'
+        # Once per change: a record not touched since its last send-back is still with the student.
+        last = ActivityLog.objects.filter(
+            student_id=record.student_id, action__startswith=f'{self.send_back_label} sent back:',
+            metadata__record=record.pk, metadata__kind=self.send_back_label.lower(),
+        ).values_list('created_at', flat=True).first()
+        if last is not None and record.updated_at <= last:
+            return 'Already sent back; waiting for the student.'
+        return None
 
 class ResearchViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = ResearchSerializer
@@ -420,7 +492,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
             try:
                 suggestions = rec_letter_ai.ai_suggestions(student, facts, data['draft'], letter=data, language=language)
-                return Response({'source': 'ai', 'suggestions': suggestions})
+                return Response({'source': 'ai', 'suggestions': suggestions + rec_letter_ai.missing_facts(facts, data['draft'])})
             except rec_letter_ai.SuggestionsUnavailable:
                 pass
         return Response({'source': 'profile', 'suggestions': rec_letter_ai.local_suggestions(facts, data['draft'])})
@@ -496,6 +568,11 @@ def audience_filter(user):
     return Q(recipient__isnull=True) | Q(recipient=user)
 
 
+def reads_addressed_notices(user):
+    """Staff whose own addressed notices (e.g. a meeting request) are theirs whatever the student's scope."""
+    return user.is_counselor_like or user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}
+
+
 class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     queryset = Notification.objects.select_related('student__user', 'student__assigned_counselor').all()
@@ -503,12 +580,48 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
     keyset_ordering = ('-created_at', '-id')
 
     def get_queryset(self):
-        queryset = self.filter_for_user(self.queryset).filter(audience_filter(self.request.user))
+        user = self.request.user
+        mine = self.request.query_params.get('mine') in ['1', 'true', 'True']
+        if reads_addressed_notices(user) and (mine or not user.is_counselor_like):
+            # ?mine=true: a staff member's bell, only the notices addressed to them.
+            # Teachers and school staff get only this.
+            queryset = self.addressed_notices(self.queryset)
+        else:
+            queryset = self.filter_for_user(self.queryset).filter(audience_filter(user))
+            if user.is_counselor_like:
+                # Opening or reading one of their addressed notices by id, outside their student scope.
+                queryset = queryset | self.addressed_notices(self.queryset)
         queryset = queryset.order_by(*self.keyset_ordering)
         unread = self.request.query_params.get('unread')
         if unread in ['1', 'true', 'True']:
             queryset = queryset.filter(is_read=False)
         return queryset
+
+    def addressed_notices(self, queryset):
+        """Notices addressed to the caller about a student they serve or one at their current school.
+
+        Being booked does not need the student's assignment (any staff member of the
+        student's school can be), but a student who left that school is no longer theirs.
+        """
+        user = self.request.user
+        addressed = queryset.filter(recipient=user)
+        scoped = self.filter_for_user(addressed)
+        if user.school_id:
+            return scoped | addressed.filter(student__school_id=user.school_id)
+        return scoped
+
+    def bell_notices(self):
+        """The notices behind the caller's bell: a student's own feed, or those addressed to a staff member.
+
+        A staff member never counts or clears a student's notices: the student
+        shares that feed with their counselor and would lose alerts they never saw.
+        """
+        user = self.request.user
+        if user.role == User.Role.STUDENT:
+            return Notification.objects.filter(student__user=user, recipient__isnull=True)
+        if reads_addressed_notices(user):
+            return self.addressed_notices(Notification.objects.all())
+        return self.filter_for_user(Notification.objects.filter(recipient=user))
 
     @action(detail=True, methods=['post'])
     def read(self, request, pk=None):
@@ -518,15 +631,9 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
             notification.save(update_fields=['is_read', 'updated_at'])
         return Response(NotificationSerializer(notification, context={'request': request}).data)
 
-    # The actions below act on the caller's own student record only. The
-    # notice list is shared with the counselor; a counselor clearing it would
-    # hide alerts the student never saw.
-
     @action(detail=False, methods=['post'], url_path='read-all')
     def read_all(self, request):
-        updated = Notification.objects.filter(student__user=request.user, recipient__isnull=True, is_read=False).update(
-            is_read=True, updated_at=timezone.now(),
-        )
+        updated = self.bell_notices().filter(is_read=False).update(is_read=True, updated_at=timezone.now())
         return Response({'updated': updated})
 
     @action(detail=False, methods=['get'])
@@ -534,7 +641,7 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
         """Unread counts behind the notification bell, in three bounded queries."""
         user = request.user
         return Response({
-            'unread': bounded_count(Notification.objects.filter(student__user=user, recipient__isnull=True, is_read=False)),
+            'unread': bounded_count(self.bell_notices().filter(is_read=False)),
             'counselor_messages_unread': bounded_count(
                 StudentMessage.objects.filter(recipient=user, student__user=user, is_read=False),
             ),
@@ -546,6 +653,9 @@ class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):
 class ActivityLogViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = ActivityLogSerializer
     queryset = ActivityLog.objects.select_related('actor', 'student__user', 'student__assigned_counselor').all()
+    choice_filters = {
+        'kind': ('metadata__kind', ('document', 'task', 'achievement', 'roadmap mission')),
+    }
 
     def get_queryset(self):
         return self.filter_for_user(self.queryset)

@@ -7,7 +7,7 @@ from unittest import mock
 from django.test import override_settings
 from rest_framework.test import APITestCase
 
-from apps.admissions.models import Activity, Honor, RecommendationLetter
+from apps.admissions.models import Activity, Honor, RecommendationLetter, Research
 from apps.admissions.test_audit_base import AuditBaseMixin
 
 LETTER_TEXT = 'I have known her for three years as her counselor.'
@@ -165,6 +165,61 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         titles = [item['title'] for item in response.data['suggestions'] if item['kind'] == 'fact']
         self.assertEqual(titles, ['Regional olympiad bronze', 'Robotics club'])
 
+    def facts(self, draft=''):
+        response = self.suggest(draft=draft)
+        self.assertEqual(response.status_code, 200, response.data)
+        return [item for item in response.data['suggestions'] if item['kind'] == 'fact']
+
+    def test_suggestions_follow_the_students_records(self):
+        before = self.facts()
+        Honor.objects.filter(title='Regional olympiad bronze').delete()
+        Research.objects.create(student=self.student, title='Solar cell efficiency study', field='Physics', role='Lead author')
+        self.student.sat_status, self.student.sat_score = 'taken', 1490
+        self.student.save()
+        after = self.facts()
+        self.assertNotEqual(before, after)
+        titles = [item['title'] for item in after]
+        self.assertNotIn('Regional olympiad bronze', titles)
+        self.assertIn('Solar cell efficiency study', titles)
+        self.assertEqual(after[0]['detail'], 'GPA 3.9 / 4 · SAT 1490')
+
+    def test_a_student_without_scores_gets_no_academics_card(self):
+        self.student.gpa, self.student.gpa_scale = None, None
+        self.student.sat_status, self.student.ielts_status = 'not_taken', 'not_taken'
+        self.student.save()
+        facts = self.facts()
+        self.assertNotIn('academics', [item['source'] for item in facts])
+        self.assertFalse(any('GPA' in item['detail'] for item in facts))
+
+    def test_an_unrecorded_gpa_scale_is_not_guessed(self):
+        self.student.gpa, self.student.gpa_scale = '4.75', None
+        self.student.save()
+        self.assertEqual(self.facts()[0]['detail'], 'GPA 4.75')
+
+    def test_academics_keeps_only_the_scores_the_draft_leaves_out(self):
+        self.student.sat_status, self.student.sat_score = 'taken', 1410
+        self.student.ielts_status, self.student.ielts_score = 'taken', '7.5'
+        self.student.save()
+        self.assertEqual(self.facts('Her IELTS band is 7.5.')[0]['detail'], 'GPA 3.9 / 4 · SAT 1410')
+        self.assertEqual(self.facts('GPA 3.90, SAT 1410 and IELTS 7.5.')[:1], [
+            {'kind': 'fact', 'source': 'honor', 'title': 'National physics olympiad gold', 'detail': ''},
+        ])
+
+    def test_a_short_title_drops_out_once_written(self):
+        Activity.objects.create(student=self.student, name='MUN')
+        self.assertIn('MUN', [item['title'] for item in self.facts()])
+        self.assertNotIn('MUN', [item['title'] for item in self.facts('She chaired our MUN.')])
+        self.assertIn('MUN', [item['title'] for item in self.facts('She is a mundane student.')])
+
+    def test_a_counselor_never_gets_another_schools_student(self):
+        Honor.objects.create(student=self.student_b, title='School B secret prize', level='national')
+        self.client.force_authenticate(self.counselor)
+        response = self.client.post(SUGGEST_URL, {'student': self.student_b.id, 'draft': ''}, format='json')
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn('School B secret prize', str(response.data))
+        self.client.force_authenticate(self.counselor_b)
+        self.assertEqual(self.client.post(SUGGEST_URL, {'student': self.student_b.id, 'draft': ''}, format='json').status_code, 200)
+
     def test_only_the_students_counselor_can_ask(self):
         for user in (self.student_user, self.organization, self.teacher, self.parent):
             self.assertEqual(self.suggest(user).status_code, 403, user.role)
@@ -175,21 +230,59 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
     @override_settings(AI_GATEWAY_API_KEY='test-key')
     def test_ai_gets_facts_without_identity_and_bad_items_are_dropped(self):
         answer = {'suggestions': [
-            {'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'source': 'Activity: Robotics club'},
+            {'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'fact': 'D'},
             {'kind': 'essay', 'text': 'Not a kind we show.'},
             {'kind': 'idea', 'text': ''},
         ]}
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))) as urlopen:
             response = self.suggest(draft=f'Malika is a joy to teach at {self.school_a.name}. Call 998901234567.')
-        self.assertEqual(response.data, {'source': 'ai', 'suggestions': [
-            {'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'source': 'Activity: Robotics club'},
-        ]})
+        self.assertEqual(response.data['source'], 'ai')
+        self.assertEqual(response.data['suggestions'][0], {
+            'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'source': 'activity', 'title': 'Robotics club',
+        })
+        self.assertEqual(
+            [item['title'] for item in response.data['suggestions'][1:]],
+            ['', 'National physics olympiad gold', 'Regional olympiad bronze', 'Robotics club'],
+        )
         sent = json.loads(urlopen.call_args.args[0].data)['messages'][1]['content']
         self.assertIn('National physics olympiad gold', sent)
         self.assertIn('she/her', sent)
         self.assertIn('[Student] is a joy to teach', sent)
         for private in ('Malika', 'Karimova', self.school_a.name, self.student_user.email, '998901234567'):
             self.assertNotIn(private, sent)
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_ai_text_must_rest_on_a_given_fact(self):
+        answer = {'suggestions': [
+            {'kind': 'sentence', 'text': '[Student] has a 3.9 GPA.', 'fact': 'A'},
+            {'kind': 'sentence', 'text': '[Student] ranked 1st of 300 in her class.', 'fact': 'A'},
+            {'kind': 'idea', 'text': 'Mention her SAT 1550.'},
+            {'kind': 'sentence', 'text': '[Student] is a born leader.', 'fact': None},
+            {'kind': 'sentence', 'text': '[Student] won gold.', 'fact': 'Z'},
+            {'kind': 'idea', 'text': 'Say how long you have known [Student].', 'fact': None},
+        ]}
+        with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
+            response = self.suggest(draft='')
+        self.assertEqual([item for item in response.data['suggestions'] if item['kind'] != 'fact'], [
+            {'kind': 'sentence', 'text': '[Student] has a 3.9 GPA.', 'source': 'academics', 'title': ''},
+            {'kind': 'idea', 'text': 'Say how long you have known [Student].', 'source': '', 'title': ''},
+        ])
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_a_number_from_another_fact_is_dropped(self):
+        answer = {'suggestions': [
+            {'kind': 'sentence', 'text': '[Student] won national gold in 2026.', 'fact': 'A'},
+            {'kind': 'sentence', 'text': '[Student] keeps a 3.9 GPA while winning gold.', 'fact': 'B'},
+            {'kind': 'sentence', 'text': '[Student] won national physics gold in 2026.', 'fact': 'B'},
+            {'kind': 'idea', 'text': 'Say what she did in those 3 years.', 'fact': None},
+            {'kind': 'idea', 'text': 'Mention the 2026 olympiad.', 'fact': None},
+        ]}
+        with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
+            response = self.suggest(draft='I have known her for 3 years.')
+        self.assertEqual([item for item in response.data['suggestions'] if item['kind'] != 'fact'], [
+            {'kind': 'sentence', 'text': '[Student] won national physics gold in 2026.', 'source': 'honor', 'title': 'National physics olympiad gold'},
+            {'kind': 'idea', 'text': 'Say what she did in those 3 years.', 'source': '', 'title': ''},
+        ])
 
     @override_settings(AI_GATEWAY_API_KEY='test-key')
     def test_the_ai_call_runs_without_touching_the_database(self):

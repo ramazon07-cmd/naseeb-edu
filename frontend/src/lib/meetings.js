@@ -36,14 +36,15 @@ sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 // Staff Meetings page: everything starting in the next 7 days, any status,
 // soonest first — a pending request due this week shows up here too — then
 // what happened in the last 7 days and still needs the counselor: an expired or
-// declined request to rebook, a confirmed meeting nobody marked completed.
+// declined request to rebook, a confirmed meeting nobody marked completed, a
+// completed one (its notes are written right after).
 export const meetingsThisWeek = (items = [], now = new Date()) => {
   const at = (item) => new Date(item.starts_at);
   const weekEnd = new Date(now.getTime() + 7 * 86400000);
   const weekStart = new Date(now.getTime() - 7 * 86400000);
   const upcoming = items.filter((item) => at(item) >= now && at(item) < weekEnd).sort((a, b) => at(a) - at(b));
   const overdue = items.
-  filter((item) => at(item) < now && at(item) >= weekStart && (needsRebook(item, now) || item.status === 'approved')).
+  filter((item) => at(item) < now && at(item) >= weekStart && (needsRebook(item, now) || ['approved', 'completed'].includes(item.status))).
   sort((a, b) => at(b) - at(a));
   return [...upcoming, ...overdue];
 };

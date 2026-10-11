@@ -10,6 +10,11 @@ import { errorCodeMessages } from "./translations/errorCodes.js";
 import { fitReasonMessages } from "./translations/fitReasons.js";
 import { letterMessages } from "./translations/letters.js";
 import { catalogAdminMessages } from "./translations/catalogAdmin.js";
+import { counselorHomeMessages } from "./translations/counselorHome.js";
+import { inviteMessages } from "./translations/invites.js";
+import { counselorStudentsMessages } from "./translations/counselorStudents.js";
+import { reviewMessages } from "./translations/review.js";
+import { counselorShellMessages } from "./translations/counselorShell.js";
 
 import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
 
@@ -25,6 +30,7 @@ const LOCALES = { uz: "uz-UZ", ru: "ru-RU", en: "en-GB" };
 
 export const TRANSLATIONS = {
   uz: {
+    ...inviteMessages("uz"),
     ...essayLabMessages("uz"),
     ...uiMessages("uz"),
     ...copyMessages("uz"),
@@ -37,6 +43,10 @@ export const TRANSLATIONS = {
     ...fitReasonMessages("uz"),
     ...letterMessages("uz"),
     ...catalogAdminMessages("uz"),
+    ...counselorHomeMessages("uz"),
+    ...counselorStudentsMessages("uz"),
+    ...reviewMessages("uz"),
+    ...counselorShellMessages("uz"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
@@ -214,6 +224,7 @@ export const TRANSLATIONS = {
     "General essay": "Umumiy insho",
   },
   ru: {
+    ...inviteMessages("ru"),
     ...essayLabMessages("ru"),
     ...uiMessages("ru"),
     ...copyMessages("ru"),
@@ -226,6 +237,10 @@ export const TRANSLATIONS = {
     ...fitReasonMessages("ru"),
     ...letterMessages("ru"),
     ...catalogAdminMessages("ru"),
+    ...counselorHomeMessages("ru"),
+    ...counselorStudentsMessages("ru"),
+    ...reviewMessages("ru"),
+    ...counselorShellMessages("ru"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",
@@ -528,8 +543,16 @@ const UZ_MONTHS = [
   "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr",
 ];
 
-// Some Chromium builds ship without Uzbek month names and fall back to "M09".
-// Uzbek is the default language here, so compose the date ourselves when that happens.
+// Sunday first, as Date#getDay() counts.
+const UZ_WEEKDAYS = {
+  long: ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"],
+  short: ["Yak", "Dush", "Sesh", "Chor", "Pay", "Jum", "Shan"],
+  narrow: ["Y", "D", "S", "C", "P", "J", "S"],
+};
+
+// Some Chromium builds ship without Uzbek month names (they fall back to "M09")
+// or weekday names (English "Mon"). Uzbek is the default language here, so
+// compose the date ourselves when that happens.
 const formatUzbekDate = (date, options) => {
   const pad = (part) => String(part).padStart(2, "0");
   const pieces = [];
@@ -537,7 +560,8 @@ const formatUzbekDate = (date, options) => {
   else if (options.month) pieces.push(UZ_MONTHS[date.getMonth()]);
   else if (options.day) pieces.push(String(date.getDate()));
   if (options.year) pieces.push(String(date.getFullYear()));
-  const stamp = pieces.join(" ");
+  const weekday = options.weekday ? (UZ_WEEKDAYS[options.weekday] || UZ_WEEKDAYS.long)[date.getDay()] : "";
+  const stamp = [weekday, pieces.join(" ")].filter(Boolean).join(", ");
   if (!options.hour && !options.minute) return stamp;
   const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
   return stamp ? `${stamp}, ${time}` : time;
@@ -558,7 +582,9 @@ export const formatDateLocale = (
   if (!value) return "—";
   const date = parseDateValue(value);
   const formatted = new Intl.DateTimeFormat(locale(), options).format(date);
-  return /\bM\d{2}\b/.test(formatted) ? formatUzbekDate(date, options) : formatted;
+  const missingWeekday = activeLanguage === "uz" && options.weekday
+    && !formatted.includes((UZ_WEEKDAYS[options.weekday] || UZ_WEEKDAYS.long)[date.getDay()]);
+  return missingWeekday || /\bM\d{2}\b/.test(formatted) ? formatUzbekDate(date, options) : formatted;
 };
 export const formatNumberLocale = (value, options = {}) =>
   new Intl.NumberFormat(locale(), options).format(Number(value) || 0);

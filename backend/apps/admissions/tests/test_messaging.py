@@ -488,3 +488,90 @@ class MessagingRoleIsolationTests(RoleIsolationBase):
         self.assertEqual(self.client.get('/api/message-channels/overview/').data['unread_total'], 0)
         self.client.force_authenticate(self.student_a_user)
         self.assertEqual(self.client.get('/api/message-channels/overview/').data['unread_total'], 1)
+
+
+class MessagingSearchPagingTests(RoleIsolationBase):
+    def test_contact_search_pages_and_stays_in_the_counselors_school(self):
+        # Same name in both schools: only the counselor's own student may come back.
+        for user in (self.student_a_user, self.student_b_user):
+            user.first_name = 'Zarina'
+            user.save(update_fields=['first_name'])
+        self.client.force_authenticate(self.counselor)
+        response = self.client.get('/api/message-channels/contacts/', {'search': 'Zarina', 'page_size': 10})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['id'] for item in response.data['results']], [self.student_a_user.id])
+        self.assertIsNone(response.data['next'])
+        # Searching the other school's student by username finds nothing.
+        other = self.client.get('/api/message-channels/contacts/', {'search': self.student_b_user.username, 'page_size': 10})
+        self.assertEqual(other.data['results'], [])
+        self.client.force_authenticate(self.counselor_b)
+        theirs = self.client.get('/api/message-channels/contacts/', {'search': 'Zarina', 'page_size': 10})
+        self.assertEqual([item['id'] for item in theirs.data['results']], [self.student_b_user.id])
+
+    def test_contact_search_matches_full_name_and_email_within_scope(self):
+        for user, email in ((self.student_a_user, 'zarina.a@mail.example'), (self.student_b_user, 'zarina.b@mail.example')):
+            user.first_name, user.last_name, user.email = 'Zarina', 'Karimova', email
+            user.save(update_fields=['first_name', 'last_name', 'email'])
+        self.client.force_authenticate(self.counselor)
+
+        def found(term):
+            response = self.client.get('/api/message-channels/contacts/', {'search': term, 'page_size': 10})
+            return [item['id'] for item in response.data['results']]
+
+        self.assertEqual(found('zarina karimova'), [self.student_a_user.id])
+        self.assertEqual(found('zarina.a@mail'), [self.student_a_user.id])
+        # Another school's student stays out, by email too.
+        self.assertEqual(found('zarina.b@mail'), [])
+
+    def test_contact_search_matches_role_label_and_school_within_scope(self):
+        self.school_a.name, self.school_b.name = 'Registan Lyceum', 'Registan Academy'
+        self.school_a.save(update_fields=['name'])
+        self.school_b.save(update_fields=['name'])
+        # Nothing but the role says "teacher".
+        self.teacher.username, self.teacher.email = 'k-aliyev', 'k.aliyev@example.com'
+        self.teacher.save(update_fields=['username', 'email'])
+        self.client.force_authenticate(self.counselor)
+
+        def found(term):
+            response = self.client.get('/api/message-channels/contacts/', {'search': term, 'page_size': 50})
+            return {item['id'] for item in response.data['results']}
+
+        everyone = {item['id'] for item in self.client.get('/api/message-channels/contacts/').data}
+        self.assertEqual(found('teach'), {self.teacher.id})
+        self.assertIn(self.student_a_user.id, found('Student'))
+        self.assertNotIn(self.student_b_user.id, found('Student'))
+        # The school name finds only contacts already in scope.
+        self.assertEqual(found('registan'), everyone & found('registan'))
+        self.assertIn(self.student_a_user.id, found('registan'))
+        self.assertNotIn(self.student_b_user.id, found('registan'))
+        self.assertEqual(found('Academy'), set())
+
+    def test_contacts_page_through_every_contact_once(self):
+        self.client.force_authenticate(self.counselor)
+        everyone = {item['id'] for item in self.client.get('/api/message-channels/contacts/').data}
+        first = self.client.get('/api/message-channels/contacts/', {'page_size': 1})
+        seen = [item['id'] for item in first.data['results']]
+        next_url = first.data['next']
+        while next_url:
+            page = self.client.get(next_url)
+            seen += [item['id'] for item in page.data['results']]
+            next_url = page.data['next']
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertEqual(set(seen), everyone)
+
+    def test_unread_filter_lists_only_own_channels_with_unread_messages(self):
+        self.client.force_authenticate(self.student_a_user)
+        unread_id = self.client.post('/api/message-channels/direct/', {'user': self.counselor.id}, format='json').data['id']
+        self.client.force_authenticate(self.teacher)
+        read_id = self.client.post('/api/message-channels/direct/', {'user': self.counselor.id}, format='json').data['id']
+        self.client.post('/api/channel-messages/', {'channel': read_id, 'body': 'Seen.'}, format='json')
+        self.client.force_authenticate(self.student_a_user)
+        self.client.post('/api/channel-messages/', {'channel': unread_id, 'body': 'Hello?'}, format='json')
+        self.client.force_authenticate(self.counselor)
+        self.client.post(f'/api/message-channels/{read_id}/mark-read/')
+        listed = self.results(self.client.get('/api/message-channels/', {'unread': 'true'}))
+        self.assertEqual([item['id'] for item in listed], [unread_id])
+        self.assertEqual(listed[0]['unread_count'], 1)
+        # A counselor of another school sees none of it.
+        self.client.force_authenticate(self.counselor_b)
+        self.assertEqual(self.results(self.client.get('/api/message-channels/', {'unread': 'true'})), [])

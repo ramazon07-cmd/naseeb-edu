@@ -326,7 +326,9 @@ class TestScoreMigrationTests(TransactionTestCase):
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
         executor.migrate(self.migrate_to)
-        taken, planned, broken = (StudentProfile.objects.get(pk=p.pk) for p in (taken, planned, broken))
+        # Read with the model as of migrate_to: later migrations add profile columns.
+        NewProfile = executor.loader.project_state(self.migrate_to).apps.get_model('admissions', 'StudentProfile')
+        taken, planned, broken = (NewProfile.objects.get(pk=p.pk) for p in (taken, planned, broken))
         self.assertEqual((taken.ielts_status, taken.ielts_attempts, taken.sat_status, taken.sat_reading, taken.sat_math, taken.sat_attempts),
                          ('taken', 1, 'taken', 650, 700, 1))
         self.assertEqual(taken.application_profile, {'interests': ['Arts']})

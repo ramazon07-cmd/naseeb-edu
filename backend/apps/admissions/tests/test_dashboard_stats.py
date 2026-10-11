@@ -70,7 +70,9 @@ class DashboardSummaryTests(AuditBaseMixin, APITestCase):
             Application.objects.create(student=profile, university=self.university, program=f'P{index}',
                                        status=status_value)
         for index, status_value in enumerate(documents):
-            Document.objects.create(student=profile, title=f'D{index}', status=status_value)
+            # Past "required" a document carries its file or link, as the serializer insists.
+            link = '' if status_value == Document.Status.REQUIRED else 'https://docs.google.com/document/d/x'
+            Document.objects.create(student=profile, title=f'D{index}', status=status_value, google_docs_url=link)
         for index, status_value in enumerate(letters):
             RecommendationLetter.objects.create(student=profile, recommender_name=f'R{index}', status=status_value)
 
@@ -258,3 +260,45 @@ class DashboardSummaryTests(AuditBaseMixin, APITestCase):
         self.assertEqual(keys['base-teacher'], keys['base-org'])
         scoped = [key for name, key in keys.items() if name not in {'base-admin', 'base-parent', 'base-org'}]
         self.assertEqual(len(set(scoped)), len(scoped))
+
+
+class TasksDueWeekTests(AuditBaseMixin, APITestCase):
+    def test_monday_to_sunday_like_the_deadlines(self):
+        wednesday = timezone.localdate().replace(year=2026, month=10, day=7)
+        for title, due, status in (
+            ('Monday, already late', wednesday - timedelta(days=2), 'todo'),
+            ('Sunday', wednesday + timedelta(days=4), 'in_progress'),
+            ('Next Monday', wednesday + timedelta(days=5), 'todo'),
+            ('Last Sunday', wednesday - timedelta(days=3), 'todo'),
+            ('Done this week', wednesday, 'approved'),
+        ):
+            Task.objects.create(student=self.student, title=title, due_date=due, status=status)
+        for user in (self.counselor, self.teacher):
+            with self.subTest(user=user.username):
+                cache.clear()
+                self.client.force_authenticate(user)
+                with mock.patch('django.utils.timezone.localdate', return_value=wednesday):
+                    data = self.client.get('/api/dashboard/stats/').data
+                self.assertEqual(data['tasks_due_week'], 2)
+
+
+class SupportUnreadBadgeTests(AuditBaseMixin, APITestCase):
+    def test_counts_every_own_ticket_with_an_unopened_answer(self):
+        from apps.admissions.models import SupportTicket
+        now = timezone.now()
+
+        def ticket(requester, responded_at=None, viewed_at=None):
+            SupportTicket.objects.create(requester=requester, category='technical', subject='Help', message='Help',
+                                         responded_at=responded_at, requester_viewed_at=viewed_at)
+
+        # More than the Support page's first page (50) of unread answers.
+        for _ in range(55):
+            ticket(self.counselor, responded_at=now)
+        ticket(self.counselor, responded_at=now, viewed_at=now - timedelta(minutes=1))  # a newer answer
+        ticket(self.counselor, responded_at=now - timedelta(minutes=1), viewed_at=now)  # already read
+        ticket(self.counselor)  # not answered yet
+        ticket(self.teacher, responded_at=now)  # someone else's
+        for user, expected in ((self.counselor, 56), (self.teacher, 1), (self.organization, 0)):
+            with self.subTest(user=user.username):
+                self.client.force_authenticate(user)
+                self.assertEqual(self.client.get('/api/dashboard/stats/').data['support_unread'], expected)

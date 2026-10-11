@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PAGED_ENDPOINTS, loadsDashboardStats, pagedListsAfter, resourcesFor, usesPagedLists, waitsBeforeLoading } from '../src/lib/workspaceResources.js';
+import { BOOKING_WINDOW_DAYS, PAGED_ENDPOINTS, bookingWindowStart, createInFlight, failedStatsStatus, loadsDashboardStats, mergeStats, pagedListsAfter, resourcesFor, usesPagedLists, waitsBeforeLoading } from '../src/lib/workspaceResources.js';
 import { planWorkspaceReload } from '../src/lib/reloadPlan.js';
 
 const ROLES = ['parent', 'organization', 'teacher', 'admin', 'counselor', 'student'];
@@ -67,4 +67,74 @@ test('a superuser loads its workspace without student onboarding', () => {
   assert.equal(waitsBeforeLoading({ role: 'student', student_profile_complete: false }), true);
   assert.equal(waitsBeforeLoading({ role: 'counselor', must_change_password: true }), true);
   assert.equal(waitsBeforeLoading(null), true);
+});
+
+test('a plain stats response keeps the last Home block, marked stale', () => {
+  const home = { today: '2026-10-11' };
+  assert.deepEqual(mergeStats({ students_total: 1, home }, { students_total: 2 }), { students_total: 2, home, home_stale: true });
+  const fresh = { students_total: 3, home: { today: '2026-10-12' } };
+  assert.equal(mergeStats({ home }, fresh), fresh);
+  assert.deepEqual(mergeStats(null, { students_total: 2 }), { students_total: 2 });
+  assert.deepEqual(mergeStats({ students_total: 1 }, { students_total: 2 }), { students_total: 2 });
+});
+
+test('staff sign-in loads a window of meetings and the first page of chats and tickets', () => {
+  const now = new Date(2026, 9, 11, 15, 0);
+  assert.equal(BOOKING_WINDOW_DAYS, 30);
+  assert.equal(bookingWindowStart(now), '2026-09-11');
+  assert.equal(bookingWindowStart(new Date(2026, 0, 5)), '2025-12-06');
+  for (const role of ['counselor', 'teacher', 'organization']) {
+    const resources = resourcesFor({ role }, now);
+    assert.deepEqual(resources.find(([key]) => key === 'bookings'), ['bookings', 'bookings', '?starts_from=2026-09-11'], role);
+    assert.equal(resources.find(([key]) => key === 'messageChannels')[3]?.firstPage, true, role);
+    const tickets = resources.find(([key]) => key === 'supportTickets');
+    if (tickets) assert.equal(tickets[3]?.firstPage, true, role);
+  }
+  // A student's own collections are small and still load whole.
+  assert.ok(resourcesFor({ role: 'student' }, now).every(([, , , options]) => !options?.firstPage));
+});
+
+test('a stats refresh joins the workspace load of the same stats instead of superseding it', async () => {
+  const inFlight = createInFlight();
+  let calls = 0;
+  let resolve;
+  const request = () => { calls += 1; return new Promise((done) => { resolve = done; }); };
+  // Sign-in on Home: the workspace load asks for ?include=home...
+  const load = inFlight.track('home', request());
+  // ...and Home, mounting meanwhile, joins it rather than sending it again.
+  const joined = inFlight.join('home');
+  assert.equal(joined, load);
+  assert.equal(inFlight.join('dashboard'), null);
+  resolve({ home: {} });
+  assert.deepEqual(await joined, { home: {} });
+  assert.equal(calls, 1);
+  // Once settled the next refresh asks the server again.
+  await Promise.resolve();
+  assert.equal(inFlight.join('home'), null);
+});
+
+test('a failed load fails every caller that joined it, then frees the key', async () => {
+  const inFlight = createInFlight();
+  const failure = Promise.reject(new Error('offline'));
+  inFlight.track('home', failure);
+  await assert.rejects(inFlight.join('home'), /offline/);
+  await Promise.resolve();
+  assert.equal(inFlight.join('home'), null);
+  // A newer request for the key is not cleared by an older one settling.
+  let finishOld;
+  const old = inFlight.track('home', new Promise((done) => { finishOld = done; }));
+  const newer = inFlight.track('home', new Promise(() => {}));
+  finishOld();
+  await old;
+  assert.equal(inFlight.join('home'), newer);
+  inFlight.clear();
+  assert.equal(inFlight.join('home'), null);
+});
+
+test('a failed stats refresh never leaves the dashboard loading', () => {
+  const error = { message: 'Server error' };
+  assert.deepEqual(failedStatsStatus({ status: 'loading', error: '', loaded: false }, error), { status: 'error', error: 'Server error', loaded: false });
+  assert.deepEqual(failedStatsStatus(undefined, {}), { status: 'error', error: 'Unable to load this section.', loaded: false });
+  // Stats on screen stay up after a failed refresh.
+  assert.deepEqual(failedStatsStatus({ status: 'loading', error: '', loaded: true }, error), { status: 'success', error: '', loaded: true });
 });

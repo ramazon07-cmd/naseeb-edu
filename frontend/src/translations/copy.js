@@ -140,6 +140,7 @@ export const COPY_TRANSLATIONS = {
   // Messages, meetings, support and store
   'Group created.': ['Guruh yaratildi.', 'Группа создана.'],
   'Community created.': ['Hamjamiyat yaratildi.', 'Сообщество создано.'],
+  'Communities': ['Hamjamiyatlar', 'Сообщества'],
   'Discussion created.': ['Muhokama yaratildi.', 'Обсуждение создано.'],
   'Initial members · {0} selected': ['Dastlabki a’zolar · {0} ta tanlandi', 'Первые участники · выбрано: {0}'],
   'Meeting approved.': ['Uchrashuv tasdiqlandi.', 'Встреча одобрена.'],
@@ -186,7 +187,7 @@ export const COPY_TRANSLATIONS = {
   'Student deactivated': ['O‘quvchi faolsizlantirildi', 'Ученик деактивирован'],
   'Student reactivated': ['O‘quvchi qayta faollashtirildi', 'Ученик снова активен'],
   'Counselor assigned to student': ['O‘quvchiga maslahatchi biriktirildi', 'Ученику назначен консультант'],
-  'Student 360 profile viewed': ['Student 360 profili ko‘rildi', 'Просмотрен профиль Student 360'],
+  'Student 360 profile viewed': ['O‘quvchi 360 profili ko‘rildi', 'Просмотрен профиль «Ученик 360»'],
   'Student account viewed': ['O‘quvchi akkaunti ko‘rildi', 'Просмотрен аккаунт ученика'],
   'Student photo viewed': ['O‘quvchi surati ko‘rildi', 'Просмотрено фото ученика'],
   'Student XP viewed': ['O‘quvchi XP ko‘rsatkichi ko‘rildi', 'Просмотрен XP ученика'],

@@ -209,6 +209,13 @@
   flex: 1;
 }
 
+.sidebar-search-results button small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
 .sidebar-search-results button:hover,
 .sidebar-notice:hover {
   background: var(--surface-hover);
@@ -685,6 +692,22 @@ button.chat-shared-item {
   --cx-radius-side: 20px;
   --cx-radius-item: 10px;
   --cx-radius-btn: 11px;
+  /* Counselor type scale: the student dashboard's sizes and weights, so the
+     two workspaces read at the same size. */
+  --cx-fs-meta: var(--text-xs);
+  --cx-fs-body: var(--text-sm);
+  --cx-fs-input: 0.9375rem;
+  --cx-fs-card-title: 0.9375rem;
+  --cx-fs-topbar: 1.0625rem;
+  --cx-fs-figure: var(--text-2xl);
+  --cx-fs-page-title: 1.875rem;
+  --cx-fs-stat: 2.5rem;
+  --cx-fw-nav: 500;
+  --cx-fw-strong: 600;
+  --cx-fw-title: 700;
+  --cx-fw-button: 700;
+  --cx-fw-light: 300;
+  --cx-ls-eyebrow: 0.14em;
   /* Login: one full-bleed photograph behind one card. The scrim is what keeps
      white chrome legible over a sky that is almost white at the horizon, and
      it is the only thing that changes between the two themes. */
@@ -16451,8 +16474,9 @@ a:focus-visible {
   grid-template-columns: 240px minmax(0, 1fr);
   background: var(--cx-canvas);
   color: var(--cx-text);
-  font-family: 'Roboto Variable', Roboto, system-ui, sans-serif;
-  font-size: 0.875rem;
+  /* Same face as the student dashboard. */
+  font-family: 'Montserrat', system-ui, sans-serif;
+  font-size: var(--cx-fs-body);
   line-height: 1.45;
   font-variant-numeric: tabular-nums;
 }
@@ -16526,8 +16550,8 @@ a:focus-visible {
   background: transparent;
   color: var(--cx-text);
   font: inherit;
-  font-size: 0.875rem;
-  font-weight: 450;
+  font-size: var(--cx-fs-meta);
+  font-weight: var(--cx-fw-nav);
   text-align: left;
   cursor: pointer;
   transition:
@@ -16568,7 +16592,7 @@ a:focus-visible {
   border-radius: var(--radius-pill);
   background: var(--cx-badge);
   color: var(--cx-dark);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-style: normal;
   font-weight: 600;
   line-height: 1;
@@ -16629,15 +16653,15 @@ a:focus-visible {
 .cx-account-copy b {
   overflow: hidden;
   color: var(--cx-ink);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--cx-fs-body);
+  font-weight: var(--cx-fw-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .cx-account-copy small {
   color: var(--cx-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
 }
 
 .cx-account-menu {
@@ -16667,7 +16691,7 @@ a:focus-visible {
   background: transparent;
   color: var(--cx-text);
   font: inherit;
-  font-size: 0.8438rem;
+  font-size: var(--cx-fs-body);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -16700,7 +16724,7 @@ a:focus-visible {
   gap: 8px;
   padding: 4px 4px 4px 10px;
   color: var(--cx-muted);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   font-weight: 500;
 }
 
@@ -16721,7 +16745,7 @@ a:focus-visible {
   background: transparent;
   color: var(--cx-text);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-weight: 600;
   cursor: pointer;
 }
@@ -16784,9 +16808,9 @@ a:focus-visible {
 .cx-head h1 {
   margin: 0 0 8px;
   color: var(--cx-ink);
-  font-size: 1.625rem;
-  font-weight: 650;
-  line-height: 1.2;
+  font-size: var(--cx-fs-page-title);
+  font-weight: var(--cx-fw-strong);
+  line-height: 1.1;
   letter-spacing: -0.035em;
   font-family: 'Montserrat', system-ui, sans-serif;
 }
@@ -16794,7 +16818,7 @@ a:focus-visible {
 .cx-head p {
   margin: 0;
   color: var(--cx-muted);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   font-weight: 400;
   line-height: 1.5;
   text-wrap: pretty;
@@ -16827,8 +16851,8 @@ a:focus-visible {
 .cx-card-head h2 {
   margin: 0;
   color: var(--cx-ink);
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: var(--cx-fs-card-title);
+  font-weight: var(--cx-fw-title);
   line-height: 1.4;
   letter-spacing: -0.015em;
 }
@@ -16836,7 +16860,7 @@ a:focus-visible {
 .cx-card-head small {
   margin-left: 10px;
   color: var(--cx-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-weight: 400;
   letter-spacing: 0;
 }
@@ -16853,7 +16877,7 @@ a:focus-visible {
   background: var(--cx-avatar);
   color: var(--cx-avatar-text);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-weight: 600;
   line-height: 1;
 }
@@ -16882,7 +16906,7 @@ a:focus-visible {
   border-radius: 6px;
   background: var(--cx-quiet-bg);
   color: var(--cx-quiet-text);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -16942,7 +16966,7 @@ a:focus-visible {
   background: var(--cx-card);
   color: var(--cx-text);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -16970,8 +16994,8 @@ a:focus-visible {
   background: var(--cx-card);
   color: var(--cx-text);
   font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 500;
+  font-size: var(--cx-fs-body);
+  font-weight: var(--cx-fw-button);
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -17008,8 +17032,8 @@ a:focus-visible {
   background: transparent;
   color: var(--cx-ink);
   font: inherit;
-  font-size: 0.825rem;
-  font-weight: 600;
+  font-size: var(--cx-fs-meta);
+  font-weight: var(--cx-fw-strong);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -17027,7 +17051,7 @@ a:focus-visible {
   background: var(--cx-card);
   color: var(--cx-muted);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-input);
   text-align: left;
 }
 
@@ -17069,7 +17093,12 @@ button.cx-search {
   margin: 0;
   padding: 18px 20px;
   color: var(--cx-muted);
-  font-size: 0.875rem;
+  font-size: var(--cx-fs-body);
+}
+
+/* Lists that already pad their content: the empty line sits on their edge. */
+:is(.cx-activity, .cx-requests, .cx-reason-list, .cx-progress-list, .cx-week) > .cx-empty {
+  padding: 4px 0 2px;
 }
 
 /* -- rows shared by Home and Review ---------------------------------------- */
@@ -17118,8 +17147,8 @@ button.cx-search {
 .cx-row-copy b {
   overflow: hidden;
   color: var(--cx-ink);
-  font-size: 0.875rem;
-  font-weight: 550;
+  font-size: var(--cx-fs-body);
+  font-weight: var(--cx-fw-strong);
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: normal;
@@ -17129,7 +17158,7 @@ button.cx-search {
 .cx-row-copy small {
   overflow: hidden;
   color: var(--cx-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -17168,7 +17197,7 @@ button.cx-search {
 
 .cx-stat > span {
   color: var(--cx-muted);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   font-weight: 500;
   letter-spacing: 0;
   line-height: 1.4;
@@ -17178,7 +17207,7 @@ button.cx-search {
 .cx-stat strong {
   margin-top: 10px;
   color: var(--cx-ink);
-  font-size: 2rem;
+  font-size: var(--cx-fs-figure);
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.035em;
@@ -17191,13 +17220,13 @@ button.cx-search {
 .cx-stat small {
   margin-top: 7px;
   color: var(--cx-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   line-height: 1.5;
   text-wrap: pretty;
 }
 
 .cx-home .cx-card-head h2 {
-  font-size: 0.9375rem;
+  font-size: var(--cx-fs-card-title);
 }
 
 .cx-stat.dark {
@@ -17223,7 +17252,7 @@ button.cx-search {
   align-items: center;
   gap: 6px;
   padding-top: 12px;
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-style: normal;
   font-weight: 500;
 }
@@ -17290,16 +17319,16 @@ button.cx-search {
 
 .cx-time {
   color: var(--cx-ink);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-weight: 500;
 }
 
 .cx-meeting-row .cx-row-copy b {
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
 }
 
 .cx-meeting-row .cx-row-copy small {
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   display: flex;
   align-items: center;
   min-height: 18px;
@@ -17312,12 +17341,12 @@ button.cx-search {
   gap: 16px;
   min-height: 34px;
   color: var(--cx-text);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
 }
 
 .cx-deadline-row small {
   color: var(--cx-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   white-space: nowrap;
 }
 
@@ -17357,7 +17386,7 @@ button.cx-search {
 
 .cx-request-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -17394,19 +17423,19 @@ button.cx-search {
 
 .cx-week-when b {
   color: var(--cx-ink);
-  font-size: 0.8375rem;
+  font-size: var(--cx-fs-body);
   font-weight: 600;
   line-height: 1.3;
 }
 
 .cx-week-when small {
   color: var(--cx-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   line-height: 1.3;
 }
 
 .cx-week-row .cx-row-copy small {
-  font-size: 0.7688rem;
+  font-size: var(--cx-fs-meta);
 }
 
 .cx-week-actions {
@@ -17414,6 +17443,11 @@ button.cx-search {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* "Open" and "Notes" share one width so the status tags line up down the week. */
+.cx-week-actions .cx-btn {
+  min-width: 66px;
 }
 
 /* -- Review ---------------------------------------------------------------- */
@@ -17438,19 +17472,19 @@ button.cx-search {
 }
 
 .cx-review-head .cx-row-copy b {
-  font-size: 1rem;
+  font-size: var(--cx-fs-card-title);
   line-height: 1.4;
   font-weight: 600;
 }
 
 .cx-review-head .cx-row-copy small {
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
 }
 
 .cx-meeting-help {
   padding: 13px 18px;
   color: var(--cx-muted);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   line-height: 1.35;
 }
 
@@ -17500,7 +17534,7 @@ button.cx-search {
 .cx-quote-link {
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
 }
 
 .cx-quote-link a {
@@ -17515,8 +17549,8 @@ button.cx-search {
 
 .cx-field > span {
   color: var(--cx-muted);
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: var(--cx-fs-meta);
+  font-weight: var(--cx-fw-strong);
   letter-spacing: 0;
   line-height: 1.5;
   text-transform: none;
@@ -17531,7 +17565,7 @@ button.cx-search {
   box-shadow: none;
   color: var(--cx-ink);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-input);
   line-height: 1.5;
   resize: vertical;
 }
@@ -17549,8 +17583,9 @@ button.cx-search {
   width: 304px;
 }
 
+/* clip, not hidden: hidden makes a scroll box and the sticky header stops working. */
 .cx-table-card {
-  overflow: hidden;
+  overflow: clip;
 }
 
 .cx-table {
@@ -17588,11 +17623,15 @@ button.cx-search {
   padding: 0 0 0;
   border-bottom: 1px solid var(--cx-rule);
   color: var(--cx-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-weight: 500;
   letter-spacing: 0.05em;
   text-align: left;
   text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--cx-card);
 }
 
 .cx-table td {
@@ -17600,7 +17639,7 @@ button.cx-search {
   padding: 15px 14px 15px 0;
   border-bottom: 1px solid var(--cx-rule);
   color: var(--cx-ink);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   vertical-align: middle;
 }
 
@@ -17644,8 +17683,8 @@ button.cx-search {
   background: transparent;
   color: var(--cx-ink);
   font: inherit;
-  font-size: 0.875rem;
-  font-weight: 550;
+  font-size: var(--cx-fs-body);
+  font-weight: var(--cx-fw-strong);
   line-height: 1.28;
   text-align: left;
   text-overflow: ellipsis;
@@ -17654,13 +17693,13 @@ button.cx-search {
 }
 
 .cx-table .cx-row-copy small {
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
 }
 
 .cx-table td > b {
   display: block;
   margin-bottom: 4px;
-  font-size: 0.825rem;
+  font-size: var(--cx-fs-body);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -17707,7 +17746,7 @@ button.cx-search {
 .cx-footnote {
   margin: 0;
   color: var(--cx-muted);
-  font-size: 0.8063rem;
+  font-size: var(--cx-fs-meta);
   line-height: 1.5;
 }
 
@@ -17724,6 +17763,7 @@ button.cx-search {
 }
 
 .cx-back {
+  flex: none;
   display: inline-flex;
   align-items: center;
   padding: 0 0 0 13px;
@@ -17735,20 +17775,26 @@ button.cx-search {
 }
 
 .cx-back b {
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   font-weight: 600;
 }
 
 .cx-crumb {
+  min-width: 0;
   margin-left: 17px;
+  overflow: hidden;
   color: var(--cx-muted);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cx-s360-actions {
+  flex: none;
   display: flex;
   gap: 9px;
   margin-left: auto;
+  padding-left: 12px;
 }
 
 .cx-hero {
@@ -17782,9 +17828,9 @@ button.cx-search {
 .cx-hero-copy > span {
   display: block;
   color: var(--cx-hero-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--cx-ls-eyebrow);
   line-height: 15px;
   margin-bottom: 5px;
 }
@@ -17792,7 +17838,7 @@ button.cx-search {
 .cx-hero-copy h1 {
   margin: 0;
   color: var(--cx-hero-ink);
-  font-size: 1.375rem;
+  font-size: var(--cx-fs-figure);
   font-weight: 650;
   line-height: 1.3;
   letter-spacing: -0.02em;
@@ -17803,7 +17849,7 @@ button.cx-search {
 .cx-hero-copy p {
   margin: 0;
   color: var(--cx-hero-muted);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   line-height: 1.5;
   margin-top: 4px;
 }
@@ -17817,7 +17863,7 @@ button.cx-search {
 .cx-hero-stats dt {
   margin: 0;
   color: var(--cx-hero-ink);
-  font-size: 1.625rem;
+  font-size: var(--cx-fs-figure);
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: -0.02em;
@@ -17827,7 +17873,7 @@ button.cx-search {
 .cx-hero-stats dd {
   margin: 0;
   color: var(--cx-hero-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   line-height: 1.45;
   white-space: nowrap;
 }
@@ -17854,7 +17900,7 @@ button.cx-search {
   background: transparent;
   color: var(--cx-text);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--cx-fs-body);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -17868,6 +17914,56 @@ button.cx-search {
   background: var(--cx-dark);
   color: var(--cx-on-dark);
   font-weight: 600;
+}
+
+/* Laptop widths: the nine tabs wrap instead of hiding the last ones off-edge. */
+@media (min-width: 821px) and (max-width: 1100px) {
+  .cx-tabs {
+    flex-wrap: wrap;
+  }
+}
+
+/* Phones: the strip scrolls; its edges fade while there is more to scroll to. */
+@property --cx-fade-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --cx-fade-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@keyframes cx-tabs-fade {
+  0% {
+    --cx-fade-start: 0px;
+    --cx-fade-end: 36px;
+  }
+
+  8% {
+    --cx-fade-start: 36px;
+  }
+
+  92% {
+    --cx-fade-end: 36px;
+  }
+
+  100% {
+    --cx-fade-start: 36px;
+    --cx-fade-end: 0px;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  @media (max-width: 820px) {
+    .cx-tabs {
+      mask-image: linear-gradient(to right, transparent, #000 var(--cx-fade-start), #000 calc(100% - var(--cx-fade-end)), transparent);
+      animation: cx-tabs-fade linear both;
+      animation-timeline: scroll(self inline);
+    }
+  }
 }
 
 .cx-overview {
@@ -17896,7 +17992,7 @@ button.cx-search {
   column-gap: 10px;
   align-items: center;
   color: var(--cx-text);
-  font-size: 0.875rem;
+  font-size: var(--cx-fs-body);
   line-height: 1.2;
 }
 
@@ -17916,13 +18012,13 @@ button.cx-search {
   justify-content: space-between;
   gap: 10px;
   color: var(--cx-text);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   line-height: 1.3;
 }
 
 .cx-progress-item b {
   color: var(--cx-ink);
-  font-size: 0.825rem;
+  font-size: var(--cx-fs-body);
   font-weight: 600;
 }
 
@@ -17934,7 +18030,7 @@ button.cx-search {
 .cx-progress-item small {
   display: block;
   color: var(--cx-muted);
-  font-size: 0.75rem;
+  font-size: var(--cx-fs-meta);
   line-height: 1.3;
 }
 
@@ -17948,7 +18044,7 @@ button.cx-search {
   display: grid;
   grid-template-columns: 80px minmax(0, 1fr);
   color: var(--cx-text);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   line-height: 16px;
 }
 
@@ -17963,7 +18059,7 @@ button.cx-search {
   margin: 0;
   padding: 9px 18px 22px;
   color: var(--cx-text);
-  font-size: 0.85rem;
+  font-size: var(--cx-fs-body);
 }
 
 .cx-scores b {
@@ -17978,7 +18074,7 @@ button.cx-search {
   margin: 0;
   padding: 8px 18px 22px;
   color: var(--cx-text);
-  font-size: 0.8625rem;
+  font-size: var(--cx-fs-body);
 }
 
 .cx-row-static {
@@ -18017,7 +18113,7 @@ button.cx-search {
 .cx-stat-unit {
   text-transform: lowercase;
   color: var(--cx-muted);
-  font-size: 0.8125rem;
+  font-size: var(--cx-fs-body);
   font-weight: 400;
   letter-spacing: 0;
   line-height: 1.4;
@@ -18081,12 +18177,30 @@ button.cx-search {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .cx-table-card {
-    overflow-x: auto;
+  /* Laptop widths fit the table instead of scrolling Next deadline off the card:
+     "Last active" is the column given up. */
+  .cx-table {
+    min-width: 640px;
   }
 
-  .cx-table {
-    min-width: 880px;
+  .cx-table .c-last,
+  .cx-table th:nth-child(6),
+  .cx-table td:nth-child(6) {
+    display: none;
+  }
+
+  /* The deadline's title and date stack, so neither is cut to two letters. */
+  .cx-table .cx-deadline-cell {
+    flex-direction: column;
+  }
+
+  .cx-table .cx-deadline-when {
+    color: var(--cx-muted);
+    font-size: var(--cx-fs-meta);
+  }
+
+  .cx-table .cx-deadline-when::before {
+    content: none;
   }
 }
 
@@ -18151,7 +18265,7 @@ button.cx-search {
 
   .cx-mobilebar > b {
     color: var(--cx-ink);
-    font-size: 1.0625rem;
+    font-size: var(--cx-fs-topbar);
     font-weight: 600;
   }
 
@@ -18192,7 +18306,7 @@ button.cx-search {
     background: transparent;
     color: var(--cx-text);
     font: inherit;
-    font-size: 0.75rem;
+    font-size: var(--cx-fs-meta);
     font-weight: 600;
     cursor: pointer;
   }
@@ -18355,12 +18469,12 @@ button.cx-search {
   }
 
   .cx-stat strong {
-    font-size: 1.75rem;
+    font-size: var(--cx-fs-figure);
   }
 
   .cx-stat.dark strong,
   .cx-stat strong.num {
-    font-size: 1.75rem;
+    font-size: var(--cx-fs-figure);
   }
 
   .cx-stat-value {
@@ -18390,6 +18504,7 @@ button.cx-search {
     width: 100%;
     flex-wrap: wrap;
     margin-left: 0;
+    padding-left: 0;
   }
 
   .cx-hero {
@@ -18463,6 +18578,44 @@ button.cx-search {
   .cx-sidebar.open {
     transition: none;
   }
+}
+
+/* -- shared pages inside the counselor shell --------------------------------
+   Account settings, Messages, Essays, roadmap templates and the meeting modals
+   use the app-wide components; these keep them on the workspace's tokens. */
+
+/* One primary colour: the workspace's dark button, not the student-side tan. */
+.app-shell.cx-shell .button.primary:not(:disabled),
+.app-shell.cx-shell .button.primary[aria-busy='true']:disabled {
+  background: var(--cx-dark);
+  border-color: var(--cx-dark);
+  color: var(--cx-on-dark);
+}
+
+.app-shell.cx-shell .button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--cx-dark) 88%, var(--cx-card));
+  border-color: color-mix(in srgb, var(--cx-dark) 88%, var(--cx-card));
+}
+
+/* A field with a hint below must not stretch its neighbour's label and input. */
+.app-shell.cx-shell .form-grid {
+  align-items: start;
+}
+
+/* Notifications: unread rows are tinted and bold, not edged with an accent bar. */
+.app-shell.cx-shell .sidebar-notice.unread {
+  box-shadow: none;
+  background: var(--cx-hover);
+}
+
+.app-shell.cx-shell .sidebar-notice b {
+  color: var(--cx-ink);
+  font-size: var(--cx-fs-body);
+  line-height: 1.35;
+}
+
+.app-shell.cx-shell .sidebar-notice small {
+  font-size: var(--cx-fs-meta);
 }
 /* == counselor workspace end == */
 /* Meeting availability picker and staff schedule. */

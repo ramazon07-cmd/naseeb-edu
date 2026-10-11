@@ -25,7 +25,7 @@ from ..serializers import (
 from ..services import ROADMAP_APPROVAL_XP, award_approval_xp, record_approval_note, extend_level_one_roadmap
 from apps.users.services import audit_product_action
 from ..params import int_param
-from ..scoping import visible_students
+from ..scoping import visible_students, without_deactivated_students
 from .common import RECORD_ORDERING, SendBackMixin, StaffControlledWorkMixin, StudentRecordListMixin, clean_note
 
 
@@ -45,6 +45,13 @@ class RoadmapMissionViewSet(StudentRecordListMixin, StaffControlledWorkMixin, Se
 
     def get_queryset(self):
         return self.filter_work_for_user(self.queryset)
+
+    def apply_filters(self, queryset, params):
+        queryset = super().apply_filters(queryset, params)
+        if params.get('status') == RoadmapMission.Status.SUBMITTED and not params.get('student'):
+            # The review queue: it matches the dashboard count, which skips deactivated students.
+            queryset = without_deactivated_students(queryset)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(assigned_by=self.request.user)

@@ -3,7 +3,6 @@
 export const ASSESSMENT_TRANSLATIONS = {
   "Could not prepare your card. Please try again.": ["Kartochkani tayyorlab bo‘lmadi. Qayta urinib ko‘ring.", "Не удалось подготовить карточку. Попробуйте ещё раз."],
   "Could not download your card. Please try again.": ["Kartochkani yuklab bo‘lmadi. Qayta urinib ko‘ring.", "Не удалось скачать карточку. Попробуйте ещё раз."],
-  "Review": ["Qayta ko‘rish", "Просмотреть"],
   "Start": ["Boshlash", "Начать"],
   "Back": ["Orqaga", "Назад"],
   "Next": ["Keyingi", "Далее"],

@@ -1,0 +1,56 @@
+.student-search-box {
+  position: relative;
+}
+
+.student-search-box > svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.field .student-search-box input {
+  padding-left: 34px;
+}
+
+.student-search-options {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 264px;
+  overflow-y: auto;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--control-option-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-raised);
+}
+
+.student-search-options li {
+  padding: 7px 10px;
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-search-options li.is-active {
+  background: var(--selected-bg);
+}
+
+.student-search-options li.is-current {
+  font-weight: 650;
+}
+
+.student-search-options li.student-search-note {
+  color: var(--muted);
+  cursor: default;
+}

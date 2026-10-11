@@ -34,12 +34,33 @@ export function notificationTarget(notification) {
   }
 }
 
+// A staff notice about submitted work that Review lists (a task or a
+// document) opens that item there: 'document-12' for /review?item=document-12.
+// Null for every other notice.
+const REVIEW_NOTICE_KINDS = new Set(['task', 'document']);
+
+export function reviewItemForNotice(notification) {
+  const id = Number(notification?.target_id);
+  if (!REVIEW_NOTICE_KINDS.has(notification?.kind) || !Number.isInteger(id) || id <= 0) return null;
+  return `${notification.kind}-${id}`;
+}
+
 // Everything the bell counts: notices and unread chats.
 export function bellTotal(summary) {
   if (!summary) return 0;
   return ['unread', 'chats_unread']
     .reduce((total, key) => total + Math.max(0, Number(summary[key]) || 0), 0);
 }
+
+// What a feed does with its unread chats for this summary: 'wait' (none
+// yet), 'clear' (the server counts nothing unread) or 'fetch' (ask the server
+// for the unread chats; a cached workspace list may be stale).
+export function unreadChatsPlan(summary) {
+  if (!summary) return 'wait';
+  return Math.max(0, Number(summary.chats_unread) || 0) > 0 ? 'fetch' : 'clear';
+}
+
+export const unreadChats = (channels) => (Array.isArray(channels) ? channels : []).filter((item) => item.unread_count > 0);
 
 // True when a fresh summary differs from the one on screen.
 export function summaryChanged(previous, next) {

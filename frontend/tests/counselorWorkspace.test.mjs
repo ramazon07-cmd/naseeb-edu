@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const { setLanguage } = await import('../src/i18n.js');
-const { counselorCounts, reviewCounts, unreadMessages } = await import('../src/lib/counselorCounts.js');
+const { counselorCounts, liveReloadKeys, reviewCounts, statsBadges, unreadConversations, unreadMessages } = await import('../src/lib/counselorCounts.js');
 const { studentReasons, needsAttention, isOnTrack, isQuiet, urgency } = await import('../src/lib/studentReasons.js');
 const { mergeReviewQueue, REVIEW_SOURCES } = await import('../src/lib/reviewQueue.js');
 const { meetingsThisWeek } = await import('../src/lib/meetings.js');
 const { activityText } = await import('../src/lib/activityText.js');
-const { COUNSELOR_NAV, navigationFor, reachablePages, canOpenPage } = await import('../src/lib/routes.js');
+const { COUNSELOR_NAV, navigationFor, reachablePages, canOpenPage, parsePath, resolveRoute } = await import('../src/lib/routes.js');
 
 const now = new Date('2026-09-25T12:00:00Z');
 
@@ -34,8 +34,44 @@ test('badges count pending requests and unread messages from what the browser ho
   const counts = counselorCounts({}, data, now);
   assert.equal(counts.meetings, 1);
   assert.deepEqual(unreadMessages(data.messageChannels), { messages: 5, conversations: 2 });
-  assert.equal(counts.messages, 5);
+  // The Messages badge counts conversations, like the bell.
+  assert.equal(counts.messages, 2);
   assert.equal(counts.notifications, 2);
+  // The bell adds the notices addressed to the counselor.
+  assert.equal(counselorCounts({}, data, now, { unread: 3, chats_unread: 5 }).notifications, 5);
+  assert.equal(counselorCounts({}, data, now, { unread: -1 }).notifications, 2);
+});
+
+test('with server badges, meetings and messages come from the stats, not the loaded lists', () => {
+  const data = { bookings: [{ id: 1, status: 'pending', starts_at: '2026-09-26T09:00:00Z' }], messageChannels: [{ unread_count: 2 }] };
+  const stats = { badges: { meetings_pending: 7, messages_unread: 40, messages_unread_conversations: 9, messages_unread_students: 12 } };
+  const counts = counselorCounts(stats, data, now, { unread: 1 });
+  assert.equal(counts.meetings, 7);
+  // Unread chats beyond the loaded first page still count: conversations come from the server.
+  assert.equal(counts.messages, 9);
+  assert.equal(counts.notifications, 10);
+  assert.deepEqual(statsBadges(stats), { meetings: 7, messages: 40, conversations: 9, messageStudents: 12 });
+  assert.equal(unreadConversations(stats, []), 9);
+  assert.equal(statsBadges({}), null);
+  // A missing or broken field falls back to what is loaded.
+  const partial = counselorCounts({ badges: { meetings_pending: null, messages_unread_conversations: -2 } }, data, now);
+  assert.equal(partial.meetings, 1);
+  assert.equal(partial.messages, 0);
+  assert.equal(counselorCounts({ badges: { meetings_pending: 1 } }, data, now).messages, 1);
+});
+
+test('the poll reloads meetings and chats only on their page or when their badge moved', () => {
+  const at = (meetings, messages, students = 0) => ({ badges: { meetings_pending: meetings, messages_unread: messages, messages_unread_students: students } });
+  assert.deepEqual(liveReloadKeys('dashboard', at(1, 2), at(1, 2)), []);
+  assert.deepEqual(liveReloadKeys('bookings', at(1, 2), at(1, 2)), ['bookings']);
+  assert.deepEqual(liveReloadKeys('messages', at(1, 2), at(1, 2)), ['messageChannels']);
+  assert.deepEqual(liveReloadKeys('students', at(1, 2), at(2, 2)), ['bookings']);
+  assert.deepEqual(liveReloadKeys('students', at(1, 2), at(1, 3)), ['messageChannels']);
+  assert.deepEqual(liveReloadKeys('students', at(1, 2, 1), at(1, 2, 2)), ['messageChannels']);
+  // The first stats seen this session: the lists loaded at sign-in are current.
+  assert.deepEqual(liveReloadKeys('dashboard', null, at(1, 2)), []);
+  // An API without badges: both reload, as before.
+  assert.deepEqual(liveReloadKeys('dashboard', {}, {}), ['bookings', 'messageChannels']);
 });
 
 test('"need you" means late or missing, not merely waiting for review', () => {
@@ -100,12 +136,12 @@ test('this week: what is coming, then what happened lately and still needs the c
     meeting(2, 'pending', '2026-09-26T09:00:00Z'),
     meeting(3, 'pending', '2026-09-24T09:00:00Z', { is_expired: true }), // expired: rebook it
     meeting(4, 'approved', '2026-09-23T09:00:00Z'),                      // held, never marked completed
-    meeting(5, 'completed', '2026-09-24T09:00:00Z'),                      // finished: nothing to do
+    meeting(5, 'completed', '2026-09-24T09:00:00Z'),                      // finished: notes still to write
     meeting(6, 'cancelled', '2026-09-22T09:00:00Z'),                      // cancelled: rebook it
     meeting(7, 'approved', '2026-09-10T09:00:00Z'),                       // too old for "this week"
     meeting(8, 'approved', '2026-10-30T09:00:00Z'),                       // too far ahead
   ], now);
-  assert.deepEqual(week.map((item) => item.id), [2, 1, 3, 4, 6]);
+  assert.deepEqual(week.map((item) => item.id), [2, 1, 3, 5, 4, 6]);
 });
 
 test('known server activity sentences are rewritten, unknown ones are kept', () => {
@@ -119,9 +155,9 @@ test('known server activity sentences are rewritten, unknown ones are kept', () 
   assert.equal(activityText('Student completed their profile'), 'Completed their profile');
 });
 
-test('the counselor sidebar is the design\'s seven pages; the old flat pages stay reachable but unlisted', () => {
+test('the counselor sidebar is the design\'s six pages; the old flat pages stay reachable but unlisted', () => {
   const counselor = { id: 2, role: 'counselor' };
-  assert.deepEqual(COUNSELOR_NAV, ['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap']);
+  assert.deepEqual(COUNSELOR_NAV, ['dashboard', 'students', 'review', 'essays', 'bookings', 'messages']);
   assert.deepEqual(navigationFor(counselor), [...COUNSELOR_NAV, 'support']);
   for (const page of ['tasks', 'documents', 'roadmap', 'portfolio', 'certificates', 'recommendations']) {
     assert.ok(!navigationFor(counselor).includes(page), `${page} is not in the sidebar`);
@@ -130,4 +166,15 @@ test('the counselor sidebar is the design\'s seven pages; the old flat pages sta
   // Teachers and schools never gain the counselor's old pages this way.
   assert.ok(!reachablePages({ id: 3, role: 'teacher' }).has('documents'));
   assert.ok(!reachablePages({ id: 4, role: 'organization' }).has('certificates'));
+});
+
+test('roadmap templates are switched off: in no sidebar, and /counselor-roadmap opens Home', () => {
+  const counselor = { id: 2, role: 'counselor' };
+  const admin = { id: 1, role: 'admin' };
+  for (const user of [counselor, admin]) {
+    assert.ok(!navigationFor(user).includes('counselor_roadmap'), user.id);
+    assert.equal(canOpenPage('counselor_roadmap', user), false, user.id);
+  }
+  assert.deepEqual(resolveRoute(parsePath('/counselor-roadmap'), counselor), { page: 'dashboard', params: {} });
+  assert.deepEqual(resolveRoute(parsePath('/counselor-roadmap'), admin), { page: 'admin_dashboard', params: {} });
 });

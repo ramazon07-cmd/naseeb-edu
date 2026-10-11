@@ -1,5 +1,9 @@
 """Admissions API serializers — portal."""
+from datetime import timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from rest_framework import serializers
+from django.conf import settings
 from django.utils import timezone
 from apps.users.models import User
 from apps.users.serializers import ContactSerializer
@@ -10,12 +14,26 @@ from ..models import (
     ScreenTimeDaily,
     StudentMessage,
 )
-from ..meetings import MEETING_DURATIONS, has_open_slot, overlapping
+from ..meetings import MAX_REPEAT_DAYS, MEETING_DURATIONS, overlapping
 from ..scoping import booking_participants_for, school_staff, tenant_school_id
 from .common import StudentRecordSerializerMixin, scope_related_field
 
 UNAVAILABLE_PARTICIPANT = 'Choose your assigned counselor, teacher, or a representative from your school.'
 UNAVAILABLE_MENTOR = "Select a counselor or teacher from the student's school."
+# Students book only from published availability; this is the answer when no slot was chosen.
+CHOOSE_AVAILABLE_TIME = 'Choose one of the available times.'
+
+
+def scope_slot_field(field, user):
+    """Students pick from their school's staff, staff from their own slots; other ids fail like missing ones."""
+    if user is None or user.is_product_admin:
+        return
+    if user.role == User.Role.STUDENT:
+        owners = booking_participants_for(getattr(user, 'student_profile', None))
+        slots = MeetingAvailability.objects.filter(participant__in=owners)
+    else:
+        slots = MeetingAvailability.objects.filter(participant=user)
+    scope_related_field(field, slots, CHOOSE_AVAILABLE_TIME)
 
 
 class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
@@ -56,6 +74,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
         fields = super().get_fields()
         request = self.context.get('request')
         user = getattr(request, 'user', None)
+        scope_slot_field(fields['availability_slot'], user)
         if user and user.role != User.Role.STUDENT:
             # Staff books with themselves (the view sets it); nothing to choose from.
             fields['participant'].required = False
@@ -88,16 +107,15 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
         if request and request.user.role == User.Role.STUDENT and self.instance is None:
             participant = attrs.get('participant')
             slot = attrs.get('availability_slot')
-            if slot:
-                if slot.participant_id != participant.id or slot.starts_at != attrs.get('starts_at') or slot.duration_minutes != attrs.get('duration_minutes', 45):
-                    raise serializers.ValidationError({'availability_slot': 'Choose a time from this staff member’s availability.'})
-                if slot.bookings.filter(status__in=Booking.OPEN_STATUSES).exists():
-                    raise serializers.ValidationError({'availability_slot': 'This time has already been requested.'})
-                meetings = Booking.objects.filter(participant=participant, status__in=Booking.OPEN_STATUSES)
-                if overlapping(meetings, slot.starts_at, slot.duration_minutes):
-                    raise serializers.ValidationError({'availability_slot': 'This time overlaps another meeting.'})
-            elif has_open_slot(participant.id):
-                raise serializers.ValidationError({'availability_slot': 'Choose an available time.'})
+            if not slot:
+                raise serializers.ValidationError({'availability_slot': CHOOSE_AVAILABLE_TIME})
+            if slot.participant_id != participant.id or slot.starts_at != attrs.get('starts_at') or slot.duration_minutes != attrs.get('duration_minutes', 45):
+                raise serializers.ValidationError({'availability_slot': 'Choose a time from this staff member’s availability.'})
+            if slot.bookings.filter(status__in=Booking.OPEN_STATUSES).exists():
+                raise serializers.ValidationError({'availability_slot': 'This time has already been requested.'})
+            meetings = Booking.objects.filter(participant=participant, status__in=Booking.OPEN_STATUSES)
+            if overlapping(meetings, slot.starts_at, slot.duration_minutes):
+                raise serializers.ValidationError({'availability_slot': 'This time overlaps another meeting.'})
         elif attrs.get('availability_slot'):
             raise serializers.ValidationError({'availability_slot': 'Only students can choose an available time.'})
         return attrs
@@ -113,6 +131,11 @@ class BookingRescheduleSerializer(serializers.Serializer):
     validate_starts_at = BookingSerializer.validate_starts_at
     validate_duration_minutes = BookingSerializer.validate_duration_minutes
 
+    def get_fields(self):
+        fields = super().get_fields()
+        scope_slot_field(fields['availability_slot'], getattr(self.context.get('request'), 'user', None))
+        return fields
+
 
 class MeetingAvailabilitySerializer(serializers.ModelSerializer):
     class Meta:
@@ -122,6 +145,33 @@ class MeetingAvailabilitySerializer(serializers.ModelSerializer):
 
     validate_starts_at = BookingSerializer.validate_starts_at
     validate_duration_minutes = BookingSerializer.validate_duration_minutes
+
+
+class MeetingAvailabilityRepeatSerializer(serializers.Serializer):
+    """Weekly slots: the same local time on the chosen weekdays (Monday = 0) between two dates."""
+
+    weekdays = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), min_length=1, max_length=7)
+    time = serializers.TimeField()
+    duration_minutes = serializers.IntegerField(required=False, default=45)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    # The browser's zone, so 15:00 stays 15:00 on the staff member's clock every week.
+    timezone = serializers.CharField(required=False, default=settings.TIME_ZONE, max_length=64)
+
+    validate_duration_minutes = BookingSerializer.validate_duration_minutes
+
+    def validate_timezone(self, value):
+        try:
+            return ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise serializers.ValidationError('Unknown time zone.')
+
+    def validate(self, attrs):
+        if attrs['end_date'] < attrs['start_date']:
+            raise serializers.ValidationError({'end_date': 'Choose an end date on or after the start date.'})
+        if attrs['end_date'] - attrs['start_date'] >= timedelta(days=MAX_REPEAT_DAYS):
+            raise serializers.ValidationError({'end_date': 'Repeat for at most 12 weeks.'})
+        return attrs
 
 
 class StudentMessageSerializer(serializers.ModelSerializer):

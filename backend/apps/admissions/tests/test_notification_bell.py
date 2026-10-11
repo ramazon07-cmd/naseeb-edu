@@ -144,6 +144,38 @@ class NotificationBellTests(AuditBaseMixin, APITestCase):
         notice.refresh_from_db()
         self.assertFalse(notice.is_read)
 
+    def test_counselor_bell_lists_counts_and_clears_only_notices_addressed_to_them(self):
+        student_notice = self.notify(title='For the student')
+        mine = self.notify(title='Essay shared with counselor', recipient=self.counselor, kind='essay', target_id=7)
+        mine_read = self.notify(title='Older', recipient=self.counselor, is_read=True)
+        peer = self.notify(title='For a colleague', recipient=self.counselor_peer)
+        self.client.force_authenticate(self.counselor)
+
+        rows = self.results(self.client.get('/api/notifications/?cursor=&mine=true'))
+        self.assertEqual({row['id'] for row in rows}, {mine.pk, mine_read.pk})
+        shared = next(row for row in rows if row['id'] == mine.pk)
+        self.assertEqual((shared['kind'], shared['target_id'], shared['student']), ('essay', 7, self.student.pk))
+        self.assertEqual(self.client.get('/api/notifications/summary/').data['unread'], 1)
+
+        self.assertEqual(self.client.post(f'/api/notifications/{mine.pk}/read/').status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get('/api/notifications/summary/').data['unread'], 0)
+        self.notify(title='Newer', recipient=self.counselor)
+        self.assertEqual(self.client.post('/api/notifications/read-all/').data['updated'], 1)
+        for notice in (student_notice, peer):
+            notice.refresh_from_db()
+            self.assertFalse(notice.is_read)
+
+        # The student's own bell is unchanged: their feed only, never staff notices.
+        self.client.force_authenticate(self.student_user)
+        self.assertEqual([row['id'] for row in self.results(self.client.get('/api/notifications/?mine=true'))],
+                         [student_notice.pk])
+
+    def test_staff_bell_skips_notices_about_students_no_longer_theirs(self):
+        self.notify(self.student_b, title='Old student', recipient=self.counselor)
+        self.client.force_authenticate(self.counselor)
+        self.assertEqual(self.client.get('/api/notifications/summary/').data['unread'], 0)
+        self.assertEqual(self.results(self.client.get('/api/notifications/?mine=true')), [])
+
     def test_link_fields_are_server_owned(self):
         self.client.force_authenticate(self.counselor)
         response = self.client.post('/api/notifications/', {

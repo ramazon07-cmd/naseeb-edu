@@ -69,9 +69,27 @@ class VersionedJWTAuthentication(JWTAuthentication):
                 'detail': localized_message('password_change_required', request),
                 'code': 'password_change_required',
             })
+        if self.awaiting_confirmation(user) and not (
+            request.method == 'GET' and request.path_info == self.pending_path
+        ):
+            raise PermissionDenied({
+                'detail': localized_message('awaiting_confirmation', request),
+                'code': 'awaiting_confirmation',
+            })
         if request.method not in SAFE_METHODS:
             self.enforce_write_access(request, user, tenant_school(user))
         return user, token
+
+    # A student who joined by invite reads only their own account until their
+    # counselor confirms them (the waiting screen); every other endpoint refuses.
+    pending_path = '/api/users/accounts/me/'
+
+    @staticmethod
+    def awaiting_confirmation(user):
+        if user.role != user.Role.STUDENT or user.is_product_admin:
+            return False
+        profile = getattr(user, 'student_profile', None)  # loaded with the user, no query
+        return bool(profile and profile.awaiting_confirmation)
 
     def enforce_write_access(self, request, user, school):
         # Every JWT-authenticated write passes here, so staff tiers and

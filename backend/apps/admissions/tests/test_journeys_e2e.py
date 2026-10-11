@@ -149,8 +149,11 @@ class TaskJourneyTests(JourneyBase):
             'xp_total': 0, 'level': 1,
         })
         stats = self.dashboard()
+        # Due this week = Monday to Sunday (late work of this week included).
+        monday = self.today - timedelta(days=self.today.weekday())
+        due_week = sum(1 for days in (-1, 2, 2, 10) if monday <= self.today + timedelta(days=days) <= monday + timedelta(days=6))
         self.assertEqual((stats['tasks_total'], stats['tasks_late'], stats['tasks_due_week'],
-                          stats['students_at_risk']), (4, 1, 2, 1))
+                          stats['students_at_risk']), (4, 1, due_week, 1))
 
         # Submitted work waits on the counselor: no longer late.
         submitted = self.student_submits(late['id'])

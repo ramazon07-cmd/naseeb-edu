@@ -29,6 +29,14 @@ OPEN_MISSION_STATUSES = ('planned', 'in_progress')
 APPLICATION_DONE = ('submitted', 'accepted', 'rejected', 'waitlisted')
 APPLICATION_ACCEPTED = 'accepted'
 DOCUMENT_DONE = 'approved'
+DOCUMENT_REVIEW_STATUSES = ('uploaded', 'reviewing')
+# A document is its file or link (DocumentViewSet.awaiting_review): one marked
+# uploaded without either has nothing to approve, so it is still missing.
+_HAS_DOCUMENT_FILE = (Q(file__isnull=False) & ~Q(file='')) | ~Q(google_docs_url='')
+DOCUMENT_AWAITING_REVIEW = Q(status__in=DOCUMENT_REVIEW_STATUSES) & _HAS_DOCUMENT_FILE
+DOCUMENT_MISSING = Q(status='required') | (
+    Q(status__in=DOCUMENT_REVIEW_STATUSES) & (Q(file__isnull=True) | Q(file='')) & Q(google_docs_url='')
+)
 # The recommender has sent the letter; the counselor's approval is a quality check on top.
 RECOMMENDATION_DONE = ('submitted', 'approved')
 
@@ -76,8 +84,8 @@ class ProgressStats:
     documents_total: int = 0
     documents_done: int = 0
     documents_pending: int = 0
-    # Documents a counselor asked for that the student has not provided (status
-    # "required"); the alphabetically first title names it ("Passport missing").
+    # Documents a counselor asked for that the student has not provided
+    # (DOCUMENT_MISSING); the alphabetically first title names it ("Passport missing").
     documents_missing: int = 0
     missing_document_title: str = ''
     # Portfolio items waiting for the counselor: not verified and not sent back.
@@ -238,9 +246,9 @@ def load_progress_stats(students):
         Document.objects.filter(**scope).order_by().values('student_id')
         .annotate(
             total=Count('id'), done=Count('id', filter=Q(status=DOCUMENT_DONE)),
-            pending=Count('id', filter=Q(status__in=('uploaded', 'reviewing'))),
-            missing=Count('id', filter=Q(status='required')),
-            missing_title=Min('title', filter=Q(status='required')),
+            pending=Count('id', filter=DOCUMENT_AWAITING_REVIEW),
+            missing=Count('id', filter=DOCUMENT_MISSING),
+            missing_title=Min('title', filter=DOCUMENT_MISSING),
         )
     ):
         item = get(row['student_id'])

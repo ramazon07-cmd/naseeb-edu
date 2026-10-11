@@ -320,28 +320,44 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
   </>;
 }
 
+// Quick-create: a student account with a temporary password the counselor sets
+// (the student changes it at first sign-in). `onSaved(created, values)`.
+export function QuickCreateStudentForm({ user, data, onCancel, onSaved, notify }) {
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {
+    event.preventDefault(); setSaving(true);
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      const created = await api.quickCreateStudent(values);
+      onSaved(created, values);
+    } catch (error) { notify(error.message, 'error'); }
+    finally { setSaving(false); }
+  }
+  return <form className="form-grid student-access-form" onSubmit={submit}>
+    <Field label={t('Student name')}><input name="name" placeholder={t('e.g. Aziza Karimova')} required autoComplete="off" /></Field>
+    <Field label={t('Email')}><input name="email" type="email" placeholder={t('e.g. name@example.com')} /></Field>
+    <Field label={t('Temporary password')} hint={t('Use at least 8 characters.')}><input name="password" type="password" minLength={8} required autoComplete="new-password" /></Field>
+    {isPlatformAdmin(user) && <SchoolPicker label="School" required filters={ACTIVE_SCHOOLS} />}
+    <p className="form-wide">{t('The student completes their profile after signing in.')}</p>
+    <div className="form-actions">{onCancel && <button type="button" className="button quiet" onClick={onCancel}>{t('Cancel')}</button>}<button className="button primary" disabled={saving}>{saving ? t('Saving…') : t('Create login')}</button></div>
+  </form>;
+}
+
 export function StudentForm({ user, data, student, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   async function submit(event) {
     event.preventDefault(); setSaving(true);
     const values = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      if (student) await api.update('students', student.id, { notes: values.notes });
-      else await api.quickCreateStudent(values);
+      await api.update('students', student.id, { notes: values.notes });
       onSaved();
     } catch (error) { notify(error.message, 'error'); }
     finally { setSaving(false); }
   }
   return <Modal title={student ? t('Student notes') : t('Add student account')} onClose={onClose}>
-    <form className="form-grid student-access-form" onSubmit={submit}>
-      {student ? <Field label={t('Notes')}><textarea name="notes" defaultValue={student.notes} placeholder={t('e.g. Prefers evening calls; interested in UK and Korean universities')} /></Field> : <>
-        <Field label={t('Student name')}><input name="name" placeholder={t('e.g. Aziza Karimova')} required autoComplete="off" /></Field>
-        <Field label={t('Email')}><input name="email" type="email" placeholder={t('e.g. name@example.com')} /></Field>
-        <Field label={t('Temporary password')} hint={t('Use at least 8 characters.')}><input name="password" type="password" minLength={8} required autoComplete="new-password" /></Field>
-        {isPlatformAdmin(user) && <SchoolPicker label="School" required filters={ACTIVE_SCHOOLS} />}
-        <p className="form-wide">{t('The student completes their profile after signing in.')}</p>
-      </>}
-      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving}>{saving ? t('Saving…') : t(student ? 'Save' : 'Create login')}</button></div>
-    </form>
+    {student ? <form className="form-grid student-access-form" onSubmit={submit}>
+      <Field label={t('Notes')}><textarea name="notes" defaultValue={student.notes} placeholder={t('e.g. Prefers evening calls; interested in UK and Korean universities')} /></Field>
+      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving}>{saving ? t('Saving…') : t('Save')}</button></div>
+    </form> : <QuickCreateStudentForm user={user} data={data} onCancel={onClose} onSaved={() => onSaved()} notify={notify} />}
   </Modal>;
 }

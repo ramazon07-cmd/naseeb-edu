@@ -54,6 +54,28 @@ export function mergePage(items, page) {
   return [...items, ...page.filter((item) => !seen.has(item.id))];
 }
 
+const pageState = (page) => {
+  const items = Array.isArray(page?.results) ? page.results : [];
+  const cursor = cursorFromNext(page?.next);
+  return { items, cursor, hasMore: Boolean(page?.has_more ?? page?.next) && Boolean(cursor) };
+};
+
+// A fresh first page laid over the rows already loaded: new rows come first,
+// a fresh copy replaces its stale one (dedupe by id) and the later pages and
+// their cursor are kept. When the fresh page does not reach the loaded rows
+// (a gap: more than a page of new rows) or holds the whole list, it replaces them.
+export function mergeFreshHead(current, page) {
+  const fresh = pageState(page);
+  if (!current?.items?.length || !fresh.hasMore) return fresh;
+  const freshIds = new Set(fresh.items.map((item) => item.id));
+  if (!current.items.some((item) => freshIds.has(item.id))) return fresh;
+  return {
+    items: [...fresh.items, ...current.items.filter((item) => !freshIds.has(item.id))],
+    cursor: current.cursor,
+    hasMore: current.hasMore,
+  };
+}
+
 export function createPageCache({ limit = CACHE_LIMIT, ttlMs = CACHE_TTL_MS, now = () => Date.now() } = {}) {
   const entries = new Map();
   return {
@@ -192,6 +214,29 @@ export function createPagedController({
       if (!params) return;
       cache?.invalidate([resource]);
       load({ append: false });
+    },
+    // Something new may have arrived at the top: fetch the first page again
+    // and merge it over what is loaded (mergeFreshHead). A failure keeps the rows.
+    refreshHead() {
+      if (!params || timer !== null || state.loading || state.loadingMore) return;
+      if (!state.loaded) {
+        load({ append: false });
+        return;
+      }
+      const id = ++requestId;
+      abortInFlight();
+      const controller = new AbortController();
+      inFlight = controller;
+      const requestKey = key();
+      fetchPage(resource, listQuery({ ...params, cursor: '' }), controller.signal).then((page) => {
+        if (id !== requestId || disposed) return;
+        inFlight = null;
+        const next = mergeFreshHead(state, page);
+        cache?.set(requestKey, next);
+        set({ ...next, error: '' });
+      }).catch(() => {
+        if (id === requestId) inFlight = null;
+      });
     },
     // Replace or drop one row locally (after an edit) without refetching.
     updateItem(id, updater) {

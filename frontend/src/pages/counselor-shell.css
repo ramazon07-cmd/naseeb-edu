@@ -1,0 +1,505 @@
+/* ==========================================================================
+   Counselor shell: sidebar (or icon rail), top bar with search, language,
+   theme, bell and (phone) account; plus the Notifications page.
+   Layout follows the "Counselor Dashboard" design; colours are Naseeb's
+   --cx-* tokens, so light and dark both come from styles.css.
+   This file loads before styles.css, so rules are scoped under .cx-shell
+   to win over the base workspace rules they refine.
+   ========================================================================== */
+
+/* -- column: top bar above the page -------------------------------------- */
+.cx-shell .cx-column {
+  min-width: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.cx-shell .cx-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 1520px;
+  margin-inline: auto;
+  padding: 16px 32px 6px;
+  background: var(--cx-canvas);
+}
+
+.cx-shell .cx-topbar .cx-burger,
+.cx-shell .cx-topbar .cx-topbar-title,
+.cx-shell .cx-topbar .cx-account-avatar {
+  display: none;
+}
+
+.cx-shell .cx-topsearch {
+  flex: 0 1 400px;
+  min-width: 0;
+  height: 44px;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 14px;
+  border: 1px solid var(--cx-line);
+  border-radius: 12px;
+  background: var(--cx-card);
+  color: var(--cx-muted);
+  font: inherit;
+  font-size: var(--cx-fs-body);
+  text-align: left;
+  cursor: text;
+  transition: border-color var(--theme-duration) ease;
+}
+
+.cx-shell .cx-topsearch:hover {
+  border-color: var(--cx-selected-line);
+}
+
+.cx-shell .cx-topsearch svg {
+  flex: none;
+}
+
+.cx-shell .cx-topsearch span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cx-shell .cx-topsearch kbd {
+  flex: none;
+  padding: 3px 7px;
+  border: 1px solid var(--cx-line);
+  border-radius: 7px;
+  background: var(--cx-inset);
+  color: var(--cx-muted);
+  font: inherit;
+  font-size: var(--cx-fs-meta);
+  font-weight: 600;
+}
+
+.cx-shell .cx-topbtn {
+  position: relative;
+  flex: none;
+  height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--cx-line);
+  border-radius: 12px;
+  background: var(--cx-card);
+  color: var(--cx-text);
+  font: inherit;
+  font-size: var(--cx-fs-meta);
+  font-weight: var(--cx-fw-button);
+  cursor: pointer;
+  transition: background-color var(--theme-duration) ease;
+}
+
+.cx-shell .cx-topbtn:hover {
+  background: var(--cx-hover);
+}
+
+.cx-shell .cx-topicon {
+  width: 44px;
+  padding: 0;
+}
+
+.cx-shell .cx-bell-dot {
+  position: absolute;
+  top: 10px;
+  right: 11px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--cx-card);
+  border-radius: 50%;
+  background: var(--cx-alert);
+}
+
+.cx-shell .cx-lang {
+  position: relative;
+  flex: none;
+}
+
+.cx-shell .cx-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  background: var(--cx-card);
+  border: 1px solid var(--cx-line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-raised);
+}
+
+.cx-shell .cx-popover button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--cx-text);
+  font: inherit;
+  font-size: var(--cx-fs-body);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cx-shell .cx-popover button:hover,
+.cx-shell .cx-popover button[aria-checked='true'] {
+  background: var(--cx-hover);
+}
+
+.cx-shell .cx-popover button[aria-checked='true'] {
+  color: var(--cx-ink);
+  font-weight: 600;
+}
+
+.cx-shell .cx-popover button b {
+  margin-left: auto;
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+  font-weight: 600;
+}
+
+/* -- sidebar --------------------------------------------------------------- */
+.cx-shell .cx-rail-toggle {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--cx-muted);
+  cursor: pointer;
+}
+
+.cx-shell .cx-rail-toggle:hover {
+  background: var(--cx-hover);
+  color: var(--cx-ink);
+}
+
+.cx-shell .cx-account-trigger {
+  border-radius: var(--cx-radius-item);
+}
+
+.cx-shell .cx-account-chevron {
+  flex: none;
+  margin-left: auto;
+  color: var(--cx-muted);
+  transition: transform 0.15s ease;
+}
+
+.cx-shell .cx-account-trigger[aria-expanded='true'] .cx-account-chevron {
+  transform: rotate(180deg);
+}
+
+.cx-shell .cx-account-menu .cx-signout {
+  border-top: 1px solid var(--cx-line);
+  border-radius: 0 0 var(--cx-radius-btn) var(--cx-radius-btn);
+}
+
+.cx-shell .cx-nav-item {
+  position: relative;
+}
+
+/* The icon rail: 88px of icons with their badges, labels as tooltips. */
+@media (min-width: 821px) {
+  .cx-shell .cx-column > .cx-main {
+    flex: 1;
+    min-height: 0;
+    padding-top: 14px;
+  }
+
+  .app-shell.cx-shell:has(> .cx-sidebar.rail) {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-side-card {
+    padding: 18px 10px 12px;
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-brand {
+    flex-direction: column;
+    gap: 12px;
+    padding-left: 0;
+    margin-bottom: 18px;
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-brand b,
+  .cx-shell .cx-sidebar.rail .cx-nav-item > span,
+  .cx-shell .cx-sidebar.rail .cx-account-copy,
+  .cx-shell .cx-sidebar.rail .cx-account-chevron {
+    display: none;
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-rail-toggle {
+    margin-left: 0;
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-nav-item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-nav-item .cx-count {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    font-size: var(--cx-fs-meta);
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-account-trigger {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-account-menu {
+    right: auto;
+    width: 240px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .cx-shell .cx-topsearch kbd {
+    display: none;
+  }
+}
+
+/* -- phone: fixed top bar with menu, title, search, bell and account ------ */
+@media (max-width: 820px) {
+  .cx-shell .cx-rail-toggle {
+    display: none;
+  }
+
+  .cx-shell .cx-topbar {
+    position: fixed;
+    z-index: 30;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    max-width: none;
+    gap: 6px;
+    padding: 0 10px 0 6px;
+    border-bottom: 1px solid var(--cx-line);
+  }
+
+  .cx-shell .cx-topbar .cx-burger,
+  .cx-shell .cx-topbar .cx-account-avatar {
+    display: inline-flex;
+  }
+
+  .cx-shell .cx-burger,
+  .cx-shell .cx-topbar .cx-topicon,
+  .cx-shell .cx-topbar .cx-topsearch {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .cx-shell .cx-topbar .cx-topbar-title {
+    flex: 1;
+    min-width: 0;
+    display: block;
+    overflow: hidden;
+    color: var(--cx-ink);
+    font-size: var(--cx-fs-topbar);
+    font-weight: var(--cx-fw-title);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .cx-shell .cx-topsearch {
+    flex: none;
+    width: 44px;
+    margin-left: 0;
+    justify-content: center;
+    padding: 0;
+    color: var(--cx-text);
+    cursor: pointer;
+  }
+
+  .cx-shell .cx-topsearch span,
+  .cx-shell .cx-topsearch kbd,
+  .cx-shell .cx-topbar .cx-lang,
+  .cx-shell .cx-topbar > .cx-topicon:not(.cx-burger, .cx-bell) {
+    display: none;
+  }
+
+  .cx-shell .cx-bell-dot {
+    border-color: var(--cx-canvas);
+  }
+
+  .cx-shell .cx-topbar .cx-account {
+    flex: none;
+    margin: 0 0 0 2px;
+  }
+
+  .cx-shell .cx-topbar .cx-account-menu {
+    top: calc(100% + 8px);
+    right: 0;
+    bottom: auto;
+    left: auto;
+    width: 250px;
+  }
+}
+
+/* -- Notifications page ---------------------------------------------------- */
+.cx-shell .cx-notices {
+  padding: 6px;
+}
+
+.cx-shell .cx-notice-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cx-shell .cx-notice {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 8px 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--cx-radius-item);
+  background: transparent;
+  color: var(--cx-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--theme-duration) ease;
+}
+
+.cx-shell .cx-notice:hover {
+  background: var(--cx-hover);
+}
+
+.cx-shell .cx-notice-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.cx-shell .cx-notice.unread .cx-notice-dot {
+  background: var(--cx-progress);
+}
+
+.cx-shell .cx-notice-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--cx-badge);
+  color: var(--cx-ink);
+}
+
+.cx-shell .cx-notice-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.cx-shell .cx-notice-copy b {
+  color: var(--cx-ink);
+  font-size: var(--cx-fs-body);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.cx-shell .cx-notice.unread .cx-notice-copy b {
+  font-weight: 650;
+}
+
+.cx-shell .cx-notice-copy small {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+  overflow-wrap: anywhere;
+}
+
+.cx-shell .cx-notice-meta {
+  font-size: var(--cx-fs-meta);
+}
+
+.cx-shell .cx-notice-action {
+  padding: 6px 11px;
+  border-radius: var(--radius-pill);
+  background: var(--cx-badge);
+  color: var(--cx-ink);
+  font-size: var(--cx-fs-meta);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cx-shell .cx-notice:hover .cx-notice-action {
+  background: var(--cx-dark);
+  color: var(--cx-on-dark);
+}
+
+.cx-shell .cx-notices-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 48px 20px;
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-body);
+}
+
+.cx-shell .cx-notices-empty p {
+  margin: 0;
+}
+
+.cx-shell .cx-notices-empty .cx-logo {
+  width: 44px;
+  height: 52px;
+  opacity: 0.7;
+}
+
+.notification-see-all {
+  justify-self: center;
+  margin-top: 6px;
+}
+
+@media (max-width: 560px) {
+  .cx-shell .cx-notice {
+    grid-template-columns: 8px 32px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px 10px;
+  }
+
+  .cx-shell .cx-notice-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .cx-shell .cx-notice-action {
+    grid-column: 3;
+    justify-self: start;
+  }
+}

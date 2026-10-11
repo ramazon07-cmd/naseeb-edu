@@ -10,8 +10,9 @@ from django.db.models import (
     Prefetch,
     Q,
     Subquery,
+    Value,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Concat
 from django.http import Http404
 from django.utils import timezone
 from django.utils.translation import get_language
@@ -24,7 +25,7 @@ from rest_framework import serializers as drf_serializers
 from apps.users.models import User
 from apps.users.serializers import ContactSerializer
 from apps.users.services import audit_product_action
-from core.pagination import BoundedCountPaginator, keyset_filter
+from core.pagination import BoundedCountPaginator, ListPagination, keyset_filter
 from core.storage import delete_file_on_commit
 from ..models import (
     ChannelMembership,
@@ -216,6 +217,9 @@ class MessageChannelViewSet(viewsets.ModelViewSet):
         search = self.request.query_params.get('search')
         if kind:
             queryset = queryset.filter(kind=kind)
+        if self.action == 'list' and self.request.query_params.get('unread') in {'true', '1'}:
+            # The requester's own channels with a message they have not read.
+            queryset = queryset.filter(id__in=unread_channel_messages(self.request.user).values('channel_id'))
         if search:
             matching_users = User.objects.filter(
                 Q(first_name__icontains=search) | Q(last_name__icontains=search)
@@ -288,8 +292,21 @@ class MessageChannelViewSet(viewsets.ModelViewSet):
         contacts = messaging_contacts_for(request.user).select_related('school')
         search = request.query_params.get('search', '').strip()
         if search:
-            contacts = contacts.filter(
-                Q(first_name__icontains=search) | Q(last_name__icontains=search) | Q(username__icontains=search)
+            # Roles whose label ("Counselor") or value matches, as the picker shows them.
+            term = search.lower()
+            roles = [value for value, role_label in User.Role.choices if term in str(role_label).lower() or term in value]
+            contacts = contacts.annotate(
+                search_full_name=Concat('first_name', Value(' '), 'last_name'),
+            ).filter(
+                Q(search_full_name__icontains=search) | Q(username__icontains=search) | Q(email__icontains=search)
+                | Q(role__in=roles) | Q(school__name__icontains=search)
+            )
+        if 'page_size' in request.query_params or 'page' in request.query_params:
+            # The picker: one page at a time ({count, next, previous, results}).
+            paginator = ListPagination()
+            page = paginator.paginate_queryset(contacts, request, view=self)
+            return paginator.get_paginated_response(
+                ContactSerializer(page, many=True, context={'request': request}).data,
             )
         # A product admin's contact scope is every user; cap the picker.
         return Response(ContactSerializer(

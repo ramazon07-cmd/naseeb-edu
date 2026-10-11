@@ -1,0 +1,59 @@
+/* Student 360 additions to the document and essay detail modals (components/documents.jsx). */
+.workspace-detail > section.document-decision {
+  display: grid;
+  gap: 10px;
+}
+
+.document-decision textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+
+.document-decision .detail-actions {
+  justify-content: flex-end;
+}
+
+.document-history,
+.essay-feedback-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.essay-feedback-list li {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.essay-feedback-list li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.essay-feedback-list q {
+  color: var(--text);
+  font-style: italic;
+}
+
+.essay-feedback-list p {
+  margin: 4px 0 0;
+}
+
+.essay-feedback-list del {
+  color: var(--danger);
+}
+
+.essay-feedback-list ins {
+  color: var(--success);
+  text-decoration: none;
+}

@@ -92,6 +92,9 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         user = request.user
         if user.is_counselor_like:
             return True
+        if view.basename == 'notifications' and user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
+            # Their own bell only: the viewset narrows them to notices addressed to them.
+            return view.action in {'list', 'retrieve', 'read', 'read_all', 'summary'}
         if user.role == User.Role.TEACHER:
             return bool(
                 view.basename == 'students'
@@ -132,6 +135,8 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
             return True
         if request.user.is_counselor_like:
             return True
+        if view.basename == 'notifications' and request.user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
+            return obj.recipient_id == request.user.id
         if request.user.role == User.Role.TEACHER:
             student = obj if isinstance(obj, StudentProfile) else getattr(obj, 'student', None)
             return bool(
@@ -273,7 +278,8 @@ class ApproveMixin:
     """POST .../{id}/approve/: a counselor accepts submitted work, optionally with a note for the student.
 
     A viewset says what approval changes (``apply_approval`` returns the fields
-    it set) and what the notice is about; the note is kept on records that have
+    it set), when a record is waiting for review (``awaiting_review``) or already
+    approved (``is_approved``), and what the notice is about; the note is kept on records that have
     a ``counselor_comment`` and always reaches the student as a notice.
     """
 
@@ -281,6 +287,12 @@ class ApproveMixin:
     approve_label = 'Record'
 
     def apply_approval(self, record):
+        raise NotImplementedError
+
+    def is_approved(self, record):
+        raise NotImplementedError
+
+    def awaiting_review(self, record):
         raise NotImplementedError
 
     @action(detail=True, methods=['post'])
@@ -291,6 +303,11 @@ class ApproveMixin:
         scoped = self.get_object()
         with transaction.atomic():
             record = type(scoped).objects.select_for_update(of=('self',)).select_related('student__user').get(pk=scoped.pk)
+            # A repeat approve (a double click, a stale page) is a no-op: no second log entry or notice.
+            if self.is_approved(record):
+                return Response(self.get_serializer(record).data)
+            if not self.awaiting_review(record):
+                return Response({'detail': 'The student must submit this before approval.'}, status=400)
             changed = ['updated_at', *self.apply_approval(record)]
             if hasattr(record, 'counselor_comment'):
                 record.counselor_comment = note
@@ -320,8 +337,11 @@ class SendBackMixin:
     send_back_label = 'Record'
     send_back_managers = 'counselor'
 
-    def can_send_back(self, record):
-        return not self.send_back_statuses or record.status in self.send_back_statuses
+    def send_back_refusal(self, record):
+        """Why this record cannot be sent back now, or None when it can."""
+        if self.send_back_statuses and record.status not in self.send_back_statuses:
+            return 'This work is not waiting for review.'
+        return None
 
     @action(detail=True, methods=['post'], url_path='send-back')
     def send_back(self, request, pk=None):
@@ -335,8 +355,9 @@ class SendBackMixin:
         scoped = self.get_object()
         with transaction.atomic():
             record = type(scoped).objects.select_for_update(of=('self',)).select_related('student__user').get(pk=scoped.pk)
-            if not self.can_send_back(record):
-                return Response({'detail': 'This work is not waiting for review.'}, status=400)
+            refusal = self.send_back_refusal(record)
+            if refusal:
+                return Response({'detail': refusal}, status=400)
             changed = ['updated_at']
             if self.send_back_to:
                 record.status = self.send_back_to

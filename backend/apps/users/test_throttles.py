@@ -9,6 +9,7 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory, APITestCase
 
 from apps.users.cache_safety import cache_decrement, cache_get, count_hit
+from apps.admissions.models import School
 from apps.users.models import User
 from apps.users.throttles import ScopedRateThrottle, UserRateThrottle, WindowRateThrottle, parse_rate
 
@@ -102,6 +103,18 @@ class WindowThrottleTests(SimpleTestCase):
             for _ in range(10):
                 self.assertTrue(self.hit()[0])
 
+    def test_an_hour_of_heavy_counselor_use_is_never_throttled(self):
+        # Two full page loads (~15 requests each) every minute for an hour, plus
+        # the polls: the old 1200/hour default refused this after ~40 minutes.
+        request = APIRequestFactory().get('/')
+        request.user = mock.Mock(is_authenticated=True, pk=42)
+        refused = 0
+        for minute in range(60):
+            for second in range(0, 60, 2):
+                self.clock.now = 600.0 + minute * 60 + second
+                refused += not UserRateThrottle().allow_request(request, None)
+        self.assertEqual(refused, 0)
+
     def test_scoped_throttle_keys_users_and_ips_separately(self):
         request = APIRequestFactory().get('/')
         request.user = mock.Mock(is_authenticated=True, pk=7)
@@ -127,6 +140,33 @@ class ApiThrottleTests(APITestCase):
             self.assertEqual(codes, [200, 200, 429])
             response = self.client.get('/api/users/accounts/me/')
         self.assertGreaterEqual(int(response['Retry-After']), 1)
+
+    def test_counselor_burst_of_page_loads_is_never_throttled(self):
+        # 300 requests in one minute: ~20 full page loads at ~15 requests each
+        # plus the minute polls, at the default rates.
+        school = School.objects.create(name='Busy School', code='busy-school')
+        counselor = User.objects.create_user(username='busy-counselor', email='busy@example.com', password='StrongPass123!', role=User.Role.COUNSELOR, school=school)
+        self.client.force_authenticate(counselor)
+        codes = {self.client.get('/api/users/accounts/me/').status_code for _ in range(300)}
+        self.assertEqual(codes, {status.HTTP_200_OK})
+
+    def test_user_rate_is_per_user(self):
+        other = User.objects.create_user(username='rate-other', email='other@example.com', password='StrongPass123!', role=User.Role.STUDENT)
+        with rates(user='2/minute'):
+            self.client.force_authenticate(self.user)
+            for _ in range(3):
+                self.client.get('/api/users/accounts/me/')
+            self.client.force_authenticate(other)
+            self.assertEqual(self.client.get('/api/users/accounts/me/').status_code, status.HTTP_200_OK)
+
+    def test_uploads_keep_a_strict_limit_of_their_own(self):
+        self.client.force_authenticate(self.user)
+        with rates(upload='2/hour'):
+            codes = [self.client.post('/api/documents/', {'title': 'x'}, format='multipart').status_code for _ in range(3)]
+            json_write = self.client.post('/api/documents/', {'title': 'x'}, format='json').status_code
+        self.assertNotIn(429, codes[:2])
+        self.assertEqual(codes[2], status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertNotEqual(json_write, status.HTTP_429_TOO_MANY_REQUESTS)
 
     def test_counter_is_a_single_integer_per_window(self):
         # O(1): the stored state is one integer, however many requests were made.

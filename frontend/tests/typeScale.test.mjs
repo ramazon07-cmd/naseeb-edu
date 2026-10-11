@@ -28,3 +28,17 @@ test('the type scale tokens exist and start at 12px', () => {
   const styles = readFileSync(new URL('styles.css', dir), 'utf8');
   assert.match(styles, /--text-xs: 0?\.75rem;/);
 });
+
+test('the counselor type tokens follow the student dashboard scale', () => {
+  const styles = readFileSync(new URL('styles.css', dir), 'utf8');
+  for (const token of [
+    '--cx-fs-meta: var(--text-xs);',
+    '--cx-fs-body: var(--text-sm);',
+    '--cx-fs-input: 0.9375rem;',
+    '--cx-fs-card-title: 0.9375rem;',
+    '--cx-fs-topbar: 1.0625rem;',
+    '--cx-fs-figure: var(--text-2xl);',
+    '--cx-fs-page-title: 1.875rem;',
+    '--cx-fs-stat: 2.5rem;',
+  ]) assert.ok(styles.includes(token), token);
+});

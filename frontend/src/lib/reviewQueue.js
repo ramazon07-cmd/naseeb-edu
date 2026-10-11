@@ -16,15 +16,34 @@ export const REVIEW_SOURCES = [
   { kind: 'portfolio', listKey: 'achievements', endpoint: 'achievements', filters: { awaiting_review: 'true' }, label: 'Portfolio', pill: 'Portfolio', when: 'added {when}', countPattern: '{n} portfolio item|{n} portfolio items', at: (item) => item.created_at },
 ];
 
+// Every source is paged oldest first (RECORD_ORDERING 'created' on the server).
+export const REVIEW_ORDERING = 'created';
+
 export const REVIEW_SOURCE = Object.fromEntries(REVIEW_SOURCES.map((source) => [source.kind, source]));
+
+// The approve call for each kind, shared by Review and Home. `api` is passed in
+// so this file stays free of the network layer.
+const APPROVE = {
+  task: (api, id, note) => api.approveTask(id, note),
+  document: (api, id, note) => api.approveRecord('documents', id, note),
+  roadmap: (api, id, note) => api.approveRoadmapMission(id, note),
+  portfolio: (api, id, note) => api.approveRecord('achievements', id, note),
+};
+
+export const canApprove = (kind) => Boolean(APPROVE[kind]);
+
+export function approveReviewItem(api, kind, recordId, note = '') {
+  if (!APPROVE[kind] || !recordId) return Promise.reject(new Error(`Cannot approve ${kind}`));
+  return Promise.resolve(APPROVE[kind](api, recordId, note));
+}
 
 // `lists`: { [listKey]: items[] }, one already-filtered page per source. Oldest
 // first, across every source — the same order the Review mock uses.
 // `id` is a composite (kind-recordId, unique across every source, for React
 // keys); `recordId`/`endpoint` are what a PATCH or action call needs, `record`
 // the API row for the detail pane.
-export function mergeReviewQueue(lists) {
-  return REVIEW_SOURCES.flatMap(({ kind, listKey, endpoint, label, when, countPattern, at }) => (lists[listKey] || []).map((item) => ({
+export function reviewItem({ kind, endpoint, label, when, countPattern, at }, item) {
+  return {
     id: `${kind}-${item.id}`,
     recordId: item.id,
     kind, label, endpoint, when, countPattern,
@@ -33,5 +52,45 @@ export function mergeReviewQueue(lists) {
     studentName: item.student_name,
     at: at(item),
     record: item,
-  }))).sort((a, b) => new Date(a.at) - new Date(b.at));
+  };
+}
+
+export function mergeReviewQueue(lists) {
+  return REVIEW_SOURCES.flatMap((source) => (lists[source.listKey] || []).map((item) => reviewItem(source, item)))
+    .sort((a, b) => new Date(a.at) - new Date(b.at));
+}
+
+// `/review?item=kind-id` (Home's rows): { kind, recordId }, or null when malformed.
+export function parseReviewItemId(id) {
+  const match = /^([a-z]+)-([1-9]\d*)$/.exec(String(id ?? ''));
+  return match && REVIEW_SOURCE[match[1]] ? { kind: match[1], recordId: Number(match[2]) } : null;
+}
+
+// The same "needs review" test each source's list filter applies on the server.
+const AWAITING = {
+  task: (record) => record.status === 'submitted',
+  document: (record) => ['uploaded', 'reviewing'].includes(record.status) && Boolean(record.has_file || record.google_docs_url),
+  roadmap: (record) => record.status === 'submitted',
+  portfolio: (record) => record.verified === false && !record.counselor_comment,
+};
+
+export const awaitingReview = (kind, record) => Boolean(record && AWAITING[kind]?.(record));
+
+/**
+ * What Review does with a linked item. Lists come oldest-created first while
+ * Home picks the oldest submissions, so a linked item may sit on a page not
+ * loaded yet: 'found' (in the list), 'wait' (lists still loading), 'fetch'
+ * (load that one record), 'gone' (malformed link). Never another item.
+ */
+export function deepLinkStep(itemId, items, loaded) {
+  if (!parseReviewItemId(itemId)) return 'gone';
+  if (items.some((item) => item.id === itemId)) return 'found';
+  return loaded ? 'fetch' : 'wait';
+}
+
+// A fetched record as a queue item, or null when it no longer waits for review.
+export function linkedReviewItem(itemId, record) {
+  const parsed = parseReviewItemId(itemId);
+  if (!parsed || !record || Number(record.id) !== parsed.recordId || !awaitingReview(parsed.kind, record)) return null;
+  return reviewItem(REVIEW_SOURCE[parsed.kind], record);
 }

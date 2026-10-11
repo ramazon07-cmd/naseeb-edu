@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Lightbulb, MessageSquareWarning, Plus, RefreshCw } from 'lucide-react';
 import { api } from '../api';
+import { RATE_LIMIT_WAIT_CAP } from '../lib/backoff';
 import { formatNumberLocale, t, tp, tx } from '../i18n';
 import { dateText, joinParts } from '../lib/format';
 import { fullName, label } from '../lib/labels';
@@ -60,12 +61,16 @@ function useLetterSuggestions(studentId, form) {
   const [state, setState] = useState({ items: [], source: '', loading: true, error: '' });
   const sent = useRef(null);
   const controller = useRef(null);
+  const retry = useRef(null);
   const latest = useRef(form);
   latest.current = form;
 
-  const refresh = useCallback(async () => {
+  // A throttled Refresh click retries once, and only when the wait is short;
+  // otherwise it would spin until the throttle window ends.
+  const refresh = useCallback(async (manual = false, retried = false) => {
     const { body, recommender_title, relationship } = latest.current;
     const previous = sent.current;
+    window.clearTimeout(retry.current);
     controller.current?.abort();
     const request = new AbortController();
     controller.current = request;
@@ -76,9 +81,13 @@ function useLetterSuggestions(studentId, form) {
       if (!request.signal.aborted) setState({ items: result.suggestions || [], source: result.source, loading: false, error: '' });
     } catch (err) {
       if (request.signal.aborted) return;
+      if (err.status === 429 && manual && !retried && err.retryAfter != null && err.retryAfter <= RATE_LIMIT_WAIT_CAP) {
+        retry.current = window.setTimeout(() => refresh(true, true), err.retryAfter);
+        return;
+      }
       // Asked too soon after the last request: keep what is shown and ask at the next pause.
       if (err.status === 429) sent.current = previous;
-      setState((current) => ({ ...current, loading: false, error: err.status === 429 ? '' : err.message }));
+      setState((current) => ({ ...current, loading: false, error: err.status === 429 && !manual ? '' : err.message }));
     }
   }, [studentId]);
 
@@ -87,8 +96,11 @@ function useLetterSuggestions(studentId, form) {
     const timer = window.setTimeout(refresh, sent.current === null ? 0 : REFRESH_PAUSE_MS);
     return () => window.clearTimeout(timer);
   }, [form.body, refresh]);
-  useEffect(() => () => controller.current?.abort(), []);
-  return { ...state, refresh };
+  useEffect(() => () => {
+    window.clearTimeout(retry.current);
+    controller.current?.abort();
+  }, []);
+  return { ...state, refresh: () => refresh(true) };
 }
 
 function Suggestion({ item, name, onInsert }) {
@@ -100,7 +112,7 @@ function Suggestion({ item, name, onInsert }) {
     {item.detail && <p>{item.detail}</p>}
   </li>;
   return <li className={`letter-suggestion is-${item.kind}`}>
-    {item.source && <span className="letter-suggestion-source">{item.source}</span>}
+    {item.source && <span className="letter-suggestion-source">{joinParts(t(SOURCE_LABELS[item.source] || 'Profile'), item.title)}</span>}
     <p>{fill(item.text)}</p>
     {item.kind === 'sentence' && <button type="button" className="cx-btn" onClick={() => onInsert(fill(item.text))}>{t('Insert')}</button>}
   </li>;

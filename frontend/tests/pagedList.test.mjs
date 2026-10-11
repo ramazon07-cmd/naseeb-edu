@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAX_PAGE_SIZE, createPageCache, createPagedController, cursorFromNext, listKey, listQuery, mergePage,
+  MAX_PAGE_SIZE, createPageCache, createPagedController, cursorFromNext, listKey, listQuery, mergeFreshHead, mergePage,
 } from '../src/lib/pagedList.js';
 
 function deferred() {
@@ -227,4 +227,54 @@ test('updateItem replaces or removes one row locally', async () => {
   h.controller.updateItem(2, (item) => ({ ...item, done: true }));
   h.controller.updateItem(3, () => null);
   assert.deepEqual(h.state().items, [{ id: 1 }, { id: 2, done: true }]);
+});
+
+test('mergeFreshHead puts new rows on top, replaces stale copies and keeps later pages', () => {
+  const loaded = { items: [{ id: 5, read: false }, { id: 4 }, { id: 3 }, { id: 2 }], cursor: 'c2', hasMore: true };
+  const fresh = { results: [{ id: 7 }, { id: 6 }, { id: 5, read: true }], next: nextLink('f1'), has_more: true };
+  const merged = mergeFreshHead(loaded, fresh);
+  assert.deepEqual(merged.items.map((item) => item.id), [7, 6, 5, 4, 3, 2]);
+  assert.equal(merged.items[2].read, true);
+  assert.equal(merged.cursor, 'c2');
+  assert.equal(merged.hasMore, true);
+});
+
+test('mergeFreshHead replaces the rows when the fresh page leaves a gap or holds everything', () => {
+  const loaded = { items: [{ id: 2 }, { id: 1 }], cursor: 'c1', hasMore: true };
+  const gap = mergeFreshHead(loaded, { results: [{ id: 9 }, { id: 8 }], next: nextLink('g'), has_more: true });
+  assert.deepEqual(gap, { items: [{ id: 9 }, { id: 8 }], cursor: 'g', hasMore: true });
+  const whole = mergeFreshHead(loaded, { results: [{ id: 3 }, { id: 2 }], next: null, has_more: false });
+  assert.deepEqual(whole, { items: [{ id: 3 }, { id: 2 }], cursor: null, hasMore: false });
+  assert.deepEqual(mergeFreshHead(null, page([1])).items, [{ id: 1 }]);
+});
+
+test('refreshHead merges a fresh first page over loaded pages and leaves the cursor', async () => {
+  const h = harness({ debounceMs: 0 });
+  h.controller.setParams({ pageSize: 2 });
+  h.calls[0].resolve(page([4, 3], nextLink('p2')));
+  await h.settle();
+  h.controller.loadMore();
+  h.calls[1].resolve(page([2, 1], nextLink('p3')));
+  await h.settle();
+  h.controller.refreshHead();
+  assert.match(h.calls[2].query, /cursor=&/);
+  h.calls[2].resolve(page([5, 4], nextLink('x')));
+  await h.settle();
+  assert.deepEqual(h.state().items.map((item) => item.id), [5, 4, 3, 2, 1]);
+  assert.equal(h.state().cursor, 'p3');
+  assert.equal(h.state().hasMore, true);
+});
+
+test('refreshHead keeps the rows on a failure and waits for a load in progress', async () => {
+  const h = harness({ debounceMs: 0 });
+  h.controller.setParams({});
+  h.controller.refreshHead();
+  assert.equal(h.calls.length, 1, 'no second request while the first page loads');
+  h.calls[0].resolve(page([2, 1]));
+  await h.settle();
+  h.controller.refreshHead();
+  h.calls[1].reject(new Error('offline'));
+  await h.settle();
+  assert.deepEqual(h.state().items.map((item) => item.id), [2, 1]);
+  assert.equal(h.state().error, '');
 });

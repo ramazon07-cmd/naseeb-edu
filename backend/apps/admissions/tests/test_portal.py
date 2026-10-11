@@ -4,6 +4,7 @@ from rest_framework import status
 from apps.users.models import User
 from ..models import (
     Booking,
+    MeetingAvailability,
     Notification,
     ProgramService,
     ScreenTimeDaily,
@@ -21,6 +22,7 @@ class PortalRoleIsolationTests(RoleIsolationBase):
         self.assertTrue({self.counselor.id, self.teacher.id, self.organization.id}.issubset(participant_ids))
         self.assertNotIn(self.student_b_user.id, participant_ids)
 
+        slot = MeetingAvailability.objects.create(participant=self.counselor, starts_at='2027-11-20T09:00:00Z', duration_minutes=45)
         booking = self.client.post(
             '/api/bookings/',
             {
@@ -28,6 +30,7 @@ class PortalRoleIsolationTests(RoleIsolationBase):
                 'topic': 'Essay review',
                 'starts_at': '2027-11-20T09:00:00Z',
                 'duration_minutes': 45,
+                'availability_slot': slot.id,
             },
             format='json',
         )
@@ -63,9 +66,9 @@ class PortalRoleIsolationTests(RoleIsolationBase):
         )
         self.assertEqual(approved.status_code, status.HTTP_200_OK)
         self.assertEqual(approved.data['status'], Booking.Status.APPROVED)
-        notification = Notification.objects.get(student=self.student_a, title='Meeting approved')
+        notification = Notification.objects.get(student=self.student_a, title='Meeting confirmed')
         self.assertIn('Essay review', booking.data['topic'])
-        self.assertIn('approved', notification.message)
+        self.assertRegex(notification.message, r'on \d{2} \w{3} \d{4}, \d{2}:\d{2} \(Tashkent time\) is now confirmed\.$')
 
         completed = self.client.post(f"/api/bookings/{booking.data['id']}/complete/", {}, format='json')
         self.assertEqual(completed.status_code, status.HTTP_200_OK)
@@ -93,6 +96,7 @@ class PortalRoleIsolationTests(RoleIsolationBase):
         )
         self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
 
+        slot = MeetingAvailability.objects.create(participant=self.teacher, starts_at='2027-11-21T09:00:00Z', duration_minutes=30)
         teacher_booking = self.client.post(
             '/api/bookings/',
             {
@@ -100,6 +104,7 @@ class PortalRoleIsolationTests(RoleIsolationBase):
                 'topic': 'Academic planning',
                 'starts_at': '2027-11-21T09:00:00Z',
                 'duration_minutes': 30,
+                'availability_slot': slot.id,
             },
             format='json',
         )

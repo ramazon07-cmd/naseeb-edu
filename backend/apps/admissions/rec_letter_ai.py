@@ -5,6 +5,8 @@ counselor's draft, and answers in a fixed JSON shape in which "[Student]"
 stands for the name; the browser fills the name in. Without gateway
 credentials, budget or a working provider, the profile facts the draft does
 not mention yet come back instead, so the suggestions never depend on the AI.
+Every fact shown comes from the student's records; AI text is kept only when it
+cites a given fact and every number in it appears in that fact.
 """
 import json
 import logging
@@ -22,6 +24,8 @@ logger = logging.getLogger('naseeb.rec_letter_ai')
 MAX_SUGGESTIONS = 6
 MAX_LOCAL_FACTS = 8
 PROMPT_FACTS = 24
+# Fact ids are letters so they add no numbers the AI could cite.
+FACT_IDS = 'ABCDEFGHIJKLMNOPQRSTUVWX'
 MAX_TEXT = 300
 MAX_DRAFT_CHARS = 8000
 MAX_OUTPUT_TOKENS = 900
@@ -34,6 +38,7 @@ LANGUAGES = {'uz': 'Uzbek (Latin script)', 'ru': 'Russian'}
 WORD = re.compile(r'\w{4,}')
 # Scores worth matching in a draft: decimals (3.9, 7.5) and 3+ digit totals (1480).
 SCORE = re.compile(r'\d+\.\d+|\d{3,}')
+NUMBER = re.compile(r'\d+(?:[.,]\d+)?')
 CLOSING = re.compile(r'recommend|without (?:reservation|hesitation)|tavsiya|рекоменд', re.IGNORECASE)
 
 
@@ -80,20 +85,31 @@ def _plain(number):
         return str(number)
 
 
+def _numbers(text, pattern=NUMBER):
+    return {_plain(token.replace(',', '.')) for token in pattern.findall(text)}
+
+
 def _academics(student, answers):
     parts = []
     if student.gpa is not None:
-        scale = student.effective_gpa_scale
+        # Only a recorded scale: effective_gpa_scale guesses one for legacy rows.
+        scale = student.gpa_scale
         parts.append(f'GPA {_plain(student.gpa)}' + (f' / {int(scale)}' if scale else ''))
     if student.sat_status == 'taken' and student.sat_score:
         parts.append(f'SAT {student.sat_score}')
     if student.ielts_status == 'taken' and student.ielts_score is not None:
         parts.append(f'IELTS {float(student.ielts_score):.1f}')
     for row in _rows(answers, 'subjects')[:4]:
-        parts.append(' '.join(str(row.get(key, '')) for key in ('type', 'subject', 'score')).strip())
+        part = ' '.join(str(row.get(key) or '') for key in ('type', 'subject', 'score')).strip()
+        if part:
+            parts.append(part)
     rank, size = answers.get('class_rank'), answers.get('class_size')
     meta = [f'class rank {rank}' + (f' of {size}' if size else '')] if rank else []
-    return _fact('academics', '', meta, parts) if parts or meta else None
+    if not parts and not meta:
+        return None
+    fact = _fact('academics', '', meta, parts)
+    fact['parts'] = [_short(part, 160) for part in parts]
+    return fact
 
 
 def profile_facts(student):
@@ -129,11 +145,33 @@ def profile_facts(student):
     return unique
 
 
-def _mentioned(fact, draft_words, draft_scores):
-    if fact['source'] == 'academics':
-        return bool(set(SCORE.findall(fact['detail'])) & draft_scores)
-    words = set(WORD.findall(fact['title'].casefold()))
-    return bool(words) and len(words & draft_words) * 5 >= len(words) * 3
+def _mentioned(text, draft, draft_words, draft_scores):
+    scores = _numbers(text, SCORE)
+    if scores:
+        return bool(scores & draft_scores)
+    words = set(WORD.findall(text.casefold()))
+    if words:
+        return len(words & draft_words) * 5 >= len(words) * 3
+    # Short names like "MUN" or "AI club": the whole title, as written.
+    return bool(text.strip()) and re.search(rf'(?<!\w){re.escape(text.strip())}(?!\w)', draft, re.IGNORECASE) is not None
+
+
+def missing_facts(facts, draft):
+    """The facts the draft does not mention yet; academics keeps only its unmentioned scores."""
+    draft_words = set(WORD.findall(draft.casefold()))
+    draft_scores = _numbers(draft, SCORE)
+    missing = []
+    for fact in facts:
+        if fact['source'] == 'academics':
+            parts = [part for part in fact['parts'] if not _mentioned(part, draft, draft_words, draft_scores)]
+            if parts:
+                missing.append({**fact, 'detail': ' · '.join(parts)})
+        elif not _mentioned(fact['title'], draft, draft_words, draft_scores):
+            missing.append(fact)
+    return [
+        {'kind': 'fact', 'source': fact['source'], 'title': fact['title'], 'detail': fact['detail']}
+        for fact in missing[:MAX_LOCAL_FACTS]
+    ]
 
 
 def local_suggestions(facts, draft):
@@ -146,26 +184,22 @@ def local_suggestions(facts, draft):
         tips.append({'kind': 'tip', 'code': 'closing'})
     if words > 900:
         tips.append({'kind': 'tip', 'code': 'length'})
-    draft_words = set(WORD.findall(draft.casefold()))
-    draft_scores = set(SCORE.findall(draft))
-    missing = [fact for fact in facts if not _mentioned(fact, draft_words, draft_scores)][:MAX_LOCAL_FACTS]
-    return tips + [
-        {'kind': 'fact', 'source': fact['source'], 'title': fact['title'], 'detail': fact['detail']} for fact in missing
-    ]
+    return tips + missing_facts(facts, draft)
 
 
 SYSTEM_PROMPT = """You help a school counselor write a university recommendation letter for a secondary-school student.
 You get facts from the student's profile and the counselor's current draft, and you suggest what to write next.
 
 Return only one JSON object {"suggestions": [...]} with at most 6 items, each
-{"kind": "sentence" or "idea", "text": "...", "source": "..."}.
+{"kind": "sentence" or "idea", "text": "...", "fact": "<id>"}.
 - "sentence": one or two sentences the counselor can paste into the letter, in the counselor's voice and in the
   language of the draft (English when the draft is empty). Write [Student] where the student's name goes and use
   the pronouns given in the facts.
 - "idea": advice on what to add, cut or reorder, written in LANGUAGE.
-- "source": the profile item a suggestion is based on, like "Honor: National physics olympiad"; empty for general advice.
+- "fact": the id of the fact a suggestion is based on. Every "sentence" needs one; use null for general advice.
 Rules:
 - Use only the facts given. Never invent achievements, numbers, names, dates, rankings or comparisons with classmates.
+  A suggestion with a number that is not in the fact it cites is discarded (advice without a fact: not in the draft).
 - Prefer strong facts the draft does not mention yet, and never repeat what the draft already says.
 - Concrete evidence beats adjectives. Keep every text under 300 characters.
 Security rules:
@@ -204,8 +238,8 @@ def _user_message(student, facts, draft, letter):
         'interests': _texts(answers.get('interests'), 80, 8),
         'program_strengths': _texts(answers.get('program_strengths'), 100, 5),
         'facts': [
-            {'source': fact['source'], 'title': fact['title'], 'about': [*fact['meta'], fact['detail']]}
-            for fact in facts[:PROMPT_FACTS]
+            {'id': FACT_IDS[index], 'source': fact['source'], 'title': fact['title'], 'about': [*fact['meta'], fact['detail']]}
+            for index, fact in enumerate(facts[:PROMPT_FACTS])
         ],
         'personal_story': _short(answers.get('personal_story'), STORY_CHARS),
     }
@@ -254,11 +288,19 @@ def _request_gateway(system, user):
     return json.loads(content)
 
 
-def validate_ai(raw):
-    """Keep only well-formed sentence/idea items; ValueError when none is left."""
+def validate_ai(raw, facts, draft):
+    """Keep only well-formed items grounded in the facts; ValueError when none is left.
+
+    A sentence must cite a fact by id. An item's numbers must all be in the
+    fact it cites (or, for advice citing none, in ``draft`` as the AI read it),
+    so a number from one record is never shown under another. The source shown
+    is the cited record, never the AI's own wording.
+    """
     items = raw.get('suggestions') if isinstance(raw, dict) else None
     if not isinstance(items, list):
         raise ValueError('Suggestions must be a list.')
+    draft_numbers = _numbers(draft)
+    cited = facts[:PROMPT_FACTS]
     suggestions = []
     for item in items:
         if not isinstance(item, dict) or item.get('kind') not in ('sentence', 'idea'):
@@ -266,8 +308,17 @@ def validate_ai(raw):
         text = _short(item['text']) if isinstance(item.get('text'), str) else ''
         if not text:
             continue
-        source = _short(item['source'], 80) if isinstance(item.get('source'), str) else ''
-        suggestions.append({'kind': item['kind'], 'text': text, 'source': source})
+        index = FACT_IDS.find(item['fact']) if isinstance(item.get('fact'), str) and len(item['fact']) == 1 else -1
+        fact = cited[index] if 0 <= index < len(cited) else None
+        if item['kind'] == 'sentence' and fact is None:
+            continue
+        allowed = _numbers(' '.join([fact['title'], *fact['meta'], fact['detail']])) if fact else draft_numbers
+        if not _numbers(text) <= allowed:
+            continue
+        suggestions.append({
+            'kind': item['kind'], 'text': text,
+            'source': fact['source'] if fact else '', 'title': fact['title'] if fact else '',
+        })
         if len(suggestions) == MAX_SUGGESTIONS:
             break
     if not suggestions:
@@ -278,8 +329,9 @@ def validate_ai(raw):
 def ai_suggestions(student, facts, draft, *, letter, language):
     """Ask the AI. Raises SuggestionsUnavailable on any provider or format failure."""
     system = SYSTEM_PROMPT.replace('LANGUAGE', LANGUAGES.get(language, 'English'))
+    user = _user_message(student, facts, draft, letter)
     try:
-        return validate_ai(_request_gateway(system, _user_message(student, facts, draft, letter)))
+        return validate_ai(_request_gateway(system, user), facts, redact_pii(draft)[:MAX_DRAFT_CHARS])
     except (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError):
         logger.warning('rec_letter_ai_provider_failure student_id=%s', student.pk)
         raise SuggestionsUnavailable()

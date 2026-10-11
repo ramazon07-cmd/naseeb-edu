@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BELL_POLL, NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, notificationTarget, summaryChanged } from '../src/lib/notifications.js';
+import { BELL_POLL, NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, notificationTarget, reviewItemForNotice, summaryChanged, unreadChats, unreadChatsPlan } from '../src/lib/notifications.js';
 import { nextPollDelay } from '../src/lib/pollDelay.js';
-import { buildPath, parsePath, roadmapTab } from '../src/lib/routes.js';
+import { buildPath, canOpenPage, parsePath, roadmapTab } from '../src/lib/routes.js';
 
 test('each notice kind opens the page that holds its work', () => {
   const cases = [
@@ -56,4 +56,35 @@ test('marking something read tells the bell to refresh', () => {
   announceNotificationsChanged({ dispatchEvent: (event) => events.push(event.type) });
   assert.deepEqual(events, [NOTIFICATIONS_CHANGED]);
   assert.doesNotThrow(() => announceNotificationsChanged(null));
+});
+
+test('a staff notice about a task or document opens that item in Review', () => {
+  assert.equal(reviewItemForNotice({ kind: 'document', target_id: 12 }), 'document-12');
+  assert.equal(reviewItemForNotice({ kind: 'task', target_id: '7' }), 'task-7');
+  assert.equal(reviewItemForNotice({ kind: 'essay', target_id: 3 }), null);
+  assert.equal(reviewItemForNotice({ kind: 'document', target_id: null }), null);
+  assert.equal(reviewItemForNotice({ kind: 'task', target_id: 0 }), null);
+  assert.equal(reviewItemForNotice(null), null);
+});
+
+test('counselors have a Notifications page at /notifications', () => {
+  assert.deepEqual(parsePath('/notifications'), { page: 'notifications', params: {} });
+  assert.equal(buildPath({ page: 'notifications' }), '/notifications');
+  assert.equal(buildPath({ page: 'review', params: { item: reviewItemForNotice({ kind: 'document', target_id: 4 }) } }), '/review?item=document-4');
+});
+
+test('only a counselor workspace opens the Notifications page', () => {
+  assert.equal(canOpenPage('notifications', { id: 1, role: 'counselor' }), true);
+  for (const user of [{ id: 2, role: 'student' }, { id: 3, role: 'teacher' }, { id: 4, role: 'parent' }, { id: 5, role: 'counselor', is_superuser: true }]) {
+    assert.equal(canOpenPage('notifications', user), false, user.role);
+  }
+});
+
+test('unread chats come from the server and clear when it counts none', () => {
+  assert.equal(unreadChatsPlan(null), 'wait');
+  assert.equal(unreadChatsPlan({ unread: 3, chats_unread: 0 }), 'clear');
+  assert.equal(unreadChatsPlan({ unread: 0 }), 'clear');
+  assert.equal(unreadChatsPlan({ unread: 0, chats_unread: 2 }), 'fetch');
+  assert.deepEqual(unreadChats([{ id: 1, unread_count: 2 }, { id: 2, unread_count: 0 }]), [{ id: 1, unread_count: 2 }]);
+  assert.deepEqual(unreadChats(undefined), []);
 });

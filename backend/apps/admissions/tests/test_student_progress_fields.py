@@ -70,7 +70,7 @@ class StudentProgressFieldsTests(RoleIsolationBase):
         RoadmapMission.objects.create(student=self.student_a, title='Waiting', level=3, sequence=1,
                                       status=RoadmapMission.Status.SUBMITTED)
         Document.objects.create(student=self.student_a, title='Passport', document_type='passport',
-                                status=Document.Status.UPLOADED)
+                                status=Document.Status.UPLOADED, google_docs_url='https://docs.google.com/document/d/x')
         data = self.own_profile()
         self.assertEqual(data['tasks_overdue'], 1)
         self.assertEqual(data['missions_overdue'], 0)

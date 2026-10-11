@@ -1,0 +1,660 @@
+/* Counselor Students list and quick look (pages/CounselorStudents.jsx,
+   components/StudentQuickPanel.jsx). Built on the --cx-* tokens of styles.css,
+   so it follows the light and dark themes with no colours of its own. */
+
+.cs-page {
+  gap: 16px;
+}
+
+.cs-add-slot {
+  display: contents;
+}
+
+/* -- filters -------------------------------------------------------------- */
+.cs-filters {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--cx-line);
+  border-radius: var(--cx-radius-card);
+  background: var(--cx-card);
+}
+
+.cs-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.cx-students .cs-search {
+  flex: 2 1 240px;
+  width: auto;
+  background: var(--cx-inset);
+}
+
+.cs-field {
+  display: grid;
+  flex: 1 1 140px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cs-field span {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+  font-weight: 600;
+  letter-spacing: var(--cx-ls-eyebrow);
+  text-transform: uppercase;
+}
+
+.cs-field select {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--cx-field-line);
+  border-radius: var(--cx-radius-btn);
+  background: var(--cx-inset);
+  color: var(--cx-ink);
+  font: inherit;
+  font-size: var(--cx-fs-input);
+}
+
+.cs-field select:focus-visible,
+.cs-search:focus-within {
+  outline: 2px solid var(--cx-selected-line);
+  outline-offset: 1px;
+}
+
+.cs-filter-foot {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.cs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--cx-blue-soft-bg);
+  color: var(--cx-blue-soft-text);
+  font: inherit;
+  font-size: var(--cx-fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cs-chip:hover {
+  background: var(--cx-blue-bg);
+}
+
+.cs-clear {
+  height: 28px;
+}
+
+.cs-view {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--cx-radius-btn);
+  background: var(--cx-badge);
+}
+
+.cs-view button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cx-muted);
+  font: inherit;
+  font-size: var(--cx-fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cs-view button[aria-pressed='true'] {
+  background: var(--cx-card);
+  color: var(--cx-ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.cs-chip:focus-visible,
+.cs-view button:focus-visible,
+.cs-card:focus-visible {
+  outline: 2px solid var(--cx-selected-line);
+  outline-offset: 2px;
+}
+
+/* -- table ---------------------------------------------------------------- */
+.cs-results {
+  min-height: 120px;
+}
+
+.cs-table-card {
+  overflow-x: auto;
+}
+
+.cs-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.cs-table th {
+  height: 42px;
+  padding: 0 14px 0 0;
+  border-bottom: 1px solid var(--cx-rule);
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cs-table td {
+  height: 60px;
+  padding: 12px 14px 12px 0;
+  border-bottom: 1px solid var(--cx-rule);
+  color: var(--cx-ink);
+  font-size: var(--cx-fs-body);
+  vertical-align: middle;
+}
+
+.cs-table th:first-child,
+.cs-table td:first-child {
+  padding-left: 18px;
+}
+
+.cs-table tbody tr {
+  cursor: pointer;
+}
+
+.cs-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.cs-table tbody tr:hover td,
+.cs-table tbody tr.selected td {
+  background: var(--cx-hover);
+}
+
+.cs-table .cx-person {
+  min-width: 190px;
+}
+
+.cs-table .cx-row-copy small {
+  font-size: var(--cx-fs-meta);
+}
+
+.cs-check-col {
+  width: 34px;
+}
+
+.cs-check-col input,
+.cs-card-check {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--cx-dark);
+}
+
+.cs-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cs-progress .cx-progress {
+  flex: 1;
+  min-width: 60px;
+  max-width: 120px;
+  height: 6px;
+  margin: 0;
+}
+
+.cs-progress b {
+  min-width: 38px;
+  font-size: var(--cx-fs-body);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* -- cards ---------------------------------------------------------------- */
+.cs-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px;
+}
+
+.cs-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--cx-line);
+  border-radius: var(--cx-radius-card);
+  background: var(--cx-card);
+  color: var(--cx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--theme-duration) ease,
+    transform 160ms ease;
+}
+
+.cs-card:hover {
+  border-color: var(--cx-selected-line);
+  transform: translateY(-1px);
+}
+
+.cs-card.selected {
+  border-color: var(--cx-selected-line);
+  background: var(--cx-selected);
+}
+
+.cs-card-check {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+.cs-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding-right: 22px;
+}
+
+.cs-card-top b {
+  display: block;
+  font-size: var(--cx-fs-card-title);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.cs-card-top small {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+}
+
+.cs-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--cx-fs-body);
+}
+
+.cs-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 32px 20px;
+  color: var(--cx-muted);
+  text-align: center;
+}
+
+.cs-empty p {
+  margin: 0;
+}
+
+/* -- pager ---------------------------------------------------------------- */
+.cs-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-body);
+}
+
+.cs-pager-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cs-pager-buttons span {
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- quick look panel ----------------------------------------------------- */
+.cs-panel-layer {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+}
+
+.cs-panel-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 20, 28, 0.42);
+  animation: cs-fade 180ms ease both;
+}
+
+.cs-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(440px, 100vw);
+  overflow-y: auto;
+  padding: 22px 22px 26px;
+  border-left: 1px solid var(--cx-line);
+  background: var(--cx-card);
+  color: var(--cx-ink);
+  box-shadow: -18px 0 40px rgba(0, 0, 0, 0.18);
+  animation: cs-slide 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.cs-panel-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.cs-panel-head .cs-panel-avatar {
+  width: 56px;
+  height: 56px;
+  font-size: 1.125rem;
+}
+
+.cs-panel-head h2 {
+  margin: 2px 0 0;
+  font-size: var(--cx-fs-figure);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.cs-panel-head p {
+  margin: 4px 0 0;
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-body);
+}
+
+.cs-kicker {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+  font-weight: 600;
+  letter-spacing: var(--cx-ls-eyebrow);
+  text-transform: uppercase;
+}
+
+.cs-icon-btn {
+  display: grid;
+  place-items: center;
+  align-self: start;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--cx-line);
+  border-radius: 9px;
+  background: var(--cx-card);
+  color: var(--cx-text);
+  cursor: pointer;
+}
+
+.cs-icon-btn:hover {
+  background: var(--cx-hover);
+}
+
+.cs-panel-road {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--cx-radius-item);
+  background: var(--cx-inset);
+}
+
+.cs-panel-road > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: var(--cx-fs-body);
+}
+
+.cs-panel-road b {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.cs-panel-road .cx-progress {
+  margin: 0;
+}
+
+.cs-panel-road small {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+}
+
+.cs-panel-section h3 {
+  margin: 0 0 8px;
+  font-size: var(--cx-fs-card-title);
+  font-weight: var(--cx-fw-title);
+}
+
+.cs-panel-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cs-panel-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--cx-rule);
+  font-size: var(--cx-fs-body);
+}
+
+.cs-panel-list li:first-child {
+  border-top: 0;
+}
+
+.cs-panel-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-panel-list small {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+}
+
+.cs-panel-deadlines li {
+  justify-content: space-between;
+}
+
+.cs-panel-more,
+.cs-panel-muted {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-body);
+}
+
+.cs-panel-muted {
+  margin: 0;
+}
+
+.cs-panel-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  font-size: var(--cx-fs-body);
+}
+
+.cs-panel-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--cx-radius-item);
+  background: var(--cx-inset);
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-body);
+}
+
+.cs-panel-note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--cx-text);
+}
+
+.cs-panel-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.cs-panel-actions .cx-btn {
+  flex: 1;
+  height: 40px;
+}
+
+@keyframes cs-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes cs-slide {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes cs-rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (max-width: 820px) {
+  .cs-table-card {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .cs-table {
+    min-width: 0;
+  }
+
+  .cs-table thead {
+    display: none;
+  }
+
+  .cs-table,
+  .cs-table tbody {
+    display: block;
+  }
+
+  .cs-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    margin-bottom: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--cx-line);
+    border-radius: var(--cx-radius-card);
+    background: var(--cx-card);
+  }
+
+  .cs-table td,
+  .cs-table td:first-child {
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .cs-table tbody tr:hover td,
+  .cs-table tbody tr.selected td {
+    background: transparent;
+  }
+
+  .cs-table tbody tr.selected {
+    background: var(--cx-selected);
+  }
+
+  .cs-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: var(--cx-muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .cs-table td:not([data-label]) {
+    grid-column: 1 / -1;
+  }
+
+  .cs-table td.cs-check-col {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .cs-filters {
+    padding: 12px;
+  }
+
+  .cs-field {
+    flex-basis: calc(50% - 5px);
+  }
+
+  .cs-panel {
+    top: auto;
+    left: 0;
+    width: 100%;
+    max-height: 92vh;
+    border-left: 0;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+    animation-name: cs-rise;
+  }
+
+  .cs-pager {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-panel,
+  .cs-panel-scrim,
+  .cs-card {
+    transition: none;
+    animation: none;
+  }
+}

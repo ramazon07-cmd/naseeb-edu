@@ -2,7 +2,7 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import './mind-section.css';
-import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X } from 'lucide-react';
+import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
@@ -19,18 +19,21 @@ import { NotificationPanel } from './components/NotificationPanel';
 import { COUNSELOR_SELF_HEADED, CounselorLayout, counselorPageDescription, counselorPageLabel } from './components/CounselorShell';
 import { CounselorStudentsPage } from './pages/CounselorStudents';
 import { CxHead } from './components/counselorUi';
-import { formatNumberLocale, getLanguage, locale, setLanguage, siteTitle, t, tp, tx } from './i18n';
+import { formatNumberLocale, getLanguage, locale, setLanguage, siteTitle, t, tx } from './i18n';
 import { exportNodePdf } from './lib/exportPdf';
 import { fullName, initials, label, ownStudent } from './lib/labels';
 import { isCounselor, isPlatformAdmin, isTaskManager } from './lib/roles';
-import { LANDING_PATH, LOGIN_PATH, buildPath, canOpenPage, isPageLocked, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
-import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchText } from './lib/searchIndex';
+import { LANDING_PATH, LOGIN_PATH, buildPath, canOpenPage, isPageLocked, joinTokenFor, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
+import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchResultTarget, searchText } from './lib/searchIndex';
 import { loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
 import { useNotificationBell } from './hooks/useNotificationBell';
 import { invalidatePagedLists } from './hooks/usePagedList';
-import { bellTotal } from './lib/notifications';
+import { NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, summaryChanged } from './lib/notifications';
+import { liveReloadKeys, unreadConversations } from './lib/counselorCounts';
+import { createPoller } from './lib/poller';
+import { busyRetryDelay } from './lib/backoff';
 import { ForcedPasswordChange, Login } from './pages/Login';
 import { clearUserSessionStorage, clearUserStorage, dropLegacySharedKeys } from './userStorage';
 import { forgetAccountDashboardLayout, loadAccountDashboardLayout } from './dashboardLayout';
@@ -68,6 +71,8 @@ const MessagesPage = lazyNamed(() => import('./pages/MessagesPage'), 'MessagesPa
 const ParentPortalPage = lazyNamed(() => import('./pages/ParentPortalPage'), 'ParentPortalPage');
 const ProgramsPage = lazyNamed(() => import('./pages/ProgramsPage'), 'ProgramsPage');
 const ResourceSection = lazyNamed(() => import('./pages/ResourceSection'), 'ResourceSection');
+const CounselorEssaysPage = lazyNamed(() => import('./pages/CounselorEssays'), 'CounselorEssaysPage');
+const NotificationsPage = lazyNamed(() => import('./pages/NotificationsPage'), 'NotificationsPage');
 const ReviewPage = lazyNamed(() => import('./pages/ReviewPage'), 'ReviewPage');
 const RoadmapPage = lazyNamed(() => import('./pages/RoadmapPage'), 'RoadmapPage');
 const SchoolsPage = lazyNamed(() => import('./pages/SchoolsPage'), 'SchoolsPage');
@@ -77,6 +82,11 @@ const StudentCenterPage = lazyNamed(() => import('./pages/StudentCenterPage'), '
 const StudentsPage = lazyNamed(() => import('./pages/StudentsPage'), 'StudentsPage');
 const SupportPage = lazyNamed(() => import('./pages/SupportPage'), 'SupportPage');
 const AccountSettingsPage = lazyNamed(() => import('./pages/AccountSettingsPage'), 'AccountSettingsPage');
+const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
+const AwaitingConfirmation = lazyNamed(() => import('./pages/JoinPage'), 'AwaitingConfirmation');
+const RecentlyJoinedPage = lazyNamed(() => import('./components/StudentInvites'), 'RecentlyJoinedPage');
+const JoinedBanner = lazyNamed(() => import('./components/StudentInvites'), 'JoinedBanner');
+const AddStudentModal = lazyNamed(() => import('./components/StudentInvites'), 'AddStudentModal');
 
 // Kept equal to CHALLENGES.length by tests/codeSplitting.test.mjs, so the
 // navigation does not pull the question banks into the main bundle.
@@ -99,6 +109,7 @@ const PAGE_META = {
   dashboard: { label: 'Dashboard', icon: LayoutDashboard, description: 'A complete view of the application journey' },
   schools: { label: 'Schools', icon: Building2, description: 'Schools and organization accounts' },
   students: { label: 'Students', icon: Users, description: 'Student profiles and progress' },
+  students_joined: { label: 'Recently joined', icon: UserPlus, description: 'Students who joined with your invitation or magic link' },
   review: { label: 'Review', icon: CheckSquare, description: 'Submitted work waiting for your decision' },
   academics: { label: 'Academics', icon: BookOpen, description: 'Academic results and research' },
   portfolio: { label: 'Portfolio', icon: FolderKanban, description: 'Projects and internship experience' },
@@ -135,7 +146,8 @@ const PAGE_META = {
   admin_audit: { label: 'Audit Log', icon: ShieldAlert, description: 'Review product administration actions' },
   admin_plans: { label: 'Plans', icon: Layers, description: 'Seat limits and features of every plan' },
   admin_staff: { label: 'Staff', icon: UserCog, description: 'Product staff and their access tiers' },
-  admin_health: { label: 'Health', icon: HeartPulse, description: 'Readiness, scheduled jobs and file storage' }
+  admin_health: { label: 'Health', icon: HeartPulse, description: 'Readiness, scheduled jobs and file storage' },
+  notifications: { label: 'Notifications', icon: Bell, description: 'What happened since your last visit' }
 };
 
 const GLOBAL_SEARCH_RESOURCES = {
@@ -160,9 +172,14 @@ function globalSearchTitle(resource, item) {
   return item.title || item.name || item.organization || item.recommender_name || item.subject || item.program || item.category;
 }
 
+// Records indexed per collection. Staff lists beyond this (and every paged
+// staff list) are found by the server search (useRemoteSearch).
+const SEARCH_INDEX_CAP = 200;
+
 // Built once per (user, data, language) instead of JSON.stringify-ing every
 // record on every keystroke; typing only filters the prepared haystacks.
 function buildGlobalSearchIndex(user, data) {
+  const staff = usesPagedLists(user);
   const navigation = navigationFor(user).filter((page) => !isPageLocked(page, user));
   const allowedPages = new Set(navigation);
   const pages = navigation.map((destination) => {
@@ -171,11 +188,12 @@ function buildGlobalSearchIndex(user, data) {
   });
   const records = Object.entries(GLOBAL_SEARCH_RESOURCES).flatMap(([resource, destination]) => {
     if (!allowedPages.has(destination)) return [];
-    const items = Array.isArray(data[resource]) ? data[resource] : [];
+    const items = Array.isArray(data[resource]) ? data[resource].slice(0, SEARCH_INDEX_CAP) : [];
     return items.flatMap((item, index) => {
       const title = globalSearchTitle(resource, item);
       if (!title) return [];
-      return [{ id: `${resource}-${item.id ?? index}`, kind: 'record', destination, title: String(title), subtitle: t(PAGE_META[destination].label), filterQuery: String(title), text: `${title} ${searchText(item)}` }];
+      const subtitle = (staff && item.student_name) || t(PAGE_META[destination].label);
+      return [{ id: `${resource}-${item.id ?? index}`, kind: 'record', type: resource, recordId: item.id, destination, title: String(title), subtitle, filterQuery: String(title), text: `${title} ${searchText(item)}` }];
     });
   });
   return buildIndex([...pages, ...records], (entry) => entry.text, locale());
@@ -201,7 +219,7 @@ function remoteSearchDestinations(user) {
 
 const PAGE_RESOURCE_KEYS = {
   dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'programServices', 'parentPortal'],
-  schools: ['schools'], students: ['students'], review: [], academics: ['students', 'researches'],
+  schools: ['schools'], students: ['students'], students_joined: [], review: [], academics: ['students', 'researches'],
   // The catalog editor pages its own lists from the server.
   admin_catalog: [],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
@@ -214,8 +232,31 @@ const PAGE_RESOURCE_KEYS = {
   college_search: ['students', 'applications', 'scholarships', 'essays', 'documents', 'recommendations'], store: ['storeItems'], support: ['supportTickets'],
   screen_time: [], account_settings: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
-  parent_documents: ['parentPortal'], parent_meetings: ['parentPortal']
+  parent_documents: ['parentPortal'], parent_meetings: ['parentPortal'],
+  counselor_roadmap: ['counselorRoadmapTemplates', 'counselorRoadmaps'],
+  // Pages its own notices from the server.
+  notifications: []
 };
+
+// What a counselor's badges and counts read: the stats (plus the bell's
+// summary), refreshed every minute while the tab is visible and when the
+// window regains focus; failures back off up to five minutes.
+const COUNSELOR_POLL_MS = 60_000;
+const COUNSELOR_POLL_MAX_MS = 300_000;
+const COUNSELOR_FOCUS_GAP_MS = 15_000;
+const isCounselorShell = (user) => user?.role === 'counselor' && !isPlatformAdmin(user);
+
+// The workspace page the address bar names (a sign-in page: its ?next=).
+function routedPage(activeUser) {
+  const { pathname, search } = window.location;
+  const next = publicPageFor(pathname) === 'login' ? safeNextPath(new URLSearchParams(search).get('next')) : null;
+  return resolveRoute(parsePath(next ? next.split('?')[0] : pathname), activeUser).page;
+}
+
+// Counselor Home renders from the stats call itself (?include=home), so on
+// Home the badges and the cards share one request.
+const workspaceStatsRequest = (activeUser) => (activeUser?.role === 'counselor' && routedPage(activeUser) === 'dashboard' ? api.counselorHome() : api.dashboard());
+const workspaceStatsKey = (activeUser) => (activeUser?.role === 'counselor' && routedPage(activeUser) === 'dashboard' ? 'home' : 'dashboard');
 
 // `lazy`: a student's page waits for exactly the collections it fetches.
 // Student pages that cannot render without these collections. Essays, documents and
@@ -227,10 +268,14 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, re
   const primaryKeys = lazy ? STUDENT_PRIMARY_KEYS[page] || [] : [];
   const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys });
 
-  if (initialLoading) return <PageSkeleton />;
+  // Rate-limited sections retry on their own (useWorkspaceData): a quiet note, not an error.
+  const busy = keys.some((key) => resourceStatus[key]?.busy);
+  const busyNote = busy && <div className="data-state refreshing" role="status"><RefreshCw className="spin" size={16} /><span>{t('Busy, retrying…')}</span></div>;
+  if (initialLoading) return <>{busyNote}<PageSkeleton /></>;
   return <>
+    {busyNote}
     {failedKeys.length > 0 && <div className="data-state error" role="alert"><X size={18} /><div><b>{t("Some information could not be loaded")}</b><p>{failedKeys.slice(0, 2).map((key) => resourceStatus[key].error).join(' · ')}</p>{hasVisibleData && !contentBlocked && <small>{t("Available information remains visible while you retry.")}</small>}</div><button type="button" className="button quiet small" onClick={() => retry(failedKeys)}><RefreshCw size={14} /> {t("Retry")}</button></div>}
-    {loadingKeys.length > 0 && hasVisibleData && <div className="data-state refreshing" role="status"><RefreshCw className="spin" size={16} /><span>{t("Refreshing this page. Current information remains available.")}</span></div>}
+    {!busy && loadingKeys.length > 0 && hasVisibleData && <div className="data-state refreshing" role="status"><RefreshCw className="spin" size={16} /><span>{t("Refreshing this page. Current information remains available.")}</span></div>}
     {!contentBlocked && children}
   </>;
 }
@@ -253,9 +298,10 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   const [collapsed, setCollapsed] = useState(() => {
     try {return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';} catch {return false;}
   });
-  const [searchOpen, setSearchOpen] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
-  const searchRef = useRef(null);
+  // The palette's own text: `query` is the page filter a chosen record sets, and
+  // sharing it left the last record's title in the box for the next search.
+  const [paletteQuery, setPaletteQuery] = useState('');
   const navigation = navigationFor(user).filter((item) => !['support', 'screen_time'].includes(item));
   const meta = PAGE_META[page];
   // eslint-disable-next-line react-hooks/exhaustive-deps -- language changes the translated labels
@@ -263,19 +309,24 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   // Staff lists are paged, so records beyond what is loaded come from the server.
   // Students hold their own records; only the university catalogue is searched on the server.
   const studentSearch = !usesPagedLists(user) && user?.role === 'student';
-  const remoteSearch = useRemoteSearch(query, usesPagedLists(user) || studentSearch, studentSearch ? 'universities' : '');
+  const remoteSearch = useRemoteSearch(paletteQuery, usesPagedLists(user) || studentSearch, studentSearch ? 'universities' : '');
   const searchResults = useMemo(() => mergeSearchResults(
-    globalSearchResults(searchIndexData, query),
+    globalSearchResults(searchIndexData, paletteQuery),
     remoteSearchEntries(remoteSearch.results, remoteSearchDestinations(user)).map((entry) => ({ ...entry, subtitle: entry.subtitle || t(PAGE_META[entry.destination].label) })),
-  ), [searchIndexData, query, remoteSearch.results, user]);
+  ), [searchIndexData, paletteQuery, remoteSearch.results, user]);
   const adminSupport = useSupportCounts(isPlatformAdmin(user), stats);
+  // Staff load only the first page of their tickets: the server counts unread
+  // answers (stats.support_unread); students hold their whole (short) list.
   const supportBadge = isPlatformAdmin(user) ?
   adminSupport.open + adminSupport.inProgress :
-  data.supportTickets.filter((ticket) => ticket.has_unread_response).length;
-  // Students get server-side notices; staff keep the unread-chat dot.
-  const studentBell = user.role === 'student';
-  const bell = useNotificationBell(studentBell);
-  const bellCount = studentBell ? bellTotal(bell.summary) : data.messageChannels.filter((item) => item.unread_count > 0).length;
+  stats?.support_unread ?? data.supportTickets.filter((ticket) => ticket.has_unread_response).length;
+  // Students and staff get server-side notices (staff: the ones addressed to
+  // them) beside their unread chats; parents keep the unread-chat dot.
+  const serverBell = user.role !== 'parent';
+  const bell = useNotificationBell(serverBell);
+  // The server's count when it sends one: the loaded chats are only the first page.
+  const unreadChats = unreadConversations(stats, data.messageChannels);
+  const bellCount = user.role === 'student' ? bellTotal(bell.summary) : unreadChats + (serverBell ? Math.max(0, Number(bell.summary?.unread) || 0) : 0);
   const bellLabel = bellCount > 0 ? tx`Notifications, ${bellCount > 99 ? '99+' : formatNumberLocale(bellCount)} unread` : t('Notifications');
   function openNotifications() {
     // Opening the bell always shows the newest notices, never a cached page.
@@ -289,19 +340,15 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   }
   useEffect(() => {
     setActiveSearchIndex(0);
-  }, [query]);
+  }, [paletteQuery]);
   // Search covers every record, so opening it loads what pages have not yet.
-  const searching = searchOpen || utility === 'search';
+  const searching = utility === 'search';
   useEffect(() => {
     if (searching) onSearchOpen();
   }, [searching, onSearchOpen]);
   useEffect(() => {
-    const closeSearch = (event) => {
-      if (!searchRef.current?.contains(event.target)) setSearchOpen(false);
-    };
-    document.addEventListener('pointerdown', closeSearch);
-    return () => document.removeEventListener('pointerdown', closeSearch);
-  }, []);
+    if (searching) setPaletteQuery('');
+  }, [searching]);
   function toggleSidebar() {
     setCollapsed((current) => {
       const next = !current;
@@ -312,25 +359,23 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   function openSearchResult(result) {
     if (!result) return;
     setUtility(null);setMobileOpen(false);
-    setPage(result.destination);
-    setQuery(result.kind === 'record' ? result.filterQuery : '');
-    setSearchOpen(false);
+    const target = searchResultTarget(result);
+    setPage(target.page, target.params);
+    setQuery(target.query);
+    setPaletteQuery('');
   }
   function handleSearchKeyDown(event) {
     if (event.key === 'Escape') {
-      setSearchOpen(false);
-      setQuery('');
+      setPaletteQuery('');
       event.currentTarget.blur();
       return;
     }
     if (!searchResults.length) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setSearchOpen(true);
       setActiveSearchIndex((current) => (current + 1) % searchResults.length);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setSearchOpen(true);
       setActiveSearchIndex((current) => (current - 1 + searchResults.length) % searchResults.length);
     } else if (event.key === 'Enter') {
       event.preventDefault();
@@ -345,14 +390,14 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     {error && <div className="alert error workspace-alert">{error}</div>}
   </>;
   const overlays = <>
-    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(query.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}</span><ChevronRight size={16} /></button>)}{query.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} />}</Modal>}
+    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');setPaletteQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(paletteQuery.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}{result.kind === 'record' && result.subtitle && <small>{result.subtitle}</small>}</span><ChevronRight size={16} /></button>)}{paletteQuery.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} onSeeAll={counselorShell ? () => {invalidatePagedLists(['notifications']);openFromNotification('notifications', {});} : undefined} />}</Modal>}
     <ScreenTimeTracker page={page} userId={user.id} />
     {canUseAssistant(user) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} onUnavailable={(message) => {updateUser({ assistant_enabled: false });notify(message, 'error');}} />}
   </>;
   if (counselorShell) {
     const pageTitle = t(counselorPageLabel(page) || meta.label);
     return <div className="app-shell cx-shell role-counselor">
-      <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={() => setAssistantRequest((current) => current + 1)} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
+      <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} bell={bell.summary} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={() => setAssistantRequest((current) => current + 1)} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
         <main className={`cx-main${page === 'messages' ? ' cx-main-messages' : ''}`}>
           {banners}
           {!COUNSELOR_SELF_HEADED.has(page) && <CxHead title={pageTitle} subtitle={t(counselorPageDescription(page) || meta.description)} />}
@@ -375,7 +420,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
           const itemLabel = t(PAGE_META[item].label);
           // A locked page stays visible but cannot be opened or focused.
           if (isPageLocked(item, user)) return <button key={item} type="button" className="nav-locked" disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${itemLabel} — ${t('Coming soon')}`}><ItemIcon size={18} aria-hidden="true" /><span>{itemLabel}</span><Lock size={13} className="nav-lock-icon" aria-hidden="true" /></button>;
-          return <button key={item} className={page === item ? "active" : ''} title={collapsed ? itemLabel : undefined} onClick={() => {setPage(item);setQuery('');setSearchOpen(false);setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
+          return <button key={item} className={page === item ? "active" : ''} title={collapsed ? itemLabel : undefined} onClick={() => {setPage(item);setQuery('');setMobileOpen(false);}} aria-label={itemLabel}><ItemIcon size={18} /><span>{itemLabel}</span>{item === 'support' && supportBadge > 0 && <span className="nav-badge">{supportBadge > 99 ? '99+' : supportBadge}</span>}</button>;
         })}</nav>
 
       <div className="sidebar-account" ref={profileMenuRef}><button className="sidebar-account-trigger" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>{user.role === 'student' ? <StudentAvatar student={ownStudent(data)} /> : <span className="avatar">{initials(fullName(user))}</span>}<span className="sidebar-account-copy"><b>{user.first_name || fullName(user)}</b><small>{label(user.role)}</small></span><ChevronRight size={17} className={profileOpen ? 'rotated' : ''} /></button>{profileOpen && <div className="sidebar-account-menu">{canOpenPage('account_settings', user) && <button onClick={() => {setPage('account_settings');setProfileOpen(false);setMobileOpen(false);}}><Settings size={17} />{t('Account settings')}</button>}{navigationFor(user).includes('support') && <button onClick={() => {setPage('support');setQuery('');setProfileOpen(false);setMobileOpen(false);}}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}<button onClick={logout}><LogOut size={17} />{t('Logout')}</button></div>}</div>
@@ -385,17 +430,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
         <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label={t("Open navigation")}><Menu /></button>
         <div className="page-heading"><h1>{t(meta.label)}</h1><p>{t(meta.description)}</p></div>
         <div className="header-actions">
-          {page !== 'essay_lab' && <div className="global-search" ref={searchRef}>
-            <div className={`search ${searchOpen && query.trim() ? 'is-open' : ''}`}><Search size={17} /><input role="combobox" aria-autocomplete="list" aria-controls="global-search-results" aria-expanded={searchOpen && Boolean(query.trim())} aria-activedescendant={searchResults[activeSearchIndex]?.id} aria-label={t("Search pages and records")} placeholder={t("Search pages and records…")} value={query} onFocus={() => setSearchOpen(true)} onChange={(event) => {setQuery(event.target.value);setSearchOpen(true);}} onKeyDown={handleSearchKeyDown} />{query && <button type="button" className="search-clear" onClick={() => {setQuery('');setSearchOpen(false);}} aria-label={t("Clear search")}><X size={14} /></button>}</div>
-            {searchOpen && query.trim() && <div className="search-results" id="global-search-results" role="listbox" aria-label={t("Search results")}>
-              {searchResults.map((result, index) => {
-                const ResultIcon = PAGE_META[result.destination].icon;
-                return <button type="button" id={result.id} role="option" aria-selected={index === activeSearchIndex} className={index === activeSearchIndex ? 'active' : ''} key={result.id} onMouseEnter={() => setActiveSearchIndex(index)} onMouseDown={(event) => event.preventDefault()} onClick={() => openSearchResult(result)}><span className="search-result-icon"><ResultIcon size={16} /></span><span><b>{result.title}</b><small>{result.kind === 'page' ? t("Page") : result.subtitle}</small></span><ChevronRight size={15} /></button>;
-              })}
-              {!searchResults.length && (remoteSearch.loading ? <div className="search-empty" role="status"><Search size={18} /><span>{t("Searching…")}</span></div> : <div className="search-empty"><Search size={18} /><span>{tx`No results for “${query.trim()}”`}</span></div>)}
-              {searchResults.length > 0 && <footer><span>{tp('{n} result|{n} results', searchResults.length, { n: searchResults.length })}</span><small>{t("Use ↑↓ and Enter")}</small></footer>}
-            </div>}
-          </div>}
+          {page !== 'essay_lab' && <button type="button" className="icon-button" onClick={() => setUtility('search')} title={`${t("Search pages and records")} (Ctrl+K)`} aria-label={t("Search pages and records")} aria-keyshortcuts="Control+K Meta+K"><Search size={19} /></button>}
           <LanguageSelector language={language} onChange={changeLanguage} compact />
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
           {PDF_EXPORT_PAGES.has(page) && <button className="icon-button" onClick={() => exportNodePdf(document.querySelector('.page-content'))} title={t("Export PDF")} aria-label={t("Export PDF")}><Download size={19} /></button>}
@@ -408,8 +443,9 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   </div>;
 }
 
-function PageRouter({ page, params, user, data, stats, query, setQuery, reload, notify, setPage, search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources }) {
+function PageRouter({ page, params, user, data, stats, query, setQuery, reload, notify, setPage, search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources, refreshStats, updateStats, more, loadMore }) {
   const [directChannel, setDirectChannel] = useState(null);
+  const [addingStudent, setAddingStudent] = useState(false);
   const openingDirect = useRef(false);
   useEffect(() => {if (page !== 'messages') setDirectChannel(null);}, [page]);
   async function onDirect(userId) {
@@ -433,7 +469,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (isPlatformAdmin(user) && page === 'admin_plans') return <AdminPlansPage user={user} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_staff') return <AdminStaffPage user={user} query={query} notify={notify} reload={reload} />;
   if (isPlatformAdmin(user) && page === 'admin_health') return <AdminHealthPage />;
-  if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources }} />;
+  if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources, refreshStats, updateStats }} />;
   if (user.role === 'student' && page === 'student_center') {
     const editSection = new URLSearchParams(search).get('edit');
     return <StudentCenterPage {...{ user, data, query, reload, notify, setPage }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} editSection={editSection}
@@ -443,8 +479,8 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} />;
   if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage user={user} notify={notify} data={data} reload={reload} />;
   if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />;
-  if (page === 'messages') return <MessagesPage {...{ user, data, notify }} initialChannel={directChannel} channelId={params.channelId} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
-  if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} />;
+  if (page === 'messages') return <MessagesPage {...{ user, data, stats, notify }} initialChannel={directChannel} channelId={params.channelId} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
+  if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} moreTickets={Boolean(more?.supportTickets)} loadMoreTickets={() => loadMore('supportTickets')} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query, search, navigate, notify }} />;
   if (user.role === 'student' && page === 'essay_lab') return <EssayLab user={user} notify={notify} essayId={params.essayId} onEssay={(essayId) => setPage(page, { essayId })} />;
@@ -453,15 +489,28 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
   if (['student', 'counselor'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
-  if (page === 'students' && user.role === 'counselor') return <CounselorStudentsPage {...{ user, data, stats, query, setQuery, reload, notify, setPage, onDirect }} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
+  if (page === 'students_joined' && ['counselor', 'organization'].includes(user.role)) return <RecentlyJoinedPage user={user} data={data} notify={notify} onChanged={() => { refreshStats(user); reload(); }} onBack={() => setPage('students')} headless={user.role === 'organization'} />;
+  if (page === 'students' && user.role === 'counselor') return <>
+    {!params.studentId && <JoinedBanner count={stats?.badges?.students_pending} onOpen={() => setPage('students_joined')} />}
+    <CounselorStudentsPage {...{ user, data, stats, query, setQuery, reload, notify, setPage, onDirect }} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} onAddStudent={() => setAddingStudent(true)} />
+    {addingStudent && <AddStudentModal user={user} data={data} onClose={() => setAddingStudent(false)} notify={notify} onJoined={() => setPage('students_joined')} onCreated={reload} />}
+  </>;
+  // Organization accounts invite students too and confirm the ones who join.
+  if (page === 'students' && user.role === 'organization') return <>
+    {!params.studentId && <JoinedBanner count={stats?.badges?.students_pending} onOpen={() => setPage('students_joined')} onInvite={() => setAddingStudent(true)} />}
+    <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />
+    {addingStudent && <AddStudentModal user={user} data={data} onClose={() => setAddingStudent(false)} notify={notify} onJoined={() => setPage('students_joined')} onCreated={reload} />}
+  </>;
   if (page === 'students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
-  if (isCounselor(user) && page === 'review') return <ReviewPage setPage={setPage} notify={notify} reload={reload} />;
+  if (isCounselor(user) && page === 'review') return <ReviewPage setPage={setPage} notify={notify} reload={reload} initialItem={new URLSearchParams(search).get('item')} onLinkDone={() => navigate(buildPath({ page: 'review' }), { replace: true })} />;
   if (page === 'academics') return <div className="section-stack">{user.role === 'student' && <ProfileCard student={ownStudent(data)} />}<ResourceSection title={t("Research")} resource="researches" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'portfolio') return <div className="split-grid"><ResourceSection title={t("Projects")} resource="projects" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Internships")} resource="internships" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'activities') return <div className="section-stack"><div className="split-grid"><ResourceSection title={t("Activities")} resource="activities" {...{ user, data, query, reload, notify }} /><ResourceSection title={t("Honors")} resource="honors" {...{ user, data, query, reload, notify }} /></div><ResourceSection title={t("Achievements")} resource="achievements" {...{ user, data, query, reload, notify }} /></div>;
   if (page === 'recommendations') return <ResourceSection title={t("Recommendation letters")} resource="recommendations" {...{ user, data, query, reload, notify }} />;
   if (page === 'documents') return <DocumentsPage {...{ user, data, query, reload, notify }} />;
   if (page === 'certificates') return <DocumentsPage typeFilter="certificate" title={t("Certificates")} {...{ user, data, query, reload, notify }} />;
+  if (page === 'notifications' && isCounselorShell(user)) return <NotificationsPage {...{ notify, setPage }} />;
+  if (page === 'essays' && isCounselorShell(user)) return <CounselorEssaysPage title={t("Essays")} resource="essays" {...{ user, data, query, reload, notify }} />;
   const titleMap = { tasks: 'Tasks', applications: 'University applications', essays: 'Essays' };
   return <ResourceSection title={titleMap[page] || label(page)} resource={page} {...{ user, data, query, reload, notify }} />;
 }
@@ -476,11 +525,12 @@ export default function App() {
   const [toast, notify] = useToast();
   const [bootstrapping, setBootstrapping] = useState(() => api.hasSession());
   const [bootstrapError, setBootstrapError] = useState('');
+  const [bootstrapBusy, setBootstrapBusy] = useState(false);
   const bootstrapAttempted = useRef(false);
   const [signOutPrompt, setSignOutPrompt] = useState(false);
   const signingOut = useRef(false);
   const handleUnauthorized = useCallback(() => {api.logout();setUser(null);}, []);
-  const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace } = useWorkspaceData(user, handleUnauthorized);
+  const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace, refreshStats, updateStats, more, loadMore } = useWorkspaceData(user, handleUnauthorized, { statsRequest: workspaceStatsRequest, statsKey: workspaceStatsKey });
   useEffect(() => (user ? api.onSessionEnded(handleUnauthorized) : undefined), [user, handleUnauthorized]);
 
   const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
@@ -507,33 +557,48 @@ export default function App() {
   const requestedRoute = useMemo(() => parsePath(location.pathname), [location.pathname]);
   const route = useMemo(() => resolveRoute(requestedRoute, user), [requestedRoute, user]);
   const page = route.page;
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const statsRef = useRef(stats);
+  statsRef.current = stats;
   // Opening a page the role cannot see does nothing: pushing its path would
   // only be replaced by the home page, leaving a Back entry that bounces.
   const setPage = useCallback((nextPage, params = {}) => {
     const target = openablePage(nextPage, user);
     if (target) navigate(buildPath({ page: target, params }));
   }, [navigate, user]);
-  const inWorkspace = Boolean(user) && !user.must_change_password && !(user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete);
+  const inWorkspace = Boolean(user) && !user.must_change_password && !user.awaiting_confirmation && !(user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete);
 
   const loadUser = useCallback(async () => {
     const current = await api.me();
     setUser(current);
     // The dashboard layout follows the account: fetch it while the workspace loads.
-    if (current.role === 'student' && !current.must_change_password) loadAccountDashboardLayout(current.id);
+    if (current.role === 'student' && !current.must_change_password && !current.awaiting_confirmation) loadAccountDashboardLayout(current.id);
     return current;
   }, []);
   // Account settings changes (email, a password change's refreshed account).
   const updateUser = useCallback((changes) => setUser((current) => (current ? { ...current, ...changes } : current)), []);
 
-  const bootstrapSession = useCallback(async () => {
+  // A rate limit (429) is never a reason to show the error card: the boot
+  // loader says "Busy, retrying…" and tries again once the server's Retry-After
+  // has passed (only GET /me/ is re-sent).
+  const bootstrapSession = useCallback(async (attempt = 0) => {
     if (!api.hasSession()) {setBootstrapping(false);return;}
     setBootstrapping(true);
     setBootstrapError('');
     try {
       const current = await loadUser();
+      setBootstrapBusy(false);
       setBootstrapping(false);
-      if (!current.must_change_password) await loadInitial(current);
+      if (!current.must_change_password && !current.awaiting_confirmation) await loadInitial(current);
     } catch (err) {
+      const busyWait = busyRetryDelay(attempt, err, { retries: Infinity, maxWait: Infinity });
+      if (busyWait != null) {
+        setBootstrapBusy(true);
+        window.setTimeout(() => bootstrapSession(attempt + 1), busyWait);
+        return;
+      }
+      setBootstrapBusy(false);
       if (err.status === 401) {
         api.logout();
         setUser(null);
@@ -561,7 +626,7 @@ export default function App() {
   // unknown and forbidden paths. Waits until onboarding is done so a deep
   // link survives it.
   useEffect(() => {
-    if (!inWorkspace) return;
+    if (!inWorkspace || publicPage === 'join') return;
     if (publicPage === 'login') {
       const next = safeNextPath(new URLSearchParams(location.search).get('next'));
       if (next) {navigate(next, { replace: true });return;}
@@ -583,7 +648,19 @@ export default function App() {
 
   async function afterLogin() {
     const current = await loadUser();
-    if (!current.must_change_password) await loadInitial(current);
+    if (!current.must_change_password && !current.awaiting_confirmation) await loadInitial(current);
+  }
+  // The waiting screen's "Check again": once confirmed, the workspace (or onboarding) opens.
+  async function checkConfirmation() {
+    try {
+      const current = await loadUser();
+      if (!current.awaiting_confirmation && !current.must_change_password) {
+        await loadInitial(current);
+        navigate(buildPath({ page: 'dashboard' }), { replace: true });
+      }
+    } catch (err) {
+      notify(err.message, 'error');
+    }
   }
   async function afterPasswordChanged(current) {
     // Keep the fields only /me/ reports (workspace, assistant_enabled).
@@ -616,16 +693,66 @@ export default function App() {
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
   const loadResources = useCallback((keys) => ensureLoaded(user, keys), [ensureLoaded, user]);
 
-  if (bootstrapping) return <AppBootLoader message="Checking your secure session…" />;
-  if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={bootstrapSession} onSignOut={logout} />;
+  // Counselor badges (review, essays, meetings, messages, the bell) come from
+  // the stats: keep them current while the tab is open. Meetings and chats
+  // reload only on their own page or when their badge moved; the bell is told
+  // only when its summary changed, so its own back-off stands.
+  const counselorLive = inWorkspace && !publicPage && isCounselorShell(user);
+  useEffect(() => {
+    if (!counselorLive) return undefined;
+    let lastRun = Date.now();
+    let lastBell;
+    let announcing = false;
+    const loop = createPoller({
+      min: COUNSELOR_POLL_MS,
+      failureCap: COUNSELOR_POLL_MAX_MS,
+      run: async () => {
+        lastRun = Date.now();
+        const previous = statsRef.current;
+        const [fresh, bellSummary] = await Promise.allSettled([refreshStats(user), api.notificationSummary()]);
+        if (bellSummary.status === 'fulfilled') {
+          if (lastBell !== undefined && summaryChanged(lastBell, bellSummary.value)) {
+            announcing = true;
+            announceNotificationsChanged();
+            announcing = false;
+          }
+          lastBell = bellSummary.value;
+        }
+        // Thrown, not null: the poller then waits out a 429's Retry-After.
+        if (fresh.status === 'rejected') throw fresh.reason;
+        if (!fresh.value) return null;
+        const reload = liveReloadKeys(pageRef.current, previous, fresh.value);
+        if (reload.length) await loadData(user, reload, { background: true });
+        return true;
+      },
+    });
+    loop.start();
+    // Coming back to the window: refresh unless a run just happened (the visibility change already ran one).
+    const onFocus = () => { if (Date.now() - lastRun > COUNSELOR_FOCUS_GAP_MS) loop.poke(); };
+    // A notice or chat read elsewhere (Mark all as read, a chat opened): the
+    // bell's chat count comes from the stats, so fetch them now, not in a minute.
+    const onNoticesChanged = () => { if (!announcing) loop.poke(); };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener(NOTIFICATIONS_CHANGED, onNoticesChanged);
+    return () => {
+      loop.stop();
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener(NOTIFICATIONS_CHANGED, onNoticesChanged);
+    };
+  }, [counselorLive, loadData, refreshStats, user]);
+
+  if (bootstrapping) return <AppBootLoader message={bootstrapBusy ? t('Busy, retrying…') : 'Checking your secure session…'} />;
+  if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={() => bootstrapSession()} onSignOut={logout} />;
+  if (publicPage === 'join') return <LazyBoundary fallback={<AppBootLoader />}><JoinPage token={joinTokenFor(location.pathname)} onSignIn={() => showPublicPage('login')} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;
   if (!user) return publicPage !== 'landing' ?
   <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> :
   <LazyBoundary fallback={<AppBootLoader />}><LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /></LazyBoundary>;
   if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
+  if (user.awaiting_confirmation) return <LazyBoundary fallback={<AppBootLoader />}><AwaitingConfirmation user={user} onCheck={checkConfirmation} onSignOut={logout} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;
   if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
     <AppShell {...{ user, updateUser, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
-      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, setQuery, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources }} /></LazyBoundary>
+      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, setQuery, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources, refreshStats, updateStats, more, loadMore }} /></LazyBoundary>
     </AppShell>
     {signOutPrompt && <Modal title={t("Sign out?")} backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
       <div className="sign-out-prompt" role="alert">

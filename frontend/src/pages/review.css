@@ -1,0 +1,472 @@
+/* Review queue: list and Reviewed today on the left, the open item on the
+   right. Naseeb's --cx-* tokens carry both themes. */
+
+.rv-page .cx-head {
+  min-height: 0;
+}
+
+.rv-tabs .cx-pills {
+  gap: 6px;
+}
+
+.rv-tabs .cx-pill {
+  height: 40px;
+  padding: 0 18px;
+  border-color: var(--cx-line);
+  font-weight: 600;
+  font-size: var(--cx-fs-body);
+}
+
+.rv-tabs .cx-pill.active {
+  box-shadow: 0 10px 22px -14px var(--accent-shadow);
+}
+
+.rv-tabs .cx-pill:focus-visible {
+  outline: 3px solid var(--cx-dark);
+  outline-offset: 2px;
+}
+
+.rv-workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.rv-column {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rv-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--cx-line);
+  border-radius: var(--cx-radius-side);
+  background: var(--cx-card);
+}
+
+.rv-wh {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+  font-weight: 700;
+  letter-spacing: var(--cx-ls-eyebrow);
+  text-transform: uppercase;
+}
+
+.rv-wh svg {
+  flex: none;
+  color: var(--cx-progress);
+}
+
+.rv-wh em {
+  margin-left: auto;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.rv-list {
+  padding: 0;
+  gap: 0;
+}
+
+.rv-workspace .rv-list .cx-row {
+  min-height: 68px;
+  padding: 12px;
+  border: 0;
+  border-top: 1px solid var(--cx-rule);
+  border-radius: 14px;
+  background: transparent;
+}
+
+.rv-workspace .rv-list .cx-row:first-child {
+  border-top-color: transparent;
+}
+
+.rv-workspace .rv-list .cx-row:hover {
+  background: var(--cx-hover);
+}
+
+.rv-workspace .rv-list .cx-row.active {
+  background: var(--cx-selected);
+  box-shadow: inset 0 0 0 1px var(--cx-selected-line);
+}
+
+.rv-workspace .rv-list .cx-row:focus-visible {
+  outline: 3px solid var(--cx-dark);
+  outline-offset: -3px;
+}
+
+.rv-workspace .rv-list .cx-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+.rv-workspace .rv-list .cx-row-copy b {
+  font-weight: 650;
+}
+
+.rv-empty {
+  margin: 0;
+  padding: 18px 8px;
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-body);
+  text-align: center;
+}
+
+.rv-more {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0 0;
+}
+
+/* -- detail ----------------------------------------------------------------- */
+.rv-detail {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+}
+
+.rv-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rv-step {
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--cx-badge);
+  color: var(--cx-text);
+  font-size: var(--cx-fs-meta);
+  font-weight: 700;
+}
+
+.rv-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.rv-who .rv-avatar {
+  width: 52px;
+  height: 52px;
+  font-size: 0.95rem;
+}
+
+.rv-who-copy {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.rv-who-copy b {
+  overflow: hidden;
+  color: var(--cx-ink);
+  font-size: var(--cx-fs-card-title);
+  font-weight: var(--cx-fw-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rv-who-copy small {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+}
+
+.rv-link {
+  flex: none;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--cx-ink);
+  font: inherit;
+  font-size: var(--cx-fs-meta);
+  font-weight: var(--cx-fw-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.rv-link:hover {
+  background: var(--cx-hover);
+}
+
+.rv-title {
+  margin: 0;
+  color: var(--cx-ink);
+  font-size: var(--cx-fs-figure);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.rv-body {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  max-height: 340px;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--cx-line);
+  border-radius: 16px;
+  background: var(--cx-inset);
+}
+
+
+.rv-field {
+  display: grid;
+  gap: 6px;
+}
+
+.rv-field > span {
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+  font-weight: var(--cx-fw-strong);
+  line-height: 1.5;
+}
+
+.rv-field textarea {
+  min-height: 64px;
+  padding: 12px 13px;
+  border: 1px solid var(--cx-field-line);
+  border-radius: 14px;
+  background: var(--cx-card);
+  box-shadow: none;
+  color: var(--cx-ink);
+  font: inherit;
+  font-size: var(--cx-fs-input);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.rv-file {
+  display: grid;
+  gap: 10px;
+}
+
+.rv-file .attachment-row {
+  background: var(--cx-card);
+}
+
+.rv-file .secure-document-preview,
+.rv-file .secure-document-state {
+  min-height: 0;
+}
+
+.rv-file .secure-document-preview iframe {
+  height: min(60vh, 560px);
+}
+
+.rv-file .secure-document-state {
+  padding: 28px 16px;
+}
+
+.rv-file-note {
+  margin: 0;
+  color: var(--cx-muted);
+  line-height: 1.5;
+}
+
+.rv-file-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+}
+
+.rv-none {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px dashed var(--cx-line-strong);
+  border-radius: 16px;
+  background: var(--cx-inset);
+  color: var(--cx-muted);
+}
+
+.rv-none svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.rv-none b {
+  display: block;
+  color: var(--cx-ink);
+}
+
+.rv-none small {
+  font-size: var(--cx-fs-meta);
+  line-height: 1.5;
+}
+
+.rv-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rv-btn,
+.rv-later {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rv-btn {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--cx-dark);
+  border-radius: var(--radius-pill);
+  background: var(--cx-dark);
+  color: var(--cx-on-dark);
+  font-size: var(--cx-fs-body);
+  font-weight: var(--cx-fw-button);
+  transition: transform 0.2s ease;
+}
+
+.rv-btn.line {
+  border-color: var(--cx-line-strong);
+  background: transparent;
+  color: var(--cx-ink);
+}
+
+.rv-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.rv-later {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-body);
+  font-weight: 600;
+}
+
+.rv-later:hover:not(:disabled) {
+  background: var(--cx-hover);
+  color: var(--cx-ink);
+}
+
+.rv-btn:focus-visible,
+.rv-later:focus-visible,
+.rv-link:focus-visible {
+  outline: 3px solid var(--cx-dark);
+  outline-offset: 2px;
+}
+
+.rv-btn:disabled,
+.rv-later:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* -- Reviewed today ---------------------------------------------------------- */
+.rv-today-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rv-today-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--cx-rule);
+}
+
+.rv-today-row:first-child {
+  border-top: 0;
+}
+
+.rv-today-row.pending {
+  opacity: 0.75;
+}
+
+.rv-today-row .cx-avatar {
+  width: 36px;
+  height: 36px;
+}
+
+.rv-today-error {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .rv-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rv-detail {
+    position: static;
+    order: -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .rv-card,
+  .rv-detail {
+    padding: 16px;
+  }
+
+  .rv-title {
+    font-size: 1.2rem;
+  }
+
+  .rv-who {
+    flex-wrap: wrap;
+  }
+
+  .rv-who-copy b {
+    white-space: normal;
+  }
+
+  .rv-acts {
+    justify-content: stretch;
+  }
+
+  .rv-acts .rv-btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rv-btn {
+    transition: none;
+  }
+
+  .rv-btn:hover:not(:disabled) {
+    transform: none;
+  }
+}

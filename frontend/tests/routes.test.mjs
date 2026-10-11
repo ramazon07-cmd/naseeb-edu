@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PAGE_PATHS, ROADMAP_TABS, STUDENT_CENTER_TABS, buildPath, roadmapTab, canOpenPage, homePage, openablePage, loginPath, navigationFor, parsePath,
-  isPageLocked, lockedPages, publicPageFor, reachablePages, resolveRoute, safeNextPath, withQuery,
+  isPageLocked, joinTokenFor, lockedPages, publicPageFor, reachablePages, resolveRoute, safeNextPath, withQuery,
 } from '../src/lib/routes.js';
 
 const student = { id: 1, role: 'student' };
@@ -118,6 +118,27 @@ test('public pages: landing, /login and the old #/login link', () => {
   assert.equal(publicPageFor('/login'), 'login');
   assert.equal(publicPageFor('/login/'), 'login');
   assert.equal(publicPageFor('/dashboard'), null);
+});
+
+test('a student invite link is a public page carrying its token', () => {
+  const token = 'Ab3_-xYz0123456789abcdefghijklmnopqrstuvwx';
+  assert.equal(publicPageFor(`/join/${token}`), 'join');
+  assert.equal(publicPageFor(`/join/${token}/`), 'join');
+  assert.equal(joinTokenFor(`/join/${token}`), token);
+  for (const path of ['/join', '/join/', '/join/short', '/join/a b c d e f g h i j', `/join/${token}/extra`]) {
+    assert.equal(publicPageFor(path), null, path);
+    assert.equal(joinTokenFor(path), null, path);
+  }
+});
+
+test('Recently joined is reachable by link for counselors and organization accounts', () => {
+  assert.deepEqual(parsePath('/students/joined'), { page: 'students_joined', params: {} });
+  assert.equal(buildPath({ page: 'students_joined' }), '/students/joined');
+  assert.ok(canOpenPage('students_joined', counselor));
+  assert.ok(!canOpenPage('students_joined', student));
+  assert.ok(canOpenPage('students_joined', { id: 4, role: 'organization' }));
+  assert.ok(!canOpenPage('students_joined', teacher));
+  assert.ok(!navigationFor(counselor).includes('students_joined'));
 });
 
 test('query updates keep foreign keys and drop defaults', () => {

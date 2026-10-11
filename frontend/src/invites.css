@@ -1,0 +1,226 @@
+/* Student invites: the counselor's "Add student" modal and "Recently joined"
+   page, the public join page and the waiting screen. Colours come only from
+   the shared tokens (styles.css), so light and dark follow the theme. */
+
+.invite-modal {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.invite-modal .cx-tabs {
+  margin: 0;
+}
+
+.invite-dialog {
+  padding: 22px;
+}
+
+.invite-dialog form {
+  padding: 0;
+}
+
+.invite-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.invite-link-box {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+}
+
+.invite-link-box b {
+  font-size: var(--text-md);
+}
+
+.invite-copy {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.invite-copy input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-sm);
+}
+
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.invite-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.invite-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.invite-list .invite-row-copy {
+  display: grid;
+  flex: 1;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.invite-list small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* Recently joined */
+.joined-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.joined-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--cx-line);
+}
+
+.joined-row:first-child {
+  border-top: 0;
+}
+
+.joined-row-copy {
+  display: grid;
+  flex: 1;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.joined-row-copy b {
+  color: var(--cx-ink);
+}
+
+.joined-row-copy small {
+  color: var(--cx-muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.joined-row-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.joined-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  color: var(--cx-text);
+  background: var(--cx-card);
+  border: 1px solid var(--cx-line-strong);
+  border-radius: var(--cx-radius-card);
+}
+
+.joined-banner p {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+/* Public join page and the waiting screen (inside .password-change-card) */
+.join-school {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: var(--space-8) 0 var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-2xl);
+}
+
+.join-school-logo {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  color: var(--accent-contrast);
+  font-weight: 700;
+  background: var(--accent-gradient);
+  border-radius: var(--radius-xl);
+}
+
+.join-school-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.join-school-copy span {
+  color: var(--eyebrow);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.join-school-copy b {
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+
+.join-school-copy small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.join-page .password-change-intro {
+  margin: var(--space-6) 0;
+}
+
+.join-success {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+}
+
+@media (max-width: 560px) {
+  .invite-copy,
+  .joined-row {
+    flex-wrap: wrap;
+  }
+
+  .joined-row-actions {
+    width: 100%;
+  }
+
+  .joined-row-actions .cx-btn {
+    flex: 1;
+  }
+}
+
+.joined-actions {
+  margin-bottom: var(--space-4);
+}

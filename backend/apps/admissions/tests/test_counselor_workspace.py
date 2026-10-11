@@ -4,7 +4,8 @@ approve-with-note, the reminder, per-student missing/next-deadline fields.
 Every permission test proves the negative case: another counselor, a student,
 a teacher or an organization account must not be able to do it or see it.
 """
-from datetime import timedelta
+from datetime import date, timedelta
+from unittest import mock
 
 from django.core.cache import cache
 from django.db import connection
@@ -43,7 +44,7 @@ class DashboardCounselorSummaryTests(WorkspaceBase):
     def test_counts_what_is_waiting_and_who_needs_the_counselor(self):
         self.task(status=Task.Status.SUBMITTED)
         self.task(status=Task.Status.TODO, due_date=self.today - timedelta(days=2))  # late
-        Document.objects.create(student=self.student, title='Transcript', status=Document.Status.UPLOADED)
+        Document.objects.create(student=self.student, title='Transcript', status=Document.Status.UPLOADED, google_docs_url='https://docs.google.com/document/d/x')
         Document.objects.create(student=self.student, title='Passport', status=Document.Status.REQUIRED)
         RoadmapMission.objects.create(student=self.student, title='Shortlist', status=RoadmapMission.Status.SUBMITTED)
         Achievement.objects.create(student=self.student, title='Olympiad', category='olympiad', description='Silver')
@@ -69,23 +70,33 @@ class DashboardCounselorSummaryTests(WorkspaceBase):
         self.assertEqual(data['deadlines'], [])
 
     def test_deadlines_span_tasks_applications_and_letters_soonest_first(self):
-        self.task(title='IELTS certificate', due_date=self.today + timedelta(days=2))
-        self.task(title='Far away', due_date=self.today + timedelta(days=30))
-        self.task(title='Approved already', status=Task.Status.APPROVED, due_date=self.today - timedelta(days=1))
+        # A Wednesday: the week runs Monday 5 to Sunday 11 October.
+        wednesday = date(2026, 10, 7)
+        self.task(title='IELTS certificate', due_date=wednesday + timedelta(days=2))
+        self.task(title='Far away', due_date=wednesday + timedelta(days=30))
+        self.task(title='Approved already', status=Task.Status.APPROVED, due_date=wednesday - timedelta(days=1))
         university = University.objects.create(name='NUS', country='Singapore')
         Application.objects.create(
-            student=self.student, university=university, program='CS', deadline=self.today + timedelta(days=4),
+            student=self.student, university=university, program='CS', deadline=wednesday + timedelta(days=4),
         )
         RecommendationLetter.objects.create(
-            student=self.student, recommender_name='Mr Karimov', deadline=self.today - timedelta(days=3),
+            student=self.student, recommender_name='Mr Karimov', deadline=wednesday - timedelta(days=1),
+            status=RecommendationLetter.Status.REQUESTED,
+        )
+        RecommendationLetter.objects.create(
+            student=self.student, recommender_name='Last month', deadline=wednesday - timedelta(days=30),
             status=RecommendationLetter.Status.REQUESTED,
         )
         self.act_as(self.counselor)
-        deadlines = self.client.get(self.URL).data['deadlines']
+        with mock.patch('django.utils.timezone.localdate', return_value=wednesday):
+            data = self.client.get(self.URL).data
+        deadlines = data['deadlines']
         self.assertEqual([row['kind'] for row in deadlines], ['letter', 'task', 'application'])
         self.assertEqual([row['late'] for row in deadlines], [True, False, False])
         self.assertEqual(deadlines[0]['title'], 'Mr Karimov')
         self.assertEqual(deadlines[2]['title'], 'NUS')
+        # Older open work is counted, not listed.
+        self.assertEqual(data['deadlines_overdue'], 1)
 
     def test_only_counselors_get_the_workspace_fields(self):
         self.task(status=Task.Status.SUBMITTED)
@@ -173,7 +184,7 @@ class SendBackTests(WorkspaceBase):
 class ApproveWithNoteTests(WorkspaceBase):
     def setUp(self):
         super().setUp()
-        self.document = Document.objects.create(student=self.student, title='Transcript', status=Document.Status.UPLOADED, counselor_comment='old')
+        self.document = Document.objects.create(student=self.student, title='Transcript', status=Document.Status.UPLOADED, counselor_comment='old', google_docs_url='https://docs.google.com/document/d/x')
         self.achievement = Achievement.objects.create(student=self.student, title='Olympiad', category='olympiad', description='Silver')
 
     def test_document_and_achievement_are_approved_and_the_note_replaces_the_old_comment(self):
@@ -235,12 +246,18 @@ class PortfolioReviewTests(WorkspaceBase):
         self.assertEqual({row['title'] for row in rows}, {'Returned', 'Verified'})
         self.assertEqual(self.client.get('/api/achievements/?awaiting_review=maybe').status_code, 400)
 
-    def test_documents_awaiting_review_are_uploaded_or_reviewing(self):
+    def test_documents_awaiting_review_are_uploaded_or_reviewing_with_a_file_or_link(self):
         for status in ('required', 'uploaded', 'reviewing', 'approved', 'rejected'):
-            Document.objects.create(student=self.student, title=f'doc-{status}', status=status)
+            Document.objects.create(student=self.student, title=f'doc-{status}', status=status, google_docs_url='https://docs.google.com/document/d/x')
+        Document.objects.create(student=self.student, title='doc-file', status='uploaded', file='student_documents/cv.pdf')
+        # Nothing attached: nothing to approve, so not in the queue.
+        Document.objects.create(student=self.student, title='doc-empty', status='uploaded')
+        Document.objects.create(student=self.student, title='doc-empty-null', status='reviewing', file=None)
         self.act_as(self.counselor)
         rows = self.results(self.client.get('/api/documents/?awaiting_review=true&cursor='))
-        self.assertEqual({row['title'] for row in rows}, {'doc-uploaded', 'doc-reviewing'})
+        self.assertEqual({row['title'] for row in rows}, {'doc-uploaded', 'doc-reviewing', 'doc-file'})
+        rows = self.results(self.client.get('/api/documents/?awaiting_review=false&cursor='))
+        self.assertEqual({row['title'] for row in rows}, {'doc-required', 'doc-approved', 'doc-rejected', 'doc-empty', 'doc-empty-null'})
 
     def test_a_student_cannot_write_the_review_comment_or_verify_their_own_work(self):
         self.act_as(self.student_user)
@@ -311,7 +328,7 @@ class StudentProgressFieldTests(WorkspaceBase):
     def test_a_missing_document_is_named_and_counted(self):
         Document.objects.create(student=self.student, title='Passport', status=Document.Status.REQUIRED)
         Document.objects.create(student=self.student, title='Transcript', status=Document.Status.REQUIRED)
-        Document.objects.create(student=self.student, title='CV', status=Document.Status.UPLOADED)
+        Document.objects.create(student=self.student, title='CV', status=Document.Status.UPLOADED, google_docs_url='https://docs.google.com/document/d/x')
         stats = self.stats()
         self.assertEqual((stats.documents_missing, stats.missing_document_title), (2, 'Passport'))
         self.act_as(self.counselor)
@@ -361,7 +378,8 @@ class BookingPreviousTimeTests(WorkspaceBase):
         self.assertEqual(response.status_code, 200, response.data)
         booking.refresh_from_db()
         self.assertEqual(booking.previous_starts_at, original)
-        self.assertEqual(booking.status, Booking.Status.PENDING)
+        # Staff moving their own meeting confirm it at the new time.
+        self.assertEqual(booking.status, Booking.Status.APPROVED)
         self.assertEqual(parse_datetime(response.data['previous_starts_at']), original)
 
     def test_a_student_cannot_set_the_previous_time_directly(self):
@@ -386,6 +404,25 @@ class ActivityFeedFilterTests(WorkspaceBase):
         rows = self.results(self.client.get(f'/api/activity/?student={self.student_b.pk}&cursor=&page_size=5'))
         self.assertEqual(rows, [])
 
+    def test_kind_narrows_to_one_record_kinds_review_entries(self):
+        document = ActivityLog.objects.create(
+            actor=self.counselor, student=self.student, action='Document approved: Passport',
+            metadata={'record': 1, 'kind': 'document'},
+        )
+        ActivityLog.objects.create(
+            actor=self.counselor, student=self.student, action='Task approved: X',
+            metadata={'record': 2, 'kind': 'task'},
+        )
+        ActivityLog.objects.create(actor=self.counselor, student=self.student, action='Reminder sent')
+        ActivityLog.objects.create(
+            actor=self.counselor_b, student=self.student_b, action='Document approved: Other',
+            metadata={'record': 3, 'kind': 'document'},
+        )
+        self.act_as(self.counselor)
+        rows = self.results(self.client.get('/api/activity/?kind=document&cursor='))
+        self.assertEqual([row['id'] for row in rows], [document.pk])
+        self.assertEqual(self.client.get('/api/activity/?kind=nope&cursor=').status_code, 400)
+
 
 class SameSchoolCounselorIsolationTests(WorkspaceBase):
     """Two counselors of one school: neither sees, counts or acts on the other's students."""
@@ -396,7 +433,7 @@ class SameSchoolCounselorIsolationTests(WorkspaceBase):
         self.peer_student = self.make_profile(peer_user, self.school_a, self.counselor_peer)
         self.peer_task = self.task(student=self.peer_student, status=Task.Status.SUBMITTED, due_date=self.today - timedelta(days=1))
         self.peer_mission = RoadmapMission.objects.create(student=self.peer_student, title='Shortlist', status=RoadmapMission.Status.SUBMITTED)
-        self.peer_document = Document.objects.create(student=self.peer_student, title='Passport', status=Document.Status.UPLOADED)
+        self.peer_document = Document.objects.create(student=self.peer_student, title='Passport', status=Document.Status.UPLOADED, google_docs_url='https://docs.google.com/document/d/x')
         self.peer_achievement = Achievement.objects.create(student=self.peer_student, title='Olympiad', category='olympiad', description='Gold')
         self.peer_log = ActivityLog.objects.create(actor=self.counselor_peer, student=self.peer_student, action='Peer only')
 

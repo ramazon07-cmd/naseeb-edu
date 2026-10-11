@@ -10,7 +10,7 @@ from ..serializers.common import changed_fields
 from core.exceptions import CodedError
 from ..essay_lab.doc import count_words, make_preview
 from ..essay_lab.tabs import tab_from_text
-from ..scoping import owns_essays_only, scope_essays, shared_essay_lookups
+from ..scoping import owns_essays_only, scope_essays, shared_essay_lookups, without_deactivated_students
 from .common import ScopedQuerysetMixin, StudentRecordListMixin
 
 
@@ -38,6 +38,13 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
 
     def get_queryset(self):
         return scope_essays(self.queryset, self.request.user).filter(trashed_at__isnull=True)
+
+    def apply_filters(self, queryset, params):
+        queryset = super().apply_filters(queryset, params)
+        if params.get('status') == Essay.Status.REVIEWING and not params.get('student'):
+            # "Awaiting review": it matches the dashboard badge, which skips deactivated students.
+            queryset = without_deactivated_students(queryset)
+        return queryset
 
     def perform_create(self, serializer):
         content = serializer.validated_data.get('content', '')

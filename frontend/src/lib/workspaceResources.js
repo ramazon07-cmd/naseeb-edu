@@ -21,17 +21,54 @@ const ROADMAP_ADMIN = [['counselorRoadmapTemplates', 'counselor-roadmap-template
 // Schools and counselors are paged and searched on the server; Admin Control
 // reads its numbers from /api/admin/summary/.
 const ADMIN_RESOURCES = [...ROADMAP_ADMIN];
-const COUNSELOR_RESOURCES = [['schools', 'schools'], ...ROADMAP_ADMIN, ['programServices', 'program-services'], ['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']];
 
-export function resourcesFor(user) {
-  switch (workspaceRole(user)) {
-    case 'parent': return [['parentPortal', 'parent-portal']];
-    case 'organization': return [['bookings', 'bookings'], ['messageChannels', 'message-channels'], ['supportTickets', 'support-tickets']];
-    case 'teacher': return [['bookings', 'bookings'], ['messageChannels', 'message-channels']];
-    case 'admin': return ADMIN_RESOURCES;
-    case 'counselor': return COUNSELOR_RESOURCES;
-    default: return [...STUDENT_RESOURCES, ...PORTAL_RESOURCES];
-  }
+// A staff member's meetings, chats and tickets grow for as long as they work
+// here, so sign-in never loads them whole: meetings from BOOKING_WINDOW_DAYS
+// ago onwards (every upcoming one, the recent past), and the first page of
+// chats (newest first) and tickets (latest activity first). `firstPage`
+// resources keep their `next` link; the page that lists them loads more.
+export const BOOKING_WINDOW_DAYS = 30;
+const FIRST_PAGE = { firstPage: true };
+
+export function bookingWindowStart(now = new Date()) {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - BOOKING_WINDOW_DAYS);
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+}
+
+function staffResources(now) {
+  return {
+    bookings: ['bookings', 'bookings', `?starts_from=${bookingWindowStart(now)}`],
+    messageChannels: ['messageChannels', 'message-channels', '?page_size=50', FIRST_PAGE],
+    supportTickets: ['supportTickets', 'support-tickets', '?ordering=-updated&page_size=50', FIRST_PAGE],
+  };
+}
+
+export function resourcesFor(user, now = new Date()) {
+  const role = workspaceRole(user);
+  if (role === 'parent') return [['parentPortal', 'parent-portal']];
+  if (role === 'admin') return ADMIN_RESOURCES;
+  if (!['organization', 'teacher', 'counselor'].includes(role)) return [...STUDENT_RESOURCES, ...PORTAL_RESOURCES];
+  const staff = staffResources(now);
+  if (role === 'organization') return [staff.bookings, staff.messageChannels, staff.supportTickets];
+  if (role === 'teacher') return [staff.bookings, staff.messageChannels];
+  return [['schools', 'schools'], ...ROADMAP_ADMIN, ['programServices', 'program-services'], staff.bookings, staff.messageChannels, staff.supportTickets];
+}
+
+// One request per key at a time: `join(key)` hands a caller the request
+// already in flight, so it neither repeats nor supersedes it.
+export function createInFlight() {
+  const pending = new Map();
+  return {
+    track(key, promise) {
+      pending.set(key, promise);
+      const clear = () => { if (pending.get(key) === promise) pending.delete(key); };
+      promise.then(clear, clear);
+      return promise;
+    },
+    join: (key) => pending.get(key) || null,
+    clear: () => pending.clear(),
+  };
 }
 
 // Staff roles read the large collections through server-paged lists.
@@ -127,4 +164,21 @@ export function selectWorkspaceLoad(user, planned, requested = new Set(), { chan
   const wanted = lazyKeys ? new Set(lazyKeys) : planned ? new Set(planned) : null;
   return [...(loadsDashboardStats(user) ? [['dashboard']] : []), ...resourcesFor(user)]
     .filter(([key]) => !wanted || wanted.has(key));
+}
+
+// The dashboard key's status after a stats refresh failed (useWorkspaceData
+// refreshStats). That refresh may have taken over a load that marked the key
+// "loading", so it must settle here: stats already shown stay up, otherwise
+// the error shows with a retry.
+export function failedStatsStatus(current, error) {
+  if (current?.loaded) return { status: 'success', error: '', loaded: true };
+  return { status: 'error', error: error?.message || 'Unable to load this section.', loaded: false };
+}
+
+// Dashboard stats after a fresh response. Counselor Home's `home` block comes
+// only with ?include=home; a plain stats response keeps the last one, marked
+// stale, so Home shows it while it refreshes instead of a skeleton.
+export function mergeStats(current, next) {
+  if (!next || typeof next !== 'object' || next.home !== undefined || !current?.home) return next;
+  return { ...next, home: current.home, home_stale: true };
 }

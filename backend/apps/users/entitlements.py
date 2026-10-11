@@ -110,7 +110,11 @@ def create_default_subscription(sender, instance, created, raw=False, **kwargs):
 
 
 def seat_queryset(school_id, key):
-    return User.objects.filter(school_id=school_id, role=SEAT_ROLES[key], is_active=True)
+    # A student who joined by invite takes a seat only once their counselor
+    # confirms them (apps.admissions.invites.confirm_student checks it then).
+    return User.objects.filter(school_id=school_id, role=SEAT_ROLES[key], is_active=True).exclude(
+        student_profile__awaiting_confirmation=True,
+    )
 
 
 def check(school, key, delta=1, *, exclude_user_id=None):
@@ -265,6 +269,7 @@ def workspace_summary(subscription):
 def _seat_count(role):
     counts = (
         User.objects.filter(school=OuterRef('pk'), role=role, is_active=True)
+        .exclude(student_profile__awaiting_confirmation=True)
         .order_by()
         .values('school')
         .annotate(total=Count('pk'))

@@ -182,6 +182,13 @@ class StudentProfile(TimeStampedModel):
     level = models.PositiveSmallIntegerField(default=1)
     # Students are never hard-deleted: deactivation hides them and keeps data.
     deactivated_at = models.DateTimeField(null=True, blank=True)
+    # Joined through an invite and not yet confirmed by their counselor: the
+    # account can sign in but reaches nothing beyond /me (authentication.py),
+    # and school staff do not see it (scoping.student_lookups).
+    awaiting_confirmation = models.BooleanField(default=False)
+    joined_invite = models.ForeignKey(
+        'StudentInvite', on_delete=models.SET_NULL, null=True, blank=True, related_name='joined_students',
+    )
 
     class Meta:
         constraints = [
@@ -2108,6 +2115,8 @@ class ActivityLog(TimeStampedModel):
         indexes = [
             models.Index(fields=['student', '-created_at'], name='activity_student_created_idx'),
             models.Index(fields=['actor', '-created_at'], name='activity_actor_created_idx'),
+            # Home's weekly check-ins look up one counselor's work per student per day.
+            models.Index(fields=['student', 'actor', 'created_at'], name='activity_student_actor_idx'),
         ]
 
     def __str__(self):
@@ -2153,3 +2162,53 @@ class ChallengeAttempt(TimeStampedModel):
     def __str__(self):
         return f'{self.student}: {self.challenge} ({self.completed_at:%Y-%m-%d})'
 
+
+
+class StudentInvite(TimeStampedModel):
+    """A link a counselor hands out so a student can create their own account.
+
+    Only the SHA-256 of the token is stored; the raw token is shown once, when
+    the invite is created. A personal invite carries the student's details and
+    admits one student; a magic link carries none and admits any number until
+    it expires or is revoked. Students who join wait for their counselor's
+    confirmation (StudentProfile.awaiting_confirmation).
+    """
+
+    class Kind(models.TextChoices):
+        PERSONAL = 'personal', 'Personal invite'
+        LINK = 'link', 'Magic link'
+
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    token_hash = models.CharField(max_length=64, unique=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='student_invites')
+    # The counselor the joining students are assigned to.
+    counselor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='student_invites')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    email = models.EmailField(blank=True)
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    phone = models.CharField(max_length=32, blank=True)
+    grade = models.CharField(max_length=10, choices=StudentProfile.Grade.choices, blank=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    # 1 for a personal invite; NULL: unlimited (a magic link).
+    max_uses = models.PositiveIntegerField(null=True, blank=True)
+    use_count = models.PositiveIntegerField(default=0)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['school', 'counselor', '-created_at'], name='invite_school_counselor_idx')]
+
+    @property
+    def status(self):
+        if self.revoked_at:
+            return 'revoked'
+        if self.max_uses is not None and self.use_count >= self.max_uses:
+            return 'used'
+        if self.expires_at <= timezone.now():
+            return 'expired'
+        return 'active'
+
+    def __str__(self):
+        return f'{self.get_kind_display()} · {self.school} · {self.status}'

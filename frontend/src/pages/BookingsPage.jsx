@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
-import { api } from '../api';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { api, request } from '../api';
 import { t, tx, locale, formatDateLocale } from '../i18n';
 import { Modal, Badge, Empty, Panel } from '../components/ui';
 import { Field, PortalTabs } from '../components/forms';
 import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
-import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2 } from 'lucide-react';
+import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil } from 'lucide-react';
 import { clockText, dateTimeText, dayLabel, joinParts, relativeDayText } from '../lib/format';
 import { isPlatformAdmin } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
 import { isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook } from '../lib/meetings';
-import { StudentPicker } from '../components/paged';
+import { StudentSearchInput } from '../components/StudentSearchInput';
 import './bookings-scheduler.css';
 
 // Local calendar day of a timestamp, as YYYY-MM-DD.
@@ -18,6 +18,19 @@ function dayKey(value) {
   const date = new Date(value);
   const pad = (part) => String(part).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+const byStart = (x, y) => new Date(x.starts_at) - new Date(y.starts_at);
+const NO_SLOTS = [];
+
+function groupByParticipant(slots) {
+  const groups = new Map();
+  for (const slot of slots) {
+    if (!groups.has(slot.participant)) groups.set(slot.participant, []);
+    groups.get(slot.participant).push(slot);
+  }
+  for (const list of groups.values()) list.sort(byStart);
+  return groups;
 }
 
 const monthStart = (value) => { const date = new Date(value); return new Date(date.getFullYear(), date.getMonth(), 1); };
@@ -89,10 +102,14 @@ function SlotCalendar({ slots, selectedDate, onDate, selectedSlot, onSlot, onNex
   </div>;
 }
 
+// Matches OVERVIEW_SLOTS_PER_PARTICIPANT in backend meetings.py.
+const OVERVIEW_SLOTS = 20;
+
 // `staff`: a counselor/teacher/org member booking with one of their students —
 // they pick the student, not a participant (the API sets participant = them).
 // `defaultStudentId`/`defaultTopic`: pre-fill for "Rebook" on an expired or declined request.
-export function BookingForm({ staff = false, defaultStudentId = null, defaultTopic = '', onClose, onSaved, notify }) {
+export function BookingForm({ staff = false, defaultStudentId = null, defaultStudentName = '', defaultTopic = '', onClose, onSaved, notify }) {
+  const [student, setStudent] = useState(defaultStudentId ? { id: defaultStudentId, name: defaultStudentName } : null);
   const [participants, setParticipants] = useState([]);
   const [participantId, setParticipantId] = useState('');
   const [slots, setSlots] = useState([]);
@@ -112,31 +129,47 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
       const nextSlots = times || [];
       setParticipants(nextPeople);
       setSlots(nextSlots);
-      const firstWithTime = nextPeople.find((person) => nextSlots.some((slot) => slot.participant === person.id && slot.available));
-      const first = firstWithTime || nextPeople[0];
+      const groups = groupByParticipant(nextSlots);
+      const firstFree = (id) => (groups.get(id) || NO_SLOTS).find((slot) => slot.available);
+      const first = nextPeople.find((person) => firstFree(person.id)) || nextPeople[0];
       setParticipantId(String(first?.id || ''));
-      const firstSlot = nextSlots.filter((slot) => slot.participant === first?.id && slot.available).sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at))[0];
+      const firstSlot = first && firstFree(first.id);
       if (firstSlot) setSelectedDate(dayKey(firstSlot.starts_at));
     }).catch((err) => { if (active) notify(err.message, 'error'); }).finally(() => {
       if (active) setLoading(false);
     });
     return () => {active = false;};
   }, [staff, notify]);
-  const personSlots = slots.filter((slot) => slot.participant === Number(participantId)).sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
+  // The overview holds only each person's next few times; the chosen person's full list replaces them.
+  useEffect(() => {
+    if (staff || !participantId) return undefined;
+    let active = true;
+    const id = Number(participantId);
+    api.bookingAvailability(id).then((items) => {
+      if (!active) return;
+      const theirs = items || [];
+      setSlots((current) => [...current.filter((slot) => slot.participant !== id), ...theirs]);
+      const first = [...theirs].sort(byStart).find((slot) => slot.available);
+      setSelectedDate((day) => day || (first ? dayKey(first.starts_at) : ''));
+    }).catch((err) => { if (active) notify(err.message, 'error'); });
+    return () => { active = false; };
+  }, [staff, participantId, notify]);
+  const slotsByPerson = useMemo(() => groupByParticipant(slots), [slots]);
+  const personSlots = slotsByPerson.get(Number(participantId)) || NO_SLOTS;
   const person = participants.find((item) => String(item.id) === participantId);
   const personName = person ? fullName(person) || person.username : '';
   const duration = selectedSlot?.duration_minutes || personSlots[0]?.duration_minutes;
-  // Nobody can be booked through slots until they publish some: ask for any time instead.
-  const freeForm = !loading && Boolean(participantId) && !personSlots.some((slot) => slot.available);
+  // Students book only from published times; until there are some, there is nothing to pick.
+  const noTimes = !loading && Boolean(participantId) && !personSlots.some((slot) => slot.available);
   function choosePerson(id) {
-    const next = slots.filter((slot) => slot.participant === id && slot.available).sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at))[0];
+    const next = (slotsByPerson.get(id) || NO_SLOTS).find((slot) => slot.available);
     setParticipantId(String(id));
     setSelectedDate(next ? dayKey(next.starts_at) : '');
     setSelectedSlot(null);
   }
   async function submit(event) {
     event.preventDefault();
-    if (!staff && !selectedSlot && !freeForm) return;
+    if (!staff && !selectedSlot) return;
     setSaving(true);
     const values = new FormData(event.currentTarget);
     try {
@@ -146,10 +179,6 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
         starts_at: new Date(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
         notes: values.get('notes')
-      } : freeForm ? {
-        participant: Number(participantId), topic, notes,
-        starts_at: new Date(values.get('starts_at')).toISOString(),
-        duration_minutes: Number(values.get('duration_minutes')),
       } : {
         participant: Number(participantId), availability_slot: selectedSlot.id,
         topic, starts_at: selectedSlot.starts_at, duration_minutes: selectedSlot.duration_minutes, notes
@@ -162,9 +191,9 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
       setSaving(false);
     }
   }
-  if (staff) return <Modal title={t("Request a meeting")} onClose={onClose}><form className="form-grid" onSubmit={submit}>
-    <StudentPicker required value={defaultStudentId || ''} /><Field label={t("Topic")}><input name="topic" required defaultValue={defaultTopic} placeholder={t("Essay review, university list...")} /></Field><Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required /></Field><Field label={t("Duration")}><select name="duration_minutes" defaultValue="45"><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field><Field label={t("Notes")}><textarea name="notes" placeholder={t("What would you like to discuss?")} /></Field>
-    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Requesting…") : t("Send request")}</button></div>
+  if (staff) return <Modal title={t("Book a meeting")} onClose={onClose}><form className="form-grid" onSubmit={submit}>
+    <StudentSearchInput name="student" required value={student} onChange={setStudent} /><Field label={t("Topic")}><input name="topic" required defaultValue={defaultTopic} placeholder={t("Essay review, university list...")} /></Field><Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required /></Field><Field label={t("Duration")}><select name="duration_minutes" defaultValue="45"><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field><Field label={t("Notes")}><textarea name="notes" placeholder={t("What would you like to discuss?")} /></Field>
+    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Booking…") : t("Book meeting")}</button></div>
   </form></Modal>;
   const details = step === 'details' && selectedSlot;
   return <Modal title={t("Request a meeting")} onClose={onClose} className="booking-scheduler-modal"><form className="booking-cal" onSubmit={submit}>
@@ -176,9 +205,11 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
       </> : <section className="booking-cal-people" aria-label={t("Meet with")}>
         <h3>{t("Meet with")}</h3>
         {loading ? <p className="booking-cal-note">{t("Loading available staff…")}</p> : participants.length ? participants.map((item) => {
-          const free = slots.filter((slot) => slot.participant === item.id && slot.available).length;
+          const free = (slotsByPerson.get(item.id) || NO_SLOTS).filter((slot) => slot.available).length;
+          // Until a person is picked only their next OVERVIEW_SLOTS times are loaded: a full page means "or more".
+          const partial = participantId !== String(item.id) && free >= OVERVIEW_SLOTS;
           const name = fullName(item) || item.username;
-          return <button key={item.id} type="button" className="booking-cal-person" aria-pressed={participantId === String(item.id)} onClick={() => choosePerson(item.id)}><span className="booking-cal-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span><span><b>{name}</b><small>{free ? t("{n} available times", { n: free }) : t("No available times")}</small></span></button>;
+          return <button key={item.id} type="button" className="booking-cal-person" aria-pressed={participantId === String(item.id)} onClick={() => choosePerson(item.id)}><span className="booking-cal-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span><span><b>{name}</b><small>{free ? t(partial ? "{n}+ available times" : "{n} available times", { n: free }) : t("No available times")}</small></span></button>;
         }) : <p className="booking-cal-note">{t("No counselor, teacher, or school representative is available for your account.")}</p>}
       </section>}
       <ul className="booking-cal-meta">
@@ -197,19 +228,21 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultTop
         </div>
       </> : <>
         <h3>{t("Choose a date and time")}</h3>
-        {loading ? <p className="booking-cal-note">{t("Loading available times…")}</p> : !participantId ? null : freeForm
-          ? <div className="booking-cal-fields">
-            <p className="booking-cal-note">{t("No published times yet. Suggest a time and they will confirm it.")}</p>
-            <Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required /></Field>
-            <Field label={t("Duration")}><select name="duration_minutes" defaultValue="45"><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field>
-            <Field label={t("Topic")}><input name="topic" required value={topic} onChange={(event) => setTopic(event.target.value)} placeholder={t("Essay review, university list...")} /></Field>
-            <Field label={t("Notes")}><textarea name="notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t("What would you like to discuss?")} /></Field>
-            <div><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Requesting…") : t("Request meeting")}</button></div>
-          </div>
+        {loading ? <p className="booking-cal-note">{t("Loading available times…")}</p> : !participantId ? null : noTimes
+          ? <p className="booking-cal-note" role="status">{t("{name} hasn't published available times yet. Message them or check back later.", { name: personName || t("Meeting participant") })}</p>
           : <SlotCalendar key={participantId} slots={personSlots} selectedDate={selectedDate} onDate={(key) => { setSelectedDate(key); setSelectedSlot(null); }} selectedSlot={selectedSlot} onSlot={setSelectedSlot} onNext={() => setStep('details')} />}
       </>}
     </section>
   </form></Modal>;
+}
+
+// A past slot, or one any meeting points at (`editable` from the API), stays as it is; the server refuses to move it.
+const isPast = (slot) => new Date(slot.starts_at) <= new Date();
+const canEdit = (slot) => slot.available && slot.editable !== false && !isPast(slot);
+function editTitle(slot) {
+  if (!slot.available) return t("A student already requested this time.");
+  if (slot.editable === false || isPast(slot)) return t("Locked");
+  return t("Edit");
 }
 
 const slotEnd = (slot) => new Date(new Date(slot.starts_at).getTime() + slot.duration_minutes * 60000);
@@ -224,11 +257,16 @@ function AvailabilityManager({ onClose, notify }) {
   const [viewMonth, setViewMonth] = useState(() => monthStart(new Date()));
   const [time, setTime] = useState('');
   const [duration, setDuration] = useState(45);
+  const [repeat, setRepeat] = useState(false);
+  const [repeatUntil, setRepeatUntil] = useState('');
+  const [repeatDays, setRepeatDays] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const sortSlots = (items) => [...items].sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
   useEffect(() => {
     let active = true;
     api.bookingAvailability().then((items) => {
       if (!active) return;
-      const next = (items || []).sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
+      const next = sortSlots(items || []);
       setSlots(next);
       if (next[0]) { setSelectedDay(dayKey(next[0].starts_at)); setViewMonth(monthStart(next[0].starts_at)); }
     }).catch((err) => { if (active) notify(err.message, 'error'); }).finally(() => { if (active) setLoading(false); });
@@ -238,16 +276,41 @@ function AvailabilityManager({ onClose, notify }) {
   const slotDays = new Set(slots.map((slot) => dayKey(slot.starts_at)));
   const daySlots = slots.filter((slot) => dayKey(slot.starts_at) === selectedDay);
   const openCount = slots.filter((slot) => slot.available).length;
+  const selectedWeekday = (new Date(`${selectedDay}T00:00`).getDay() + 6) % 7;
+  // The server repeats for at most 12 weeks counted from the first day.
+  const lastRepeatDay = dayKey(new Date(new Date(`${selectedDay}T00:00`).getTime() + 83 * 86400000));
+  function pickDay(key) {
+    setSelectedDay(key);
+    setEditing(null);
+    if (repeat) setRepeatDays([(new Date(`${key}T00:00`).getDay() + 6) % 7]);
+  }
+  function toggleRepeat(on) {
+    setRepeat(on);
+    setRepeatDays([selectedWeekday]);
+    if (on && !repeatUntil) setRepeatUntil(dayKey(new Date(new Date(`${selectedDay}T00:00`).getTime() + 27 * 86400000)));
+  }
   async function add(event) {
     event.preventDefault();
     const startsAt = new Date(`${selectedDay}T${time}`);
-    if (!time || startsAt <= new Date()) { notify(t("Choose a time in the future."), 'error'); return; }
+    if (!time || (!repeat && startsAt <= new Date())) { notify(t("Choose a time in the future."), 'error'); return; }
+    if (repeat && (!repeatUntil || repeatUntil < selectedDay || repeatUntil > lastRepeatDay || !repeatDays.length)) { notify(t("Repeat for at most 12 weeks."), 'error'); return; }
     setBusy(true);
     try {
-      const slot = await api.addBookingAvailability({ starts_at: startsAt.toISOString(), duration_minutes: duration });
-      setSlots((current) => [...current, { ...slot, available: true }].sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at)));
+      if (repeat) {
+        const result = await api.repeatBookingAvailability({
+          weekdays: repeatDays, time, duration_minutes: duration, start_date: selectedDay, end_date: repeatUntil,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        });
+        setSlots((current) => sortSlots([...current, ...(result.slots || [])]));
+        notify(result.skipped
+          ? t("{created} times added, {skipped} skipped (past or overlapping).", { created: result.created, skipped: result.skipped })
+          : t("{created} times added.", { created: result.created }), result.created ? undefined : 'error');
+      } else {
+        const slot = await api.addBookingAvailability({ starts_at: startsAt.toISOString(), duration_minutes: duration });
+        setSlots((current) => sortSlots([...current, { ...slot, available: true }]));
+        notify(t("Available time added."));
+      }
       setTime('');
-      notify(t("Available time added."));
     } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
   }
   async function remove(id) {
@@ -255,19 +318,44 @@ function AvailabilityManager({ onClose, notify }) {
     try { await api.removeBookingAvailability(id); setSlots((current) => current.filter((slot) => slot.id !== id)); notify(t("Available time removed.")); }
     catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
   }
+  async function saveEdit(event) {
+    event.preventDefault();
+    const startsAt = new Date(`${editing.date}T${editing.time}`);
+    if (!editing.date || !editing.time || startsAt <= new Date()) { notify(t("Choose a time in the future."), 'error'); return; }
+    setBusy(true);
+    try {
+      const slot = await api.editBookingAvailability(editing.id, { starts_at: startsAt.toISOString(), duration_minutes: editing.duration });
+      setSlots((current) => sortSlots(current.map((item) => (item.id === slot.id ? slot : item))));
+      setSelectedDay(dayKey(slot.starts_at));
+      setEditing(null);
+      notify(t("Available time updated."));
+    } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
+  }
+  const startEdit = (slot) => setEditing({ id: slot.id, date: dayKey(slot.starts_at), time: localInputValue(slot.starts_at).slice(11), duration: slot.duration_minutes });
   return <Modal title={t("My available hours")} onClose={onClose} className="booking-scheduler-modal">
     <div className="booking-cal availability-cal">
       <aside className="booking-cal-side">
         <p className="booking-cal-note">{t("Add times students can choose when requesting a meeting. Times are shown in your local time zone.")}</p>
-        <MonthGrid month={viewMonth} onMonth={setViewMonth} canBack={viewMonth > monthStart(new Date())} canForward marked={slotDays} canPick={(key) => key >= today} selected={selectedDay} onPick={setSelectedDay} label={t("Choose a date and time")} />
+        <MonthGrid month={viewMonth} onMonth={setViewMonth} canBack={viewMonth > monthStart(new Date())} canForward marked={slotDays} canPick={(key) => key >= today} selected={selectedDay} onPick={pickDay} label={t("Choose a date and time")} />
         <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}{!loading && <> · {t("{n} available times", { n: openCount })}</>}</p>
       </aside>
       <section className="booking-cal-main availability-day">
         <h3>{dayTitle(selectedDay)}</h3>
         {loading ? <p className="booking-cal-note">{t("Loading available times…")}</p> : daySlots.length ? <ul className="availability-slots">{daySlots.map((slot) => <li key={slot.id} className={slot.available ? '' : 'is-requested'}>
-          <span><b>{clockText(slot.starts_at)} – {clockText(slotEnd(slot))}</b><small>{slot.duration_minutes} {t("min")}</small></span>
-          <span className="availability-state">{slot.available ? t("Available") : t("Requested")}</span>
-          <button type="button" className="availability-remove" disabled={busy || !slot.available} onClick={() => remove(slot.id)} aria-label={`${t("Remove")} ${clockText(slot.starts_at)}`} title={slot.available ? t("Remove") : t("A student already requested this time.")}><Trash2 size={16} aria-hidden="true" /></button>
+          {editing?.id === slot.id ? <form className="availability-add-row" style={{ gridColumn: '1 / -1' }} onSubmit={saveEdit} aria-label={`${t("Edit")} ${clockText(slot.starts_at)}`}>
+            <label className="availability-time"><span className="sr-only">{t("Date")}</span><input type="date" required min={today} value={editing.date} onChange={(event) => setEditing({ ...editing, date: event.target.value })} /></label>
+            <label className="availability-time"><span className="sr-only">{t("Time")}</span><input type="time" required value={editing.time} onChange={(event) => setEditing({ ...editing, time: event.target.value })} /></label>
+            <fieldset className="availability-durations"><legend className="sr-only">{t("Duration")}</legend>{[30, 45, 60].map((value) => <label key={value}><input type="radio" name={`availability-edit-${slot.id}`} checked={editing.duration === value} onChange={() => setEditing({ ...editing, duration: value })} /><span>{value} {t("min")}</span></label>)}</fieldset>
+            <button type="button" className="button quiet" disabled={busy} onClick={() => setEditing(null)}>{t("Cancel")}</button>
+            <button className="button primary" disabled={busy} aria-busy={busy}>{t("Save")}</button>
+          </form> : <>
+            <span><b>{clockText(slot.starts_at)} – {clockText(slotEnd(slot))}</b><small>{slot.duration_minutes} {t("min")}</small></span>
+            <span className="availability-state">{slot.available ? t("Available") : t("Requested")}</span>
+            <span style={{ display: 'flex', gap: 4 }}>
+              <button type="button" className="availability-remove" disabled={busy || !canEdit(slot)} onClick={() => startEdit(slot)} aria-label={`${t("Edit")} ${clockText(slot.starts_at)}`} title={editTitle(slot)}><Pencil size={16} aria-hidden="true" /></button>
+              <button type="button" className="availability-remove" disabled={busy || !slot.available} onClick={() => remove(slot.id)} aria-label={`${t("Remove")} ${clockText(slot.starts_at)}`} title={slot.available ? t("Remove") : t("A student already requested this time.")}><Trash2 size={16} aria-hidden="true" /></button>
+            </span>
+          </>}
         </li>)}</ul> : <p className="booking-cal-note">{t("No times on this day yet.")}</p>}
         <form className="availability-add" onSubmit={add}>
           <b>{t("Add available time")}</b>
@@ -276,6 +364,11 @@ function AvailabilityManager({ onClose, notify }) {
             <fieldset className="availability-durations"><legend className="sr-only">{t("Duration")}</legend>{[30, 45, 60].map((value) => <label key={value}><input type="radio" name="availability-duration" checked={duration === value} onChange={() => setDuration(value)} /><span>{value} {t("min")}</span></label>)}</fieldset>
             <button className="button primary" disabled={busy || !time} aria-busy={busy}><Plus size={16} aria-hidden="true" /> {t("Add")}</button>
           </div>
+          <div className="availability-add-row">
+            <label><input type="checkbox" checked={repeat} onChange={(event) => toggleRepeat(event.target.checked)} /> {t("Repeat weekly until…")}</label>
+            {repeat && <label className="availability-time"><span className="sr-only">{t("Repeat until")}</span><input type="date" required min={selectedDay} max={lastRepeatDay} value={repeatUntil} onChange={(event) => setRepeatUntil(event.target.value)} /></label>}
+          </div>
+          {repeat && <fieldset className="availability-durations"><legend className="sr-only">{t("Repeat on")}</legend>{WEEKDAYS.map((name, index) => <label key={name}><input type="checkbox" checked={repeatDays.includes(index)} onChange={(event) => setRepeatDays((current) => (event.target.checked ? [...current, index] : current.filter((day) => day !== index)))} /><span>{uzbek() ? t(name).slice(0, 2) : formatDateLocale(new Date(2024, 0, 1 + index), { weekday: 'short' })}</span></label>)}</fieldset>}
         </form>
       </section>
     </div>
@@ -292,41 +385,49 @@ function localInputValue(iso) {
 export function RescheduleForm({ booking, staff = false, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   const [slots, setSlots] = useState([]);
-  const [loading, setLoading] = useState(!staff && Boolean(booking.participant));
+  const [loading, setLoading] = useState(staff || Boolean(booking.participant));
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [staffSlotId, setStaffSlotId] = useState('');
   const form = useRef(null);
   useEffect(() => {
-    if (staff || !booking.participant) return undefined;
+    // Staff see their own slots, usable only on a meeting they take part in; a student sees the participant's free ones.
+    if (!staff && !booking.participant) return undefined;
     let active = true;
     const current = new Date(booking.starts_at).getTime();
-    api.bookingAvailability(booking.participant).then((items) => {
+    // `reschedule`: this meeting's own time does not block the slots it overlaps.
+    const query = new URLSearchParams({ reschedule: booking.id });
+    if (!staff) query.set('participant', booking.participant);
+    request(`/bookings/availability/?${query}`).then((items) => {
       if (!active) return;
       // The meeting's own slot (or time) is where it already is, not a new time.
       const next = (items || [])
+        .filter((slot) => !staff || slot.participant === booking.participant)
         .map((slot) => (slot.id === booking.availability_slot || new Date(slot.starts_at).getTime() === current ? { ...slot, available: false } : slot))
         .sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
       setSlots(next);
       const first = next.find((slot) => slot.available);
       if (first) setSelectedDate(dayKey(first.starts_at));
-    }).catch((err) => { if (active) notify(err.message, 'error'); }).finally(() => { if (active) setLoading(false); });
+    }).catch((err) => { if (active && !staff) notify(err.message, 'error'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [staff, booking.participant, booking.availability_slot, booking.starts_at, notify]);
-  // Staff, or a participant without open slots: any date and time, as before slots existed.
-  const freeForm = staff || (!loading && !slots.some((slot) => slot.available));
+  }, [staff, booking.id, booking.participant, booking.availability_slot, booking.starts_at, notify]);
+  const openSlots = slots.filter((slot) => slot.available);
+  // Staff may also suggest any free time; students only move onto a published slot.
+  const staffSlot = staff ? openSlots.find((slot) => String(slot.id) === staffSlotId) : null;
+  const chosen = staff ? staffSlot : selectedSlot;
   async function submit(event) {
     event.preventDefault();
-    if (!freeForm && !selectedSlot) return;
+    if (!staff && !selectedSlot) return;
     setSaving(true);
     const values = new FormData(event.currentTarget);
     try {
-      await api.rescheduleBooking(booking.id, freeForm ? {
+      await api.rescheduleBooking(booking.id, chosen ? {
+        starts_at: chosen.starts_at, duration_minutes: chosen.duration_minutes, availability_slot: chosen.id,
+      } : {
         starts_at: new Date(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
-      } : {
-        starts_at: selectedSlot.starts_at, duration_minutes: selectedSlot.duration_minutes, availability_slot: selectedSlot.id,
       });
-      notify(t("New time sent for confirmation."));
+      notify(staff ? t("Meeting moved.") : t("New time sent for confirmation."));
       onSaved();
     } catch (err) {
       notify(err.message, 'error');
@@ -335,12 +436,34 @@ export function RescheduleForm({ booking, staff = false, onClose, onSaved, notif
     }
   }
   const otherParty = (staff ? booking.student_name : booking.participant_name) || t("Meeting participant");
-  const calendar = !loading && !freeForm;
-  return <Modal title={staff ? t("Suggest another time") : t("Reschedule meeting")} onClose={onClose} className={calendar ? 'booking-scheduler-modal' : undefined}><form ref={form} className="form-grid" onSubmit={submit}><p className="form-wide">{t("The new time goes back to {name} to confirm.", { name: otherParty })}</p>{loading ? <p className="form-wide booking-cal-note">{t("Loading available times…")}</p> : freeForm ? <><Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required defaultValue={localInputValue(booking.starts_at)} /></Field><Field label={t("Duration")}><select name="duration_minutes" defaultValue={String(booking.duration_minutes || 45)}><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field></> : <div className="form-wide availability-picker"><h3>{t("Choose a new date and time")}</h3><SlotCalendar slots={slots} selectedDate={selectedDate} onDate={(key) => { setSelectedDate(key); setSelectedSlot(null); }} selectedSlot={selectedSlot} onSlot={setSelectedSlot} onNext={() => form.current?.requestSubmit()} /></div>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || loading || (!freeForm && !selectedSlot)} aria-busy={saving}>{saving ? t("Sending…") : t("Propose new time")}</button></div></form></Modal>;
+  const calendar = !staff && !loading && openSlots.length > 0;
+  let body;
+  if (loading) body = <p className="form-wide booking-cal-note">{t("Loading available times…")}</p>;
+  else if (staff) body = <>
+    {openSlots.length > 0 && <Field label={t("My available times")}><select value={staffSlotId} onChange={(event) => setStaffSlotId(event.target.value)}><option value="">{t("Another time")}</option>{openSlots.map((slot) => <option key={slot.id} value={slot.id}>{slotRange(slot)}</option>)}</select></Field>}
+    {!staffSlot && <><Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required defaultValue={localInputValue(booking.starts_at)} /></Field><Field label={t("Duration")}><select name="duration_minutes" defaultValue={String(booking.duration_minutes || 45)}><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field></>}
+  </>;
+  else if (calendar) body = <div className="form-wide availability-picker"><h3>{t("Choose a new date and time")}</h3><SlotCalendar slots={slots} selectedDate={selectedDate} onDate={(key) => { setSelectedDate(key); setSelectedSlot(null); }} selectedSlot={selectedSlot} onSlot={setSelectedSlot} onNext={() => form.current?.requestSubmit()} /></div>;
+  else body = <p className="form-wide booking-cal-note" role="status">{t("{name} hasn't published available times yet. Message them or check back later.", { name: otherParty })}</p>;
+  const title = staff ? t("Move meeting") : t("Reschedule meeting");
+  return <Modal title={title} onClose={onClose} className={calendar ? 'booking-scheduler-modal' : undefined}><form ref={form} className="form-grid" onSubmit={submit}><p className="form-wide">{staff ? t("The meeting moves to the new time and stays confirmed; {name} is notified.", { name: otherParty }) : t("The new time goes back to {name} to confirm.", { name: otherParty })}</p>{body}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || loading || (!staff && !selectedSlot)} aria-busy={saving}>{saving ? t("Sending…") : staff ? t("Move meeting") : t("Propose new time")}</button></div></form></Modal>;
 }
 
 export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
+  const [earlier, setEarlier] = useState([]);
+  // The meeting's local calendar day; the ISO string is UTC and can be a day off.
+  // A bare YYYY-MM-DD is already a local day (new Date() would read it as UTC).
+  const meetingDate = /^\d{4}-\d{2}-\d{2}$/.test(booking.starts_at) ? booking.starts_at : dayKey(booking.starts_at);
+  // Opened from a meeting: show what was already written about that day, so "Notes" reads them back.
+  useEffect(() => {
+    if (!booking.id) return undefined;
+    const controller = new AbortController();
+    api.page('meetings', `?${new URLSearchParams({ student: booking.student, meeting_from: meetingDate, meeting_to: meetingDate, page_size: '20' })}`, controller.signal)
+      .then((data) => setEarlier(data?.results || []))
+      .catch((err) => { if (err?.name !== 'AbortError') notify(err.message, 'error'); });
+    return () => controller.abort();
+  }, [booking.id, booking.student, meetingDate, notify]);
   async function submit(event) {
     event.preventDefault();
     setSaving(true);
@@ -349,7 +472,7 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
       await api.create('meetings', {
         student: booking.student,
         title: values.get('title'),
-        meeting_date: booking.starts_at.slice(0, 10),
+        meeting_date: meetingDate,
         summary: values.get('summary'),
         next_steps: values.get('next_steps'),
       });
@@ -361,7 +484,7 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
       setSaving(false);
     }
   }
-  return <Modal title={t("Meeting notes")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Title")}><input name="title" required defaultValue={booking.topic} /></Field><Field label={t("Summary")}><textarea name="summary" required placeholder={t("What did you cover?")} /></Field><Field label={t("Next steps")}><textarea name="next_steps" placeholder={t("Optional")} /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save note")}</button></div></form></Modal>;
+  return <Modal title={t("Meeting notes")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{earlier.length > 0 && <section className="form-wide"><h3>{t("Notes from this day")}</h3><div className="record-list">{earlier.map((note) => <Record key={note.id} title={note.title} meta={joinParts(note.summary, note.next_steps && `${t("Next steps")}: ${note.next_steps}`)} />)}</div></section>}<Field label={t("Title")}><input name="title" required defaultValue={booking.topic} /></Field><Field label={t("Summary")}><textarea name="summary" required placeholder={t("What did you cover?")} /></Field><Field label={t("Next steps")}><textarea name="next_steps" placeholder={t("Optional")} /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save note")}</button></div></form></Modal>;
 }
 
 export function BookingsPage({ user, data, reload, notify }) {
@@ -432,9 +555,10 @@ function CounselorMeetingsPage({ data, reload, notify }) {
   function weekActions(item) {
     const status = meetingStatus(item, now, { student: false });
     if (status === 'pending') return <button type="button" className="cx-btn" onClick={() => scrollToPending(item.id)}>{t("Open")}</button>;
-    if (needsRebook(item, now)) return <button type="button" className="cx-btn" onClick={() => setBooking({ studentId: item.student, topic: item.topic })}>{t("Rebook")}</button>;
+    if (needsRebook(item, now)) return <button type="button" className="cx-btn" onClick={() => setBooking({ studentId: item.student, studentName: item.student_name, topic: item.topic })}>{t("Rebook")}</button>;
     return <>
       {status === 'approved' && !isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} onClick={() => transition(item, 'complete')}>{t("Mark completed")}</button>}
+      {status === 'approved' && isOpenMeeting(item, now) && <button type="button" className="cx-btn" onClick={() => setRescheduling(item)}>{t("Move meeting")}</button>}
       <button type="button" className="cx-btn" onClick={() => setAddingNote(item)}>{t("Notes")}</button>
     </>;
   }
@@ -462,7 +586,7 @@ function CounselorMeetingsPage({ data, reload, notify }) {
             </div>
             <div className="cx-request-actions">
               <button type="button" className="cx-btn" disabled={savingId === item.id} onClick={() => transition(item, 'reject')}>{t("Decline")}</button>
-              <button type="button" className="cx-btn" disabled={savingId === item.id} onClick={() => setRescheduling(item)}>{t("Suggest another time")}</button>
+              <button type="button" className="cx-btn" disabled={savingId === item.id} onClick={() => setRescheduling(item)}>{t("Move meeting")}</button>
               <button type="button" className="cx-btn primary" disabled={savingId === item.id} aria-busy={savingId === item.id} onClick={() => transition(item, 'approve')}>{t("Accept")}</button>
             </div>
           </article>)}
@@ -484,10 +608,10 @@ function CounselorMeetingsPage({ data, reload, notify }) {
         </div>
       </CxCard>
     </div>
-    <CxCard className="cx-meeting-help"><p>{t("Pending → Confirmed → Completed · Cancelled · Expired — not confirmed.")}{' '}{t("Rescheduled meetings appear as new requests, with the previous time shown.")}</p></CxCard>
+    <CxCard className="cx-meeting-help"><p>{t("Pending → Confirmed → Completed · Cancelled · Expired — not confirmed.")}{' '}{t("A meeting a student moves comes back as a new request, with the previous time shown.")}</p></CxCard>
     {rescheduling && <RescheduleForm booking={rescheduling} staff onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
     {addingNote && <MeetingNoteForm booking={addingNote} onClose={() => setAddingNote(null)} onSaved={() => setAddingNote(null)} notify={notify} />}
-    {booking && <BookingForm staff defaultStudentId={booking.studentId} defaultTopic={booking.topic} onClose={() => setBooking(null)} onSaved={() => {setBooking(null);reload();}} notify={notify} />}
+    {booking && <BookingForm staff defaultStudentId={booking.studentId} defaultStudentName={booking.studentName} defaultTopic={booking.topic} onClose={() => setBooking(null)} onSaved={() => {setBooking(null);reload();}} notify={notify} />}
     {availabilityOpen && <AvailabilityManager onClose={() => setAvailabilityOpen(false)} notify={notify} />}
   </div>;
 }
@@ -527,10 +651,11 @@ function StaffMeetingsPage({ data, reload, notify }) {
   function weekActions(item) {
     const status = meetingStatus(item, now, { student: false });
     if (status === 'pending') return <button type="button" className="button quiet small" onClick={() => scrollToPending(item.id)}>{t("Open")}</button>;
-    if (needsRebook(item, now)) return <button type="button" className="button quiet small" onClick={() => setBooking({ studentId: item.student, topic: item.topic })}><CalendarClock size={14} /> {t("Rebook")}</button>;
+    if (needsRebook(item, now)) return <button type="button" className="button quiet small" onClick={() => setBooking({ studentId: item.student, studentName: item.student_name, topic: item.topic })}><CalendarClock size={14} /> {t("Rebook")}</button>;
     return <>
       <button type="button" className="button quiet small" onClick={() => setAddingNote(item)}>{t("Notes")}</button>
       {status === 'approved' && !isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'complete')}><CheckCircle2 size={14} /> {t("Mark completed")}</button>}
+      {status === 'approved' && isOpenMeeting(item, now) && <button type="button" className="button quiet small" onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Move meeting")}</button>}
     </>;
   }
 
@@ -545,7 +670,7 @@ function StaffMeetingsPage({ data, reload, notify }) {
             badge={meetingBadgeStatus(item.status)}
             actions={<div className="booking-actions">
               <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'reject')}><X size={14} /> {t("Decline")}</button>
-              <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Suggest another time")}</button>
+              <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Move meeting")}</button>
               <button type="button" className="button primary small" disabled={savingId === item.id} onClick={() => transition(item, 'approve')}><Check size={14} /> {t("Accept")}</button>
             </div>}
           /></div>)}
@@ -561,7 +686,7 @@ function StaffMeetingsPage({ data, reload, notify }) {
     </div>
     {rescheduling && <RescheduleForm booking={rescheduling} staff onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
     {addingNote && <MeetingNoteForm booking={addingNote} onClose={() => setAddingNote(null)} onSaved={() => setAddingNote(null)} notify={notify} />}
-    {booking && <BookingForm staff defaultStudentId={booking.studentId} defaultTopic={booking.topic} onClose={() => setBooking(null)} onSaved={() => {setBooking(null);reload();}} notify={notify} />}
+    {booking && <BookingForm staff defaultStudentId={booking.studentId} defaultStudentName={booking.studentName} defaultTopic={booking.topic} onClose={() => setBooking(null)} onSaved={() => {setBooking(null);reload();}} notify={notify} />}
     {availabilityOpen && <AvailabilityManager onClose={() => setAvailabilityOpen(false)} notify={notify} />}
   </div>;
 }

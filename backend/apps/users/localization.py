@@ -48,6 +48,31 @@ MESSAGES = {
         'ru': 'Сессия отозвана. Войдите снова.',
         'en': 'This session has been revoked. Sign in again.',
     },
+    'invite_unavailable': {
+        'uz': 'Bu taklif havolasi endi ishlamaydi. Maslahatchingizdan yangisini so‘rang.',
+        'ru': 'Эта ссылка-приглашение больше не действует. Попросите у консультанта новую.',
+        'en': 'This invitation link is no longer valid. Ask your counselor for a new one.',
+    },
+    'awaiting_confirmation': {
+        'uz': 'Maslahatchingiz sizni hali tasdiqlamadi.',
+        'ru': 'Ваш консультант ещё не подтвердил вас.',
+        'en': 'Your counselor has not confirmed you yet.',
+    },
+    'invite_paused': {
+        'uz': 'Bu havola hozircha yangi o‘quvchilarni qabul qilmayapti.',
+        'ru': 'Эта ссылка сейчас не принимает новых учеников.',
+        'en': 'This link is not accepting new students right now.',
+    },
+    'already_confirmed': {
+        'uz': 'Bu o‘quvchi allaqachon tasdiqlangan.',
+        'ru': 'Этот ученик уже подтверждён.',
+        'en': 'This student was already confirmed.',
+    },
+    'school_full': {
+        'uz': 'Bu maktabda o‘quvchilar uchun bo‘sh joy qolmagan. Maslahatchingizga murojaat qiling.',
+        'ru': 'В этой школе не осталось свободных мест для учеников. Обратитесь к своему консультанту.',
+        'en': 'This school has no free student places left. Contact your counselor.',
+    },
 }
 
 COMMON_API_MESSAGES = {
@@ -78,6 +103,42 @@ COMMON_API_MESSAGES = {
     'Not found.': {
         'uz': 'Ma’lumot topilmadi.',
         'ru': 'Данные не найдены.',
+    },
+    'Enter a valid username. This value may contain only letters, numbers, and @/./+/-/_ characters.': {
+        'uz': 'Foydalanuvchi nomida faqat harflar, raqamlar va @ . + - _ belgilari bo‘lishi mumkin.',
+        'ru': 'Имя пользователя может содержать только буквы, цифры и символы @ . + - _.',
+    },
+    'This email address already has an account. Connect that student instead of inviting them.': {
+        'uz': 'Bu email manzilda allaqachon hisob bor. Taklif qilish o‘rniga o‘sha o‘quvchini biriktiring.',
+        'ru': 'С этим адресом электронной почты уже есть аккаунт. Привяжите этого ученика вместо приглашения.',
+    },
+    'Use the email address this invitation was sent to.': {
+        'uz': 'Taklif yuborilgan email manzildan foydalaning.',
+        'ru': 'Укажите адрес электронной почты, на который пришло приглашение.',
+    },
+    'This username is already in use.': {
+        'uz': 'Bu foydalanuvchi nomi band.',
+        'ru': 'Это имя пользователя уже занято.',
+    },
+    'This username or email address is already in use.': {
+        'uz': 'Bu foydalanuvchi nomi yoki email manzil band.',
+        'ru': 'Это имя пользователя или адрес электронной почты уже заняты.',
+    },
+    'This email address is already used by another account.': {
+        'uz': 'Bu email manzil boshqa hisobda ishlatilmoqda.',
+        'ru': 'Этот адрес электронной почты уже используется другим аккаунтом.',
+    },
+    'Choose the counselor these students will work with.': {
+        'uz': 'O‘quvchilar ishlaydigan maslahatchini tanlang.',
+        'ru': 'Выберите консультанта, с которым будут работать ученики.',
+    },
+    'Choose an active counselor of this school.': {
+        'uz': 'Ushbu maktabning faol maslahatchisini tanlang.',
+        'ru': 'Выберите активного консультанта этой школы.',
+    },
+    'Only counselors can invite students.': {
+        'uz': 'O‘quvchilarni faqat maslahatchilar taklif qila oladi.',
+        'ru': 'Приглашать учеников могут только консультанты.',
     },
     'One or more selected students are not available for assignment.': {
         'uz': 'Tanlangan o‘quvchilardan biri yoki bir nechtasi biriktirish uchun mavjud emas.',

@@ -6,7 +6,8 @@
 //    skip the refresh and just resume the cadence.
 //  - `run()` resolves to true (something changed), false (nothing new) or
 //    throws / resolves to null (failed). Success delays follow `nextDelay`;
-//    failures back off exponentially with full jitter, starting from `min`.
+//    failures back off exponentially with full jitter, starting from `min`,
+//    and never retry before a thrown error's `retryAfter` (ms).
 //  - Only one run at a time; `poke()` (focus, a send) asks for a run now.
 //
 // Pure: timers, clock, visibility and randomness are injected for node tests.
@@ -53,18 +54,21 @@ export function createPoller({
     busy = true
     cancel()
     let result = null
+    let failure = null
     const startedAt = now()
     try {
       result = await run()
-    } catch {
+    } catch (error) {
       result = null
+      failure = error
     } finally {
       busy = false
     }
     if (stopped) return
     if (result === null || result === undefined) {
-      // Never faster than `min / 8`, so a flapping server isn't hammered.
-      schedule(Math.max(Math.round(min / 8), backoffDelay(failures, { base: min, cap: failureCap }, random)))
+      // Never faster than `min / 8`, so a flapping server isn't hammered, nor
+      // before a rate limit's Retry-After (`error.retryAfter`, ms) has passed.
+      schedule(Math.max(Math.round(min / 8), Number(failure?.retryAfter) || 0, backoffDelay(failures, { base: min, cap: failureCap }, random)))
       failures += 1
     } else {
       failures = 0

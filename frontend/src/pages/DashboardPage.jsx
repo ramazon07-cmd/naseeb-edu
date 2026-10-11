@@ -1,22 +1,25 @@
 import { Stat, StudentTable, Record } from '../components/records';
 import { t, tx, tp, formatNumberLocale, formatPercentLocale, formatDateLocale } from '../i18n';
 import { Panel, Empty, Modal } from '../components/ui';
-import { ChevronRight, Plus, ArrowRight, Search } from 'lucide-react';
-import { studentName, dateText, clockText, joinParts, programUsageCaption, shortDayText } from '../lib/format';
+import { ChevronRight, Plus, SlidersHorizontal } from 'lucide-react';
+import { studentName, dateText, joinParts, programUsageCaption } from '../lib/format';
 import { isCounselor } from '../lib/roles';
 import CompactDashboard from '../CompactDashboard';
-import { ownStudent, label, fullName } from '../lib/labels';
-import { useCallback, useState } from 'react';
+import { ownStudent, label } from '../lib/labels';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { Field, CheckboxControl } from '../components/forms';
 import { usePagedList } from '../hooks/usePagedList';
 import { StudentPicker } from '../components/paged';
-import { useReviewQueue } from '../hooks/useReviewQueue';
 import { REVIEW_SOURCES } from '../lib/reviewQueue';
-import { reviewCounts, unreadMessages } from '../lib/counselorCounts';
-import { needsAttention, studentReasons } from '../lib/studentReasons';
-import { CxAvatar, CxCard, CxHead, CxQueueRow, CxTag, ReasonTags, useCounselorUi } from '../components/counselorUi';
+import { reviewCounts, statsBadges } from '../lib/counselorCounts';
+import { isExpiredMeeting } from '../lib/meetings';
+import { CxHead } from '../components/counselorUi';
+import { AllSetOverlay, CheckInsCard, CustomizeHome, DeadlinesCard, HomeError, HomeSkeleton, NeedYouCard, ProgressCard, ReviewCard, SnapshotCard, StatCards, TodayCard } from '../components/counselorHome';
+import { WIDE_CARDS, addCheckedIn, allClear, allSetSeen, checkInKey, checkInOutcome, checkInPage, greetingKey, loadLayout, markAllSetSeen, mergeCheckInRows, moveCard, normalizeLayout, saveLayout, setCheckIn, setCheckInRow, snapshotChoices, toggleCard, visibleCards, withPending } from '../lib/counselorHome';
+import './counselor-home.css';
 import { MeetingNoteForm } from './BookingsPage';
+import { inServerZone } from '../lib/serverTime';
 
 // The first screen of staff dashboards: a page of students and the nearest
 // deadlines, fetched from the server rather than the whole roster.
@@ -28,14 +31,14 @@ function useDashboardLists(user) {
   return { students, tasks };
 }
 
-export function Dashboard({ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources }) {
+export function Dashboard({ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources, refreshStats, updateStats }) {
   if (user.role === 'student') return <StudentDashboard {...{ user, data, setPage, onDirect, resourceStatus, loadResources, retryResources }} />;
-  return <StaffDashboard {...{ user, data, stats, reload, notify, setPage }} />;
+  return <StaffDashboard {...{ user, data, stats, reload, notify, setPage, refreshStats, updateStats }} />;
 }
 
-function StaffDashboard({ user, data, stats, reload, notify, setPage }) {
+function StaffDashboard({ user, data, stats, reload, notify, setPage, refreshStats, updateStats }) {
   if (user.role === 'organization') return <OrganizationDashboard {...{ user, data, stats, setPage }} />;
-  if (isCounselor(user)) return <CounselorHome {...{ user, data, stats, notify, setPage }} />;
+  if (isCounselor(user)) return <CounselorHome {...{ user, stats, notify, setPage, refreshStats, updateStats }} />;
   return <TeacherDashboard {...{ user, data, stats, reload, notify, setPage }} />;
 }
 
@@ -56,120 +59,191 @@ function TeacherDashboard({ user, data, stats, reload, notify, setPage }) {
   </>;
 }
 
-// "Today's queue" (product vision S3.4.2), laid out as the Counselor Dashboard
-// design's Home: four numbers, then what needs the counselor, today and this
-// week. See lib/counselorCounts.js for where each number comes from.
-const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
-
-function CounselorHome({ user, data, stats, notify, setPage }) {
-  const { openSearch } = useCounselorUi();
-  const queue = useReviewQueue();
-  const students = usePagedList('students', { ordering: 'name', pageSize: 50 });
-  const [noteFor, setNoteFor] = useState(null);
-  const now = new Date();
-  const name = user.first_name || user.username;
-  const review = reviewCounts(stats);
-  const { messages: unread, conversations } = unreadMessages(data.messageChannels);
-  const todayKey = now.toDateString();
-  const todayMeetings = data.bookings
-    .filter((item) => ['pending', 'approved'].includes(item.status) && new Date(item.starts_at).toDateString() === todayKey)
-    .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
-  const nextMeeting = todayMeetings.find((item) => new Date(item.starts_at) > now);
-  const breakdown = joinParts(...REVIEW_SOURCES.filter(({ kind }) => review[kind] > 0).map(({ kind, countPattern }) => tp(countPattern, review[kind], { n: review[kind] })));
-  const needYou = students.items
-    .map((student) => ({ student, reasons: studentReasons(student, now) }))
-    .filter(({ reasons }) => needsAttention(reasons))
-    .sort((a, b) => b.reasons.filter((reason) => reason.tone === 'danger').length - a.reasons.filter((reason) => reason.tone === 'danger').length)
-    .slice(0, 5);
-  const deadlines = stats?.deadlines || [];
-  const hour = now.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-
-  return <div className="cx-page cx-home">
-    <CxHead
-      title={`${t(greeting)}, ${name}`}
-      subtitle={<><span className="cx-home-date">{formatDateLocale(now, { weekday: 'long', day: 'numeric', month: 'long' })} · </span>{joinParts(
-        tp('{n} thing to review|{n} things to review', review.total, { n: review.total }),
-        tp('{n} meeting today|{n} meetings today', todayMeetings.length, { n: todayMeetings.length }),
-      )}</>}
-    >
-      <button type="button" className="cx-search" onClick={openSearch}><Search size={16} aria-hidden="true" />{t("Search students and work…")}</button>
-    </CxHead>
-
-    <div className="cx-stats">
-      <button type="button" className="cx-stat dark" onClick={() => setPage('review')}>
-        <span>{t("To review")}</span>
-        <strong>{formatNumberLocale(review.total)}</strong>
-        <small>{breakdown || t("Nothing waiting right now")}</small>
-        <em>{t("Start reviewing")}<ArrowRight size={15} aria-hidden="true" /></em>
-      </button>
-      <button type="button" className="cx-stat" onClick={() => setPage('students')}>
-        <span><i className="cx-label-long">{t("Students who need you")}</i><i className="cx-label-short">{t("Need you")}</i></span>
-        <strong className={stats?.students_need_you ? 'num hot' : 'num'}>{formatNumberLocale(stats?.students_need_you ?? 0)}</strong>
-        <small>{t("Late work or missing documents")}</small>
-      </button>
-      <button type="button" className="cx-stat" onClick={() => setPage('bookings')}>
-        <span>{t("Today")}</span>
-        <strong className="cx-stat-value"><span>{formatNumberLocale(todayMeetings.length)}</span><span className="cx-stat-unit">{tp('meeting|meetings', todayMeetings.length)}</span></strong>
-        <small>{nextMeeting ? tx`Next at ${clockText(nextMeeting.starts_at)} · ${firstName(nextMeeting.student_name || studentName(data, nextMeeting.student))}` : t("No meetings today")}</small>
-      </button>
-      <button type="button" className="cx-stat" onClick={() => setPage('messages')}>
-        <span>{t("Messages")}</span>
-        <strong className="cx-stat-value"><span>{formatNumberLocale(unread)}</span><span className="cx-stat-unit">{t("Unread")}</span></strong>
-        <small>{conversations ? tp('From {n} student|From {n} students', conversations, { n: conversations }) : t("You're all caught up")}</small>
-      </button>
-    </div>
-
-    <div className="cx-home-grid">
-      <CxCard title={t("Needs your review")} hint={t("oldest first")} className="cx-queue">
-        <div className="cx-list">
-          {queue.items.slice(0, 8).map((item) => <CxQueueRow key={item.id} item={item} onClick={() => setPage('review')} />)}
-          {queue.loaded && !queue.items.length && <p className="cx-empty">{t("Nothing is waiting for your review.")}</p>}
-        </div>
-      </CxCard>
-      <div className="cx-home-side">
-        <CxCard title={t("Students who need you")}>
-          <div className="cx-plain-list">
-            {needYou.map(({ student, reasons }) => <button type="button" key={student.id} className="cx-person-row" onClick={() => setPage('students', { studentId: student.id })}>
-              <CxAvatar name={fullName(student.user_detail)} />
-              <span className="cx-row-copy"><b>{fullName(student.user_detail)}</b><ReasonTags reasons={reasons.filter((reason) => reason.tone === 'danger')} /></span>
-            </button>)}
-            {students.loaded && !needYou.length && <p className="cx-empty">{t("Nobody needs you right now.")}</p>}
-          </div>
-        </CxCard>
-        <CxCard title={t("Today")}>
-          <div className="cx-plain-list">
-            {todayMeetings.map((meeting) => <div key={meeting.id} className="cx-meeting-row">
-              <b className="cx-time">{clockText(meeting.starts_at)}</b>
-              <span className="cx-row-copy">
-                <b>{joinParts(meeting.student_name || studentName(data, meeting.student), meeting.topic)}</b>
-                <small>{meeting.status === 'pending' ? <CxTag tone="warn" small>{t("Waiting for you")}</CxTag> : joinParts(t("Confirmed"), meeting.duration_minutes > 0 && tx`${meeting.duration_minutes} min`)}</small>
-              </span>
-              {meeting.status === 'approved' && <button type="button" className="cx-btn" onClick={() => setNoteFor(meeting)}>{t("Notes")}</button>}
-            </div>)}
-            {!todayMeetings.length && <p className="cx-empty">{t("No meetings today")}</p>}
-          </div>
-        </CxCard>
-        <CxCard title={t("Deadlines this week")}>
-          <div className="cx-plain-list">
-            {deadlines.map((item) => <div key={item.id} className="cx-deadline-row">
-              <span>{joinParts(deadlineLabel(item), item.student_name)}</span>
-              {item.late ? <CxTag tone="late" small>{t("Late")}</CxTag> : <small>{shortDayText(item.due)}</small>}
-            </div>)}
-            {!deadlines.length && <p className="cx-empty">{t("No deadlines this week.")}</p>}
-          </div>
-        </CxCard>
-      </div>
-    </div>
-    {noteFor && <MeetingNoteForm booking={noteFor} onClose={() => setNoteFor(null)} onSaved={() => setNoteFor(null)} notify={notify} />}
-  </div>;
+// Home fetches nothing of its own: GET /dashboard/stats/?include=home (see
+// App.jsx workspaceStatsRequest) feeds both the cards and the sidebar badges,
+// and the minute poll refreshes both.
+function useCounselorHome(stats, refreshStats) {
+  const [state, setState] = useState({ error: '', loading: false });
+  const load = useCallback(async () => {
+    setState({ loading: true, error: '' });
+    try {
+      await refreshStats();
+      setState({ loading: false, error: '' });
+    } catch (err) {
+      setState({ loading: false, error: err.message || t("Check your connection and try again.") });
+    }
+  }, [refreshStats]);
+  // Stats loaded on another page carry no (or an older) Home: fetch it once.
+  const needsHome = !stats?.home || Boolean(stats.home_stale);
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!needsHome || asked.current) return;
+    asked.current = true;
+    load();
+  }, [needsHome, load]);
+  return { ...state, reload: load };
 }
 
-// A deadline's name: the task's own title, or what the application / letter is.
-function deadlineLabel(item) {
-  if (item.kind === 'application') return t('{name} application', { name: item.title });
-  if (item.kind === 'letter') return t('Recommendation letter');
-  return item.title;
+const CHECK_IN_PAGE = 50;
+
+function useStudentSnapshot(studentId, enabled) {
+  const [state, setState] = useState({ id: null, data: null, error: '', loading: false });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!enabled || studentId == null) return undefined;
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) setState((current) => ({ id: studentId, data: current.id === studentId ? current.data : null, error: '', loading: true }));
+      return api.counselorSnapshot(studentId);
+    }).then((response) => {
+      if (active) setState({ id: studentId, data: response?.snapshot || null, error: '', loading: false });
+    }).catch((err) => {
+      if (active) setState({ id: studentId, data: null, error: err.message || t("Check your connection and try again."), loading: false });
+    });
+    return () => { active = false; };
+  }, [studentId, enabled, attempt]);
+  const own = state.id === studentId ? state : { id: studentId, data: null, error: '', loading: true };
+  return { ...own, retry: () => setAttempt((value) => value + 1) };
+}
+
+function CounselorHome({ user, stats, notify, setPage, refreshStats, updateStats }) {
+  const { error, loading, reload } = useCounselorHome(stats, refreshStats);
+  const [layout, setLayout] = useState(() => loadLayout(() => window.localStorage, user.id));
+  const [customizing, setCustomizing] = useState(false);
+  const [noteFor, setNoteFor] = useState(null);
+  const [pendingCheckIns, setPendingCheckIns] = useState(() => new Set());
+  const pendingKeys = useRef(new Set());
+  const [moreRows, setMoreRowsState] = useState([]);
+  const moreRowsRef = useRef([]);
+  const [morePaging, setMorePaging] = useState({ loading: false, done: false });
+  const [allSetClosed, setAllSetClosed] = useState(false);
+  const [snapshotFor, setSnapshotFor] = useState(null);
+  const home = stats?.home;
+  const name = user.first_name || user.username;
+  // The server's hour, like the date and week below (lib/serverTime).
+  const greeting = t(greetingKey(inServerZone(new Date()).getHours()));
+
+  function setMoreRows(rows) {
+    moreRowsRef.current = rows;
+    setMoreRowsState(rows);
+  }
+
+  function changeLayout(next) {
+    setLayout(next);
+    saveLayout(() => window.localStorage, user.id, next);
+  }
+
+  function applyCheckIn(studentId, dayIndex, checked, days = null) {
+    if (moreRowsRef.current.some((row) => row.student === studentId)) {
+      const { rows, delta } = setCheckInRow(moreRowsRef.current, studentId, dayIndex, checked, days);
+      setMoreRows(rows);
+      if (delta) updateStats((current) => (current?.home ? { ...current, home: { ...current.home, check_ins: addCheckedIn(current.home.check_ins, delta) } } : current));
+      return;
+    }
+    updateStats((current) => (current?.home ? { ...current, home: { ...current.home, check_ins: setCheckIn(current.home.check_ins, studentId, dayIndex, checked, days) } } : current));
+  }
+
+  async function toggleCheckIn(studentId, dayIndex, checked) {
+    const day = home.week[dayIndex];
+    const key = checkInKey(studentId, day);
+    if (pendingKeys.current.has(key)) return;
+    pendingKeys.current.add(key);
+    setPendingCheckIns((current) => withPending(current, key, true));
+    applyCheckIn(studentId, dayIndex, checked);
+    try {
+      const outcome = checkInOutcome(await api.counselorCheckIn(studentId, day, checked), checked);
+      applyCheckIn(studentId, dayIndex, outcome.checked, outcome.days);
+    } catch (err) {
+      applyCheckIn(studentId, dayIndex, !checked);
+      notify(err.message, 'error');
+    } finally {
+      pendingKeys.current.delete(key);
+      setPendingCheckIns((current) => withPending(current, key, false));
+    }
+  }
+
+  const firstRows = home?.check_ins?.students || [];
+  const checkInRows = mergeCheckInRows(firstRows, moreRows);
+  const shown = visibleCards(layout);
+
+  const snapshotOptions = snapshotChoices(home?.need_you?.students, checkInRows);
+  const snapshotStudent = snapshotFor || snapshotOptions[0] || null;
+  const snapshot = useStudentSnapshot(snapshotStudent?.id ?? null, Boolean(home) && shown.includes('snapshot'));
+
+  const review = reviewCounts(stats);
+  const storage = () => window.localStorage;
+  // Every request waiting for the counselor, any day: the sidebar's Meetings badge.
+  // Today's list is only the fallback for an API without badges.
+  const pendingRequests = statsBadges(stats)?.meetings ?? (home?.meetings.today.filter((meeting) => meeting.status === 'pending' && !isExpiredMeeting(meeting)).length || 0);
+  const essaysWaiting = Number(stats?.review?.essays) || 0;
+  const nothingWaiting = Boolean(home) && allClear({ review: review.total, needYou: home.need_you.total, unread: home.messages.unread }) && !pendingRequests && !essaysWaiting;
+  const showAllSet = nothingWaiting && !allSetClosed && !allSetSeen(storage, user.id, home.today);
+
+  function closeAllSet() {
+    markAllSetSeen(storage, user.id, home.today);
+    setAllSetClosed(true);
+  }
+
+  const firstPage = checkInPage({ check_ins: home?.check_ins }, 0);
+  const checkInsHaveMore = moreRows.length || morePaging.done ? !morePaging.done : firstPage.hasMore;
+
+  async function loadMoreCheckIns() {
+    if (morePaging.loading) return;
+    const offset = checkInRows.length;
+    setMorePaging({ loading: true, done: false });
+    try {
+      const page = checkInPage(await api.counselorCheckIns(offset, CHECK_IN_PAGE), offset);
+      setMoreRows(mergeCheckInRows(moreRowsRef.current, page.rows.filter((row) => !firstRows.some((first) => first.student === row.student))));
+      setMorePaging({ loading: false, done: !page.hasMore || !page.rows.length });
+    } catch (err) {
+      setMorePaging({ loading: false, done: false });
+      notify(err.message, 'error');
+    }
+  }
+
+  const head = (subtitle) => <CxHead title={<>{greeting}, <b className="ch-name">{name}</b></>} subtitle={subtitle}>
+    <button type="button" className="cx-btn lg" onClick={() => setCustomizing(true)} disabled={!home}><SlidersHorizontal size={16} aria-hidden="true" />{t("Customize")}</button>
+  </CxHead>;
+
+  if (!home) {
+    return <div className="cx-page ch-home">
+      {head(null)}
+      {error ? <HomeError message={error} onRetry={reload} /> : <HomeSkeleton />}
+    </div>;
+  }
+
+  const breakdown = joinParts(...REVIEW_SOURCES.filter(({ kind }) => review[kind] > 0).map(({ kind, countPattern }) => tp(countPattern, review[kind], { n: review[kind] })));
+  const meetingsToday = home.meetings.today.filter((meeting) => meeting.status !== 'pending');
+  const openStudent = (studentId) => setPage('students', studentId ? { studentId } : {});
+  const cards = {
+    stats: <StatCards review={review} breakdown={breakdown} needYou={home.need_you.total} meetings={meetingsToday} requests={pendingRequests} messages={home.messages} setPage={setPage} />,
+    review: <ReviewCard items={home.review_items} total={review.total} onOpen={(item) => setPage('review', item ? { item: item.id } : {})} />,
+    need_you: <NeedYouCard needYou={home.need_you} onOpen={openStudent} />,
+    today: <TodayCard week={home.week} today={home.today} meetings={home.meetings} onOpenMeeting={() => setPage('bookings')} onNotes={setNoteFor} />,
+    deadlines: <DeadlinesCard deadlines={home.deadlines} onOpenStudents={() => setPage('students')} />,
+    check_ins: <CheckInsCard checkIns={{ ...home.check_ins, students: checkInRows }} week={home.week} today={home.today} onToggle={toggleCheckIn} pending={pendingCheckIns}
+      hasMore={Boolean(checkInsHaveMore)} loadingMore={morePaging.loading} onLoadMore={loadMoreCheckIns} history={home.check_in_history} />,
+    snapshot: <SnapshotCard choices={snapshotOptions} selected={snapshotStudent} onSelect={setSnapshotFor} state={snapshot} onRetry={snapshot.retry} onOpenStudent={openStudent} />,
+    progress: <ProgressCard progress={home.progress} onOpen={openStudent} onViewAll={() => setPage('students')} />,
+  };
+  return <div className="cx-page ch-home">
+    {head(<>{formatDateLocale(home.today, { weekday: 'long', day: 'numeric', month: 'long' })} · {joinParts(
+      tp('{n} thing to review|{n} things to review', review.total, { n: review.total }),
+      tp('{n} meeting today|{n} meetings today', meetingsToday.length, { n: meetingsToday.length }),
+    )}{pendingRequests > 0 && <> · <button type="button" className="cx-link ch-head-link" onClick={() => setPage('bookings')}>{tp('{n} request waiting|{n} requests waiting', pendingRequests, { n: pendingRequests })}</button></>}{loading && <span className="ch-refreshing" role="status"> · {t("Updating…")}</span>}</>)}
+    {error && <HomeError message={error} onRetry={reload} />}
+    <div className="ch-grid-cards">
+      {shown.filter((id) => cards[id]).map((id) => <div key={id} className={`ch-slot ch-slot-${id}${WIDE_CARDS.includes(id) ? ' wide' : ''}`}>{cards[id]}</div>)}
+    </div>
+    {!shown.length && <p className="ch-empty">{t("Every card is hidden. Use Customize to show them again.")}</p>}
+    {customizing && <CustomizeHome layout={layout}
+      onToggle={(id) => changeLayout(toggleCard(layout, id))}
+      onMove={(id, delta) => changeLayout(moveCard(layout, id, delta))}
+      onReset={() => changeLayout(normalizeLayout(null))}
+      onClose={() => setCustomizing(false)} />}
+    {showAllSet && <AllSetOverlay onClose={closeAllSet} />}
+    {noteFor && <MeetingNoteForm booking={noteFor} onClose={() => setNoteFor(null)} onSaved={() => { setNoteFor(null); reload(); }} notify={notify} />}
+  </div>;
 }
 
 export function StudentDashboard({ user, data, setPage, onDirect, resourceStatus, loadResources, retryResources }) {

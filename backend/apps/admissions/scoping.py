@@ -8,6 +8,8 @@ Canonical rule:
 * anyone else, or staff without a school: nobody;
 * staff of a deactivated school: nobody;
 * deactivated students are visible to product admins only;
+* students who joined by invite and wait for confirmation are visible to
+  product admins only (the pending list has its own scoping, invites.py);
 * essays additionally need to be shared by their student to be seen by anyone else.
 
 Views may still restrict roles further (e.g. teachers cannot list tasks);
@@ -64,12 +66,15 @@ def student_lookups(user):
             return _NOBODY
         return {
             'assigned_counselor': user, 'school_id': user.school_id,
-            'school__is_active': True, 'user__is_active': True,
+            'school__is_active': True, 'user__is_active': True, 'awaiting_confirmation': False,
         }
     if user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
         if not user.school_id:
             return _NOBODY
-        return {'school_id': user.school_id, 'school__is_active': True, 'user__is_active': True}
+        return {
+            'school_id': user.school_id, 'school__is_active': True, 'user__is_active': True,
+            'awaiting_confirmation': False,
+        }
     if user.role == User.Role.STUDENT:
         return {'user': user}
     return _NOBODY
@@ -131,7 +136,17 @@ def visible_students(user, queryset=None):
 
 def active_visible_students(user, queryset=None):
     """Visible students who count in totals: deactivated ones are left out."""
-    return visible_students(user, queryset).filter(user__is_active=True, deactivated_at__isnull=True)
+    return visible_students(user, queryset).filter(
+        user__is_active=True, deactivated_at__isnull=True, awaiting_confirmation=False,
+    )
+
+
+def without_deactivated_students(queryset, via='student'):
+    """Leave out records of deactivated students, as ``active_visible_students`` does for counts.
+
+    For lists whose length must match a dashboard count (the review queue).
+    """
+    return queryset.filter(**{f'{via}__user__is_active': True, f'{via}__deactivated_at__isnull': True})
 
 
 SCHOOL_STAFF_ROLES = (User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION)

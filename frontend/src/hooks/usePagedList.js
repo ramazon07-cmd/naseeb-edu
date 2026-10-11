@@ -55,5 +55,6 @@ export function usePagedList(resource, { search = '', filters = {}, ordering = '
   const loadMore = useCallback(() => controllerRef.current?.loadMore(), []);
   const reload = useCallback(() => controllerRef.current?.reload(), []);
   const updateItem = useCallback((id, updater) => controllerRef.current?.updateItem(id, updater), []);
-  return { ...state, loadMore, reload, updateItem };
+  const refreshHead = useCallback(() => controllerRef.current?.refreshHead(), []);
+  return { ...state, loadMore, reload, updateItem, refreshHead };
 }
