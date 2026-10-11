@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 from apps.admissions.models import School, StudentProfile
 from . import api_messages
 from .localization import localized_api_error
-from .models import User
+from .models import PLAN_FEATURES, Plan, User, WorkspaceSubscription
 
 ADMISSIONS = Path(__file__).resolve().parent.parent / 'admissions'
 
@@ -155,6 +155,12 @@ ADMIN_MESSAGES = (
 class AdminApiErrorLanguageTests(APITestCase):
     def setUp(self):
         self.school = School.objects.create(name='Seat school', code='seat-school')
+        # These tests exercise limit error translations, independently of the default plan.
+        plan = Plan.objects.create(
+            code='seat-language-test', name='Seat language test', max_counselors=3,
+            features={key: True for key in PLAN_FEATURES},
+        )
+        WorkspaceSubscription.objects.filter(school=self.school).update(plan=plan)
         self.other = School.objects.create(name='Other seat school', code='other-seat-school')
         self.ops = User.objects.create_user(
             username='seat-ops', email='seat-ops@example.com', password='StrongPass123!',
