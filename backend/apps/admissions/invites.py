@@ -292,7 +292,9 @@ class PendingStudentSerializer(serializers.ModelSerializer):
 def confirm_student(profile, actor):
     """Make a pending student a normal one. This is when they take a plan seat:
     raises EntitlementError when the school is full or read-only."""
-    locked = StudentProfile.objects.select_for_update().select_related('school', 'user').get(pk=profile.pk)
+    # Lock only the profile row: StudentProfile.school is nullable, so the
+    # joined school is an outer join, which PostgreSQL cannot lock.
+    locked = StudentProfile.objects.select_for_update(of=('self',)).select_related('school', 'user').get(pk=profile.pk)
     if not locked.awaiting_confirmation:
         return locked
     entitlements.check(locked.school, 'max_students', 1, exclude_user_id=locked.user_id)

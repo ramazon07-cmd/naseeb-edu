@@ -9,7 +9,7 @@ import { api } from './api';
 import { AssistantCenter } from './components/AssistantCenter';
 import { canUseAssistant } from './lib/assistantAccess';
 import { ScreenTimeTracker, flushActiveScreenTime } from './components/ScreenTimeTracker';
-import { AppBootLoader, BootstrapError, BrandLockup, LanguageSelector, ThemeToggle } from './components/brand';
+import { AppBootLoader, BootstrapError, BrandLockup, LanguageSelector, SignOutFailed, ThemeToggle } from './components/brand';
 import { ProfileCard, StudentAvatar } from './components/records';
 import { LazyBoundary, PageSkeleton } from './components/states';
 import { lazyWithRetry } from './lib/retryableLazy';
@@ -528,8 +528,12 @@ export default function App() {
   const [bootstrapBusy, setBootstrapBusy] = useState(false);
   const bootstrapAttempted = useRef(false);
   const [signOutPrompt, setSignOutPrompt] = useState(false);
+  // { keepDrafts, retrying }: the server did not confirm the sign-out.
+  const [signOutFailure, setSignOutFailure] = useState(null);
   const signingOut = useRef(false);
-  const handleUnauthorized = useCallback(() => {api.logout();setUser(null);}, []);
+  // Also ends the server session (the cookie may still be valid, e.g. after a
+  // revoked access token), unless another tab already did.
+  const handleUnauthorized = useCallback((info) => {api.logout({ server: !info?.fromOtherTab });setUser(null);}, []);
   const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace, refreshStats, updateStats, more, loadMore } = useWorkspaceData(user, handleUnauthorized, { statsRequest: workspaceStatsRequest, statsKey: workspaceStatsKey });
   useEffect(() => (user ? api.onSessionEnded(handleUnauthorized) : undefined), [user, handleUnauthorized]);
 
@@ -678,18 +682,29 @@ export default function App() {
       const screenTime = flushActiveScreenTime ? Promise.race([flushActiveScreenTime().catch(() => {}), new Promise((resolve) => window.setTimeout(resolve, 3000))]) : null;
       const [, essaysSynced] = await Promise.all([screenTime, api.syncBeforeSignOut(user?.id)]);
       if (!essaysSynced) {setSignOutPrompt(true);return;}
-      finishSignOut();
+      await finishSignOut();
     } finally {
       signingOut.current = false;
     }
   }
   // keepDrafts ("Sign in again"): end the session but keep this user's unsynced
   // Essay Lab drafts on the device, and go straight to the sign-in form.
-  function finishSignOut({ keepDrafts = false } = {}) {
+  // The server sign-out is awaited (it retries once and times out after a few
+  // seconds), so on a shared computer the cookie is gone before the form shows.
+  async function finishSignOut({ keepDrafts = false } = {}) {
     const signedOut = user?.id;
     setSignOutPrompt(false);
     resetWorkspace();
-    api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
+    const ended = api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);
+    if (await ended) leaveWorkspace(keepDrafts);else setSignOutFailure({ keepDrafts, retrying: false });}
+  function leaveWorkspace(keepDrafts) {
+    setSignOutFailure(null);setUser(null);setBootstrapError('');showPublicPage(keepDrafts ? 'login' : 'landing', true);}
+  async function retrySignOut() {
+    setSignOutFailure((current) => current && { ...current, retrying: true });
+    const ok = await api.retrySignOut();
+    if (ok) leaveWorkspace(signOutFailure?.keepDrafts);else setSignOutFailure((current) => current && { ...current, retrying: false });}
+  function dismissSignOutFailure() {
+    api.forgetSession();leaveWorkspace(signOutFailure?.keepDrafts);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
   const loadResources = useCallback((keys) => ensureLoaded(user, keys), [ensureLoaded, user]);
 
@@ -741,6 +756,7 @@ export default function App() {
     };
   }, [counselorLive, loadData, refreshStats, user]);
 
+  if (signOutFailure) return <SignOutFailed retrying={signOutFailure.retrying} onRetry={retrySignOut} onDismiss={dismissSignOutFailure} />;
   if (bootstrapping) return <AppBootLoader message={bootstrapBusy ? t('Busy, retrying…') : 'Checking your secure session…'} />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={() => bootstrapSession()} onSignOut={logout} />;
   if (publicPage === 'join') return <LazyBoundary fallback={<AppBootLoader />}><JoinPage token={joinTokenFor(location.pathname)} onSignIn={() => showPublicPage('login')} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;

@@ -21,6 +21,7 @@ from .audit import (
     subscription_audit_state,
 )
 from .models import PLAN_LIMITS, CredentialAuditEvent, Plan, ProductAuditEvent, User, WorkspaceSubscription
+from .auth_cookies import move_refresh_to_cookie
 from .auth_views import token_pair_for_user
 from .credentials import change_own_password, complete_password_change, issue_temporary_credential
 from .serializers import (
@@ -308,10 +309,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
             if str(exc) == 'password_reuse':
                 return Response({'new_password': ['Choose a password different from the temporary password.']}, status=400)
             raise
-        return Response({
+        return move_refresh_to_cookie(Response({
             **token_pair_for_user(user),
             'user': UserSerializer(user, context={'request': request}).data,
-        })
+        }))
 
     @action(
         detail=False,
@@ -329,10 +330,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
             new_password=serializer.validated_data['new_password'],
             request=request,
         )
-        return Response({
+        return move_refresh_to_cookie(Response({
             **token_pair_for_user(user),
             'user': UserSerializer(user, context={'request': request}).data,
-        })
+        }))
 
     @action(
         detail=False,

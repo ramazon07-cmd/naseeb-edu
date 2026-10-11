@@ -305,6 +305,16 @@ class TestScoreMigrationTests(TransactionTestCase):
     migrate_from = [('admissions', '0048_safety_student_deactivated_at')]
     migrate_to = [('admissions', '0050_center_test_score_constraints')]
 
+    def tearDown(self):
+        # Back to the latest schema: later TransactionTestCases (run after
+        # every TestCase) need the columns added after 0050.
+        from django.db import connection
+        from django.db.migrations.executor import MigrationExecutor
+
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
     def test_scores_move_from_json_into_columns(self):
         from django.db import connection
         from django.db.migrations.executor import MigrationExecutor
