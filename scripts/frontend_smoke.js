@@ -71,7 +71,13 @@ for (const channelTab of ['Private', 'Groups', 'Discussions']) {
   if (!app.includes(`\"${channelTab}\"`)) throw new Error(`Messaging tab missing: ${channelTab}`)
 }
 if (!app.includes('Post anonymously') || !app.includes('Accept answer')) throw new Error('Anonymous discussions or accepted-answer controls are missing.');
-if (!app.includes('COUNSELOR INBOX') || !app.includes('SCHOOL COMMUNICATIONS') || !app.includes('function ChannelMembersModal(')) throw new Error('Counselor and school messaging interfaces are missing.');
+// Counselors and schools (the staff interface) start a direct chat or a group
+// from one compose menu, manage group members, and see the moderation queue.
+if (!app.includes("const staffInterface = ['counselor', 'organization'].includes(user.role)")
+  || !app.includes('function ComposeMenu(')
+  || !app.includes('staffInterface || isTaskManager(user) ? <ComposeMenu')
+  || !app.includes('function ChannelMembersModal(')
+  || !app.includes('chat-moderation-button')) throw new Error('Counselor and school messaging interfaces are missing.');
 if (!app.includes('Assigned students') || !app.includes('School students') || !app.includes('Manage members')) throw new Error('Staff messaging audience and member controls are missing.');
 if (!app.includes('function ReportMessageModal(') || !app.includes('function ModerationQueueModal(')) throw new Error('Anonymous report and moderation interfaces are missing.');
 if (!app.includes('Your report is confidential') || !app.includes('Mute 24h') || !app.includes('Remove content')) throw new Error('Moderation privacy notice or actions are missing.');
@@ -136,11 +142,19 @@ for (const name of ['CounselorHome', 'CounselorStudentsPage', 'CounselorStudent3
 }
 if (!api.includes('sendBack') || !api.includes('approveRecord') || !api.includes('remindStudent')) throw new Error('Counselor review and reminder API methods are missing.');
 if (!app.includes('launcher={!counselorShell}')) throw new Error('The counselor workspace must not float the assistant launcher over its content.');
-if (app.includes("\n  meetings: { label: 'Meetings'") || app.includes("'meetings', 'bookings'")) throw new Error('Legacy meeting notes navigation must be removed.');
+// Navigation only: refreshing the meetings and bookings lists after a meeting
+// note is saved (invalidatePagedLists) is not a navigation entry.
+const navigationSource = app.replace(/invalidatePagedLists\(\[[^\]]*\]\)/g, '');
+if (navigationSource.includes("\n  meetings: { label: 'Meetings'") || navigationSource.includes("'meetings', 'bookings'")) throw new Error('Legacy meeting notes navigation must be removed.');
 if (!app.includes("bookings: { label: 'Meetings'")) throw new Error('Booking workflow must be presented as Meetings.');
 // The retired standalone notification page and launcher stay gone; server
 // notices are shown by the sidebar bell instead.
-if (app.includes('function NotificationCenter(') || app.includes('NotificationsPage') || styles.includes('.notification-launcher')) throw new Error('The retired notification page and launcher must not come back.');
+// The counselor shell has its own notifications page (bell in the sidebar);
+// it must stay counselor-only, and the old centre and launcher stay retired.
+const notificationsPageUses = app.split('<NotificationsPage').length - 1;
+if (app.includes('function NotificationCenter(') || styles.includes('.notification-launcher')
+  || notificationsPageUses !== 1
+  || !app.includes("page === 'notifications' && isCounselorShell(user)) return <NotificationsPage")) throw new Error('The retired notification page and launcher must not come back.');
 if (!api.includes("'/notifications/summary/'") || !api.includes('markAllNotificationsRead')) throw new Error('The notification bell must load and clear server notifications.');
 if (!app.includes('function AssistantCenter(') || !styles.includes('.assistant-launcher') || !styles.includes('.assistant-drawer')) throw new Error('Corner AI assistant is missing.');
 if (!app.includes('Role-scoped context only') || !app.includes('History is kept only while this page is open.')) throw new Error('Assistant privacy and retention guidance is missing.');
@@ -152,7 +166,7 @@ if (!app.includes("['supportTickets', 'support-tickets']") || !app.includes('isP
 if (!app.includes('function IndividualCounselorForm(') || !app.includes('function CounselorTransferForm(') || !styles.includes('.school-card.individual')) throw new Error('Individual counselor workspace provisioning or transfer UI is missing.');
 if (!app.includes('function ParentPortalPage(') || !app.includes('function ParentChildSwitcher(') || !app.includes('function ParentInviteModal(')) throw new Error('Parent cabinet, child switcher, or invite UI is missing.');
 if (!api.includes('parentPortal') || !api.includes('inviteParent') || !api.includes('acceptParentInvite') || !api.includes('revokeParentLink')) throw new Error('Parent consent/linking API client is missing.');
-if (!app.includes("user?.role === 'parent'") || !app.includes("case 'parent': return [['parentPortal', 'parent-portal']]") || !styles.includes('.parent-family-hero')) throw new Error('Parent bootstrap, navigation, or responsive design is missing.');
+if (!app.includes("user?.role === 'parent'") || !app.includes("if (role === 'parent') return [['parentPortal', 'parent-portal']]") || !styles.includes('.parent-family-hero')) throw new Error('Parent bootstrap, navigation, or responsive design is missing.');
 if (!app.includes('This cabinet never shows essays, messages, counselor notes') || !app.includes('FAMILY VIEW · READ ONLY')) throw new Error('Parent privacy and read-only disclosure is missing.');
 if (!app.includes('function ScreenTimeTracker(') || !app.includes('function ScreenTimePage(') || !app.includes("document.visibilityState === 'visible'") || !app.includes('60_000')) throw new Error('Active-tab and idle-aware screen time is missing.');
 if (!app.includes('createScreenTimeSync(') || !app.includes("window.addEventListener('online'") || !styles.includes('.screen-time-privacy')) throw new Error('Offline retry or screen-time privacy UI is missing.');
@@ -162,7 +176,7 @@ for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchra
   if (app.includes(uzbekFragment)) throw new Error(`Non-English UI copy remains: ${uzbekFragment}`)
 }
 if (app.includes('className="palette-row"')) throw new Error('Login palette swatches must not be rendered.');
-if (!app.includes("case 'organization': return [['bookings', 'bookings']") || !app.includes("usePagedList('students'")) throw new Error('Organization data scope is missing: school rosters must be server-paged.');
+if (!app.includes("if (role === 'organization') return [staff.bookings, staff.messageChannels, staff.supportTickets]") || !app.includes("usePagedList('students'")) throw new Error('Organization data scope is missing: school rosters must be server-paged.');
 if (!app.includes("const THEME_KEY = 'naseeb-edu-theme'")) throw new Error('Persistent theme support is missing.');
 if (!app.includes("light: '/brand/favicon-light-32.png'") || !app.includes("dark: '/brand/favicon-dark-32.png'") || !app.includes('favicon.href = themeIconFor(theme)')) throw new Error('The favicon must follow the active app theme.');
 if (!html.includes("favicon.href = theme === 'dark' ? '/brand/favicon-dark-32.png' : '/brand/favicon-light-32.png'")) throw new Error('The pre-paint favicon must follow the initial app theme.');
@@ -209,7 +223,10 @@ for (const token of [
   if (!styles.includes(token)) throw new Error(`Semantic theme token missing: ${token}`)
 }
 const normalizedStyles = styles.replace(/\r\n/g, '\n')
-const componentStyles = normalizedStyles.split("color-scheme: dark;\n}")[1] || ''
+// mask-image gradients only carry alpha (the counselor shell fades its tab
+// strip with one); their colour is never painted, so they are not themed.
+const componentStyles = (normalizedStyles.split("color-scheme: dark;\n}")[1] || '')
+  .split('\n').filter((line) => !/^\s*(-webkit-)?mask-image:/.test(line)).join('\n')
 if (/#[0-9a-f]{3,8}|rgba?\(/i.test(componentStyles)) throw new Error('Component-level hardcoded color remains outside the theme token blocks.')
 const landingSentinel = '/* == landing tokens end == */'
 if (!landingCss.includes(landingSentinel)) throw new Error('landing.css token-block sentinel is missing; the public-page color guard cannot run.')
