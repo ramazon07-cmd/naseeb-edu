@@ -7,7 +7,7 @@ Production-oriented CRM for schools and counselors managing students who apply t
 | Role | Access |
 | --- | --- |
 | Admin | Product staff (tiers: support, ops, super admin). Provisions schools, counselors and plans, opens Student 360 for any student, reads the audit log and handles support |
-| Organization School | Its own school's students: create and edit them, read-only Student 360, meetings and messages |
+| Organization School | Its own school's students: create and edit them, read-only Student 360, meetings and messages; lists and edits its counselors (name, phone, position, active status) |
 | Counselor | Only the students assigned to them: review queue, Student 360, essays, applications, documents, meetings and messages; invites parents |
 | Teacher | Students in their own school; creates Tasks and Roadmap missions and approves submitted work |
 | Student | Their own profile, assessment, roadmap, tasks, applications, documents, essays, meetings and messages |

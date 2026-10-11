@@ -12,6 +12,12 @@ const parent = { id: 4, role: 'parent' };
 const organization = { id: 5, role: 'organization' };
 const admin = { id: 6, role: 'admin' };
 
+test('only organization accounts open their school counselor roster', () => {
+  assert.ok(navigationFor(organization).includes('school_counselors'));
+  assert.deepEqual(resolveRoute(parsePath('/counselors'), organization), { page: 'school_counselors', params: {} });
+  for (const user of [student, counselor, teacher, parent, admin]) assert.equal(canOpenPage('school_counselors', user), false);
+});
+
 test('every page has a unique path that parses back to it', () => {
   const paths = Object.values(PAGE_PATHS);
   assert.equal(new Set(paths).size, paths.length);

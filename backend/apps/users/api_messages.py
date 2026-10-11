@@ -767,6 +767,10 @@ EXACT = {
         'uz': 'Yordam ko‘rinishini faqat platforma xodimlari ocha oladi.',
         'ru': 'Открыть просмотр поддержки могут только сотрудники платформы.',
     },
+    'Schools can only edit counselor names, phone, position and active status.': {
+        'uz': 'Maktablar maslahatchining faqat ismi, telefoni, lavozimi va faollik holatini tahrirlay oladi.',
+        'ru': 'Школы могут менять только имя, телефон, должность и статус активности консультанта.',
+    },
     'Only a product admin can activate or deactivate accounts.': {
         'uz': 'Hisoblarni faqat platforma administratori faollashtira yoki faolsizlantira oladi.',
         'ru': 'Активировать или деактивировать учётные записи может только администратор платформы.',

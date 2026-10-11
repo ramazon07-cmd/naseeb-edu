@@ -25,14 +25,14 @@ CENTER = 'center'
 
 ALL_FEATURES = {key: True for key in PLAN_FEATURES}
 
-# Defaults reproduce the behaviour before plans existed: three counselors per
-# organization school, one owner per individual workspace, everything else
-# unlimited. Real numbers are a pricing decision and are set per plan by staff.
+# School counselor seats are unlimited until payments ship (issue #52).
+# Paid plans will set limits again; enforcement stays in check(). Individual
+# workspaces still have one owner counselor.
 DEFAULT_PLANS = {
     SCHOOL_STANDARD: {
         'name': 'School Standard',
         'description': 'Organization school workspace.',
-        'max_counselors': 3,
+        'max_counselors': None,  # Temporary until paid plans: issue #52.
         'max_students': None,
         'max_teachers': None,
         'features': ALL_FEATURES,

@@ -79,7 +79,7 @@ class IsRoleScopedUserAccess(permissions.BasePermission):
 
     Product admins manage every account. Counselors may only touch their own
     account and the students assigned to them (matching ``/api/students/``);
-    organization accounts may read and edit students of their own school.
+    organization accounts may read and edit students and counselors of their own school.
     Deleting an account is reserved for product admins. Support staff only
     read, reset credentials and open support views; changes need ops.
     Another staff account (admin role or superuser) is changed, deactivated
@@ -120,6 +120,15 @@ class IsRoleScopedUserAccess(permissions.BasePermission):
         if view.action == 'destroy':
             return False
         if obj == user:
+            return True
+        if (
+            user.role == User.Role.ORGANIZATION
+            and user.school_id
+            and obj.role == User.Role.COUNSELOR
+            and not obj.is_product_admin
+            and obj.school_id == user.school_id
+            and view.action in {'list', 'retrieve', 'update', 'partial_update'}
+        ):
             return True
         return obj.role == User.Role.STUDENT and student_account_in_scope(obj, user)
 
@@ -166,8 +175,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
             visible = Q(role=User.Role.STUDENT, **{
                 f'student_profile__{key}': value for key, value in lookups.items()
             })
-            if user.role == User.Role.COUNSELOR:
-                visible |= Q(role=User.Role.COUNSELOR, school_id=user.school_id)
+            visible |= Q(role=User.Role.COUNSELOR, school_id=user.school_id)
             return User.objects.filter(visible).order_by('first_name', 'last_name', 'id')
         return User.objects.filter(id=user.id).order_by('id')
 
@@ -233,17 +241,20 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                             actor=self.request.user, action='staff.tier_changed', target=account,
                             metadata={'changes': {'admin_tier': {'from': previous_tier, 'to': account.admin_tier}}},
                         )
+                # Commit the edit and its audit together, including school-managed counselors.
+                actor = self.request.user
+                audits_update = actor.is_product_admin or (
+                    actor.role == User.Role.ORGANIZATION and account.role == User.Role.COUNSELOR
+                )
+                if audits_update and (other_changes or not TENANCY_AUDIT_ACTIONS.intersection(audited)):
+                    audit_product_action(
+                        actor=actor,
+                        action='counselor.updated' if account.role == User.Role.COUNSELOR else 'account.updated',
+                        target=account,
+                        metadata=account_update_metadata(other_changes),
+                    )
         except DjangoValidationError as exc:
             raise ValidationError(exc.message_dict) from exc
-        # A move, (de)activation or tier change has its own row; every other changed
-        # field (email, username, names...) is listed on one update row next to it.
-        if self.request.user.is_product_admin and (other_changes or not TENANCY_AUDIT_ACTIONS.intersection(audited)):
-            audit_product_action(
-                actor=self.request.user,
-                action='counselor.updated' if account.role == User.Role.COUNSELOR else 'account.updated',
-                target=account,
-                metadata=account_update_metadata(other_changes),
-            )
 
     def perform_destroy(self, instance):
         """Soft-delete: deactivate instead of cascading away the student's records."""
