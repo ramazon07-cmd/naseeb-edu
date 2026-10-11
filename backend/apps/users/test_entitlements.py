@@ -49,7 +49,7 @@ class PlanDefaultsTests(APITestCase):
             name='Solo Workspace', code='solo', workspace_type=School.WorkspaceType.INDIVIDUAL,
         )
         self.assertEqual(school.subscription.plan.code, entitlements.SCHOOL_STANDARD)
-        self.assertEqual(school.subscription.plan.max_counselors, 3)
+        self.assertIsNone(school.subscription.plan.max_counselors)
         self.assertEqual(school.subscription.status, WorkspaceSubscription.Status.ACTIVE)
         self.assertEqual(individual.subscription.plan.code, entitlements.INDIVIDUAL_COUNSELOR)
         self.assertEqual(individual.subscription.plan.max_counselors, 1)
@@ -633,7 +633,7 @@ class PlanManagementTests(APITestCase):
         self.assertEqual(saved.status_code, status.HTTP_200_OK, saved.data)
         self.assertEqual(User.objects.filter(school=self.school, role=User.Role.COUNSELOR, is_active=True).count(), 3)
         row = ProductAuditEvent.objects.get(action='plan.updated')
-        self.assertEqual(row.metadata['changes'], {'max_counselors': {'from': 3, 'to': 2}})
+        self.assertEqual(row.metadata['changes'], {'max_counselors': {'from': None, 'to': 2}})
         retired = self.client.patch(f'/api/users/plans/{self.plan.id}/', {'is_active': False}, format='json')
         self.assertEqual(retired.status_code, status.HTTP_200_OK)
         self.assertTrue(ProductAuditEvent.objects.filter(action='plan.retired').exists())

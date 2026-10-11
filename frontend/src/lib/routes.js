@@ -7,6 +7,7 @@ import { FEATURES } from './features.js';
 export const PAGE_PATHS = {
   dashboard: '/dashboard',
   schools: '/schools',
+  school_counselors: '/counselors',
   students: '/students',
   students_joined: '/students/joined',
   review: '/review',
@@ -147,7 +148,7 @@ export function navigationFor(user) {
   // read per student in Student 360; the old flat pages stay reachable by link.
   if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
-  if (user?.role === 'organization') return ['dashboard', 'students', 'bookings', 'messages', 'screen_time', 'support'];
+  if (user?.role === 'organization') return ['dashboard', 'students', 'school_counselors', 'bookings', 'messages', 'screen_time', 'support'];
   return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
 }
 

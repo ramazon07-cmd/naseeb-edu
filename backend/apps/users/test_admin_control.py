@@ -147,22 +147,17 @@ class AdminControlTests(APITestCase):
         listed = self.client.get(f'/api/schools/{self.school.id}/')
         self.assertEqual(listed.data['organization_account_username'], 'control-login')
 
-    def test_fourth_active_school_counselor_is_rejected_and_deactivation_releases_slot(self):
+    def test_school_standard_allows_more_than_three_active_counselors(self):
         counselors = [self.create_counselor(index) for index in range(3)]
         self.client.force_authenticate(self.admin)
         payload = {
             'username': 'fourth', 'email': 'fourth@example.com', 'first_name': 'Fourth',
             'password': 'StrongPass123!', 'school': self.school.id,
         }
-        rejected = self.client.post('/api/users/accounts/create-counselor/', payload, format='json')
-        self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('at most 3', str(rejected.data))
-
-        deactivated = self.client.post(f'/api/users/accounts/{counselors[0].id}/deactivate/')
-        self.assertEqual(deactivated.status_code, status.HTTP_200_OK)
         created = self.client.post('/api/users/accounts/create-counselor/', payload, format='json')
-        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(User.objects.filter(school=self.school, role=User.Role.COUNSELOR, is_active=True).count(), 3)
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertEqual(User.objects.filter(school=self.school, role=User.Role.COUNSELOR, is_active=True).count(), 4)
+        self.assertTrue(all(User.objects.get(pk=counselor.pk).is_active for counselor in counselors))
 
     def test_individual_counselor_workspace_is_exempt(self):
         self.client.force_authenticate(self.admin)
@@ -344,6 +339,9 @@ class AdminSummaryTests(APITestCase):
         # Migrations seed a default school; counts are relative to it.
         self.baseline = School.objects.filter(is_active=True, workspace_type=School.WorkspaceType.SCHOOL).count()
         self.full = School.objects.create(name='Full School', code='full-school')
+        # Attention still warns for explicitly limited plans, not School Standard.
+        from apps.users.test_entitlements import use_plan
+        use_plan(self.full, code='summary-limited', max_counselors=3)
         self.expiring = School.objects.create(name='Expiring School', code='expiring-school')
         School.objects.create(name='Closed School', code='closed-school', is_active=False)
         solo = School.objects.create(name='Solo', code='solo-summary', workspace_type=School.WorkspaceType.INDIVIDUAL)

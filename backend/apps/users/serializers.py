@@ -98,9 +98,29 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Change your email from Account settings.')
         return value
 
+    def _school_counselor_edit(self):
+        request = self.context.get('request')
+        return bool(
+            request and not request.user.is_product_admin
+            and request.user.role == User.Role.ORGANIZATION and request.user.school_id
+            and self.instance and self.instance.role == User.Role.COUNSELOR
+            and self.instance.school_id == request.user.school_id
+        )
+
+    def to_internal_value(self, data):
+        if self._school_counselor_edit():
+            allowed = {'first_name', 'last_name', 'phone', 'position', 'is_active'}
+            forbidden = set(data) - allowed
+            if forbidden:
+                raise serializers.ValidationError({
+                    field: 'Schools can only edit counselor names, phone, position and active status.'
+                    for field in sorted(forbidden)
+                })
+        return super().to_internal_value(data)
+
     def validate_is_active(self, value):
         request = self.context.get('request')
-        if request and not request.user.is_product_admin:
+        if request and not request.user.is_product_admin and not self._school_counselor_edit():
             current = getattr(self.instance, 'is_active', True)
             if value != current:
                 raise serializers.ValidationError('Only a product admin can activate or deactivate accounts.')

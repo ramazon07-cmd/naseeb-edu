@@ -1,4 +1,5 @@
 import { uiMessages } from "./translations/ui.js";
+import { schoolCounselorMessages } from "./translations/schoolCounselors.js";
 import { essayLabMessages } from "./translations/essayLab.js";
 import { copyMessages } from "./translations/copy.js";
 import { fileMessages } from "./translations/files.js";
@@ -31,6 +32,7 @@ const LOCALES = { uz: "uz-UZ", ru: "ru-RU", en: "en-GB" };
 export const TRANSLATIONS = {
   uz: {
     ...inviteMessages("uz"),
+    ...schoolCounselorMessages("uz"),
     ...essayLabMessages("uz"),
     ...uiMessages("uz"),
     ...copyMessages("uz"),
@@ -225,6 +227,7 @@ export const TRANSLATIONS = {
   },
   ru: {
     ...inviteMessages("ru"),
+    ...schoolCounselorMessages("ru"),
     ...essayLabMessages("ru"),
     ...uiMessages("ru"),
     ...copyMessages("ru"),

@@ -58,6 +58,7 @@ const AdminAuditPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminAudit
 const CatalogAdminPage = lazyNamed(() => import('./pages/CatalogAdminPage'), 'CatalogAdminPage');
 const AdminControlDashboard = lazyNamed(() => import('./pages/AdminPages'), 'AdminControlDashboard');
 const AdminCounselorsPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminCounselorsPage');
+const SchoolCounselorsPage = lazyNamed(() => import('./pages/SchoolCounselorsPage'), 'SchoolCounselorsPage');
 const CounselorRoadmapPage = lazyNamed(() => import('./pages/AdminPages'), 'CounselorRoadmapPage');
 const AdminPlansPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminPlansPage');
 const AdminStaffPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminStaffPage');
@@ -108,6 +109,7 @@ const PDF_EXPORT_PAGES = new Set([
 const PAGE_META = {
   dashboard: { label: 'Dashboard', icon: LayoutDashboard, description: 'A complete view of the application journey' },
   schools: { label: 'Schools', icon: Building2, description: 'Schools and organization accounts' },
+  school_counselors: { label: 'Counselors', icon: UserRound, description: 'Manage counselors in your school' },
   students: { label: 'Students', icon: Users, description: 'Student profiles and progress' },
   students_joined: { label: 'Recently joined', icon: UserPlus, description: 'Students who joined with your invitation or magic link' },
   review: { label: 'Review', icon: CheckSquare, description: 'Submitted work waiting for your decision' },
@@ -212,14 +214,14 @@ function remoteSearchDestinations(user) {
     students: pick(admin ? 'admin_students' : 'students'), tasks: pick('tasks'),
     applications: pick('applications'), documents: pick('documents'), essays: pick('essays'), recommendations: pick('recommendations'),
     roadmapMissions: pick('roadmap'), bookings: pick('bookings'), schools: pick(admin ? 'admin_schools' : 'schools'),
-    accounts: pick('admin_counselors'), supportTickets: pick('support'),
+    accounts: pick(admin ? 'admin_counselors' : 'school_counselors'), supportTickets: pick('support'),
     universities: pick('college_search'),
   };
 }
 
 const PAGE_RESOURCE_KEYS = {
   dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'programServices', 'parentPortal'],
-  schools: ['schools'], students: ['students'], students_joined: [], review: [], academics: ['students', 'researches'],
+  school_counselors: [], schools: ['schools'], students: ['students'], students_joined: [], review: [], academics: ['students', 'researches'],
   // The catalog editor pages its own lists from the server.
   admin_catalog: [],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
@@ -488,6 +490,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
   if (['student', 'counselor'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
+  if (page === 'school_counselors' && user.role === 'organization') return <SchoolCounselorsPage {...{ query, reload, notify }} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (page === 'students_joined' && ['counselor', 'organization'].includes(user.role)) return <RecentlyJoinedPage user={user} data={data} notify={notify} onChanged={() => { refreshStats(user); reload(); }} onBack={() => setPage('students')} headless={user.role === 'organization'} />;
   if (page === 'students' && user.role === 'counselor') return <>

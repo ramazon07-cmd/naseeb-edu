@@ -258,7 +258,7 @@ class ProductAuditTests(APITestCase):
         })
         self.assertEqual(response.status_code, 302)
         row = self.events('plan.updated').get()
-        self.assertEqual(row.metadata['changes'], {'max_counselors': {'from': 3, 'to': 5}})
+        self.assertEqual(row.metadata['changes'], {'max_counselors': {'from': None, 'to': 5}})
         self.assertEqual((row.actor, row.metadata['source']), (root, 'django_admin'))
 
     def test_a_json_field_change_has_the_same_shape_from_the_api_and_django_admin(self):
