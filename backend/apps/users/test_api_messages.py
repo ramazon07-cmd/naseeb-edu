@@ -118,7 +118,7 @@ class StudentApiErrorLanguageTests(APITestCase):
 ADMIN_MESSAGES = (
     'You cannot delete your own account.',
     'You cannot deactivate your own account.',
-    'Temporary credentials are only available for student and school accounts.',
+    'Temporary credentials are only available for student, school and counselor accounts.',
     'You cannot issue credentials for this account.',
     'Only a product admin can create counselors.',
     'Only a product admin can create individual counselors.',

@@ -44,6 +44,7 @@ export const PAGE_PATHS = {
   admin_catalog: '/platform/catalog',
   counselor_roadmap: '/counselor-roadmap',
   admin_audit: '/platform/audit',
+  admin_moderation: '/platform/moderation',
   admin_plans: '/platform/plans',
   admin_staff: '/platform/staff',
   admin_health: '/platform/health',
@@ -141,8 +142,8 @@ const COUNSELOR_DIRECT_LINK_PAGES = ['students_joined', 'academics', 'portfolio'
 // Sidebar order per role.
 export function navigationFor(user) {
   // Health is for ops and above; staff accounts are managed by super admins only.
-  if (isPlatformAdmin(user)) return offered(['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'admin_catalog', 'counselor_roadmap', 'admin_plans', ...(canManageWorkspaces(user) ? ['admin_health'] : []), ...(isSuperAdmin(user) ? ['admin_staff'] : []), 'admin_audit', 'support']);
-  if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings'];
+  if (isPlatformAdmin(user)) return offered(['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'admin_catalog', 'counselor_roadmap', 'admin_plans', ...(canManageWorkspaces(user) ? ['admin_health'] : []), ...(isSuperAdmin(user) ? ['admin_staff'] : []), 'admin_moderation', 'admin_audit', 'support']);
+  if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings', 'messages'];
   // The counselor sidebar is the "Counselor Dashboard" design: seven destinations.
   // Tasks, documents, roadmap, portfolio and the rest are reviewed in Review and
   // read per student in Student 360; the old flat pages stay reachable by link.
@@ -165,7 +166,7 @@ export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
 // Pages opened from the account menu (or, for counselors, the shell's
 // Notifications item) rather than the sidebar list.
-const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'] };
+const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'] };
 
 export function reachablePages(user) {
   if (!user) return new Set();

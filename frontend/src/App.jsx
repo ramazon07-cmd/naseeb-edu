@@ -2,7 +2,7 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import './mind-section.css';
-import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus } from 'lucide-react';
+import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus, Flag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
@@ -30,7 +30,7 @@ import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
 import { useNotificationBell } from './hooks/useNotificationBell';
 import { invalidatePagedLists } from './hooks/usePagedList';
-import { NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, summaryChanged } from './lib/notifications';
+import { NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, summaryChanged, parentNotices } from './lib/notifications';
 import { liveReloadKeys, unreadConversations } from './lib/counselorCounts';
 import { createPoller } from './lib/poller';
 import { busyRetryDelay } from './lib/backoff';
@@ -55,6 +55,7 @@ const ProfileAssessmentPage = lazyWithRetry(() => import('./pages/ProfileAssessm
 const lazyNamed = (load, name) => lazyWithRetry(() => load().then((module) => ({ default: module[name] })));
 const EssayLab = lazyWithRetry(() => import('./essayLab/EssayLab.jsx'));
 const AdminAuditPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminAuditPage');
+const AdminModerationPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminModerationPage');
 const CatalogAdminPage = lazyNamed(() => import('./pages/CatalogAdminPage'), 'CatalogAdminPage');
 const AdminControlDashboard = lazyNamed(() => import('./pages/AdminPages'), 'AdminControlDashboard');
 const AdminCounselorsPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminCounselorsPage');
@@ -146,6 +147,7 @@ const PAGE_META = {
   admin_catalog: { label: 'Catalog', icon: Library, description: 'Universities, programs, scholarships and opportunity programs students search' },
   counselor_roadmap: { label: 'Counselor Roadmap', icon: Compass, description: 'Professional and school-management milestones' },
   admin_audit: { label: 'Audit Log', icon: ShieldAlert, description: 'Review product administration actions' },
+  admin_moderation: { label: 'Moderation', icon: Flag, description: 'Reported messages across schools' },
   admin_plans: { label: 'Plans', icon: Layers, description: 'Seat limits and features of every plan' },
   admin_staff: { label: 'Staff', icon: UserCog, description: 'Product staff and their access tiers' },
   admin_health: { label: 'Health', icon: HeartPulse, description: 'Readiness, scheduled jobs and file storage' },
@@ -223,7 +225,7 @@ const PAGE_RESOURCE_KEYS = {
   dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'programServices', 'parentPortal'],
   school_counselors: [], schools: ['schools'], students: ['students'], students_joined: [], review: [], academics: ['students', 'researches'],
   // The catalog editor pages its own lists from the server.
-  admin_catalog: [],
+  admin_catalog: [], admin_moderation: [],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
   roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'students', 'essays', 'recommendations'],
@@ -235,7 +237,7 @@ const PAGE_RESOURCE_KEYS = {
   screen_time: [], account_settings: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal'],
-  counselor_roadmap: ['counselorRoadmapTemplates', 'counselorRoadmaps'],
+  counselor_roadmap: ['counselorRoadmaps', 'counselorRoadmapTemplates'],
   // Pages its own notices from the server.
   notifications: []
 };
@@ -267,7 +269,8 @@ const STUDENT_PRIMARY_KEYS = { college_search: ['students', 'applications'], app
 
 function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, retry, children }) {
   const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
-  const primaryKeys = lazy ? STUDENT_PRIMARY_KEYS[page] || [] : [];
+  // A parent page is all parent-portal data: a failed first load is not an empty family.
+  const primaryKeys = lazy ? STUDENT_PRIMARY_KEYS[page] || [] : keys.filter((key) => key === 'parentPortal');
   const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys });
 
   // Rate-limited sections retry on their own (useWorkspaceData): a quiet note, not an error.
@@ -328,7 +331,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   const bell = useNotificationBell(serverBell);
   // The server's count when it sends one: the loaded chats are only the first page.
   const unreadChats = unreadConversations(stats, data.messageChannels);
-  const bellCount = user.role === 'student' ? bellTotal(bell.summary) : unreadChats + (serverBell ? Math.max(0, Number(bell.summary?.unread) || 0) : 0);
+  const bellCount = user.role === 'student' ? bellTotal(bell.summary) : unreadChats + (serverBell ? Math.max(0, Number(bell.summary?.unread) || 0) : parentNotices(data.parentPortal).length);
   const bellLabel = bellCount > 0 ? tx`Notifications, ${bellCount > 99 ? '99+' : formatNumberLocale(bellCount)} unread` : t('Notifications');
   function openNotifications() {
     // Opening the bell always shows the newest notices, never a cached page.
@@ -393,7 +396,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   </>;
   const overlays = <>
     {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');setPaletteQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(paletteQuery.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}{result.kind === 'record' && result.subtitle && <small>{result.subtitle}</small>}</span><ChevronRight size={16} /></button>)}{paletteQuery.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} onSeeAll={counselorShell ? () => {invalidatePagedLists(['notifications']);openFromNotification('notifications', {});} : undefined} />}</Modal>}
-    <ScreenTimeTracker page={page} userId={user.id} />
+    {canOpenPage('screen_time', user) && <ScreenTimeTracker page={page} userId={user.id} />}
     {canUseAssistant(user) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} onUnavailable={(message) => {updateUser({ assistant_enabled: false });notify(message, 'error');}} />}
   </>;
   if (counselorShell) {
@@ -467,6 +470,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (isPlatformAdmin(user) && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (isCounselor(user) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_audit') return <AdminAuditPage query={query} />;
+  if (isPlatformAdmin(user) && page === 'admin_moderation') return <AdminModerationPage notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_catalog') return <CatalogAdminPage user={user} query={query} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_plans') return <AdminPlansPage user={user} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_staff') return <AdminStaffPage user={user} query={query} notify={notify} reload={reload} />;
@@ -489,7 +493,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
-  if (['student', 'counselor'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
+  if (['student', 'counselor', 'parent'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
   if (page === 'school_counselors' && user.role === 'organization') return <SchoolCounselorsPage {...{ query, reload, notify }} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (page === 'students_joined' && ['counselor', 'organization'].includes(user.role)) return <RecentlyJoinedPage user={user} data={data} notify={notify} onChanged={() => { refreshStats(user); reload(); }} onBack={() => setPage('students')} headless={user.role === 'organization'} />;

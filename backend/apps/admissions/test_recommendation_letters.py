@@ -403,9 +403,10 @@ class StudentLetterReviewTests(LetterFixture, APITestCase):
 
     def test_nobody_else_can_answer_for_the_student(self):
         letter = self.write_letter(shared_with_student=True)
+        # Parents are refused every write at the permission layer (Trello card 53), before any lookup.
         expected = {
             self.counselor: 403, self.admin: 403, self.organization: 403, self.teacher: 403,
-            self.parent: 404, self.student_b_user: 404, self.counselor_b: 404,
+            self.parent: 403, self.student_b_user: 404, self.counselor_b: 404,
         }
         for user, status in expected.items():
             response = self.review(user, letter, decision='confirmed')

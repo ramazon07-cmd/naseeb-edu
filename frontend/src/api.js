@@ -635,7 +635,8 @@ export const api = {
     body: JSON.stringify({ school }),
   }),
   createCounselor: (payload) => request('/users/accounts/create-counselor/', { method: 'POST', body: JSON.stringify(payload) }),
-  deactivateAccount: (id) => request(`/users/accounts/${id}/deactivate/`, { method: 'POST' }),
+  // `handover`: a counselor's active students, { students: 'reassign', reassign_to } or { students: 'unassign' }.
+  deactivateAccount: (id, handover) => request(`/users/accounts/${id}/deactivate/`, { method: 'POST', ...(handover ? { body: JSON.stringify(handover) } : {}) }),
   plans: () => request('/users/plans/'),
   adminSummary: () => request('/admin/summary/'),
   adminAiUsage: () => request('/admin/ai-usage/'),
@@ -664,6 +665,8 @@ export const api = {
   }),
   acceptParentInvite: (id) => request(`/parent-links/${id}/accept/`, { method: 'POST' }),
   revokeParentLink: (id) => request(`/parent-links/${id}/revoke/`, { method: 'POST' }),
+  parentLinks: (studentId) => listAll('parent-links', `?student=${encodeURIComponent(studentId)}`),
+  updateParentLinkSections: (id, sections) => request(`/parent-links/${id}/sections/`, { method: 'POST', body: JSON.stringify(sections) }),
   // Profile Assessment. Attempts are append-only: a retake is a new row, so
   // there is deliberately no update or delete here.
   challengeAttempts: (studentId) => listAll('challenge-attempts', studentId ? `?student=${encodeURIComponent(studentId)}` : ''),
