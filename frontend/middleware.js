@@ -1,3 +1,4 @@
+/* global process */
 // Vercel Routing Middleware: /api/* is proxied to the Django API, so the app
 // and the API share one origin and the HttpOnly refresh cookie is first-party.
 // NASEEB_API_ORIGIN (e.g. https://naseeb-api.onrender.com) is read at request
@@ -16,7 +17,7 @@ export function apiTarget(requestUrl, origin) {
   return new URL(`${url.pathname}${url.search}`, origin).toString()
 }
 
-export default function middleware(request, env = globalThis.process?.env ?? {}) {
+export function middlewareWithEnv(request, env) {
   const origin = (env.NASEEB_API_ORIGIN || '').trim().replace(/\/+$/, '')
   if (!/^https?:\/\/[^/]+$/.test(origin)) {
     return json(502, { detail: 'The API proxy is not configured (NASEEB_API_ORIGIN).', code: 'api_proxy_unconfigured' })
@@ -24,4 +25,9 @@ export default function middleware(request, env = globalThis.process?.env ?? {})
   // What @vercel/functions' rewrite() returns: Vercel fetches the target and
   // streams its response (status, body, Set-Cookie) back under this origin.
   return new Response(null, { headers: { 'x-middleware-rewrite': apiTarget(request.url, origin) } })
+}
+
+// Vercel passes request context as the second argument, never environment variables.
+export default function middleware(request, _context) {
+  return middlewareWithEnv(request, process.env)
 }
