@@ -25,10 +25,12 @@ import { fullName, initials, label, ownStudent } from './lib/labels';
 import { isCounselor, isPlatformAdmin, isTaskManager } from './lib/roles';
 import { LANDING_PATH, LOGIN_PATH, buildPath, canOpenPage, isPageLocked, joinTokenFor, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
 import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchResultTarget, searchText } from './lib/searchIndex';
-import { loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
+import { STUDENT_SHELL_KEYS, loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
 import { useNotificationBell } from './hooks/useNotificationBell';
+import { STUDENT_REFRESH_MS } from './lib/workspaceFreshness';
+import { studentPrimaryKeys } from './lib/resourceState';
 import { invalidatePagedLists } from './hooks/usePagedList';
 import { NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, summaryChanged } from './lib/notifications';
 import { liveReloadKeys, unreadConversations } from './lib/counselorCounts';
@@ -263,11 +265,10 @@ const workspaceStatsKey = (activeUser) => (activeUser?.role === 'counselor' && r
 // `lazy`: a student's page waits for exactly the collections it fetches.
 // Student pages that cannot render without these collections. Essays, documents and
 // letters only feed counts there; when one of them fails the page stays up with a retry.
-const STUDENT_PRIMARY_KEYS = { college_search: ['students', 'applications'], applications: ['students', 'applications'] };
 
 function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, retry, children }) {
   const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
-  const primaryKeys = lazy ? STUDENT_PRIMARY_KEYS[page] || [] : [];
+  const primaryKeys = lazy ? studentPrimaryKeys(page) : [];
   const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys });
 
   // Rate-limited sections retry on their own (useWorkspaceData): a quiet note, not an error.
@@ -337,6 +338,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     setUtility('notifications');
   }
   function openFromNotification(nextPage, params) {
+    if (loadsLazily(user)) retryResources(studentPageKeys(nextPage));
     setUtility(null);setMobileOpen(false);
     setPage(nextPage, params);
   }
@@ -537,7 +539,7 @@ export default function App() {
   // Also ends the server session (the cookie may still be valid, e.g. after a
   // revoked access token), unless another tab already did.
   const handleUnauthorized = useCallback((info) => {api.logout({ server: !info?.fromOtherTab });setUser(null);}, []);
-  const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace, refreshStats, updateStats, more, loadMore } = useWorkspaceData(user, handleUnauthorized, { statsRequest: workspaceStatsRequest, statsKey: workspaceStatsKey });
+  const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, revalidate, reset: resetWorkspace, refreshStats, updateStats, more, loadMore } = useWorkspaceData(user, handleUnauthorized, { statsRequest: workspaceStatsRequest, statsKey: workspaceStatsKey });
   useEffect(() => (user ? api.onSessionEnded(handleUnauthorized) : undefined), [user, handleUnauthorized]);
 
   const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
@@ -643,7 +645,7 @@ export default function App() {
   }, [inWorkspace, publicPage, route, requestedRoute, location, navigate]);
 
   // Students fetch a page's collections the first time it opens (see
-  // useWorkspaceData); a page already loaded is not fetched again.
+  // useWorkspaceData); later visits revalidate stale or invalidated keys.
   useEffect(() => {
     if (inWorkspace && !publicPage && loadsLazily(user)) ensureLoaded(user, studentPageKeys(page));
   }, [inWorkspace, publicPage, user, page, ensureLoaded]);
@@ -710,6 +712,21 @@ export default function App() {
     api.forgetSession();leaveWorkspace(signOutFailure?.keepDrafts);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
   const loadResources = useCallback((keys) => ensureLoaded(user, keys), [ensureLoaded, user]);
+
+  // Revalidate only the active student's page and shell; catalogues on other
+  // pages remain lazy. The freshness tracker also deduplicates focus/visibility.
+  const studentLive = inWorkspace && !publicPage && loadsLazily(user);
+  useEffect(() => {
+    if (!studentLive) return undefined;
+    const loop = createPoller({ min: STUDENT_REFRESH_MS, failureCap: STUDENT_REFRESH_MS * 5,
+      run: () => revalidate(user, [...STUDENT_SHELL_KEYS, ...studentPageKeys(pageRef.current)]),
+    });
+    const focus = () => loop.poke();
+    loop.start();
+    window.addEventListener('focus', focus);
+    window.addEventListener('online', focus);
+    return () => { loop.stop(); window.removeEventListener('focus', focus); window.removeEventListener('online', focus); };
+  }, [studentLive, user, revalidate]);
 
   // Counselor badges (review, essays, meetings, messages, the bell) come from
   // the stats: keep them current while the tab is open. Meetings and chats

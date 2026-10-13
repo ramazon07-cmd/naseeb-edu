@@ -9,6 +9,7 @@ import { notificationMessage, notificationTitle } from '../lib/notificationText'
 import { usePagedList } from '../hooks/usePagedList';
 import { LoadMore, PagedListError, firstPageLoading } from './paged';
 import { Empty } from './ui';
+import { InlineLoadError } from './states';
 
 export const KIND_ICONS = { task: ClipboardCheck, document: FileText, deadline: Target, essay: PenLine, meeting: CalendarClock, message: MessageCircle, profile_review: ListChecks };
 
@@ -56,6 +57,10 @@ export function useNotificationFeed({ summary, notify, staff, pageSize = 20 }) {
   const [chats, setChats] = useState([]);
   const [chatsNext, setChatsNext] = useState(null);
   const [chatsKnown, setChatsKnown] = useState(false);
+  const [chatsError, setChatsError] = useState('');
+  const [chatHeadLoading, setChatHeadLoading] = useState(false);
+  const [chatsAttempt, setChatsAttempt] = useState(0);
+  const lastChatsAttempt = useRef(-1);
   const [loadingChats, setLoadingChats] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const lastSummary = useRef(null);
@@ -73,26 +78,30 @@ export function useNotificationFeed({ summary, notify, staff, pageSize = 20 }) {
     const plan = unreadChatsPlan(summary);
     if (plan === 'wait') return;
     const previous = lastSummary.current;
-    if (previous && !summaryChanged(previous, summary)) return;
+    if (previous && !summaryChanged(previous, summary) && lastChatsAttempt.current === chatsAttempt) return;
     lastSummary.current = summary;
-    if (previous) refreshHead();
+    if (previous && summaryChanged(previous, summary)) refreshHead();
+    lastChatsAttempt.current = chatsAttempt;
     const request = ++chatsRequest.current;
     const landed = () => mounted.current && request === chatsRequest.current;
+    setChatsError('');
     if (plan === 'clear') {
+      setChatHeadLoading(false);
       setChats([]);
       setChatsNext(null);
       setChatsKnown(true);
       return;
     }
+    setChatHeadLoading(true);
     api.messageChannels('', '', { unread: true }).then((page) => {
       if (!landed()) return;
       setChats(unreadChats(page?.results));
       setChatsNext(page?.next || null);
       setChatsKnown(true);
-    }).catch(() => {
-      if (landed()) setChatsKnown(true);
-    });
-  }, [summary, refreshHead]);
+    }).catch((error) => {
+      if (landed()) { setChatsKnown(false); setChatsError(error.message); }
+    }).finally(() => { if (landed()) setChatHeadLoading(false); });
+  }, [summary, refreshHead, chatsAttempt]);
 
   async function moreChats() {
     if (!chatsNext || loadingChats) return;
@@ -136,13 +145,13 @@ export function useNotificationFeed({ summary, notify, staff, pageSize = 20 }) {
     }
   }
 
-  const empty = chatsKnown && !chats.length && !list.items.length && !firstPageLoading(list) && !list.error;
-  return { list, targetOf, chats, chatsNext, loadingChats, moreChats, read, markAll, markingAll, empty };
+  const empty = chatsKnown && !chatsError && !chatHeadLoading && !(summary?.chats_unread > 0) && !chats.length && !list.items.length && !firstPageLoading(list) && !list.error;
+  return { list, targetOf, chats, chatsNext, loadingChats, moreChats, read, markAll, markingAll, empty, chatsError, chatHeadLoading, retryChats: () => setChatsAttempt((value) => value + 1) };
 }
 
 function ServerNotifications({ summary, onOpen, notify, staff, onSeeAll }) {
   const feed = useNotificationFeed({ summary, notify, staff });
-  const { list, targetOf, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
+  const { list, targetOf, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty, chatsError, chatHeadLoading, retryChats } = feed;
 
   function open(notification) {
     const target = feed.read(notification);
@@ -155,6 +164,8 @@ function ServerNotifications({ summary, onOpen, notify, staff, onSeeAll }) {
       <p>{t('Alerts about your work and unread conversations.')}</p>
       {hasUnread && <button type="button" className="button quiet small" onClick={markAll} disabled={markingAll} aria-busy={markingAll}><CheckCheck size={15} /> {t('Mark all as read')}</button>}
     </div>
+    {chatsError && <InlineLoadError message={chatsError} onRetry={retryChats} />}
+    {chatHeadLoading && <p role="status">{t('Loading…')}</p>}
     <ChatNotices chats={chats} onOpen={onOpen} />
     {chatsNext && <button type="button" className="button quiet small" onClick={moreChats} disabled={loadingChats} aria-busy={loadingChats}>{loadingChats ? t('Loading…') : t('Load more')}</button>}
     {list.items.map((item) => {
