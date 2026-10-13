@@ -1,4 +1,9 @@
 export const UI_TRANSLATIONS = {
+  'Privacy policy': ['Maxfiylik siyosati', 'Политика конфиденциальности'],
+  'Terms of use': ['Foydalanish shartlari', 'Условия использования'],
+  'Legal information': ['Huquqiy ma’lumotlar', 'Правовая информация'],
+  'Document languages': ['Hujjat tillari', 'Языки документа'],
+  'Draft — pending legal review': ['Qoralama, yurist ko‘rib chiqadi', 'Черновик, ожидает проверки юристом'],
   'Your profile': ['Profilingiz', 'Ваш профиль'],
   'Major': ['Yo‘nalish', 'Направление'],
   'Public university': ['Davlat universiteti', 'Государственный университет'],
