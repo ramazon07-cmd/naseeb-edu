@@ -85,9 +85,8 @@ test('student progress numbers come from the API fields, each with its own meani
   assert.equal(studentProgress({ roadmap_progress_percent: 140 }).roadmapPercent, 100);
 });
 
-test('the dashboard shows roadmap progress on the Roadmap tile and deep-links tasks', () => {
+test('the dashboard uses server counts and deep-links tasks', () => {
   const source = readFileSync(new URL('../src/CompactDashboard.jsx', import.meta.url), 'utf8');
-  assert.match(source, /const progress = numbers\.roadmapPercent;/);
   assert.doesNotMatch(source, /data\.applications\.(filter|length)/);
   assert.doesNotMatch(source, /data\.(achievements|honors)\.length/);
   assert.doesNotMatch(source, /setPage\('roadmap'\)/);

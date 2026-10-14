@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, ChevronRight, Clock3, Fingerprint, Globe2, GraduationCap, Lock, MessageCircle, School, SlidersHorizontal, Target, Telescope, UsersRound, ArrowUpRight, Star, Map, Plus } from 'lucide-react';
+import { CalendarClock, ChevronRight, Clock3, Fingerprint, Globe2, GraduationCap, Lock, MessageCircle, School, SlidersHorizontal, Target, Telescope, UsersRound, ArrowUpRight, Star, Plus } from 'lucide-react';
 import { api } from './api';
-import { t, tp, tx, formatClockDurationLocale, formatPercentLocale, formatDateLocale } from './i18n';
+import { t, tp, tx, formatClockDurationLocale, formatDateLocale } from './i18n';
 import { dateTimeText, dayMonthText } from './lib/format';
 import { daysUntil } from './lib/college';
 import { nextPriorities, studentProgress } from './lib/metrics';
@@ -20,7 +20,7 @@ const widgetMeta = {
   screen_time: ['Screen Time', Clock3],
   journey: ['Study goal', Target], tasks: ['Next priorities', Target],
   meetings: ['Meetings', CalendarClock], applications: ['Applications', GraduationCap],
-  discovery: ['Student discovery tools', Telescope], team: ['My Naseeb team', UsersRound], roadmap: ['Roadmap', Map],
+  discovery: ['Student discovery tools', Telescope], team: ['My Naseeb team', UsersRound],
   programs: ['Programs', Globe2],
 };
 
@@ -123,7 +123,6 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   const numbers = studentProgress(student);
   const stars = numbers.missionsApproved;
   const meetings = upcomingMeetings(data.bookings);
-  const progress = numbers.roadmapPercent;
   const roadmapLocked = isPageLocked('roadmap', user);
   const openTasks = () => setPage('roadmap', { tab: 'tasks' });
   const editGoal = () => setPage('student_center', { edit: 'goal' });
@@ -132,7 +131,6 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const [boardRef, boardWidth] = useBoardWidth();
   const columns = dashboardColumns(preferences, boardWidth);
-  const missionSteps = numbers.missionsTotal > 0 && numbers.missionsTotal <= 12 ? Array.from({ length: numbers.missionsTotal }, (_, index) => index < numbers.missionsApproved) : null;
   function save() {
     const layout = draft;
     setPreferences(layout);
@@ -147,7 +145,6 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   const content = {
     screen_time: <DashboardScreenTime userId={user.id} />,
     journey: <><div className="dashboard-goal-body"><button className="dashboard-goal-symbol" onClick={editGoal} aria-label={t('Edit study goal')}><span className="dashboard-goal-orbit" aria-hidden="true" />{student?.target_major ? <GraduationCap size={32} strokeWidth={1.5} /> : <Plus size={30} />}</button><div><h4>{student?.target_major || t('Set your study goal')}</h4><p>{listText(student?.target_countries) || t('Choose your study interests and destination.')}</p><span className="dashboard-goal-pill"><Star size={13} />{tx`Level ${student?.level || 1}`}<span>·</span>{tp('{n} star|{n} stars', stars, { n: stars })}</span></div></div><div className="dashboard-goal-footer">{open('student_center', 'Edit study goal', { edit: 'goal' })}<button className="dashboard-link" onClick={() => setUsageOpen(true)}>{t('Program usage')}<ArrowUpRight size={14} /></button></div></>,
-    roadmap: <><div className="dashboard-roadmap-value"><strong><CountUp value={progress} format={formatPercentLocale} /></strong></div>{missionSteps ? <div className="dashboard-mission-steps" role="progressbar" aria-label={t('Roadmap progress')} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>{missionSteps.map((done, index) => <i key={index} className={done ? 'done' : index === numbers.missionsApproved ? 'current' : ''} style={{ '--s': index }} />)}</div> : <div className="dashboard-progress-track" role="progressbar" aria-label={t('Roadmap progress')} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ '--fill': progress / 100 }} /></div>}{numbers.missionsTotal > 0 ? <div className="dashboard-application-stats dashboard-roadmap-stats"><span><b>{numbers.missionsApproved}/{numbers.missionsTotal}</b>{t('Missions approved')}</span>{numbers.levelTotal > 0 && <span><b>{numbers.levelApproved}/{numbers.levelTotal}</b>{t('This level')}</span>}</div> : <p className="dashboard-roadmap-caption">{t('No roadmap missions assigned yet.')}</p>}{open('roadmap', 'Open roadmap', { tab: 'path' })}</>,
     tasks: <><div className="dashboard-card-list">{pending.slice(0, 3).map((task, index) => <button key={task.id} onClick={openTasks} disabled={roadmapLocked} aria-disabled={roadmapLocked || undefined} title={roadmapLocked ? t('Coming soon') : undefined}><i className="dashboard-task-index">{String(index + 1).padStart(2, '0')}</i><span><b>{task.title}</b><small>{task.due_date ? formatDateLocale(task.due_date) : t('No deadline')}</small></span>{roadmapLocked ? <Lock size={16} aria-hidden="true" /> : <ChevronRight size={16} />}</button>)}{!pending.length && empty('All tasks are complete.')}</div><div className="dashboard-card-foot"><span>{tp('{n} open task|{n} open tasks', pending.length, { n: pending.length })}</span>{open('roadmap', 'View all', { tab: 'tasks' })}</div></>,
     meetings: <><div className="dashboard-card-list">{meetings.slice(0, 2).map((meeting) => <button key={meeting.id} onClick={() => setPage('bookings')}><CalendarClock size={20} /><span><b>{meeting.topic || t('Meeting')}</b><small>{dateTimeText(meeting.starts_at)}</small></span><ChevronRight size={16} /></button>)}{!meetings.length && <div className="dashboard-meeting-empty"><CalendarClock size={28} strokeWidth={1.3} />{empty('No upcoming meetings.')}<small>{t('Make time for your next step.')}</small></div>}</div>{open('bookings', meetings.length ? 'View all' : 'Request a meeting')}</>,
     applications: <><div className="dashboard-number"><CountUp value={numbers.applicationsTotal} /><small>{t('Universities on your list')}</small></div><div className="dashboard-application-stats"><span><b>{numbers.applicationsSubmitted}</b>{t('Submitted')}</span><span><b>{data.essays.length}</b>{t('Essays')}</span><span><b>{numbers.applicationsAccepted}</b>{t('Accepted')}</span><span><b>{numbers.achievementsTotal}</b>{t('Achievements')}</span></div>{open('applications', 'View applications')}</>,

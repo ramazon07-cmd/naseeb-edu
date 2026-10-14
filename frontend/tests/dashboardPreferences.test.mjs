@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DASHBOARD_WIDGETS, LOCKED_WIDGETS, THREE_ACROSS_MIN_WIDTH, dashboardColumns, isLockedWidget, moveDashboardWidget, normalizeDashboardPreferences, setWidgetHidden } from '../src/dashboardPreferences.js';
 test('invalid and old stored preferences preserve every supported card once', () => {
-  assert.deepEqual(normalizeDashboardPreferences(null), { order: DASHBOARD_WIDGETS, hidden: [], rail: ['roadmap', 'discovery', 'programs'] });
+  assert.deepEqual(normalizeDashboardPreferences(null), { order: DASHBOARD_WIDGETS, hidden: [], rail: ['discovery', 'programs'] });
   const result = normalizeDashboardPreferences({order: ['team', 'removed', 'team'], hidden: ['removed', 'meetings', 'meetings']});
   assert.equal(result.order[0], 'team');
   assert.equal(new Set(result.order).size, DASHBOARD_WIDGETS.length);
   assert.deepEqual(result.hidden, ['meetings']);
 });
 test('the locked widgets cannot be hidden, whatever a saved layout says', () => {
-  assert.deepEqual(LOCKED_WIDGETS, ['journey', 'tasks', 'applications', 'roadmap']);
+  assert.deepEqual(LOCKED_WIDGETS, ['journey', 'tasks', 'applications']);
   // A corrupted all-hidden layout, or one saved before the lock existed, still shows them.
   const result = normalizeDashboardPreferences({ hidden: DASHBOARD_WIDGETS });
   assert.deepEqual(result.hidden, DASHBOARD_WIDGETS.filter((id) => !isLockedWidget(id)));
@@ -41,7 +41,7 @@ test('moves widgets across columns and inserts before a drop target', () => {
   assert.equal(back.order[0], 'meetings');
 });
 test('migrates old layouts and cleans invalid column assignments', () => {
-  assert.deepEqual(normalizeDashboardPreferences({order:['tasks']}).rail, ['roadmap', 'discovery', 'programs']);
+  assert.deepEqual(normalizeDashboardPreferences({order:['tasks']}).rail, ['discovery', 'programs']);
   assert.deepEqual(normalizeDashboardPreferences({rail:['team','team','gone']}).rail, ['team']);
   assert.deepEqual(normalizeDashboardPreferences({rail:[]}).rail, []);
 });
@@ -53,7 +53,7 @@ test('upgrades the old default but preserves intentional custom arrangements', (
   assert.deepEqual(custom.hidden, ['meetings']);
   // Its own rail is kept; widgets it never knew about join their default column.
   assert.deepEqual(custom.rail, ['discovery','team','programs']);
-  assert.ok(custom.order.includes('roadmap'));
+  assert.ok(!custom.order.includes('roadmap'));
 });
 
 test('every layout draws each visible widget once, and the locked ones always', () => {
@@ -88,27 +88,27 @@ test('every layout draws each visible widget once, and the locked ones always', 
       checked += 1;
     }
   }
-  assert.equal(checked, 512 * 512);
+  assert.equal(checked, (2 ** DASHBOARD_WIDGETS.length) ** 2);
 });
 
 test('the main column is cut one or three tiles wide so it matches the side column', () => {
   // Meetings, team and screen time hidden: three tiles beside three would leave a hole under a two-wide main column.
-  const hidden = ['meetings', 'team', 'screen_time'];
-  const [main, rail] = dashboardColumns({ hidden });
+  const hidden = ['meetings', 'screen_time'];
+  const [main, rail] = dashboardColumns({ hidden, rail: ['team', 'discovery', 'programs'] });
   assert.deepEqual([main.ids, main.across, main.wideLast, main.rows], [['journey', 'applications', 'tasks'], 1, false, 3]);
-  assert.deepEqual([rail.ids, rail.across], [['roadmap', 'discovery', 'programs'], 1]);
+  assert.deepEqual([rail.ids, rail.across], [['team', 'discovery', 'programs'], 1]);
   // Discovery and programs hidden: six beside one would leave the side column far short.
-  const [six] = dashboardColumns({ hidden: ['discovery', 'programs'] }, THREE_ACROSS_MIN_WIDTH);
+  const [six] = dashboardColumns({ hidden: ['programs'] }, THREE_ACROSS_MIN_WIDTH);
   assert.deepEqual([six.ids.length, six.across, six.rows, six.lastSpan, six.fewRows], [6, 3, 2, 1, true]);
-  const [five] = dashboardColumns({ hidden: ['discovery', 'programs', 'screen_time'] }, 1200);
+  const [five] = dashboardColumns({ hidden: ['programs', 'screen_time'] }, 1200);
   assert.deepEqual([five.ids.length, five.across, five.rows, five.lastSpan, five.wideLast], [5, 3, 2, 2, true]);
   // A board narrower than CSS needs for three across (or not measured yet) keeps two.
   for (const width of [undefined, 0, THREE_ACROSS_MIN_WIDTH - 1]) {
-    const [narrow] = dashboardColumns({ hidden: ['discovery', 'programs'] }, width);
+    const [narrow] = dashboardColumns({ hidden: ['programs'] }, width);
     assert.deepEqual([narrow.across, narrow.rows, narrow.lastSpan, narrow.fewRows], [2, 3, 1, false]);
   }
   // The default layout (six beside three) and near matches keep two across.
-  for (const layout of [{}, { hidden: ['programs'] }, { hidden: ['discovery'] }, { hidden: [...hidden, 'programs'] }]) assert.equal(dashboardColumns(layout, THREE_ACROSS_MIN_WIDTH)[0].across, 2);
+  for (const layout of [{}, { hidden: ['meetings'] }, { hidden: ['team'] }]) assert.equal(dashboardColumns(layout, THREE_ACROSS_MIN_WIDTH)[0].across, 2);
 });
 
 test('a side rail with no main column beside it is drawn as the main column', () => {
@@ -116,6 +116,14 @@ test('a side rail with no main column beside it is drawn as the main column', ()
   assert.equal(only.column, 'main');
   assert.equal(only.ids.length, DASHBOARD_WIDGETS.length - 1);
   const columns = dashboardColumns({});
-  assert.deepEqual(columns.map((column) => [column.column, column.ids.length]), [['main', 6], ['rail', 3]]);
-  assert.deepEqual(columns[1].ids, ['roadmap', 'discovery', 'programs']);
+  assert.deepEqual(columns.map((column) => [column.column, column.ids.length]), [['main', 6], ['rail', 2]]);
+  assert.deepEqual(columns[1].ids, ['discovery', 'programs']);
+});
+
+
+test('retired roadmap is removed from saved layouts and cannot be restored', () => {
+  const saved = normalizeDashboardPreferences({ order: ['roadmap', 'journey'], rail: ['roadmap', 'discovery'], hidden: ['roadmap'] });
+  for (const items of [saved.order, saved.rail, saved.hidden]) assert.ok(!items.includes('roadmap'));
+  assert.ok(!dashboardColumns(saved).flatMap((column) => column.ids).includes('roadmap'));
+  assert.deepEqual(moveDashboardWidget(saved, 'roadmap', 'main'), saved);
 });
