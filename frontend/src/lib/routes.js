@@ -131,11 +131,11 @@ export function buildPath({ page, params = {} } = {}) {
 
 // Sidebar order of the counselor workspace, and the pages that left it: still
 // openable by a direct link (search results, old bookmarks), just not listed.
-// Pages turned off in features.js: in no sidebar, so no role can open them.
+// Unreleased templates stay out of the admin sidebar; counselors see a locked placeholder.
 const OFF_PAGES = new Set(FEATURES.counselorRoadmapTemplates ? [] : ['counselor_roadmap']);
 const offered = (pages) => pages.filter((page) => !OFF_PAGES.has(page));
 
-export const COUNSELOR_NAV = offered(['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap']);
+export const COUNSELOR_NAV = ['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap'];
 const COUNSELOR_DIRECT_LINK_PAGES = ['students_joined', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates'];
 
 // Sidebar order per role.
@@ -154,7 +154,10 @@ export function navigationFor(user) {
 
 // Pages a role sees in its navigation but cannot open yet: the sidebar shows
 // them locked ("Coming soon") and their paths fall back to the home page.
-const LOCKED_PAGES = { student: ['store'] };
+const LOCKED_PAGES = {
+  student: ['store', 'roadmap'],
+  counselor: ['roadmap', 'counselor_roadmap'],
+};
 
 export function lockedPages(user) {
   if (!user || isPlatformAdmin(user)) return new Set();

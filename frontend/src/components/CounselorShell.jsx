@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@fontsource-variable/roboto/wght.css';
 import '../pages/counselor-shell.css';
-import { Bell, Calendar, Check, CheckSquare, ChevronDown, ChevronsLeft, ChevronsRight, Compass, Ellipsis, Globe2, LayoutDashboard, LifeBuoy, LogOut, Menu, MessageCircle, Moon, Pencil, Search, Settings, Sun, Users, X } from 'lucide-react';
+import { Bell, Calendar, Check, CheckSquare, ChevronDown, ChevronsLeft, ChevronsRight, Compass, Ellipsis, Globe2, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, Moon, Pencil, Search, Settings, Sun, Users, X } from 'lucide-react';
 import { LANGUAGE_OPTIONS, formatNumberLocale, t, tx } from '../i18n';
 import { fullName, initials } from '../lib/labels';
 import { counselorCounts } from '../lib/counselorCounts';
 import { canUseAssistant } from '../lib/assistantAccess';
-import { COUNSELOR_NAV } from '../lib/routes';
+import { COUNSELOR_NAV, isPageLocked } from '../lib/routes';
 import { invalidatePagedLists } from '../hooks/usePagedList';
 import { CounselorUiContext } from './counselorUi';
 import { useAccountPhoto } from './records';
@@ -20,7 +20,7 @@ const NAV = {
   essays: { label: 'Essays', icon: Pencil, badge: 'essays' },
   bookings: { label: 'Meetings', icon: Calendar, badge: 'meetings' },
   messages: { label: 'Messages', icon: MessageCircle, badge: 'messages' },
-  counselor_roadmap: { label: 'Roadmap templates', icon: Compass },
+  counselor_roadmap: { label: 'Roadmap', icon: Compass },
 };
 // The phone's bottom bar keeps the four daily pages; "More" opens the full list.
 const TAB_PAGES = ['dashboard', 'students', 'review', 'messages'];
@@ -157,6 +157,9 @@ export function CounselorLayout({ user, data, stats, bell, page, title, setPage,
     const { label, icon: Icon, badge } = NAV[next];
     const active = page === next;
     const text = t(label);
+    if (isPageLocked(next, user)) return <button type="button" key={next} className={`${className} cx-nav-locked`} disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${text} — ${t('Coming soon')}`}>
+      <Icon size={18} aria-hidden="true" /><span>{text}</span><Lock size={13} className="cx-nav-lock-icon" aria-hidden="true" />
+    </button>;
     return <button type="button" key={next} className={`${className}${active ? ' active' : ''}`} aria-current={active ? 'page' : undefined} title={rail && badges ? text : undefined} onClick={() => go(next)}>
       <Icon size={18} aria-hidden="true" /><span>{text}</span>{badges && badge && <NavCount value={counts[badge]} />}
     </button>;

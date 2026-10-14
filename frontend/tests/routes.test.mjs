@@ -164,17 +164,40 @@ test('the store is shown locked to students and cannot be opened', () => {
   assert.deepEqual(resolveRoute(parsePath('/store'), student), { page: 'dashboard', params: {} });
   assert.equal(buildPath(resolveRoute(parsePath('/store/'), student)), '/dashboard');
   assert.ok(!reachablePages(student).has('store'));
-  // Staff and product admins are unaffected.
-  for (const user of [counselor, teacher, parent, organization, admin, { id: 9, role: 'student', is_superuser: true }]) {
+  // The store lock applies only to students.
+  assert.equal(isPageLocked('store', counselor), false);
+  for (const user of [teacher, parent, organization, admin, { id: 9, role: 'student', is_superuser: true }]) {
     assert.equal(isPageLocked('store', user), false);
     assert.equal(lockedPages(user).size, 0);
   }
   assert.equal(lockedPages(null).size, 0);
 });
 
+test('roadmap pages stay locked for students and counselors, including direct tab links', () => {
+  assert.ok(navigationFor(student).includes('roadmap'));
+  assert.ok(navigationFor(counselor).includes('counselor_roadmap'));
+  for (const user of [student, counselor]) {
+    assert.equal(isPageLocked('roadmap', user), true);
+    assert.equal(canOpenPage('roadmap', user), false);
+    assert.equal(openablePage('roadmap', user), null);
+    assert.ok(!reachablePages(user).has('roadmap'));
+    for (const path of ['/roadmap', '/roadmap/', ...ROADMAP_TABS.map((tab) => `/roadmap/${tab}`)]) {
+      assert.deepEqual(resolveRoute(parsePath(path), user), { page: 'dashboard', params: {} }, `${user.role}: ${path}`);
+    }
+  }
+  assert.equal(isPageLocked('counselor_roadmap', counselor), true);
+  assert.equal(openablePage('counselor_roadmap', counselor), null);
+  assert.deepEqual(resolveRoute(parsePath('/counselor-roadmap'), counselor), { page: 'dashboard', params: {} });
+  assert.equal(canOpenPage('roadmap', teacher), true);
+  for (const user of [teacher, parent, organization, admin, { role: 'student', is_superuser: true }, { role: 'counselor', is_superuser: true }]) {
+    assert.equal(isPageLocked('roadmap', user), false);
+    assert.equal(isPageLocked('counselor_roadmap', user), false);
+  }
+});
+
 test('roadmap tabs: links open the requested tab, unknown ones the role default', () => {
   assert.equal(buildPath({ page: 'roadmap', params: { tab: 'tasks' } }), '/roadmap/tasks');
-  assert.deepEqual(resolveRoute(parsePath('/roadmap/tasks'), student), { page: 'roadmap', params: { tab: 'tasks' } });
+  assert.deepEqual(resolveRoute(parsePath('/roadmap/tasks'), teacher), { page: 'roadmap', params: { tab: 'tasks' } });
   assert.equal(roadmapTab('tasks', false), 'tasks');
   assert.equal(roadmapTab(undefined, false), 'path');
   assert.equal(roadmapTab('missions', false), 'path');
