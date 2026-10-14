@@ -149,7 +149,7 @@ export function navigationFor(user) {
   if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'school_counselors', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'roadmap', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'roadmap', 'store', 'screen_time', 'support'];
 }
 
 // Pages a role sees in its navigation but cannot open yet: the sidebar shows
