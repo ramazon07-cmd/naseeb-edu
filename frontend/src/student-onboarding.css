@@ -615,7 +615,27 @@
 }
 
 .profile-section-open {
-  margin-top: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.profile-section-open:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.profile-section-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .profile-status {

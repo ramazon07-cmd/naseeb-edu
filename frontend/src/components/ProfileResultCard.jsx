@@ -48,12 +48,14 @@ function loadLogo(theme) {
 }
 
 // `card`: profileCardData() for this student, or null until Interests is done.
-// `student`: the own student record, for the photo. `children`: the detailed scores.
+// `student`: the own student record, for the photo. `children`: the detailed
+// scores, shown on the card's back; the PNG is always the front.
 export function ProfileResultCard({ card, student, children }) {
   const canvasRef = useRef(null);
   const [rendered, setRendered] = useState(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [flipped, setFlipped] = useState(false);
   // CSS hot updates change tokens but cannot repaint existing canvas pixels.
   useEffect(() => {
     if (!import.meta.hot) return undefined;
@@ -78,7 +80,6 @@ export function ProfileResultCard({ card, student, children }) {
     personality: t('Personality'), majors: t('Recommended majors'),
     issued: t('Date of issue'), signature: t('Signature'),
     notTaken: t('Not taken yet'), majorsLocked: t('Unlocks once all four challenges are saved.'),
-    disclaimer: t('An education-interest snapshot, not a diagnosis.'),
   };
   // The page re-scores on every render; redraw only when what the card shows changes.
   const drawing = JSON.stringify({ card, labels, theme });
@@ -124,16 +125,26 @@ export function ProfileResultCard({ card, student, children }) {
 
   const code = card.code.map((item) => item.letter).join('');
   return <section className="profile-card-panel" aria-labelledby="profile-card-title">
-    <div className="profile-card-frame" aria-busy={!ready}>
-      <canvas ref={canvasRef} width={CARD_WIDTH} height={CARD_HEIGHT} role="img" aria-label={tx`Profile card for ${card.name}: interest code ${code}, ${card.code.map((item) => item.name).join(', ')}.`} />
+    {/* The card itself is the control: a click, Enter or Space flips it. */}
+    <div className={`profile-card-flip${flipped ? ' is-flipped' : ''}`} {...(children ? { role: 'button', tabIndex: 0, 'aria-pressed': flipped, 'aria-label': t('Flip card'), title: t('Flip card'), onClick: () => setFlipped((value) => !value), onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setFlipped((value) => !value); } } } : {})}>
+      <div className="profile-card-inner">
+        <div className="profile-card-frame" aria-busy={!ready} inert={flipped}>
+          <canvas ref={canvasRef} width={CARD_WIDTH} height={CARD_HEIGHT} role="img" aria-label={tx`Profile card for ${card.name}: interest code ${code}, ${card.code.map((item) => item.name).join(', ')}.`} />
+        </div>
+        {children && <div className="profile-card-back" inert={!flipped}>
+          <header><span>Naseeb Edu</span><h3>{t('Assessment scores')}</h3></header>
+          {children}
+        </div>}
+      </div>
     </div>
     <header className="profile-card-copy">
       <span className="eyebrow">{t('YOUR PROFILE CARD')}</span>
       <h2 id="profile-card-title">{t('Your results on one card')}</h2>
       <p>{t('Save it as an image to share with your family or keep for later. Your IQ & Reasoning result stays off the card.')}</p>
-      <button type="button" className="button primary" onClick={download} disabled={!ready} aria-busy={!ready}><Download size={16} aria-hidden="true" /> {t('Download card')}</button>
+      <div className="profile-card-actions">
+        <button type="button" className="button primary" onClick={download} disabled={!ready} aria-busy={!ready}><Download size={16} aria-hidden="true" /> {t('Download card')}</button>
+      </div>
       {error && <div className="profile-card-error" role="alert"><p>{error}</p>{!ready && <button type="button" className="button quiet" onClick={() => { setError(''); setAttempt((value) => value + 1); }}>{t('Retry')}</button>}</div>}
     </header>
-    {children && <div className="profile-card-details">{children}</div>}
   </section>;
 }

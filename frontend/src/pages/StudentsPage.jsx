@@ -58,8 +58,8 @@ export function StudentEssayList({ items, onView }) {
   return <Panel title={t("Essays & Google Docs")} className="print-private" ><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={joinParts(tx`Version ${essay.version}`, essay.university_name || t("General essay"))} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={NO_SHARED_ESSAYS} />}</div></Panel>;
 }
 
-export function StudentDocumentList({ title, items, onPreview, notify }) {
-  return <Panel title={title} ><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={label(doc.document_type)} description={doc.counselor_comment} badge={doc.status} attachment={<AttachmentRow attachment={documentAttachment(doc)} onPreview={() => onPreview(doc)} notify={notify} />} actions={<GoogleDocsActions item={doc} onPreview={doc.has_file ? undefined : () => onPreview(doc)} />} />)}{!items.length && <Empty />}</div></Panel>;
+export function StudentDocumentList({ title, items, onPreview, notify, hideStatus = false }) {
+  return <Panel title={title} ><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={label(doc.document_type)} description={doc.counselor_comment} badge={hideStatus ? undefined : doc.status} attachment={<AttachmentRow attachment={documentAttachment(doc)} onPreview={() => onPreview(doc)} notify={notify} />} actions={<GoogleDocsActions item={doc} onPreview={doc.has_file ? undefined : () => onPreview(doc)} />} />)}{!items.length && <Empty />}</div></Panel>;
 }
 
 // No workspace plan (older schools) keeps full access, as on the server.
@@ -121,8 +121,8 @@ export function ParentInviteModal({ student, onClose, notify }) {
 // `profile`: the student's own editable profile cards, shown instead of the
 // read-only profile panels; activities, honors and achievements are then
 // summarised there too. `roadmapLocked`: the student cannot reach the roadmap
-// or its tasks yet, so tasks, mission progress and the tasks' share of readiness
-// are left out; level and stars stay (Applications are in the College list below).
+// or its tasks yet, so tasks, mission progress, level, stars and the tasks' share
+// of readiness are left out (Applications are in the College list below).
 export function StudentOverview({ student, data: workspaceData, onBack, user, notify, profile = null, roadmapLocked = false }) {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedEssay, setSelectedEssay] = useState(null);
@@ -144,12 +144,12 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
 
   return <div className="section-stack student-overview">
     <section className="student-overview-hero">
-      <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{joinParts(student.user_detail?.email, student.school_name || t("No school assigned"))}</p></div></div></div>
+      <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div>{!profile && <span className="eyebrow">{t("STUDENT 360° PROFILE")}</span>}<h2>{fullName(student.user_detail)}</h2><p>{joinParts(student.user_detail?.email, student.school_name || t("No school assigned"))}</p></div></div></div>
       <div className="student-overview-actions">{(isCounselor(user) || user?.role === 'organization') && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{isCounselor(user) && (parentPortalInPlan(user) ? <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button> : <><button className="button quiet" disabled aria-describedby="parent-invite-plan-note"><UsersRound size={16} /> {t("Invite parent")}</button><small id="parent-invite-plan-note">{t("The parent portal is not included in your school’s plan.")}</small></>)}{canDownloadCv(user) && <DownloadCvButton studentId={student.id} className="button quiet" notify={notify} />}</div>
-      <div className="overview-progress"><strong>{formatPercentLocale(readiness.percent)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${readiness.percent}%` }} /></div><small>{tp('{done} of {n} item finished|{done} of {n} items finished', readiness.total, { done: readiness.done, n: readiness.total })}</small>{profile && <small>{roadmapLocked ? t("Counts approved documents, submitted applications and sent recommendation letters.") : t("Counts approved tasks and documents, submitted applications and sent recommendation letters.")}</small>}</div>
+      <div className="overview-progress"><strong>{formatPercentLocale(readiness.percent)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${readiness.percent}%` }} /></div><small>{tp('{done} of {n} item finished|{done} of {n} items finished', readiness.total, { done: readiness.done, n: readiness.total })}</small></div>
     </section>
     {profile}
-    <div className={roadmapLocked ? "stat-grid two" : "stat-grid"}><Stat label={t("Level")} value={formatNumberLocale(student.level ?? 1)} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : (student.level ?? 1) > 1 ? t("Approved by staff") : t("Starting level")} /><Stat label={t("Stars")} value={formatNumberLocale(student.roadmap_stars ?? 0)} note={t("One per approved roadmap mission")} />{!roadmapLocked && <><Stat label={t("Assigned tasks")} value={formatNumberLocale(countTotal(student.task_status_counts))} /><Stat label={t("Applications")} value={formatNumberLocale(applications.length)} /></>}</div>
+    {!roadmapLocked && <div className="stat-grid"><Stat label={t("Level")} value={formatNumberLocale(student.level ?? 1)} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : (student.level ?? 1) > 1 ? t("Approved by staff") : t("Starting level")} /><Stat label={t("Stars")} value={formatNumberLocale(student.roadmap_stars ?? 0)} note={t("One per approved roadmap mission")} /><Stat label={t("Assigned tasks")} value={formatNumberLocale(countTotal(student.task_status_counts))} /><Stat label={t("Applications")} value={formatNumberLocale(applications.length)} /></div>}
     {!roadmapLocked && <LevelProgress student={student} />}
     {studentRecords.loading && <div className="data-state refreshing" role="status"><span>{t("Loading this student’s records…")}</span></div>}
     {studentRecords.error && <div className="alert error" role="alert">{studentRecords.error}</div>}
@@ -157,14 +157,14 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
       <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} className="print-private" ><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget")} value={student.budget_usd == null ? null : money(student.budget_usd)} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
       <Panel title={t("Guardian")} className="print-private" ><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
     </>}
-    <div className="overview-grid student-workspace-grid">{!roadmapLocked && <StudentTaskList items={tasks} onView={setSelectedTask} />}<StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} /></div>
+    <div className="overview-grid student-workspace-grid">{!roadmapLocked && <StudentTaskList items={tasks} onView={setSelectedTask} />}<StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} /></div>
     <div className="overview-grid">
       {STUDENT_RESOURCE_GROUPS.filter(([, resource]) => !profile || !PROFILE_SUMMARY_RESOURCES.includes(resource)).map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
-      <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} />
+      <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} />
     </div>
     {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} notify={notify} />}
     {selectedEssay && <EssayDetailModal essay={selectedEssay} onClose={() => setSelectedEssay(null)} />}
-    {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} />}
+    {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} showStatus={!profile} />}
     {parentInviteOpen && <ParentInviteModal student={student} onClose={() => setParentInviteOpen(false)} notify={notify} />}
     {credentialOpen && <TemporaryCredentialModal account={student.user_detail} onClose={() => setCredentialOpen(false)} notify={notify} />}
   </div>;

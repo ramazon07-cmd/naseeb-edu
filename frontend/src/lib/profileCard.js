@@ -5,7 +5,7 @@ import { formatNumberLocale, t } from '../i18n.js';
 
 // ID-1 card proportions (85.6 × 54 mm).
 export const CARD_WIDTH = 1600;
-export const CARD_HEIGHT = 1010;
+export const CARD_HEIGHT = 880;
 
 const SANS = "'Helvetica Neue', system-ui, sans-serif";
 const SERIF = "'Newsreader Variable', Georgia, serif";
@@ -275,8 +275,5 @@ export function drawProfileCard(canvas, card, palette, labels, art = {}) {
     note(ctx, labels.majorsLocked, right, 616, rightWidth, palette);
   }
 
-  divider(ctx, PAD, 878, RIGHT - PAD, palette);
-  ctx.fillStyle = palette.label;
-  fitText(ctx, labels.disclaimer, PAD, 932, RIGHT - PAD, 400, [23, 20], SANS);
   ctx.restore();
 }
