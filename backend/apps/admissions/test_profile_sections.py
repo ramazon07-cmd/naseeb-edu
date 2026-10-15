@@ -6,7 +6,7 @@ from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from apps.users.models import User
-from .models import School, StudentProfile
+from .models import Achievement, Activity, Honor, School, StudentProfile
 from .onboarding import PROFILE_READINESS_ITEMS, profile_readiness
 
 URL = '/api/students/onboarding/'
@@ -162,6 +162,10 @@ class ProfileReadinessTests(APITestCase):
         self.student = User.objects.create_user(username='ready-student', email='ready@example.com', role='student', school=self.school)
         self.profile = StudentProfile.objects.create(user=self.student, school=self.school, school_name='')
 
+    def missing_keys(self):
+        # A fresh instance: progress_stats stays cached on the instance that loaded it.
+        return {item['key'] for item in profile_readiness(StudentProfile.objects.get(pk=self.profile.pk))['missing']}
+
     def test_empty_profile_lists_every_item(self):
         readiness = profile_readiness(self.profile)
         self.assertEqual(readiness['percent'], 0)
@@ -186,3 +190,44 @@ class ProfileReadinessTests(APITestCase):
         listed = self.client.get('/api/students/').data
         rows = listed['results'] if isinstance(listed, dict) else listed
         self.assertIn('profile_readiness', rows[0])
+
+    def test_an_activity_record_answers_activities(self):
+        Activity.objects.create(student=self.profile, name='Robotics club')
+        missing = self.missing_keys()
+        self.assertNotIn('activities', missing)
+        self.assertIn('honors', missing)
+
+    def test_an_honor_or_an_achievement_record_answers_honors(self):
+        for model, fields in (
+            (Honor, {'title': 'Dean list'}),
+            (Achievement, {'title': 'Olympiad', 'category': 'olympiad', 'description': 'Gold medal'}),
+        ):
+            with self.subTest(model.__name__):
+                record = model.objects.create(student=self.profile, **fields)
+                missing = self.missing_keys()
+                self.assertNotIn('honors', missing)
+                self.assertIn('activities', missing)
+                record.delete()
+                self.assertIn('honors', self.missing_keys())
+
+    def test_onboarding_rows_alone_still_answer_both(self):
+        self.profile.application_profile = {'activities': [{'type': 'Club'}], 'honors': [{'project': 'Olympiad'}]}
+        missing = {item['key'] for item in profile_readiness(self.profile)['missing']}
+        self.assertFalse(missing & {'activities', 'honors'})
+
+    def test_another_students_records_never_answer_this_students_items(self):
+        counselor = User.objects.create_user(username='ready-counselor', email='ready-counselor@example.com', role='counselor', school=self.school)
+        other_user = User.objects.create_user(username='ready-other', email='ready-other@example.com', role='student', school=self.school)
+        other = StudentProfile.objects.create(user=other_user, school=self.school, assigned_counselor=counselor)
+        StudentProfile.objects.filter(pk=self.profile.pk).update(assigned_counselor=counselor)
+        Activity.objects.create(student=other, name='Robotics club')
+        Honor.objects.create(student=other, title='Dean list')
+        Achievement.objects.create(student=other, title='Olympiad', category='olympiad', description='Gold medal')
+        self.assertLessEqual({'activities', 'honors'}, self.missing_keys())
+        # One list page batch-loads both students' counts; each row gets only its own.
+        self.client.force_authenticate(counselor)
+        rows = self.client.get('/api/students/').data['results']
+        missing = {row['id']: {item['key'] for item in row['profile_readiness']['missing']} for row in rows}
+        self.assertEqual(set(missing), {self.profile.pk, other.pk})
+        self.assertLessEqual({'activities', 'honors'}, missing[self.profile.pk])
+        self.assertFalse(missing[other.pk] & {'activities', 'honors'})

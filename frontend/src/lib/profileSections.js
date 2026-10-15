@@ -27,6 +27,15 @@ export function sectionReview(student, key) {
   return { status, ...REVIEW_STATUSES[status], note: status === 'changes_requested' ? String(review?.note || '').trim() : '' };
 }
 
+// The Overview lists activities and honors on the portfolio records card. Their
+// onboarding answers keep a card there only while it has rows, is open for
+// editing or holds a counselor's change request.
+export function answerCardHidden(student, key, editing) {
+  if (!['honors', 'activities'].includes(key) || editing === key) return false;
+  const rows = student?.application_profile?.[key];
+  return !(Array.isArray(rows) && rows.length) && sectionReview(student, key).status !== 'changes_requested';
+}
+
 // Review notices name their section by position (1-based), so the reader's
 // language can title it.
 export const sectionFromNotice = (targetId) => PROFILE_SECTIONS[Number(targetId) - 1] || null;

@@ -4,7 +4,7 @@ import { RecordRow } from './ResourceSection';
 import { GoogleDocsActions, GoogleDocsRecordModal, TaskSubmissionModal, EssayDetailModal, DocumentPreviewModal, visibilityItemTitle, EvidencePreviewModal } from '../components/documents';
 import { AttachmentRow, documentAttachment } from '../components/files';
 import { t, tp, tx, formatPercentLocale, formatNumberLocale } from '../i18n';
-import { countTotal } from '../lib/metrics';
+import { countTotal, readinessWithoutTasks } from '../lib/metrics';
 import { Record, StudentAvatar, Stat, LevelProgress, ProfileCard, Detail, StudentTable } from '../components/records';
 import { dateText, gradeText, joinParts, money } from '../lib/format';
 import { label, fullName, initials } from '../lib/labels';
@@ -90,8 +90,10 @@ export function ParentInviteModal({ student, onClose, notify }) {
 
 // `profile`: the student's own editable profile cards, shown instead of the
 // read-only profile panels; activities, honors and achievements are then
-// summarised there too.
-export function StudentOverview({ student, data: workspaceData, onBack, user, notify, profile = null }) {
+// summarised there too. `roadmapLocked`: the student cannot reach the roadmap
+// or its tasks yet, so tasks, mission progress and the tasks' share of readiness
+// are left out; level and stars stay (Applications are in the College list below).
+export function StudentOverview({ student, data: workspaceData, onBack, user, notify, profile = null, roadmapLocked = false }) {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedEssay, setSelectedEssay] = useState(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
@@ -108,23 +110,24 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
   const tasks = studentItems(data, 'tasks', student.id);
   const applications = studentItems(data, 'applications', student.id);
   const essays = studentItems(data, 'essays', student.id);
+  const readiness = roadmapLocked ? readinessWithoutTasks(student) : { percent: student.progress_percent || 0, done: student.readiness_items_done ?? 0, total: student.readiness_items_total ?? 0 };
 
   return <div className="section-stack student-overview">
     <section className="student-overview-hero">
       <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{joinParts(student.user_detail?.email, student.school_name || t("No school assigned"))}</p></div></div></div>
       <div className="student-overview-actions">{(isCounselor(user) || user?.role === 'organization') && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{isCounselor(user) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}{canDownloadCv(user) && <DownloadCvButton studentId={student.id} className="button quiet" notify={notify} />}</div>
-      <div className="overview-progress"><strong>{formatPercentLocale(student.progress_percent || 0)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${student.progress_percent || 0}%` }} /></div><small>{tp('{done} of {n} item finished|{done} of {n} items finished', student.readiness_items_total ?? 0, { done: student.readiness_items_done ?? 0, n: student.readiness_items_total ?? 0 })}</small></div>
+      <div className="overview-progress"><strong>{formatPercentLocale(readiness.percent)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${readiness.percent}%` }} /></div><small>{tp('{done} of {n} item finished|{done} of {n} items finished', readiness.total, { done: readiness.done, n: readiness.total })}</small>{profile && <small>{roadmapLocked ? t("Counts approved documents, submitted applications and sent recommendation letters.") : t("Counts approved tasks and documents, submitted applications and sent recommendation letters.")}</small>}</div>
     </section>
     {profile}
-    <div className="stat-grid"><Stat label={t("Level")} value={formatNumberLocale(student.level ?? 1)} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : (student.level ?? 1) > 1 ? t("Approved by staff") : t("Starting level")} /><Stat label={t("Stars")} value={formatNumberLocale(student.roadmap_stars ?? 0)} note={t("One per approved roadmap mission")} /><Stat label={t("Assigned tasks")} value={formatNumberLocale(countTotal(student.task_status_counts))} /><Stat label={t("Applications")} value={formatNumberLocale(applications.length)} /></div>
-    <LevelProgress student={student} />
+    <div className={roadmapLocked ? "stat-grid two" : "stat-grid"}><Stat label={t("Level")} value={formatNumberLocale(student.level ?? 1)} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : (student.level ?? 1) > 1 ? t("Approved by staff") : t("Starting level")} /><Stat label={t("Stars")} value={formatNumberLocale(student.roadmap_stars ?? 0)} note={t("One per approved roadmap mission")} />{!roadmapLocked && <><Stat label={t("Assigned tasks")} value={formatNumberLocale(countTotal(student.task_status_counts))} /><Stat label={t("Applications")} value={formatNumberLocale(applications.length)} /></>}</div>
+    {!roadmapLocked && <LevelProgress student={student} />}
     {studentRecords.loading && <div className="data-state refreshing" role="status"><span>{t("Loading this student’s records…")}</span></div>}
     {studentRecords.error && <div className="alert error" role="alert">{studentRecords.error}</div>}
     {!profile && <>
       <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} className="print-private" ><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget")} value={student.budget_usd == null ? null : money(student.budget_usd)} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
       <Panel title={t("Guardian")} className="print-private" ><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
     </>}
-    <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} /></div>
+    <div className="overview-grid student-workspace-grid">{!roadmapLocked && <StudentTaskList items={tasks} onView={setSelectedTask} />}<StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} /></div>
     <div className="overview-grid">
       {STUDENT_RESOURCE_GROUPS.filter(([, resource]) => !profile || !PROFILE_SUMMARY_RESOURCES.includes(resource)).map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
       <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} />

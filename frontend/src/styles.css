@@ -3327,6 +3327,12 @@ td small {
   overflow: hidden;
   position: relative;
 }
+/* Secondary copy takes the banner's own ink on the taupe light banner: the
+   muted token reads below 4.5:1 on the darker end of its gradient. */
+.student-overview-hero {
+  --accent-muted: var(--accent-contrast);
+}
+
 /* Secondary copy stays readable on the ice-blue overview banner. */
 :root[data-theme='dark'] .student-overview-hero {
   --accent-muted: var(--on-accent-muted);
@@ -7348,6 +7354,7 @@ body:has(.modal-backdrop) .assistant-launchers {
   min-height: 38px;
   padding: 8px 15px;
   white-space: nowrap;
+  flex-shrink: 0;
   color: var(--muted);
   background: transparent;
   border: 0;
@@ -12455,6 +12462,14 @@ a:focus-visible {
 
 .student-overview .overview-grid > .panel {
   min-width: 0;
+}
+
+/* An odd last panel takes the whole row instead of leaving a hole beside it.
+   Only panels count (a record modal open inside the grid is not one), and a
+   profile card being edited already fills a row of its own. */
+.student-overview .overview-grid > :last-child:nth-child(odd of .panel),
+.student-overview .profile-section-grid > :last-child:nth-child(odd of :not(.is-editing)) {
+  grid-column: 1 / -1;
 }
 
 .student-overview .record {

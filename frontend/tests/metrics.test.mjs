@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
-const { countTotal, isMissionLocked, nextLevel, nextPriorities, studentProgress, SUBMITTED_APPLICATION_STATUSES } = await import('../src/lib/metrics.js');
+const { countTotal, isMissionLocked, nextLevel, nextPriorities, readinessWithoutTasks, studentProgress, SUBMITTED_APPLICATION_STATUSES } = await import('../src/lib/metrics.js');
 const { setLanguage, tp } = await import('../src/i18n.js');
 
 const task = (id, status, due_date, priority = 'medium') => ({ id, status, due_date, priority });
@@ -83,6 +83,20 @@ test('student progress numbers come from the API fields, each with its own meani
   assert.equal(empty.roadmapPercent, 0);
   assert.equal(empty.missionsTotal, 0);
   assert.equal(studentProgress({ roadmap_progress_percent: 140 }).roadmapPercent, 100);
+});
+
+test('readiness without tasks drops every task and rounds half up like the backend', () => {
+  const counts = (approved, open) => ({ todo: open, in_progress: 0, submitted: 0, approved, late: 0 });
+  // No tasks: the server's own numbers (3 of 11 is 27.3%).
+  assert.deepEqual(readinessWithoutTasks({ readiness_items_done: 3, readiness_items_total: 11, task_status_counts: counts(0, 0) }), { done: 3, total: 11, percent: 27 });
+  // 1 approved of 5 tasks: 3 of 16 (19%) becomes 2 of 11 (18.2%).
+  assert.deepEqual(readinessWithoutTasks({ readiness_items_done: 3, readiness_items_total: 16, task_status_counts: { todo: 3, in_progress: 1, submitted: 0, approved: 1, late: 0 } }), { done: 2, total: 11, percent: 18 });
+  // Only tasks: nothing left to count.
+  assert.deepEqual(readinessWithoutTasks({ readiness_items_done: 2, readiness_items_total: 4, task_status_counts: counts(2, 2) }), { done: 0, total: 0, percent: 0 });
+  // Halves round up: 1 of 8 is 12.5%, 7 of 40 is 17.5%.
+  assert.equal(readinessWithoutTasks({ readiness_items_done: 2, readiness_items_total: 10, task_status_counts: counts(1, 1) }).percent, 13);
+  assert.equal(readinessWithoutTasks({ readiness_items_done: 7, readiness_items_total: 40, task_status_counts: {} }).percent, 18);
+  assert.deepEqual(readinessWithoutTasks(null), { done: 0, total: 0, percent: 0 });
 });
 
 test('the dashboard uses server counts and deep-links tasks', () => {

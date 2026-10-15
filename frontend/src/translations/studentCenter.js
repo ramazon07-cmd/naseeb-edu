@@ -68,6 +68,7 @@ export const STUDENT_CENTER_TRANSLATIONS = {
   'Waiting for counselor': ['Maslahatchi tekshiruvida', 'Ждёт проверки консультанта'],
   '{0} of {1} approved': ['{1} tadan {0} tasi tasdiqlangan', 'Одобрено {0} из {1}'],
   'Open Activities & honors': ['Faoliyat va mukofotlarni ochish', 'Открыть активности и награды'],
+  'No entries in Activities & honors yet.': ['«Faoliyatlar va mukofotlar» bo‘limida hali yozuv yo‘q.', 'В разделе «Активности и награды» пока нет записей.'],
   'What the labels mean': ['Belgilar nimani anglatadi', 'Что означают отметки'],
   'your counselor checked it': ['maslahatchingiz tekshirgan', 'консультант проверил'],
   'sent, not checked yet. Editing an approved entry sends it back for checking.': ['yuborilgan, hali tekshirilmagan. Tasdiqlangan yozuvni tahrirlasangiz, u qayta tekshiruvga yuboriladi.', 'отправлено, ещё не проверено. Если изменить одобренную запись, она снова уйдёт на проверку.'],
@@ -78,6 +79,7 @@ export const STUDENT_CENTER_TRANSLATIONS = {
   'Counselor note:': ['Maslahatchi izohi:', 'Комментарий консультанта:'],
   // Profile readiness
   'Profile ready': ['Profil tayyorligi', 'Готовность профиля'],
+  'Profile completeness': ['Profil to‘liqligi', 'Заполненность профиля'],
   'To raise it:': ['Oshirish uchun:', 'Чтобы повысить:'],
   'Every profile question is answered.': ['Profildagi barcha savollarga javob berilgan.', 'На все вопросы профиля даны ответы.'],
   'add a profile photo': ['profil suratini qo‘shing', 'добавьте фото профиля'],
@@ -92,6 +94,9 @@ export const STUDENT_CENTER_TRANSLATIONS = {
   'write a short personal story': ['qisqa shaxsiy hikoya yozing', 'напишите короткую личную историю'],
   'add an activity': ['faoliyat qo‘shing', 'добавьте активность'],
   'add an honor': ['mukofot qo‘shing', 'добавьте награду'],
+  // What Application readiness counts (Overview hero)
+  'Counts approved documents, submitted applications and sent recommendation letters.': ['Hisobga olinadi: tasdiqlangan hujjatlar, yuborilgan arizalar va tavsiyanomalar.', 'Учитываются одобренные документы, поданные заявки и отправленные рекомендательные письма.'],
+  'Counts approved tasks and documents, submitted applications and sent recommendation letters.': ['Hisobga olinadi: tasdiqlangan vazifalar va hujjatlar, yuborilgan arizalar va tavsiyanomalar.', 'Учитываются одобренные задания и документы, поданные заявки и отправленные рекомендательные письма.'],
   // Profile questions
   'Middle name': ['Otasining ismi', 'Отчество'],
   'Gender': ['Jins', 'Пол'],

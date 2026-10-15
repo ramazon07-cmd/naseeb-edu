@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, Pencil } from 'lucide-react';
 import { api } from '../api';
 import { t, tx, formatPercentLocale } from '../i18n';
 import { fieldErrorsFrom } from '../lib/onboardingDraft';
-import { answersPayload, listText, profileAnswers, readinessHints, sectionByKey, sectionReview, validateSection } from '../lib/profileSections';
+import { answerCardHidden, answersPayload, listText, profileAnswers, readinessHints, sectionByKey, sectionReview, validateSection } from '../lib/profileSections';
 import { gradeText, joinParts, locationText } from '../lib/format';
 import { label } from '../lib/labels';
 import { Detail } from './records';
@@ -150,7 +150,7 @@ function RecordsCard({ items, onOpen }) {
     <div className="panel-body">
       {items.length ? <ul className="profile-section-rows">{items.slice(0, 5).map((item) => <li key={`${item.kind}-${item.id}`}>
         <b>{visibilityItemTitle(item)}</b><RecordStatus verified={item.verified} />
-      </li>)}</ul> : <p className="profile-section-empty">{t('Nothing added yet.')}</p>}
+      </li>)}</ul> : <p className="profile-section-empty">{t('No entries in Activities & honors yet.')}</p>}
       <button type="button" className="button quiet profile-section-open" onClick={onOpen}>{t('Open Activities & honors')}</button>
     </div>
   </section>;
@@ -164,7 +164,7 @@ export function ProfileReadiness({ student, onEdit }) {
   const counselor = student.counselor_name ? tx`Counselor: ${student.counselor_name}` : null;
   return <section className="profile-readiness" aria-labelledby="profile-readiness-title">
     <div className="profile-readiness-head">
-      <div className="profile-readiness-name"><h2 id="profile-readiness-title">{t('Profile ready')}</h2><p>{joinParts(gradeText(student.grade), counselor)}</p></div>
+      <div className="profile-readiness-name"><h2 id="profile-readiness-title">{t('Profile completeness')}</h2><p>{joinParts(gradeText(student.grade), counselor)}</p></div>
       <strong className="profile-readiness-value">{formatPercentLocale(value)}</strong>
     </div>
     <div className="progress wide" role="progressbar" aria-labelledby="profile-readiness-title" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${value}%` }} /></div>
@@ -184,10 +184,12 @@ export function ProfileSections({ student, data, reload, notify, sections = PROF
   if (!student) return null;
   const close = () => { setEditing(null); onEditDone(); };
   const records = onOpenRecords ? ['activities', 'honors', 'achievements'].flatMap((kind) => (data?.[kind] || []).filter((item) => Number(item.student) === Number(student.id)).map((item) => ({ ...item, kind }))) : [];
+  // Overview: the records card is the one place for activities and honors.
+  const hidden = (key) => Boolean(onOpenRecords) && answerCardHidden(student, key, editing);
   return <div className="profile-sections">
-    {showReadiness && <ProfileReadiness student={student} onEdit={(key) => { if (!editing && sections.includes(key)) setEditing(key); }} />}
+    {showReadiness && <ProfileReadiness student={student} onEdit={(key) => { if (editing) return; if (hidden(key)) onOpenRecords(); else if (sections.includes(key)) setEditing(key); }} />}
     <div className="profile-section-grid">
-      {sections.map((key) => <SectionCard key={key} section={sectionByKey(key)} student={student} editing={editing === key} locked={editing != null && editing !== key}
+      {sections.filter((key) => !hidden(key)).map((key) => <SectionCard key={key} section={sectionByKey(key)} student={student} editing={editing === key} locked={editing != null && editing !== key}
         onEdit={() => setEditing(key)} onClose={close} reload={reload} notify={notify} />)}
       {onOpenRecords && <RecordsCard items={records} onOpen={onOpenRecords} />}
     </div>
