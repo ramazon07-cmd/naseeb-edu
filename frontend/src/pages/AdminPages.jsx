@@ -6,18 +6,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { auditActionLabel, auditGroupOptions, fullName, initials, label } from '../lib/labels';
 import { auditDetailLines } from '../lib/auditDetails';
 import { api } from '../api';
-import { CheckboxControl, Field } from '../components/forms';
+import { CheckboxControl, ChoiceCards, Field, PortalTabs } from '../components/forms';
 import { PlanFacts } from '../components/plans';
-import { OneTimePassword } from '../components/TemporaryCredentialModal';
+import { OneTimePassword, TemporaryCredentialModal } from '../components/TemporaryCredentialModal';
 import { PLAN_FEATURES } from '../lib/workspacePlan';
 import { canManageWorkspaces, isPlatformAdmin, isSuperAdmin } from '../lib/roles';
 import { auditFilters } from '../lib/auditQuery';
 import { SupportViewModal } from '../components/SupportViewModal';
+import { ModerationCard, moderateReport } from '../components/moderation';
 import { dateText, dateTimeText, formatFileSize, joinParts } from '../lib/format';
 import { attentionRows } from '../lib/adminAttention';
 import { InlineLoadError } from '../components/states';
 import { FEATURES } from '../lib/features';
-import { usePagedList } from '../hooks/usePagedList';
+import { invalidatePagedLists, usePagedList } from '../hooks/usePagedList';
 import { AccountPicker, LoadMore, PagedListError, SchoolPicker, firstPageLoading } from '../components/paged';
 
 const ACTIVE_ORGANIZATION_SCHOOLS = { workspace_type: 'school', is_active: 'true' };
@@ -32,7 +33,7 @@ export function AdminControlDashboard({ user, stats, setPage }) {
   // Quick links describe only what this staff tier can do on those pages.
   const manage = canManageWorkspaces(user);
   const reviewer = isSuperAdmin(user);
-  return <div className="section-stack"><div className="stat-grid" aria-busy={summary.loading}><Stat label={t("Schools")} value={tile(data?.schools_active)} note={t("Active organization workspaces")} /><Stat label={t("Counselors")} value={tile(data?.counselors_active)} note={data ? tx`${data.counselors_inactive} inactive` : undefined} /><Stat label={t("Students")} value={stats?.students_total ?? '—'} note={t("Available in Student 360")} /><Stat label={t("Roadmap reviews")} value={tile(data?.roadmap_missions_submitted)} note={t("Submitted counselor missions")} /></div>{summary.error && <InlineLoadError message={summary.error} onRetry={summary.retry} />}<AttentionPanel summary={summary} setPage={setPage} /><AiUsagePanel /><Panel title={t("Platform administration")}><div className="quick-grid"><button onClick={() => setPage('admin_schools')}><Building2 /><span><b>{manage ? t("Manage schools") : t("Schools")}</b><small>{manage ? t("Provision organization accounts") : t("View workspaces and reset school logins")}</small></span></button><button onClick={() => setPage('admin_counselors')}><UserRound /><span><b>{manage ? t("Manage counselors") : t("Counselors")}</b><small>{manage ? t("Create, transfer, or deactivate") : t("View counselor accounts and open support views")}</small></span></button>{FEATURES.counselorRoadmapTemplates && <button onClick={() => setPage('counselor_roadmap')}><Compass /><span><b>{reviewer ? t("Review roadmaps") : t("Counselor roadmaps")}</b><small>{reviewer ? t("Approve submitted milestones") : t("Follow counselor milestones")}</small></span></button>}<button onClick={() => setPage('admin_audit')}><ShieldAlert /><span><b>{t("Open audit log")}</b><small>{t("Trace administration actions")}</small></span></button></div></Panel></div>;
+  return <div className="section-stack"><div className="stat-grid" aria-busy={summary.loading}><Stat label={t("Schools")} value={tile(data?.schools_active)} note={t("Active organization workspaces")} /><Stat label={t("Counselors")} value={tile(data?.counselors_active)} note={data ? tx`${data.counselors_inactive} inactive` : undefined} /><Stat label={t("Students")} value={stats?.students_total ?? '—'} note={t("Available in Student 360")} /><article className="stat-card"><span>{t("Roadmap reviews")}</span><strong>{tile(data?.roadmap_missions_submitted)}</strong><small>{FEATURES.counselorRoadmapTemplates ? <button type="button" className="link-button admin-link" onClick={() => setPage('counselor_roadmap')}>{t("Submitted counselor missions")}</button> : t("Submitted counselor missions")}</small></article></div>{summary.error && <InlineLoadError message={summary.error} onRetry={summary.retry} />}<AttentionPanel summary={summary} setPage={setPage} /><AiUsagePanel /><Panel title={t("Platform administration")}><div className="quick-grid"><button onClick={() => setPage('admin_schools')}><Building2 /><span><b>{manage ? t("Manage schools") : t("Schools")}</b><small>{manage ? t("Provision organization accounts") : t("View workspaces and reset school logins")}</small></span></button><button onClick={() => setPage('admin_counselors')}><UserRound /><span><b>{manage ? t("Manage counselors") : t("Counselors")}</b><small>{manage ? t("Create, transfer, or deactivate") : t("View counselor accounts and open support views")}</small></span></button>{FEATURES.counselorRoadmapTemplates && <button onClick={() => setPage('counselor_roadmap')}><Compass /><span><b>{reviewer ? t("Review roadmaps") : t("Counselor roadmaps")}</b><small>{reviewer ? t("Approve submitted milestones") : t("Follow counselor milestones")}</small></span></button>}<button onClick={() => setPage('admin_audit')}><ShieldAlert /><span><b>{t("Open audit log")}</b><small>{t("Trace administration actions")}</small></span></button></div></Panel></div>;
 }
 
 function AttentionPanel({ summary, setPage }) {
@@ -54,19 +55,69 @@ export function AdminCounselorsPage({ user, query, reload, notify }) {
   const [transfer, setTransfer] = useState(null);
   const [editing, setEditing] = useState(null);
   const [supportTarget, setSupportTarget] = useState(null);
+  const [credentialTarget, setCredentialTarget] = useState(null);
+  const [handover, setHandover] = useState(null);
   // Paged and searched on the server; the roster is never loaded whole.
   const list = usePagedList('users/accounts', { search: query, filters: { role: 'counselor' }, ordering: 'name', pageSize: 50 });
   const counselors = list.items;
   async function deactivate(account) {
     if (!window.confirm(tx`Deactivate ${fullName(account)}? Their login will stop immediately.`)) return;
-    try {await api.deactivateAccount(account.id);notify(t("Counselor deactivated."));reload();} catch (error) {notify(error.message, 'error');}
+    try {await api.deactivateAccount(account.id);notify(t("Counselor deactivated."));reload();} catch (error) {
+      // Their active students must go somewhere first; the server says how many.
+      if (error.status === 409 && error.details?.code === 'counselor_has_students') setHandover({ account, students: Number(error.details.students) || 0 });
+      else notify(error.message, 'error');
+    }
   }
-  return <><Panel title={t("Counselor provisioning")} action={canManage && <button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {t("Add counselor")}</button>}><div className="record-list" aria-busy={list.loading}>{counselors.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.school_name || t("No school"))}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.school_workspace_type === 'individual' ? t("Individual workspace") : t("Organization school")}</span></div></div><div className="record-actions"><button className="icon-button" onClick={() => setSupportTarget(account)} title={t("Support view")} aria-label={t("Support view")}><LifeBuoy size={16} /></button>{canManage && <button className="icon-button" onClick={() => setEditing(account)} title={t("Edit counselor")}><Pencil size={16} /></button>}{canManage && account.is_active && account.school_workspace_type !== 'individual' && <button className="button quiet" onClick={() => setTransfer(account)}><Building2 size={15} /> {t("Transfer")}</button>}{canManage && account.is_active && <button className="icon-button danger" onClick={() => deactivate(account)} title={t("Deactivate counselor")}><Trash2 size={16} /></button>}</div></article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !counselors.length && <Empty text={t("No counselors found.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{open && <CounselorProvisionForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{editing && <CounselorEditForm account={editing} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}{transfer && <AccountTransferForm account={transfer} onClose={() => setTransfer(null)} onSaved={() => {setTransfer(null);reload();}} notify={notify} />}{supportTarget && <SupportViewModal account={supportTarget} onClose={() => setSupportTarget(null)} notify={notify} />}</>;
+  return <><Panel title={t("Counselor provisioning")} action={canManage && <button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {t("Add counselor")}</button>}><div className="record-list" aria-busy={list.loading}>{counselors.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.school_name || t("No school"))}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.school_workspace_type === 'individual' ? t("Individual workspace") : t("Organization school")}</span></div></div><div className="record-actions"><button className="icon-button" onClick={() => setSupportTarget(account)} title={t("Support view")} aria-label={t("Support view")}><LifeBuoy size={16} /></button>{account.is_active && <button className="icon-button" onClick={() => setCredentialTarget(account)} title={t("Reset login")} aria-label={t("Reset login")}><Fingerprint size={16} /></button>}{canManage && <button className="icon-button" onClick={() => setEditing(account)} title={t("Edit counselor")}><Pencil size={16} /></button>}{canManage && account.is_active && account.school_workspace_type !== 'individual' && <button className="button quiet" onClick={() => setTransfer(account)}><Building2 size={15} /> {t("Transfer")}</button>}{canManage && account.is_active && <button className="icon-button danger" onClick={() => deactivate(account)} title={t("Deactivate counselor")}><Trash2 size={16} /></button>}</div></article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !counselors.length && <Empty text={t("No counselors found.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{open && <CounselorProvisionForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{editing && <CounselorEditForm account={editing} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}{transfer && <AccountTransferForm account={transfer} onClose={() => setTransfer(null)} onSaved={() => {setTransfer(null);reload();}} notify={notify} />}{supportTarget && <SupportViewModal account={supportTarget} onClose={() => setSupportTarget(null)} notify={notify} />}{credentialTarget && <TemporaryCredentialModal account={credentialTarget} onClose={() => setCredentialTarget(null)} notify={notify} />}{handover && <CounselorHandoverModal {...handover} notify={notify} onClose={() => setHandover(null)} onDone={() => {setHandover(null);list.reload();reload();}} />}</>;
+}
+
+const HANDOVER_OPTIONS = [
+  { value: 'reassign', label: 'Reassign to another counselor', description: 'An active counselor of the same school takes them over.', icon: UserRound },
+  { value: 'unassign', label: 'Leave them unassigned', description: 'They wait under “No counselor assigned” in Student 360.', icon: AlertTriangle },
+];
+
+// Deactivating a counselor who still has active students: say where those students go.
+function CounselorHandoverModal({ account, students, changes, notify, onClose, onDone }) {
+  const [choice, setChoice] = useState('reassign');
+  const [target, setTarget] = useState('');
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const handover = choice === 'reassign' ? { students: 'reassign', reassign_to: Number(target) } : { students: 'unassign' };
+      if (changes) await api.update('users/accounts', account.id, { ...changes, ...handover });
+      else await api.deactivateAccount(account.id, handover);
+      notify(t("Counselor deactivated."));
+      onDone();
+    } catch (error) {notify(error.message, 'error');} finally {setSaving(false);}
+  }
+  return <Modal title={t("Deactivate counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}>
+    <p className="form-wide">{tp('{n} active student is assigned to {name}.|{n} active students are assigned to {name}.', students, { n: formatNumberLocale(students), name: fullName(account) })}</p>
+    <div className="form-wide"><ChoiceCards name="handover" label={t("Students")} value={choice} onChange={setChoice} options={HANDOVER_OPTIONS} /></div>
+    {choice === 'reassign' && <AccountPicker name="reassign_to" label="Counselor" required value={target} onChange={setTarget} filters={{ ...ACTIVE_COUNSELORS, school: account.school }} />}
+    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || (choice === 'reassign' && (!target || Number(target) === account.id))} aria-busy={saving}>{t("Deactivate")}</button></div>
+  </form></Modal>;
 }
 
 export function CounselorEditForm({ account, schoolManaged = false, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);try {await api.update('users/accounts', account.id, { first_name: values.get('first_name'), last_name: values.get('last_name'), ...(!schoolManaged ? { email: values.get('email') } : {}), phone: values.get('phone'), position: values.get('position'), is_active: values.get('is_active') === 'true' });notify(t("Counselor updated."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
+  const [handover, setHandover] = useState(null);
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    const values = new FormData(event.currentTarget);
+    const changes = { first_name: values.get('first_name'), last_name: values.get('last_name'), ...(!schoolManaged ? { email: values.get('email') } : {}), phone: values.get('phone'), position: values.get('position'), is_active: values.get('is_active') === 'true' };
+    try {
+      await api.update('users/accounts', account.id, changes);
+      notify(t("Counselor updated."));
+      onSaved();
+    } catch (error) {
+      if (error.status === 409 && error.details?.code === 'counselor_has_students') setHandover({ students: Number(error.details.students) || 0, changes });
+      else notify(error.message, 'error');
+    } finally {setSaving(false);}
+  }
+  if (handover) return <CounselorHandoverModal account={account} {...handover} notify={notify} onClose={() => setHandover(null)} onDone={onSaved} />;
   return <Modal title={t("Edit counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("First name")}><input name="first_name" defaultValue={account.first_name} placeholder={t("e.g. Dilnoza")} required /></Field><Field label={t("Last name")}><input name="last_name" defaultValue={account.last_name} placeholder={t("e.g. Karimova")} /></Field>{!schoolManaged && <Field label={t("Email")}><input name="email" type="email" defaultValue={account.email} placeholder={t("e.g. name@example.com")} required /></Field>}<Field label={t("Phone")}><input name="phone" defaultValue={account.phone} placeholder={t("e.g. +998 90 123 45 67")} /></Field><Field label={t("Position")}><input name="position" defaultValue={account.position} placeholder={t("e.g. Senior counselor")} /></Field><Field label={t("Status")}><select name="is_active" defaultValue={String(account.is_active)}><option value="true">{t("Active")}</option><option value="false">{t("Inactive")}</option></select></Field>{!schoolManaged && <p className="form-note form-wide">{t("Reactivation is blocked when the school's plan has no free counselor seat.")}</p>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Saving…") : t("Save")}</button></div></form></Modal>;
 }
 
@@ -84,17 +135,93 @@ export function AccountTransferForm({ account, onClose, onSaved, notify }) {
 
 export function CounselorRoadmapPage({ user, data, reload, notify }) {
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [selfAssignOpen, setSelfAssignOpen] = useState(false);
-  async function submitMission(roadmap, mission) {const note = window.prompt(t("Add a completion note"), mission.counselor_note || '');if (!note?.trim()) return;try {await api.submitCounselorMission(roadmap.id, mission.id, note);notify(t("Mission submitted for review."));reload();} catch (error) {notify(error.message, 'error');}}
-  async function review(roadmap, mission, decision) {let feedback = '';if (decision === 'request_changes') {feedback = window.prompt(t("Explain the requested changes"), '') || '';if (!feedback.trim()) return;}if (!window.confirm(decision === 'approve' ? t("Approve this mission?") : t("Request changes for this mission?"))) return;try {await api.reviewCounselorMission(roadmap.id, mission.id, decision, feedback);notify(decision === 'approve' ? t("Mission approved.") : t("Changes requested."));reload();} catch (error) {notify(error.message, 'error');}}
+  const [missionAction, setMissionAction] = useState(null);
+  const [tab, setTab] = useState('queue');
+  const [togglingId, setTogglingId] = useState(null);
   const templates = data.counselorRoadmapTemplates.filter((template) => template.is_active);
   const admin = isPlatformAdmin(user);
   // Templates, assignments and reviews are super-admin writes on the API.
   const canControl = admin && isSuperAdmin(user);
+  async function toggleTemplate(template) {
+    setTogglingId(template.id);
+    try {await api.update('counselor-roadmap-templates', template.id, { is_active: !template.is_active });notify(template.is_active ? t("Template deactivated.") : t("Template reactivated."));reload();} catch (error) {notify(error.message, 'error');} finally {setTogglingId(null);}
+  }
+  function missionDone() {
+    setMissionAction(null);
+    invalidatePagedLists([REVIEW_QUEUE]);
+    reload();
+  }
   const actions = admin ? canControl && <div className="panel-actions"><button className="button quiet" onClick={() => setTemplateOpen(true)}><Plus size={16} /> {t("New template")}</button><button className="button primary" onClick={() => setAssignOpen(true)}><Compass size={16} /> {t("Assign roadmap")}</button></div> : <button className="button primary" onClick={() => setSelfAssignOpen(true)}><Compass size={16} /> {t("Start my roadmap")}</button>;
   const emptyText = user.role === 'counselor' ? t("Create your own roadmap or begin from an active template.") : t("No counselor roadmaps assigned yet.");
-  return <><Panel title={admin ? t("Counselor roadmap control") : t("My professional roadmap")} action={actions}>{admin && !canControl && <p className="form-note staff-tier-note"><ShieldCheck size={16} /> {t("Only super admins can create templates, assign roadmaps and review missions.")}</p>}<div className="record-list">{data.counselorRoadmaps.map((roadmap) => <article className="roadmap-admin-card" key={roadmap.id}><header><div><span className="eyebrow">{label(roadmap.kind)}</span><h3>{roadmap.title}</h3><p>{joinParts(roadmap.counselor_name, roadmap.school_name)}</p></div><div className="roadmap-progress"><b>{formatPercentLocale(roadmap.progress_percent)}</b><Badge tone={roadmap.status === 'completed' ? 'success' : ''}>{label(roadmap.status)}</Badge></div></header><div className="roadmap-admin-missions">{roadmap.missions.map((mission) => <div key={mission.id}><span className={`status-dot ${mission.status}`} /><div><b>{mission.sequence}. {mission.title}</b><small>{joinParts(label(mission.status), mission.due_date && tx`Due ${dateText(mission.due_date)}`)}</small>{mission.counselor_note && <p>{mission.counselor_note}</p>}{mission.admin_feedback && <p className="form-note">{mission.admin_feedback}</p>}</div><div>{user.role === 'counselor' && mission.status !== 'approved' && <button className="button quiet" onClick={() => submitMission(roadmap, mission)}>{t("Submit")}</button>}{canControl && mission.status === 'submitted' && <><button className="button quiet" onClick={() => review(roadmap, mission, 'request_changes')}>{t("Request changes")}</button><button className="button primary" onClick={() => review(roadmap, mission, 'approve')}>{t("Approve")}</button></>}</div></div>)}</div></article>)}{!data.counselorRoadmaps.length && <Empty text={emptyText} />}</div></Panel>{templateOpen && <RoadmapTemplateForm onClose={() => setTemplateOpen(false)} onSaved={() => {setTemplateOpen(false);reload();}} notify={notify} />}{assignOpen && <RoadmapAssignForm data={data} onClose={() => setAssignOpen(false)} onSaved={() => {setAssignOpen(false);reload();}} notify={notify} />}{selfAssignOpen && <RoadmapSelfAssignForm templates={templates} onClose={() => setSelfAssignOpen(false)} onSaved={() => {setSelfAssignOpen(false);reload();}} notify={notify} />}</>;
+  const roadmapsList = <div className="record-list">{data.counselorRoadmaps.map((roadmap) => <article className="roadmap-admin-card" key={roadmap.id}><header><div><span className="eyebrow">{label(roadmap.kind)}</span><h3>{roadmap.title}</h3><p>{joinParts(roadmap.counselor_name, roadmap.school_name)}</p></div><div className="roadmap-progress"><b>{formatPercentLocale(roadmap.progress_percent)}</b><Badge tone={roadmap.status === 'completed' ? 'success' : ''}>{label(roadmap.status)}</Badge></div></header><div className="roadmap-admin-missions">{roadmap.missions.map((mission) => <div key={mission.id}><span className={`status-dot ${mission.status}`} /><div><b>{mission.sequence}. {mission.title}</b><small>{joinParts(label(mission.status), mission.due_date && tx`Due ${dateText(mission.due_date)}`)}</small>{mission.counselor_note && <p>{mission.counselor_note}</p>}{mission.admin_feedback && <p className="form-note">{mission.admin_feedback}</p>}</div><div>{user.role === 'counselor' && mission.status !== 'approved' && <button className="button quiet" onClick={() => setMissionAction({ roadmapId: roadmap.id, mission, decision: 'submit' })}>{t("Submit")}</button>}{canControl && mission.status === 'submitted' && <><button className="button quiet" onClick={() => setMissionAction({ roadmapId: roadmap.id, mission, decision: 'request_changes' })}>{t("Request changes")}</button><button className="button primary" onClick={() => setMissionAction({ roadmapId: roadmap.id, mission, decision: 'approve' })}>{t("Approve")}</button></>}</div></div>)}</div></article>)}{!data.counselorRoadmaps.length && <Empty text={emptyText} />}</div>;
+  const adminContent = <><div className="roadmap-control-tabs"><PortalTabs active={tab} onChange={setTab} items={[['queue', 'Waiting for review'], ['roadmaps', 'All roadmaps'], ['templates', 'Templates']]} /></div>{tab === 'queue' ? <MissionReviewQueue canControl={canControl} onReview={(mission, decision) => setMissionAction({ roadmapId: mission.roadmap, mission, decision })} /> : tab === 'templates' ? <RoadmapTemplateList templates={data.counselorRoadmapTemplates} canControl={canControl} busyId={togglingId} onEdit={setEditingTemplate} onToggle={toggleTemplate} /> : roadmapsList}</>;
+  return <><Panel title={admin ? t("Counselor roadmap control") : t("My professional roadmap")} action={actions}>{admin && !canControl && <p className="form-note staff-tier-note"><ShieldCheck size={16} /> {t("Only super admins can create templates, assign roadmaps and review missions.")}</p>}{admin ? adminContent : roadmapsList}</Panel>{(templateOpen || editingTemplate) && <RoadmapTemplateForm template={editingTemplate} onClose={() => {setTemplateOpen(false);setEditingTemplate(null);}} onSaved={() => {setTemplateOpen(false);setEditingTemplate(null);reload();}} notify={notify} />}{assignOpen && <RoadmapAssignForm data={data} onClose={() => setAssignOpen(false)} onSaved={() => {setAssignOpen(false);reload();}} notify={notify} />}{selfAssignOpen && <RoadmapSelfAssignForm templates={templates} onClose={() => setSelfAssignOpen(false)} onSaved={() => {setSelfAssignOpen(false);reload();}} notify={notify} />}{missionAction && <MissionActionModal {...missionAction} onClose={() => setMissionAction(null)} onDone={missionDone} notify={notify} />}</>;
+}
+
+const REVIEW_QUEUE = 'counselor-roadmaps/review-queue';
+
+const REPORT_STATUSES = [['pending', 'Pending'], ['reviewing', 'Reviewing'], ['resolved', 'Resolved'], ['dismissed', 'Dismissed']];
+
+// Reported messages from every school, a page at a time. Only the reported message is
+// shown, never the rest of the chat; a moderator never decides on their own message.
+export function AdminModerationPage({ notify }) {
+  const [status, setStatus] = useState('pending');
+  const [school, setSchool] = useState('');
+  const [notes, setNotes] = useState({});
+  const [savingId, setSavingId] = useState(null);
+  const list = usePagedList('message-reports', { filters: { status, school }, pageSize: 25 });
+  async function moderate(report, mode, action) {
+    setSavingId(report.id);
+    try {notify(await moderateReport(report, mode, action, notes[report.id] || ''));list.reload();} catch (error) {notify(error.message, 'error');} finally {setSavingId(null);}
+  }
+  return <Panel title={t("Moderation")}><div className="moderation-queue"><div className="roadmap-control-tabs"><PortalTabs active={status} onChange={setStatus} items={REPORT_STATUSES} /></div><div className="paged-list-filters"><SchoolPicker label="School" value={school} onChange={setSchool} emptyOption={t("All schools")} /></div><div className="moderation-list" aria-busy={list.loading}>{list.items.map((report) => <ModerationCard key={report.id} report={report} note={notes[report.id] || ''} onNote={(value) => setNotes((current) => ({ ...current, [report.id]: value }))} saving={savingId === report.id} onModerate={(mode, action) => moderate(report, mode, action)} />)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !list.items.length && <Empty text={t("No reports with this status.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></div></Panel>;
+}
+
+// Submitted counselor missions, oldest first, a page at a time (the Admin Control tile opens here).
+function MissionReviewQueue({ canControl, onReview }) {
+  const [school, setSchool] = useState('');
+  const [counselor, setCounselor] = useState('');
+  const list = usePagedList(REVIEW_QUEUE, { filters: { school, counselor }, pageSize: 25 });
+  return <>
+    <div className="paged-list-filters"><SchoolPicker label="School" value={school} onChange={setSchool} emptyOption={t("All schools")} /><AccountPicker label="Counselor" value={counselor} onChange={setCounselor} emptyOption={t("Any counselor")} filters={ACTIVE_COUNSELORS} /></div>
+    <div className="record-list" aria-busy={list.loading}>{list.items.map((mission) => <article className="record roadmap-queue-row" key={mission.id}><div className="record-main"><h3>{mission.title}</h3><p>{joinParts(mission.counselor_name, mission.school_name, mission.roadmap_title)}</p>{mission.submitted_at && <small>{tx`Submitted ${dateText(mission.submitted_at)}`}</small>}{mission.counselor_note && <p>{mission.counselor_note}</p>}</div>{canControl && <div className="record-actions"><button className="button quiet" onClick={() => onReview(mission, 'request_changes')}>{t("Request changes")}</button><button className="button primary" onClick={() => onReview(mission, 'approve')}>{t("Approve")}</button></div>}</article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !list.items.length && <Empty text={t("No missions waiting for review")} />}</div>
+    <PagedListError list={list} /><LoadMore list={list} />
+  </>;
+}
+
+function RoadmapTemplateList({ templates, canControl, busyId, onEdit, onToggle }) {
+  return <div className="record-list">{templates.map((template) => <article className="record" key={template.id}><div className="record-main"><h3>{template.name}</h3><p>{joinParts(label(template.kind), tp('{n} mission|{n} missions', template.missions.length, { n: formatNumberLocale(template.missions.length) }))}</p><div className="record-meta"><Badge tone={template.is_active ? 'success' : 'muted'}>{template.is_active ? t("Active") : t("Inactive")}</Badge></div></div>{canControl && <div className="record-actions"><button className="icon-button" onClick={() => onEdit(template)} title={t("Edit template")} aria-label={tx`Edit ${template.name}`}><Pencil size={16} /></button><button className="button quiet" disabled={busyId === template.id} aria-busy={busyId === template.id} onClick={() => onToggle(template)}>{template.is_active ? t("Deactivate") : t("Reactivate")}</button></div>}</article>)}{!templates.length && <Empty text={t("No roadmap templates yet.")} />}</div>;
+}
+
+// One in-app dialog for a counselor's submission and an admin's review (no browser prompts).
+const MISSION_ACTIONS = {
+  submit: { title: 'Submit mission', field: 'Add a completion note', button: 'Submit', done: 'Mission submitted for review.', required: true },
+  approve: { title: 'Approve mission', field: 'Feedback for the counselor', button: 'Approve', done: 'Mission approved.', required: false },
+  request_changes: { title: 'Request changes', field: 'Explain the requested changes', button: 'Request changes', done: 'Changes requested.', required: true },
+};
+
+function MissionActionModal({ roadmapId, mission, decision, onClose, onDone, notify }) {
+  const copy = MISSION_ACTIONS[decision];
+  const [text, setText] = useState(decision === 'submit' ? mission.counselor_note || '' : '');
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      if (decision === 'submit') await api.submitCounselorMission(roadmapId, mission.id, text.trim());
+      else await api.reviewCounselorMission(roadmapId, mission.id, decision, text.trim());
+      notify(t(copy.done));
+      onDone();
+    } catch (error) {notify(error.message, 'error');} finally {setSaving(false);}
+  }
+  return <Modal title={t(copy.title)} onClose={onClose}><form className="form-grid" onSubmit={submit}>
+    <p className="form-wide"><b>{mission.title}</b></p>
+    <Field className="form-wide" label={t(copy.field)}><textarea value={text} onChange={(event) => setText(event.target.value)} required={copy.required} rows="4" /></Field>
+    <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving || (copy.required && !text.trim())} aria-busy={saving}>{t(copy.button)}</button></div>
+  </form></Modal>;
 }
 
 export function RoadmapSelfAssignForm({ templates, onClose, onSaved, notify }) {
@@ -125,10 +252,11 @@ export function RoadmapSelfAssignForm({ templates, onClose, onSaved, notify }) {
   return <Modal title={t("Start my roadmap")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field className="form-wide" label={t("Roadmap source")}><select name="template" value={templateId} onChange={(event) => setTemplateId(event.target.value)}><option value="">{t("Create my own roadmap")}</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name} · {label(template.kind)}</option>)}</select></Field><Field className="form-wide" label={templateId ? t("Custom title (optional)") : t("Roadmap title")}><input name="title" placeholder={t("e.g. New counselor onboarding")} required={!templateId} /></Field>{!templateId && <><Field label={t("Roadmap type")}><select name="kind"><option value="professional_onboarding">{t("Professional onboarding")}</option><option value="school_management">{t("School management")}</option></select></Field><Field className="form-wide" label={t("Missions, one per line")}><textarea name="missions" rows="6" placeholder={t("e.g. Complete your counselor profile")} required /></Field></>}<p className="form-note form-wide"><Compass size={16} /> {t("You can start one active roadmap for each roadmap type.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Starting…") : t("Start roadmap")}</button></div></form></Modal>;
 }
 
-export function RoadmapTemplateForm({ onClose, onSaved, notify }) {
+// `template`: edit it; a mission whose title stays keeps its description, due days and required flag.
+export function RoadmapTemplateForm({ template = null, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);const missions = String(values.get('missions')).split('\n').map((title) => title.trim()).filter(Boolean).map((title, index) => ({ title, description: '', sequence: index + 1, due_days: (index + 1) * 7, is_required: true }));try {await api.create('counselor-roadmap-templates', { name: values.get('name'), description: values.get('description'), kind: values.get('kind'), is_active: true, missions });notify(t("Roadmap template created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
-  return <Modal title={t("New counselor roadmap template")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Template name")}><input name="name" placeholder={t("e.g. New counselor onboarding")} required /></Field><Field label={t("Roadmap type")}><select name="kind"><option value="professional_onboarding">{t("Professional onboarding")}</option><option value="school_management">{t("School management")}</option></select></Field><Field className="form-wide" label={t("Description")}><textarea name="description" placeholder={t("e.g. A four-week plan for counselors joining a school")} /></Field><Field className="form-wide" label={t("Missions, one per line")}><textarea name="missions" placeholder={t("e.g. Complete your counselor profile")} required rows="6" /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{t("Create template")}</button></div></form></Modal>;
+  async function submit(event) {event.preventDefault();setSaving(true);const values = new FormData(event.currentTarget);const kept = Object.fromEntries((template?.missions || []).map((mission) => [mission.title, mission]));const missions = String(values.get('missions')).split('\n').map((title) => title.trim()).filter(Boolean).map((title, index) => ({ title, description: kept[title]?.description || '', sequence: index + 1, due_days: kept[title]?.due_days ?? (index + 1) * 7, is_required: kept[title]?.is_required ?? true }));const payload = { name: values.get('name'), description: values.get('description'), kind: values.get('kind'), missions };try {if (template) await api.update('counselor-roadmap-templates', template.id, payload);else await api.create('counselor-roadmap-templates', { ...payload, is_active: true });notify(template ? t("Roadmap template updated.") : t("Roadmap template created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
+  return <Modal title={template ? t("Edit template") : t("New counselor roadmap template")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Template name")}><input name="name" defaultValue={template?.name} placeholder={t("e.g. New counselor onboarding")} required /></Field><Field label={t("Roadmap type")}><select name="kind" defaultValue={template?.kind}><option value="professional_onboarding">{t("Professional onboarding")}</option><option value="school_management">{t("School management")}</option></select></Field><Field className="form-wide" label={t("Description")}><textarea name="description" defaultValue={template?.description} placeholder={t("e.g. A four-week plan for counselors joining a school")} /></Field><Field className="form-wide" label={t("Missions, one per line")}><textarea name="missions" defaultValue={template?.missions.map((mission) => mission.title).join('\n')} placeholder={t("e.g. Complete your counselor profile")} required rows="6" /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{template ? t("Save template") : t("Create template")}</button></div></form></Modal>;
 }
 
 export function RoadmapAssignForm({ data, onClose, onSaved, notify }) {

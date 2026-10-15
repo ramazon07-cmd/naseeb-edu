@@ -67,7 +67,9 @@ def messaging_contacts_for(user):
             parent_links__parent=user,
             parent_links__status=ParentStudentLink.Status.ACTIVE,
             assigned_counselor__school_id=F('school_id'),
-            school__is_active=True,
+            school__is_active=True, user__is_active=True, deactivated_at__isnull=True,
+        ).filter(
+            Q(school__subscription__isnull=True) | Q(school__subscription__plan__features__parent_portal=True),
         ).values('assigned_counselor_id')
         return queryset.filter(id__in=counselor_ids, role=User.Role.COUNSELOR).order_by(*order)
     school_id = tenant_school_id(user)
@@ -728,6 +730,9 @@ class MessageReportViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self.queryset.filter(
             message__channel__in=moderatable_channels_for(self.request.user),
         )
+        school = int_param(self.request.query_params, 'school')
+        if school:
+            queryset = queryset.filter(message__channel__school_id=school)
         status_value = self.request.query_params.get('status')
         if status_value:
             valid_statuses = {choice for choice, _ in MessageReport.Status.choices}

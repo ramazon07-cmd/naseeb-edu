@@ -727,9 +727,9 @@ EXACT = {
         'uz': 'O‘z hisobingizni faolsizlantira olmaysiz.',
         'ru': 'Нельзя деактивировать собственную учётную запись.',
     },
-    'Temporary credentials are only available for student and school accounts.': {
-        'uz': 'Vaqtinchalik parol faqat o‘quvchi va maktab hisoblari uchun beriladi.',
-        'ru': 'Временный пароль выдаётся только ученикам и школам.',
+    'Temporary credentials are only available for student, school and counselor accounts.': {
+        'uz': 'Vaqtinchalik parol faqat o‘quvchi, maktab va counselor hisoblari uchun beriladi.',
+        'ru': 'Временный пароль выдаётся только ученикам, школам и консультантам.',
     },
     'You cannot issue credentials for this account.': {
         'uz': 'Bu hisob uchun vaqtinchalik parol bera olmaysiz.',
@@ -918,6 +918,26 @@ EXACT = {
     'This plan is for a different kind of workspace.': {
         'uz': 'Bu tarif boshqa turdagi ish maydoni uchun.',
         'ru': 'Этот тариф предназначен для другого типа рабочего пространства.',
+    },
+    'Screen time is not available for parent accounts.': {
+        'uz': 'Ota-ona hisoblari uchun ekran vaqti mavjud emas.',
+        'ru': 'Экранное время недоступно для аккаунтов родителей.',
+    },
+    'This counselor still has active students. Reassign them or leave them unassigned before deactivating.': {
+        'uz': 'Bu counselor’da hali faol o‘quvchilar bor. O‘chirishdan oldin ularni boshqa counselor’ga o‘tkazing yoki biriktirilmagan holda qoldiring.',
+        'ru': 'У этого консультанта ещё есть активные ученики. Перед деактивацией передайте их другому консультанту или оставьте без консультанта.',
+    },
+    'Select an active counselor in the same school.': {
+        'uz': 'Shu maktabdagi faol counselor’ni tanlang.',
+        'ru': 'Выберите активного консультанта из той же школы.',
+    },
+    'This parent access was disconnected; send a new invitation instead.': {
+        'uz': 'Bu ota-ona ruxsati uzilgan; o‘rniga yangi taklif yuboring.',
+        'ru': 'Этот родительский доступ отключён; отправьте новое приглашение.',
+    },
+    'This student account is not active, so the invitation cannot be accepted.': {
+        'uz': 'Bu o‘quvchi hisobi faol emas, shuning uchun taklifni qabul qilib bo‘lmaydi.',
+        'ru': 'Аккаунт этого ученика не активен, поэтому приглашение нельзя принять.',
     },
 }
 

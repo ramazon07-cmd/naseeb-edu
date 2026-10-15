@@ -334,6 +334,32 @@ class CounselorRoadmapViewSet(viewsets.ModelViewSet):
         roadmap = self.queryset.get(pk=roadmap.pk)
         return Response(self.get_serializer(roadmap).data)
 
+    @action(detail=False, methods=['get'], url_path='review-queue')
+    def review_queue(self, request):
+        """Submitted missions of active roadmaps waiting for a product admin, oldest first, paged."""
+        if not request.user.is_product_admin:
+            return Response({'detail': 'Only a product admin can review counselor missions.'}, status=403)
+        missions = CounselorRoadmapMission.objects.filter(
+            status=CounselorRoadmapMission.Status.SUBMITTED, roadmap__status=CounselorRoadmap.Status.ACTIVE,
+        ).select_related('roadmap__counselor', 'roadmap__school').order_by('submitted_at', 'id')
+        school = int_param(request.query_params, 'school')
+        counselor = int_param(request.query_params, 'counselor')
+        if school:
+            missions = missions.filter(roadmap__school_id=school)
+        if counselor:
+            missions = missions.filter(roadmap__counselor_id=counselor)
+        page = self.paginate_queryset(missions)
+        return self.get_paginated_response([{
+            'id': mission.id,
+            'title': mission.title,
+            'counselor_note': mission.counselor_note,
+            'submitted_at': mission.submitted_at,
+            'roadmap': mission.roadmap_id,
+            'roadmap_title': mission.roadmap.title,
+            'counselor_name': mission.roadmap.counselor.get_full_name() or mission.roadmap.counselor.username,
+            'school_name': mission.roadmap.school.name if mission.roadmap.school else None,
+        } for mission in page])
+
     @action(detail=True, methods=['post'], url_path='review-mission')
     def review_mission(self, request, pk=None):
         if not request.user.is_product_admin:

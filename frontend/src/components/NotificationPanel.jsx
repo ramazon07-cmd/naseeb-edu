@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, CalendarClock, CheckCheck, ChevronRight, ClipboardCheck, FileText, ListChecks, MessageCircle, PenLine, Target } from 'lucide-react';
+import { Bell, CalendarClock, CheckCheck, ChevronRight, ClipboardCheck, FileText, ListChecks, MessageCircle, PenLine, Target, UserPlus } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, t } from '../i18n';
-import { dateTimeText, joinParts } from '../lib/format';
+import { dateText, dateTimeText, joinParts } from '../lib/format';
 import { sectionFromNotice } from '../lib/profileSections';
-import { announceNotificationsChanged, notificationTarget, summaryChanged, unreadChats, unreadChatsPlan } from '../lib/notifications';
+import { announceNotificationsChanged, notificationTarget, summaryChanged, unreadChats, unreadChatsPlan, parentNotices, selectParentChild } from '../lib/notifications';
 import { notificationMessage, notificationTitle } from '../lib/notificationText';
 import { usePagedList } from '../hooks/usePagedList';
 import { LoadMore, PagedListError, firstPageLoading } from './paged';
@@ -33,13 +33,25 @@ export function staffNotificationTarget(notification) {
   return Number.isInteger(studentId) && studentId > 0 ? { page: 'students', params: { studentId } } : null;
 }
 
-// Parents have no server notices: their unread chats only.
-function ChatOnlyNotifications({ data, onOpen }) {
+const PARENT_ICONS = { invitation: UserPlus, task: ClipboardCheck, meeting: CalendarClock };
+
+// Parents see their family notices and their own unread counselor conversations.
+function ParentNotifications({ user, data, onOpen }) {
+  const notices = parentNotices(data.parentPortal);
   const chats = data.messageChannels.filter((item) => item.unread_count > 0);
+  function open(notice) {
+    if (notice.childId) selectParentChild(user.id, notice.childId);
+    onOpen(notice.page);
+  }
   return <>
-    <p>{t('Alerts about your work and unread conversations.')}</p>
+    <p>{t('Invitations, overdue tasks and meetings this week.')}</p>
+    {notices.map((notice) => {
+      const Icon = PARENT_ICONS[notice.kind];
+      const meta = notice.kind === 'invitation' ? t('New child invitation') : joinParts(notice.childName, notice.kind === 'task' ? dateText(notice.date) : dateTimeText(notice.date));
+      return <button type="button" className="sidebar-notice unread" key={notice.key} onClick={() => open(notice)}><Icon size={18} /><span><b>{notice.title}</b><small>{meta}</small></span><ChevronRight size={16} /></button>;
+    })}
     <ChatNotices chats={chats} onOpen={onOpen} />
-    {!chats.length && <Empty text={t('All caught up')} />}
+    {!notices.length && !chats.length && <Empty text={t('All caught up')} />}
   </>;
 }
 
@@ -177,6 +189,6 @@ function ServerNotifications({ summary, onOpen, notify, staff, onSeeAll }) {
 // `onSeeAll`: opens the full Notifications page (the counselor workspace has one).
 export function NotificationPanel({ user, data, summary, onOpen, notify, onSeeAll }) {
   return <div className="sidebar-utility-panel notification-panel">
-    {user.role === 'parent' ? <ChatOnlyNotifications {...{ data, onOpen }} /> : <ServerNotifications {...{ summary, onOpen, notify, onSeeAll }} staff={user.role !== 'student'} />}
+    {user.role === 'parent' ? <ParentNotifications {...{ user, data, onOpen }} /> : <ServerNotifications {...{ summary, onOpen, notify, onSeeAll }} staff={user.role !== 'student'} />}
   </div>;
 }

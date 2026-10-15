@@ -15,6 +15,8 @@ Canonical rule:
 Views may still restrict roles further (e.g. teachers cannot list tasks);
 they should never widen this scope.
 """
+from django.db.models import Q
+
 from apps.users.models import User
 
 from .models import StudentProfile
@@ -132,6 +134,18 @@ def visible_students(user, queryset=None):
     if queryset is None:
         queryset = StudentProfile.objects.all()
     return scope_students(queryset, user)
+
+
+def parent_visible_links(links):
+    """Parent links whose child a parent may see: account, profile and school all active.
+
+    Deactivating a student or their school hides the child; reactivating shows
+    the child again on the same link, without a new invitation.
+    """
+    return links.filter(
+        Q(student__school__isnull=True) | Q(student__school__is_active=True),
+        student__user__is_active=True, student__deactivated_at__isnull=True,
+    )
 
 
 def active_visible_students(user, queryset=None):

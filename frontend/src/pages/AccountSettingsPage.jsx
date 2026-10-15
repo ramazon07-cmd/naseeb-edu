@@ -28,11 +28,14 @@ function PasswordInput({ value, onChange, autoComplete, invalid, ...props }) {
 const PROFILE_FIELDS = ['first_name', 'last_name', 'phone', 'position'];
 
 // A counselor's own name, phone, position and photo (students edit theirs in Student Center).
+// Parents keep only name and phone: no position, and no photo (card 47 scope).
 function ProfileSection({ user, onUserChange, notify }) {
-  const [form, setForm] = useState(() => Object.fromEntries(PROFILE_FIELDS.map((name) => [name, user[name] || ''])));
+  const parent = user.role === 'parent';
+  const fields = parent ? PROFILE_FIELDS.filter((name) => name !== 'position') : PROFILE_FIELDS;
+  const [form, setForm] = useState(() => Object.fromEntries(fields.map((name) => [name, user[name] || ''])));
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const unchanged = PROFILE_FIELDS.every((name) => form[name].trim() === (user[name] || ''));
+  const unchanged = fields.every((name) => form[name].trim() === (user[name] || ''));
   // Photo writes save at once and return the account, whose avatar URL carries the new version.
   const photo = useMemo(() => ({
     load: (id) => api.accountAvatar(id),
@@ -45,8 +48,8 @@ function ProfileSection({ user, onUserChange, notify }) {
     if (unchanged) return;
     setSaving(true);setErrors({});
     try {
-      const updated = await api.update('users/accounts', user.id, Object.fromEntries(PROFILE_FIELDS.map((name) => [name, form[name].trim()])));
-      onUserChange(Object.fromEntries(PROFILE_FIELDS.map((name) => [name, updated[name]])));
+      const updated = await api.update('users/accounts', user.id, Object.fromEntries(fields.map((name) => [name, form[name].trim()])));
+      onUserChange(Object.fromEntries(fields.map((name) => [name, updated[name]])));
       notify(t('Your profile was updated.'));
     } catch (error) {
       setErrors(errorsFrom(error));
@@ -55,11 +58,11 @@ function ProfileSection({ user, onUserChange, notify }) {
   return <section className="panel account-settings-panel" aria-labelledby="account-profile-title">
     <header><UserRound size={18} aria-hidden="true" /><h2 id="account-profile-title">{t('Profile')}</h2></header>
     <form className="panel-body form-grid" onSubmit={submit}>
-      <div className="form-wide"><ProfilePhotoField profileId={user.id} hasPhoto={Boolean(user.avatar)} initials={initials(fullName(user))} photo={photo} hint={t('PNG, JPG or WebP · up to 2 MB')} onError={(message) => message && notify(message, 'error')} /></div>
+      {!parent && <div className="form-wide"><ProfilePhotoField profileId={user.id} hasPhoto={Boolean(user.avatar)} initials={initials(fullName(user))} photo={photo} hint={t('PNG, JPG or WebP · up to 2 MB')} onError={(message) => message && notify(message, 'error')} /></div>}
       <Field label={t('First name')} error={errors.first_name}><input {...input('first_name')} autoComplete="given-name" maxLength="150" placeholder={t('e.g. Dilnoza')} required /></Field>
       <Field label={t('Last name')} error={errors.last_name}><input {...input('last_name')} autoComplete="family-name" maxLength="150" placeholder={t('e.g. Karimova')} /></Field>
       <Field label={t('Phone')} error={errors.phone}><input {...input('phone')} type="tel" autoComplete="tel" maxLength="32" placeholder={t('e.g. +998 90 123 45 67')} /></Field>
-      <Field label={t('Position')} error={errors.position}><input {...input('position')} maxLength="120" placeholder={t('School counselor')} /></Field>
+      {!parent && <Field label={t('Position')} error={errors.position}><input {...input('position')} maxLength="120" placeholder={t('School counselor')} /></Field>}
       {errors.form && <div className="alert error form-wide" role="alert">{errors.form}</div>}
       <div className="form-actions"><button className="button primary" disabled={saving || unchanged} aria-busy={saving}>{saving ? t('Saving…') : t('Save profile')}</button></div>
     </form>
@@ -168,7 +171,7 @@ export function AccountSettingsPage({ user, language, changeLanguage, onUserChan
   const student = user.role === 'student';
   return <div className="section-stack account-settings">
     {!student && <ProfileSection user={user} onUserChange={onUserChange} notify={notify} />}
-    <EmailSection user={user} onUserChange={onUserChange} notify={notify} />
+    {user.role !== 'parent' && <EmailSection user={user} onUserChange={onUserChange} notify={notify} />}
     <PasswordSection onUserChange={onUserChange} notify={notify} />
     <section className="panel account-settings-panel" aria-labelledby="account-language-title">
       <header><Globe2 size={18} aria-hidden="true" /><h2 id="account-language-title">{t('Language')}</h2></header>

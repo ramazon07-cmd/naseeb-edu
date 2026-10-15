@@ -62,6 +62,36 @@ export function StudentDocumentList({ title, items, onPreview, notify }) {
   return <Panel title={title} ><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={label(doc.document_type)} description={doc.counselor_comment} badge={doc.status} attachment={<AttachmentRow attachment={documentAttachment(doc)} onPreview={() => onPreview(doc)} notify={notify} />} actions={<GoogleDocsActions item={doc} onPreview={doc.has_file ? undefined : () => onPreview(doc)} />} />)}{!items.length && <Empty />}</div></Panel>;
 }
 
+// No workspace plan (older schools) keeps full access, as on the server.
+const parentPortalInPlan = (user) => !user?.workspace || Boolean(user.workspace.features?.parent_portal);
+
+const LINK_SECTIONS = [['can_view_applications', 'Applications'], ['can_view_documents', 'Document status'], ['can_view_meetings', 'Meetings']];
+
+// Parents already linked to this student: what each one sees changes without disconnecting them.
+function ParentLinkSections({ student, notify }) {
+  const [links, setLinks] = useState([]);
+  const [error, setError] = useState('');
+  const [savingId, setSavingId] = useState(null);
+  useEffect(() => {
+    let active = true;
+    api.parentLinks(student.id).then((items) => {if (active) setLinks(items.filter((item) => item.status !== 'revoked'));}).catch((err) => {if (active) setError(err.message);});
+    return () => {active = false;};
+  }, [student.id]);
+  async function save(event, link) {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    setSavingId(link.id);
+    try {
+      const updated = await api.updateParentLinkSections(link.id, Object.fromEntries(LINK_SECTIONS.map(([name]) => [name, values.get(name) === 'on'])));
+      setLinks((items) => items.map((item) => item.id === link.id ? updated : item));
+      notify(t("Parent access updated."));
+    } catch (err) {notify(err.message, 'error');} finally {setSavingId(null);}
+  }
+  if (error) return <div className="alert error" role="alert">{error}</div>;
+  if (!links.length) return null;
+  return <section className="parent-link-sections" aria-label={t("Family access")}>{links.map((link) => <form key={link.id} className="parent-permission-fields parent-link-row" onSubmit={(event) => save(event, link)}><span>{joinParts(link.parent_name, label(link.relationship), link.status === 'pending' && label('pending'))}</span>{LINK_SECTIONS.map(([name, title]) => <CheckboxControl key={name} name={name} defaultChecked={link[name]}>{t(title)}</CheckboxControl>)}<button className="button quiet small" disabled={savingId === link.id} aria-busy={savingId === link.id}>{t("Save")}</button></form>)}</section>;
+}
+
 export function ParentInviteModal({ student, onClose, notify }) {
   const [saving, setSaving] = useState(false);
   async function submit(event) {
@@ -85,7 +115,7 @@ export function ParentInviteModal({ student, onClose, notify }) {
       onClose();
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" placeholder={t("e.g. Gulnora")} /></Field><Field label={t("Parent last name")}><input name="last_name" placeholder={t("e.g. Karimova")} /></Field><Field label={t("Parent email")}><input name="email" type="email" placeholder={t("e.g. name@example.com")} required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Used only if this email has no parent account yet; an existing parent keeps their own password.")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
+  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><ParentLinkSections student={student} notify={notify} /><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" placeholder={t("e.g. Gulnora")} /></Field><Field label={t("Parent last name")}><input name="last_name" placeholder={t("e.g. Karimova")} /></Field><Field label={t("Parent email")}><input name="email" type="email" placeholder={t("e.g. name@example.com")} required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Used only if this email has no parent account yet; an existing parent keeps their own password.")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
 }
 
 // `profile`: the student's own editable profile cards, shown instead of the
@@ -115,7 +145,7 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
   return <div className="section-stack student-overview">
     <section className="student-overview-hero">
       <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{joinParts(student.user_detail?.email, student.school_name || t("No school assigned"))}</p></div></div></div>
-      <div className="student-overview-actions">{(isCounselor(user) || user?.role === 'organization') && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{isCounselor(user) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}{canDownloadCv(user) && <DownloadCvButton studentId={student.id} className="button quiet" notify={notify} />}</div>
+      <div className="student-overview-actions">{(isCounselor(user) || user?.role === 'organization') && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{isCounselor(user) && (parentPortalInPlan(user) ? <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button> : <><button className="button quiet" disabled aria-describedby="parent-invite-plan-note"><UsersRound size={16} /> {t("Invite parent")}</button><small id="parent-invite-plan-note">{t("The parent portal is not included in your school’s plan.")}</small></>)}{canDownloadCv(user) && <DownloadCvButton studentId={student.id} className="button quiet" notify={notify} />}</div>
       <div className="overview-progress"><strong>{formatPercentLocale(readiness.percent)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${readiness.percent}%` }} /></div><small>{tp('{done} of {n} item finished|{done} of {n} items finished', readiness.total, { done: readiness.done, n: readiness.total })}</small>{profile && <small>{roadmapLocked ? t("Counts approved documents, submitted applications and sent recommendation letters.") : t("Counts approved tasks and documents, submitted applications and sent recommendation letters.")}</small>}</div>
     </section>
     {profile}
@@ -240,7 +270,8 @@ export function StudentAssignmentModal({ user, data, onClose, onSaved, notify })
 export function StudentsPage({ user, data, query, reload, notify, studentId = null, onStudent = () => {} }) {
   const [school, setSchool] = useState('');
   const [grade, setGrade] = useState('');
-  const students = usePagedList('students', { search: query, filters: { school, grade }, ordering: 'name', pageSize: 50 });
+  const [unassigned, setUnassigned] = useState('');
+  const students = usePagedList('students', { search: query, filters: { school, grade, unassigned }, ordering: 'name', pageSize: 50 });
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
@@ -313,6 +344,7 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
       <div className="paged-list-filters">
         {isPlatformAdmin(user) && <SchoolPicker label="School" value={school} onChange={setSchool} emptyOption={t("All schools")} />}
         <label><span>{t("Grade")}</span><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">{t("All grades")}</option>{['8', '9', '10', '11', 'gap'].map((value) => <option key={value} value={value}>{value === 'gap' ? t("Gap year") : value}</option>)}</select></label>
+        {isPlatformAdmin(user) && <label><span>{t("Counselor")}</span><select value={unassigned} onChange={(event) => setUnassigned(event.target.value)}><option value="">{t("Any counselor")}</option><option value="true">{t("No counselor assigned")}</option></select></label>}
       </div>
       {students.loading && !students.items.length ? <PageSkeleton /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
       <PagedListError list={students} />

@@ -25,7 +25,7 @@ test('the admin loads no school or account list at sign-in', () => {
 test('students and parents keep their own bounded collections in memory', () => {
   const student = resourcesFor({ role: 'student' }).map(([key]) => key);
   for (const key of ['students', 'tasks', 'applications', 'documents', 'roadmapMissions', 'supportTickets']) assert.ok(student.includes(key), key);
-  assert.deepEqual(resourcesFor({ role: 'parent' }), [['parentPortal', 'parent-portal']]);
+  assert.deepEqual(resourcesFor({ role: 'parent' }), [['parentPortal', 'parent-portal'], ['messageChannels', 'message-channels']]);
   assert.equal(usesPagedLists({ role: 'student' }), false);
   assert.equal(usesPagedLists({ role: 'parent' }), false);
   for (const role of ROLES) assert.ok(resourcesFor({ role }).every(([key, endpoint]) => key && endpoint), role);
