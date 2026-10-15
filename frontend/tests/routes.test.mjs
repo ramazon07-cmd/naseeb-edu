@@ -219,3 +219,15 @@ test('staff pages open only for the tiers that use them', () => {
   for (const page of ['admin_staff', 'admin_health', 'admin_plans']) assert.equal(resolveRoute({ page, params: {} }, superadmin).page, page);
   assert.equal(resolveRoute({ page: 'admin_plans', params: {} }, support).page, 'admin_plans');
 });
+
+test('legal pages are public and stay outside role-scoped workspace routes', () => {
+  for (const [path, page] of [['/privacy', 'privacy'], ['/terms', 'terms']]) {
+    assert.equal(publicPageFor(path), page);
+    assert.equal(publicPageFor(`${path}/`), page);
+    assert.equal(parsePath(path), null);
+    assert.equal(safeNextPath(path), null);
+    for (const user of [student, counselor, teacher, parent, organization, admin]) {
+      assert.ok(!reachablePages(user).has(page), user.role);
+    }
+  }
+});

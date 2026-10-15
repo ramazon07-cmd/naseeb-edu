@@ -2,6 +2,7 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import './mind-section.css';
+import './legal.css';
 import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
@@ -48,6 +49,7 @@ import './student-onboarding.css';
 // Route-level code splitting: landing visitors do not download the assessment
 // banks, and signed-in users do not download the landing page.
 const LandingPage = lazyWithRetry(() => import('./LandingPage'));
+const LegalPage = lazyWithRetry(() => import('./pages/LegalPage'));
 const StudentOnboarding = lazyWithRetry(() => import('./StudentOnboarding'));
 const ProfileAssessmentPage = lazyWithRetry(() => import('./pages/ProfileAssessmentPage'));
 // Workspace pages are chunks of their own, loaded on first visit (PageRouter
@@ -617,11 +619,12 @@ export default function App() {
   }, [loadUser, loadInitial]);
 
   useEffect(() => {
+    if (['privacy', 'terms'].includes(publicPage)) {setBootstrapping(false);return;}
     if (bootstrapAttempted.current) return;
     bootstrapAttempted.current = true;
     dropLegacySharedKeys(() => window.localStorage);
     bootstrapSession();
-  }, []);
+  }, [bootstrapSession, publicPage]);
 
   // Signed out on a workspace link: sign in first, then come back to it.
   useEffect(() => {
@@ -633,7 +636,7 @@ export default function App() {
   // unknown and forbidden paths. Waits until onboarding is done so a deep
   // link survives it.
   useEffect(() => {
-    if (!inWorkspace || publicPage === 'join') return;
+    if (!inWorkspace || ['join', 'privacy', 'terms'].includes(publicPage)) return;
     if (publicPage === 'login') {
       const next = safeNextPath(new URLSearchParams(location.search).get('next'));
       if (next) {navigate(next, { replace: true });return;}
@@ -650,8 +653,9 @@ export default function App() {
   const loadSearchable = useCallback(() => ensureLoaded(user, resourcesFor(user).map(([key]) => key)), [ensureLoaded, user]);
 
   useEffect(() => {
-    document.title = inWorkspace && PAGE_META[page] ? `${t(PAGE_META[page].label)} · Naseeb Edu` : siteTitle();
-  }, [inWorkspace, page, language]);
+    const legalTitle = publicPage === 'privacy' ? 'Privacy policy' : publicPage === 'terms' ? 'Terms of use' : null;
+    document.title = legalTitle ? `${t(legalTitle)} · Naseeb Edu` : inWorkspace && PAGE_META[page] ? `${t(PAGE_META[page].label)} · Naseeb Edu` : siteTitle();
+  }, [inWorkspace, page, language, publicPage]);
 
   async function afterLogin() {
     const current = await loadUser();
@@ -759,6 +763,7 @@ export default function App() {
     };
   }, [counselorLive, loadData, refreshStats, user]);
 
+  if (['privacy', 'terms'].includes(publicPage)) return <LazyBoundary fallback={<AppBootLoader />}><LegalPage page={publicPage} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;
   if (signOutFailure) return <SignOutFailed retrying={signOutFailure.retrying} onRetry={retrySignOut} onDismiss={dismissSignOutFailure} />;
   if (bootstrapping) return <AppBootLoader message={bootstrapBusy ? t('Busy, retrying…') : 'Checking your secure session…'} />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={() => bootstrapSession()} onSignOut={logout} />;

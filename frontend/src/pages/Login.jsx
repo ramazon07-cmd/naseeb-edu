@@ -5,6 +5,7 @@ import { t } from '../i18n';
 import { LanguageSelector, ThemeToggle, BrandLogo, BrandLockup } from '../components/brand';
 import { Field } from '../components/forms';
 import { fullName, label } from '../lib/labels';
+import { LegalLinks } from '../components/LegalLinks';
 
 export const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
 
@@ -85,6 +86,7 @@ export function Login({ onLogin, onBack, theme, toggleTheme, language, changeLan
             <div className="demo-hint">{t("Demo: counselor / admin12345")}</div>
           )}
         </form>
+        <LegalLinks />
       </section>
     </main>
   );

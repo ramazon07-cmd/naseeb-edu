@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { LegalLinks } from "./components/LegalLinks";
 import {
   ArrowLeft,
   ArrowRight,
@@ -1429,6 +1430,7 @@ export default function LandingPage({
               things a visitor can act on read first, and the imprint sits under
               them as a single quiet sentence. */}
           <div className="landing-footer-imprint">
+            <LegalLinks />
             <p className="landing-footer-contact">
               <a href={`tel:${CONTACT_PHONE.replace(/[^+\d]/g, "")}`}>
                 {CONTACT_PHONE}

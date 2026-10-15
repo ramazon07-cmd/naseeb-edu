@@ -233,6 +233,8 @@ export function publicPageFor(pathname, hash = '') {
   const path = normalizePath(pathname);
   if (path === LOGIN_PATH || (path === LANDING_PATH && hash === '#/login')) return 'login';
   if (joinTokenFor(path)) return 'join';
+  if (path === '/privacy') return 'privacy';
+  if (path === '/terms') return 'terms';
   if (path === LANDING_PATH) return 'landing';
   return null;
 }
