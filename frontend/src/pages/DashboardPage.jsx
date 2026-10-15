@@ -250,7 +250,7 @@ export function StudentDashboard({ user, data, setPage, onDirect, resourceStatus
   const loadPrograms = useCallback(() => loadResources(['opportunityPrograms']), [loadResources]);
   const retryPrograms = useCallback(() => retryResources(['opportunityPrograms']), [retryResources]);
   return <CompactDashboard key={user.id} user={user} student={ownStudent(data)} data={data} setPage={setPage} onDirect={onDirect} Modal={Modal} programUsage={<ProgramUsageSummary user={user} data={data} />}
-    programsStatus={resourceStatus?.opportunityPrograms} loadPrograms={loadPrograms} retryPrograms={retryPrograms} />;
+    resourceStatus={resourceStatus} retryResources={retryResources} programsStatus={resourceStatus?.opportunityPrograms} loadPrograms={loadPrograms} retryPrograms={retryPrograms} />;
 }
 
 export function ProgramServiceForm({ service, user, data, defaultStudentId = null, onClose, onSaved, notify }) {

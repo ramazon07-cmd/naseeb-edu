@@ -14,7 +14,8 @@ import { createPoller } from './lib/poller';
 import { listText } from './lib/profileSections';
 import { isPageLocked } from './lib/routes';
 import DashboardCustomizer from './DashboardCustomizer';
-import { cachedDashboardLayout, loadAccountDashboardLayout, saveAccountDashboardLayout } from './dashboardLayout';
+import { ResourceContent } from './components/ResourceContent';
+import { cachedDashboardLayout, loadAccountDashboardLayout, saveAccountDashboardLayout, subscribeDashboardLayout, pendingDashboardLayout } from './dashboardLayout';
 
 const widgetMeta = {
   screen_time: ['Screen Time', Clock3],
@@ -107,18 +108,31 @@ function trackSpotlight(event) {
   tile.style.setProperty('--my', `${event.clientY - rect.top}px`);
 }
 
-export default function CompactDashboard({ user, student, data, setPage, onDirect, Modal, programUsage, programsStatus, loadPrograms, retryPrograms }) {
+export default function CompactDashboard({ user, student, data, setPage, onDirect, Modal, programUsage, programsStatus, loadPrograms, retryPrograms, resourceStatus, retryResources }) {
   // This browser's copy first, then the account's layout (see dashboardLayout.js).
   const [preferences, setPreferences] = useState(() => normalizeDashboardPreferences(cachedDashboardLayout(user.id)));
   useEffect(() => {
     let active = true;
+    const unsubscribe = subscribeDashboardLayout(user.id, ({ layout, pending }) => { setPreferences(layout); setSaveError(pending); });
     loadAccountDashboardLayout(user.id).then((layout) => { if (active) setPreferences(layout); });
-    return () => { active = false; };
+    return () => { active = false; unsubscribe(); };
   }, [user.id]);
   const [usageOpen, setUsageOpen] = useState(false);
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState(preferences);
   const [saveError, setSaveError] = useState(false);
+  useEffect(() => {
+    if (!saveError) return undefined;
+    const loop = createPoller({ min: 15_000, failureCap: 60_000, run: async () => {
+      if (navigator.onLine === false) return null;
+      await loadAccountDashboardLayout(user.id);
+      return pendingDashboardLayout(user.id) ? null : true;
+    } });
+    const online = () => loop.poke();
+    window.addEventListener('online', online);
+    loop.start();
+    return () => { loop.stop(); window.removeEventListener('online', online); };
+  }, [saveError, user.id]);
   const pending = nextPriorities(data.tasks);
   const numbers = studentProgress(student);
   const stars = numbers.missionsApproved;
@@ -136,12 +150,13 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
     setPreferences(layout);
     setCustomizing(false);
     setSaveError(false);
-    saveAccountDashboardLayout(user.id, layout).then(({ synced }) => setSaveError(!synced));
+    saveAccountDashboardLayout(user.id, layout);
   }
   const open = (page, text, params) => isPageLocked(page, user)
     ? <button className="dashboard-link" disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${t(text)} — ${t('Coming soon')}`}>{t('Coming soon')}<Lock size={15} aria-hidden="true" /></button>
     : <button className="dashboard-link" onClick={() => setPage(page, params)}>{t(text)}<ChevronRight size={15} /></button>;
   const empty = (text) => <p className="dashboard-empty">{t(text)}</p>;
+  const dependencies = { journey: ['students'], roadmap: ['students'], tasks: ['tasks'], meetings: ['bookings'], applications: ['students', 'essays'], team: ['team'] };
   const content = {
     screen_time: <DashboardScreenTime userId={user.id} />,
     journey: <><div className="dashboard-goal-body"><button className="dashboard-goal-symbol" onClick={editGoal} aria-label={t('Edit study goal')}><span className="dashboard-goal-orbit" aria-hidden="true" />{student?.target_major ? <GraduationCap size={32} strokeWidth={1.5} /> : <Plus size={30} />}</button><div><h4>{student?.target_major || t('Set your study goal')}</h4><p>{listText(student?.target_countries) || t('Choose your study interests and destination.')}</p><span className="dashboard-goal-pill"><Star size={13} />{tx`Level ${student?.level || 1}`}<span>·</span>{tp('{n} star|{n} stars', stars, { n: stars })}</span></div></div><div className="dashboard-goal-footer">{open('student_center', 'Edit study goal', { edit: 'goal' })}<button className="dashboard-link" onClick={() => setUsageOpen(true)}>{t('Program usage')}<ArrowUpRight size={14} /></button></div></>,
@@ -154,9 +169,9 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   };
   return <section className="compact-dashboard reference-dashboard">
     <header className="dashboard-heading"><div className="dashboard-greeting"><h2><span>{t(greeting)},</span> {name}</h2></div><div className="dashboard-heading-actions"><button className="button quiet small" onClick={() => { setDraft(preferences); setCustomizing(true); }}><SlidersHorizontal size={16} />{t('Customize')}</button></div></header>
-    {saveError && <p role="status">{t('Layout saved on this device. It will be saved to your account when you are back online.')}</p>}
-    <div ref={boardRef} onPointerMove={trackSpotlight} className={`dashboard-board dashboard-board-columns ${columns.some((item) => item.column === 'rail') ? 'has-rail' : ''} ${columns.some((item) => item.column === 'main') ? 'has-main' : ''} ${columns[0].across === 1 ? 'has-stacked-main' : ''} ${columns.some((item) => item.fewRows) ? 'has-few-rows' : ''}`.trim()}>{columns.map(({ column, ids, rows, across, lastSpan, wideLast, teamFooter }) => <div key={column} className={`dashboard-column dashboard-column-${column} ${column === 'main' && across === 1 ? 'is-stacked' : ''} ${across === 3 ? 'is-three' : ''} ${wideLast ? 'has-wide-last' : ''} ${teamFooter ? 'has-team-footer' : ''}`.trim()} style={{ '--widget-rows': rows, '--last-span': lastSpan }}>{ids.map((id, index) => { const [title, Icon] = widgetMeta[id]; return <article key={id} className={`dashboard-tile dashboard-tile-${id} dashboard-position-${column === 'rail' ? index + 2 : index}`} style={{ '--i': column === 'rail' ? index * 2 + 1 : index }}><header><Icon size={18} /><h3>{t(title)}</h3></header>{content[id]}</article>; })}</div>)}</div>
-    {usageOpen && <Modal title={t('Program usage')} onClose={() => setUsageOpen(false)}>{data.programServices.length ? programUsage : <p className="dashboard-empty">{t('No program services have been assigned yet.')}</p>}</Modal>}
+    {saveError && <p role="status">{t('Your layout is not saved to your account yet. We will keep trying while this page is open.')}</p>}
+    <div ref={boardRef} onPointerMove={trackSpotlight} className={`dashboard-board dashboard-board-columns ${columns.some((item) => item.column === 'rail') ? 'has-rail' : ''} ${columns.some((item) => item.column === 'main') ? 'has-main' : ''} ${columns[0].across === 1 ? 'has-stacked-main' : ''} ${columns.some((item) => item.fewRows) ? 'has-few-rows' : ''}`.trim()}>{columns.map(({ column, ids, rows, across, lastSpan, wideLast, teamFooter }) => <div key={column} className={`dashboard-column dashboard-column-${column} ${column === 'main' && across === 1 ? 'is-stacked' : ''} ${across === 3 ? 'is-three' : ''} ${wideLast ? 'has-wide-last' : ''} ${teamFooter ? 'has-team-footer' : ''}`.trim()} style={{ '--widget-rows': rows, '--last-span': lastSpan }}>{ids.map((id, index) => { const [title, Icon] = widgetMeta[id]; return <article key={id} className={`dashboard-tile dashboard-tile-${id} dashboard-position-${column === 'rail' ? index + 2 : index}`} style={{ '--i': column === 'rail' ? index * 2 + 1 : index }}><header><Icon size={18} /><h3>{t(title)}</h3></header>{dependencies[id] ? <ResourceContent keys={dependencies[id]} statuses={resourceStatus} retry={retryResources}>{content[id]}</ResourceContent> : content[id]}</article>; })}</div>)}</div>
+    {usageOpen && <Modal title={t('Program usage')} onClose={() => setUsageOpen(false)}><ResourceContent keys={['programServices']} statuses={resourceStatus} retry={retryResources}>{data.programServices.length ? programUsage : <p className="dashboard-empty">{t('No program services have been assigned yet.')}</p>}</ResourceContent></Modal>}
     {customizing && <DashboardCustomizer draft={draft} setDraft={setDraft} metadata={widgetMeta} Modal={Modal} onClose={() => setCustomizing(false)} onSave={save} />}
   </section>;
 }
