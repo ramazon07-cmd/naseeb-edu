@@ -1,6 +1,8 @@
 """Admissions API serializers — messaging."""
+from datetime import datetime
 from pathlib import Path
 from rest_framework import serializers
+from django.db.models import Max
 from django.urls import reverse
 from django.utils import timezone
 from apps.users.models import User
@@ -40,6 +42,8 @@ class MessageChannelSerializer(serializers.ModelSerializer):
     my_role = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
+    # Read receipt: the latest last_read_at among the other members (members only, else null).
+    peer_last_read_at = serializers.SerializerMethodField()
 
     class Meta:
         model = MessageChannel
@@ -47,6 +51,7 @@ class MessageChannelSerializer(serializers.ModelSerializer):
             'id', 'kind', 'name', 'display_name', 'description', 'school', 'school_name',
             'created_by', 'is_public', 'is_global', 'is_archived', 'last_message_at', 'members_count',
             'is_member', 'my_role', 'unread_count', 'last_message', 'created_at', 'updated_at', 'is_saved_messages',
+            'peer_last_read_at',
         )
         read_only_fields = ('created_by', 'last_message_at')
 
@@ -106,6 +111,17 @@ class MessageChannelSerializer(serializers.ModelSerializer):
     def get_my_role(self, obj):
         membership = self._membership(obj)
         return membership.role if membership else None
+
+    def get_peer_last_read_at(self, obj) -> datetime | None:
+        membership = self._membership(obj)
+        if membership is None:
+            return None
+        if hasattr(obj, 'peer_last_read_at'):
+            value = obj.peer_last_read_at
+        else:
+            # Single-channel responses (create, direct, saved) skip the list queryset's annotation.
+            value = obj.memberships.exclude(user_id=membership.user_id).aggregate(latest=Max('last_read_at'))['latest']
+        return serializers.DateTimeField().to_representation(value) if value else None
 
     def get_unread_count(self, obj) -> int:
         if hasattr(obj, '_unread_count'):

@@ -465,6 +465,7 @@ export const UI_TRANSLATIONS = {
   "Select a chat": ["Chatni tanlang", "Выберите чат"],
   "Choose emoji": ["Emoji tanlash", "Выбрать эмодзи"],
   "Sent": ["Yuborildi", "Отправлено"],
+  "Read": ["O‘qildi", "Прочитано"],
 
   'Questions': ['Savollar', 'Вопросы'],
   'What is your question?': ['Savolingiz nima?', 'Какой у вас вопрос?'],

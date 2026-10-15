@@ -67,7 +67,8 @@ if (!api.includes('extendLevelOneRoadmap') || !app.includes('function LevelOneSe
 if (app.includes('Progress %') || app.includes('item.progress_percent') || app.includes("values.get('progress_percent')")) throw new Error('Manual roadmap progress controls must not be rendered.');
 if (!app.includes("status: 'submitted', reflection: values.get('reflection')") || !app.includes('Submit mission') || !styles.includes('.mission-submit-status')) throw new Error('Student submit-only roadmap workflow is missing.');
 if (!app.includes('function LevelProgress(') || !api.includes('approveStudentLevel')) throw new Error('XP and teacher-approved leveling UI is missing.');
-for (const channelTab of ['Private', 'Groups', 'Discussions']) {
+// All lists every kind (communities and discussions included); Private and Groups filter.
+for (const channelTab of ['All', 'Private', 'Groups']) {
   if (!app.includes(`\"${channelTab}\"`)) throw new Error(`Messaging tab missing: ${channelTab}`)
 }
 if (!app.includes('Post anonymously') || !app.includes('Accept answer')) throw new Error('Anonymous discussions or accepted-answer controls are missing.');

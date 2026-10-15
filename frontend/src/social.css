@@ -853,6 +853,11 @@
 }
 
 @media (max-width: 820px) {
+  /* The list fills the full-height sidebar, not the old stacked layout's 245px. */
+  .messaging-page .channel-list {
+    max-height: none;
+  }
+
   .messaging-page .messages-shell {
     grid-template-columns: minmax(0, 1fr);
     height: calc(100dvh - 210px);
@@ -1358,6 +1363,10 @@
   display: inline-block;
   vertical-align: -2px;
   margin-left: 4px;
+}
+
+.messaging-page .message-bubble p > time svg.tick-read {
+  color: var(--social-accent);
 }
 
 .messaging-page .message-bubble footer button,

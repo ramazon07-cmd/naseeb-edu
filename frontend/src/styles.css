@@ -16450,8 +16450,7 @@ a:focus-visible {
   }
 
   .app-shell.role-student .portal-tabs button,
-  .app-shell.role-student .support-toolbar .portal-tabs button,
-  .app-shell.role-student .messaging-page .channel-more-folders {
+  .app-shell.role-student .support-toolbar .portal-tabs button {
     min-width: 44px;
   }
 
