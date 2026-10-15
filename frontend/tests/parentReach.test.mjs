@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 import { loadsDashboardStats, resourcesFor } from '../src/lib/workspaceResources.js';
 import { navigationFor, reachablePages } from '../src/lib/routes.js';
 
-// The backend gives parents no school: they may read only their own portal
-// and never messaging, bookings, student lists or school accounts.
-const PARENT_ENDPOINTS = new Set(['parent-portal']);
+// The backend gives parents no school: they read their own portal and their direct
+// chats with their children's counselors (card 15), never bookings, student lists or school accounts.
+const PARENT_ENDPOINTS = new Set(['parent-portal', 'message-channels']);
 
 test('parents load only the parent portal', () => {
   const endpoints = resourcesFor({ role: 'parent' }).map(([, endpoint]) => endpoint);
@@ -14,10 +14,11 @@ test('parents load only the parent portal', () => {
   assert.equal(loadsDashboardStats({ role: 'parent' }), false);
 });
 
-test('parent navigation has no messaging or school pages', () => {
+test('parent navigation has direct messages but no school pages', () => {
   const parent = { role: 'parent' };
   const reachable = reachablePages(parent);
-  for (const page of ['messages', 'bookings', 'students', 'screen_time', 'support']) {
+  assert.ok(navigationFor(parent).includes('messages'));
+  for (const page of ['bookings', 'students', 'screen_time', 'support']) {
     assert.ok(!navigationFor(parent).includes(page), `parents must not see ${page}`);
     assert.ok(!reachable.has(page), `parents must not reach ${page}`);
   }

@@ -47,7 +47,7 @@ export const AUDIT_ACTIONS = {
   'counselor_roadmap_template.created': 'Roadmap template created', 'counselor_roadmap_template.updated': 'Roadmap template updated',
   'counselor_roadmap_mission.approve': 'Counselor mission approved', 'counselor_roadmap_mission.request_changes': 'Changes requested on a counselor mission',
   'credential.issued': 'Temporary password issued', 'organization_account.created': 'Organization login created',
-  'parent.invited': 'Parent invited', 'school.created': 'School created', 'school.updated': 'School updated', 'school.deactivated': 'School deactivated',
+  'parent.invited': 'Parent invited', 'parent.permissions_changed': 'Parent access changed', 'school.created': 'School created', 'school.updated': 'School updated', 'school.deactivated': 'School deactivated',
   'student.moved': 'Student moved to another school', 'student.deactivated': 'Student deactivated', 'student.reactivated': 'Student reactivated',
   'student.counselor_assigned': 'Counselor assigned to student', 'student_360.viewed': 'Student 360 profile viewed',
   'student_visibility.viewed': 'Student 360 profile viewed', 'student_account.viewed': 'Student account viewed',

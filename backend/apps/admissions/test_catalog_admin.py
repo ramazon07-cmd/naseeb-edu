@@ -237,3 +237,22 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
         listing = next(query['sql'] for query in large.captured_queries if 'admissions_university' in query['sql'] and 'programs_count' in query['sql'])
         self.assertNotIn('DISTINCT', listing.upper())
         self.assertNotIn('GROUP BY "ADMISSIONS_UNIVERSITY"."ID"', listing.upper())
+
+    def test_staff_manage_store_items_while_the_student_store_stays_as_it_is(self):
+        from apps.admissions.models import StoreItem
+        hidden = StoreItem.objects.create(title='Essay review pack', category='Essays', is_active=False)
+        shown = StoreItem.objects.create(title='Mock interview', category='Interviews')
+        listed = self.as_user(self.support).get('/api/catalog/store-items/')
+        self.assertEqual(listed.status_code, 200)
+        # Seeded catalogue items are listed too; both of ours are, the hidden one included.
+        self.assertLessEqual({hidden.id, shown.id}, {row['id'] for row in listed.data['results']})
+        self.assertEqual(self.as_user(self.support).patch(f'/api/catalog/store-items/{shown.id}/', {'is_active': False}, format='json').status_code, 403)
+        self.assertEqual(self.as_user(self.student_user).get('/api/catalog/store-items/').status_code, 403)
+        student_store = self.as_user(self.student_user).get('/api/store-items/')
+        self.assertEqual(student_store.status_code, 200)
+        student_ids = {row['id'] for row in student_store.data['results']}
+        self.assertIn(shown.id, student_ids)
+        self.assertNotIn(hidden.id, student_ids)
+        changed = self.as_user(self.ops).patch(f'/api/catalog/store-items/{shown.id}/', {'is_active': False}, format='json')
+        self.assertEqual(changed.status_code, 200, changed.data)
+        self.assertEqual(ProductAuditEvent.objects.filter(action='store_item.updated', target_id=shown.id).count(), 1)

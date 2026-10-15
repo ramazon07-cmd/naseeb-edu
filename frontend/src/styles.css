@@ -7366,6 +7366,26 @@ body:has(.modal-backdrop) .assistant-launchers {
   outline-offset: -2px;
 }
 
+/* Admin Control: the Roadmap reviews tile opens the review queue. */
+.stat-card .admin-link,
+.stat-card .admin-link:hover:not(:disabled) {
+  color: var(--accent-deep);
+}
+
+.roadmap-control-tabs {
+  margin-bottom: var(--space-4);
+}
+
+.roadmap-control-tabs .portal-tabs {
+  flex-wrap: wrap;
+}
+
+.roadmap-control-tabs .portal-tabs button.active {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
 .student-portal .portal-tabs button.active {
   color: var(--student-accent-text);
   background: var(--student-accent);
@@ -11294,6 +11314,12 @@ a:focus-visible {
   font-size: var(--text-xs);
 }
 
+.parent-invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .parent-stat-grid .stat-card strong {
   font-variant-numeric: tabular-nums;
 }
@@ -11473,6 +11499,23 @@ a:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
+}
+
+.parent-link-sections {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.parent-link-row {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.parent-link-row > button {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .parent-permission-fields > span,
@@ -11944,7 +11987,8 @@ a:focus-visible {
   }
 
   .parent-invitations,
-  .parent-empty-workspace > article {
+  .parent-empty-workspace > article,
+  .parent-invite-actions {
     align-items: stretch;
     flex-direction: column;
   }

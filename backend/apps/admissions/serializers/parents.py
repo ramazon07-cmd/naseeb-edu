@@ -5,6 +5,14 @@ from apps.users.models import User
 from ..models import ParentStudentLink, StudentProfile
 
 
+class ParentLinkSectionsSerializer(serializers.ModelSerializer):
+    """The three read-only sections a parent link shares; nothing else on the link changes."""
+
+    class Meta:
+        model = ParentStudentLink
+        fields = ('can_view_applications', 'can_view_documents', 'can_view_meetings')
+
+
 class ParentStudentLinkSerializer(serializers.ModelSerializer):
     parent_name = serializers.SerializerMethodField()
     parent_email = serializers.EmailField(source='parent.email', read_only=True)

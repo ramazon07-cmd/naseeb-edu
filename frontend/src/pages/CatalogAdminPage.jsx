@@ -138,6 +138,22 @@ const OPPORTUNITY_FIELDS = [
   ['is_active', 'Shown to students', 'checkbox'],
 ];
 
+// The student store stays locked; staff prepare its items here (card 34).
+const STORE_FIELDS = [
+  ['title', 'Item name', 'text', true],
+  ['category', 'Category', 'text', true, [], 'e.g. Mentoring'],
+  ['provider_name', 'Provider', 'text'],
+  ['provider_role', 'Provider role', 'text'],
+  ['price_amount', 'Price', 'decimal'],
+  ['currency', 'Currency', 'text', true, [], 'UZS'],
+  ['price_label', 'Price as shown', 'text'],
+  ['duration_minutes', 'Duration (minutes)', 'number'],
+  ['destination_url', 'Link', 'url'],
+  ['description', 'Description', 'textarea'],
+  ['is_featured', 'Featured', 'checkbox'],
+  ['is_active', 'Shown to students', 'checkbox'],
+];
+
 // remove: 'delete' (nothing may depend on the row) or 'hide' (students saved
 // it, so it is switched off and can be shown again).
 const TABS = {
@@ -163,6 +179,11 @@ const TABS = {
     add: 'Add opportunity program', edit: 'Edit opportunity program', name: (item) => item.title,
     meta: (item) => joinParts(item.provider, item.category, item.country, item.deadline ? tx`Deadline ${dateText(item.deadline)}` : item.deadline_text),
   },
+  store: {
+    title: 'Store', endpoint: 'catalog/store-items', ordering: 'title', fields: STORE_FIELDS, remove: 'hide',
+    add: 'Add store item', edit: 'Edit store item', name: (item) => item.title,
+    meta: (item) => joinParts(item.category, item.provider_name, item.price_label || (item.price_amount != null && `${formatNumberLocale(Number(item.price_amount))} ${item.currency}`)),
+  },
 };
 
 // A new row starts from the model defaults the form shows.
@@ -171,6 +192,7 @@ const NEW_ROW = {
   programs: { teaching_language: 'English', international_students_eligible: true, is_active: true },
   scholarships: { funding_level: 'partial', scope: 'international', requires_transcript: true, is_active: true },
   opportunities: { delivery_mode: 'onsite', is_active: true },
+  store: { currency: 'UZS', is_active: true },
 };
 
 const NULLABLE = new Set(['number', 'decimal', 'date', 'university']);

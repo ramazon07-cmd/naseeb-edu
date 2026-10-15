@@ -46,7 +46,7 @@ function staffResources(now) {
 
 export function resourcesFor(user, now = new Date()) {
   const role = workspaceRole(user);
-  if (role === 'parent') return [['parentPortal', 'parent-portal']];
+  if (role === 'parent') return [['parentPortal', 'parent-portal'], ['messageChannels', 'message-channels']];
   if (role === 'admin') return ADMIN_RESOURCES;
   if (!['organization', 'teacher', 'counselor'].includes(role)) return [...STUDENT_RESOURCES, ...PORTAL_RESOURCES];
   const staff = staffResources(now);

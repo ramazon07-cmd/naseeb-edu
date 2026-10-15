@@ -3,12 +3,14 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ErrorDetail, ValidationError
 from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from apps.admissions.listing import ListQueryMixin
+from core.exceptions import CodedError
 from . import entitlements
 from .admin_permissions import IsSupportStaff, SupportReadOpsWrite, SupportReadSuperadminWrite, has_tier, staff_tier_denied
 from .audit import (
@@ -72,6 +74,11 @@ def student_account_in_scope(account, user):
         pk=account.pk,
         **{f'student_profile__{key}': value for key, value in lookups.items()},
     ).exists()
+
+
+COUNSELOR_HAS_STUDENTS_MESSAGE = (
+    'This counselor still has active students. Reassign them or leave them unassigned before deactivating.'
+)
 
 
 class IsRoleScopedUserAccess(permissions.BasePermission):
@@ -209,6 +216,8 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         }
         try:
             with transaction.atomic(), recorded_actions() as audited:
+                deactivating = previous_active and serializer.validated_data.get('is_active') is False
+                handover = self._hand_over_students(serializer.instance) if deactivating else {}
                 account = serializer.save()
                 if (
                     account.role != User.Role.STUDENT
@@ -233,7 +242,9 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                             },
                         )
                     if previous_active and not account.is_active:
-                        audit_product_action(actor=self.request.user, action='account.deactivated', target=account)
+                        audit_product_action(
+                            actor=self.request.user, action='account.deactivated', target=account, metadata=handover,
+                        )
                     elif not previous_active and account.is_active:
                         audit_product_action(actor=self.request.user, action='account.reactivated', target=account)
                     if account.admin_tier != previous_tier:
@@ -269,9 +280,45 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         if account.role == User.Role.STUDENT and hasattr(account, 'student_profile'):
             set_student_active(account, False, self.request.user)
             return
-        account.is_active = False
-        account.save(update_fields=['is_active'])
-        audit_product_action(actor=self.request.user, action='account.deactivated', target=account)
+        with transaction.atomic():
+            handover = self._hand_over_students(account)
+            account.is_active = False
+            account.save(update_fields=['is_active'])
+            audit_product_action(actor=self.request.user, action='account.deactivated', target=account, metadata=handover)
+
+    def _hand_over_students(self, account):
+        """Before a counselor is deactivated, their active students go to another counselor or none.
+
+        The request says which: ``students`` is ``reassign`` (with ``reassign_to``, an active
+        counselor of the same school) or ``unassign``. Without it, 409 gives the count.
+        Returns the audit metadata (empty when nobody was assigned).
+        """
+        from apps.admissions.models import StudentProfile
+        from apps.admissions.params import int_param
+        from apps.admissions.progress_cache import invalidate_progress_summary
+
+        if account.role != User.Role.COUNSELOR:
+            return {}
+        students = StudentProfile.objects.filter(
+            assigned_counselor=account, user__is_active=True, deactivated_at__isnull=True,
+        )
+        count = students.count()
+        if not count:
+            return {}
+        choice = self.request.data.get('students')
+        target = None
+        if choice == 'reassign':
+            target = User.objects.filter(
+                pk=int_param(self.request.data, 'reassign_to'), role=User.Role.COUNSELOR, is_active=True,
+                school_id=account.school_id, school__isnull=False,
+            ).exclude(pk=account.pk).first()
+            if target is None:
+                raise ValidationError({'reassign_to': ['Select an active counselor in the same school.']})
+        elif choice != 'unassign':
+            raise CodedError(COUNSELOR_HAS_STUDENTS_MESSAGE, 'counselor_has_students', 409, students=count)
+        students.update(assigned_counselor=target, updated_at=timezone.now())
+        invalidate_progress_summary()
+        return {'students_handed_over': count, 'handover': choice, 'reassigned_to': target.pk if target else None}
 
     @action(detail=True, methods=['get'], url_path='avatar')
     def avatar(self, request, pk=None):
@@ -390,9 +437,9 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     )
     def temporary_credential(self, request, pk=None):
         target = self.get_object()
-        if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION}:
+        if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION, User.Role.COUNSELOR}:
             return Response({
-                'detail': 'Temporary credentials are only available for student and school accounts.',
+                'detail': 'Temporary credentials are only available for student, school and counselor accounts.',
                 'code': 'credential_role_unsupported',
             }, status=400)
         allowed = has_tier(request.user, SUPPORT) or (
@@ -448,7 +495,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
             return Response({
                 'detail': 'Only a product admin can create individual counselors.', 'code': 'product_admin_required',
             }, status=403)
-        serializer = IndividualCounselorCreateSerializer(data=request.data)
+        serializer = IndividualCounselorCreateSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         counselor = serializer.save()
         audit_product_action(

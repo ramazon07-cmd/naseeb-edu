@@ -8,6 +8,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 from . import entitlements
 from .admin_permissions import has_tier
+from .credentials import issue_temporary_credential
 from .images import AvatarField
 from .models import Plan, ProductAuditEvent, User, WorkspaceSubscription, normalize_plan_features
 from .services import audit_product_action, validate_counselor_capacity, validate_workspace_membership
@@ -109,7 +110,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         if self._school_counselor_edit():
-            allowed = {'first_name', 'last_name', 'phone', 'position', 'is_active'}
+            # Request-only handover controls are consumed by UserViewSet, after scope checks.
+            allowed = {'first_name', 'last_name', 'phone', 'position', 'is_active', 'students', 'reassign_to'}
             forbidden = set(data) - allowed
             if forbidden:
                 raise serializers.ValidationError({
@@ -270,9 +272,13 @@ class CounselorProvisionSerializer(serializers.Serializer):
                 validate_counselor_capacity(school=school)
                 counselor = User.objects.create_user(
                     **validated_data,
-                    password=password,
+                    password=None,
                     role=User.Role.COUNSELOR,
                     school=school,
+                )
+                # The admin knows this password, so it is single use: changed at first sign-in.
+                counselor, _, _, _ = issue_temporary_credential(
+                    user=counselor, issued_by=request.user, raw_password=password, request=request,
                 )
                 audit_product_action(actor=request.user, action='counselor.created', target=counselor, metadata={'school': school.pk})
                 return counselor
@@ -356,9 +362,13 @@ class IndividualCounselorCreateSerializer(serializers.Serializer):
             )
             counselor = User.objects.create_user(
                 **validated_data,
-                password=password,
+                password=None,
                 role=User.Role.COUNSELOR,
                 school=workspace,
+            )
+            counselor, _, _, _ = issue_temporary_credential(
+                user=counselor, issued_by=self.context['request'].user, raw_password=password,
+                request=self.context['request'],
             )
             workspace.owner_counselor = counselor
             workspace.save(update_fields=['owner_counselor', 'updated_at'])
@@ -391,8 +401,6 @@ class StaffCreateSerializer(serializers.Serializer):
         return value.lower()
 
     def create(self, validated_data):
-        from .credentials import issue_temporary_credential
-
         request = self.context['request']
         with transaction.atomic():
             staff = User.objects.create_user(**validated_data, password=None, role=User.Role.ADMIN)

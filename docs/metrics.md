@@ -67,6 +67,24 @@ and it is past due. `is_at_risk`, `tasks_late` and the "Late tasks require
 attention" alert all count exactly these tasks (`progress.late_tasks`); the
 `late` status on its own, with a due date still ahead, does not make a task late.
 
+## Parent portal (`/api/parent-portal/`)
+
+Each linked child's `profile` carries the per-student fields above plus these
+headline counts. The family dashboard only formats them.
+
+| Field | Label in the UI | Formula |
+|---|---|---|
+| `open_tasks_total` | Open tasks | Tasks the student still owes: `todo`, `in_progress` or `late`. |
+| `overdue_tasks_total` | — | Open tasks that are `is_overdue` (see above). |
+| `is_at_risk` | "Deadline needs attention" | As above: a late task or an open mission past its due date. |
+| `active_applications_total` | Active applications | Applications without a final decision: every status except `accepted` and `rejected` (a waitlisted application is still active). `null` when applications are not shared. |
+| `upcoming_meetings_total` | Upcoming meetings | Pending or approved meetings that have not started, in server time (a pending request counts, as on the Meetings page). `null` when meetings are not shared. |
+
+Lists are bounded, and the query count does not grow with the number of
+children: every open task plus the 20 most recently updated closed ones, and
+every meeting that has not started plus the 20 most recent past ones. A child
+whose account, profile or school is deactivated is not listed.
+
 ## Dashboard (`/api/dashboard/stats/`)
 
 The scope is the students the user can see (see `scoping.py`), without

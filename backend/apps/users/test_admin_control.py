@@ -168,6 +168,97 @@ class AdminControlTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['school_workspace_type'], School.WorkspaceType.INDIVIDUAL)
 
+    def test_new_counselors_start_on_a_one_time_password_that_admins_can_reset(self):
+        from apps.users.models import ProductAuditEvent
+        self.client.force_authenticate(self.admin)
+        created = self.client.post('/api/users/accounts/create-counselor/', {
+            'username': 'fresh-counselor', 'email': 'fresh@example.com', 'first_name': 'Fresh',
+            'password': 'StrongPass123!', 'school': self.school.id,
+        }, format='json')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        counselor = User.objects.get(username='fresh-counselor')
+        self.assertTrue(counselor.must_change_password)
+        solo = self.client.post('/api/users/accounts/create-individual-counselor/', {
+            'username': 'solo', 'email': 'solo@example.com', 'first_name': 'Solo', 'password': 'StrongPass123!',
+        }, format='json')
+        self.assertEqual(solo.status_code, status.HTTP_201_CREATED, solo.data)
+        self.assertTrue(User.objects.get(username='solo').must_change_password)
+        reset = self.client.post(f'/api/users/accounts/{counselor.id}/temporary-credential/', {}, format='json')
+        self.assertEqual(reset.status_code, status.HTTP_200_OK, reset.data)
+        self.assertTrue(reset.data['temporary_password'])
+        self.assertEqual(ProductAuditEvent.objects.filter(action='credential.issued', target_id=counselor.id).count(), 1)
+        self.client.force_authenticate(self.create_counselor(2))
+        denied = self.client.post(f'/api/users/accounts/{counselor.id}/temporary-credential/', {}, format='json')
+        self.assertIn(denied.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND})
+
+    def test_deactivating_a_counselor_hands_their_students_over_first(self):
+        from apps.users.models import ProductAuditEvent
+        leaving, staying = self.create_counselor(1), self.create_counselor(2)
+        other_school = School.objects.create(name='Other School', code='other-school')
+        outsider = self.create_counselor(3, school=other_school)
+        profiles = []
+        for index in range(3):
+            student = User.objects.create_user(
+                username=f'handover-{index}', email=f'handover-{index}@example.com', password='StrongPass123!',
+                role=User.Role.STUDENT, school=self.school,
+            )
+            profiles.append(StudentProfile.objects.create(user=student, school=self.school, assigned_counselor=leaving))
+        self.client.force_authenticate(self.admin)
+        url = f'/api/users/accounts/{leaving.id}/deactivate/'
+        blocked = self.client.post(url, {}, format='json')
+        self.assertEqual(blocked.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual((blocked.data['code'], str(blocked.data['students'])), ('counselor_has_students', '3'))
+        wrong = self.client.post(url, {'students': 'reassign', 'reassign_to': outsider.id}, format='json')
+        self.assertEqual(wrong.status_code, status.HTTP_400_BAD_REQUEST)
+        leaving.refresh_from_db()
+        self.assertTrue(leaving.is_active)
+        done = self.client.post(url, {'students': 'reassign', 'reassign_to': staying.id}, format='json')
+        self.assertEqual(done.status_code, status.HTTP_200_OK, done.data)
+        self.assertEqual(StudentProfile.objects.filter(assigned_counselor=staying).count(), 3)
+        event = ProductAuditEvent.objects.get(action='account.deactivated', target_id=leaving.id)
+        self.assertEqual(event.metadata['students_handed_over'], 3)
+        idle = self.create_counselor(4)
+        self.assertEqual(self.client.post(f'/api/users/accounts/{idle.id}/deactivate/').status_code, status.HTTP_200_OK)
+        unassign = self.client.patch(f'/api/users/accounts/{staying.id}/', {'is_active': False}, format='json')
+        self.assertEqual(unassign.status_code, status.HTTP_409_CONFLICT)
+        unassign = self.client.patch(f'/api/users/accounts/{staying.id}/', {'is_active': False, 'students': 'unassign'}, format='json')
+        self.assertEqual(unassign.status_code, status.HTTP_200_OK, unassign.data)
+        self.assertFalse(StudentProfile.objects.filter(assigned_counselor__isnull=False).exists())
+
+    def test_review_queue_lists_submitted_missions_oldest_first_and_deactivated_templates_disappear(self):
+        first, second = self.create_counselor(1), self.create_counselor(2)
+        self.client.force_authenticate(self.admin)
+        template = self.client.post('/api/counselor-roadmap-templates/', {
+            'name': 'Queue check', 'description': '', 'kind': 'school_management',
+            'missions': [{'title': 'Step one', 'sequence': 1, 'due_days': 3, 'is_required': True},
+                         {'title': 'Step two', 'sequence': 2, 'due_days': 6, 'is_required': True}],
+        }, format='json').data
+        roadmaps = {}
+        for counselor in (first, second):
+            self.client.force_authenticate(self.admin)
+            roadmaps[counselor.id] = self.client.post('/api/counselor-roadmaps/', {
+                'counselor': counselor.id, 'template': template['id'], 'title': '',
+            }, format='json').data
+        for counselor in (second, first):
+            self.client.force_authenticate(counselor)
+            roadmap = roadmaps[counselor.id]
+            self.client.post(f'/api/counselor-roadmaps/{roadmap["id"]}/submit-mission/', {
+                'mission': roadmap['missions'][0]['id'], 'counselor_note': 'Done.',
+            }, format='json')
+        self.client.force_authenticate(self.admin)
+        queue = self.client.get('/api/counselor-roadmaps/review-queue/')
+        self.assertEqual(queue.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['counselor_name'] for row in queue.data['results']], [second.get_full_name() or second.username, first.get_full_name() or first.username])
+        mine = self.client.get(f'/api/counselor-roadmaps/review-queue/?counselor={first.id}')
+        self.assertEqual(len(mine.data['results']), 1)
+        self.client.force_authenticate(first)
+        self.assertEqual(self.client.get('/api/counselor-roadmaps/review-queue/').status_code, status.HTTP_403_FORBIDDEN)
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.patch(f'/api/counselor-roadmap-templates/{template["id"]}/', {'is_active': False}, format='json').status_code, status.HTTP_200_OK)
+        self.client.force_authenticate(first)
+        listed = self.client.get('/api/counselor-roadmap-templates/')
+        self.assertNotIn(template['id'], [row['id'] for row in listed.data['results']])
+
     def test_counselor_roadmap_completion_is_separate_from_student_xp(self):
         counselor = self.create_counselor(1)
         student_user = User.objects.create_user(

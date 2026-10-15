@@ -6,7 +6,7 @@ from django.apps import apps
 from django.db import connection
 from rest_framework.test import APITestCase
 
-from apps.admissions.models import School
+from apps.admissions.models import School, StudentProfile
 from apps.users.models import Plan, ProductAuditEvent, User
 from apps.users.test_entitlements import make_user, use_plan
 
@@ -42,6 +42,78 @@ class SchoolCounselorTests(APITestCase):
             response = self.client.patch(self.url, {'is_active': active}, format='json')
             self.assertEqual(response.status_code, 200, response.data)
             self.assertTrue(ProductAuditEvent.objects.filter(action=action, actor=self.org, target_id=str(self.counselor.pk)).exists())
+
+    def assigned_student(self):
+        student = make_user('handover-student', User.Role.STUDENT, self.school)
+        return StudentProfile.objects.create(user=student, school=self.school, assigned_counselor=self.counselor)
+
+    def test_school_cannot_deactivate_counselor_without_student_handover(self):
+        profile = self.assigned_student()
+        response = self.client.patch(self.url, {'is_active': False, 'first_name': 'Unsaved'}, format='json')
+        self.assertEqual(response.status_code, 409, response.data)
+        self.assertEqual(response.data['code'], 'counselor_has_students')
+        self.assertEqual(int(response.data['students']), 1)
+        self.counselor.refresh_from_db()
+        profile.refresh_from_db()
+        self.assertTrue(self.counselor.is_active)
+        self.assertEqual(self.counselor.first_name, '')
+        self.assertEqual(profile.assigned_counselor, self.counselor)
+        self.assertFalse(ProductAuditEvent.objects.filter(actor=self.org).exists())
+
+    def test_school_can_reassign_to_active_counselor_in_own_school(self):
+        profile = self.assigned_student()
+        self.peer.is_active = True
+        self.peer.save(update_fields=['is_active'])
+        response = self.client.patch(self.url, {
+            'is_active': False, 'students': 'reassign', 'reassign_to': self.peer.pk, 'first_name': 'Updated',
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        profile.refresh_from_db()
+        self.counselor.refresh_from_db()
+        self.assertEqual(profile.assigned_counselor, self.peer)
+        self.assertFalse(self.counselor.is_active)
+        self.assertEqual(self.counselor.first_name, 'Updated')
+        event = ProductAuditEvent.objects.get(action='account.deactivated', actor=self.org)
+        self.assertEqual(event.metadata['students_handed_over'], 1)
+        self.assertEqual(event.metadata['reassigned_to'], self.peer.pk)
+
+    def test_school_handover_rejects_foreign_inactive_and_same_counselor(self):
+        profile = self.assigned_student()
+        for target in [self.foreign, self.peer, self.counselor]:
+            with self.subTest(target=target.pk):
+                response = self.client.patch(self.url, {
+                    'is_active': False, 'students': 'reassign', 'reassign_to': target.pk,
+                }, format='json')
+                self.assertEqual(response.status_code, 400, response.data)
+        self.counselor.refresh_from_db()
+        profile.refresh_from_db()
+        self.assertTrue(self.counselor.is_active)
+        self.assertEqual(profile.assigned_counselor, self.counselor)
+
+    def test_school_can_explicitly_leave_students_unassigned(self):
+        profile = self.assigned_student()
+        response = self.client.patch(self.url, {'is_active': False, 'students': 'unassign'}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        profile.refresh_from_db()
+        self.assertIsNone(profile.assigned_counselor)
+
+    def test_school_cannot_use_handover_controls_to_deactivate_another_schools_counselor(self):
+        response = self.client.patch(f'/api/users/accounts/{self.foreign.pk}/', {
+            'is_active': False, 'students': 'unassign',
+        }, format='json')
+        self.assertEqual(response.status_code, 404)
+        self.foreign.refresh_from_db()
+        self.assertTrue(self.foreign.is_active)
+
+    def test_audit_failure_rolls_back_student_handover_and_deactivation(self):
+        profile = self.assigned_student()
+        with patch('apps.users.views.audit_product_action', side_effect=RuntimeError('audit unavailable')):
+            with self.assertRaises(RuntimeError):
+                self.client.patch(self.url, {'is_active': False, 'students': 'unassign'}, format='json')
+        profile.refresh_from_db()
+        self.counselor.refresh_from_db()
+        self.assertEqual(profile.assigned_counselor, self.counselor)
+        self.assertTrue(self.counselor.is_active)
 
     def test_another_school_gets_404(self):
         url = f'/api/users/accounts/{self.foreign.pk}/'

@@ -388,6 +388,18 @@ class CatalogOpportunityProgramViewSet(CatalogAdminMixin, viewsets.ModelViewSet)
     http_method_names = NO_DELETE
 
 
+class CatalogStoreItemViewSet(CatalogAdminMixin, viewsets.ModelViewSet):
+    """Every store item for staff, hidden ones too; the student store below stays as it is."""
+    serializer_class = StoreItemSerializer
+    queryset = StoreItem.objects.order_by('title', 'id')
+    search_fields = ('title', 'category', 'provider_name')
+    bool_filters = {'is_active': 'is_active'}
+    ordering_options = {'title': ('title', 'id')}
+    default_cursor_ordering = 'title'
+    audit_name = 'store_item'
+    http_method_names = NO_DELETE
+
+
 class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = StoreItemSerializer
     permission_classes = [StudentPortalPermission]

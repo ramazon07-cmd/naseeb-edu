@@ -1,5 +1,6 @@
 """Admissions API views — parents."""
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 from django.utils.text import slugify
 from django.utils import timezone
 from rest_framework import permissions, viewsets
@@ -7,12 +8,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from apps.users.credentials import issue_temporary_credential
+from apps.users.entitlements import feature_not_in_plan, links_with_feature, school_has_feature
 from apps.users.models import User
 from apps.users.services import audit_product_action
-from ..models import ParentStudentLink
-from ..serializers import ParentInviteSerializer, ParentStudentLinkSerializer
-from ..scoping import scope_students
-from ..progress import attach_progress_stats
+from ..models import Application, Booking, ParentStudentLink, Task
+from ..params import int_param
+from ..serializers import ParentInviteSerializer, ParentLinkSectionsSerializer, ParentStudentLinkSerializer
+from ..scoping import parent_visible_links, scope_students
+from ..progress import OPEN_TASK_STATUSES, attach_progress_stats
+
+
+INACTIVE_CHILD_MESSAGE = 'This student account is not active, so the invitation cannot be accepted.'
+REVOKED_LINK_MESSAGE = 'This parent access was disconnected; send a new invitation instead.'
 
 
 class ParentLinkPermission(permissions.BasePermission):
@@ -23,7 +30,7 @@ class ParentLinkPermission(permissions.BasePermission):
         if user.is_superuser or user.role == User.Role.ADMIN:
             return True
         if user.role == User.Role.COUNSELOR:
-            return view.action in {'list', 'retrieve', 'invite', 'revoke'}
+            return view.action in {'list', 'retrieve', 'invite', 'revoke', 'sections'}
         if user.role == User.Role.PARENT:
             return view.action in {'list', 'retrieve', 'accept', 'revoke'}
         return False
@@ -52,12 +59,16 @@ class ParentStudentLinkViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_superuser or user.role == User.Role.ADMIN:
-            return self.queryset
-        if user.role == User.Role.COUNSELOR:
-            return scope_students(self.queryset, user, via='student')
-        if user.role == User.Role.PARENT:
+            queryset = self.queryset
+        elif user.role == User.Role.COUNSELOR:
+            queryset = scope_students(self.queryset, user, via='student')
+        elif user.role == User.Role.PARENT:
             return self.queryset.filter(parent=user)
-        return self.queryset.none()
+        else:
+            return self.queryset.none()
+        # Staff open one student's family access (the invite dialog).
+        student = int_param(self.request.query_params, 'student')
+        return queryset.filter(student_id=student) if student else queryset
 
     @staticmethod
     def unique_parent_username(email):
@@ -80,6 +91,8 @@ class ParentStudentLinkViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data
         student = values['student']
+        if not school_has_feature(student.school_id, 'parent_portal'):
+            raise feature_not_in_plan(request)
 
         email = values['email'].lower()
         with transaction.atomic():
@@ -167,10 +180,33 @@ class ParentStudentLinkViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'detail': 'Only the invited parent can accept this link.'}, status=403)
         if link.status != ParentStudentLink.Status.PENDING:
             return Response({'detail': 'Only a pending invitation can be accepted.'}, status=409)
+        if not parent_visible_links(ParentStudentLink.objects.filter(pk=link.pk)).exists():
+            return Response({'detail': INACTIVE_CHILD_MESSAGE, 'code': 'student_inactive'}, status=409)
+        if not links_with_feature(ParentStudentLink.objects.filter(pk=link.pk), 'parent_portal').exists():
+            raise feature_not_in_plan(request)
         link.status = ParentStudentLink.Status.ACTIVE
         link.consented_at = timezone.now()
         link.revoked_at = None
         link.save(update_fields=['status', 'consented_at', 'revoked_at', 'updated_at'])
+        return Response(self.get_serializer(link).data)
+
+    @action(detail=True, methods=['post'])
+    def sections(self, request, pk=None):
+        """Change what an active or pending link shares, without disconnecting the family."""
+        link = self.get_object()
+        if link.status == ParentStudentLink.Status.REVOKED:
+            return Response({'detail': REVOKED_LINK_MESSAGE, 'code': 'link_revoked'}, status=409)
+        serializer = ParentLinkSectionsSerializer(link, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        changes = {
+            field: value for field, value in serializer.validated_data.items() if getattr(link, field) != value
+        }
+        if changes:
+            serializer.save()
+            audit_product_action(
+                actor=request.user, action='parent.permissions_changed', target=link.parent,
+                school=link.student.school_id, metadata={'student': link.student_id, 'link': link.pk, **changes},
+            )
         return Response(self.get_serializer(link).data)
 
     @action(detail=True, methods=['post'])
@@ -187,24 +223,52 @@ class ParentStudentLinkViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ParentPortalView(APIView):
+    """The family portal: one payload, a fixed number of queries however many children.
+
+    Each child returns every open task plus the most recent CLOSED_TASKS closed ones, and
+    every upcoming meeting plus the most recent PAST_MEETINGS past ones (docs/metrics.md).
+    """
     permission_classes = [permissions.IsAuthenticated]
+    CLOSED_TASKS = 20
+    PAST_MEETINGS = 20
+    DECIDED_APPLICATIONS = {Application.Status.ACCEPTED, Application.Status.REJECTED}
+    OPEN_MEETINGS = {Booking.Status.PENDING, Booking.Status.APPROVED}
 
     def get(self, request):
         if request.user.role != User.Role.PARENT:
             return Response({'detail': 'This workspace is only available to parent accounts.'}, status=403)
-        links = ParentStudentLink.objects.filter(parent=request.user).select_related(
+        visible = parent_visible_links(ParentStudentLink.objects.filter(parent=request.user))
+        # Each child counts on its own school's plan; a sibling elsewhere never opens it.
+        links = links_with_feature(visible, 'parent_portal').select_related(
             'student__user', 'student__school', 'student__assigned_counselor', 'invited_by'
         )
         pending = links.filter(status=ParentStudentLink.Status.PENDING)
         children = []
-        active_links = list(links.filter(status=ParentStudentLink.Status.ACTIVE))
+        now = timezone.now()
+        meetings = Booking.objects.select_related('participant')
+        # Hidden sections are prefetched too but never serialized (the can_view_* checks below).
+        active_links = list(links.filter(status=ParentStudentLink.Status.ACTIVE).prefetch_related(
+            Prefetch('student__tasks', Task.objects.filter(status__in=OPEN_TASK_STATUSES), to_attr='portal_open_tasks'),
+            Prefetch(
+                'student__tasks',
+                Task.objects.exclude(status__in=OPEN_TASK_STATUSES).order_by('-updated_at', '-id')[:self.CLOSED_TASKS],
+                to_attr='portal_closed_tasks',
+            ),
+            Prefetch('student__applications', Application.objects.select_related('university'), to_attr='portal_applications'),
+            Prefetch('student__documents', to_attr='portal_documents'),
+            Prefetch('student__bookings', meetings.filter(starts_at__gte=now), to_attr='portal_upcoming_meetings'),
+            Prefetch(
+                'student__bookings', meetings.filter(starts_at__lt=now).order_by('-starts_at')[:self.PAST_MEETINGS],
+                to_attr='portal_past_meetings',
+            ),
+        ))
         attach_progress_stats([link.student for link in active_links])
         for link in active_links:
             student = link.student
-            tasks = student.tasks.all()
-            applications = student.applications.select_related('university').all() if link.can_view_applications else []
-            documents = student.documents.all() if link.can_view_documents else []
-            meetings = student.bookings.select_related('participant').all() if link.can_view_meetings else []
+            tasks = student.portal_open_tasks + student.portal_closed_tasks
+            applications = student.portal_applications if link.can_view_applications else []
+            documents = student.portal_documents if link.can_view_documents else []
+            meetings = student.portal_upcoming_meetings + student.portal_past_meetings if link.can_view_meetings else []
             children.append({
                 'link_id': link.id,
                 'relationship': link.relationship,
@@ -225,6 +289,9 @@ class ParentPortalView(APIView):
                     'level': student.level,
                     'xp_total': student.xp_total,
                     'next_level_xp': student.next_level_xp,
+                    'eligible_level': student.eligible_level,
+                    'level_up_pending': student.level_up_pending,
+                    'xp_progress_percent': student.xp_progress_percent,
                     'gpa': student.gpa,
                     'ielts_score': student.ielts_score,
                     'sat_score': student.sat_score,
@@ -234,6 +301,15 @@ class ParentPortalView(APIView):
                     'roadmap_progress_percent': student.roadmap_progress_percent,
                     'journey_progress_percent': student.journey_progress_percent,
                     'is_at_risk': student.is_at_risk,
+                    # Headline counts (docs/metrics.md, "Parent portal"); null for a section that is not shared.
+                    'open_tasks_total': len(student.portal_open_tasks),
+                    'overdue_tasks_total': sum(task.is_overdue for task in student.portal_open_tasks),
+                    'active_applications_total': sum(
+                        item.status not in self.DECIDED_APPLICATIONS for item in student.portal_applications
+                    ) if link.can_view_applications else None,
+                    'upcoming_meetings_total': sum(
+                        item.status in self.OPEN_MEETINGS and item.starts_at > now for item in student.portal_upcoming_meetings
+                    ) if link.can_view_meetings else None,
                 },
                 'tasks': [{
                     'id': item.id,
@@ -272,11 +348,13 @@ class ParentPortalView(APIView):
                         if item.participant else None
                     ),
                     'participant_role': item.participant.role if item.participant else None,
+                    'is_expired': item.is_expired,
                 } for item in meetings],
             })
         return Response({
             'children': children,
             'pending_invitations': ParentStudentLinkSerializer(pending, many=True).data,
+            'plan_locked_children': visible.filter(status=ParentStudentLink.Status.ACTIVE).count() - len(active_links),
             'privacy': {
                 'hidden': ['private essays', 'messages', 'counselor notes', 'task responses', 'document files'],
                 'read_only': True,
