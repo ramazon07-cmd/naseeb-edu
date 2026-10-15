@@ -8,24 +8,24 @@ session on the server (every rotation of that sign-in), not just one token.
 
 The cookie only reaches the API when the browser treats the request as
 first-party, so **the app and the API must share an origin or a site**. Pick
-one of the layouts below; the first is the recommended one.
+one of the layouts below. **Production uses layout C:** `https://www.naseebedu.com` calls `https://api.naseebedu.com/api` directly. Vercel Preview deployments use layout A, because their `vercel.app` site differs from the API site.
 
 Every layout keeps the CSRF protection of the cookie endpoints: refresh and
 logout require the `X-Requested-With` header and an `Origin` that is the API's
 own origin or listed in `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_REGEXES` or
 `CSRF_TRUSTED_ORIGINS` (wildcards such as `https://*.example.com` work).
 
-## A. Vercel frontend, API on Render (current hosting) — same origin through a proxy
+## A. Vercel Preview — same origin through a proxy
 
 `frontend/middleware.js` (Vercel Routing Middleware) proxies `/api/*` to the
 API, so the browser only ever talks to the Vercel origin.
 
 Vercel project (root directory `frontend/`), Environment Variables, for
-Production **and** Preview, available at build time too:
+**Preview**, available at build time too (Production settings are in C):
 
 | Variable | Value |
 | --- | --- |
-| `NASEEB_API_ORIGIN` | the API origin, no path: `https://<render-service>.onrender.com` |
+| `NASEEB_API_ORIGIN` | the API origin, no path: `https://api.naseebedu.com` (or the Render service origin) |
 | `VITE_API_URL` | leave unset (defaults to `/api`) |
 
 Without `NASEEB_API_ORIGIN` the build fails (`scripts/api-config.mjs`), and a
@@ -57,11 +57,36 @@ renders the `/api/` proxy location into `nginx.conf`; the build fails if
 `API_UPSTREAM` is missing. Put the app's public origin in
 `CORS_ALLOWED_ORIGINS` and count nginx in `NUM_PROXIES`.
 
-## C. Same site, API called directly (`app.example.com` + `api.example.com`)
+## C. Production — same site, API called directly
 
-Frontend: `VITE_API_URL=https://api.example.com/api` (the nginx image's CSP `connect-src`
-picks the origin up). Backend: `CORS_ALLOWED_ORIGINS=https://app.example.com`,
-`AUTH_REFRESH_COOKIE_SAMESITE=Lax` (or `Strict`).
+The production frontend is `https://www.naseebedu.com`; the API is
+`https://api.naseebedu.com`. Both use HTTPS and belong to the same site,
+so the API's host-only HttpOnly cookie stays first-party. The frontend sends
+cross-origin API calls with credentials (`api.js` already does this).
+
+| Service | Setting | Production value |
+| --- | --- | --- |
+| Vercel | `VITE_API_URL` | `https://api.naseebedu.com/api` |
+| Render | `CORS_ALLOWED_ORIGINS` | `https://www.naseebedu.com` |
+| Render | `CSRF_TRUSTED_ORIGINS` | `https://www.naseebedu.com` |
+| Render | `ALLOWED_HOSTS` | `api.naseebedu.com` (plus the Render service host if needed) |
+| Render | `AUTH_REFRESH_COOKIE_SAMESITE` | `Lax` |
+| Render | `AUTH_REFRESH_COOKIE_SECURE` | `True` |
+| Render | `AUTH_REFRESH_COOKIE_DOMAIN` | leave unset (host-only) |
+| Render | `NUM_PROXIES` | `1` for direct requests through Render's edge with Cloudflare DNS only; verify the real chain in a request log |
+
+Production does not need `NASEEB_API_ORIGIN` for direct API calls. Keep Preview's
+`VITE_API_URL` unset and configure `NASEEB_API_ORIGIN` in Preview as described in A.
+Cloudflare's `api` DNS record must be **DNS only** for this proxy-count assumption.
+If additional frontend domains also serve the app, explicitly add those origins
+rather than allowing arbitrary Vercel projects.
+
+`frontend/vercel.json` sends frame, MIME, referrer, permissions and HSTS headers
+on pages and assets. Its CSP is **report-only**, with `https://api.naseebedu.com`
+in `connect-src`; it logs policy violations without blocking resources. Inline
+boot scripts have no hashes in this static policy yet. Review violations,
+Preview behavior and private file-storage origins before enforcing CSP. The nginx
+image continues to generate its enforced CSP with build-time script hashes.
 
 ## D. Different sites (last resort)
 
