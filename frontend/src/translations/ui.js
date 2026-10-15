@@ -1,4 +1,5 @@
 export const UI_TRANSLATIONS = {
+  'Your layout is not saved to your account yet. We will keep trying while this page is open.': ['Dashboard tartibi akkauntingizga hali saqlanmadi. Sahifa ochiq turganida qayta urinib turamiz.', 'Расположение ещё не сохранено в аккаунте. Мы продолжим попытки, пока страница открыта.'],
   'Your profile': ['Profilingiz', 'Ваш профиль'],
   'Major': ['Yo‘nalish', 'Направление'],
   'Public university': ['Davlat universiteti', 'Государственный университет'],

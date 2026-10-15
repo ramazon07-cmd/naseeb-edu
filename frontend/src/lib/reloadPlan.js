@@ -20,13 +20,20 @@ export function endpointOf(path) {
 // reload everything.
 export const UNTRACKED_ENDPOINTS = ['screen-time', 'assistant', 'education-matches', 'auth', 'essay-lab', 'notifications', 'student-messages', 'catalog', 'dashboard'];
 
+// Only Essay Lab collection/metadata writes affect workspace summaries.
+// Text autosaves, folders and collaboration polls stay local to the editor.
+export function essayWorkspaceKeys(path) {
+  const clean = String(path || '').split('?')[0].replace(/^\/+/, '');
+  return /^essay-lab\/essays\/(?:[1-9]\d*\/(?:trash\/|restore\/|duplicate\/|share\/|unshare\/)?|)$/.test(clean) ? ['essays'] : [];
+}
+
 // `ignore`: endpoints whose writes never change loaded data (telemetry, AI).
 export function createMutationTracker(ignore = []) {
   const dirty = new Set();
   const skip = new Set(ignore);
   return {
     note(path) {
-      const endpoint = endpointOf(path);
+      const endpoint = essayWorkspaceKeys(path).length ? 'essays' : endpointOf(path);
       if (endpoint && !skip.has(endpoint)) dirty.add(endpoint);
     },
     take() {

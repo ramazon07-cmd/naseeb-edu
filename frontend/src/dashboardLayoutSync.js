@@ -53,42 +53,46 @@ export function planLayoutSync({ server, local, pending }) {
   return { layout: null, upload: false };
 }
 
-// Reconciles the cache with the account. Resolves to { layout, online }: the
-// normalized layout, and whether the account could be read at all.
+// Reconciles the cache with the account. online reports a successful GET;
+// synced separately reports whether the chosen layout reached the account.
 // `fetchLayout()` resolves to { layout } and `saveLayout(layout)` stores it.
-export async function syncDashboardLayout({ storage, userId, fetchLayout, saveLayout }) {
-  const local = readCachedLayout(storage, userId);
-  const pending = hasPendingLayout(storage, userId);
+export async function syncDashboardLayout({ storage, userId, fetchLayout, saveLayout, isCurrent = () => true, pendingLayout = null }) {
   let server;
   try {
     server = (await fetchLayout())?.layout ?? null;
   } catch {
     // Offline or server trouble: the cached layout is the best we have.
-    return { layout: normalizeDashboardPreferences(local), online: false };
+    return { layout: normalizeDashboardPreferences(pendingLayout || readCachedLayout(storage, userId)), online: false, synced: false };
   }
+  // Re-read after the GET: the student may have saved a newer local choice.
+  const local = pendingLayout || readCachedLayout(storage, userId);
+  const pending = Boolean(pendingLayout) || hasPendingLayout(storage, userId);
+  if (!isCurrent()) return { layout: normalizeDashboardPreferences(local), online: true, synced: false };
   const plan = planLayoutSync({ server, local, pending });
   const layout = normalizeDashboardPreferences(plan.layout);
+  let synced = true;
   if (plan.upload) {
     try {
       await saveLayout(layout);
-      writeCachedLayout(storage, userId, layout);
+      if (isCurrent()) writeCachedLayout(storage, userId, layout);
     } catch {
-      writeCachedLayout(storage, userId, layout, { pending: true });
+      synced = false;
+      if (isCurrent()) writeCachedLayout(storage, userId, layout, { pending: true });
     }
   } else if (plan.layout) {
     writeCachedLayout(storage, userId, layout);
   }
-  return { layout, online: true };
+  return { layout, online: true, synced: synced && isCurrent() };
 }
 
 // Saves a layout the user chose: cached first (so it applies even offline),
 // then sent to the account. Resolves to { synced, cached }.
-export async function saveDashboardLayout({ storage, userId, layout, saveLayout }) {
+export async function saveDashboardLayout({ storage, userId, layout, saveLayout, isCurrent = () => true }) {
   const cached = writeCachedLayout(storage, userId, layout, { pending: true });
   try {
     await saveLayout(layout);
-    if (cached) writeCachedLayout(storage, userId, layout);
-    return { synced: true, cached };
+    if (cached && isCurrent()) writeCachedLayout(storage, userId, layout);
+    return { synced: isCurrent(), cached };
   } catch {
     return { synced: false, cached };
   }

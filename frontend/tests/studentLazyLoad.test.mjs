@@ -156,7 +156,7 @@ test('the app starts students with the shell and loads pages as they open', () =
   assert.match(app, /await loadInitial\(current\)/);
   assert.match(app, /ensureLoaded\(user, studentPageKeys\(page\)\)/);
   // College Search and Applications block only on their primary data.
-  assert.match(app, /STUDENT_PRIMARY_KEYS = \{ college_search: \['students', 'applications'\], applications: \['students', 'applications'\] \}/);
+  assert.match(app, /primaryKeys = lazy \? studentPrimaryKeys\(page\)/);
 });
 
 for (const [page, dependencies] of [

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { t } from '../i18n';
 import { busyRetryDelay } from '../lib/backoff';
@@ -7,6 +7,7 @@ import { createKeyedLatest } from '../lib/latestRequest';
 import { planWorkspaceReload } from '../lib/reloadPlan';
 import { PAGED_ENDPOINTS, STUDENT_SHELL_KEYS, createInFlight, failedStatsStatus, loadsDashboardStats, loadsLazily, mergeStats, missingKeys, pagedListsAfter, resourcesFor, selectWorkspaceLoad, waitsBeforeLoading } from '../lib/workspaceResources';
 import { clearPagedLists, invalidatePagedLists } from './usePagedList';
+import { createResourceFreshness, WORKSPACE_RESOURCES_CHANGED } from '../lib/workspaceFreshness';
 
 // loadData(user, RELOAD_CHANGED): refetch what the last saves touched.
 export const RELOAD_CHANGED = 'changed';
@@ -48,6 +49,13 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
   const inFlightLoads = useRef(0);
   // Keys fetched (or being fetched) at least once since sign-in.
   const requestedOnce = useRef(new Set());
+  const freshness = useRef(createResourceFreshness());
+  useEffect(() => {
+    if (!loadsLazily(user)) return undefined;
+    const invalidate = (event) => freshness.current.invalidate(event.detail || []);
+    window.addEventListener(WORKSPACE_RESOURCES_CHANGED, invalidate);
+    return () => window.removeEventListener(WORKSPACE_RESOURCES_CHANGED, invalidate);
+  }, [user]);
   const requestedFor = useRef(null);
   // Sections refused by the rate limit (429) are retried on their own a few
   // times (status `busy`: "Busy, retrying…"); attempts per key, the keys
@@ -73,6 +81,7 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
       const planned = changed ? planWorkspaceReload(written, resources, ['dashboard', 'students'], PAGED_ENDPOINTS) : requestedKeys;
       const selected = selectWorkspaceLoad(activeUser, planned, requestedOnce.current, { changed });
       selected.forEach(([key]) => requestedOnce.current.add(key));
+      const settleFreshness = freshness.current.begin(selected.map(([key]) => key));
       // `loaded` stays true once a key has arrived, so a page can tell its
       // first load (skeleton) from a background refresh (keep showing data).
       setResourceStatus((current) => {
@@ -115,6 +124,7 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
       settled.forEach((result, index) => {
         const key = requests[index][0];
         if (!isCurrent(key)) return;
+        settleFreshness(key, result.status === 'fulfilled');
         if (result.status === 'fulfilled') {
           busyAttempts.current.delete(key);
           nextStatuses[key] = { status: 'success', error: '', loaded: true };
@@ -149,7 +159,7 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
       setResourceStatus((current) => {
         const next = { ...current };
         Object.entries(nextStatuses).forEach(([key, status]) => {
-          if (background && status.status === 'error' && current[key]?.loaded) return;
+          if (background && status.status === 'error' && current[key]?.loaded && !loadsLazily(activeUser)) return;
           next[key] = { ...status, loaded: status.loaded || Boolean(current[key]?.loaded) };
         });
         return next;
@@ -167,8 +177,14 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
       if (!background && !busyKeys.length && settled.length > 0 && settled.every((result) => result.status === 'rejected')) {
         setError(t("No new information could be loaded. Check your connection and retry."));
       }
+      // A write may have invalidated a collection while its read was waiting.
+      // Follow that successful, now-stale read once; failed reads use normal backoff.
+      const invalidated = loadsLazily(activeUser) ? freshness.current.due(Object.keys(successfulResources)) : [];
+      if (invalidated.length) queueMicrotask(() => loadData(activeUser, invalidated, { background: true }));
+      return settled.every((result) => result.status === 'fulfilled');
     } catch (err) {
       if (!background) setError(err.message);
+      return false;
     } finally {
       inFlightLoads.current -= 1;
       if (inFlightLoads.current === 0) setLoading(false);
@@ -201,12 +217,21 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
   }, [user]);
 
   // Fetch the keys this user's workspace has not requested yet (a student
-  // opening a page for the first time). Keys already loaded or in flight are
-  // never fetched twice.
+  // opening a page). Fresh keys and keys in flight are not fetched twice.
   const ensureLoaded = useCallback((activeUser, keys) => {
     if (waitsBeforeLoading(activeUser)) return Promise.resolve();
     const missing = missingKeys(activeUser, keys, requestedOnce.current);
-    return missing.length ? loadData(activeUser, missing) : Promise.resolve();
+    const stale = loadsLazily(activeUser) ? freshness.current.due(keys).filter((key) => requestedOnce.current.has(key)) : [];
+    const wanted = [...new Set([...missing, ...stale])];
+    return wanted.length ? loadData(activeUser, wanted) : Promise.resolve();
+  }, [loadData]);
+
+  const revalidate = useCallback(async (activeUser, keys) => {
+    if (waitsBeforeLoading(activeUser) || !loadsLazily(activeUser)) return true;
+    const available = new Set(resourcesFor(activeUser).map(([key]) => key));
+    const due = freshness.current.due(keys.filter((key) => available.has(key)));
+    if (!due.length) return true;
+    return (await loadData(activeUser, due, { background: true })) ? true : null;
   }, [loadData]);
 
   // Sign-out: drop in-flight responses and everything loaded for the user.
@@ -219,6 +244,7 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
     statsInFlight.current.clear();
     setMore({});
     requestedOnce.current = new Set();
+    freshness.current.clear();
     requestedFor.current = null;
     clearPagedLists();
     setData(EMPTY_DATA);
@@ -259,5 +285,5 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
     }
   }, [more]);
 
-  return { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset, refreshStats, updateStats: setStats, more, loadMore };
+  return { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, revalidate, reset, refreshStats, updateStats: setStats, more, loadMore };
 }
