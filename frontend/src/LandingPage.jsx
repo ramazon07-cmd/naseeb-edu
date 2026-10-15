@@ -461,7 +461,7 @@ const SCHOOL_CONTACT_URL = (
   import.meta.env.VITE_SCHOOL_CONTACT_URL || ""
 ).trim();
 const DEFAULT_BOOK_MEETING_URL =
-  "https://calendly.com/khumoyunnasipkulov/full-support-asia";
+  "https://calendly.com/khumoyunnasipkulov/naseeb";
 const BOOK_MEETING_URL = (
   import.meta.env.VITE_BOOK_MEETING_URL || DEFAULT_BOOK_MEETING_URL
 ).trim();
