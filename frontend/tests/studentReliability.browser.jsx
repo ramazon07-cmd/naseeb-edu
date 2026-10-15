@@ -1,7 +1,7 @@
 // Open /tests/studentReliability.browser.html on the local Vite server.
 // Real components/hooks use deterministic dummy API responses; no live API
 // request is permitted. This entry is excluded from the production build.
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from '../src/App';
 import { api, request } from '../src/api';
@@ -10,10 +10,13 @@ import { THEME_KEY } from '../src/hooks/useTheme';
 import { ProgramsPage } from '../src/pages/ProgramsPage';
 import { BookingForm, RescheduleForm } from '../src/pages/BookingsPage';
 import { NotificationPanel } from '../src/components/NotificationPanel';
+import { SnapshotCard } from '../src/components/counselorHome';
 import { useWorkspaceData } from '../src/hooks/useWorkspaceData';
 import { essayLabApi } from '../src/essayLab/essayLabApi';
 import '../src/styles.css';
 import '../src/social.css';
+import '../src/pages/counselor-home.css';
+import '@fontsource-variable/roboto/wght.css';
 
 const fixturePath = location.pathname + location.search;
 const params = new URLSearchParams(location.search);
@@ -32,6 +35,7 @@ let tasksBroken = true, savedBroken = true, slotsBroken = true, chatsBroken = tr
 let serverLayout = null;
 let delayEssayRead = false, releaseEssayRead;
 let taskTitle = 'Assigned task', essayRows = [{ id: 1, title: 'Initial essay' }];
+let taskSubmission = {};
 const calls = [];
 const host = { id: 7, first_name: 'Fixture', last_name: 'Counselor', username: 'mentor', role: 'counselor' };
 const slot = { id: 71, participant: 7, starts_at: new Date(realNow() + 86400000).toISOString(), duration_minutes: 45, available: true };
@@ -55,7 +59,8 @@ window.fetch = async (input, options = {}) => {
     return response({ layout: serverLayout });
   }
   if (path === '/students/') return response(page([profile]));
-  if (path === '/tasks/') return tasksBroken ? unavailable('Tasks unavailable') : response(page([{ id: 1, student: 901, title: taskTitle, status: 'todo', priority: 'medium' }]));
+  if (path === '/tasks/1/' && method === 'PATCH') { taskSubmission = JSON.parse(options.body); return response({ id: 1, ...taskSubmission }); }
+  if (path === '/tasks/') return tasksBroken ? unavailable('Tasks unavailable') : response(page([{ id: 1, student: 901, title: taskTitle, description: 'Prepare a written response for your counselor.', due_date: '2030-11-01', status: 'todo', priority: 'medium', is_self_assigned: false, ...taskSubmission }]));
   if (path === '/essays/') {
     const snapshot = page(essayRows);
     if (delayEssayRead) { delayEssayRead = false; await new Promise((resolve) => { releaseEssayRead = resolve; }); }
@@ -109,6 +114,25 @@ function EssayProbe() {
   </section>;
 }
 
+function SnapshotPreview() {
+  const choices = [{ id: 901, name: 'Aziza Karimova' }, { id: 902, name: 'Muhammadali Abdurahmonov' }];
+  const [selected, setSelected] = useState(choices[0]);
+  const [opened, setOpened] = useState(null);
+  const data = {
+    name: selected.name, study_goal: selected.id === 901 ? 'Economics' : 'Computer Science', target_countries: ['US', 'Canada'],
+    applications: { total: 3, submitted: 0, accepted: 0 }, achievements: 2, open_tasks: 4,
+    priorities: [
+      { id: 1, title: 'Recommendation letter request', due: '2026-10-12', late: true },
+      { id: 2, title: 'IELTS certificate upload', due: '2026-10-14', late: true },
+      { id: 3, title: 'Personal Statement 1 — draft', due: '2026-10-18', late: false },
+    ],
+  };
+  return <main style={{ maxWidth: 760, margin: '32px auto', padding: '0 16px', fontFamily: "'Roboto Variable', sans-serif" }}>
+    <SnapshotCard choices={choices} selected={selected} onSelect={setSelected} state={{ data, loading: false, error: '' }} onOpenStudent={setOpened} onRetry={noop} />
+    {opened && <p role="status">Opened student {opened}</p>}
+  </main>;
+}
+
 async function run() {
   await api.login('fixture', 'fixture-password');
   await check('Dashboard failure is an error, never completed work; Retry recovers', async () => {
@@ -144,6 +168,26 @@ async function run() {
     await waitFor(() => !document.querySelector('.compact-dashboard > p[role="status"]'));
     assert(serverLayout?.hidden.includes('programs'), 'Pending layout was not uploaded');
     assert(!document.querySelector('.dashboard-tile-programs'), 'Retry changed the chosen widgets');
+  });
+  await check('Tasks opens directly with Roadmap locked and sends the student response', async () => {
+    history.replaceState({}, '', '/tasks');
+    await mount(<App />);
+    await waitFor(() => document.querySelector('.record-list')?.textContent.includes(taskTitle));
+    assert(document.querySelector('.sidebar [aria-label="Roadmap — Coming soon"]')?.disabled, 'Roadmap was unlocked');
+    click('.record-list [aria-label="Edit Tasks"]');
+    await waitFor(() => document.querySelector('textarea[name="student_response"]'));
+    assert(!document.querySelector('.self-task-note'), 'Counselor task was described as a personal task');
+    const answer = document.querySelector('textarea[name="student_response"]');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(answer, 'Here is my completed assignment.');
+    answer.dispatchEvent(new Event('input', { bubbles: true }));
+    const status = document.querySelector('select[name="status"]');
+    status.value = 'submitted';
+    status.dispatchEvent(new Event('change', { bubbles: true }));
+    answer.form.requestSubmit();
+    await waitFor(() => taskSubmission.status === 'submitted');
+    assert(taskSubmission.student_response === 'Here is my completed assignment.', 'Response text was not submitted');
+    assert(!('title' in taskSubmission) && !('student' in taskSubmission), 'Student changed counselor-owned assignment fields');
+    await waitFor(() => document.querySelector('.record-list')?.textContent.includes('Here is my completed assignment.'));
   });
   await check('Essay Lab create invalidates real workspace state; text autosave stays local', async () => {
     await mount(<EssayProbe />);
@@ -212,10 +256,16 @@ async function run() {
   });
   // Keep the selected real component visible for viewport/theme checks.
   setLanguage(language);
-  if (params.get('preview') === 'dashboard') {
+  if (params.get('preview') === 'snapshot') {
+    await mount(<SnapshotPreview />);
+  } else if (params.get('preview') === 'dashboard') {
     tasksBroken = true;
     await mount(<App />);
     await waitFor(() => document.querySelector('.dashboard-tile-tasks [role="alert"]'));
+  } else if (params.get('preview') === 'tasks') {
+    history.replaceState({}, '', '/tasks');
+    await mount(<App />);
+    await waitFor(() => document.querySelector('.record-list')?.textContent.includes(taskTitle));
   } else if (params.get('preview') === 'booking') {
     slotsBroken = true;
     await mount(<BookingForm notify={noop} onClose={noop} onSaved={noop} />);

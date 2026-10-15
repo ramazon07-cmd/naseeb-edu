@@ -114,6 +114,7 @@ export const STUDENT_PAGE_KEYS = {
   dashboard: ['tasks', 'bookings', 'essays', 'team', 'programServices'],
   student_center: ['tasks', 'applications', 'essays', 'documents', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations'],
   find_personality: [],
+  tasks: ['tasks'],
   roadmap: ['roadmapMissions', 'tasks'],
   bookings: ['bookings'],
   messages: ['messageChannels'],

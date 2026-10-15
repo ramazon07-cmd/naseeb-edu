@@ -52,7 +52,7 @@ export const COUNSELOR_HOME_TRANSLATIONS = {
   'You’re all set!': ['Hammasi joyida!', 'Всё готово!'],
   'Nothing is waiting for you. Great work today.': ['Sizni hech narsa kutmayapti. Bugun ajoyib ishladingiz.', 'Вас ничего не ждёт. Отличная работа сегодня.'],
   'Back to dashboard': ['Bosh sahifaga qaytish', 'Вернуться на главную'],
-  'Student snapshot': ['O‘quvchi ko‘rinishi', 'Взгляд ученика'],
+  'Student snapshot': ['O‘quvchi xulosasi', 'Сводка об ученике'],
   'No students found.': ['O‘quvchi topilmadi.', 'Ученики не найдены.'],
   'As {name} sees it': ['{name} buni shunday ko‘radi', 'Как это видит {name}'],
   'Universities on list': ['Ro‘yxatdagi universitetlar', 'Университетов в списке'],

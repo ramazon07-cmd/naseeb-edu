@@ -4,7 +4,7 @@ import { RecordRow } from './ResourceSection';
 import { GoogleDocsActions, GoogleDocsRecordModal, TaskSubmissionModal, EssayDetailModal, DocumentPreviewModal, visibilityItemTitle, EvidencePreviewModal } from '../components/documents';
 import { AttachmentRow, documentAttachment } from '../components/files';
 import { t, tp, tx, formatPercentLocale, formatNumberLocale } from '../i18n';
-import { countTotal, readinessWithoutTasks } from '../lib/metrics';
+import { countTotal } from '../lib/metrics';
 import { Record, StudentAvatar, Stat, LevelProgress, ProfileCard, Detail, StudentTable } from '../components/records';
 import { dateText, gradeText, joinParts, money } from '../lib/format';
 import { label, fullName, initials } from '../lib/labels';
@@ -121,8 +121,8 @@ export function ParentInviteModal({ student, onClose, notify }) {
 // `profile`: the student's own editable profile cards, shown instead of the
 // read-only profile panels; activities, honors and achievements are then
 // summarised there too. `roadmapLocked`: the student cannot reach the roadmap
-// or its tasks yet, so tasks, mission progress, level, stars and the tasks' share
-// of readiness are left out (Applications are in the College list below).
+// yet, so mission progress, level and stars are left out. Tasks are independent
+// and remain part of application readiness.
 export function StudentOverview({ student, data: workspaceData, onBack, user, notify, profile = null, roadmapLocked = false }) {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedEssay, setSelectedEssay] = useState(null);
@@ -140,7 +140,7 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
   const tasks = studentItems(data, 'tasks', student.id);
   const applications = studentItems(data, 'applications', student.id);
   const essays = studentItems(data, 'essays', student.id);
-  const readiness = roadmapLocked ? readinessWithoutTasks(student) : { percent: student.progress_percent || 0, done: student.readiness_items_done ?? 0, total: student.readiness_items_total ?? 0 };
+  const readiness = { percent: student.progress_percent || 0, done: student.readiness_items_done ?? 0, total: student.readiness_items_total ?? 0 };
 
   return <div className="section-stack student-overview">
     <section className="student-overview-hero">

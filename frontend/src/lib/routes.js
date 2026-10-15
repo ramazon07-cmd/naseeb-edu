@@ -136,21 +136,21 @@ export function buildPath({ page, params = {} } = {}) {
 const OFF_PAGES = new Set(FEATURES.counselorRoadmapTemplates ? [] : ['counselor_roadmap']);
 const offered = (pages) => pages.filter((page) => !OFF_PAGES.has(page));
 
-export const COUNSELOR_NAV = ['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap'];
-const COUNSELOR_DIRECT_LINK_PAGES = ['students_joined', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates'];
+export const COUNSELOR_NAV = ['dashboard', 'students', 'tasks', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap'];
+const COUNSELOR_DIRECT_LINK_PAGES = ['students_joined', 'academics', 'portfolio', 'activities', 'recommendations', 'roadmap', 'applications', 'documents', 'certificates'];
 
 // Sidebar order per role.
 export function navigationFor(user) {
   // Health is for ops and above; staff accounts are managed by super admins only.
   if (isPlatformAdmin(user)) return offered(['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'admin_catalog', 'counselor_roadmap', 'admin_plans', ...(canManageWorkspaces(user) ? ['admin_health'] : []), ...(isSuperAdmin(user) ? ['admin_staff'] : []), 'admin_moderation', 'admin_audit', 'support']);
   if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings', 'messages'];
-  // The counselor sidebar is the "Counselor Dashboard" design: seven destinations.
+  // The counselor sidebar includes Tasks independently of the locked Roadmap.
   // Tasks, documents, roadmap, portfolio and the rest are reviewed in Review and
   // read per student in Student 360; the old flat pages stay reachable by link.
   if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'school_counselors', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'roadmap', 'store', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'roadmap', 'store', 'screen_time', 'support'];
 }
 
 // Pages a role sees in its navigation but cannot open yet: the sidebar shows

@@ -281,7 +281,7 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
     } finally {setSaving(false);}
   }
   function close() {upload.cancel();onClose();}
-  const selfTask = resource === 'tasks' && user.role === 'student';
+  const selfTask = resource === 'tasks' && user.role === 'student' && (!item || item.is_self_assigned);
   const [addTitle, editTitle] = selfTask ? ['Add personal task', 'Edit personal task'] : FORM_TITLES[resource] || ['Add', 'Edit'];
   return <Modal title={title || t(item ? editTitle : addTitle)} onClose={close}><form ref={formRef} className="form-grid" onSubmit={submit}>
     {!item && isTaskManager(user) && <StudentPicker required value={studentId} onChange={setStudentId} hint={t("Only students connected to your account are listed.")} />}

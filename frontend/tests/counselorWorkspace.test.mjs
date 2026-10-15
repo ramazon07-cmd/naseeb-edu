@@ -157,9 +157,9 @@ test('known server activity sentences are rewritten, unknown ones are kept', () 
 
 test('the counselor sidebar includes a locked Roadmap; other old flat pages stay reachable but unlisted', () => {
   const counselor = { id: 2, role: 'counselor' };
-  assert.deepEqual(COUNSELOR_NAV, ['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap']);
+  assert.deepEqual(COUNSELOR_NAV, ['dashboard', 'students', 'tasks', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap']);
   assert.deepEqual(navigationFor(counselor), [...COUNSELOR_NAV, 'support']);
-  for (const page of ['tasks', 'documents', 'portfolio', 'certificates', 'recommendations']) {
+  for (const page of ['documents', 'portfolio', 'certificates', 'recommendations']) {
     assert.ok(!navigationFor(counselor).includes(page), `${page} is not in the sidebar`);
     assert.ok(canOpenPage(page, counselor), `${page} still opens by link`);
   }

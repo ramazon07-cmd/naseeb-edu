@@ -6,6 +6,7 @@ import { buildPath, canOpenPage, parsePath } from '../src/lib/routes.js';
 
 test('each notice kind opens the page that holds its work', () => {
   const cases = [
+    [{ kind: 'task', target_id: 12 }, '/tasks'],
     [{ kind: 'document' }, '/student-center/documents'],
     [{ kind: 'deadline' }, '/applications'],
     [{ kind: 'essay', target_id: 42 }, '/essay-lab/essays/42'],
@@ -23,8 +24,7 @@ test('each notice kind opens the page that holds its work', () => {
     // The link survives a refresh: the path parses back to the same page.
     assert.equal(parsePath(path.split('?')[0]).page, target.page);
   }
-  // The roadmap is locked for students, so a task notice has no page to open (no dead click).
-  assert.equal(notificationTarget({ kind: 'task' }), null);
+  assert.ok(canOpenPage(notificationTarget({ kind: 'task' }).page, { role: 'student' }));
   assert.equal(notificationTarget({ kind: 'general' }), null);
   assert.equal(notificationTarget(null), null);
 });

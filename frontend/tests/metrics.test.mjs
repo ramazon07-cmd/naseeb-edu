@@ -104,7 +104,8 @@ test('the dashboard uses server counts and deep-links tasks', () => {
   assert.doesNotMatch(source, /data\.applications\.(filter|length)/);
   assert.doesNotMatch(source, /data\.(achievements|honors)\.length/);
   assert.doesNotMatch(source, /setPage\('roadmap'\)/);
-  assert.match(source, /setPage\('roadmap', \{ tab: 'tasks' \}\)/);
+  assert.match(source, /setPage\('tasks'\)/);
+  assert.doesNotMatch(source, /setPage\('roadmap', \{ tab: 'tasks' \}\)/);
   const roadmap = readFileSync(new URL('../src/pages/RoadmapPage.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(roadmap, /Math\.round\(completed/);
 });

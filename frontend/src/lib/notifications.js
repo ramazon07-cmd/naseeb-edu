@@ -2,7 +2,6 @@
 // Framework-free so the mapping is unit tested.
 
 import { sectionFromNotice } from './profileSections.js';
-import { isPageLocked } from './routes.js';
 import { isOpenTask } from './metrics.js';
 import { upcomingMeetings } from './meetings.js';
 import { USER_STORAGE, userStorageKey } from '../userStorage.js';
@@ -45,8 +44,8 @@ export function notificationTarget(notification) {
   const id = Number(notification?.target_id);
   const hasId = Number.isInteger(id) && id > 0;
   switch (notification?.kind) {
-    // Student notices only (staff use staffNotificationTarget): a locked roadmap has no page to open.
-    case 'task': return isPageLocked('roadmap', { role: 'student' }) ? null : { page: 'roadmap', params: { tab: 'tasks' } };
+    // Student task work lives on its own page, independently of roadmap access.
+    case 'task': return { page: 'tasks', params: {} };
     case 'document': return { page: 'student_center', params: { tab: 'documents' } };
     case 'deadline': return { page: 'applications', params: {} };
     case 'essay': return { page: 'essay_lab', params: hasId ? { essayId: id } : {} };

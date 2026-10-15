@@ -16,6 +16,7 @@ import { useAccountPhoto } from './records';
 const NAV = {
   dashboard: { label: 'Home', icon: LayoutDashboard },
   students: { label: 'Students', icon: Users, badge: 'students' },
+  tasks: { label: 'Tasks', icon: CheckSquare },
   review: { label: 'Review', icon: CheckSquare, badge: 'review' },
   essays: { label: 'Essays', icon: Pencil, badge: 'essays' },
   bookings: { label: 'Meetings', icon: Calendar, badge: 'meetings' },

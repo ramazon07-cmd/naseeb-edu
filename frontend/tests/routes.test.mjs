@@ -207,6 +207,16 @@ test('roadmap tabs: links open the requested tab, unknown ones the role default'
   assert.equal(parsePath('/roadmap/secret'), null);
 });
 
+test('students and counselors reach Tasks independently while Roadmap stays locked', () => {
+  for (const user of [student, counselor]) {
+    assert.ok(navigationFor(user).includes('tasks'));
+    assert.deepEqual(resolveRoute(parsePath('/tasks'), user), { page: 'tasks', params: {} });
+    assert.equal(isPageLocked('tasks', user), false);
+    assert.equal(canOpenPage('roadmap', user), false);
+  }
+  for (const user of [parent, organization]) assert.equal(canOpenPage('tasks', user), false);
+});
+
 test('profile answers are edited on Student Center cards; /profile leads there', () => {
   assert.deepEqual(resolveRoute(parsePath('/profile'), student), { page: 'student_center', params: {} });
   assert.equal(buildPath(resolveRoute(parsePath('/profile'), student)), '/student-center');

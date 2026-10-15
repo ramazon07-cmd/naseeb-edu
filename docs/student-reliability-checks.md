@@ -19,7 +19,7 @@ Start the local Vite server from `frontend/`:
 npm run dev -- --host 127.0.0.1 --port 5181
 ```
 
-Open [the browser checks](http://127.0.0.1:5181/tests/studentReliability.browser.html). Wait for **ALL BROWSER CHECKS PASSED**. This runs nine scenarios against the actual components, hooks and API client:
+Open [the browser checks](http://127.0.0.1:5181/tests/studentReliability.browser.html). Wait for **ALL BROWSER CHECKS PASSED**. This runs ten scenarios against the actual components, hooks and API client:
 
 1. Dashboard task failure shows an error, then Retry restores the assigned task.
 2. A changed task becomes visible on focus after the freshness window; rapid focus does not repeat the request.
@@ -30,10 +30,11 @@ Open [the browser checks](http://127.0.0.1:5181/tests/studentReliability.browser
 7. Meeting availability failure retains successfully loaded staff, shows an error and retries times.
 8. Rescheduling failure exposes Retry and recovers published times.
 9. Unread chat failure does not show “All caught up”; Retry works with the same summary counts.
+10. Opening `/tasks` directly while Roadmap is locked loads counselor assignments and submits a written response without changing counselor-owned fields.
 
 Only the fixture tab replaces fetch, supplies dummy principals/responses and controls the clock. Its fetch handler refuses requests outside the local `/api/` fixture. No backend server, real account, email or third-party service is needed. This test entry is excluded from the production build. Fixture session hints and the clock are cleaned up; the fixture URL is restored so reload starts the checks again.
 
-Optional query parameters select the final preview: `theme=light|dark`, `language=en|uz|ru`, and `preview=dashboard|booking|notifications` (default: Programs). Verify 320, 560, 820, 1100 and 1440 px, including error text wrapping, visible Retry and keyboard focus. Restore any temporary viewport override afterwards.
+Optional query parameters select the final preview: `theme=light|dark`, `language=en|uz|ru`, and `preview=dashboard|tasks|snapshot|booking|notifications` (default: Programs). The snapshot preview uses synthetic counselor/student data for checking the student picker, compact summary, and priority list. Verify 320, 560, 820, 1100 and 1440 px, including error text wrapping, visible Retry and keyboard focus. Restore any temporary viewport override afterwards.
 
 ## Boundary of the verification
 
