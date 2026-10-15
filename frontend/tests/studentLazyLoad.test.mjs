@@ -45,6 +45,15 @@ test('a student signing in to the dashboard fetches only what the dashboard show
   }
 });
 
+test('opening Tasks directly loads assignments without loading Roadmap', () => {
+  const s = session(student);
+  s.signIn();
+  assert.deepEqual(s.open('tasks'), ['tasks']);
+  assert.deepEqual(studentPageKeys('tasks'), ['students', 'tasks']);
+  assert.ok(!s.fetched.includes('roadmap-missions'));
+  assert.deepEqual(s.reloadAfter(['tasks']).sort(), ['students', 'tasks']);
+});
+
 test('each student page fetches its own collections the first time it opens, once', () => {
   const s = session(student);
   s.signIn();
@@ -156,7 +165,7 @@ test('the app starts students with the shell and loads pages as they open', () =
   assert.match(app, /await loadInitial\(current\)/);
   assert.match(app, /ensureLoaded\(user, studentPageKeys\(page\)\)/);
   // College Search and Applications block only on their primary data.
-  assert.match(app, /STUDENT_PRIMARY_KEYS = \{ college_search: \['students', 'applications'\], applications: \['students', 'applications'\] \}/);
+  assert.match(app, /primaryKeys = lazy \? studentPrimaryKeys\(page\)/);
 });
 
 for (const [page, dependencies] of [

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PROFILE_SECTIONS, answersPayload, listText, profileAnswers, readinessHints, sectionByKey, sectionFromNotice, sectionReview, validateSection } from '../src/lib/profileSections.js';
+import { PROFILE_SECTIONS, answerCardHidden, answersPayload, listText, profileAnswers, readinessHints, sectionByKey, sectionFromNotice, sectionReview, validateSection } from '../src/lib/profileSections.js';
 import { ONBOARDING_STEP_FIELDS } from '../src/lib/onboardingDraft.js';
 
 const profile = {
@@ -88,6 +88,16 @@ test('the readiness hint names the first missing items in the order given', () =
   assert.deepEqual(readinessHints(readiness).map((hint) => [hint.key, hint.section]), [['sat', 'tests'], ['activities', 'activities']]);
   assert.deepEqual(readinessHints({ percent: 100, missing: [] }), []);
   assert.deepEqual(readinessHints(undefined), []);
+});
+
+test('the Overview skips an empty activities or honors card unless it is being edited or sent back', () => {
+  const student = { application_profile: { activities: [], honors: [{ role: 'Winner', project: 'Olympiad' }] } };
+  assert.equal(answerCardHidden(student, 'activities', null), true);
+  assert.equal(answerCardHidden({}, 'honors', 'personal'), true);
+  assert.equal(answerCardHidden(student, 'honors', null), false, 'rows keep the card');
+  assert.equal(answerCardHidden(student, 'activities', 'activities'), false, 'the card being edited stays');
+  assert.equal(answerCardHidden({ ...student, section_reviews: { activities: { status: 'changes_requested', note: 'Add your hours.' } } }, 'activities', null), false, 'a counselor note is never hidden');
+  assert.equal(answerCardHidden({}, 'goal', null), false, 'other sections always show');
 });
 
 test('country lists read with a space after each comma', () => {

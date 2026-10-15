@@ -4,6 +4,7 @@ import { Award, Briefcase, FolderGit2, Mail, Sparkles, Trophy } from 'lucide-rea
 import { t } from '../i18n';
 import { StudentOverview } from './StudentsPage';
 import { ownStudent } from '../lib/labels';
+import { isPageLocked } from '../lib/routes';
 import { ProfileSections } from '../components/ProfileSections';
 import { AddMenu } from '../components/AddMenu';
 import { ResourceForm, ResourceSection } from './ResourceSection';
@@ -56,7 +57,7 @@ export function StudentCenterPage({ user, data, query, reload, notify, tab = 'ov
       <PortalTabs active={tab} onChange={onTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
       <DownloadCvButton refreshKey={cvKey} notify={notify} />
     </div>
-    {tab === 'overview' && <StudentOverview student={student} data={data} profile={<ProfileSections {...sections} editSection={editSection} onOpenRecords={() => onTab('activities')} />} />}
+    {tab === 'overview' && <StudentOverview student={student} data={data} roadmapLocked={isPageLocked('roadmap', user)} profile={<ProfileSections {...sections} editSection={editSection} onOpenRecords={() => { onTab('activities'); window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }} />} />}
     {tab === 'academics' && <div className="section-stack"><ProfileSections {...sections} sections={['academics', 'tests']} showReadiness={false} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}
     {TAB_RESOURCES[tab] && <ResourceTab key={tab} tab={tab} {...{ user, data, query, reload, notify }} />}
     {tab === 'documents' && <DocumentsPage {...{ user, data, query, reload, notify }} />}

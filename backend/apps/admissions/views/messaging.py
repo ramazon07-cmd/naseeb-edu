@@ -6,6 +6,7 @@ from django.db.models import (
     Count,
     Exists,
     F,
+    Max,
     OuterRef,
     Prefetch,
     Q,
@@ -67,7 +68,9 @@ def messaging_contacts_for(user):
             parent_links__parent=user,
             parent_links__status=ParentStudentLink.Status.ACTIVE,
             assigned_counselor__school_id=F('school_id'),
-            school__is_active=True,
+            school__is_active=True, user__is_active=True, deactivated_at__isnull=True,
+        ).filter(
+            Q(school__subscription__isnull=True) | Q(school__subscription__plan__features__parent_portal=True),
         ).values('assigned_counselor_id')
         return queryset.filter(id__in=counselor_ids, role=User.Role.COUNSELOR).order_by(*order)
     school_id = tenant_school_id(user)
@@ -130,6 +133,19 @@ def unread_channel_messages(user):
         deleted_at__isnull=True,
         channel__memberships__user=user,
     ).exclude(sender=user)
+
+
+def peer_last_read(user):
+    """The latest ``last_read_at`` among a channel's other members: the read receipt (one subquery, no N+1)."""
+    return Subquery(
+        ChannelMembership.objects.filter(channel=OuterRef('pk')).exclude(user=user).order_by()
+        .values('channel').annotate(latest=Max('last_read_at')).values('latest'),
+    )
+
+
+def advance_last_read(memberships, moment):
+    """Move ``last_read_at`` forward to ``moment``; a stale or repeated call never moves it back."""
+    return memberships.filter(Q(last_read_at__isnull=True) | Q(last_read_at__lt=moment)).update(last_read_at=moment)
 
 
 def attach_channel_summaries(channels, user):
@@ -212,7 +228,9 @@ class MessageChannelViewSet(viewsets.ModelViewSet):
     queryset = MessageChannel.objects.all()
 
     def get_queryset(self):
-        queryset = discoverable_channels_for(self.request.user)
+        queryset = discoverable_channels_for(self.request.user).annotate(
+            peer_last_read_at=peer_last_read(self.request.user),
+        )
         kind = self.request.query_params.get('kind')
         search = self.request.query_params.get('search')
         if kind:
@@ -476,8 +494,7 @@ class MessageChannelViewSet(viewsets.ModelViewSet):
         membership = channel.memberships.filter(user=request.user).first()
         if not membership:
             return Response({'detail': 'Join the channel before marking it read.'}, status=403)
-        membership.last_read_at = timezone.now()
-        membership.save(update_fields=['last_read_at'])
+        advance_last_read(channel.memberships.filter(pk=membership.pk), timezone.now())
         return Response({'status': 'read', 'channel': channel.id})
 
 
@@ -602,8 +619,8 @@ class ChannelMessageViewSet(viewsets.ModelViewSet):
             updated_at=timezone.now(),
         )
         # Writing in a conversation means having read it up to here.
-        ChannelMembership.objects.filter(channel_id=message.channel_id, user=self.request.user).update(
-            last_read_at=message.created_at,
+        advance_last_read(
+            ChannelMembership.objects.filter(channel_id=message.channel_id, user=self.request.user), message.created_at,
         )
 
     def perform_update(self, serializer):
@@ -728,6 +745,9 @@ class MessageReportViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self.queryset.filter(
             message__channel__in=moderatable_channels_for(self.request.user),
         )
+        school = int_param(self.request.query_params, 'school')
+        if school:
+            queryset = queryset.filter(message__channel__school_id=school)
         status_value = self.request.query_params.get('status')
         if status_value:
             valid_statuses = {choice for choice, _ in MessageReport.Status.choices}

@@ -469,7 +469,8 @@ class OnboardingSerializer(serializers.Serializer):
 
 
 # Profile readiness: the answers a counselor needs to plan with, in the order
-# the hint suggests them. (key, section, done?)
+# the hint suggests them. (key, section, done?) Activities and honors also count
+# the portfolio records, as the CV does (cv.py): Activity, and Honor or Achievement.
 PROFILE_READINESS_ITEMS = (
     ('photo', 'personal', lambda profile, answers: bool(profile.photo)),
     ('graduation_year', 'personal', lambda profile, answers: bool(answers.get('graduation_year'))),
@@ -481,13 +482,17 @@ PROFILE_READINESS_ITEMS = (
     ('countries', 'goal', lambda profile, answers: bool(profile.target_countries)),
     ('interests', 'goal', lambda profile, answers: bool(answers.get('interests'))),
     ('story', 'goal', lambda profile, answers: bool((answers.get('personal_story') or '').strip())),
-    ('activities', 'activities', lambda profile, answers: bool(answers.get('activities'))),
-    ('honors', 'honors', lambda profile, answers: bool(answers.get('honors'))),
+    ('activities', 'activities', lambda profile, answers: bool(answers.get('activities')) or profile.progress_stats.activities_total > 0),
+    ('honors', 'honors', lambda profile, answers: bool(answers.get('honors')) or profile.progress_stats.achievements_total > 0),
 )
 
 
 def profile_readiness(profile):
-    """Share of readiness items answered, plus the missing ones; reads only the profile row."""
+    """Share of readiness items answered, plus the missing ones.
+
+    Reads the profile row and its batch-loaded record counts (``progress_stats``,
+    which list views attach), so a page of students costs no extra query.
+    """
     answers = profile.application_profile or {}
     missing = [
         {'key': key, 'section': section}

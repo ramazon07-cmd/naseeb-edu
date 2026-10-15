@@ -1,14 +1,17 @@
 // Why the chat list shows an empty note: 'search' (nothing matches), 'none'
 // (no channels), or '' when there is something to show. The unsearched
-// Private tab always lists Saved Messages (the channel or its placeholder),
-// so it is never empty.
+// All and Private tabs always list Saved Messages (the channel or its
+// placeholder), so they are never empty.
 export function channelListEmpty(tab, search, channelCount) {
   if (channelCount > 0) return '';
   if (search) return 'search';
-  return tab === 'direct' ? '' : 'none';
+  return tab === 'direct' || tab === 'all' ? '' : 'none';
 }
 
-// A refreshed first page of folder `kind` merged into the loaded chats. Rows on
+// Whether a chat belongs in folder `kind`; 'all' holds every kind.
+export const inFolder = (kind, channel) => kind === 'all' || channel.kind === kind;
+
+// A refreshed first page of folder `kind` ('all' for every kind) merged into the loaded chats. Rows on
 // the page replace their old copies; other folders are untouched. With
 // `keepLoaded` (the same folder and search as the rows already listed), chats
 // loaded from later pages stay after it instead of vanishing. `fetched`: chats
@@ -17,11 +20,11 @@ export function channelListEmpty(tab, search, channelCount) {
 export function mergeChannelPage(current, kind, page, { keepLoaded = false, fetched = [], gone = [] } = {}) {
   const onPage = new Set(page.map((channel) => channel.id));
   const drop = new Set(gone);
-  const fresh = new Map(fetched.filter((channel) => channel.kind === kind && !onPage.has(channel.id)).map((channel) => [channel.id, channel]));
-  const later = keepLoaded ? current.filter((item) => item.kind === kind && !onPage.has(item.id)).map((item) => fresh.get(item.id) || item) : [];
+  const fresh = new Map(fetched.filter((channel) => inFolder(kind, channel) && !onPage.has(channel.id)).map((channel) => [channel.id, channel]));
+  const later = keepLoaded ? current.filter((item) => inFolder(kind, item) && !onPage.has(item.id)).map((item) => fresh.get(item.id) || item) : [];
   const laterIds = new Set(later.map((item) => item.id));
   return [
-    ...current.filter((item) => item.kind !== kind),
+    ...current.filter((item) => !inFolder(kind, item)),
     ...page,
     ...later,
     ...[...fresh.values()].filter((channel) => !laterIds.has(channel.id)),

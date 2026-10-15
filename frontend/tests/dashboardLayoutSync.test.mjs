@@ -35,7 +35,7 @@ test('the account layout replaces this browser\'s copy', async () => {
   const storage = memoryStorage({ [cacheKey(5)]: JSON.stringify(custom) });
   const api = server(other);
   const result = await syncDashboardLayout({ storage, userId: 5, ...api });
-  assert.deepEqual(result, { layout: other, online: true });
+  assert.deepEqual(result, { layout: other, online: true, synced: true });
   assert.deepEqual(readCachedLayout(storage, 5), other);
   assert.equal(api.calls.saved.length, 0);
 });
@@ -61,7 +61,7 @@ test('no layout anywhere gives the default and uploads nothing', async () => {
 test('offline: the cached layout is used and the account is asked again later', async () => {
   const storage = memoryStorage({ [cacheKey(5)]: JSON.stringify(custom) });
   const result = await syncDashboardLayout({ storage, userId: 5, ...server(other, { failFetch: true }) });
-  assert.deepEqual(result, { layout: custom, online: false });
+  assert.deepEqual(result, { layout: custom, online: false, synced: false });
 });
 
 test('saving caches first; an unsent save is uploaded at the next sync', async () => {

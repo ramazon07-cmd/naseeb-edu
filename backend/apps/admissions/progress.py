@@ -81,6 +81,8 @@ class ProgressStats:
     applications_done: int = 0
     applications_accepted: int = 0
     achievements_total: int = 0
+    # Activity records; profile readiness counts them with the onboarding activities.
+    activities_total: int = 0
     documents_total: int = 0
     documents_done: int = 0
     documents_pending: int = 0
@@ -192,7 +194,7 @@ def _student_filter(students):
 
 def load_progress_stats(students):
     """Return ``{student_id: ProgressStats}`` for a queryset or iterable of ids (6 queries)."""
-    from .models import Achievement, Application, Document, Honor, RecommendationLetter, RoadmapMission, Task
+    from .models import Achievement, Activity, Application, Document, Honor, RecommendationLetter, RoadmapMission, Task
 
     today = timezone.localdate()
     scope = _student_filter(students)
@@ -271,17 +273,23 @@ def load_progress_stats(students):
         item.recommendations_total = row['total']
         item.recommendations_done = row['done']
         item._next_letter = row['next_due'] or ''
-    # Achievements and honors are one "Achievements" count: one UNION ALL query.
+    # Achievements and honors are one "Achievements" count; activities ride in
+    # the same UNION ALL query as their own column. Columns match by position.
+    zero = Value(0, output_field=IntegerField())
     achievements = Achievement.objects.filter(**scope).order_by().values('student_id').annotate(
-        total=Count('id'), unverified=Count('id', filter=Q(verified=False, counselor_comment='')),
+        total=Count('id'), unverified=Count('id', filter=Q(verified=False, counselor_comment='')), activities=zero,
     )
     honors = Honor.objects.filter(**scope).order_by().values('student_id').annotate(
-        total=Count('id'), unverified=Value(0, output_field=IntegerField()),
+        total=Count('id'), unverified=zero, activities=zero,
     )
-    for row in achievements.union(honors, all=True):
+    activities = Activity.objects.filter(**scope).order_by().values('student_id').annotate(
+        total=zero, unverified=zero, activities=Count('id'),
+    )
+    for row in achievements.union(honors, activities, all=True):
         item = get(row['student_id'])
         item.achievements_total += row['total']
         item.achievements_unverified += row['unverified']
+        item.activities_total += row['activities']
     return stats
 
 

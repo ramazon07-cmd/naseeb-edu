@@ -100,6 +100,7 @@ from .messaging import (  # noqa: F401
     MessageReportSerializer,
 )
 from .parents import (  # noqa: F401
+    ParentLinkSectionsSerializer,
     ParentStudentLinkSerializer,
     ParentInviteSerializer,
 )

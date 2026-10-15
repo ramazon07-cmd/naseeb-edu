@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowRight, CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardCheck, Eye, EyeOff,
-  GraduationCap, ListChecks, MessageSquare, RefreshCw, Star, UserRound, UsersRound,
+  GraduationCap, ListChecks, MessageSquare, RefreshCw, UserRound, UsersRound,
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDateLocale, formatNumberLocale, formatPercentLocale, t, tp, tx } from '../i18n';
@@ -19,11 +19,11 @@ import { Modal } from './ui';
 
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
 
-export function HomeCard({ icon: Icon, title, hint, className = '', children, footer }) {
+export function HomeCard({ icon: Icon, title, hint, action, className = '', children, footer }) {
   return <section className={`cx-card ch-card ${className}`.trim()}>
     <header className="ch-card-head">
       <h2>{Icon && <Icon size={15} aria-hidden="true" />}{title}</h2>
-      {hint && <small>{hint}</small>}
+      {action || (hint && <small>{hint}</small>)}
     </header>
     <div className="ch-card-body">{children}</div>
     {footer && <footer className="ch-card-foot">{footer}</footer>}
@@ -337,7 +337,7 @@ export function AllSetOverlay({ onClose }) {
 }
 
 function SnapshotNumber({ value, label }) {
-  return <div><b>{formatNumberLocale(value)}</b><span>{label}</span></div>;
+  return <div><dt>{label}</dt><dd>{formatNumberLocale(value)}</dd></div>;
 }
 
 function SnapshotPicker({ choices, selected, onSelect }) {
@@ -404,44 +404,34 @@ function SnapshotPicker({ choices, selected, onSelect }) {
 export function SnapshotCard({ choices, selected, onSelect, state, onOpenStudent, onRetry }) {
   const data = state.data;
   const name = data?.name || selected?.name || '';
-  const missions = data?.roadmap;
-  const segments = missions && missions.total > 0 && missions.total <= 12 ? Array.from({ length: missions.total }, (_, index) => index < missions.approved) : null;
+  const goal = data ? joinParts(data.study_goal, data.target_countries?.map((country) => t(country)).join(', ')) : '';
   return <HomeCard icon={UserRound} title={t("Student snapshot")} className="ch-snapshot"
-    footer={selected && <button type="button" className="cx-btn" onClick={() => onOpenStudent(selected.id)}>{t("Open student")} <ArrowRight size={14} aria-hidden="true" /></button>}>
+    action={selected && <button type="button" className="ch-snap-open" onClick={() => onOpenStudent(selected.id)}>{t("Open student")} <ArrowRight size={14} aria-hidden="true" /></button>}>
     {choices.length || selected ? <>
       <div className="ch-snap-top">
         <CxAvatar name={name} />
-        <span className="ch-snap-who">
-          <SnapshotPicker choices={choices} selected={selected} onSelect={onSelect} />
-          {name && <span className="ch-snap-pill"><Eye size={13} aria-hidden="true" />{t('As {name} sees it', { name: firstName(name) })}</span>}
-        </span>
+        <div className="ch-snap-who">
+          <div className="ch-snap-name"><SnapshotPicker choices={choices} selected={selected} onSelect={onSelect} /><ChevronDown size={15} aria-hidden="true" /></div>
+          {goal && <p className="ch-snap-context"><GraduationCap size={15} aria-hidden="true" /><span>{goal}</span></p>}
+        </div>
       </div>
       {state.error ? <div className="ch-snap-error" role="alert"><p>{state.error}</p><button type="button" className="cx-btn" onClick={onRetry}><RefreshCw size={14} aria-hidden="true" /> {t("Retry")}</button></div>
         : !data ? <div className="ch-snap-loading" role="status" aria-label={t("Loading…")}><span className="ch-skeleton-block" /><span className="ch-skeleton-block" /></div>
           : <div className={`ch-snap-body${state.loading ? ' is-loading' : ''}`} aria-busy={state.loading || undefined}>
-            <div className="ch-snap-goal">
-              {data.study_goal && <><span className="ch-snap-k">{t("Study goal")}</span><b><GraduationCap size={18} aria-hidden="true" />{data.study_goal}</b></>}
-              {data.target_countries && <span className="ch-snap-countries">{data.target_countries.map((country) => t(country)).join(', ')}</span>}
-              <span className="ch-snap-level"><Star size={13} aria-hidden="true" />{tx`Level ${data.level}`}<span aria-hidden="true">·</span>{tp('{n} star|{n} stars', data.stars, { n: data.stars })}</span>
-            </div>
-            {missions && <div className="ch-snap-road">
-              <span className="ch-snap-k">{t("Roadmap")}</span>
-              <div className="ch-snap-road-row"><b>{formatPercentLocale(missions.percent)}</b><small>{missions.total ? `${formatNumberLocale(missions.approved)}/${formatNumberLocale(missions.total)} ${t("Missions approved")}` : t("No roadmap missions assigned yet.")}</small></div>
-              {segments ? <div className="ch-snap-segs" aria-hidden="true">{segments.map((done, index) => <i key={index} className={done ? 'on' : ''} />)}</div>
-                : missions.total > 0 && <CxProgress value={missions.percent} label={t("Roadmap progress")} />}
-            </div>}
-            <span className="ch-snap-k">{t("Applications")}</span>
-            <div className="ch-snap-apps">
+            <dl className="ch-snap-apps" aria-label={t("Applications")}>
               <SnapshotNumber value={data.applications.total} label={t("Universities on list")} />
               <SnapshotNumber value={data.applications.submitted} label={t("Submitted")} />
               <SnapshotNumber value={data.applications.accepted} label={t("Accepted")} />
               <SnapshotNumber value={data.achievements} label={t("Achievements")} />
-            </div>
-            <div className="ch-snap-prio-head"><span className="ch-snap-k">{t("Next priorities")}</span><small>{tp('{n} open task|{n} open tasks', data.open_tasks, { n: data.open_tasks })}</small></div>
+            </dl>
+            <div className="ch-snap-prio-head"><h3>{t("Next priorities")}</h3><small>{tp('{n} open task|{n} open tasks', data.open_tasks, { n: data.open_tasks })}</small></div>
             {data.priorities.length ? <ol className="ch-snap-prio">
-              {data.priorities.map((task, index) => <li key={task.id}>
-                <i>{String(index + 1).padStart(2, '0')}</i>
-                <span><b>{task.title}</b><small>{task.due ? (task.late ? <CxTag tone="late" small>{t("Late")}</CxTag> : dateText(inServerZone(task.due))) : t("No deadline")}</small></span>
+              {data.priorities.map((task) => <li key={task.id}>
+                <b>{task.title}</b>
+                <span className={`ch-snap-due${task.late ? ' is-late' : ''}`}>
+                  {task.late && <span>{t("Late")}</span>}
+                  {task.due ? <time dateTime={task.due}>{dayMonthText(inServerZone(task.due))}</time> : <span>{t("No deadline")}</span>}
+                </span>
               </li>)}
             </ol> : <p className="ch-empty">{t("All tasks are complete.")}</p>}
           </div>}

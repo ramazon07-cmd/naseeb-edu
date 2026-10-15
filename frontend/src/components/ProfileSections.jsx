@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Pencil } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Pencil } from 'lucide-react';
 import { api } from '../api';
 import { t, tx, formatPercentLocale } from '../i18n';
 import { fieldErrorsFrom } from '../lib/onboardingDraft';
-import { answersPayload, listText, profileAnswers, readinessHints, sectionByKey, sectionReview, validateSection } from '../lib/profileSections';
+import { answerCardHidden, answersPayload, listText, profileAnswers, readinessHints, sectionByKey, sectionReview, validateSection } from '../lib/profileSections';
 import { gradeText, joinParts, locationText } from '../lib/format';
 import { label } from '../lib/labels';
 import { Detail } from './records';
@@ -129,29 +129,23 @@ function SectionCard({ section, student, editing, locked, onEdit, onClose, reloa
 // Approved, Needs changes).
 function SectionReviewStatus({ review }) {
   const Icon = review.status === 'approved' ? CheckCircle2 : review.status === 'changes_requested' ? AlertCircle : null;
+  if (review.status === 'not_reviewed') return null;
   return <span className={`profile-status ${review.tone}`.trim()}>{Icon && <Icon size={14} aria-hidden="true" />} {t(review.label)}</span>;
 }
 
-// A counselor's verification is the only review state these records have:
-// verified reads as Approved, anything else is still waiting for them.
-function RecordStatus({ verified }) {
-  return verified
-    ? <span className="profile-status is-verified"><CheckCircle2 size={14} aria-hidden="true" /> {t('Approved')}</span>
-    : <span className="profile-status is-waiting">{t('Waiting for counselor')}</span>;
-}
+const RECORD_KINDS = { activities: 'Activity', honors: 'Honor', achievements: 'Achievement' };
 
+// The student's own entries: a plain list (title and kind), one link to the full tab.
 function RecordsCard({ items, onOpen }) {
-  const approved = items.filter((item) => item.verified).length;
   return <section className="panel profile-section-card" aria-labelledby="profile-section-records">
     <header>
       <h2 id="profile-section-records">{t('Activities & honors')}</h2>
-      {items.length > 0 && <span className="profile-section-count">{tx`${approved} of ${items.length} approved`}</span>}
+      <button type="button" className="text-button profile-section-open" onClick={onOpen}>{t('Open Activities & honors')} <ArrowRight size={15} aria-hidden="true" /></button>
     </header>
     <div className="panel-body">
       {items.length ? <ul className="profile-section-rows">{items.slice(0, 5).map((item) => <li key={`${item.kind}-${item.id}`}>
-        <b>{visibilityItemTitle(item)}</b><RecordStatus verified={item.verified} />
-      </li>)}</ul> : <p className="profile-section-empty">{t('Nothing added yet.')}</p>}
-      <button type="button" className="button quiet profile-section-open" onClick={onOpen}>{t('Open Activities & honors')}</button>
+        <b>{visibilityItemTitle(item)}</b><small>{t(RECORD_KINDS[item.kind])}</small>
+      </li>)}</ul> : <p className="profile-section-empty">{t('No entries in Activities & honors yet.')}</p>}
     </div>
   </section>;
 }
@@ -164,13 +158,11 @@ export function ProfileReadiness({ student, onEdit }) {
   const counselor = student.counselor_name ? tx`Counselor: ${student.counselor_name}` : null;
   return <section className="profile-readiness" aria-labelledby="profile-readiness-title">
     <div className="profile-readiness-head">
-      <div className="profile-readiness-name"><h2 id="profile-readiness-title">{t('Profile ready')}</h2><p>{joinParts(gradeText(student.grade), counselor)}</p></div>
+      <div className="profile-readiness-name"><h2 id="profile-readiness-title">{t('Profile completeness')}</h2><p>{joinParts(gradeText(student.grade), counselor)}</p></div>
       <strong className="profile-readiness-value">{formatPercentLocale(value)}</strong>
     </div>
     <div className="progress wide" role="progressbar" aria-labelledby="profile-readiness-title" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${value}%` }} /></div>
-    <p className="profile-readiness-hint">{hints.length
-      ? <>{t('To raise it:')} {hints.map((hint, i) => <button key={hint.key} type="button" className="text-button" onClick={() => onEdit(hint.section)}>{t(hint.text)}{i < hints.length - 1 ? ',' : '.'}</button>)}</>
-      : t('Every profile question is answered.')}</p>
+    {hints.length > 0 && <p className="profile-readiness-hint">{t('To raise it:')} {hints.map((hint, i) => <button key={hint.key} type="button" className="text-button" onClick={() => onEdit(hint.section)}>{t(hint.text)}{i < hints.length - 1 ? ',' : '.'}</button>)}</p>}
   </section>;
 }
 
@@ -184,16 +176,14 @@ export function ProfileSections({ student, data, reload, notify, sections = PROF
   if (!student) return null;
   const close = () => { setEditing(null); onEditDone(); };
   const records = onOpenRecords ? ['activities', 'honors', 'achievements'].flatMap((kind) => (data?.[kind] || []).filter((item) => Number(item.student) === Number(student.id)).map((item) => ({ ...item, kind }))) : [];
+  // Overview: the records card is the one place for activities and honors.
+  const hidden = (key) => Boolean(onOpenRecords) && answerCardHidden(student, key, editing);
   return <div className="profile-sections">
-    {showReadiness && <ProfileReadiness student={student} onEdit={(key) => { if (!editing && sections.includes(key)) setEditing(key); }} />}
+    {showReadiness && <ProfileReadiness student={student} onEdit={(key) => { if (editing) return; if (hidden(key)) onOpenRecords(); else if (sections.includes(key)) setEditing(key); }} />}
     <div className="profile-section-grid">
-      {sections.map((key) => <SectionCard key={key} section={sectionByKey(key)} student={student} editing={editing === key} locked={editing != null && editing !== key}
+      {sections.filter((key) => !hidden(key)).map((key) => <SectionCard key={key} section={sectionByKey(key)} student={student} editing={editing === key} locked={editing != null && editing !== key}
         onEdit={() => setEditing(key)} onClose={close} reload={reload} notify={notify} />)}
       {onOpenRecords && <RecordsCard items={records} onOpen={onOpenRecords} />}
     </div>
-    {onOpenRecords && records.length > 0 && <p className="profile-status-legend"><b>{t('What the labels mean')}</b>
-      <span><RecordStatus verified /> {t('your counselor checked it')}</span>
-      <span><RecordStatus verified={false} /> {t('sent, not checked yet. Editing an approved entry sends it back for checking.')}</span>
-    </p>}
   </div>;
 }

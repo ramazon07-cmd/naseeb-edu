@@ -5,7 +5,6 @@ import { isLockedWidget, moveDashboardWidget, normalizeDashboardPreferences, set
 
 const descriptions = {
   screen_time: 'Your daily activity over the last 7 or 30 days.',
-  roadmap: 'Your progress through the roadmap missions.',
   journey: 'Your study goal, level, and overall progress.',
   tasks: 'Assignments and upcoming deadlines.',
   meetings: 'Your upcoming counselor meetings.',

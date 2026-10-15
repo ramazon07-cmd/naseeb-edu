@@ -46,7 +46,7 @@ function staffResources(now) {
 
 export function resourcesFor(user, now = new Date()) {
   const role = workspaceRole(user);
-  if (role === 'parent') return [['parentPortal', 'parent-portal']];
+  if (role === 'parent') return [['parentPortal', 'parent-portal'], ['messageChannels', 'message-channels']];
   if (role === 'admin') return ADMIN_RESOURCES;
   if (!['organization', 'teacher', 'counselor'].includes(role)) return [...STUDENT_RESOURCES, ...PORTAL_RESOURCES];
   const staff = staffResources(now);
@@ -114,6 +114,7 @@ export const STUDENT_PAGE_KEYS = {
   dashboard: ['tasks', 'bookings', 'essays', 'team', 'programServices'],
   student_center: ['tasks', 'applications', 'essays', 'documents', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations'],
   find_personality: [],
+  tasks: ['tasks'],
   roadmap: ['roadmapMissions', 'tasks'],
   bookings: ['bookings'],
   messages: ['messageChannels'],

@@ -12,6 +12,7 @@ from .views import (
     ApplicationViewSet,
     BookingViewSet,
     CatalogOpportunityProgramViewSet,
+    CatalogStoreItemViewSet,
     CatalogProgramViewSet,
     CatalogScholarshipViewSet,
     CatalogUniversityViewSet,
@@ -64,6 +65,7 @@ router.register('catalog/universities', CatalogUniversityViewSet, basename='cata
 router.register('catalog/programs', CatalogProgramViewSet, basename='catalog-programs')
 router.register('catalog/scholarships', CatalogScholarshipViewSet, basename='catalog-scholarships')
 router.register('catalog/opportunity-programs', CatalogOpportunityProgramViewSet, basename='catalog-opportunity-programs')
+router.register('catalog/store-items', CatalogStoreItemViewSet, basename='catalog-store-items')
 router.register('applications', ApplicationViewSet, basename='applications')
 router.register('tasks', TaskViewSet, basename='tasks')
 router.register('documents', DocumentViewSet, basename='documents')

@@ -394,8 +394,19 @@
   transition: transform 220ms var(--ease-out-strong);
 }
 
+.dashboard-link:disabled,
+.dashboard-card-list > button:disabled {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dashboard-link:disabled > svg {
+  transform: none;
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .dashboard-link:hover > svg {
+  .dashboard-link:hover:not(:disabled) > svg {
     transform: translateX(3px);
   }
 }
@@ -1443,7 +1454,7 @@
   }
 
   .compact-dashboard button:active:not(:disabled),
-  .dashboard-link:hover > svg {
+  .dashboard-link:hover:not(:disabled) > svg {
     transform: none;
   }
 }

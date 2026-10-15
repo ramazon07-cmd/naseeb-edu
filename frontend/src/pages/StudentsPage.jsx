@@ -58,8 +58,38 @@ export function StudentEssayList({ items, onView }) {
   return <Panel title={t("Essays & Google Docs")} className="print-private" ><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={joinParts(tx`Version ${essay.version}`, essay.university_name || t("General essay"))} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={NO_SHARED_ESSAYS} />}</div></Panel>;
 }
 
-export function StudentDocumentList({ title, items, onPreview, notify }) {
-  return <Panel title={title} ><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={label(doc.document_type)} description={doc.counselor_comment} badge={doc.status} attachment={<AttachmentRow attachment={documentAttachment(doc)} onPreview={() => onPreview(doc)} notify={notify} />} actions={<GoogleDocsActions item={doc} onPreview={doc.has_file ? undefined : () => onPreview(doc)} />} />)}{!items.length && <Empty />}</div></Panel>;
+export function StudentDocumentList({ title, items, onPreview, notify, hideStatus = false }) {
+  return <Panel title={title} ><div className="record-list">{items.map((doc) => <Record key={doc.id} title={doc.title} meta={label(doc.document_type)} description={doc.counselor_comment} badge={hideStatus ? undefined : doc.status} attachment={<AttachmentRow attachment={documentAttachment(doc)} onPreview={() => onPreview(doc)} notify={notify} />} actions={<GoogleDocsActions item={doc} onPreview={doc.has_file ? undefined : () => onPreview(doc)} />} />)}{!items.length && <Empty />}</div></Panel>;
+}
+
+// No workspace plan (older schools) keeps full access, as on the server.
+const parentPortalInPlan = (user) => !user?.workspace || Boolean(user.workspace.features?.parent_portal);
+
+const LINK_SECTIONS = [['can_view_applications', 'Applications'], ['can_view_documents', 'Document status'], ['can_view_meetings', 'Meetings']];
+
+// Parents already linked to this student: what each one sees changes without disconnecting them.
+function ParentLinkSections({ student, notify }) {
+  const [links, setLinks] = useState([]);
+  const [error, setError] = useState('');
+  const [savingId, setSavingId] = useState(null);
+  useEffect(() => {
+    let active = true;
+    api.parentLinks(student.id).then((items) => {if (active) setLinks(items.filter((item) => item.status !== 'revoked'));}).catch((err) => {if (active) setError(err.message);});
+    return () => {active = false;};
+  }, [student.id]);
+  async function save(event, link) {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    setSavingId(link.id);
+    try {
+      const updated = await api.updateParentLinkSections(link.id, Object.fromEntries(LINK_SECTIONS.map(([name]) => [name, values.get(name) === 'on'])));
+      setLinks((items) => items.map((item) => item.id === link.id ? updated : item));
+      notify(t("Parent access updated."));
+    } catch (err) {notify(err.message, 'error');} finally {setSavingId(null);}
+  }
+  if (error) return <div className="alert error" role="alert">{error}</div>;
+  if (!links.length) return null;
+  return <section className="parent-link-sections" aria-label={t("Family access")}>{links.map((link) => <form key={link.id} className="parent-permission-fields parent-link-row" onSubmit={(event) => save(event, link)}><span>{joinParts(link.parent_name, label(link.relationship), link.status === 'pending' && label('pending'))}</span>{LINK_SECTIONS.map(([name, title]) => <CheckboxControl key={name} name={name} defaultChecked={link[name]}>{t(title)}</CheckboxControl>)}<button className="button quiet small" disabled={savingId === link.id} aria-busy={savingId === link.id}>{t("Save")}</button></form>)}</section>;
 }
 
 export function ParentInviteModal({ student, onClose, notify }) {
@@ -85,13 +115,15 @@ export function ParentInviteModal({ student, onClose, notify }) {
       onClose();
     } catch (err) {notify(err.message, 'error');} finally {setSaving(false);}
   }
-  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" placeholder={t("e.g. Gulnora")} /></Field><Field label={t("Parent last name")}><input name="last_name" placeholder={t("e.g. Karimova")} /></Field><Field label={t("Parent email")}><input name="email" type="email" placeholder={t("e.g. name@example.com")} required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Used only if this email has no parent account yet; an existing parent keeps their own password.")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
+  return <Modal title={tx`Invite parent · ${fullName(student.user_detail)}`} onClose={onClose}><ParentLinkSections student={student} notify={notify} /><form className="form-grid" onSubmit={submit}><Field label={t("Parent first name")}><input name="first_name" placeholder={t("e.g. Gulnora")} /></Field><Field label={t("Parent last name")}><input name="last_name" placeholder={t("e.g. Karimova")} /></Field><Field label={t("Parent email")}><input name="email" type="email" placeholder={t("e.g. name@example.com")} required /></Field><Field label={t("Relationship")}><select name="relationship" defaultValue="guardian"><option value="mother">{t("Mother")}</option><option value="father">{t("Father")}</option><option value="guardian">{t("Guardian")}</option><option value="other">{t("Other")}</option></select></Field><Field label={t("Temporary password")} hint={t("Used only if this email has no parent account yet; an existing parent keeps their own password.")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><div className="parent-permission-fields form-wide"><span>{t("Shared read-only sections")}</span><CheckboxControl name="can_view_applications" defaultChecked>{t("Applications")}</CheckboxControl><CheckboxControl name="can_view_documents" defaultChecked>{t("Document status")}</CheckboxControl><CheckboxControl name="can_view_meetings" defaultChecked>{t("Meetings")}</CheckboxControl></div><p className="form-note form-wide"><Fingerprint size={16} /> {t("The invitation starts as pending. No child data is shown until the parent signs in and accepts it. Essays, messages, counselor notes, responses, files, and credentials are never included.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating invitation…") : t("Invite parent")}</button></div></form></Modal>;
 }
 
 // `profile`: the student's own editable profile cards, shown instead of the
 // read-only profile panels; activities, honors and achievements are then
-// summarised there too.
-export function StudentOverview({ student, data: workspaceData, onBack, user, notify, profile = null }) {
+// summarised there too. `roadmapLocked`: the student cannot reach the roadmap
+// yet, so mission progress, level and stars are left out. Tasks are independent
+// and remain part of application readiness.
+export function StudentOverview({ student, data: workspaceData, onBack, user, notify, profile = null, roadmapLocked = false }) {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedEssay, setSelectedEssay] = useState(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
@@ -108,30 +140,31 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
   const tasks = studentItems(data, 'tasks', student.id);
   const applications = studentItems(data, 'applications', student.id);
   const essays = studentItems(data, 'essays', student.id);
+  const readiness = { percent: student.progress_percent || 0, done: student.readiness_items_done ?? 0, total: student.readiness_items_total ?? 0 };
 
   return <div className="section-stack student-overview">
     <section className="student-overview-hero">
-      <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div><span className="eyebrow">{t("STUDENT 360° PROFILE")}</span><h2>{fullName(student.user_detail)}</h2><p>{joinParts(student.user_detail?.email, student.school_name || t("No school assigned"))}</p></div></div></div>
-      <div className="student-overview-actions">{(isCounselor(user) || user?.role === 'organization') && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{isCounselor(user) && <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button>}{canDownloadCv(user) && <DownloadCvButton studentId={student.id} className="button quiet" notify={notify} />}</div>
-      <div className="overview-progress"><strong>{formatPercentLocale(student.progress_percent || 0)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${student.progress_percent || 0}%` }} /></div><small>{tp('{done} of {n} item finished|{done} of {n} items finished', student.readiness_items_total ?? 0, { done: student.readiness_items_done ?? 0, n: student.readiness_items_total ?? 0 })}</small></div>
+      <div className="student-overview-title">{onBack && <button className="button quiet student-overview-back" onClick={onBack}>{t("← Students")}</button>}<div className="profile-identity"><StudentAvatar student={student} className="large" /><div>{!profile && <span className="eyebrow">{t("STUDENT 360° PROFILE")}</span>}<h2>{fullName(student.user_detail)}</h2><p>{joinParts(student.user_detail?.email, student.school_name || t("No school assigned"))}</p></div></div></div>
+      <div className="student-overview-actions">{(isCounselor(user) || user?.role === 'organization') && <button className="button quiet" onClick={() => setCredentialOpen(true)}><Fingerprint size={16} /> {t('Reset login')}</button>}{isCounselor(user) && (parentPortalInPlan(user) ? <button className="button quiet" onClick={() => setParentInviteOpen(true)}><UsersRound size={16} /> {t("Invite parent")}</button> : <><button className="button quiet" disabled aria-describedby="parent-invite-plan-note"><UsersRound size={16} /> {t("Invite parent")}</button><small id="parent-invite-plan-note">{t("The parent portal is not included in your school’s plan.")}</small></>)}{canDownloadCv(user) && <DownloadCvButton studentId={student.id} className="button quiet" notify={notify} />}</div>
+      <div className="overview-progress"><strong>{formatPercentLocale(readiness.percent)}</strong><span>{t("Application readiness")}</span><div className="progress wide"><span style={{ width: `${readiness.percent}%` }} /></div><small>{tp('{done} of {n} item finished|{done} of {n} items finished', readiness.total, { done: readiness.done, n: readiness.total })}</small></div>
     </section>
     {profile}
-    <div className="stat-grid"><Stat label={t("Level")} value={formatNumberLocale(student.level ?? 1)} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : (student.level ?? 1) > 1 ? t("Approved by staff") : t("Starting level")} /><Stat label={t("Stars")} value={formatNumberLocale(student.roadmap_stars ?? 0)} note={t("One per approved roadmap mission")} /><Stat label={t("Assigned tasks")} value={formatNumberLocale(countTotal(student.task_status_counts))} /><Stat label={t("Applications")} value={formatNumberLocale(applications.length)} /></div>
-    <LevelProgress student={student} />
+    {!roadmapLocked && <div className="stat-grid"><Stat label={t("Level")} value={formatNumberLocale(student.level ?? 1)} note={student.level_up_pending ? tx`Level ${student.eligible_level} approval pending` : (student.level ?? 1) > 1 ? t("Approved by staff") : t("Starting level")} /><Stat label={t("Stars")} value={formatNumberLocale(student.roadmap_stars ?? 0)} note={t("One per approved roadmap mission")} /><Stat label={t("Assigned tasks")} value={formatNumberLocale(countTotal(student.task_status_counts))} /><Stat label={t("Applications")} value={formatNumberLocale(applications.length)} /></div>}
+    {!roadmapLocked && <LevelProgress student={student} />}
     {studentRecords.loading && <div className="data-state refreshing" role="status"><span>{t("Loading this student’s records…")}</span></div>}
     {studentRecords.error && <div className="alert error" role="alert">{studentRecords.error}</div>}
     {!profile && <>
       <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} className="print-private" ><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget")} value={student.budget_usd == null ? null : money(student.budget_usd)} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
       <Panel title={t("Guardian")} className="print-private" ><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
     </>}
-    <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} /></div>
+    <div className="overview-grid student-workspace-grid">{!roadmapLocked && <StudentTaskList items={tasks} onView={setSelectedTask} />}<StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} /></div>
     <div className="overview-grid">
       {STUDENT_RESOURCE_GROUPS.filter(([, resource]) => !profile || !PROFILE_SUMMARY_RESOURCES.includes(resource)).map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
-      <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} />
+      <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} />
     </div>
     {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} notify={notify} />}
     {selectedEssay && <EssayDetailModal essay={selectedEssay} onClose={() => setSelectedEssay(null)} />}
-    {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} />}
+    {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} showStatus={!profile} />}
     {parentInviteOpen && <ParentInviteModal student={student} onClose={() => setParentInviteOpen(false)} notify={notify} />}
     {credentialOpen && <TemporaryCredentialModal account={student.user_detail} onClose={() => setCredentialOpen(false)} notify={notify} />}
   </div>;
@@ -237,7 +270,8 @@ export function StudentAssignmentModal({ user, data, onClose, onSaved, notify })
 export function StudentsPage({ user, data, query, reload, notify, studentId = null, onStudent = () => {} }) {
   const [school, setSchool] = useState('');
   const [grade, setGrade] = useState('');
-  const students = usePagedList('students', { search: query, filters: { school, grade }, ordering: 'name', pageSize: 50 });
+  const [unassigned, setUnassigned] = useState('');
+  const students = usePagedList('students', { search: query, filters: { school, grade, unassigned }, ordering: 'name', pageSize: 50 });
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
@@ -310,6 +344,7 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
       <div className="paged-list-filters">
         {isPlatformAdmin(user) && <SchoolPicker label="School" value={school} onChange={setSchool} emptyOption={t("All schools")} />}
         <label><span>{t("Grade")}</span><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">{t("All grades")}</option>{['8', '9', '10', '11', 'gap'].map((value) => <option key={value} value={value}>{value === 'gap' ? t("Gap year") : value}</option>)}</select></label>
+        {isPlatformAdmin(user) && <label><span>{t("Counselor")}</span><select value={unassigned} onChange={(event) => setUnassigned(event.target.value)}><option value="">{t("Any counselor")}</option><option value="true">{t("No counselor assigned")}</option></select></label>}
       </div>
       {students.loading && !students.items.length ? <PageSkeleton /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
       <PagedListError list={students} />

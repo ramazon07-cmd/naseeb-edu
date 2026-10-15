@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { channelListEmpty, mergeChannelPage } from '../src/lib/channelList.js';
 
-test('the unsearched Private tab never claims to be empty', () => {
+test('the unsearched All and Private tabs never claim to be empty', () => {
   // Saved Messages (and the counselor thread) are listed there even before any chat exists.
   assert.equal(channelListEmpty('direct', '', 0), '');
+  assert.equal(channelListEmpty('all', '', 0), '');
+  assert.equal(channelListEmpty('all', 'anna', 0), 'search');
 });
 
 test('other tabs and searches explain an empty list', () => {
@@ -43,4 +45,12 @@ test('the open chat off page 1 is updated or added, and dropped only when gone',
   assert.deepEqual(left.map((item) => item.id), [1, 2]);
   const otherFolder = mergeChannelPage(current, 'group', [], { fetched: [chat(7, 'direct')] });
   assert.ok(!otherFolder.some((item) => item.id === 7), "a fetched chat of another folder is not added");
+});
+
+test('the All folder holds every kind: its page replaces or keeps every loaded chat', () => {
+  const current = [chat(1), chat(9, 'group'), chat(12, 'community'), chat(40, 'discussion')];
+  const searched = mergeChannelPage(current, 'all', [chat(9, 'group'), chat(12, 'community')]);
+  assert.deepEqual(searched.map((item) => item.id), [9, 12]);
+  const refreshed = mergeChannelPage(current, 'all', [chat(12, 'community', { unread_count: 2 })], { keepLoaded: true, fetched: [chat(50, 'discussion')] });
+  assert.deepEqual(refreshed.map((item) => item.id), [12, 1, 9, 40, 50]);
 });

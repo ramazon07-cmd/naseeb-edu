@@ -8,7 +8,7 @@ const { studentReasons, needsAttention, isOnTrack, isQuiet, urgency } = await im
 const { mergeReviewQueue, REVIEW_SOURCES } = await import('../src/lib/reviewQueue.js');
 const { meetingsThisWeek } = await import('../src/lib/meetings.js');
 const { activityText } = await import('../src/lib/activityText.js');
-const { COUNSELOR_NAV, navigationFor, reachablePages, canOpenPage, parsePath, resolveRoute } = await import('../src/lib/routes.js');
+const { COUNSELOR_NAV, navigationFor, reachablePages, canOpenPage, isPageLocked, parsePath, resolveRoute } = await import('../src/lib/routes.js');
 
 const now = new Date('2026-09-25T12:00:00Z');
 
@@ -155,11 +155,11 @@ test('known server activity sentences are rewritten, unknown ones are kept', () 
   assert.equal(activityText('Student completed their profile'), 'Completed their profile');
 });
 
-test('the counselor sidebar is the design\'s six pages; the old flat pages stay reachable but unlisted', () => {
+test('the counselor sidebar includes a locked Roadmap; other old flat pages stay reachable but unlisted', () => {
   const counselor = { id: 2, role: 'counselor' };
-  assert.deepEqual(COUNSELOR_NAV, ['dashboard', 'students', 'review', 'essays', 'bookings', 'messages']);
+  assert.deepEqual(COUNSELOR_NAV, ['dashboard', 'students', 'tasks', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap']);
   assert.deepEqual(navigationFor(counselor), [...COUNSELOR_NAV, 'support']);
-  for (const page of ['tasks', 'documents', 'roadmap', 'portfolio', 'certificates', 'recommendations']) {
+  for (const page of ['documents', 'portfolio', 'certificates', 'recommendations']) {
     assert.ok(!navigationFor(counselor).includes(page), `${page} is not in the sidebar`);
     assert.ok(canOpenPage(page, counselor), `${page} still opens by link`);
   }
@@ -168,11 +168,13 @@ test('the counselor sidebar is the design\'s six pages; the old flat pages stay 
   assert.ok(!reachablePages({ id: 4, role: 'organization' }).has('certificates'));
 });
 
-test('roadmap templates are switched off: in no sidebar, and /counselor-roadmap opens Home', () => {
+test('roadmap templates stay locked for counselors and hidden from admins', () => {
   const counselor = { id: 2, role: 'counselor' };
   const admin = { id: 1, role: 'admin' };
+  assert.ok(navigationFor(counselor).includes('counselor_roadmap'));
+  assert.equal(isPageLocked('counselor_roadmap', counselor), true);
+  assert.ok(!navigationFor(admin).includes('counselor_roadmap'));
   for (const user of [counselor, admin]) {
-    assert.ok(!navigationFor(user).includes('counselor_roadmap'), user.id);
     assert.equal(canOpenPage('counselor_roadmap', user), false, user.id);
   }
   assert.deepEqual(resolveRoute(parsePath('/counselor-roadmap'), counselor), { page: 'dashboard', params: {} });

@@ -382,7 +382,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
 const TABS = (student, records, letters) => [
   ['overview', 'Overview'],
   ['review', 'To review', student.to_review_total ?? 0],
-  ['roadmap', 'Roadmap'],
+  ['tasks', 'Tasks', (records.tasks || []).length],
   ['documents', 'Documents', (records.documents || []).length],
   ['essays', 'Essays', (records.essays || []).length],
   ['applications', 'Applications', (records.applications || []).length],
@@ -711,10 +711,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
       <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>
     </CxAccountActions>
     {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={() => reload({ endpoints: REVIEW_ENDPOINTS, workspace: true })} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}
-    {tab === 'roadmap' && <div className="cx-two">
-      <RecordCard title={t("Roadmap missions")} count={(records['roadmap-missions'] || []).length} empty={t("No roadmap missions assigned yet.")}>
-        {(records['roadmap-missions'] || []).map((mission) => <RecordRow key={mission.id} title={mission.title} meta={joinParts(tx`Level ${mission.level}`, mission.due_date && tx`Due ${dateText(mission.due_date)}`)} status={mission.status} />)}
-      </RecordCard>
+    {tab === 'tasks' && <div className="section-stack">
       <RecordCard title={t("Tasks")} count={(records.tasks || []).length} empty={t("No assigned tasks found.")}>
         {(records.tasks || []).map((item) => <RecordRow key={item.id} title={item.title} meta={joinParts(item.due_date && tx`Due ${dateText(item.due_date)}`, label(item.priority))} status={item.status === 'todo' && item.due_date < localDateKey() ? 'late' : item.status} onClick={item.status === 'submitted' || item.status === 'approved' ? () => setTask(item) : undefined} />)}
       </RecordCard>

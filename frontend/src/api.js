@@ -4,8 +4,9 @@ import {
   migrateLegacyTokens,
 } from './authTokens'
 import { readPayload } from './lib/payload.js'
-import { UNTRACKED_ENDPOINTS, createMutationTracker } from './lib/reloadPlan'
+import { UNTRACKED_ENDPOINTS, createMutationTracker, essayWorkspaceKeys } from './lib/reloadPlan'
 import { errorPayloadMessage } from './lib/apiErrors'
+import { WORKSPACE_RESOURCES_CHANGED } from './lib/workspaceFreshness.js'
 import { firstListPath } from './lib/listPath.js'
 import { requestRetryDelay, retryAfterMs } from './lib/backoff.js'
 import { protectedFileUrl, readProtectedFile } from './lib/protectedFile.js'
@@ -23,6 +24,11 @@ const REQUEST_TIMEOUT_MS = 15_000
 const session = createSessionStore(() => window.localStorage)
 // Successful writes are recorded so the app can reload only what changed.
 const mutations = createMutationTracker(UNTRACKED_ENDPOINTS)
+function recordMutation(path) {
+  mutations.note(path)
+  const keys = essayWorkspaceKeys(path)
+  if (keys.length) window.dispatchEvent(new CustomEvent(WORKSPACE_RESOURCES_CHANGED, { detail: keys }))
+}
 
 export class ApiError extends Error {
   // retryAfter: ms the server asked to wait (a 429's Retry-After), or null.
@@ -344,7 +350,7 @@ export async function request(path, options = {}, retry = true, unwrapPagination
   if (etag !== undefined && response.status === 304) return { notModified: true }
   const payload = await parseResponse(response)
   if (!response.ok) throw new ApiError(errorMessage(payload), response.status, payload, retryAfterMs(response.headers.get('Retry-After')))
-  if (fetchOptions.method && fetchOptions.method !== 'GET') mutations.note(path)
+  if (fetchOptions.method && fetchOptions.method !== 'GET') recordMutation(path)
   const data = unwrapPagination ? payload?.results ?? payload : payload
   return etag !== undefined ? { notModified: false, etag: response.headers.get('ETag'), data } : data
 }
@@ -386,7 +392,7 @@ async function uploadRequest(method, path, body, { onProgress, signal } = {}, re
     try { payload = JSON.parse(response.text) } catch { payload = response.text }
   }
   if (response.status < 200 || response.status >= 300) throw new ApiError(errorMessage(payload), response.status, payload)
-  mutations.note(path)
+  recordMutation(path)
   return payload
 }
 
@@ -635,7 +641,8 @@ export const api = {
     body: JSON.stringify({ school }),
   }),
   createCounselor: (payload) => request('/users/accounts/create-counselor/', { method: 'POST', body: JSON.stringify(payload) }),
-  deactivateAccount: (id) => request(`/users/accounts/${id}/deactivate/`, { method: 'POST' }),
+  // `handover`: a counselor's active students, { students: 'reassign', reassign_to } or { students: 'unassign' }.
+  deactivateAccount: (id, handover) => request(`/users/accounts/${id}/deactivate/`, { method: 'POST', ...(handover ? { body: JSON.stringify(handover) } : {}) }),
   plans: () => request('/users/plans/'),
   adminSummary: () => request('/admin/summary/'),
   adminAiUsage: () => request('/admin/ai-usage/'),
@@ -664,6 +671,8 @@ export const api = {
   }),
   acceptParentInvite: (id) => request(`/parent-links/${id}/accept/`, { method: 'POST' }),
   revokeParentLink: (id) => request(`/parent-links/${id}/revoke/`, { method: 'POST' }),
+  parentLinks: (studentId) => listAll('parent-links', `?student=${encodeURIComponent(studentId)}`),
+  updateParentLinkSections: (id, sections) => request(`/parent-links/${id}/sections/`, { method: 'POST', body: JSON.stringify(sections) }),
   // Profile Assessment. Attempts are append-only: a retake is a new row, so
   // there is deliberately no update or delete here.
   challengeAttempts: (studentId) => listAll('challenge-attempts', studentId ? `?student=${encodeURIComponent(studentId)}` : ''),

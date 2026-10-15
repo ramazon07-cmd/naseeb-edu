@@ -131,6 +131,18 @@ export const ASSESSMENT_TRANSLATIONS = {
     "Tanlov saqlanmoqda…",
     "Сохранение выбора…"
   ],
+  "Your study direction": [
+    "Sizning ta’lim yo‘nalishingiz",
+    "Ваше направление обучения"
+  ],
+  "Core school subjects": [
+    "Asosiy maktab fanlari",
+    "Основные школьные предметы"
+  ],
+  "Change direction": [
+    "Yo‘nalishni o‘zgartirish",
+    "Изменить направление"
+  ],
   "Select one major": [
     "Bitta yo‘nalishni tanlang",
     "Выберите одно направление"
@@ -1071,6 +1083,14 @@ export const ASSESSMENT_TRANSLATIONS = {
   "Download card": [
     "Kartochkani yuklab olish",
     "Скачать карточку"
+  ],
+  "Flip card": [
+    "Kartochkani aylantirish",
+    "Перевернуть карточку"
+  ],
+  "Assessment scores": [
+    "Test natijalari",
+    "Результаты тестов"
   ],
   "Profile card for {0}: interest code {1}, {2}.": [
     "{0} profil kartochkasi: qiziqish kodi {1}, {2}.",
