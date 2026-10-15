@@ -308,7 +308,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   // The palette's own text: `query` is the page filter a chosen record sets, and
   // sharing it left the last record's title in the box for the next search.
   const [paletteQuery, setPaletteQuery] = useState('');
-  const navigation = navigationFor(user).filter((item) => !['support', 'screen_time'].includes(item));
+  const navigation = navigationFor(user).filter((item) => !['support', 'screen_time'].includes(item) && !isPageLocked(item, user));
   const meta = PAGE_META[page];
   // eslint-disable-next-line react-hooks/exhaustive-deps -- language changes the translated labels
   const searchIndexData = useMemo(() => buildGlobalSearchIndex(user, data), [user, data, language]);
