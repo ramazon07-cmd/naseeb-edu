@@ -3,7 +3,7 @@
 // reviewQueue.js: the page turns keys into words.
 import { userStorageKey } from '../userStorage.js';
 
-export const HOME_CARDS = ['stats', 'review', 'need_you', 'snapshot', 'today', 'deadlines', 'check_ins', 'progress'];
+export const HOME_CARDS = ['stats', 'review', 'need_you', 'snapshot', 'today', 'deadlines', 'check_ins'];
 // Cards that span the whole Home width rather than one column of the grid.
 export const WIDE_CARDS = ['stats'];
 export const HOME_LAYOUT_STORAGE = 'naseeb-counselor-home-v1';
@@ -140,26 +140,12 @@ export function mergeCheckInRows(first, more) {
 
 export const checkedDays = (row) => row.days.filter(Boolean).length;
 
-// Shares of the progress bar, in whole percent that add up to 100 (0 when empty).
-export function bucketShares(buckets = {}) {
-  const keys = ['on_track', 'behind', 'needs_attention'];
-  const total = keys.reduce((sum, key) => sum + (Number(buckets[key]) || 0), 0);
-  if (!total) return Object.fromEntries(keys.map((key) => [key, 0]));
-  const shares = Object.fromEntries(keys.map((key) => [key, Math.floor(((Number(buckets[key]) || 0) * 100) / total)]));
-  let rest = 100 - keys.reduce((sum, key) => sum + shares[key], 0);
-  for (const key of [...keys].sort((a, b) => (buckets[b] || 0) - (buckets[a] || 0))) {
-    if (!rest) break;
-    if (buckets[key]) { shares[key] += 1; rest -= 1; }
-  }
-  return shares;
-}
-
 // Server reasons ({key, count, title}) in the shape counselorUi's reasonText reads.
+// Late roadmap missions are left out: the counselor side does not show the roadmap.
 const REASON_PATTERNS = {
   late_task: '{n} late task|{n} late tasks',
-  late_mission: '{n} late mission|{n} late missions',
 };
-export const homeReasons = (reasons = []) => reasons.map((reason) => ({
+export const homeReasons = (reasons = []) => reasons.filter((reason) => reason.key !== 'late_mission').map((reason) => ({
   ...reason, tone: 'danger', countPattern: REASON_PATTERNS[reason.key],
 }));
 

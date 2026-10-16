@@ -686,7 +686,12 @@ export const api = {
   approveRecord: (endpoint, id, note = '') => request(`/${endpoint}/${id}/approve/`, { method: 'POST', body: JSON.stringify({ note }) }),
   // A counselor returns submitted work (tasks, roadmap-missions, documents, achievements) with a note.
   // A shared Essay Lab essay as its counselor reads it: current tab, comment threads, suggested edits.
-  reviewEssay: (id) => request(`/essay-lab/review/essays/${id}/`, {}, true, false),
+  reviewEssay: (id, tab) => request(`/essay-lab/review/essays/${id}/${tab ? `?tab=${encodeURIComponent(tab)}` : ''}`, {}, true, false),
+  // The reader's comments (a quoted range of one paragraph), replies, and suggested edits.
+  reviewEssayThread: (id, payload) => request(`/essay-lab/review/essays/${id}/threads/`, { method: 'POST', body: JSON.stringify(payload) }, true, false),
+  reviewEssayReply: (id, thread, body) => request(`/essay-lab/review/essays/${id}/threads/${thread}/reply/`, { method: 'POST', body: JSON.stringify({ body }) }, true, false),
+  reviewEssayResolve: (id, thread, resolved) => request(`/essay-lab/review/essays/${id}/threads/${thread}/${resolved ? 'resolve' : 'reopen'}/`, { method: 'POST' }, true, false),
+  reviewEssaySuggest: (id, payload) => request(`/essay-lab/review/essays/${id}/suggestions/`, { method: 'POST', body: JSON.stringify(payload) }, true, false),
   sendBack: (endpoint, id, note) => request(`/${endpoint}/${id}/send-back/`, { method: 'POST', body: JSON.stringify({ note }) }),
   // What this counselor approved or sent back since midnight in Tashkent, newest first.
   reviewedToday: () => request('/review/today/', {}, true, false),

@@ -98,7 +98,7 @@ function NothingAttached() {
 const ExternalUrl = ({ url }) => <p className="cx-quote-link"><a href={url} target="_blank" rel="noreferrer">{url} <ExternalLink size={13} aria-hidden="true" /></a></p>;
 
 // What the student sent: the words they wrote, and the file or link itself.
-function Submission({ item, notify }) {
+export function Submission({ item, notify }) {
   const record = item.record;
   if (item.kind === 'task') {
     const file = taskAttachment(record);
@@ -153,6 +153,8 @@ export function ReviewWorkspace({ items: allItems, loaded, notify, reload, setPa
   // status: pending → found | fetching → fetched | gone | failed; dismissed once the user picks another item.
   const [link, setLink] = useState(() => (initialItem ? { id: initialItem, status: 'pending', item: null, error: '' } : null));
   const [note, setNote] = useState('');
+  const noteField = useRef(null);
+  const detailPanel = useRef(null);
   const [saving, setSaving] = useState(false);
   // Items decided here leave the list at once; the reload that confirms it may come later.
   const [decided, setDecided] = useState(() => new Set());
@@ -209,6 +211,11 @@ export function ReviewWorkspace({ items: allItems, loaded, notify, reload, setPa
     });
   }, [link, allItems, loaded, onLinkDone]);
 
+  // The detail card scrolls on its own on wide screens; a new item opens at its top.
+  useEffect(() => {
+    detailPanel.current?.scrollTo?.(0, 0);
+  }, [selected?.id]);
+
   function select(item) {
     setSelectedId(item.id);
     setNote('');
@@ -230,6 +237,7 @@ export function ReviewWorkspace({ items: allItems, loaded, notify, reload, setPa
     if (action === 'approve' && !hasSubmission(selected.kind, selected.record)) return;
     if (action === 'sendBack' && !text) {
       notify(t("Add a note explaining what needs to change."), 'error');
+      noteField.current?.focus();
       return;
     }
     const current = selected;
@@ -275,7 +283,7 @@ export function ReviewWorkspace({ items: allItems, loaded, notify, reload, setPa
       </section>
       {aside}
     </div>
-    <section className="rv-card rv-detail" aria-label={t("Details")}>
+    <section ref={detailPanel} className="rv-card rv-detail" aria-label={t("Details")}>
       {!selected && (link?.status === 'pending' || link?.status === 'fetching'
         ? <p className="rv-empty" role="status">{t("Opening…")}</p>
         : link?.status === 'gone' ? <p className="rv-empty" role="status">{t("That item was already reviewed.")}</p>
@@ -293,14 +301,16 @@ export function ReviewWorkspace({ items: allItems, loaded, notify, reload, setPa
         </div>
         <h2 className="rv-title">{selected.title}</h2>
         <Submission item={selected} notify={notify} />
-        <label className="rv-field">
-          <span>{t("Note to {name} (optional for approve, required to send back)", { name: firstName(selected.studentName) })}</span>
-          <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} placeholder={t("e.g. “Great start — add one concrete example in paragraph 2.”")} />
-        </label>
-        <div className="rv-acts">
-          <button type="button" className="rv-btn line" disabled={saving} onClick={() => decide('sendBack')}>{t("Send back with note")}</button>
-          {items.length > 1 && <button type="button" className="rv-later" disabled={saving} onClick={skip}>{t("Skip for now")}</button>}
-          <button type="button" className="rv-btn" disabled={saving || !approvable} aria-busy={saving} onClick={() => decide('approve')}>{xp > 0 ? t("Approve (+{xp} XP)", { xp }) : t("Approve")}</button>
+        <div className="rv-decide">
+          <label className="rv-field">
+            <span>{t("Note to {name} (optional for approve, required to send back)", { name: firstName(selected.studentName) })}</span>
+            <textarea ref={noteField} value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} placeholder={t("e.g. “Great start — add one concrete example in paragraph 2.”")} />
+          </label>
+          <div className="rv-acts">
+            <button type="button" className="rv-btn line" disabled={saving} onClick={() => decide('sendBack')}>{t("Send back with note")}</button>
+            {items.length > 1 && <button type="button" className="rv-later" disabled={saving} onClick={skip}>{t("Skip for now")}</button>}
+            <button type="button" className="rv-btn" disabled={saving || !approvable} aria-busy={saving} onClick={() => decide('approve')}>{xp > 0 ? t("Approve (+{xp} XP)", { xp }) : t("Approve")}</button>
+          </div>
         </div>
       </>}
     </section>

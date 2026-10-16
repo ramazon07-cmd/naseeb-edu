@@ -29,8 +29,8 @@ export function Stat({ label: title, value, note, tone = '' }) {
   return <article className={`stat-card ${tone}`}><span>{t(title)}</span><strong>{value}</strong>{note && <small>{t(note)}</small>}</article>;
 }
 
-export function Record({ title, meta, description, badge, attachment, actions }) {
-  return <article className="record"><div className="record-main"><div><b>{title}</b>{meta && <small>{meta}</small>}</div>{badge && <Badge>{badge}</Badge>}</div>{description && <p>{description}</p>}{attachment}{actions && <div className="record-actions">{actions}</div>}</article>;
+export function Record({ title, meta, description, badge, extraBadge = null, attachment, actions }) {
+  return <article className="record"><div className="record-main"><div><b>{title}</b>{meta && <small>{meta}</small>}</div>{(badge || extraBadge) && <span className="record-badges">{extraBadge}{badge && <Badge>{badge}</Badge>}</span>}</div>{description && <p>{description}</p>}{attachment}{actions && <div className="record-actions">{actions}</div>}</article>;
 }
 
 export function ProfileCard({ student }) {

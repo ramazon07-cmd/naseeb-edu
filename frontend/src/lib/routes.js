@@ -78,6 +78,7 @@ const TAB_PAGES = { student_center: STUDENT_CENTER_TABS, roadmap: ROADMAP_TABS }
 // /messages/9 (open that chat).
 const RECORD_ROUTES = {
   essay_lab: { segment: 'essays', param: 'essayId' },
+  essays: { segment: '', param: 'essayId' },
   students: { segment: '', param: 'studentId' },
   admin_students: { segment: '', param: 'studentId' },
   messages: { segment: '', param: 'channelId' },

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasSubmission, opensInTab } from '../src/lib/reviewSubmission.js';
+import { documentStatus, hasSubmission, opensInTab } from '../src/lib/reviewSubmission.js';
 
 test('a document needs a file or a Google Docs link', () => {
   assert.equal(hasSubmission('document', { has_file: false, google_docs_url: '' }), false);
@@ -28,4 +28,12 @@ test('only PDFs and plain images open in a new tab', () => {
   assert.equal(opensInTab('image/svg+xml'), false);
   assert.equal(opensInTab('text/html'), false);
   assert.equal(opensInTab(''), false);
+});
+
+test('an empty uploaded or reviewing document reads as required', () => {
+  assert.equal(documentStatus({ status: 'uploaded', has_file: false, google_docs_url: '' }), 'required');
+  assert.equal(documentStatus({ status: 'reviewing', has_file: false }), 'required');
+  assert.equal(documentStatus({ status: 'uploaded', has_file: true }), 'uploaded');
+  assert.equal(documentStatus({ status: 'uploaded', google_docs_url: 'https://docs.google.com/x' }), 'uploaded');
+  assert.equal(documentStatus({ status: 'approved', has_file: false }), 'approved');
 });

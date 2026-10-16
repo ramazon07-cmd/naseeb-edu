@@ -138,6 +138,27 @@
   flex-direction: column;
   gap: 14px;
   padding: 22px;
+  /* Fits the screen below the page heading (about 236px); taller content scrolls
+     inside the card while the decision bar below stays in view. */
+  max-height: max(380px, calc(100dvh - 236px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  container-type: inline-size;
+}
+
+/* Note and decision stay pinned to the bottom of the card (or of the screen when
+   the card is not its own scroller), so Approve never sits below a long preview. */
+.rv-decide {
+  position: sticky;
+  /* A scrolling card pins to its content edge, so reach down over its bottom padding. */
+  bottom: -22px;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin: 0 -22px -22px;
+  padding: 12px 22px 22px;
+  border-top: 1px solid var(--cx-line);
+  background: var(--cx-card);
 }
 
 .rv-top {
@@ -244,7 +265,7 @@
 }
 
 .rv-field textarea {
-  min-height: 64px;
+  min-height: 56px;
   padding: 12px 13px;
   border: 1px solid var(--cx-field-line);
   border-radius: 14px;
@@ -431,6 +452,20 @@
   .rv-detail {
     position: static;
     order: -1;
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* The page scrolls here, so the bar pins to the screen edge. */
+  .rv-decide {
+    bottom: 0;
+  }
+}
+
+/* The phone tab bar (64px, fixed) covers the bottom of the screen: pin above it. */
+@media (max-width: 820px) {
+  .rv-decide {
+    bottom: calc(64px + env(safe-area-inset-bottom));
   }
 }
 
@@ -438,6 +473,11 @@
   .rv-card,
   .rv-detail {
     padding: 16px;
+  }
+
+  .rv-decide {
+    margin: 0 -16px -16px;
+    padding: 12px 16px 16px;
   }
 
   .rv-title {
@@ -452,12 +492,26 @@
     white-space: normal;
   }
 
+  .rv-field textarea {
+    min-height: 44px;
+  }
+}
+
+/* Three labels do not fit one row in a narrow card (Uzbek ones need ~540px):
+   Send back and Approve share a row, Skip is a slim line under them. */
+@container (max-width: 540px) {
   .rv-acts {
-    justify-content: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rv-acts .rv-later {
+    grid-column: 1 / -1;
+    order: 3;
   }
 
   .rv-acts .rv-btn {
-    flex: 1 1 100%;
+    padding: 0 12px;
   }
 }
 

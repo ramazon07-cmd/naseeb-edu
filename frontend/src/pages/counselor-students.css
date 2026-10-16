@@ -28,14 +28,14 @@
 }
 
 .cx-students .cs-search {
-  flex: 2 1 240px;
+  flex: 2 1 200px;
   width: auto;
   background: var(--cx-inset);
 }
 
 .cs-field {
   display: grid;
-  flex: 1 1 140px;
+  flex: 1 1 120px;
   gap: 4px;
   min-width: 0;
 }
@@ -150,7 +150,7 @@
 
 .cs-table {
   width: 100%;
-  min-width: 720px;
+  min-width: 560px;
   border-collapse: collapse;
 }
 
@@ -212,27 +212,6 @@
   height: 16px;
   margin: 0;
   accent-color: var(--cx-dark);
-}
-
-.cs-progress {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.cs-progress .cx-progress {
-  flex: 1;
-  min-width: 60px;
-  max-width: 120px;
-  height: 6px;
-  margin: 0;
-}
-
-.cs-progress b {
-  min-width: 38px;
-  font-size: var(--cx-fs-body);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
 }
 
 /* -- cards ---------------------------------------------------------------- */
@@ -423,35 +402,6 @@
   background: var(--cx-hover);
 }
 
-.cs-panel-road {
-  display: grid;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: var(--cx-radius-item);
-  background: var(--cx-inset);
-}
-
-.cs-panel-road > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  font-size: var(--cx-fs-body);
-}
-
-.cs-panel-road b {
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
-.cs-panel-road .cx-progress {
-  margin: 0;
-}
-
-.cs-panel-road small {
-  color: var(--cx-muted);
-  font-size: var(--cx-fs-meta);
-}
-
 .cs-panel-section h3 {
   margin: 0 0 8px;
   font-size: var(--cx-fs-card-title);
@@ -501,14 +451,6 @@
 
 .cs-panel-muted {
   margin: 0;
-}
-
-.cs-panel-level {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 8px 0 0;
-  font-size: var(--cx-fs-body);
 }
 
 .cs-panel-note {

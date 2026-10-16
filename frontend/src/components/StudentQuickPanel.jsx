@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, Lock, MessageCircle, X } from 'lucide-react';
 import { api } from '../api';
-import { t, tp, tx, formatPercentLocale } from '../i18n';
-import { CxAvatar, CxProgress, CxTag } from './counselorUi';
+import { t, tp } from '../i18n';
+import { CxAvatar, CxTag } from './counselorUi';
 import { dayMonthText, gradeText, joinParts, localDateKey } from '../lib/format';
 import { fullName } from '../lib/labels';
 import { splitList } from '../lib/profileSections';
@@ -36,7 +36,6 @@ function useQuickRecords(studentId) {
 
 function attentionText(item) {
   if (item.kind === 'late_task') return t('Late task: {title}', { title: item.title });
-  if (item.kind === 'late_mission') return t('Late mission: {title}', { title: item.title });
   if (item.kind === 'missing_document') return t('{title} not uploaded', { title: item.title });
   return t('To review: {title}', { title: item.title });
 }
@@ -47,8 +46,8 @@ function deadlineTitle(item) {
   return item.title;
 }
 
-const ATTENTION_TONE = { late_task: 'late', late_mission: 'late', missing_document: 'late', review: 'warn' };
-const ATTENTION_TAG = { late_task: 'Late', late_mission: 'Late', missing_document: 'Missing', review: 'To review' };
+const ATTENTION_TONE = { late_task: 'late', missing_document: 'late', review: 'warn' };
+const ATTENTION_TAG = { late_task: 'Late', missing_document: 'Missing', review: 'To review' };
 
 // A side panel (a bottom sheet on phones) with one student's urgent work and this
 // week's deadlines; Student 360 stays one click away.
@@ -60,9 +59,7 @@ export function StudentQuickPanel({ student, onClose, onOpen, onDirect }) {
   const attention = attentionItems(records, today);
   const deadlines = weekDeadlines(records, today);
   const name = fullName(student.user_detail);
-  const missions = student.roadmap_status_counts || {};
-  const missionsTotal = Object.values(missions).reduce((sum, value) => sum + value, 0);
-  const meta = joinParts(gradeText(student.grade), tx`Level ${student.level ?? 1}`, splitList(student.target_countries).map((country) => t(country)).join(', '));
+  const meta = joinParts(gradeText(student.grade), splitList(student.target_countries).map((country) => t(country)).join(', '));
 
   useEffect(() => {
     const previous = document.activeElement;
@@ -88,12 +85,6 @@ export function StudentQuickPanel({ student, onClose, onOpen, onDirect }) {
         <button type="button" ref={closeRef} className="cs-icon-btn" onClick={onClose} aria-label={t("Close")}><X size={18} aria-hidden="true" /></button>
       </header>
 
-      <section className="cs-panel-road" aria-label={t("Roadmap")}>
-        <div><span>{t("Roadmap")}</span><b>{formatPercentLocale(student.roadmap_progress_percent || 0)}</b></div>
-        <CxProgress value={student.roadmap_progress_percent} label={t("Roadmap")} />
-        <small>{tp('{done} of {n} mission approved|{done} of {n} missions approved', missionsTotal, { done: missions.completed || 0, n: missionsTotal })}</small>
-      </section>
-
       {error && <div className="alert error" role="alert">{error}</div>}
 
       <section className="cs-panel-section">
@@ -105,7 +96,6 @@ export function StudentQuickPanel({ student, onClose, onOpen, onDirect }) {
           </li>)}
           {attention.length > ATTENTION_LIMIT && <li className="cs-panel-more">{tp('{n} more in Student 360|{n} more in Student 360', attention.length - ATTENTION_LIMIT, { n: attention.length - ATTENTION_LIMIT })}</li>}
         </ul> : <p className="cs-panel-muted">{t("Nothing needs your attention right now.")}</p>}
-        {student.level_up_pending && <p className="cs-panel-level"><CxTag tone="warn" small>{t("Level")}</CxTag>{t('Ready for level {n}', { n: student.eligible_level })}</p>}
       </section>
 
       <section className="cs-panel-section">
