@@ -1,7 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { Inbox, X } from 'lucide-react';
-import { t } from '../i18n';
+import { t, tx } from '../i18n';
 import { label } from '../lib/labels';
+
+// A task's priority, in words ("Priority: High"), tinted from high up: shown to students as well as staff.
+export function PriorityBadge({ priority }) {
+  if (!priority) return null;
+  return <span className={`badge priority priority-${priority}`}>{tx`Priority: ${label(priority)}`}</span>;
+}
 
 export function Badge({ children, tone = '' }) {
   const normalized = String(children || '').toLowerCase().replaceAll(' ', '-');

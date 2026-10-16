@@ -40,7 +40,7 @@ const records = {
 
 test('what needs attention: late work, missing documents, then work to review', () => {
   assert.deepEqual(attentionItems(records, '2026-10-08').map((item) => [item.kind, item.title]), [
-    ['late_task', 'Late essay'], ['late_mission', 'Old mission'], ['missing_document', 'Passport'], ['missing_document', 'Visa'],
+    ['late_task', 'Late essay'], ['missing_document', 'Passport'], ['missing_document', 'Visa'],
     ['review', 'Sent'], ['review', 'Waiting'], ['review', 'Transcript'], ['review', 'Olympiad'],
   ]);
   assert.deepEqual(attentionItems({}, '2026-10-08'), []);

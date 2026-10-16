@@ -3,9 +3,9 @@ import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, R
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
 import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag, ReasonTags } from '../components/counselorUi';
-import { Field } from '../components/forms';
+import { Field, SegmentedField } from '../components/forms';
 import { Modal } from '../components/ui';
-import { DocumentPreviewModal, EssayDetailModal, TaskSubmissionModal } from '../components/documents';
+import { DocumentPreviewModal, TaskSubmissionModal } from '../components/documents';
 import { LoadMore, PagedListError } from '../components/paged';
 import { PageSkeleton } from '../components/states';
 import { TemporaryCredentialModal } from '../components/TemporaryCredentialModal';
@@ -22,7 +22,7 @@ import { createLatestRequest } from '../lib/latestRequest';
 import { splitList } from '../lib/profileSections';
 import { meetingBadgeStatus, meetingStatus, upcomingMeetings } from '../lib/meetings';
 import { mergeReviewQueue } from '../lib/reviewQueue';
-import { hasSubmission } from '../lib/reviewSubmission';
+import { documentStatus, hasSubmission } from '../lib/reviewSubmission';
 import { failedPage, pageAfterLoad, pageCount } from '../lib/studentListPage';
 import { isQuiet, needsAttention, studentReasons } from '../lib/studentReasons';
 import { BookingForm, MeetingNoteForm } from './BookingsPage';
@@ -56,20 +56,20 @@ function BulkTaskForm({ studentIds, onClose, onSaved, notify }) {
   return <Modal title={tp('Assign task to {n} student|Assign task to {n} students', studentIds.length, { n: studentIds.length })} onClose={onClose}><form className="form-grid" onSubmit={submit}>
     <Field label={t("Task title")}><input name="title" required /></Field>
     <Field label={t("Due date")}><input name="due_date" type="date" required /></Field>
-    <Field label={t("Priority")}><select name="priority" defaultValue="medium">{['low', 'medium', 'high', 'urgent'].map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></Field>
+    <SegmentedField name="priority" label="Priority" value="medium" options={['low', 'medium', 'high', 'urgent'].map((value) => ({ value, label: label(value) }))} />
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Assigning…") : t("Assign task")}</button></div>
   </form></Modal>;
 }
 
 // "Students": who is assigned to you and what they need from you, one server page
-// at a time (GET /api/students/?page=&status=&level=&grade=&country=&ordering=).
+// at a time (GET /api/students/?page=&status=&grade=&country=&ordering=).
 const PAGE_SIZE = 25;
 const VIEW_KEY = 'naseeb-counselor-students-view';
 const STATUS_PILLS = [['all', 'All'], ['need_you', 'Need you'], ['late', 'Late work'], ['missing_documents', 'Missing documents'], ['quiet', 'Quiet for 14+ days'], ['on_track', 'On track']];
-const SORTS = [['need_you', 'Needs you first'], ['late', 'Most late work'], ['progress', 'Lowest progress'], ['name', 'Name A–Z']];
+const SORTS = [['need_you', 'Needs you first'], ['late', 'Most late work'], ['name', 'Name A–Z']];
 const GRADES = ['8', '9', '10', '11', 'gap'];
 const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
-export const STUDENT_LIST_DEFAULTS = Object.freeze({ status: 'all', level: '', grade: '', country: '', ordering: 'need_you', page: 1, search: '' });
+export const STUDENT_LIST_DEFAULTS = Object.freeze({ status: 'all', grade: '', country: '', ordering: 'need_you', page: 1, search: '' });
 
 function readView() {
   try {
@@ -106,7 +106,7 @@ function useDebounced(value, delay) {
 function filterParams(state) {
   const params = new URLSearchParams();
   if (state.search.trim()) params.set('search', state.search.trim());
-  for (const key of ['level', 'grade', 'country']) if (state[key]) params.set(key, state[key]);
+  for (const key of ['grade', 'country']) if (state[key]) params.set(key, state[key]);
   return params;
 }
 
@@ -150,23 +150,18 @@ function StatusTag({ reasons }) {
 }
 
 function LateWork({ reasons }) {
-  const late = reasons.filter((reason) => reason.key === 'late_task' || reason.key === 'late_mission' || reason.key === 'missing_document');
+  const late = reasons.filter((reason) => reason.key === 'late_task' || reason.key === 'missing_document');
   return late.length ? <ReasonTags reasons={late} /> : <span className="cx-faint">{t("No late work")}</span>;
 }
 
 const targetText = (student) => splitList(student.target_countries).map((country) => t(country)).join(', ') || student.target_major || '';
-
-function ProgressCell({ student }) {
-  const percent = student.roadmap_progress_percent || 0;
-  return <span className="cs-progress"><CxProgress value={percent} label={t("Roadmap")} /><b>{formatPercentLocale(percent)}</b></span>;
-}
 
 function StudentTable({ rows, selecting, selected, toggle, onPreview }) {
   return <div className="cx-card cs-table-card">
     <table className="cs-table">
       <thead><tr>
         {selecting && <th scope="col" className="cs-check-col"><span className="sr-only">{t("Select")}</span></th>}
-        <th scope="col">{t("Student")}</th><th scope="col">{t("Progress")}</th><th scope="col">{t("Late work")}</th><th scope="col">{t("Target")}</th><th scope="col">{t("Status")}</th>
+        <th scope="col">{t("Student")}</th><th scope="col">{t("Late work")}</th><th scope="col">{t("Target")}</th><th scope="col">{t("Status")}</th>
       </tr></thead>
       <tbody>
         {rows.map(({ student, reasons, name }) => <tr key={student.id} className={selecting && selected.has(student.id) ? 'selected' : ''} onClick={() => (selecting ? toggle(student.id) : onPreview(student))}>
@@ -176,11 +171,10 @@ function StudentTable({ rows, selecting, selected, toggle, onPreview }) {
               <CxAvatar name={name} />
               <span className="cx-row-copy">
                 <button type="button" className="cx-name-link" onClick={(event) => { event.stopPropagation(); if (selecting) toggle(student.id); else onPreview(student); }}>{name}</button>
-                <small>{joinParts(gradeText(student.grade), tx`Level ${student.level ?? 1}`)}</small>
+                <small>{gradeText(student.grade)}</small>
               </span>
             </div>
           </td>
-          <td data-label={t("Progress")}><ProgressCell student={student} /></td>
           <td data-label={t("Late work")}><LateWork reasons={reasons} /></td>
           <td data-label={t("Target")}>{targetText(student) || <span className="cx-faint">—</span>}</td>
           <td data-label={t("Status")}><StatusTag reasons={reasons} /></td>
@@ -196,9 +190,8 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
       const body = <>
         <span className="cs-card-top">
           <CxAvatar name={name} />
-          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeText(student.grade), tx`Level ${student.level ?? 1}`, targetText(student))}</small></span>
+          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeText(student.grade), targetText(student))}</small></span>
         </span>
-        <ProgressCell student={student} />
         <span className="cs-card-foot"><LateWork reasons={reasons} /><StatusTag reasons={reasons} /></span>
       </>;
       return selecting
@@ -245,8 +238,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
   }, [list.loading, list.stale, list.status, list.error, list.count, state.page, total, setListState]);
   const moving = Boolean(list.error) && pageAfterLoad({ page: state.page, pageSize: PAGE_SIZE, count: 0, status: list.status, error: list.error, total }) !== null;
 
-  const levels = list.summary?.levels || [];
-  const filtered = Boolean(query.trim() || state.level || state.grade || state.country || state.status !== 'all');
+  const filtered = Boolean(query.trim() || state.grade || state.country || state.status !== 'all');
   const from = list.count ? (state.page - 1) * PAGE_SIZE + 1 : 0;
   const to = Math.min(list.count, (state.page - 1) * PAGE_SIZE + list.items.length);
 
@@ -286,7 +278,6 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
   const chips = [
     query.trim() && ['search', `“${query.trim()}”`, clearSearch],
     state.status !== 'all' && ['status', t(STATUS_PILLS.find(([key]) => key === state.status)?.[1] || ''), () => update({ status: 'all' })],
-    state.level && ['level', tx`Level ${state.level}`, () => update({ level: '' })],
     state.grade && ['grade', gradeText(state.grade), () => update({ grade: '' })],
     state.country && ['country', t(state.country), () => update({ country: '' })],
   ].filter(Boolean);
@@ -310,12 +301,6 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
         <label className="cx-search cs-search">
           <Search size={16} aria-hidden="true" />
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search by name…")} aria-label={t("Search by name…")} autoComplete="off" />
-        </label>
-        <label className="cs-field"><span>{t("Level")}</span>
-          <select value={state.level} onChange={(event) => update({ level: event.target.value })}>
-            <option value="">{t("Any level")}</option>
-            {[...new Set([...levels.map(String), ...(state.level ? [state.level] : [])])].map((level) => <option key={level} value={level}>{tx`Level ${level}`}</option>)}
-          </select>
         </label>
         <label className="cs-field"><span>{t("Grade")}</span>
           <select value={state.grade} onChange={(event) => update({ grade: event.target.value })}>
@@ -379,14 +364,16 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
 
 // -- Student 360 ---------------------------------------------------------------
 
+// A count stays out of the tab until its section has loaded: "Tasks · 0" while
+// the records are still on their way (or failed) reads as "no tasks".
 const TABS = (student, records, letters) => [
   ['overview', 'Overview'],
   ['review', 'To review', student.to_review_total ?? 0],
-  ['tasks', 'Tasks', (records.tasks || []).length],
-  ['documents', 'Documents', (records.documents || []).length],
-  ['essays', 'Essays', (records.essays || []).length],
-  ['applications', 'Applications', (records.applications || []).length],
-  ['letters', 'Recommendations', letters.length],
+  ['tasks', 'Tasks', records.tasks?.length],
+  ['documents', 'Documents', records.documents?.length],
+  ['essays', 'Essays', records.essays?.length],
+  ['applications', 'Applications', records.applications?.length],
+  ['letters', 'Recommendations', records.recommendations ? letters.length : undefined],
   ['meetings', 'Meetings'],
   ['notes', 'Private notes'],
 ];
@@ -402,23 +389,17 @@ function missingAnswer(key) {
 }
 
 // The reasons the Overview card lists, most urgent first: [{ key, tone, tag, text, action, run }].
-function needsYouRows({ student, records, remind, goTo, approveLevel }) {
+function needsYouRows({ student, records, remind, goTo }) {
   const today = localDateKey();
   const rows = [];
   (records.tasks || []).filter((task) => ['todo', 'in_progress', 'late'].includes(task.status) && task.due_date < today).slice(0, 2).forEach((task) => rows.push({
     key: `task-${task.id}`, tone: 'late', tag: t('Late'), text: t('{title} · due {date}', { title: task.title, date: dayMonthText(task.due_date) }), action: t('Remind'), run: () => remind({ topic: 'task', record: task.id }),
-  }));
-  (records['roadmap-missions'] || []).filter((mission) => ['planned', 'in_progress'].includes(mission.status) && mission.due_date && mission.due_date < today).slice(0, 1).forEach((mission) => rows.push({
-    key: `mission-${mission.id}`, tone: 'late', tag: t('Late'), text: t('{title} · due {date}', { title: mission.title, date: dayMonthText(mission.due_date) }), action: t('Remind'), run: () => remind({ topic: 'mission', record: mission.id }),
   }));
   (records.documents || []).filter((doc) => doc.status === 'required' || (['uploaded', 'reviewing'].includes(doc.status) && !hasSubmission('document', doc))).slice(0, 1).forEach((doc) => rows.push({
     key: `doc-${doc.id}`, tone: 'late', tag: t('Missing'), text: t('{title} not uploaded', { title: doc.title }), action: t('Remind'), run: () => remind({ topic: 'document', record: doc.id }),
   }));
   if (student.to_review_total > 0) rows.push({
     key: 'review', tone: 'warn', tag: t('To review'), text: tp('{n} item waiting for you|{n} items waiting for you', student.to_review_total, { n: student.to_review_total }), action: t('Review'), run: () => goTo('review'),
-  });
-  if (student.level_up_pending) rows.push({
-    key: 'level', tone: 'warn', tag: t('Level'), text: t('Ready for level {n}', { n: student.eligible_level }), action: t('Approve level'), run: approveLevel,
   });
   const missing = student.profile_readiness?.missing || [];
   if (missing.length) rows.push({
@@ -466,26 +447,9 @@ function Overview({ student, records, meetings, name, notify, reload, goTo }) {
     }
   }
 
-  async function approveLevel() {
-    setBusy(true);
-    try {
-      const result = await api.approveStudentLevel(student.id);
-      notify(tx`Level ${result.level} approved.`);
-      // The row's pending flag goes at once, so "Approve level" can't be clicked twice.
-      reload({ patch: { level_up_pending: false, level: result.level }, workspace: true });
-      activity.reload();
-    } catch (err) {
-      notify(err.message, 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const rows = needsYouRows({ student, records, remind, goTo, approveLevel });
+  const rows = needsYouRows({ student, records, remind, goTo });
   const statuses = student.task_status_counts || {};
   const openTasks = (statuses.todo || 0) + (statuses.in_progress || 0) + (statuses.late || 0);
-  const missions = student.roadmap_status_counts || {};
-  const missionsTotal = Object.values(missions).reduce((sum, value) => sum + value, 0);
   const readiness = student.profile_readiness || { percent: 0, done: 0, total: 0 };
 
   return <>
@@ -503,7 +467,6 @@ function Overview({ student, records, meetings, name, notify, reload, goTo }) {
       <CxCard title={t("Progress")}>
         <div className="cx-progress-list">
           <ProgressItem title={t("Application readiness")} percent={student.progress_percent} caption={t('{done} of {total}: tasks, applications, documents, letters', { done: student.readiness_items_done ?? 0, total: student.readiness_items_total ?? 0 })} />
-          <ProgressItem title={t("Roadmap")} percent={student.roadmap_progress_percent} caption={tp('{done} of {n} mission approved|{done} of {n} missions approved', missionsTotal, { done: missions.completed || 0, n: missionsTotal })} />
           <ProgressItem title={t("Tasks")} percent={student.task_progress_percent} caption={joinParts(t('{n} open', { n: openTasks }), student.tasks_overdue > 0 && t('{n} late', { n: student.tasks_overdue }))} />
           <ProgressItem title={t("Profile ready")} percent={readiness.percent} caption={t('{done} of {total} answers', { done: readiness.done, total: readiness.total })} />
         </div>
@@ -535,15 +498,20 @@ function RecordRow({ title, meta, status, onClick, children }) {
     <span className="cx-row-copy"><b>{title}</b>{meta && <small>{meta}</small>}</span>
     {status && <CxTag tone={statusTone(status)} small>{label(status)}</CxTag>}
     {children}
+    {onClick && <ChevronRight className="cx-row-go" size={16} aria-hidden="true" />}
   </>;
   return onClick
     ? <button type="button" className="cx-row" onClick={onClick}>{inner}</button>
     : <div className="cx-row cx-row-static">{inner}</div>;
 }
 
-function RecordCard({ title, empty, children, count }) {
+// `count` undefined: the section has not loaded, so say so rather than "nothing yet".
+function RecordCard({ title, empty, children, count, loading = false }) {
   return <CxCard title={title}>
-    <div className="cx-list">{children}{!count && <p className="cx-empty">{empty}</p>}</div>
+    <div className="cx-list">
+      {children}
+      {count === undefined ? loading && <p className="cx-empty" role="status">{t("Loading…")}</p> : !count && <p className="cx-empty">{empty}</p>}
+    </div>
   </CxCard>;
 }
 
@@ -580,10 +548,10 @@ function documentWhen(doc, history) {
   return '';
 }
 
-function StudentDocuments({ documents, history, onOpen }) {
-  return <RecordCard title={t("Documents")} count={documents.length} empty={t("No documents yet.")}>
+function StudentDocuments({ documents, loading, history, onOpen }) {
+  return <RecordCard title={t("Documents")} count={documents?.length} loading={loading} empty={t("No documents yet.")}>
     {history.error && <p className="alert error" role="alert">{tx`Review history could not be loaded: ${history.error}`}</p>}
-    {documents.map((doc) => <RecordRow key={doc.id} title={doc.title} meta={joinParts(label(doc.document_type), documentWhen(doc, history.byDocument.get(doc.id) || []), doc.counselor_comment && `“${doc.counselor_comment}”`)} status={doc.status} onClick={() => onOpen(doc)} />)}
+    {(documents || []).map((doc) => <RecordRow key={doc.id} title={doc.title} meta={joinParts(label(doc.document_type), documentWhen(doc, history.byDocument.get(doc.id) || []), doc.counselor_comment && `“${doc.counselor_comment}”`)} status={documentStatus(doc)} onClick={() => onOpen(doc)} />)}
   </RecordCard>;
 }
 
@@ -618,7 +586,6 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
   const [credential, setCredential] = useState(false);
   const [invite, setInvite] = useState(false);
   const [document, setDocument] = useState(null);
-  const [essay, setEssay] = useState(null);
   const [task, setTask] = useState(null);
   const [noteFor, setNoteFor] = useState(null);
   const loaded = useStudentRecords(student.id, true);
@@ -696,7 +663,6 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
       <dl className="cx-hero-stats">
         <div><dt>{formatPercentLocale(student.progress_percent || 0)}</dt><dd>{t("Application readiness")}</dd><dd>{tp('{done} of {n} item finished|{done} of {n} items finished', student.readiness_items_total ?? 0, { done: student.readiness_items_done ?? 0, n: student.readiness_items_total ?? 0 })}</dd></div>
         <div><dt>{formatPercentLocale(readiness.percent)}</dt><dd>{t("Profile ready")}</dd><dd>{tp('{n} answer missing|{n} answers missing', readiness.missing.length, { n: readiness.missing.length })}</dd></div>
-        <div><dt>{tx`Level ${student.level ?? 1}`}</dt><dd>{tp('{xp} XP · {n} star|{xp} XP · {n} stars', student.roadmap_stars ?? 0, { xp: student.xp_total ?? 0, n: student.roadmap_stars ?? 0 })}</dd></div>
       </dl>
     </section>
 
@@ -712,15 +678,15 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     </CxAccountActions>
     {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={() => reload({ endpoints: REVIEW_ENDPOINTS, workspace: true })} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}
     {tab === 'tasks' && <div className="section-stack">
-      <RecordCard title={t("Tasks")} count={(records.tasks || []).length} empty={t("No assigned tasks found.")}>
-        {(records.tasks || []).map((item) => <RecordRow key={item.id} title={item.title} meta={joinParts(item.due_date && tx`Due ${dateText(item.due_date)}`, label(item.priority))} status={item.status === 'todo' && item.due_date < localDateKey() ? 'late' : item.status} onClick={item.status === 'submitted' || item.status === 'approved' ? () => setTask(item) : undefined} />)}
+      <RecordCard title={t("Tasks")} count={records.tasks?.length} loading={loaded.loading} empty={t("No assigned tasks found.")}>
+        {(records.tasks || []).map((item) => <RecordRow key={item.id} title={item.title} meta={joinParts(item.due_date && tx`Due ${dateText(item.due_date)}`, label(item.priority))} status={item.status === 'todo' && item.due_date < localDateKey() ? 'late' : item.status} onClick={() => setTask(item)} />)}
       </RecordCard>
     </div>}
-    {tab === 'documents' && <StudentDocuments documents={records.documents || []} history={documentHistory} onOpen={(doc) => setDocument(doc.id)} />}
-    {tab === 'essays' && <RecordCard title={t("Essays")} count={(records.essays || []).length} empty={t("This student hasn’t shared any essays yet.")}>
-      {(records.essays || []).map((item) => <RecordRow key={item.id} title={item.title} meta={joinParts(tx`Version ${item.version}`, item.university_name || t("General essay"))} status={item.status} onClick={() => setEssay(item)} />)}
+    {tab === 'documents' && <StudentDocuments documents={records.documents} loading={loaded.loading} history={documentHistory} onOpen={(doc) => setDocument(doc.id)} />}
+    {tab === 'essays' && <RecordCard title={t("Essays")} count={records.essays?.length} loading={loaded.loading} empty={t("This student hasn’t shared any essays yet.")}>
+      {(records.essays || []).map((item) => <RecordRow key={item.id} title={item.title} meta={joinParts(tx`Version ${item.version}`, item.university_name || t("General essay"))} status={item.status} onClick={() => setPage('essays', { essayId: item.id })} />)}
     </RecordCard>}
-    {tab === 'applications' && <RecordCard title={t("Applications")} count={(records.applications || []).length} empty={t("The student has not added any universities to the college list yet.")}>
+    {tab === 'applications' && <RecordCard title={t("Applications")} count={records.applications?.length} loading={loaded.loading} empty={t("The student has not added any universities to the college list yet.")}>
       {(records.applications || []).map((item) => <RecordRow key={item.id} title={item.university_detail?.name || t("University")} meta={joinParts(item.program, label(item.tier), item.deadline && tx`Deadline: ${dateText(item.deadline)}`)} status={item.status} />)}
     </RecordCard>}
     {tab === 'letters' && <RecommendationLetters student={student} user={user} letters={letters} loading={loaded.loading} notify={notify} onSaved={letterSaved} />}
@@ -738,7 +704,6 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     {credential && <TemporaryCredentialModal account={student.user_detail} onClose={() => setCredential(false)} notify={notify} />}
     {invite && <ParentInviteModal student={student} onClose={() => setInvite(false)} notify={notify} />}
     {openDocument && <DocumentPreviewModal document={openDocument} history={documentHistory.error ? null : documentHistory.byDocument.get(openDocument.id) || []} onDecide={decideDocument} onClose={() => setDocument(null)} notify={notify} />}
-    {essay && <EssayDetailModal essay={essay} onClose={() => setEssay(null)} />}
     {task && <TaskSubmissionModal task={task} onClose={() => setTask(null)} notify={notify} />}
     {noteFor && <MeetingNoteForm booking={noteFor} onClose={() => setNoteFor(null)} onSaved={() => { setNoteFor(null); invalidatePagedLists(['meetings', 'bookings']); reload(); }} notify={notify} />}
   </div>;

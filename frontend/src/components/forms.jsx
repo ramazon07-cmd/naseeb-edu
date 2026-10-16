@@ -1,9 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatNumberLocale, t } from '../i18n';
 import { Check, Target, CheckCircle2 } from 'lucide-react';
 
 export function Field({ label: title, children, error = '', hint = '' }) {
   return <label className={`field ${error ? 'is-error' : ''}`.trim()}><span>{typeof title === 'string' ? t(title) : title}</span>{children}{error ? <small className="field-error">{error}</small> : hint ? <small className="field-hint">{hint}</small> : null}</label>;
+}
+
+// One choice out of a few short ones, all in view (the radios submit with the form like a select would).
+export function SegmentedField({ name, label: title, options, value, required = false }) {
+  const [current, setCurrent] = useState(value || options[0].value);
+  return <div className="field" role="radiogroup" aria-label={t(title)}>
+    <span>{t(title)}</span>
+    <div className="segmented">
+      {options.map((option) => <label key={option.value} className={`segmented-option tone-${option.value}`}>
+        <input type="radio" name={name} value={option.value} checked={current === option.value} onChange={() => setCurrent(option.value)} required={required} />
+        <span>{option.label}</span>
+      </label>)}
+    </div>
+  </div>;
 }
 
 export function CheckboxControl({ children, className = '', ...props }) {

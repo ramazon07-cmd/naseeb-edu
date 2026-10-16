@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   DEFAULT_LAYOUT, HOME_CARDS, WIDE_CARDS, allClear, allSetSeen, heatLevel,
-  heatmapWeeks, markAllSetSeen, snapshotChoices, bucketShares, checkInAction, checkedDays, greetingKey, homeReasons, loadLayout, moveCard,
+  heatmapWeeks, markAllSetSeen, snapshotChoices, checkInAction, checkedDays, greetingKey, homeReasons, loadLayout, moveCard,
   normalizeLayout, saveLayout, setCheckIn, toggleCard, visibleCards,
   addCheckedIn, checkInKey, checkInOutcome, checkInPage, mergeCheckInRows, setCheckInRow, withPending, todayMeetingsState,
 } from '../src/lib/counselorHome.js';
@@ -16,14 +16,16 @@ function memoryStorage() {
 
 test('layouts keep known cards once, then add new cards where the default order puts them', () => {
   assert.deepEqual(normalizeLayout(null), { order: HOME_CARDS, hidden: [] });
-  assert.deepEqual(normalizeLayout({ order: ['progress', 'nope', 'progress', 'review'], hidden: ['review', 'x'] }), {
-    order: ['stats', 'progress', 'review', 'need_you', 'snapshot', 'today', 'deadlines', 'check_ins'],
+  assert.deepEqual(normalizeLayout({ order: ['today', 'nope', 'today', 'review'], hidden: ['review', 'x'] }), {
+    order: ['stats', 'today', 'deadlines', 'check_ins', 'review', 'need_you', 'snapshot'],
     hidden: ['review'],
   });
   // A layout saved before "Student snapshot" existed.
-  const saved = { order: ['stats', 'review', 'need_you', 'today', 'deadlines', 'check_ins', 'progress'], hidden: ['today'] };
+  const saved = { order: ['stats', 'review', 'need_you', 'today', 'deadlines', 'check_ins'], hidden: ['today'] };
   assert.deepEqual(normalizeLayout(saved), { order: HOME_CARDS, hidden: ['today'] });
-  assert.deepEqual(normalizeLayout({ order: ['progress', 'stats'] }).order.slice(0, 3), ['progress', 'stats', 'review']);
+  assert.deepEqual(normalizeLayout({ order: ['check_ins', 'stats'] }).order.slice(0, 3), ['check_ins', 'stats', 'review']);
+  // A layout saved while "Student progress" (roadmap completion) existed: that card is gone.
+  assert.deepEqual(normalizeLayout({ order: ['stats', 'review', 'need_you', 'progress'], hidden: ['progress'] }), { order: HOME_CARDS, hidden: [] });
   // A layout saved while "One thing needs you first" existed: that card is gone.
   assert.deepEqual(normalizeLayout({ order: ['first', 'stats', 'review'], hidden: ['first'] }), { order: HOME_CARDS, hidden: [] });
   assert.deepEqual(normalizeLayout('garbage'), normalizeLayout(DEFAULT_LAYOUT));
@@ -31,7 +33,7 @@ test('layouts keep known cards once, then add new cards where the default order 
 
 test('layouts are saved per account and survive broken storage', () => {
   const storage = memoryStorage();
-  const layout = toggleCard(moveCard(normalizeLayout(null), 'progress', -1), 'today');
+  const layout = toggleCard(moveCard(normalizeLayout(null), 'check_ins', -1), 'today');
   assert.equal(saveLayout(storage, 7, layout), true);
   assert.deepEqual(loadLayout(storage, 7), layout);
   assert.deepEqual(loadLayout(storage, 8), normalizeLayout(null));
@@ -77,10 +79,8 @@ test('check-in days: activity days are fixed, future days closed', () => {
   assert.equal(setCheckIn(checkIns, 1, 0, false).students[0].days[0], 'auto');
 });
 
-test('progress shares add up to 100', () => {
-  assert.deepEqual(bucketShares({ on_track: 2, behind: 0, needs_attention: 1 }), { on_track: 67, behind: 0, needs_attention: 33 });
-  assert.deepEqual(bucketShares({ on_track: 1, behind: 1, needs_attention: 1 }), { on_track: 34, behind: 33, needs_attention: 33 });
-  assert.deepEqual(bucketShares({}), { on_track: 0, behind: 0, needs_attention: 0 });
+test('late roadmap missions are not a Home reason', () => {
+  assert.deepEqual(homeReasons([{ key: 'late_mission', count: 8 }, { key: 'late_task', count: 1 }]).map((reason) => reason.key), ['late_task']);
 });
 
 test('server reasons read like the Students page reasons', () => {

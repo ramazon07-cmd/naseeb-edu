@@ -27,7 +27,7 @@ const NAV = {
 const TAB_PAGES = ['dashboard', 'students', 'review', 'messages'];
 
 // Pages that draw their own title row; every other page gets a plain one from the shell.
-export const COUNSELOR_SELF_HEADED = new Set(['dashboard', 'students', 'students_joined', 'review', 'bookings', 'notifications', 'messages']);
+export const COUNSELOR_SELF_HEADED = new Set(['dashboard', 'students', 'students_joined', 'review', 'bookings', 'notifications', 'messages', 'essays']);
 
 export const counselorPageLabel = (page) => NAV[page]?.label;
 
