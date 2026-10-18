@@ -1349,5 +1349,58 @@ export const ASSESSMENT_TRANSLATIONS = {
   "Show the front: {test}": [
     "Old tomonini ko‘rsatish: {test}",
     "Показать лицевую сторону: {test}"
+  ],
+  // Major names Naseeb Mind does not translate (MVP wording).
+  "Banking": [
+    "Bank ishi",
+    "Банковское дело"
+  ],
+  "Construction Management": [
+    "Qurilishni boshqarish",
+    "Управление строительством"
+  ],
+  "Culinary Arts": [
+    "Oshpazlik san’ati",
+    "Кулинарное искусство"
+  ],
+  "Hotel Management": [
+    "Mehmonxona ishini boshqarish",
+    "Гостиничный менеджмент"
+  ],
+  "Interior Design": [
+    "Interyer dizayni",
+    "Дизайн интерьера"
+  ],
+  "Journalism": [
+    "Jurnalistika",
+    "Журналистика"
+  ],
+  "Management": [
+    "Menejment",
+    "Менеджмент"
+  ],
+  "Physical Education": [
+    "Jismoniy tarbiya",
+    "Физическая культура"
+  ],
+  "Physiotherapy": [
+    "Fizioterapiya",
+    "Физиотерапия"
+  ],
+  "Public Relations": [
+    "Jamoatchilik bilan aloqalar",
+    "Связи с общественностью"
+  ],
+  "Primary Education": [
+    "Boshlang‘ich ta’lim",
+    "Начальное образование"
+  ],
+  "Transport Systems": [
+    "Transport tizimlari",
+    "Транспортные системы"
+  ],
+  "Veterinary Medicine": [
+    "Veterinariya",
+    "Ветеринарная медицина"
   ]
 };
