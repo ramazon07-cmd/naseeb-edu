@@ -16,6 +16,7 @@ import { inviteMessages } from "./translations/invites.js";
 import { counselorStudentsMessages } from "./translations/counselorStudents.js";
 import { reviewMessages } from "./translations/review.js";
 import { counselorShellMessages } from "./translations/counselorShell.js";
+import { assessmentHubMessages } from "./translations/assessmentHub.js";
 
 import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
 
@@ -49,6 +50,7 @@ export const TRANSLATIONS = {
     ...counselorStudentsMessages("uz"),
     ...reviewMessages("uz"),
     ...counselorShellMessages("uz"),
+    ...assessmentHubMessages("uz"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
@@ -244,6 +246,7 @@ export const TRANSLATIONS = {
     ...counselorStudentsMessages("ru"),
     ...reviewMessages("ru"),
     ...counselorShellMessages("ru"),
+    ...assessmentHubMessages("ru"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",

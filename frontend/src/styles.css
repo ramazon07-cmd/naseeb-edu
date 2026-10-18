@@ -776,16 +776,6 @@ button.chat-shared-item {
   --on-accent-muted: rgba(255, 255, 255, 0.7);
   --on-accent-wash: rgba(255, 255, 255, 0.18);
   --student-hero-start-token: #352d26;
-  --assessment-personality: #efe5d5;
-  --assessment-interests: #e1ede5;
-  --assessment-subjects: #e3ecf2;
-  --assessment-reasoning: #e9e6ef;
-  --assessment-analysis: #f7f1e7;
-  --assessment-card-text: #40392f;
-  --assessment-card-muted: #625b51;
-  --assessment-card-line: rgba(64, 57, 47, 0.3);
-  --assessment-card-wash: rgba(64, 57, 47, 0.045);
-  --assessment-card-selected: rgba(64, 57, 47, 0.09);
   --student-hero-mid-token: #675746;
   --student-hero-end-token: #806c54;
   --student-hero-text-token: #fffaf2;
@@ -868,16 +858,6 @@ button.chat-shared-item {
 }
 
 :root[data-theme='dark'] {
-  --assessment-personality: #17364d;
-  --assessment-interests: #176979;
-  --assessment-subjects: #2d678a;
-  --assessment-reasoning: #34455d;
-  --assessment-analysis: #34455d;
-  --assessment-card-text: #fffcf7;
-  --assessment-card-muted: rgba(255, 252, 247, 0.82);
-  --assessment-card-line: rgba(255, 252, 247, 0.54);
-  --assessment-card-wash: var(--student-hero-ghost-bg);
-  --assessment-card-selected: var(--student-hero-decoration);
   /* Midnight blue surfaces, ice-blue accents and neutral white text. */
   --silver: #c5d0d8;
   --silver-gradient: linear-gradient(
@@ -5245,194 +5225,6 @@ body:has(.modal-backdrop) .assistant-launchers {
   font-variant-numeric: tabular-nums;
 }
 
-.assessment-overview-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(280px, 3fr);
-  gap: 18px;
-  align-items: start;
-}
-
-.assessment-card-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-
-.assessment-card {
-  min-width: 0;
-  min-height: 248px;
-  padding: 0;
-  display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1.05fr);
-  overflow: hidden;
-  background: var(--surface);
-  border: 0;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--student-card-shadow);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.assessment-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--student-border-strong);
-  box-shadow: 0 18px 42px var(--student-hero-shadow);
-}
-
-.assessment-card.locked {
-  opacity: 0.74;
-}
-
-.assessment-card.locked:hover {
-  transform: none;
-  border-color: var(--border);
-  box-shadow: var(--student-card-shadow);
-}
-
-.assessment-card-copy {
-  min-width: 0;
-  padding: 24px 23px 21px;
-  display: flex;
-  flex-direction: column;
-  color: var(--assessment-card-text);
-  background: var(--assessment-personality);
-}
-
-.assessment-card-personality .assessment-card-copy {
-  background: var(--assessment-personality);
-}
-
-.assessment-card-interests .assessment-card-copy {
-  background: var(--assessment-interests);
-}
-
-.assessment-card-subjects .assessment-card-copy {
-  background: var(--assessment-subjects);
-}
-
-.assessment-card-reasoning .assessment-card-copy {
-  background: var(--assessment-reasoning);
-}
-
-.assessment-card-copy > header {
-  min-height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  color: var(--assessment-card-muted);
-}
-
-.assessment-card-copy > header > span:first-child {
-  font-size: var(--text-xs);
-  font-weight: 800;
-  letter-spacing: 0.18em;
-}
-
-.assessment-card-copy > header > svg {
-  color: var(--assessment-card-text);
-}
-
-.assessment-card.done .assessment-card-copy > header > svg {
-  color: var(--assessment-card-text);
-}
-
-.assessment-card-count {
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.assessment-card-copy > h3 {
-  margin: 16px 0 8px;
-  color: var(--assessment-card-text);
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(1.4375rem, 1.75vw, 2rem);
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
-}
-
-.assessment-card-copy > p {
-  margin: 0;
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-
-.assessment-card-copy .licence-pending {
-  color: var(--assessment-card-text);
-}
-
-.assessment-card-progress {
-  margin: 16px 0 0;
-  display: grid;
-  gap: 7px;
-  color: var(--assessment-card-text);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.assessment-card-progress strong {
-  font-size: var(--text-xs);
-  font-weight: 750;
-}
-
-.assessment-card-progress .progress {
-  width: 100%;
-  height: 4px;
-  overflow: hidden;
-  background: var(--assessment-card-line);
-  border-radius: 99px;
-}
-
-.assessment-card-progress .progress span {
-  height: 100%;
-  display: block;
-  background: var(--assessment-card-text);
-  border-radius: inherit;
-  transition: width 0.3s ease;
-}
-
-.assessment-card-copy > footer {
-  margin-top: auto;
-  padding-top: 13px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  border-top: 0;
-}
-
-.assessment-card-copy > footer > span {
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-}
-
-.assessment-save-state {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-}
-
-.assessment-save-state.is-failed {
-  color: var(--danger);
-}
-
-.assessment-save-retry {
-  padding: 0;
-  color: inherit;
-  background: none;
-  border: 0;
-  font: inherit;
-  font-weight: 750;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 .assessment-load-error {
   padding: 10px 12px;
   display: flex;
@@ -5448,281 +5240,6 @@ body:has(.modal-backdrop) .assistant-launchers {
 
 .assessment-load-error > span {
   flex: 1 1 200px;
-}
-
-.assessment-locked-label {
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-  font-weight: 750;
-}
-
-.assessment-card-action {
-  min-height: 38px;
-  padding: 8px 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--assessment-card-text);
-  background: transparent;
-  border: 1px solid var(--assessment-card-line);
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 750;
-  cursor: pointer;
-}
-
-.assessment-card-action:hover {
-  color: var(--assessment-personality);
-  background: var(--assessment-card-text);
-  border-color: var(--assessment-card-text);
-}
-
-.assessment-card-visual {
-  min-width: 0;
-  min-height: 248px;
-  background-color: var(--surface-inset);
-  background-size: cover;
-  background-position: center;
-}
-
-.assessment-card-personality .assessment-card-visual {
-  background-image: url('/assessment/personality.webp');
-}
-
-.assessment-card-interests .assessment-card-visual {
-  background-image: url('/assessment/interests.webp');
-}
-
-.assessment-card-subjects .assessment-card-visual {
-  background-image: url('/assessment/strongest-subjects.webp');
-}
-
-.assessment-card-reasoning .assessment-card-visual {
-  background-image: url('/assessment/ai-profile-analysis.webp');
-}
-
-.assessment-card.unlocked {
-  border-color: var(--success-border);
-}
-
-.assessment-ai-panel {
-  min-width: 0;
-  min-height: 520px;
-  padding: 27px 24px 24px;
-  position: sticky;
-  top: 18px;
-  overflow: hidden;
-  color: var(--assessment-card-text);
-  background: linear-gradient(
-    155deg,
-    var(--assessment-analysis),
-    var(--assessment-personality)
-  );
-  border: 1px solid var(--assessment-card-line);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--student-card-shadow);
-}
-
-.assessment-ai-panel::after {
-  content: '';
-  width: 220px;
-  height: 220px;
-  position: absolute;
-  right: -112px;
-  top: -102px;
-  border: 1px solid var(--assessment-card-line);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 28px var(--assessment-card-wash),
-    0 0 0 56px var(--assessment-card-wash);
-  pointer-events: none;
-}
-
-.assessment-ai-panel > * {
-  position: relative;
-  z-index: 1;
-}
-
-.assessment-ai-panel .eyebrow {
-  color: var(--assessment-card-muted);
-  letter-spacing: 0.19em;
-}
-
-.assessment-ai-panel h3 {
-  max-width: 310px;
-  margin: 16px 0 11px;
-  color: var(--assessment-card-text);
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(1.75rem, 2.5vw, 2.375rem);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 1.02;
-}
-
-.assessment-ai-panel > p {
-  margin: 0;
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-  line-height: 1.65;
-}
-
-.assessment-ai-panel.locked > p {
-  max-width: 290px;
-}
-
-.assessment-ai-orbit {
-  width: 52px;
-  height: 52px;
-  margin-bottom: 24px;
-  display: grid;
-  place-items: center;
-  color: var(--assessment-personality);
-  background: var(--assessment-card-text);
-  border-radius: 50%;
-  box-shadow: 0 8px 24px var(--student-hero-shadow);
-}
-
-.assessment-ai-orbit-mark {
-  width: 35px;
-  height: 35px;
-  display: block;
-  background: var(--assessment-personality);
-  -webkit-mask: var(--assistant-logo-image) center / contain no-repeat;
-  mask: var(--assistant-logo-image) center / contain no-repeat;
-}
-
-.assessment-ai-readiness {
-  margin: 24px 0 13px;
-  padding-top: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  color: var(--assessment-card-muted);
-  border-top: 1px solid var(--assessment-card-line);
-  font-size: var(--text-xs);
-  font-weight: 700;
-}
-
-.assessment-ai-generate {
-  width: 100%;
-  min-height: 50px;
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  color: var(--assessment-personality);
-  background: var(--assessment-card-text);
-  border: 1px solid var(--assessment-card-text);
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.assessment-ai-generate:disabled {
-  color: var(--assessment-card-muted);
-  background: var(--assessment-card-wash);
-  border-color: var(--assessment-card-line);
-  cursor: not-allowed;
-}
-
-.assessment-ai-fits {
-  margin-top: 18px;
-  display: grid;
-  gap: 9px;
-}
-
-.assessment-ai-fits > button[role='radio'] {
-  width: 100%;
-  padding: 12px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 24px;
-  align-items: start;
-  gap: var(--space-2-5);
-  color: var(--assessment-card-text);
-  text-align: left;
-  background: var(--assessment-card-wash);
-  border: 1px solid var(--assessment-card-line);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-}
-
-.assessment-ai-fits > button[role='radio']:hover,
-.assessment-ai-fits > button[role='radio'].selected {
-  background: var(--assessment-card-selected);
-  border-color: var(--assessment-card-text);
-}
-
-.assessment-ai-fits > button[role='radio'] > span:first-child {
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-  font-weight: 800;
-}
-
-.assessment-ai-fits b,
-.assessment-ai-fits small {
-  display: block;
-}
-
-.assessment-ai-fits b {
-  margin-bottom: 4px;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 0.9375rem;
-}
-
-.assessment-ai-fits small {
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-  line-height: 1.45;
-}
-
-.assessment-ai-choice {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--assessment-card-line);
-  border-radius: 50%;
-}
-
-.assessment-ai-confirm {
-  width: 100%;
-  min-height: 42px;
-  margin-top: 4px;
-  padding: 10px 13px;
-  color: var(--assessment-card-text);
-  background: transparent;
-  border: 1px solid var(--assessment-card-line);
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.assessment-ai-confirm:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.assessment-ai-disclaimer {
-  padding: 2px 4px;
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-
-.assessment-ai-panel .education-ai-error {
-  margin-top: 12px;
-  padding: 9px 10px;
-  color: var(--assessment-card-text) !important;
-  background: var(--danger-bg);
-  border: 1px solid var(--danger-border);
-  border-radius: var(--radius-base);
 }
 
 .assessment-number-summary {
@@ -5800,31 +5317,6 @@ body:has(.modal-backdrop) .assistant-launchers {
   font-size: 1.375rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-}
-
-.assessment-ai-signal {
-  margin: 10px 0 0;
-  padding: 11px 12px;
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  color: var(--muted);
-  background: var(--success-bg);
-  border: 1px solid var(--success-border);
-  border-radius: var(--radius-base);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-
-.assessment-ai-signal svg {
-  flex: 0 0 auto;
-  color: var(--success);
-}
-
-.assessment-ai-signal b {
-  display: block;
-  color: var(--text);
-  font-size: var(--text-xs);
 }
 
 .assessment-reasoning-disclaimer {
@@ -6211,16 +5703,8 @@ body:has(.modal-backdrop) .assistant-launchers {
 }
 
 @media (max-width: 1200px) {
-  .assessment-overview-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
   /* relative, not static: the panel's decorative ::after is absolutely positioned,
      and static would anchor it to the page and push it 112px past the right edge */
-  .assessment-ai-panel {
-    min-height: 0;
-    position: relative;
-    top: auto;
-  }
 
   .assessment-profile-card {
     min-height: 330px;
@@ -6232,14 +5716,6 @@ body:has(.modal-backdrop) .assistant-launchers {
 }
 
 @media (max-width: 820px) {
-  .assessment-card-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .assessment-card {
-    min-height: 220px;
-  }
-
   .assessment-number-breakdown {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -6253,24 +5729,6 @@ body:has(.modal-backdrop) .assistant-launchers {
   .assessment-progress {
     grid-template-columns: 1fr;
     gap: var(--space-2);
-  }
-
-  .assessment-card {
-    grid-template-columns: minmax(0, 1fr) 128px;
-    min-height: 218px;
-  }
-
-  .assessment-card-copy {
-    padding: 17px 16px 14px;
-  }
-
-  .assessment-card-copy > h3 {
-    margin-top: 13px;
-    font-size: 1.375rem;
-  }
-
-  .assessment-card-visual {
-    min-height: 218px;
   }
 
   .assessment-profile-card {
@@ -6568,25 +6026,6 @@ body:has(.modal-backdrop) .assistant-launchers {
 .subject-pattern .eyebrow {
   color: var(--text);
 }
-
-.licence-pending {
-  display: flex;
-  align-items: flex-start;
-  gap: 5px;
-  margin-top: 7px;
-  padding: 6px 8px;
-  background: var(--warning-bg);
-  border: 1px solid var(--warning-border);
-  border-radius: var(--radius-md);
-  color: var(--text);
-  font-size: var(--text-xs);
-  line-height: 1.45;
-}
-
-.licence-pending svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
 /* Visually hidden, still read aloud. A bipolar item has no statement of its own
    -- the two poles ARE the question -- so the legend carries them for a screen
    reader while the sighted layout shows them at the ends of the row. */
@@ -6708,40 +6147,6 @@ body:has(.modal-backdrop) .assistant-launchers {
 .type-axis footer .on {
   color: var(--text);
   font-weight: 700;
-}
-
-.sort-tally {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
-  margin-bottom: 14px;
-}
-
-.sort-tally > div {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-0-5);
-  padding: 8px 5px;
-  text-align: center;
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-base);
-}
-
-.sort-tally > div.full {
-  background: var(--success-bg);
-  border-color: var(--success-border);
-}
-
-.sort-tally b {
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-.sort-tally span {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1.3;
 }
 /* A level that already holds its four cards. Declared after the hover rules so
    a full circle does not grow or light up under the cursor. */
@@ -11699,10 +11104,6 @@ a:focus-visible {
   line-height: 1.55;
 }
 
-.education-ai-error {
-  color: var(--danger) !important;
-}
-
 .education-ai-result > div {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -16536,7 +15937,6 @@ a:focus-visible {
   .app-shell.role-student .button.small,
   .app-shell.role-student .portal-tabs button,
   .app-shell.role-student .support-toolbar .portal-tabs button,
-  .app-shell.role-student .assessment-card-action,
   .app-shell.role-student .sidebar nav button,
   .app-shell.role-student .sidebar-utilities button,
   .app-shell.role-student .sidebar-account-menu button,
@@ -18908,78 +18308,9 @@ button.cx-search {
 
 /* Open recommendations stay a compact list (name only, the reason is the tooltip)
    so the panel keeps the height of the four cards beside it. */
-.assessment-ai-panel.has-fits .assessment-ai-fits {
-  margin-top: 14px;
-  gap: 8px;
-}
-
-.assessment-ai-panel.has-fits .assessment-ai-fits > button[role='radio'] {
-  padding: 10px 12px;
-  align-items: center;
-}
-
-.assessment-ai-panel.has-fits .assessment-ai-fits > button[role='radio'] small {
-  display: none;
-}
-
-.assessment-ai-panel.has-fits > p:not(.education-ai-error),
-.assessment-ai-panel.has-fits .assessment-ai-disclaimer {
-  display: none;
-}
 
 /* The saved direction: the major, the school subjects it leans on as chips, and the
    change button pinned to the bottom of the card. */
-.assessment-ai-panel.is-chosen {
-  display: flex;
-  flex-direction: column;
-}
-
-.assessment-ai-panel.is-chosen h3 {
-  margin-bottom: 0;
-}
-
-.assessment-ai-subjects {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--assessment-card-line);
-}
-
-.assessment-ai-subjects > span {
-  display: block;
-  margin-bottom: 10px;
-  color: var(--assessment-card-muted);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.assessment-ai-subjects ul {
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  list-style: none;
-}
-
-.assessment-ai-subjects li {
-  padding: 7px 14px;
-  color: var(--assessment-card-text);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  background: var(--assessment-card-wash);
-  border: 1px solid var(--assessment-card-line);
-  border-radius: 999px;
-}
-
-.assessment-ai-panel.is-chosen .assessment-ai-generate {
-  margin-top: auto;
-}
-
-.assessment-ai-panel.is-chosen .assessment-ai-subjects {
-  margin-bottom: 28px;
-}
 
 /* A tab bar that scrolls sideways shows no scrollbar under the open tab. */
 .portal-tabs {

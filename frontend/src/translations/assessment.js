@@ -1119,5 +1119,235 @@ export const ASSESSMENT_TRANSLATIONS = {
   "Signature": [
     "Imzosi",
     "Подпись"
+  ],
+  // Assessment hub (Naseeb Mind layout).
+  "7 challenges that reveal your best-fit study directions": [
+    "Sizga mos ta’lim yo‘nalishlarini aniqlaydigan 7 ta test",
+    "7 тестов для определения подходящих направлений обучения"
+  ],
+  "Unlocks once all seven tests are saved.": [
+    "Yettita test saqlangach ochiladi.",
+    "Откроется, когда будут сохранены все семь тестов."
+  ],
+  "Review answers": [
+    "Javoblarni ko‘rish",
+    "Посмотреть ответы"
+  ],
+  "{answered} of {total}": [
+    "{total} tadan {answered}",
+    "{answered} из {total}"
+  ],
+  "Your three majors": [
+    "Sizning uchta yo‘nalishingiz",
+    "Ваши три направления"
+  ],
+  "Based on your results. Saved on this computer.": [
+    "Natijalaringiz asosida. Shu kompyuterda saqlangan.",
+    "На основе ваших результатов. Сохранено на этом компьютере."
+  ],
+  "Saved as your study direction": [
+    "Ta’lim yo‘nalishingiz sifatida saqlandi",
+    "Сохранено как ваше направление обучения"
+  ],
+  "All seven tests are complete. Continue to see your three majors.": [
+    "Yettita test yakunlandi. Uchta yo‘nalishingizni ko‘rish uchun davom eting.",
+    "Все семь тестов пройдены. Продолжите, чтобы увидеть три направления."
+  ],
+  "Complete all seven tests to unlock your three majors.": [
+    "Uchta yo‘nalishingizni ochish uchun yettita testni yakunlang.",
+    "Пройдите все семь тестов, чтобы открыть три направления."
+  ],
+  "Your results are still being saved. Your majors unlock once your account has them.": [
+    "Natijalaringiz hali saqlanmoqda. Ular hisobingizga tushgach, yo‘nalishlar ochiladi.",
+    "Результаты ещё сохраняются. Направления откроются, когда они появятся в вашем аккаунте."
+  ],
+  "Your account doesn’t have all seven results yet. Load your saved results to unlock your majors.": [
+    "Hisobingizda hali yettita natijaning hammasi yo‘q. Yo‘nalishlarni ochish uchun saqlangan natijalarni yuklang.",
+    "В вашем аккаунте пока нет всех семи результатов. Загрузите сохранённые результаты, чтобы открыть направления."
+  ],
+  "WHAT MATTERS AT WORK": [
+    "ISHDA NIMA MUHIM",
+    "ЧТО ВАЖНО В РАБОТЕ"
+  ],
+  "HOW SCHOOL FEELS": [
+    "QAYSI FANLAR SIZGA MOS",
+    "КАКИМ ОЩУЩАЕТСЯ ШКОЛА"
+  ],
+  "WHAT MATTERS MOST": [
+    "ENG MUHIMI NIMA",
+    "ЧТО ВАЖНЕЕ ВСЕГО"
+  ],
+  "EQ · OUT OF 7": [
+    "EQ · 7 DAN",
+    "EQ · ИЗ 7"
+  ],
+  // Assessment hub: the back of a finished card.
+  "How steady you stay when things get difficult.": [
+    "Qiyin paytlarda qanchalik xotirjam qolishingiz.",
+    "Насколько вы сохраняете спокойствие в трудных ситуациях."
+  ],
+  "How much energy you draw from other people.": [
+    "Boshqa odamlardan qanchalik kuch olishingiz.",
+    "Сколько энергии вы получаете от общения с людьми."
+  ],
+  "Your appetite for ideas, art and the unfamiliar.": [
+    "G‘oyalar, san’at va notanish narsalarga qiziqishingiz.",
+    "Ваш интерес к идеям, искусству и новому."
+  ],
+  "How readily you trust, help and give ground.": [
+    "Qanchalik tez ishonishingiz, yordam berishingiz va yon berishingiz.",
+    "Насколько легко вы доверяете, помогаете и уступаете."
+  ],
+  "How you plan, organise and follow through.": [
+    "Qanday rejalashtirishingiz, tartibga solishingiz va ishni oxiriga yetkazishingiz.",
+    "Как вы планируете, организуете и доводите дело до конца."
+  ],
+  "Steadiness": [
+    "Barqarorlik",
+    "Устойчивость"
+  ],
+  "Conscientious": [
+    "Mas’uliyatlilik",
+    "Добросовестность"
+  ],
+  "Making, drawing, writing, design and performance.": [
+    "Yaratish, chizish, yozish, dizayn va sahnada chiqish.",
+    "Создавать, рисовать, писать, заниматься дизайном и выступать."
+  ],
+  "Working with records, numbers, order and clear rules.": [
+    "Hujjatlar, raqamlar, tartib va aniq qoidalar bilan ishlash.",
+    "Работать с документами, числами, порядком и чёткими правилами."
+  ],
+  "Persuading, leading, selling and organising.": [
+    "Ishontirish, yetaklash, sotish va tashkil qilish.",
+    "Убеждать, руководить, продавать и организовывать."
+  ],
+  "Finding reasons, analysing, solving difficult problems.": [
+    "Sabablarni topish, tahlil qilish, murakkab muammolarni yechish.",
+    "Искать причины, анализировать, решать сложные задачи."
+  ],
+  "Working with your hands, machines, tools and the outdoors.": [
+    "Qo‘l, mashinalar, asboblar bilan va ochiq havoda ishlash.",
+    "Работать руками, с машинами, инструментами и на открытом воздухе."
+  ],
+  "Teaching, helping and caring for people.": [
+    "O‘qitish, yordam berish va odamlarga g‘amxo‘rlik qilish.",
+    "Учить, помогать людям и заботиться о них."
+  ],
+  "Conditions": [
+    "Sharoit",
+    "Условия"
+  ],
+  "Using your abilities and feeling you accomplished something.": [
+    "Qobiliyatlaringizni ishlatish va biror narsaga erishganingizni his qilish.",
+    "Применять свои способности и чувствовать, что вы чего-то добились."
+  ],
+  "Deciding for yourself and working your own way.": [
+    "O‘zingiz qaror qilish va o‘zingizcha ishlash.",
+    "Самому принимать решения и работать по-своему."
+  ],
+  "Advancement, standing and being noticed for good work.": [
+    "O‘sish, obro‘ va yaxshi ishingiz uchun e’tirof.",
+    "Продвижение, положение и признание за хорошую работу."
+  ],
+  "Colleagues you get on with, and work you can feel right about.": [
+    "Kelishib ishlaydigan hamkasblar va vijdonan to‘g‘ri deb biladigan ish.",
+    "Коллеги, с которыми вы ладите, и работа, в правильности которой вы уверены."
+  ],
+  "Being backed up, trained and treated fairly.": [
+    "Qo‘llab-quvvatlanish, o‘qitilish va adolatli munosabat.",
+    "Поддержка, обучение и справедливое отношение."
+  ],
+  "Pay, security, variety and the shape of the working day.": [
+    "Maosh, barqarorlik, xilma-xillik va ish kunining tartibi.",
+    "Оплата, стабильность, разнообразие и распорядок рабочего дня."
+  ],
+  "Verbal reasoning": [
+    "Og‘zaki mantiq",
+    "Вербальное мышление"
+  ],
+  "Letter and number series": [
+    "Harf va son qatorlari",
+    "Буквенные и числовые ряды"
+  ],
+  "Matrix reasoning": [
+    "Matritsali mantiq",
+    "Матричные задачи"
+  ],
+  "3D rotation": [
+    "3D aylantirish",
+    "3D-вращение"
+  ],
+  "Own emotions": [
+    "O‘z hissiyotlari",
+    "Свои эмоции"
+  ],
+  "Others’ emotions": [
+    "Boshqalar hissiyotlari",
+    "Эмоции других"
+  ],
+  "Self-motivation": [
+    "O‘zini ruhlantirish",
+    "Самомотивация"
+  ],
+  "Self-control": [
+    "O‘zini boshqarish",
+    "Самоконтроль"
+  ],
+  "Strongest trait: {trait}": [
+    "Eng kuchli jihat: {trait}",
+    "Самая сильная черта: {trait}"
+  ],
+  "Your interest code: {code}": [
+    "Qiziqish kodingiz: {code}",
+    "Ваш код интересов: {code}"
+  ],
+  "You want most: {value}": [
+    "Eng ko‘p xohlaganingiz: {value}",
+    "Больше всего вам важно: {value}"
+  ],
+  "Your top three for a future job.": [
+    "Kelajakdagi ish uchun eng muhim uchtasi.",
+    "Ваша тройка главного в будущей работе."
+  ],
+  "Even across all four areas.": [
+    "To‘rtta sohada ham bir xil.",
+    "Одинаково во всех четырёх областях."
+  ],
+  "Best fit: {subject}": [
+    "Eng mos fan: {subject}",
+    "Лучше всего подходит: {subject}"
+  ],
+  "Where your ability, interest and ease meet.": [
+    "Qobiliyat, qiziqish va yengillik uchrashgan joy.",
+    "Там, где сходятся ваши способности, интерес и лёгкость."
+  ],
+  "Top priority: {value}": [
+    "Asosiy ustuvorlik: {value}",
+    "Главный приоритет: {value}"
+  ],
+  "{correct} of {total} correct": [
+    "{total} tadan {correct} ta to‘g‘ri",
+    "{correct} из {total} верно"
+  ],
+  "Strongest area: {area}": [
+    "Eng kuchli soha: {area}",
+    "Сильнейшая область: {area}"
+  ],
+  "All four areas are even": [
+    "To‘rtta soha teng",
+    "Все четыре области равны"
+  ],
+  "Your answers rate every area the same.": [
+    "Javoblaringiz har bir sohani bir xil baholaydi.",
+    "Ваши ответы оценивают все области одинаково."
+  ],
+  "Show summary: {test}": [
+    "Xulosani ko‘rsatish: {test}",
+    "Показать итог: {test}"
+  ],
+  "Show the front: {test}": [
+    "Old tomonini ko‘rsatish: {test}",
+    "Показать лицевую сторону: {test}"
   ]
 };
