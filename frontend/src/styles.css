@@ -3047,6 +3047,40 @@ h3,
   border-color: var(--selected-border);
 }
 
+/* Task priority: quiet while it is low or medium, warm when high, red when urgent. */
+.badge.priority-high,
+.priority-text.priority-high {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-color: var(--warning-border);
+}
+
+.badge.priority-urgent,
+.priority-text.priority-urgent {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.priority-text {
+  background: none;
+  border: 0;
+  font-weight: 700;
+}
+
+.priority-text.priority-low,
+.priority-text.priority-medium {
+  color: inherit;
+}
+
+.record-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .badge.resolved,
 .badge.closed {
   background: var(--success-bg);
@@ -3837,15 +3871,74 @@ td small {
   border-color: var(--border-interactive);
 }
 
+/* One ring: the border turns the focus colour and a 2px outline sits right on it (no gap, no second glow). */
 .field :is(input, select, textarea):focus-visible,
 .program-filters select:focus-visible,
 .research-question-grid input:focus-visible,
 .message-compose textarea:focus-visible,
 .search:focus-within {
   border-color: var(--focus-color);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  box-shadow: none;
   outline: 2px solid var(--focus-color);
-  outline-offset: 1px;
+  outline-offset: -1px;
+}
+
+/* One-choice-of-few field (task priority): the radios are hidden, each option is a pill. */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segmented-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segmented-option:hover {
+  border-color: var(--border-interactive);
+  background: var(--control-bg-hover);
+}
+
+.segmented-option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segmented-option:has(input:checked) {
+  border-color: var(--selected-border);
+  background: var(--selected-bg);
+  color: var(--text);
+}
+
+.segmented-option.tone-high:has(input:checked) {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.segmented-option.tone-urgent:has(input:checked) {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.segmented-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
 .field :is(input, select, textarea)[aria-invalid='true'],
@@ -7373,6 +7466,13 @@ body:has(.modal-backdrop) .assistant-launchers {
   outline-offset: -2px;
 }
 
+/* The open tab. The student portal, Support and a few pages restyle it below; everywhere else it was unmarked. */
+.portal-tabs button.active {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
 /* Admin Control: the Roadmap reviews tile opens the review queue. */
 .stat-card .admin-link,
 .stat-card .admin-link:hover:not(:disabled) {
@@ -10019,9 +10119,9 @@ button.roadmap-step-card:focus-visible {
 
 .student-portal :is(select, input, textarea):focus-visible {
   border-color: var(--student-accent);
-  box-shadow: 0 0 0 3px var(--student-accent-wash);
+  box-shadow: none;
   outline: 2px solid var(--student-accent);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
 
 .student-portal
@@ -17016,6 +17116,15 @@ a:focus-visible {
   gap: 6px;
 }
 
+/* Filter pills on the left, search on the right; wraps on narrow screens. */
+.cx-list-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .cx-pill {
   height: 34px;
   padding: 0 13px;
@@ -17188,6 +17297,12 @@ button.cx-search {
 
 .cx-row:hover {
   background: var(--cx-hover);
+}
+
+/* The arrow on a row that opens something (a record's detail). */
+.cx-row-go {
+  flex: none;
+  color: var(--cx-muted);
 }
 
 .cx-row.active {
@@ -17428,6 +17543,10 @@ button.cx-search {
   gap: 15px;
 }
 
+.cx-meet-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .cx-requests {
   display: grid;
   gap: 12px;
@@ -17537,17 +17656,6 @@ button.cx-search {
 
 .cx-review-head .cx-row-copy small {
   font-size: var(--cx-fs-meta);
-}
-
-.cx-meeting-help {
-  padding: 13px 18px;
-  color: var(--cx-muted);
-  font-size: var(--cx-fs-body);
-  line-height: 1.35;
-}
-
-.cx-meeting-help p {
-  margin: 0;
 }
 
 .cx-review-head .cx-link {
@@ -18151,6 +18259,18 @@ button.cx-search {
 .cx-shell :is(button, a, input, textarea, select):focus-visible {
   outline: 2px solid var(--cx-progress);
   outline-offset: 3px;
+}
+
+/* The search box draws its focus ring on the label (.search:focus-within); keep the input from adding a second, nested one. */
+.cx-shell .search input:focus-visible {
+  outline: 0;
+}
+
+.cx-shell .field :is(input, select, textarea):focus-visible {
+  border-color: var(--cx-progress);
+  box-shadow: none;
+  outline: 2px solid var(--cx-progress);
+  outline-offset: -1px;
 }
 
 .cx-stat:hover {

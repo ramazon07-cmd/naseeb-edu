@@ -42,6 +42,8 @@
   min-height: 440px;
   border-radius: var(--radius-2xl);
   grid-template-columns: 312px minmax(0, 1fr);
+  /* One definite row: otherwise it grows to the thread's content and pushes the composer out of the clipped shell. */
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .messaging-page .channel-sidebar {

@@ -76,6 +76,8 @@ const ParentPortalPage = lazyNamed(() => import('./pages/ParentPortalPage'), 'Pa
 const ProgramsPage = lazyNamed(() => import('./pages/ProgramsPage'), 'ProgramsPage');
 const ResourceSection = lazyNamed(() => import('./pages/ResourceSection'), 'ResourceSection');
 const CounselorEssaysPage = lazyNamed(() => import('./pages/CounselorEssays'), 'CounselorEssaysPage');
+const CounselorEssayReview = lazyNamed(() => import('./pages/CounselorEssayReview'), 'CounselorEssayReview');
+const CounselorTasksPage = lazyNamed(() => import('./pages/CounselorTasks'), 'CounselorTasksPage');
 const NotificationsPage = lazyNamed(() => import('./pages/NotificationsPage'), 'NotificationsPage');
 const ReviewPage = lazyNamed(() => import('./pages/ReviewPage'), 'ReviewPage');
 const RoadmapPage = lazyNamed(() => import('./pages/RoadmapPage'), 'RoadmapPage');
@@ -519,7 +521,8 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (page === 'documents') return <DocumentsPage {...{ user, data, query, reload, notify }} />;
   if (page === 'certificates') return <DocumentsPage typeFilter="certificate" title={t("Certificates")} {...{ user, data, query, reload, notify }} />;
   if (page === 'notifications' && isCounselorShell(user)) return <NotificationsPage {...{ notify, setPage }} />;
-  if (page === 'essays' && isCounselorShell(user)) return <CounselorEssaysPage title={t("Essays")} resource="essays" {...{ user, data, query, reload, notify }} />;
+  if (page === 'essays' && isCounselorShell(user)) return params.essayId ? <CounselorEssayReview key={params.essayId} essayId={params.essayId} notify={notify} reload={reload} onBack={() => setPage('essays')} /> : <CounselorEssaysPage {...{ user, data }} onOpen={(essayId) => setPage('essays', { essayId })} />;
+  if (page === 'tasks' && isCounselorShell(user)) return <CounselorTasksPage resource="tasks" {...{ user, data, reload, notify }} />;
   const titleMap = { tasks: 'Tasks', applications: 'University applications', essays: 'Essays' };
   return <ResourceSection title={titleMap[page] || label(page)} resource={page} {...{ user, data, query, reload, notify }} />;
 }

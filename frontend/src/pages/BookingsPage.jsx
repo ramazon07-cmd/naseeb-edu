@@ -590,8 +590,8 @@ function CounselorMeetingsPage({ data, reload, notify }) {
       <button type="button" className="cx-btn" onClick={() => setAvailabilityOpen(true)}><Calendar size={15} aria-hidden="true" />{t("My available hours")}</button>
       <button type="button" className="cx-btn primary" onClick={() => setBooking({})}><Plus size={15} aria-hidden="true" />{t("Book with a student")}</button>
     </CxHead>
-    <div className="cx-meet-grid">
-      <CxCard title={tx`Requests waiting for you · ${pending.length}`}>
+    {pending.length || week.length ? <div className={`cx-meet-grid${pending.length && week.length ? '' : ' is-single'}`}>
+      {pending.length > 0 && <CxCard title={tx`Requests waiting for you · ${pending.length}`}>
         <div className="cx-requests">
           {pending.map((item) => <article key={item.id} data-pending-id={item.id} className="cx-request">
             <div className="cx-request-head">
@@ -612,10 +612,9 @@ function CounselorMeetingsPage({ data, reload, notify }) {
               <button type="button" className="cx-btn primary" disabled={savingId === item.id} aria-busy={savingId === item.id} onClick={() => transition(item, 'approve')}>{t("Accept")}</button>
             </div>
           </article>)}
-          {!pending.length && <p className="cx-empty">{t("No requests waiting for you.")}</p>}
         </div>
-      </CxCard>
-      <CxCard title={t("This week")}>
+      </CxCard>}
+      {week.length > 0 && <CxCard title={t("This week")}>
         <div className="cx-week">
           {week.map((item) => {
             const status = meetingBadgeStatus(meetingStatus(item, now, { student: false }));
@@ -626,11 +625,9 @@ function CounselorMeetingsPage({ data, reload, notify }) {
               <span className="cx-week-actions">{weekActions(item)}</span>
             </div>;
           })}
-          {!week.length && <p className="cx-empty">{t("Nothing scheduled this week.")}</p>}
         </div>
-      </CxCard>
-    </div>
-    <CxCard className="cx-meeting-help"><p>{t("Pending → Confirmed → Completed · Cancelled · Expired — not confirmed.")}{' '}{t("A meeting a student moves comes back as a new request, with the previous time shown.")}</p></CxCard>
+      </CxCard>}
+    </div> : <CxCard title={t("This week")}><p className="cx-empty">{t("No requests waiting and nothing scheduled this week.")}</p></CxCard>}
     {rescheduling && <RescheduleForm booking={rescheduling} staff onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
     {addingNote && <MeetingNoteForm booking={addingNote} onClose={() => setAddingNote(null)} onSaved={() => setAddingNote(null)} notify={notify} />}
     {booking && <BookingForm staff defaultStudentId={booking.studentId} defaultStudentName={booking.studentName} defaultTopic={booking.topic} onClose={() => setBooking(null)} onSaved={() => {setBooking(null);reload();}} notify={notify} />}

@@ -225,20 +225,33 @@ export function ModerationQueueModal({ onClose, onChanged, notify }) {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
 
+  // Switching tabs quickly starts several loads: only the newest one may show its rows or end the loading state.
+  const latestLoad = useRef(0);
   const load = useCallback(async (statusValue = statusFilter) => {
+    const mine = ++latestLoad.current;
     setLoading(true);
-    try {setReports((await api.messageReports(statusValue)) || []);}
-    catch (err) {notify(err.message, 'error');} finally
-    {setLoading(false);}
+    try {
+      const rows = (await api.messageReports(statusValue)) || [];
+      if (mine === latestLoad.current) setReports(rows);
+    } catch (err) {
+      if (mine === latestLoad.current) notify(err.message, 'error');
+    } finally {
+      if (mine === latestLoad.current) setLoading(false);
+    }
   }, [statusFilter, notify]);
 
   useEffect(() => {load(statusFilter);}, [statusFilter]);
+  // Opening the queue refreshes the badge on its button, so a report closed elsewhere does not linger there.
+  useEffect(() => {onChanged();}, []); // eslint-disable-line react-hooks/exhaustive-deps -- once, when the queue opens
+  useEffect(() => () => {latestLoad.current = -1;}, []);
 
   async function moderate(report, mode, action = 'none') {
     setSavingId(report.id);
     try {
       notify(await moderateReport(report, mode, action, notes[report.id] || ''));
-      await load(statusFilter);
+      // A report taken into review leaves this tab: follow it, so its decision buttons stay in front of the moderator.
+      if (mode === 'review') setStatusFilter('reviewing');
+      else await load(statusFilter);
       await onChanged();
     } catch (err) {notify(err.message, 'error');} finally {setSavingId(null);}
   }

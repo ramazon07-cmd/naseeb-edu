@@ -83,7 +83,8 @@ test('"need you" means late or missing, not merely waiting for review', () => {
   assert.ok(!needsAttention(reviewOnly) && !isOnTrack(reviewOnly));
 
   assert.ok(isOnTrack(studentReasons({}, now)));
-  assert.ok(needsAttention(studentReasons({ missions_overdue: 2 }, now)));
+  // Roadmap missions are not shown on the counselor side, so late ones are no reason.
+  assert.ok(isOnTrack(studentReasons({ missions_overdue: 2 }, now)));
 });
 
 test('a single missing document is named, several are counted', () => {

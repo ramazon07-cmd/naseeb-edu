@@ -31,6 +31,7 @@ test('every page has a unique path that parses back to it', () => {
 test('record and tab routes round-trip', () => {
   const routes = [
     [{ page: 'essay_lab', params: { essayId: 42 } }, '/essay-lab/essays/42'],
+    [{ page: 'essays', params: { essayId: 7 } }, '/essays/7'],
     [{ page: 'students', params: { studentId: 15 } }, '/students/15'],
     [{ page: 'admin_students', params: { studentId: 7 } }, '/platform/students/7'],
     ...STUDENT_CENTER_TABS.filter((tab) => tab !== 'overview').map((tab) => [{ page: 'student_center', params: { tab } }, `/student-center/${tab}`]),

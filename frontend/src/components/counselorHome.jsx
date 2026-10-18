@@ -1,14 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowRight, CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardCheck, Eye, EyeOff,
-  GraduationCap, ListChecks, MessageSquare, RefreshCw, UserRound, UsersRound,
+  GraduationCap, ListChecks, MessageSquare, RefreshCw, UserRound,
 } from 'lucide-react';
 import { api } from '../api';
-import { formatDateLocale, formatNumberLocale, formatPercentLocale, t, tp, tx } from '../i18n';
+import { formatDateLocale, formatNumberLocale, t, tp, tx } from '../i18n';
 import { clockText, dateText, dayMonthText, joinParts } from '../lib/format';
 import { REVIEW_SOURCE } from '../lib/reviewQueue';
 import { inServerZone, serverRelativeDayText } from '../lib/serverTime';
-import { bucketShares, checkInAction, checkedDays, heatmapWeeks, homeReasons, todayMeetingsState } from '../lib/counselorHome';
+import { checkInAction, checkedDays, heatmapWeeks, homeReasons, todayMeetingsState } from '../lib/counselorHome';
 import { fullName } from '../lib/labels';
 import { isExpiredMeeting } from '../lib/meetings';
 import { CxAvatar, CxProgress, CxTag, reasonText } from './counselorUi';
@@ -141,11 +141,13 @@ function deadlineLabel(item) {
 }
 
 export function DeadlinesCard({ deadlines, onOpenStudents }) {
-  const { items, total, overdue } = deadlines;
+  const { items: listed, total, overdue } = deadlines;
+  // The roadmap is not shown on the counselor side, so its missions are not listed (the counts come from the server).
+  const items = listed.filter((item) => item.kind !== 'mission');
   return <HomeCard icon={ListChecks} title={t("Deadlines this week")} className="ch-deadlines"
-    footer={(overdue > 0 || total > items.length) && <>
+    footer={(overdue > 0 || total > listed.length) && <>
       {overdue > 0 && <span className="ch-overdue">{tp('{n} older item still overdue|{n} older items still overdue', overdue, { n: overdue })}</span>}
-      {total > items.length && <span>{tp('{n} more this week|{n} more this week', total - items.length, { n: total - items.length })}</span>}
+      {total > listed.length && <span>{tp('{n} more this week|{n} more this week', total - listed.length, { n: total - listed.length })}</span>}
       <button type="button" className="cx-link" onClick={onOpenStudents}>{t("Open Students")} <ArrowRight size={14} aria-hidden="true" /></button>
     </>}>
     {items.length ? <div className="ch-list">
@@ -226,39 +228,6 @@ export function CheckInHeatmap({ history }) {
   </section>;
 }
 
-const BUCKETS = [
-  ['on_track', 'On track'],
-  ['behind', 'Behind'],
-  ['needs_attention', 'Needs attention'],
-];
-
-export function ProgressCard({ progress, onOpen, onViewAll }) {
-  const { buckets, students, total } = progress;
-  const shares = bucketShares(buckets);
-  return <HomeCard icon={UsersRound} title={t("Student progress")} hint={t("Roadmap completion")} className="ch-progress"
-    footer={<button type="button" className="cx-btn" onClick={onViewAll}>{tp('View all {n} student|View all {n} students', total, { n: total })}</button>}>
-    {total ? <>
-      <div className="ch-stack" role="img" aria-label={BUCKETS.map(([key, title]) => `${t(title)}: ${formatNumberLocale(buckets[key])}`).join(', ')}>
-        {BUCKETS.map(([key]) => shares[key] > 0 && <span key={key} className={key} style={{ width: `${shares[key]}%` }} />)}
-      </div>
-      <div className="ch-buckets">
-        {BUCKETS.map(([key, title]) => <span key={key} className={`ch-bucket ${key}`}><i aria-hidden="true" />{t(title)} <b>{formatNumberLocale(buckets[key])}</b></span>)}
-      </div>
-      <p className="ch-list-label">{t("Lowest progress")}</p>
-      <div className="ch-list">
-        {students.map((student) => <button type="button" key={student.id} className="ch-row ch-progress-row" onClick={() => onOpen(student.id)}>
-          <CxAvatar name={student.name} />
-          <span className="ch-row-copy">
-            <b>{student.name}</b>
-            <span className={`ch-bar ${student.bucket}`}><CxProgress value={student.completion} label={t("Roadmap completion")} /><small>{formatPercentLocale(student.completion)}</small></span>
-          </span>
-          {student.late > 0 && <span className="ch-late" title={tp('{n} late item|{n} late items', student.late, { n: student.late })}>{tp('{n} late|{n} late', student.late, { n: formatNumberLocale(student.late) })}</span>}
-        </button>)}
-      </div>
-    </> : <p className="ch-empty">{t("No students assigned to you yet.")}</p>}
-  </HomeCard>;
-}
-
 const CARD_TITLES = {
   stats: 'Summary cards',
   snapshot: 'Student snapshot',
@@ -267,7 +236,6 @@ const CARD_TITLES = {
   today: 'Today',
   deadlines: 'Deadlines this week',
   check_ins: 'Weekly check-ins',
-  progress: 'Student progress',
 };
 
 export function CustomizeHome({ layout, onToggle, onMove, onReset, onClose }) {

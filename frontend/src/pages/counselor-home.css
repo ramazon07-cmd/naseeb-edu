@@ -552,71 +552,6 @@
   background: var(--cx-dark);
 }
 
-/* -- student progress ----------------------------------------------------- */
-.ch-stack {
-  height: 10px;
-  display: flex;
-  gap: 3px;
-  overflow: hidden;
-  margin: 6px 0 12px;
-  border-radius: var(--radius-pill);
-  background: var(--cx-track);
-}
-
-.ch-stack span {
-  height: 100%;
-  border-radius: var(--radius-pill);
-}
-
-.ch-stack .on_track,
-.ch-bucket.on_track i,
-.ch-bar.on_track .cx-progress span {
-  background: var(--cx-ok-text);
-}
-
-.ch-stack .behind,
-.ch-bucket.behind i,
-.ch-bar.behind .cx-progress span {
-  background: var(--cx-warn-text);
-}
-
-.ch-stack .needs_attention,
-.ch-bucket.needs_attention i,
-.ch-bar.needs_attention .cx-progress span {
-  background: var(--cx-alert);
-}
-
-.ch-buckets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.ch-bucket {
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 13px;
-  border: 1px solid var(--cx-line-strong);
-  border-radius: var(--radius-pill);
-  color: var(--cx-text);
-  font-size: var(--cx-fs-body);
-  font-weight: 500;
-}
-
-.ch-bucket i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.ch-bucket b {
-  color: var(--cx-ink);
-  font-weight: 700;
-}
-
 .ch-list-label {
   margin: 14px 0 0;
   color: var(--cx-muted);
@@ -624,23 +559,6 @@
   font-weight: 600;
   letter-spacing: var(--cx-ls-eyebrow);
   text-transform: uppercase;
-}
-
-.ch-progress .ch-card-foot {
-  justify-content: flex-end;
-}
-
-.ch-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
-  align-items: center;
-  gap: 10px;
-}
-
-.ch-bar small {
-  color: var(--cx-ink);
-  font-weight: 600;
-  text-align: right;
 }
 
 .ch-late {
@@ -1478,8 +1396,7 @@
   }
 
   .ch-home .cx-btn,
-  .ch-row,
-  .ch-bucket {
+  .ch-row {
     min-height: 44px;
   }
 

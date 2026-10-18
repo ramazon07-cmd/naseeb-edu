@@ -9,6 +9,13 @@ export function hasSubmission(kind, record) {
   return true;
 }
 
+// The status a counselor should read. A document marked uploaded or reviewing
+// with no file or link attached has not really been sent (the API refuses to
+// save one, but older rows exist), so it reads as required, as the Overview says.
+export function documentStatus(doc) {
+  return ['uploaded', 'reviewing'].includes(doc.status) && !hasSubmission('document', doc) ? 'required' : doc.status;
+}
+
 // Only files the browser shows as themselves (no script) may open in a new tab
 // from a same-origin blob URL.
 export function opensInTab(contentType = '') {
