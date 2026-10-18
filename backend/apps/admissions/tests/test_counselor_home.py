@@ -247,8 +247,10 @@ class CheckInTests(HomeBase):
         self.assertEqual(sum(1 for value in self.days_of(home, abbos) if value), 1)
 
     def test_meetings_held_and_direct_messages_count(self):
+        # Already held, and still today: just after midnight "five minutes ago" is yesterday.
+        held_at = max(timezone.now() - timedelta(minutes=5), at(timezone.localdate(), 0))
         Booking.objects.create(student=self.student, participant=self.counselor, topic='Held',
-                               starts_at=timezone.now() - timedelta(minutes=5), status=Booking.Status.APPROVED)
+                               starts_at=held_at, status=Booking.Status.APPROVED)
         later = self.new_student(first='Later')
         Booking.objects.create(student=later, participant=self.counselor, topic='Not yet',
                                starts_at=timezone.now() + timedelta(hours=2), status=Booking.Status.APPROVED)
