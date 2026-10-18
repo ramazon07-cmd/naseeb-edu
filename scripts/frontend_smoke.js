@@ -67,7 +67,8 @@ if (!api.includes('extendLevelOneRoadmap') || !app.includes('function LevelOneSe
 if (app.includes('Progress %') || app.includes('item.progress_percent') || app.includes("values.get('progress_percent')")) throw new Error('Manual roadmap progress controls must not be rendered.');
 if (!app.includes("status: 'submitted', reflection: values.get('reflection')") || !app.includes('Submit mission') || !styles.includes('.mission-submit-status')) throw new Error('Student submit-only roadmap workflow is missing.');
 if (!app.includes('function LevelProgress(') || !api.includes('approveStudentLevel')) throw new Error('XP and teacher-approved leveling UI is missing.');
-for (const channelTab of ['Private', 'Groups', 'Discussions']) {
+// All lists every kind (communities and discussions included); Private and Groups filter.
+for (const channelTab of ['All', 'Private', 'Groups']) {
   if (!app.includes(`\"${channelTab}\"`)) throw new Error(`Messaging tab missing: ${channelTab}`)
 }
 if (!app.includes('Post anonymously') || !app.includes('Accept answer')) throw new Error('Anonymous discussions or accepted-answer controls are missing.');
@@ -166,8 +167,8 @@ if (!app.includes("['supportTickets', 'support-tickets']") || !app.includes('isP
 if (!app.includes('function IndividualCounselorForm(') || !app.includes('function CounselorTransferForm(') || !styles.includes('.school-card.individual')) throw new Error('Individual counselor workspace provisioning or transfer UI is missing.');
 if (!app.includes('function ParentPortalPage(') || !app.includes('function ParentChildSwitcher(') || !app.includes('function ParentInviteModal(')) throw new Error('Parent cabinet, child switcher, or invite UI is missing.');
 if (!api.includes('parentPortal') || !api.includes('inviteParent') || !api.includes('acceptParentInvite') || !api.includes('revokeParentLink')) throw new Error('Parent consent/linking API client is missing.');
-if (!app.includes("user?.role === 'parent'") || !app.includes("if (role === 'parent') return [['parentPortal', 'parent-portal']]") || !styles.includes('.parent-family-hero')) throw new Error('Parent bootstrap, navigation, or responsive design is missing.');
-if (!app.includes('This cabinet never shows essays, messages, counselor notes') || !app.includes('FAMILY VIEW · READ ONLY')) throw new Error('Parent privacy and read-only disclosure is missing.');
+if (!app.includes("user?.role === 'parent'") || !app.includes("if (role === 'parent') return [['parentPortal', 'parent-portal'], ['messageChannels', 'message-channels']]") || !styles.includes('.parent-family-hero')) throw new Error('Parent bootstrap, navigation, or responsive design is missing.');
+if (!app.includes('This cabinet never shows your child’s essays, private messages, counselor notes') || !app.includes('FAMILY VIEW · READ ONLY')) throw new Error('Parent privacy and read-only disclosure is missing.');
 if (!app.includes('function ScreenTimeTracker(') || !app.includes('function ScreenTimePage(') || !app.includes("document.visibilityState === 'visible'") || !app.includes('60_000')) throw new Error('Active-tab and idle-aware screen time is missing.');
 if (!app.includes('createScreenTimeSync(') || !app.includes("window.addEventListener('online'") || !styles.includes('.screen-time-privacy')) throw new Error('Offline retry or screen-time privacy UI is missing.');
 if (!app.includes('student.level ?? 1') || !app.includes('student.roadmap_stars ?? 0')) throw new Error('Zero-valued student level and stars must remain visible.');

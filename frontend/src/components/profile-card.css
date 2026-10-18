@@ -25,23 +25,47 @@
   --id-card-button-text: var(--accent-contrast);
 }
 
-/* The card and its copy side by side; the detailed scores run underneath. */
+/* The card and its copy side by side; the detailed scores are on the card's back. */
 .profile-card-panel {
   display: grid;
   grid-template-columns: minmax(0, 720px) minmax(260px, 1fr);
-  grid-template-areas:
-    'card copy'
-    'details details';
+  grid-template-areas: 'card copy';
   gap: var(--space-8);
   align-items: center;
   padding: 40px 0 24px;
   border-top: 1px solid var(--border);
 }
 
+/* Front and back share one box sized by the front, so a flip never moves the layout.
+   The container query units let the back scale with the card like the canvas does. */
+.profile-card-flip {
+  grid-area: card;
+  min-width: 0;
+  container-type: inline-size;
+  perspective: 2400px;
+  cursor: pointer;
+}
+
+.profile-card-inner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.profile-card-flip.is-flipped .profile-card-inner {
+  transform: rotateY(180deg);
+}
+
+.profile-card-flip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-lg);
+}
+
 /* A crisp document frame without ornamental shadows. */
 .profile-card-frame {
-  grid-area: card;
-  aspect-ratio: 1600 / 1010;
+  aspect-ratio: 1600 / 880;
+  backface-visibility: hidden;
   overflow: hidden;
   border: 1px solid var(--id-card-border);
   border-radius: 12px;
@@ -87,9 +111,6 @@
   line-height: 1.6;
 }
 
-.profile-card-copy .button {
-  margin-top: var(--space-1);
-}
 
 .profile-card-error {
   display: grid;
@@ -108,16 +129,98 @@
   outline-offset: 4px;
 }
 
-.profile-card-details {
-  grid-area: details;
-  min-width: 0;
+/* The back: the same paper, border and ink as the front, three score columns. */
+.profile-card-back {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2cqw;
+  padding: 4cqw 5cqw;
+  overflow: hidden;
+  border: 1px solid var(--id-card-border);
+  border-radius: 12px;
+  background: var(--id-card-paper);
+  color: var(--id-card-ink);
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
 }
 
-/* The scores are the card's long form: one hairline above, three columns. */
-.profile-card-details .assessment-number-breakdown {
-  max-width: 1040px;
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-subtle);
+.profile-card-back header {
+  display: grid;
+  gap: 0.6cqw;
+  padding-bottom: 2cqw;
+  border-bottom: 1px solid var(--id-card-border);
+}
+
+.profile-card-back header span,
+.profile-card-back .assessment-number-column h3 {
+  margin: 0;
+  color: var(--id-card-secondary);
+  font-size: clamp(0.5rem, 1.3cqw, 0.6875rem);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.profile-card-back header h3 {
+  margin: 0;
+  color: var(--id-card-primary);
+  font-family: 'Newsreader Variable', Georgia, serif;
+  font-size: clamp(0.8125rem, 3.4cqw, 1.75rem);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+/* Titles share one row (subgrid), so a two-line title never shifts its column's scores. */
+.profile-card-back .assessment-number-breakdown {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto auto;
+  gap: 0 3cqw;
+}
+
+.profile-card-back .assessment-number-column {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+}
+
+.profile-card-back .assessment-number-column h3 {
+  align-self: end;
+  margin-bottom: 0.8cqw;
+}
+
+.profile-card-back .assessment-number-column > div {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+
+.profile-card-back .assessment-number-column > div > div {
+  min-height: 0;
+  padding: 0.5cqw 0;
+  gap: 1cqw;
+  border-bottom-color: var(--id-card-border);
+}
+
+.profile-card-back .assessment-number-column span {
+  overflow: hidden;
+  color: var(--id-card-label);
+  font-size: clamp(0.5625rem, 1.75cqw, 0.8125rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-card-back .assessment-number-column strong {
+  color: var(--id-card-ink);
+  font-size: clamp(0.6875rem, 2.5cqw, 1.1875rem);
+  line-height: 1.2;
+}
+
+.profile-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 @media (max-width: 1100px) {
@@ -125,25 +228,30 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       'card'
-      'copy'
-      'details';
+      'copy';
     gap: var(--space-6);
   }
 
-  .profile-card-frame {
+  .profile-card-flip {
     width: min(100%, 720px);
   }
 }
 
 @media (max-width: 560px) {
+  .profile-card-actions {
+    width: 100%;
+  }
+
   .profile-card-copy .button {
     width: 100%;
     justify-content: center;
   }
 }
 
+/* Reduced motion: the faces swap at once, with no visible turn. */
 @media (prefers-reduced-motion: reduce) {
-  .profile-card-frame canvas {
+  .profile-card-frame canvas,
+  .profile-card-inner {
     transition: none;
   }
 }

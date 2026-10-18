@@ -44,6 +44,7 @@ export const PAGE_PATHS = {
   admin_catalog: '/platform/catalog',
   counselor_roadmap: '/counselor-roadmap',
   admin_audit: '/platform/audit',
+  admin_moderation: '/platform/moderation',
   admin_plans: '/platform/plans',
   admin_staff: '/platform/staff',
   admin_health: '/platform/health',
@@ -77,6 +78,7 @@ const TAB_PAGES = { student_center: STUDENT_CENTER_TABS, roadmap: ROADMAP_TABS }
 // /messages/9 (open that chat).
 const RECORD_ROUTES = {
   essay_lab: { segment: 'essays', param: 'essayId' },
+  essays: { segment: '', param: 'essayId' },
   students: { segment: '', param: 'studentId' },
   admin_students: { segment: '', param: 'studentId' },
   messages: { segment: '', param: 'channelId' },
@@ -131,30 +133,33 @@ export function buildPath({ page, params = {} } = {}) {
 
 // Sidebar order of the counselor workspace, and the pages that left it: still
 // openable by a direct link (search results, old bookmarks), just not listed.
-// Pages turned off in features.js: in no sidebar, so no role can open them.
+// Unreleased templates stay out of the admin sidebar; counselors see a locked placeholder.
 const OFF_PAGES = new Set(FEATURES.counselorRoadmapTemplates ? [] : ['counselor_roadmap']);
 const offered = (pages) => pages.filter((page) => !OFF_PAGES.has(page));
 
-export const COUNSELOR_NAV = offered(['dashboard', 'students', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap']);
-const COUNSELOR_DIRECT_LINK_PAGES = ['students_joined', 'academics', 'portfolio', 'activities', 'recommendations', 'tasks', 'roadmap', 'applications', 'documents', 'certificates'];
+export const COUNSELOR_NAV = ['dashboard', 'students', 'tasks', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap'];
+const COUNSELOR_DIRECT_LINK_PAGES = ['students_joined', 'academics', 'portfolio', 'activities', 'recommendations', 'roadmap', 'applications', 'documents', 'certificates'];
 
 // Sidebar order per role.
 export function navigationFor(user) {
   // Health is for ops and above; staff accounts are managed by super admins only.
-  if (isPlatformAdmin(user)) return offered(['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'admin_catalog', 'counselor_roadmap', 'admin_plans', ...(canManageWorkspaces(user) ? ['admin_health'] : []), ...(isSuperAdmin(user) ? ['admin_staff'] : []), 'admin_audit', 'support']);
-  if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings'];
-  // The counselor sidebar is the "Counselor Dashboard" design: seven destinations.
+  if (isPlatformAdmin(user)) return offered(['admin_dashboard', 'admin_schools', 'admin_counselors', 'admin_students', 'admin_catalog', 'counselor_roadmap', 'admin_plans', ...(canManageWorkspaces(user) ? ['admin_health'] : []), ...(isSuperAdmin(user) ? ['admin_staff'] : []), 'admin_moderation', 'admin_audit', 'support']);
+  if (user?.role === 'parent') return ['dashboard', 'parent_progress', 'parent_tasks', 'parent_applications', 'parent_documents', 'parent_meetings', 'messages'];
+  // The counselor sidebar includes Tasks independently of the locked Roadmap.
   // Tasks, documents, roadmap, portfolio and the rest are reviewed in Review and
   // read per student in Student 360; the old flat pages stay reachable by link.
   if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'school_counselors', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'roadmap', 'store', 'screen_time', 'support'];
 }
 
 // Pages a role sees in its navigation but cannot open yet: the sidebar shows
 // them locked ("Coming soon") and their paths fall back to the home page.
-const LOCKED_PAGES = { student: ['store'] };
+const LOCKED_PAGES = {
+  student: ['store', 'roadmap'],
+  counselor: ['roadmap', 'counselor_roadmap'],
+};
 
 export function lockedPages(user) {
   if (!user || isPlatformAdmin(user)) return new Set();
@@ -165,7 +170,7 @@ export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
 // Pages opened from the account menu (or, for counselors, the shell's
 // Notifications item) rather than the sidebar list.
-const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'] };
+const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'] };
 
 export function reachablePages(user) {
   if (!user) return new Set();

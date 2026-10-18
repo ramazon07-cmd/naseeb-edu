@@ -15,7 +15,7 @@ import { REVIEW_SOURCES } from '../lib/reviewQueue';
 import { reviewCounts, statsBadges } from '../lib/counselorCounts';
 import { isExpiredMeeting } from '../lib/meetings';
 import { CxHead } from '../components/counselorUi';
-import { AllSetOverlay, CheckInsCard, CustomizeHome, DeadlinesCard, HomeError, HomeSkeleton, NeedYouCard, ProgressCard, ReviewCard, SnapshotCard, StatCards, TodayCard } from '../components/counselorHome';
+import { AllSetOverlay, CheckInsCard, CustomizeHome, DeadlinesCard, HomeError, HomeSkeleton, NeedYouCard, ReviewCard, SnapshotCard, StatCards, TodayCard } from '../components/counselorHome';
 import { WIDE_CARDS, addCheckedIn, allClear, allSetSeen, checkInKey, checkInOutcome, checkInPage, greetingKey, loadLayout, markAllSetSeen, mergeCheckInRows, moveCard, normalizeLayout, saveLayout, setCheckIn, setCheckInRow, snapshotChoices, toggleCard, visibleCards, withPending } from '../lib/counselorHome';
 import './counselor-home.css';
 import { MeetingNoteForm } from './BookingsPage';
@@ -224,7 +224,6 @@ function CounselorHome({ user, stats, notify, setPage, refreshStats, updateStats
     check_ins: <CheckInsCard checkIns={{ ...home.check_ins, students: checkInRows }} week={home.week} today={home.today} onToggle={toggleCheckIn} pending={pendingCheckIns}
       hasMore={Boolean(checkInsHaveMore)} loadingMore={morePaging.loading} onLoadMore={loadMoreCheckIns} history={home.check_in_history} />,
     snapshot: <SnapshotCard choices={snapshotOptions} selected={snapshotStudent} onSelect={setSnapshotFor} state={snapshot} onRetry={snapshot.retry} onOpenStudent={openStudent} />,
-    progress: <ProgressCard progress={home.progress} onOpen={openStudent} onViewAll={() => setPage('students')} />,
   };
   return <div className="cx-page ch-home">
     {head(<>{formatDateLocale(home.today, { weekday: 'long', day: 'numeric', month: 'long' })} · {joinParts(
@@ -250,7 +249,7 @@ export function StudentDashboard({ user, data, setPage, onDirect, resourceStatus
   const loadPrograms = useCallback(() => loadResources(['opportunityPrograms']), [loadResources]);
   const retryPrograms = useCallback(() => retryResources(['opportunityPrograms']), [retryResources]);
   return <CompactDashboard key={user.id} user={user} student={ownStudent(data)} data={data} setPage={setPage} onDirect={onDirect} Modal={Modal} programUsage={<ProgramUsageSummary user={user} data={data} />}
-    programsStatus={resourceStatus?.opportunityPrograms} loadPrograms={loadPrograms} retryPrograms={retryPrograms} />;
+    resourceStatus={resourceStatus} retryResources={retryResources} programsStatus={resourceStatus?.opportunityPrograms} loadPrograms={loadPrograms} retryPrograms={retryPrograms} />;
 }
 
 export function ProgramServiceForm({ service, user, data, defaultStudentId = null, onClose, onSaved, notify }) {

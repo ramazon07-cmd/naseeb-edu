@@ -331,6 +331,7 @@ function AIEducationGuidance({ majors, subjects, lockReason, student, reload, no
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [changing, setChanging] = useState(false)
 
   async function generate() {
     if (locked) return
@@ -340,6 +341,7 @@ function AIEducationGuidance({ majors, subjects, lockReason, student, reload, no
       const nextGuidance = await api.educationMatchAI({ major_candidates: majors, subject_strengths: subjects })
       setGuidance(nextGuidance)
       setSelectedMajor('')
+      setChanging(false)
     } catch (requestError) {
       setError(requestError.message || t('AI guidance is unavailable right now.'))
     } finally {
@@ -354,6 +356,8 @@ function AIEducationGuidance({ majors, subjects, lockReason, student, reload, no
     try {
       await api.update('students', student.id, { target_major: selectedMajor })
       notify?.(t('{major} saved as your current study direction.', { major: selectedMajor }))
+      setGuidance(null)
+      setChanging(false)
       reload?.()
     } catch (requestError) {
       setError(requestError.message || t('We could not save your selected major.'))
@@ -363,8 +367,20 @@ function AIEducationGuidance({ majors, subjects, lockReason, student, reload, no
   }
 
   const topFits = guidance?.major_guidance?.slice(0, 3) || []
+  // A saved direction replaces the list until the student asks to change it.
+  const chosen = !locked && !guidance && !changing ? student?.target_major : ''
+  // What the chosen major leans on, from the shared majors data (no AI call, no stored text).
+  const chosenKey = chosen && Object.keys(NAMES.majors).find((key) => NAMES.majors[key] === chosen)
+  const chosenSubjects = chosenKey && MAJOR_ENTRIES[chosenKey]?.subjects ? Object.entries(MAJOR_ENTRIES[chosenKey].subjects).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([subject]) => t(SUBJECT_NAME[subject])) : []
+  if (chosen) return <section id="assessment-ai-panel" className="assessment-ai-panel is-chosen">
+    <div className="assessment-ai-orbit" aria-hidden="true"><span className="assessment-ai-orbit-mark" /></div>
+    <span className="eyebrow">{t('Your study direction')}</span>
+    <h3>{chosen}</h3>
+    {chosenSubjects.length > 0 && <div className="assessment-ai-subjects"><span>{t('Core school subjects')}</span><ul>{chosenSubjects.map((subject) => <li key={subject}>{subject}</li>)}</ul></div>}
+    <button type="button" className="assessment-ai-generate" onClick={() => setChanging(true)}>{t('Change direction')}</button>
+  </section>
 
-  return <section id="assessment-ai-panel" className={`assessment-ai-panel ${locked ? 'locked' : ''}`}>
+  return <section id="assessment-ai-panel" className={`assessment-ai-panel ${locked ? 'locked' : ''} ${topFits.length ? 'has-fits' : ''}`}>
     <div className="assessment-ai-orbit" aria-hidden="true"><span className="assessment-ai-orbit-mark" /></div>
     <span className="eyebrow">{t('AI MAJOR MATCH')}</span>
     <h3>{guidance ? t('Choose your strongest fit') : t("Now let's find your direction")}</h3>
@@ -378,7 +394,7 @@ function AIEducationGuidance({ majors, subjects, lockReason, student, reload, no
     </button>
     {error && <p className="education-ai-error" role="alert">{error}</p>}
     {topFits.length > 0 && <div className="assessment-ai-fits" role="radiogroup" aria-label={t('Top three major fits')}>
-      {topFits.map((item, index) => <button key={item.major} type="button" role="radio" aria-checked={selectedMajor === item.major} className={selectedMajor === item.major ? 'selected' : ''} onClick={() => setSelectedMajor(item.major)}>
+      {topFits.map((item, index) => <button key={item.major} type="button" role="radio" aria-checked={selectedMajor === item.major} className={selectedMajor === item.major ? 'selected' : ''} title={item.why_fit} onClick={() => setSelectedMajor(item.major)}>
         <span>{String(index + 1).padStart(2, '0')}</span>
         <div><b>{item.major}</b><small>{item.why_fit}</small></div>
         <span className="assessment-ai-choice">{selectedMajor === item.major ? <Check size={15} /> : null}</span>

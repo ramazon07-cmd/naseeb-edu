@@ -1,0 +1,184 @@
+/* Counselor lists grouped by student (Essays, Tasks): one card per student, the records as plain lines inside it. */
+
+.cg-groups {
+  display: grid;
+  gap: 20px;
+}
+
+.cg-group {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--cx-line);
+  border-radius: var(--cx-radius-card);
+  background: var(--cx-card);
+}
+
+.cg-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--cx-line);
+}
+
+.cg-head b {
+  color: var(--cx-ink);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.cg-head small {
+  color: var(--cx-muted);
+  font-size: 0.875rem;
+}
+
+/* The essays are lines inside the student's card: a hairline between them, a wash on hover. */
+.cg-group .cx-row,
+.cg-line {
+  min-height: 78px;
+  padding: 14px 22px;
+  border: 0;
+  border-bottom: 1px solid var(--cx-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+/* A line that is not itself a button (its actions are): same look, no hover wash. */
+.cg-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cg-group .cx-row {
+  gap: 16px;
+}
+
+.cg-group .cx-row-copy {
+  gap: 4px;
+}
+
+.cg-group .cx-row-copy b {
+  font-size: 1rem;
+}
+
+.cg-group .cx-row-copy small {
+  font-size: 0.875rem;
+}
+
+.cg-group .cx-tag {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+}
+
+.cg-line .icon-button {
+  width: 40px;
+  height: 40px;
+}
+
+.cg-line .cx-row-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The title is the one button that opens the record; its ::after stretches over the whole line, the other actions sit above it. */
+.cg-open {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cx-ink);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: var(--cx-fw-strong);
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.cg-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* The ring is drawn once, around the whole line (below); the shell's own button ring would add a second one round the title. */
+.cx-shell .cg-open:focus-visible {
+  outline: none;
+}
+
+.cg-open:focus-visible::after {
+  outline: 2px solid var(--cx-progress);
+  outline-offset: -2px;
+}
+
+.cg-line:has(.cg-open):hover {
+  background: var(--cx-hover);
+}
+
+.cg-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: var(--cx-muted);
+}
+
+.cg-none {
+  margin: 0;
+  color: var(--cx-muted);
+}
+
+.cg-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cg-group .cx-row:last-child,
+.cg-line:last-child {
+  border-bottom: 0;
+}
+
+.cg-group .cx-row:hover {
+  background: var(--cx-hover);
+}
+
+.cg-date {
+  color: var(--cx-muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+/* Narrow screens: the title gets its own line, status and date sit under it. */
+@media (max-width: 560px) {
+  .cg-head {
+    padding: 14px 16px;
+  }
+
+  .cg-group .cx-row,
+  .cg-line {
+    flex-wrap: wrap;
+    min-height: 0;
+    padding: 12px 16px;
+  }
+
+  .cg-group .cx-row-copy,
+  .cg-line .cx-row-copy {
+    flex: 1 1 100%;
+  }
+
+  .cg-date {
+    margin-left: auto;
+  }
+
+  .cg-group .cx-row-go {
+    display: none;
+  }
+}

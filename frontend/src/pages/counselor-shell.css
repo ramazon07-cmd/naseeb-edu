@@ -222,6 +222,18 @@
   position: relative;
 }
 
+.cx-shell .cx-nav-item.cx-nav-locked,
+.cx-shell .cx-nav-item.cx-nav-locked:hover {
+  color: var(--cx-muted);
+  background: transparent;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cx-shell .cx-nav-lock-icon {
+  margin-left: auto;
+}
+
 /* The icon rail: 88px of icons with their badges, labels as tooltips. */
 @media (min-width: 821px) {
   .cx-shell .cx-column > .cx-main {
@@ -259,6 +271,12 @@
   .cx-shell .cx-sidebar.rail .cx-nav-item {
     justify-content: center;
     padding: 0;
+  }
+
+  .cx-shell .cx-sidebar.rail .cx-nav-lock-icon {
+    position: absolute;
+    top: 4px;
+    right: 4px;
   }
 
   .cx-shell .cx-sidebar.rail .cx-nav-item .cx-count {

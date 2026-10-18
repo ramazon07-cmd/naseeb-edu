@@ -22,17 +22,17 @@ test('/api is never answered with the app shell on Vercel', () => {
 });
 
 test('the Vercel middleware proxies /api to NASEEB_API_ORIGIN, path and query kept', async () => {
-  const { default: middleware, config: matcher } = await import('../middleware.js');
+  const { middlewareWithEnv, config: matcher } = await import('../middleware.js');
   assert.deepEqual(matcher, { matcher: '/api/:path*' });
   const request = new Request('https://naseeb-edu-demo.vercel.app/api/auth/token/refresh/?x=1', { method: 'POST' });
-  const response = middleware(request, { NASEEB_API_ORIGIN: 'https://naseeb-api.onrender.com/' });
+  const response = middlewareWithEnv(request, { NASEEB_API_ORIGIN: 'https://naseeb-api.onrender.com/' });
   assert.equal(response.headers.get('x-middleware-rewrite'), 'https://naseeb-api.onrender.com/api/auth/token/refresh/?x=1');
 });
 
 test('without NASEEB_API_ORIGIN the middleware fails loudly with JSON, not index.html', async () => {
-  const { default: middleware } = await import('../middleware.js');
+  const { middlewareWithEnv } = await import('../middleware.js');
   for (const env of [{}, { NASEEB_API_ORIGIN: 'naseeb-api.onrender.com' }, { NASEEB_API_ORIGIN: 'https://x.com/api' }]) {
-    const response = middleware(new Request('https://app.example/api/users/accounts/me/'), env);
+    const response = middlewareWithEnv(new Request('https://app.example/api/users/accounts/me/'), env);
     assert.equal(response.status, 502, JSON.stringify(env));
     assert.equal((await response.json()).code, 'api_proxy_unconfigured');
     assert.equal(response.headers.get('x-middleware-rewrite'), null);
@@ -47,4 +47,36 @@ test('a Vercel build with a relative API URL and no NASEEB_API_ORIGIN fails', as
     { mode: 'vercel-proxy', apiUrl: '/api', upstream: 'https://api.example.com' });
   assert.equal(checkBuildApiConfig({ VERCEL: '1', VITE_API_URL: 'https://api.example.com/api' }).mode, 'direct');
   assert.equal(checkBuildApiConfig({}).mode, 'proxy', 'local builds use the vite/nginx proxy');
+});
+
+test('Vercel request context does not replace process.env', async (t) => {
+  const { default: middleware } = await import('../middleware.js');
+  const previous = process.env.NASEEB_API_ORIGIN;
+  t.after(() => {
+    if (previous === undefined) delete process.env.NASEEB_API_ORIGIN;
+    else process.env.NASEEB_API_ORIGIN = previous;
+  });
+  process.env.NASEEB_API_ORIGIN = 'https://api.naseebedu.com/';
+  const request = new Request('https://preview.vercel.app/api/auth/token/refresh/?x=1', { method: 'POST' });
+  const response = middleware(request, { waitUntil() {} });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-middleware-rewrite'), 'https://api.naseebedu.com/api/auth/token/refresh/?x=1');
+  delete process.env.NASEEB_API_ORIGIN;
+  const missing = middleware(request, { waitUntil() {}, NASEEB_API_ORIGIN: 'https://wrong.example.com' });
+  assert.equal(missing.status, 502);
+  assert.equal((await missing.json()).code, 'api_proxy_unconfigured');
+});
+
+test('Vercel sends the nginx security headers on every route and CSP in report-only mode', async () => {
+  const rule = config.headers.find(({ source }) => source === '/(.*)');
+  assert.ok(rule, 'security headers must cover pages and assets');
+  const headers = Object.fromEntries(rule.headers.map(({ key, value }) => [key, value]));
+  const nginx = readFileSync(new URL('../nginx-security-headers.conf', import.meta.url), 'utf8');
+  for (const [name, value] of [...nginx.matchAll(/add_header ([\w-]+) "([^"]+)" always;/g)].map((match) => [match[1], match[2]])) {
+    assert.equal(headers[name], value, name);
+  }
+  assert.equal(headers['Content-Security-Policy'], undefined);
+  const { buildCsp } = await import('../scripts/render-nginx-conf.mjs');
+  assert.equal(headers['Content-Security-Policy-Report-Only'], buildCsp('', 'https://api.naseebedu.com/api'));
+  assert.match(headers['Content-Security-Policy-Report-Only'], /connect-src 'self' https:\/\/api\.naseebedu\.com(?:;|$)/);
 });

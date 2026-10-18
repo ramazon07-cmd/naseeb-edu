@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { isTaskManager, isCounselor } from '../lib/roles';
 import { api } from '../api';
 import { tx, t } from '../i18n';
-import { Panel, Empty, Modal } from '../components/ui';
+import { Panel, Empty, Modal, PriorityBadge } from '../components/ui';
 import { Plus, Eye, CheckCircle2, Pencil, Trash2, Flag, ShieldCheck } from 'lucide-react';
 import { GoogleDocsActions, EssayDetailModal, TaskSubmissionModal, GoogleDocsRecordModal, AttachmentPreviewModal } from '../components/documents';
 import { AttachmentRow, FileField, UploadError, evidenceAttachment, recommendationAttachment, useFileUpload } from '../components/files';
@@ -11,7 +11,7 @@ import { canDelete, changedPayload, editableFields, isStaleCopyError, recordErro
 import { studentName, dateText, dateTimeText, joinParts } from '../lib/format';
 import { label, ownStudent } from '../lib/labels';
 import { Record } from '../components/records';
-import { Field, CheckboxControl } from '../components/forms';
+import { Field, CheckboxControl, SegmentedField } from '../components/forms';
 import { useRecordList } from '../hooks/useRecordList';
 import { usePagedList } from '../hooks/usePagedList';
 import { LoadMore, PagedListError, StudentPicker, UniversityPicker, firstPageLoading } from '../components/paged';
@@ -208,7 +208,7 @@ export function RecordRow({ resource, item, data, attachment, actions, showStude
     honors: [item.title, joinParts(student, item.issuer, label(item.level)), item.description, item.verified ? 'approved' : 'reviewing'],
     achievements: [item.title, joinParts(student, label(item.category), item.date && dateText(item.date)), item.impact || item.description, item.verified ? 'approved' : 'reviewing'],
     recommendations: [item.recommender_name, joinParts(student, item.recommender_title, item.relationship), item.deadline ? tx`Deadline: ${dateText(item.deadline)}` : '', item.status],
-    tasks: [item.title, joinParts(student, item.due_date && tx`Due ${dateText(item.due_date)}`, item.priority && tx`Priority: ${label(item.priority)}`, item.is_self_assigned && t('Personal task'), item.submitted_at && tx`Submitted ${dateText(item.submitted_at)}`), item.student_response || item.description, item.status],
+    tasks: [item.title, joinParts(student, item.due_date && tx`Due ${dateText(item.due_date)}`, item.is_self_assigned && t('Personal task'), item.submitted_at && tx`Submitted ${dateText(item.submitted_at)}`), item.student_response || item.description, item.status],
     applications: [item.university_detail?.name || t('University'), `${student} • ${item.program} • ${label(item.tier)}`, tx`Deadline: ${dateText(item.deadline)}`, item.status],
     essays: [item.title, joinParts(student, tx`Version ${item.version}`, item.university_name || t('General essay')), item.counselor_comment || item.prompt, item.status],
     bookings: [item.topic, joinParts(student, dateTimeText(item.starts_at), item.participant_name), item.notes, item.status]
@@ -216,7 +216,7 @@ export function RecordRow({ resource, item, data, attachment, actions, showStude
   const [title, meta, base, badge] = map[resource] || [t('Record'), student, '', null];
   const note = PORTFOLIO_RESOURCES.has(resource) && item.counselor_comment ? `${t('Counselor note:')} ${item.counselor_comment}` : '';
   const description = joinParts(base, note);
-  return <Record title={title} meta={meta} description={description} badge={badge} attachment={attachment} actions={actions} />;
+  return <Record title={title} meta={meta} description={description} badge={badge} extraBadge={resource === 'tasks' ? <PriorityBadge priority={item.priority} /> : null} attachment={attachment} actions={actions} />;
 }
 
 // [add title, edit title] per record type.
@@ -227,6 +227,8 @@ const FORM_TITLES = {
   recommendations: ['Add recommendation letter', 'Edit recommendation letter'], tasks: ['Assign task', 'Edit task'],
   applications: ['Add application', 'Edit application'], essays: ['Add essay', 'Edit essay'],
 };
+
+const STAFF_TASK_FIELDS = ['title', 'description', 'due_date', 'priority'];
 
 export function ResourceForm({ resource, item, data, user, defaultStudentId = null, onClose, onSaved, notify, title = null }) {
   const [saving, setSaving] = useState(false);
@@ -241,12 +243,15 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
   const upload = useFileUpload();
   const busy = saving || upload.uploading;
   const allFields = RESOURCE_FIELDS[resource] || [];
+  // Staff set what a task asks (title, description, date, priority). The student's answer and a task's
+  // status are not theirs to type: they read the answer and approve or send it back from the task.
   const fields = resource === 'tasks' && user.role === 'student' ?
   allFields.filter(([name]) =>
   !item ?
   ['title', 'description', 'due_date', 'priority'].includes(name) :
   item.is_self_assigned || ['status', 'student_response', 'submission_url'].includes(name)
   ) :
+  resource === 'tasks' ? allFields.filter(([name]) => STAFF_TASK_FIELDS.includes(name)) :
   item ? editableFields(item, allFields) : allFields;
   async function submit(event) {
     event.preventDefault();if (busy) return;setSaving(true);const values = new FormData(event.currentTarget);
@@ -281,7 +286,7 @@ export function ResourceForm({ resource, item, data, user, defaultStudentId = nu
     } finally {setSaving(false);}
   }
   function close() {upload.cancel();onClose();}
-  const selfTask = resource === 'tasks' && user.role === 'student';
+  const selfTask = resource === 'tasks' && user.role === 'student' && (!item || item.is_self_assigned);
   const [addTitle, editTitle] = selfTask ? ['Add personal task', 'Edit personal task'] : FORM_TITLES[resource] || ['Add', 'Edit'];
   return <Modal title={title || t(item ? editTitle : addTitle)} onClose={close}><form ref={formRef} className="form-grid" onSubmit={submit}>
     {!item && isTaskManager(user) && <StudentPicker required value={studentId} onChange={setStudentId} hint={t("Only students connected to your account are listed.")} />}
@@ -306,6 +311,7 @@ export function DynamicField({ name, labelText, type, required, choices, placeho
   if (type === 'select' && value && !choices.includes(value)) return <Field label={t(labelText)}><input value={label(value)} readOnly disabled /></Field>;
   const hint = placeholder ? t(placeholder) : undefined;
   if (type === 'textarea') return <Field label={t(labelText)}><textarea name={name} defaultValue={value || ''} required={required} placeholder={hint} /></Field>;
+  if (type === 'select' && name === 'priority') return <SegmentedField name={name} label={labelText} options={choices.map((choice) => ({ value: choice, label: label(choice) }))} value={value} required={required} />;
   if (type === 'select') return <Field label={t(labelText)}><select name={name} defaultValue={value || choices[0]} required={required}>{choices.map((choice) => <option key={choice} value={choice}>{label(choice)}</option>)}</select></Field>;
   if (type === 'checkbox') return <CheckboxControl className="form-wide" name={name} defaultChecked={Boolean(value)}>{t(labelText)}</CheckboxControl>;
   // The catalogue is searched on the server rather than loaded into the form.

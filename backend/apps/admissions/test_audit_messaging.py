@@ -310,3 +310,16 @@ class MessageReportModerationTests(AuditBaseMixin, APITestCase):
         self.assertEqual(report.status, MessageReport.Status.PENDING)
         # Another moderator can.
         self.assertEqual(self.act(self.counselor, 'dismiss', report).status_code, status.HTTP_200_OK)
+
+    def test_support_staff_moderate_reports_from_any_school(self):
+        from apps.users.models import ProductAuditEvent
+        support = self.make_user('mod-support', User.Role.ADMIN, None, admin_tier=User.AdminTier.SUPPORT)
+        self.client.force_authenticate(support)
+        listed = self.results(self.client.get(f'{REPORTS}?status=pending&school={self.school_a.id}'))
+        self.assertEqual([row['id'] for row in listed], [self.report.id])
+        self.assertEqual(self.results(self.client.get(f'{REPORTS}?school={self.school_b.id}')), [])
+        resolved = self.act(support, 'resolve', action=MessageReport.Action.MUTED_24H)
+        self.assertEqual(resolved.status_code, status.HTTP_200_OK, resolved.data)
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, MessageReport.Status.RESOLVED)
+        self.assertEqual(ProductAuditEvent.objects.filter(action__startswith='message_report.', target_id=self.report.id).count(), 1)

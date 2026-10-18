@@ -113,7 +113,7 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
 
   const suggestions = user.role === 'counselor' ?
   ['Plan student check-ins', 'Review overdue tasks', 'Plan a meeting'] :
-  ['Plan today’s tasks', 'Break down my next mission', 'Plan my essay'];
+  ['Plan my essay', 'Plan a meeting'];
 
   return <div className={`assistant-center ${open ? 'open' : ''}`}>
     {open && <section className="assistant-drawer" role="dialog" aria-label={t("Naseeb AI assistant")}>

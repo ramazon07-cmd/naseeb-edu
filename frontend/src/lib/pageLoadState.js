@@ -15,7 +15,9 @@ export function pageLoadState({ keys, data, stats, loading, resourceStatus, lazy
   // not an empty list. Other failed keys leave the page up beside the retry notice,
   // and a failed refresh still has its previous value.
   const contentBlocked = failedKeys.some((key) => primaryKeys.includes(key) && !resourceStatus[key].loaded);
-  const hasVisibleData = keys.some((key) => key === 'dashboard' ? Boolean(stats) : Boolean(data[key]?.length));
+  // An object payload (the parent portal) has no length: it counts once it has loaded.
+  const visible = (key) => key === 'dashboard' ? Boolean(stats) : Array.isArray(data[key]) ? data[key].length > 0 : Boolean(data[key] && resourceStatus[key]?.loaded);
+  const hasVisibleData = keys.some(visible);
   if (lazy) {
     const firstLoadKeys = keys.filter((key) => !resourceStatus[key] || (resourceStatus[key].status === 'loading' && !resourceStatus[key].loaded));
     return { loadingKeys, failedKeys, hasVisibleData, contentBlocked, initialLoading: firstLoadKeys.length > 0 };

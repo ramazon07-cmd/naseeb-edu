@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { pageLoadState } from '../src/lib/pageLoadState.js';
 
 const empty = { students: [], tasks: [] };
@@ -29,4 +30,27 @@ test('a page waits for its own in-memory collection on first load', () => {
 test('failed collections are reported', () => {
   const state = pageLoadState({ keys: ['tasks'], data: empty, stats: null, loading: false, resourceStatus: { tasks: { status: 'error', error: 'x' } } });
   assert.deepEqual(state.failedKeys, ['tasks']);
+});
+
+test('Counselor Roadmap waits for its roadmaps and reports a failed load instead of an empty list (card 23)', () => {
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.match(app, /counselor_roadmap: \['counselorRoadmaps', 'counselorRoadmapTemplates'\]/);
+  const keys = ['counselorRoadmaps', 'counselorRoadmapTemplates'];
+  const data = { counselorRoadmaps: [], counselorRoadmapTemplates: [] };
+  const loading = pageLoadState({ keys, data, stats: null, loading: true, resourceStatus: { counselorRoadmaps: { status: 'loading', error: '' } } });
+  assert.equal(loading.initialLoading, true);
+  const failed = pageLoadState({ keys, data, stats: null, loading: false, resourceStatus: { counselorRoadmaps: { status: 'error', error: 'Network error' }, counselorRoadmapTemplates: { status: 'success', error: '' } } });
+  assert.deepEqual(failed.failedKeys, ['counselorRoadmaps']);
+});
+
+test('parent portal: a failed first load blocks the page, a reload keeps it visible (card 48)', () => {
+  const keys = ['parentPortal'];
+  const data = { parentPortal: { children: [], pending_invitations: [] } };
+  const failed = pageLoadState({ keys, data, stats: null, loading: false, primaryKeys: keys, resourceStatus: { parentPortal: { status: 'error', error: 'Server error', loaded: false } } });
+  assert.equal(failed.contentBlocked, true);
+  const reloading = pageLoadState({ keys, data, stats: null, loading: true, primaryKeys: keys, resourceStatus: { parentPortal: { status: 'loading', error: '', loaded: true } } });
+  assert.equal(reloading.hasVisibleData, true);
+  assert.equal(reloading.initialLoading, false);
+  const first = pageLoadState({ keys, data, stats: null, loading: true, primaryKeys: keys, resourceStatus: { parentPortal: { status: 'loading', error: '', loaded: false } } });
+  assert.equal(first.initialLoading, true);
 });

@@ -1,14 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowRight, CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardCheck, Eye, EyeOff,
-  GraduationCap, ListChecks, MessageSquare, RefreshCw, Star, UserRound, UsersRound,
+  GraduationCap, ListChecks, MessageSquare, RefreshCw, UserRound,
 } from 'lucide-react';
 import { api } from '../api';
-import { formatDateLocale, formatNumberLocale, formatPercentLocale, t, tp, tx } from '../i18n';
+import { formatDateLocale, formatNumberLocale, t, tp, tx } from '../i18n';
 import { clockText, dateText, dayMonthText, joinParts } from '../lib/format';
 import { REVIEW_SOURCE } from '../lib/reviewQueue';
 import { inServerZone, serverRelativeDayText } from '../lib/serverTime';
-import { bucketShares, checkInAction, checkedDays, heatmapWeeks, homeReasons, todayMeetingsState } from '../lib/counselorHome';
+import { checkInAction, checkedDays, heatmapWeeks, homeReasons, todayMeetingsState } from '../lib/counselorHome';
 import { fullName } from '../lib/labels';
 import { isExpiredMeeting } from '../lib/meetings';
 import { CxAvatar, CxProgress, CxTag, reasonText } from './counselorUi';
@@ -19,11 +19,11 @@ import { Modal } from './ui';
 
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
 
-export function HomeCard({ icon: Icon, title, hint, className = '', children, footer }) {
+export function HomeCard({ icon: Icon, title, hint, action, className = '', children, footer }) {
   return <section className={`cx-card ch-card ${className}`.trim()}>
     <header className="ch-card-head">
       <h2>{Icon && <Icon size={15} aria-hidden="true" />}{title}</h2>
-      {hint && <small>{hint}</small>}
+      {action || (hint && <small>{hint}</small>)}
     </header>
     <div className="ch-card-body">{children}</div>
     {footer && <footer className="ch-card-foot">{footer}</footer>}
@@ -141,11 +141,13 @@ function deadlineLabel(item) {
 }
 
 export function DeadlinesCard({ deadlines, onOpenStudents }) {
-  const { items, total, overdue } = deadlines;
+  const { items: listed, total, overdue } = deadlines;
+  // The roadmap is not shown on the counselor side, so its missions are not listed (the counts come from the server).
+  const items = listed.filter((item) => item.kind !== 'mission');
   return <HomeCard icon={ListChecks} title={t("Deadlines this week")} className="ch-deadlines"
-    footer={(overdue > 0 || total > items.length) && <>
+    footer={(overdue > 0 || total > listed.length) && <>
       {overdue > 0 && <span className="ch-overdue">{tp('{n} older item still overdue|{n} older items still overdue', overdue, { n: overdue })}</span>}
-      {total > items.length && <span>{tp('{n} more this week|{n} more this week', total - items.length, { n: total - items.length })}</span>}
+      {total > listed.length && <span>{tp('{n} more this week|{n} more this week', total - listed.length, { n: total - listed.length })}</span>}
       <button type="button" className="cx-link" onClick={onOpenStudents}>{t("Open Students")} <ArrowRight size={14} aria-hidden="true" /></button>
     </>}>
     {items.length ? <div className="ch-list">
@@ -226,39 +228,6 @@ export function CheckInHeatmap({ history }) {
   </section>;
 }
 
-const BUCKETS = [
-  ['on_track', 'On track'],
-  ['behind', 'Behind'],
-  ['needs_attention', 'Needs attention'],
-];
-
-export function ProgressCard({ progress, onOpen, onViewAll }) {
-  const { buckets, students, total } = progress;
-  const shares = bucketShares(buckets);
-  return <HomeCard icon={UsersRound} title={t("Student progress")} hint={t("Roadmap completion")} className="ch-progress"
-    footer={<button type="button" className="cx-btn" onClick={onViewAll}>{tp('View all {n} student|View all {n} students', total, { n: total })}</button>}>
-    {total ? <>
-      <div className="ch-stack" role="img" aria-label={BUCKETS.map(([key, title]) => `${t(title)}: ${formatNumberLocale(buckets[key])}`).join(', ')}>
-        {BUCKETS.map(([key]) => shares[key] > 0 && <span key={key} className={key} style={{ width: `${shares[key]}%` }} />)}
-      </div>
-      <div className="ch-buckets">
-        {BUCKETS.map(([key, title]) => <span key={key} className={`ch-bucket ${key}`}><i aria-hidden="true" />{t(title)} <b>{formatNumberLocale(buckets[key])}</b></span>)}
-      </div>
-      <p className="ch-list-label">{t("Lowest progress")}</p>
-      <div className="ch-list">
-        {students.map((student) => <button type="button" key={student.id} className="ch-row ch-progress-row" onClick={() => onOpen(student.id)}>
-          <CxAvatar name={student.name} />
-          <span className="ch-row-copy">
-            <b>{student.name}</b>
-            <span className={`ch-bar ${student.bucket}`}><CxProgress value={student.completion} label={t("Roadmap completion")} /><small>{formatPercentLocale(student.completion)}</small></span>
-          </span>
-          {student.late > 0 && <span className="ch-late" title={tp('{n} late item|{n} late items', student.late, { n: student.late })}>{tp('{n} late|{n} late', student.late, { n: formatNumberLocale(student.late) })}</span>}
-        </button>)}
-      </div>
-    </> : <p className="ch-empty">{t("No students assigned to you yet.")}</p>}
-  </HomeCard>;
-}
-
 const CARD_TITLES = {
   stats: 'Summary cards',
   snapshot: 'Student snapshot',
@@ -267,7 +236,6 @@ const CARD_TITLES = {
   today: 'Today',
   deadlines: 'Deadlines this week',
   check_ins: 'Weekly check-ins',
-  progress: 'Student progress',
 };
 
 export function CustomizeHome({ layout, onToggle, onMove, onReset, onClose }) {
@@ -337,7 +305,7 @@ export function AllSetOverlay({ onClose }) {
 }
 
 function SnapshotNumber({ value, label }) {
-  return <div><b>{formatNumberLocale(value)}</b><span>{label}</span></div>;
+  return <div><dt>{label}</dt><dd>{formatNumberLocale(value)}</dd></div>;
 }
 
 function SnapshotPicker({ choices, selected, onSelect }) {
@@ -404,44 +372,34 @@ function SnapshotPicker({ choices, selected, onSelect }) {
 export function SnapshotCard({ choices, selected, onSelect, state, onOpenStudent, onRetry }) {
   const data = state.data;
   const name = data?.name || selected?.name || '';
-  const missions = data?.roadmap;
-  const segments = missions && missions.total > 0 && missions.total <= 12 ? Array.from({ length: missions.total }, (_, index) => index < missions.approved) : null;
+  const goal = data ? joinParts(data.study_goal, data.target_countries?.map((country) => t(country)).join(', ')) : '';
   return <HomeCard icon={UserRound} title={t("Student snapshot")} className="ch-snapshot"
-    footer={selected && <button type="button" className="cx-btn" onClick={() => onOpenStudent(selected.id)}>{t("Open student")} <ArrowRight size={14} aria-hidden="true" /></button>}>
+    action={selected && <button type="button" className="ch-snap-open" onClick={() => onOpenStudent(selected.id)}>{t("Open student")} <ArrowRight size={14} aria-hidden="true" /></button>}>
     {choices.length || selected ? <>
       <div className="ch-snap-top">
         <CxAvatar name={name} />
-        <span className="ch-snap-who">
-          <SnapshotPicker choices={choices} selected={selected} onSelect={onSelect} />
-          {name && <span className="ch-snap-pill"><Eye size={13} aria-hidden="true" />{t('As {name} sees it', { name: firstName(name) })}</span>}
-        </span>
+        <div className="ch-snap-who">
+          <div className="ch-snap-name"><SnapshotPicker choices={choices} selected={selected} onSelect={onSelect} /><ChevronDown size={15} aria-hidden="true" /></div>
+          {goal && <p className="ch-snap-context"><GraduationCap size={15} aria-hidden="true" /><span>{goal}</span></p>}
+        </div>
       </div>
       {state.error ? <div className="ch-snap-error" role="alert"><p>{state.error}</p><button type="button" className="cx-btn" onClick={onRetry}><RefreshCw size={14} aria-hidden="true" /> {t("Retry")}</button></div>
         : !data ? <div className="ch-snap-loading" role="status" aria-label={t("Loading…")}><span className="ch-skeleton-block" /><span className="ch-skeleton-block" /></div>
           : <div className={`ch-snap-body${state.loading ? ' is-loading' : ''}`} aria-busy={state.loading || undefined}>
-            <div className="ch-snap-goal">
-              {data.study_goal && <><span className="ch-snap-k">{t("Study goal")}</span><b><GraduationCap size={18} aria-hidden="true" />{data.study_goal}</b></>}
-              {data.target_countries && <span className="ch-snap-countries">{data.target_countries.map((country) => t(country)).join(', ')}</span>}
-              <span className="ch-snap-level"><Star size={13} aria-hidden="true" />{tx`Level ${data.level}`}<span aria-hidden="true">·</span>{tp('{n} star|{n} stars', data.stars, { n: data.stars })}</span>
-            </div>
-            {missions && <div className="ch-snap-road">
-              <span className="ch-snap-k">{t("Roadmap")}</span>
-              <div className="ch-snap-road-row"><b>{formatPercentLocale(missions.percent)}</b><small>{missions.total ? `${formatNumberLocale(missions.approved)}/${formatNumberLocale(missions.total)} ${t("Missions approved")}` : t("No roadmap missions assigned yet.")}</small></div>
-              {segments ? <div className="ch-snap-segs" aria-hidden="true">{segments.map((done, index) => <i key={index} className={done ? 'on' : ''} />)}</div>
-                : missions.total > 0 && <CxProgress value={missions.percent} label={t("Roadmap progress")} />}
-            </div>}
-            <span className="ch-snap-k">{t("Applications")}</span>
-            <div className="ch-snap-apps">
+            <dl className="ch-snap-apps" aria-label={t("Applications")}>
               <SnapshotNumber value={data.applications.total} label={t("Universities on list")} />
               <SnapshotNumber value={data.applications.submitted} label={t("Submitted")} />
               <SnapshotNumber value={data.applications.accepted} label={t("Accepted")} />
               <SnapshotNumber value={data.achievements} label={t("Achievements")} />
-            </div>
-            <div className="ch-snap-prio-head"><span className="ch-snap-k">{t("Next priorities")}</span><small>{tp('{n} open task|{n} open tasks', data.open_tasks, { n: data.open_tasks })}</small></div>
+            </dl>
+            <div className="ch-snap-prio-head"><h3>{t("Next priorities")}</h3><small>{tp('{n} open task|{n} open tasks', data.open_tasks, { n: data.open_tasks })}</small></div>
             {data.priorities.length ? <ol className="ch-snap-prio">
-              {data.priorities.map((task, index) => <li key={task.id}>
-                <i>{String(index + 1).padStart(2, '0')}</i>
-                <span><b>{task.title}</b><small>{task.due ? (task.late ? <CxTag tone="late" small>{t("Late")}</CxTag> : dateText(inServerZone(task.due))) : t("No deadline")}</small></span>
+              {data.priorities.map((task) => <li key={task.id}>
+                <b>{task.title}</b>
+                <span className={`ch-snap-due${task.late ? ' is-late' : ''}`}>
+                  {task.late && <span>{t("Late")}</span>}
+                  {task.due ? <time dateTime={task.due}>{dayMonthText(inServerZone(task.due))}</time> : <span>{t("No deadline")}</span>}
+                </span>
               </li>)}
             </ol> : <p className="ch-empty">{t("All tasks are complete.")}</p>}
           </div>}

@@ -2,7 +2,7 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import './mind-section.css';
-import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus } from 'lucide-react';
+import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus, Flag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';
 import { api } from './api';
@@ -25,12 +25,14 @@ import { fullName, initials, label, ownStudent } from './lib/labels';
 import { isCounselor, isPlatformAdmin, isTaskManager } from './lib/roles';
 import { LANDING_PATH, LOGIN_PATH, buildPath, canOpenPage, isPageLocked, joinTokenFor, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
 import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchResultTarget, searchText } from './lib/searchIndex';
-import { loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
+import { STUDENT_SHELL_KEYS, loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
 import { useNotificationBell } from './hooks/useNotificationBell';
+import { STUDENT_REFRESH_MS } from './lib/workspaceFreshness';
+import { studentPrimaryKeys } from './lib/resourceState';
 import { invalidatePagedLists } from './hooks/usePagedList';
-import { NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, summaryChanged } from './lib/notifications';
+import { NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, summaryChanged, parentNotices } from './lib/notifications';
 import { liveReloadKeys, unreadConversations } from './lib/counselorCounts';
 import { createPoller } from './lib/poller';
 import { busyRetryDelay } from './lib/backoff';
@@ -55,6 +57,7 @@ const ProfileAssessmentPage = lazyWithRetry(() => import('./pages/ProfileAssessm
 const lazyNamed = (load, name) => lazyWithRetry(() => load().then((module) => ({ default: module[name] })));
 const EssayLab = lazyWithRetry(() => import('./essayLab/EssayLab.jsx'));
 const AdminAuditPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminAuditPage');
+const AdminModerationPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminModerationPage');
 const CatalogAdminPage = lazyNamed(() => import('./pages/CatalogAdminPage'), 'CatalogAdminPage');
 const AdminControlDashboard = lazyNamed(() => import('./pages/AdminPages'), 'AdminControlDashboard');
 const AdminCounselorsPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminCounselorsPage');
@@ -73,6 +76,8 @@ const ParentPortalPage = lazyNamed(() => import('./pages/ParentPortalPage'), 'Pa
 const ProgramsPage = lazyNamed(() => import('./pages/ProgramsPage'), 'ProgramsPage');
 const ResourceSection = lazyNamed(() => import('./pages/ResourceSection'), 'ResourceSection');
 const CounselorEssaysPage = lazyNamed(() => import('./pages/CounselorEssays'), 'CounselorEssaysPage');
+const CounselorEssayReview = lazyNamed(() => import('./pages/CounselorEssayReview'), 'CounselorEssayReview');
+const CounselorTasksPage = lazyNamed(() => import('./pages/CounselorTasks'), 'CounselorTasksPage');
 const NotificationsPage = lazyNamed(() => import('./pages/NotificationsPage'), 'NotificationsPage');
 const ReviewPage = lazyNamed(() => import('./pages/ReviewPage'), 'ReviewPage');
 const RoadmapPage = lazyNamed(() => import('./pages/RoadmapPage'), 'RoadmapPage');
@@ -146,6 +151,7 @@ const PAGE_META = {
   admin_catalog: { label: 'Catalog', icon: Library, description: 'Universities, programs, scholarships and opportunity programs students search' },
   counselor_roadmap: { label: 'Counselor Roadmap', icon: Compass, description: 'Professional and school-management milestones' },
   admin_audit: { label: 'Audit Log', icon: ShieldAlert, description: 'Review product administration actions' },
+  admin_moderation: { label: 'Moderation', icon: Flag, description: 'Reported messages across schools' },
   admin_plans: { label: 'Plans', icon: Layers, description: 'Seat limits and features of every plan' },
   admin_staff: { label: 'Staff', icon: UserCog, description: 'Product staff and their access tiers' },
   admin_health: { label: 'Health', icon: HeartPulse, description: 'Readiness, scheduled jobs and file storage' },
@@ -223,7 +229,7 @@ const PAGE_RESOURCE_KEYS = {
   dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'programServices', 'parentPortal'],
   school_counselors: [], schools: ['schools'], students: ['students'], students_joined: [], review: [], academics: ['students', 'researches'],
   // The catalog editor pages its own lists from the server.
-  admin_catalog: [],
+  admin_catalog: [], admin_moderation: [],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
   roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'students', 'essays', 'recommendations'],
@@ -235,7 +241,7 @@ const PAGE_RESOURCE_KEYS = {
   screen_time: [], account_settings: [],
   parent_progress: ['parentPortal'], parent_tasks: ['parentPortal'], parent_applications: ['parentPortal'],
   parent_documents: ['parentPortal'], parent_meetings: ['parentPortal'],
-  counselor_roadmap: ['counselorRoadmapTemplates', 'counselorRoadmaps'],
+  counselor_roadmap: ['counselorRoadmaps', 'counselorRoadmapTemplates'],
   // Pages its own notices from the server.
   notifications: []
 };
@@ -263,11 +269,11 @@ const workspaceStatsKey = (activeUser) => (activeUser?.role === 'counselor' && r
 // `lazy`: a student's page waits for exactly the collections it fetches.
 // Student pages that cannot render without these collections. Essays, documents and
 // letters only feed counts there; when one of them fails the page stays up with a retry.
-const STUDENT_PRIMARY_KEYS = { college_search: ['students', 'applications'], applications: ['students', 'applications'] };
 
 function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, retry, children }) {
   const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
-  const primaryKeys = lazy ? STUDENT_PRIMARY_KEYS[page] || [] : [];
+  // A parent page is all parent-portal data: a failed first load is not an empty family.
+  const primaryKeys = lazy ? studentPrimaryKeys(page) : keys.filter((key) => key === 'parentPortal');
   const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys });
 
   // Rate-limited sections retry on their own (useWorkspaceData): a quiet note, not an error.
@@ -328,7 +334,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   const bell = useNotificationBell(serverBell);
   // The server's count when it sends one: the loaded chats are only the first page.
   const unreadChats = unreadConversations(stats, data.messageChannels);
-  const bellCount = user.role === 'student' ? bellTotal(bell.summary) : unreadChats + (serverBell ? Math.max(0, Number(bell.summary?.unread) || 0) : 0);
+  const bellCount = user.role === 'student' ? bellTotal(bell.summary) : unreadChats + (serverBell ? Math.max(0, Number(bell.summary?.unread) || 0) : parentNotices(data.parentPortal).length);
   const bellLabel = bellCount > 0 ? tx`Notifications, ${bellCount > 99 ? '99+' : formatNumberLocale(bellCount)} unread` : t('Notifications');
   function openNotifications() {
     // Opening the bell always shows the newest notices, never a cached page.
@@ -337,6 +343,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     setUtility('notifications');
   }
   function openFromNotification(nextPage, params) {
+    if (loadsLazily(user)) retryResources(studentPageKeys(nextPage));
     setUtility(null);setMobileOpen(false);
     setPage(nextPage, params);
   }
@@ -392,8 +399,8 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     {error && <div className="alert error workspace-alert">{error}</div>}
   </>;
   const overlays = <>
-    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');setPaletteQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(paletteQuery.trim() ? searchResults : navigation.map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}{result.kind === 'record' && result.subtitle && <small>{result.subtitle}</small>}</span><ChevronRight size={16} /></button>)}{paletteQuery.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} onSeeAll={counselorShell ? () => {invalidatePagedLists(['notifications']);openFromNotification('notifications', {});} : undefined} />}</Modal>}
-    <ScreenTimeTracker page={page} userId={user.id} />
+    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');setPaletteQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(paletteQuery.trim() ? searchResults : navigation.filter((destination) => !isPageLocked(destination, user)).map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}{result.kind === 'record' && result.subtitle && <small>{result.subtitle}</small>}</span><ChevronRight size={16} /></button>)}{paletteQuery.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} onSeeAll={counselorShell ? () => {invalidatePagedLists(['notifications']);openFromNotification('notifications', {});} : undefined} />}</Modal>}
+    {canOpenPage('screen_time', user) && <ScreenTimeTracker page={page} userId={user.id} />}
     {canUseAssistant(user) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} onUnavailable={(message) => {updateUser({ assistant_enabled: false });notify(message, 'error');}} />}
   </>;
   if (counselorShell) {
@@ -467,6 +474,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (isPlatformAdmin(user) && page === 'admin_students') return <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />;
   if (isCounselor(user) && page === 'counselor_roadmap') return <CounselorRoadmapPage user={user} data={data} reload={reload} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_audit') return <AdminAuditPage query={query} />;
+  if (isPlatformAdmin(user) && page === 'admin_moderation') return <AdminModerationPage notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_catalog') return <CatalogAdminPage user={user} query={query} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_plans') return <AdminPlansPage user={user} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_staff') return <AdminStaffPage user={user} query={query} notify={notify} reload={reload} />;
@@ -489,7 +497,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
-  if (['student', 'counselor'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
+  if (['student', 'counselor', 'parent'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
   if (page === 'school_counselors' && user.role === 'organization') return <SchoolCounselorsPage {...{ query, reload, notify }} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (page === 'students_joined' && ['counselor', 'organization'].includes(user.role)) return <RecentlyJoinedPage user={user} data={data} notify={notify} onChanged={() => { refreshStats(user); reload(); }} onBack={() => setPage('students')} headless={user.role === 'organization'} />;
@@ -513,7 +521,8 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (page === 'documents') return <DocumentsPage {...{ user, data, query, reload, notify }} />;
   if (page === 'certificates') return <DocumentsPage typeFilter="certificate" title={t("Certificates")} {...{ user, data, query, reload, notify }} />;
   if (page === 'notifications' && isCounselorShell(user)) return <NotificationsPage {...{ notify, setPage }} />;
-  if (page === 'essays' && isCounselorShell(user)) return <CounselorEssaysPage title={t("Essays")} resource="essays" {...{ user, data, query, reload, notify }} />;
+  if (page === 'essays' && isCounselorShell(user)) return params.essayId ? <CounselorEssayReview key={params.essayId} essayId={params.essayId} notify={notify} reload={reload} onBack={() => setPage('essays')} /> : <CounselorEssaysPage {...{ user, data }} onOpen={(essayId) => setPage('essays', { essayId })} />;
+  if (page === 'tasks' && isCounselorShell(user)) return <CounselorTasksPage resource="tasks" {...{ user, data, reload, notify }} />;
   const titleMap = { tasks: 'Tasks', applications: 'University applications', essays: 'Essays' };
   return <ResourceSection title={titleMap[page] || label(page)} resource={page} {...{ user, data, query, reload, notify }} />;
 }
@@ -537,7 +546,7 @@ export default function App() {
   // Also ends the server session (the cookie may still be valid, e.g. after a
   // revoked access token), unless another tab already did.
   const handleUnauthorized = useCallback((info) => {api.logout({ server: !info?.fromOtherTab });setUser(null);}, []);
-  const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, reset: resetWorkspace, refreshStats, updateStats, more, loadMore } = useWorkspaceData(user, handleUnauthorized, { statsRequest: workspaceStatsRequest, statsKey: workspaceStatsKey });
+  const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, revalidate, reset: resetWorkspace, refreshStats, updateStats, more, loadMore } = useWorkspaceData(user, handleUnauthorized, { statsRequest: workspaceStatsRequest, statsKey: workspaceStatsKey });
   useEffect(() => (user ? api.onSessionEnded(handleUnauthorized) : undefined), [user, handleUnauthorized]);
 
   const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
@@ -643,7 +652,7 @@ export default function App() {
   }, [inWorkspace, publicPage, route, requestedRoute, location, navigate]);
 
   // Students fetch a page's collections the first time it opens (see
-  // useWorkspaceData); a page already loaded is not fetched again.
+  // useWorkspaceData); later visits revalidate stale or invalidated keys.
   useEffect(() => {
     if (inWorkspace && !publicPage && loadsLazily(user)) ensureLoaded(user, studentPageKeys(page));
   }, [inWorkspace, publicPage, user, page, ensureLoaded]);
@@ -710,6 +719,21 @@ export default function App() {
     api.forgetSession();leaveWorkspace(signOutFailure?.keepDrafts);}
   const retryResources = useCallback((keys) => loadData(user, keys), [loadData, user]);
   const loadResources = useCallback((keys) => ensureLoaded(user, keys), [ensureLoaded, user]);
+
+  // Revalidate only the active student's page and shell; catalogues on other
+  // pages remain lazy. The freshness tracker also deduplicates focus/visibility.
+  const studentLive = inWorkspace && !publicPage && loadsLazily(user);
+  useEffect(() => {
+    if (!studentLive) return undefined;
+    const loop = createPoller({ min: STUDENT_REFRESH_MS, failureCap: STUDENT_REFRESH_MS * 5,
+      run: () => revalidate(user, [...STUDENT_SHELL_KEYS, ...studentPageKeys(pageRef.current)]),
+    });
+    const focus = () => loop.poke();
+    loop.start();
+    window.addEventListener('focus', focus);
+    window.addEventListener('online', focus);
+    return () => { loop.stop(); window.removeEventListener('focus', focus); window.removeEventListener('online', focus); };
+  }, [studentLive, user, revalidate]);
 
   // Counselor badges (review, essays, meetings, messages, the bell) come from
   // the stats: keep them current while the tab is open. Meetings and chats

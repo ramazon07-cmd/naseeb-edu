@@ -1,4 +1,5 @@
 import { t, tp, locale, formatDateLocale, formatNumberLocale } from '../i18n';
+import { InlineLoadError } from '../components/states';
 import { dateText, localDateKey, money } from '../lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapPin, CalendarDays, CalendarSearch, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, X, Check, Bookmark, Monitor } from 'lucide-react';
@@ -164,6 +165,9 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   const [filters, setFilters] = useUrlFilters(search, navigate);
   const [savedIds, setSavedIds] = useState(new Set());
   const [savedLoading, setSavedLoading] = useState(true);
+  const [savedKnown, setSavedKnown] = useState(false);
+  const [savedError, setSavedError] = useState('');
+  const [savedAttempt, setSavedAttempt] = useState(0);
   const [savingId, setSavingId] = useState(null);
   const [onlySaved, setOnlySaved] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -207,16 +211,17 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
 
   useEffect(() => {
     let active = true;
+    setSavedLoading(true); setSavedError('');
     request('/opportunity-programs/saved/').then((result) => {
-      if (active) setSavedIds(new Set(result.program_ids));
-    }).catch((error) => { if (active) notify?.(error.message, 'error'); }).finally(() => {
+      if (active) { setSavedIds(new Set(result.program_ids)); setSavedKnown(true); }
+    }).catch((error) => { if (active) setSavedError(error.message); }).finally(() => {
       if (active) setSavedLoading(false);
     });
     return () => { active = false; };
-  }, [notify]);
+  }, [savedAttempt]);
 
   async function toggleSaved(item) {
-    if (savingId != null || savedLoading) return;
+    if (savingId != null || savedLoading || !savedKnown) return;
     const wasSaved = savedIds.has(item.id);
     setSavingId(item.id);
     try {
@@ -269,12 +274,14 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     </div>
     {filterBar}
 
-    <div className="program-results-bar"><span role="status" aria-live="polite">{onlySaved ? tp('{count} saved program|{count} saved programs', shownPrograms.length, { count: shownPrograms.length }) : resultText}</span><div className="catalog-list-controls"><button type="button" className={`button quiet small ${onlySaved ? 'is-active' : ''}`} aria-pressed={onlySaved} onClick={() => setOnlySaved((value) => !value)}><Bookmark size={16} /> {t('My List')} <span>{savedIds.size}</span></button></div></div>
+    <div className="program-results-bar"><span role="status" aria-live="polite">{onlySaved && !savedKnown ? '—' : onlySaved ? tp('{count} saved program|{count} saved programs', shownPrograms.length, { count: shownPrograms.length }) : resultText}</span><div className="catalog-list-controls"><button type="button" className={`button quiet small ${onlySaved ? 'is-active' : ''}`} aria-pressed={onlySaved} onClick={() => setOnlySaved((value) => !value)}><Bookmark size={16} /> {t('My List')} <span>{savedKnown ? savedIds.size : '—'}</span></button></div></div>
 
+    {savedError && <InlineLoadError message={savedError} onRetry={() => setSavedAttempt((value) => value + 1)} />}
+    {savedLoading && onlySaved && <p role="status">{t('Loading…')}</p>}
     <div className="program-timeline">{groupProgramsByDeadline(shownPrograms).map(({ key, entries }) => <section className="program-month" key={key} aria-labelledby={`program-month-${key}`}>
       <h2 className="program-month-head" id={`program-month-${key}`}><span>{key === 'closed' ? t('Closed') : key === 'undated' ? t('Deadline on the official page') : formatDateLocale(`${key}-01`, { month: 'long', year: 'numeric' })}</span><small>{tp('{count} program|{count} programs', entries.length, { count: entries.length })}</small></h2>
-      {entries.map(({ item, closed, due }) => <ProgramRow key={item.id} item={item} closed={closed} due={due} today={today} saved={savedIds.has(item.id)} busy={savedLoading || savingId === item.id} onToggle={() => toggleSaved(item)} countdown={onlySaved} />)}
-    </section>)}{!shownPrograms.length && <div className="program-empty"><Empty text={onlySaved ? t('No saved programs match these filters.') : t('No programs match these filters.')} />{onlySaved ? <button type="button" className="button primary small" onClick={() => setOnlySaved(false)}>{t('Browse programs')}</button> : filtered && <><p>{t('Try another search or remove a filter.')}</p><button type="button" className="button primary small" onClick={reset}>{t('Reset filters')}</button></>}</div>}</div>
+      {entries.map(({ item, closed, due }) => <ProgramRow key={item.id} item={item} closed={closed} due={due} today={today} saved={savedIds.has(item.id)} busy={savedLoading || !savedKnown || savingId === item.id} onToggle={() => toggleSaved(item)} countdown={onlySaved} />)}
+    </section>)}{!shownPrograms.length && (!onlySaved || savedKnown) && <div className="program-empty"><Empty text={onlySaved ? t('No saved programs match these filters.') : t('No programs match these filters.')} />{onlySaved ? <button type="button" className="button primary small" onClick={() => setOnlySaved(false)}>{t('Browse programs')}</button> : filtered && <><p>{t('Try another search or remove a filter.')}</p><button type="button" className="button primary small" onClick={reset}>{t('Reset filters')}</button></>}</div>}</div>
     </div>
     {sheetOpen && <div className="program-sheet-backdrop" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
     {rail}

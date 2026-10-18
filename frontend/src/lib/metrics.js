@@ -1,5 +1,6 @@
 // Client-side twins of the backend metric rules (see docs/metrics.md). The
-// numbers themselves come from the API; these only pick and order records.
+// numbers themselves come from the API; these only pick and order records,
+// except readinessWithoutTasks, which re-derives one percent from API counts.
 
 // Work the student still owes. Submitted work waits on the reviewer.
 export const OPEN_TASK_STATUSES = ['todo', 'in_progress', 'late'];
@@ -63,4 +64,16 @@ export function studentProgress(student) {
     applicationsAccepted: whole(student?.applications_accepted),
     achievementsTotal: whole(student?.achievements_total),
   };
+}
+
+// Backend half_up() (progress.py): numerator / denominator rounded half up in
+// integer math, 0 when there is nothing to count.
+const halfUp = (numerator, denominator) => (denominator ? Math.floor((2 * numerator + denominator) / (2 * denominator)) : 0);
+
+// Application readiness (progress_percent) without tasks, for a student who
+// cannot reach tasks while the roadmap is locked.
+export function readinessWithoutTasks(student) {
+  const done = Math.max(0, whole(student?.readiness_items_done) - whole(student?.task_status_counts?.approved));
+  const total = Math.max(0, whole(student?.readiness_items_total) - countTotal(student?.task_status_counts));
+  return { done, total, percent: halfUp(100 * done, total) };
 }

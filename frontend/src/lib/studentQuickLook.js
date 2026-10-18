@@ -5,7 +5,6 @@
 // and a week runs Monday to Sunday. Translation-free like studentReasons.js;
 // the component turns each item into words.
 const OPEN_TASK = ['todo', 'in_progress', 'late'];
-const OPEN_MISSION = ['planned', 'in_progress'];
 const APPLICATION_DONE = ['submitted', 'accepted', 'rejected', 'waitlisted'];
 const OPEN_LETTER = ['requested', 'drafting'];
 const DOCUMENT_REVIEW = ['uploaded', 'reviewing'];
@@ -31,9 +30,6 @@ export function attentionItems(records, today) {
   const items = [];
   for (const task of records.tasks || []) {
     if (OPEN_TASK.includes(task.status) && task.due_date && task.due_date < today) items.push({ key: `task-${task.id}`, kind: 'late_task', title: task.title, due: task.due_date });
-  }
-  for (const mission of records['roadmap-missions'] || []) {
-    if (OPEN_MISSION.includes(mission.status) && mission.due_date && mission.due_date < today) items.push({ key: `mission-${mission.id}`, kind: 'late_mission', title: mission.title, due: mission.due_date });
   }
   for (const doc of records.documents || []) {
     if (doc.status === 'required' || (DOCUMENT_REVIEW.includes(doc.status) && !attached(doc))) items.push({ key: `doc-${doc.id}`, kind: 'missing_document', title: doc.title });
@@ -63,7 +59,6 @@ export function weekDeadlines(records, today) {
     if (day && day >= start && day <= end) items.push({ key: `${kind}-${id}`, kind, title, due: day, late: day < today });
   };
   for (const task of records.tasks || []) if (OPEN_TASK.includes(task.status)) add('task', task.id, task.title, task.due_date);
-  for (const mission of records['roadmap-missions'] || []) if (OPEN_MISSION.includes(mission.status)) add('mission', mission.id, mission.title, mission.due_date);
   for (const item of records.applications || []) if (!APPLICATION_DONE.includes(item.status)) add('application', item.id, item.university_detail?.name || '', item.deadline);
   for (const letter of records.recommendations || []) if (OPEN_LETTER.includes(letter.status)) add('letter', letter.id, letter.recommender_name || '', letter.deadline);
   return items.sort((a, b) => a.due.localeCompare(b.due) || a.key.localeCompare(b.key));

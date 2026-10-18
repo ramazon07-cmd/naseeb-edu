@@ -577,9 +577,17 @@ class ProgramServiceViewSet(viewsets.ModelViewSet):
         return scope_students(self.queryset, self.request.user, via='student')
 
 
+class ScreenTimePermission(permissions.IsAuthenticated):
+    """Parents have no Screen Time: nothing is recorded or shown for them."""
+    message = 'Screen time is not available for parent accounts.'
+
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and request.user.role != User.Role.PARENT
+
+
 class ScreenTimeViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ScreenTimeDailySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [ScreenTimePermission]
     queryset = ScreenTimeDaily.objects.select_related('user').all()
     http_method_names = ['get', 'post', 'head', 'options']
 

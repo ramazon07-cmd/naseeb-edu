@@ -2,6 +2,31 @@
 // Framework-free so the mapping is unit tested.
 
 import { sectionFromNotice } from './profileSections.js';
+import { isOpenTask } from './metrics.js';
+import { upcomingMeetings } from './meetings.js';
+import { USER_STORAGE, userStorageKey } from '../userStorage.js';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// A parent's bell, built from their /api/parent-portal/ payload (no server notices yet):
+// pending invitations, each child's overdue open tasks, and shared meetings in the next 7 days.
+export function parentNotices(portal, now = new Date()) {
+  const notices = (portal?.pending_invitations || []).map((invitation) => ({ key: `invitation-${invitation.id}`, kind: 'invitation', title: invitation.student_name, page: 'dashboard', childId: null }));
+  for (const child of portal?.children || []) {
+    const childId = child.profile.id;
+    const childName = child.profile.name;
+    for (const task of child.tasks.filter((item) => item.is_overdue && isOpenTask(item))) notices.push({ key: `task-${task.id}`, kind: 'task', title: task.title, childName, date: task.due_date, page: 'parent_tasks', childId });
+    for (const meeting of upcomingMeetings(child.meetings, now).filter((item) => new Date(item.starts_at) - now <= WEEK_MS)) notices.push({ key: `meeting-${meeting.id}`, kind: 'meeting', title: meeting.topic, childName, date: meeting.starts_at, page: 'parent_meetings', childId });
+  }
+  return notices;
+}
+
+// The family portal shows one child at a time; a parent notice opens its child.
+export const PARENT_CHILD_EVENT = 'naseeb:parent-child';
+export function selectParentChild(userId, childId) {
+  try {localStorage.setItem(userStorageKey(USER_STORAGE.parentChild, userId), String(childId));} catch {/* The event below still switches the open page. */}
+  window.dispatchEvent(new CustomEvent(PARENT_CHILD_EVENT, { detail: childId }));
+}
 
 // The title the server gives a section that needs changes.
 export const PROFILE_CHANGES_TITLE = 'Profile section needs changes';
@@ -19,7 +44,8 @@ export function notificationTarget(notification) {
   const id = Number(notification?.target_id);
   const hasId = Number.isInteger(id) && id > 0;
   switch (notification?.kind) {
-    case 'task': return { page: 'roadmap', params: { tab: 'tasks' } };
+    // Student task work lives on its own page, independently of roadmap access.
+    case 'task': return { page: 'tasks', params: {} };
     case 'document': return { page: 'student_center', params: { tab: 'documents' } };
     case 'deadline': return { page: 'applications', params: {} };
     case 'essay': return { page: 'essay_lab', params: hasId ? { essayId: id } : {} };

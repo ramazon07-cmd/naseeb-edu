@@ -1,8 +1,8 @@
-export const DASHBOARD_WIDGETS = ['journey', 'meetings', 'applications', 'tasks', 'team', 'screen_time', 'roadmap', 'discovery', 'programs'];
-// What a student cannot hide: the goal, what to do next, progress and applications.
-export const LOCKED_WIDGETS = ['journey', 'tasks', 'applications', 'roadmap'];
+export const DASHBOARD_WIDGETS = ['journey', 'meetings', 'applications', 'tasks', 'team', 'screen_time', 'discovery', 'programs'];
+// What a student cannot hide: the goal, what to do next, and applications.
+export const LOCKED_WIDGETS = ['journey', 'tasks', 'applications'];
 export const isLockedWidget = (id) => LOCKED_WIDGETS.includes(id);
-const DEFAULT_RAIL = ['roadmap', 'discovery', 'programs'];
+const DEFAULT_RAIL = ['discovery', 'programs'];
 // Rail widgets added after layouts were already being saved.
 const NEW_RAIL_WIDGETS = ['programs'];
 export function normalizeDashboardPreferences(value) {

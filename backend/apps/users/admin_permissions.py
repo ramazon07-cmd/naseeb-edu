@@ -31,6 +31,10 @@ SUPPORT_WRITE_ROUTES = frozenset({
     # Answering a ticket (status and reply) is the support tier's job; the
     # requester's subject, message and category are read-only for all staff.
     'support-tickets-detail',
+    # Moderating reported messages across schools (the admin Moderation page).
+    'message-reports-review',
+    'message-reports-dismiss',
+    'message-reports-resolve',
 })
 OPS_WRITE_ROUTES = SUPPORT_WRITE_ROUTES | frozenset({
     'schools-list',
@@ -56,6 +60,8 @@ OPS_WRITE_ROUTES = SUPPORT_WRITE_ROUTES | frozenset({
     'catalog-scholarships-detail',
     'catalog-opportunity-programs-list',
     'catalog-opportunity-programs-detail',
+    'catalog-store-items-list',
+    'catalog-store-items-detail',
 })
 WRITE_ROUTES = {
     User.AdminTier.SUPPORT: SUPPORT_WRITE_ROUTES,

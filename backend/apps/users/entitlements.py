@@ -207,7 +207,11 @@ def feature_enabled(user, key, subscription=_NOT_LOADED):
         return True
     if subscription is not _NOT_LOADED:
         return True if subscription is None else subscription.plan.has_feature(key)
-    row = subscription_row(user.school_id)
+    return school_has_feature(user.school_id, key)
+
+
+def school_has_feature(school_id, key):
+    row = subscription_row(school_id) if school_id else None
     # Workspaces without a subscription predate plans and keep full access.
     return True if row is None else bool((row[2] or {}).get(key))
 
@@ -229,19 +233,27 @@ def parent_feature_enabled(user, key):
     of at least one linked child's school includes it (one query)."""
     from apps.admissions.models import ParentStudentLink
 
-    school = 'student__school__subscription'
-    return ParentStudentLink.objects.filter(
-        Q(**{f'{school}__isnull': True}) | Q(**{f'{school}__plan__features__{key}': True}),
+    return links_with_feature(ParentStudentLink.objects.filter(
         parent=user, status=ParentStudentLink.Status.ACTIVE, student__school__isnull=False,
-    ).exists()
+    ), key).exists()
+
+
+def links_with_feature(links, key):
+    """Parent links whose child's school plan includes `key` (no subscription: full access)."""
+    school = 'student__school__subscription'
+    return links.filter(Q(**{f'{school}__isnull': True}) | Q(**{f'{school}__plan__features__{key}': True}))
+
+
+def feature_not_in_plan(request):
+    return PermissionDenied({
+        'detail': localized_message('feature_not_in_plan', request),
+        'code': 'feature_not_in_plan',
+    })
 
 
 def require_feature(request, key):
     if not feature_enabled(request.user, key):
-        raise PermissionDenied({
-            'detail': localized_message('feature_not_in_plan', request),
-            'code': 'feature_not_in_plan',
-        })
+        raise feature_not_in_plan(request)
 
 
 def require_school_feature(school, key):

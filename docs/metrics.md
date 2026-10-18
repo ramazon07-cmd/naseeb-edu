@@ -38,7 +38,7 @@ move a record out of an approved state. The rules:
 
 | Field | Label in the UI | Formula |
 |---|---|---|
-| `progress_percent` | Application readiness | `readiness_items_done / readiness_items_total`. Items are all tasks, applications, documents and recommendation letters; the "done" column above decides which are finished. |
+| `progress_percent` | Application readiness | `readiness_items_done / readiness_items_total`. Items are all tasks, applications, documents and recommendation letters; the "done" column above decides which are finished. While the roadmap is locked for students, the student's own Student Center leaves tasks out of both counts (`readinessWithoutTasks` in `frontend/src/lib/metrics.js`, same half-up rounding); staff views keep this server number. |
 | `readiness_items_done`, `readiness_items_total` | "x of y items finished" | The two counts above. |
 | `task_progress_percent` | Task progress | Weighted mean over all tasks: todo 0, late 0, in_progress 40, submitted 80, approved 100. |
 | `roadmap_progress_percent` | Roadmap progress | completed missions / all missions. |
@@ -57,7 +57,7 @@ move a record out of an approved state. The rules:
 | `level_up_pending` | "Level N approval pending" | `eligible_level > level`. |
 | `next_level_xp` | Next level | The XP needed to reach `level + 1` (a total, not what is left). |
 | `xp_progress_percent` | — | Progress from the current level's threshold to the next one; 100 while a level-up is pending. |
-| `profile_readiness.percent` | Profile ready | Answered readiness items / 12, from the student's own profile row (no other records). The items: photo, graduation year, guardian name and contact, school with country and city, GPA, an IELTS answer other than "not taken yet", the same for the SAT, target countries, areas of interest, personal story, at least one activity, at least one honor (`onboarding.PROFILE_READINESS_ITEMS`). |
+| `profile_readiness.percent` | Profile completeness (student), Profile ready (counselor) | Answered readiness items / 12, from the student's profile row; activities and honors also count portfolio records, as the CV does. The items: photo, graduation year, guardian name and contact, school with country and city, GPA, an IELTS answer other than "not taken yet", the same for the SAT, target countries, areas of interest, personal story, at least one activity (onboarding answer or Activity record), at least one honor (onboarding answer, Honor or Achievement record) (`onboarding.PROFILE_READINESS_ITEMS`). |
 | `profile_readiness.missing` | "To raise it: …" | The unanswered items in that order, each with the profile section that holds it. |
 
 A task is `is_overdue` when it is open and its due date is before today, in
@@ -66,6 +66,24 @@ This is the one meaning of a *late* task: the student still owes the work
 and it is past due. `is_at_risk`, `tasks_late` and the "Late tasks require
 attention" alert all count exactly these tasks (`progress.late_tasks`); the
 `late` status on its own, with a due date still ahead, does not make a task late.
+
+## Parent portal (`/api/parent-portal/`)
+
+Each linked child's `profile` carries the per-student fields above plus these
+headline counts. The family dashboard only formats them.
+
+| Field | Label in the UI | Formula |
+|---|---|---|
+| `open_tasks_total` | Open tasks | Tasks the student still owes: `todo`, `in_progress` or `late`. |
+| `overdue_tasks_total` | — | Open tasks that are `is_overdue` (see above). |
+| `is_at_risk` | "Deadline needs attention" | As above: a late task or an open mission past its due date. |
+| `active_applications_total` | Active applications | Applications without a final decision: every status except `accepted` and `rejected` (a waitlisted application is still active). `null` when applications are not shared. |
+| `upcoming_meetings_total` | Upcoming meetings | Pending or approved meetings that have not started, in server time (a pending request counts, as on the Meetings page). `null` when meetings are not shared. |
+
+Lists are bounded, and the query count does not grow with the number of
+children: every open task plus the 20 most recently updated closed ones, and
+every meeting that has not started plus the 20 most recent past ones. A child
+whose account, profile or school is deactivated is not listed.
 
 ## Dashboard (`/api/dashboard/stats/`)
 

@@ -6,7 +6,7 @@ import { label } from '../lib/labels';
 import { dateText, dateTimeText, formatFileSize } from '../lib/format';
 import { api } from '../api';
 import './documents.css';
-import { hasSubmission } from '../lib/reviewSubmission';
+import { documentStatus, hasSubmission } from '../lib/reviewSubmission';
 import { FileTypeIcon, documentAttachment, downloadAttachment, evidenceAttachment, noPreviewText } from './files';
 
 export function GoogleDocsPreview({ previewUrl, title }) {
@@ -105,10 +105,10 @@ export function EvidencePreviewModal({ item, onClose, notify }) {
   return <AttachmentPreviewModal title={tx`Evidence · ${visibilityItemTitle(item)}`} attachment={evidenceAttachment(item)} onClose={onClose} notify={notify} />;
 }
 
-export function DocumentPreviewModal({ document: doc, onClose, notify, history = null, onDecide = null }) {
+export function DocumentPreviewModal({ document: doc, onClose, notify, history = null, onDecide = null, showStatus = true }) {
   const attachment = documentAttachment(doc);
   const awaiting = ['uploaded', 'reviewing'].includes(doc.status);
-  return <Modal title={doc.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{doc.status}</Badge><span>{label(doc.document_type)}</span></div><div className="detail-actions"><GoogleDocsActions item={doc} /></div></div>{attachment && <AttachmentToolbar attachment={attachment} notify={notify} />}{doc.counselor_comment && <section><span className="detail-label">{t("Counselor comment")}</span><p>{doc.counselor_comment}</p></section>}{history?.length > 0 && <DocumentHistory entries={history} />}{onDecide && awaiting && <DocumentDecision approvable={hasSubmission('document', doc)} onDecide={onDecide} notify={notify} />}{attachment ? <AttachmentBody attachment={attachment} title={doc.title} /> : doc.google_docs_preview_url ? <GoogleDocsPreview previewUrl={doc.google_docs_preview_url} title={doc.title} /> : <Empty text={t("No file uploaded yet.")} />}</div></Modal>;
+  return <Modal title={doc.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div>{showStatus && <Badge>{documentStatus(doc)}</Badge>}<span>{label(doc.document_type)}</span></div><div className="detail-actions"><GoogleDocsActions item={doc} /></div></div>{attachment && <AttachmentToolbar attachment={attachment} notify={notify} />}{doc.counselor_comment && <section><span className="detail-label">{t("Counselor comment")}</span><p>{doc.counselor_comment}</p></section>}{history?.length > 0 && <DocumentHistory entries={history} />}{onDecide && awaiting && <DocumentDecision approvable={hasSubmission('document', doc)} onDecide={onDecide} notify={notify} />}{attachment ? <AttachmentBody attachment={attachment} title={doc.title} /> : doc.google_docs_preview_url ? <GoogleDocsPreview previewUrl={doc.google_docs_preview_url} title={doc.title} /> : <Empty text={t("No file uploaded yet.")} />}</div></Modal>;
 }
 
 const REVIEW_VERBS = [[/^Document approved: /, 'Approved'], [/^Document sent back: /, 'Sent back']];
@@ -120,7 +120,7 @@ function DocumentHistory({ entries }) {
   })}</ul></section>;
 }
 
-function DocumentDecision({ approvable, onDecide, notify }) {
+export function DocumentDecision({ approvable, onDecide, notify }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   async function decide(action) {
