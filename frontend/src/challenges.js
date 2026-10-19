@@ -13,7 +13,9 @@
 // The retired value instruments stay in this bank only so historical saved
 // attempts remain decodable. The student assessment exports the three signals
 // used by the current major-matching release.
-const CHALLENGE_BANK = [
+import { EQ_CHALLENGE, EQ_ORDER, VALUES_CHALLENGE, WORK_IMPORTANCE_CHALLENGE } from './challengeBanksMind.js'
+
+export const CHALLENGE_BANK = [
   {
     "key": "personality",
     "number": 1,
@@ -1089,9 +1091,18 @@ const REASONING_CHALLENGE = {
   ],
 }
 
+// The seven Naseeb Mind challenges, in the hub's order. Values, work
+// importance and EQ come from the Naseeb Mind banks; "How school feels" is the
+// subjects challenge under its stored key.
+const bankBy = (key) => CHALLENGE_BANK.find((challenge) => challenge.key === key)
 export const CHALLENGES = [
-  ...CHALLENGE_BANK.filter((challenge) => ['personality', 'interests', 'subjects'].includes(challenge.key)),
+  bankBy('personality'),
+  bankBy('interests'),
+  VALUES_CHALLENGE,
+  bankBy('subjects'),
+  WORK_IMPORTANCE_CHALLENGE,
   REASONING_CHALLENGE,
+  EQ_CHALLENGE,
 ].map((challenge, index) => ({ ...challenge, number: index + 1 }))
 
 // Keep future licensed instruments out of the student experience until the
@@ -1134,7 +1145,11 @@ export const INSTRUMENT_VERSION = {
   "personality": "1",
   "interests": "1",
   "subjects": "2",
-  "reasoning": "3"
+  "reasoning": "3",
+  "values": "1",
+  // 2: free placement, averaged per value (v1 was the forced four-per-level sort).
+  "workimportance": "2",
+  "eq": "wleis-16-1"
 }
 
 export const TRAIT_ORDER = ['ES', 'E', 'O', 'A', 'C']
@@ -1498,18 +1513,31 @@ export function scoreChallenge(challenge, answers) {
   }
 
   if (challenge.scoring === 'wil') {
-    // Refuse to score unless the sort is legal: exactly four cards per column.
-    // An unequal sort is not this instrument and its scores would not mean what
-    // the published norms say they mean.
-    const perColumn = [0, 0, 0, 0, 0]
-    for (const item of items) perColumn[answers[item.id] - 1]++
-    if (perColumn.some((n) => n !== challenge.perColumn)) return null
-
-    const totals = {}
-    for (const item of items) totals[item.value] = (totals[item.value] || 0) + answers[item.id]
+    // As Naseeb Mind scores it: any level may hold any number of cards, and each
+    // value is the average level of its cards, so values carried by two, three
+    // or six cards stay comparable without forcing a distribution.
+    const sums = {}, counts = {}
+    for (const item of items) {
+      sums[item.value] = (sums[item.value] || 0) + answers[item.id]
+      counts[item.value] = (counts[item.value] || 0) + 1
+    }
     const scores = {}
-    for (const value of WIL_ORDER) scores[value] = totals[value] * WIL_MULTIPLIER[value]
+    for (const value of WIL_ORDER) scores[value] = sums[value] / counts[value]
+    // Ties by the published order so the same answers always rank the same.
     const ranked = [...WIL_ORDER].sort((a, b) => scores[b] - scores[a])
+    return { scores, ranked }
+  }
+
+  if (challenge.scoring === 'eq') {
+    // Four unweighted means, 1..7. No reverse keying and no missing-item fill.
+    const sums = {}, counts = {}
+    for (const item of items) {
+      sums[item.dim] = (sums[item.dim] || 0) + answers[item.id]
+      counts[item.dim] = (counts[item.dim] || 0) + 1
+    }
+    const scores = {}
+    for (const dim of EQ_ORDER) scores[dim] = sums[dim] / counts[dim]
+    const ranked = [...EQ_ORDER].sort((a, b) => scores[b] - scores[a])
     return { scores, ranked }
   }
 

@@ -3,8 +3,9 @@ from rest_framework import serializers
 from ..models import ChallengeAttempt
 
 # Every challenge is answered on a 1-5 scale except the ICAR-16 reasoning test,
-# whose answer is the option picked: up to eight (the 3D rotation items, A-H).
-ANSWER_MAX = {'reasoning': 8}
+# whose answer is the option picked: up to eight (the 3D rotation items, A-H),
+# and the WLEIS-16 EQ test, answered on its original seven-point scale.
+ANSWER_MAX = {'reasoning': 8, 'eq': 7}
 SCALE_MAX = 5
 
 

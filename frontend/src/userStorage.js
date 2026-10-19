@@ -5,6 +5,8 @@
 export const USER_STORAGE = {
   assessment: 'naseeb-find-personality-v1',
   assessmentPending: 'naseeb-assessment-pending-v1',
+  // The three majors revealed on the assessment hub's next-step card.
+  assessmentMajors: 'naseeb-assessment-majors-v1',
   screenTime: 'naseeb-screen-time-pending-v1',
   parentChild: 'naseeb-parent-selected-child-v1',
   onboardingDraft: 'naseeb-onboarding-draft-v1',

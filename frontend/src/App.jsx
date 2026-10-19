@@ -96,7 +96,7 @@ const AddStudentModal = lazyNamed(() => import('./components/StudentInvites'), '
 
 // Kept equal to CHALLENGES.length by tests/codeSplitting.test.mjs, so the
 // navigation does not pull the question banks into the main bundle.
-export const ASSESSMENT_CHALLENGE_COUNT = 4;
+export const ASSESSMENT_CHALLENGE_COUNT = 7;
 
 const SIDEBAR_KEY = 'naseeb-edu-sidebar';
 

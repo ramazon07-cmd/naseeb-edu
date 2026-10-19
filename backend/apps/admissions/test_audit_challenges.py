@@ -94,6 +94,17 @@ class ChallengeAttemptTests(AuditBaseMixin, APITestCase):
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, answers)
         self.assertEqual(ChallengeAttempt.objects.filter(challenge='reasoning').count(), 1)
 
+    def test_eq_answers_use_the_seven_point_scale(self):
+        """WLEIS-16 is answered on its original 1-7 agreement scale."""
+        self.client.force_authenticate(self.student_user)
+        payload = {'challenge': 'eq', 'instrument_version': 'wleis-16-1', 'answers': {'3000': 1, '3007': 4, '3015': 7}}
+        response = self.client.post(URL, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        for answers in ({'3000': 8}, {'3000': 0}):
+            response = self.client.post(URL, {'challenge': 'eq', 'answers': answers}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, answers)
+        self.assertEqual(ChallengeAttempt.objects.filter(challenge='eq').count(), 1)
+
     def test_only_students_may_create(self):
         for user in (self.admin, self.counselor, self.teacher, self.organization, self.parent):
             self.client.force_authenticate(user)

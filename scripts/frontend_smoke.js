@@ -23,6 +23,9 @@ const cssSource = (raw) => {
 };
 const styles = cssSource(fs.readFileSync(path.join(root, 'frontend/src/styles.css'), 'utf8'));
 const challenges = fs.readFileSync(path.join(root, 'frontend/src/challenges.js'), 'utf8');
+// The Naseeb Mind banks (values, work importance, EQ) and the hub's own stylesheet.
+const mindBanks = fs.readFileSync(path.join(root, 'frontend/src/challengeBanksMind.js'), 'utf8');
+const hubStyles = cssSource(fs.readFileSync(path.join(root, 'frontend/src/pages/assessment-hub.css'), 'utf8'));
 
 if ((landingPage.match(/href=\{BOOK_MEETING_URL\}/g) || []).length !== 1 || !landingPage.includes("t('Book a call')")) throw new Error('Landing page must show one final Book a call action.');
 if (landingPage.includes("t('Book a meeting')") || landingPage.includes("t('Talk to our team')")) throw new Error('Duplicate meeting actions remain on the landing page.');
@@ -115,16 +118,20 @@ if (!compactDashboard.includes("setPage('find_personality')") || !compactDashboa
 // College Search filters run on the server (/api/college-search/); the page only builds the query.
 if (!app.includes("params.set('country', filters.country)") || !app.includes('{t("Where")}</legend><select className="filter-country"')) throw new Error('The College Search country filter is not wired to the university catalog.');
 if (!app.includes("params.set('bands', filters.bands.join(','))") || !styles.includes('.filter-set')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
-if (!app.includes('function AIEducationGuidance(') || !app.includes('function MajorMatches(') || !app.includes('assessment-ai-orbit-mark') || !styles.includes('.assessment-ai-orbit-mark') || !styles.includes('.education-ai-guidance')) throw new Error('Assessment-based AI major guidance or the Naseeb logo mark is missing.');
+// Majors are revealed on the hub's Next step card once all seven tests are saved,
+// and kept in this browser per user.
+if (!app.includes('function HubNextCard(') || !app.includes("t('Your three majors')") || !app.includes('USER_STORAGE.assessmentMajors') || !app.includes('/assessment/hub/logo.png') || !hubStyles.includes('.hub-next-majors')) throw new Error('The Next step card with the three revealed majors is missing.');
 if (app.includes('education-ai-colleges') || app.includes('college_explanations')) throw new Error('University AI must remain separate from the major guidance stage.');
 if (app.includes('title="Where this could lead"')) throw new Error('The retired deterministic career recommendation panel has returned.');
 if (!app.includes('function ChallengeRunner(') || !styles.includes('.challenge-scale') || !app.includes('Profile Assessment')) throw new Error('Profile Assessment challenges are missing.');
-if (!challenges.includes("['personality', 'interests', 'subjects']") || !challenges.includes('REASONING_CHALLENGE')) throw new Error('Profile Assessment must expose the three fit signals plus the reasoning challenge.');
-if (!app.includes("const ASSESSMENT_CARD_ORDER = ['personality', 'interests', 'subjects', 'reasoning']") || app.includes("key: 'academic-profile'") || app.includes("key: 'goals-preferences'") || app.includes('function AssessmentProfileStepCard(')) throw new Error('Profile Assessment must contain only the four active challenges.');
-if (!app.includes('assessment-card-visual') || !app.includes('assessment-card-progress') || !styles.includes('grid-template-columns: repeat(2, minmax(0, 1fr))') || !styles.includes('.assessment-card-visual')) throw new Error('Profile Assessment split-card design is missing.');
-// One current challenge per instrument: personality, interests, subjects, and reasoning.
-for (const scoring of ['bigfive', 'riasec', 'subjects', 'reasoning']) {
-  if (!challenges.includes(`"scoring": "${scoring}"`) && !challenges.includes(`scoring: '${scoring}'`)) throw new Error(`The ${scoring} instrument is missing from challenges.js.`);
+if (!challenges.includes('VALUES_CHALLENGE') || !challenges.includes('WORK_IMPORTANCE_CHALLENGE') || !challenges.includes('REASONING_CHALLENGE') || !challenges.includes('EQ_CHALLENGE')) throw new Error('Profile Assessment must expose the seven Naseeb Mind challenges.');
+if (app.includes("key: 'academic-profile'") || app.includes("key: 'goals-preferences'") || app.includes('function AssessmentProfileStepCard(')) throw new Error('Profile Assessment must contain only the seven active challenges.');
+// The Naseeb Mind hub: Personality hero, image cards, EQ banner, and cards that
+// turn over to a summary once finished.
+if (!app.includes('function HubCard(') || !app.includes('function cardSummary(') || !app.includes('hub-card-back') || !hubStyles.includes(".hub-card[data-kind='personality']") || !hubStyles.includes(".hub-card[data-kind='eq']") || !hubStyles.includes('backface-visibility: hidden')) throw new Error('The Profile Assessment hub with flipping cards is missing.');
+// One current challenge per instrument, each with its own scorer.
+for (const scoring of ['bigfive', 'riasec', 'values', 'subjects', 'wil', 'reasoning', 'eq']) {
+  if (!challenges.includes(`"scoring": "${scoring}"`) && !challenges.includes(`scoring: '${scoring}'`) && !mindBanks.includes(`"scoring": "${scoring}"`)) throw new Error(`The ${scoring} instrument is missing from the challenge banks.`);
   if (!challenges.includes(`challenge.scoring === '${scoring}'`)) throw new Error(`No scorer for ${scoring}.`);
 }
 if (!app.includes('function ReasoningRunner(') || app.includes('YOUR SNAPSHOT') || app.includes('ESTIMATED COGNITIVE SCORE') || !app.includes('assessment-number-breakdown') || !challenges.includes("instrument: 'ICAR-16'") || !challenges.includes('estimatedCognitiveScore') || !challenges.includes("sourceId: 'MR.45'") || !challenges.includes("sourceId: 'R3D.08'") || !styles.includes('.reasoning-options') || !styles.includes('.reasoning-item-image') || !styles.includes('.assessment-number-column')) throw new Error('The ICAR-16 challenge or numeric breakdown is missing, or the retired snapshot remains.');
@@ -240,7 +247,8 @@ if (undefinedTokens.length) throw new Error(`Undefined CSS variables: ${undefine
 if (!html.includes("localStorage.getItem('naseeb-edu-theme')") || !app.includes('useLayoutEffect')) throw new Error('Pre-paint theme initialization is missing.')
 if (!app.includes('function CheckboxControl(') || !app.includes('function ChoiceCards(')) throw new Error('Accessible reusable form controls are missing.')
 if (app.includes('program-type-tabs') || app.includes('check-filter')) throw new Error('Legacy program filters are still rendered.')
-if ((app.match(/<Sparkles/g) || []).length !== 1) throw new Error('The sparkle icon is reserved for Naseeb AI actions only.')
+// Profile Assessment's majors no longer have an AI action, so the workspace may have none.
+if ((app.match(/<Sparkles/g) || []).length > 1) throw new Error('The sparkle icon is reserved for Naseeb AI actions only.')
 if ((html.match(/name="theme-color"/g) || []).length !== 1) throw new Error('Exactly one dynamic theme-color meta tag is required.');
 if (app.includes('AdmitFlow') || html.includes('AdmitFlow')) throw new Error('Legacy AdmitFlow branding is still rendered.');
 for (const asset of ['naseeb-gold-shield.png', 'naseeb-midnight-shield.png', 'assistant-bird.png', 'favicon-light-32.png', 'favicon-dark-32.png', 'apple-touch-icon.png']) {

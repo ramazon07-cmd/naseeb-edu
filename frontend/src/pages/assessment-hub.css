@@ -1,0 +1,872 @@
+/* Profile Assessment hub, matching the Naseeb Mind challenge hub: a three-column
+   grid with Personality as the wide hero, the next-step card down the right, and
+   EQ as a full-width banner underneath. The cards carry their own dark colours,
+   so they read the same in light and dark themes. */
+
+.hub-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.hub-list {
+  display: contents;
+  list-style: none;
+}
+
+.hub-card {
+  --hub-card-color: #12324c;
+  --hub-card-cols: 52% 48%;
+  position: relative;
+  display: grid;
+  min-height: 200px;
+  border-radius: 12px;
+  color: #fff;
+  perspective: 1400px;
+}
+
+/* A finished card turns over to its summary: on hover where there is a mouse,
+   with the flip button on touch screens and from the keyboard. Both faces share
+   one grid cell, so the card is always as tall as the taller face: turning it
+   never moves the grid, and longer Russian or Uzbek copy never clips. */
+.hub-card-inner {
+  position: relative;
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.hub-card.is-flipped .hub-card-inner {
+  transform: rotateY(180deg);
+}
+
+@media (hover: hover) {
+  .hub-card.is-done:not(.is-unsaved):hover .hub-card-inner {
+    transform: rotateY(180deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-card-inner {
+    transition: none;
+  }
+}
+
+.hub-card-face {
+  position: relative;
+  grid-area: 1 / 1;
+  display: grid;
+  grid-template-columns: var(--hub-card-cols);
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--hub-card-color);
+  backface-visibility: hidden;
+}
+
+.hub-card-back {
+  transform: rotateY(180deg);
+  background: color-mix(in srgb, var(--hub-card-color) 74%, #000);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.hub-card-back .hub-card-body {
+  padding: 16px 18px;
+}
+
+.hub-card-back .hub-card-side {
+  padding-top: 12px;
+}
+
+.hub-card-eyebrow {
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hub-card-body h3 {
+  margin: 0 0 6px;
+  color: #fff;
+  font-size: clamp(1rem, 1.3vw, 1.1875rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hub-card-back .hub-card-body p {
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.hub-card-chart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 18px 18px 18px 4px;
+}
+
+.hub-card-review {
+  position: relative;
+  z-index: 2;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.86);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.hub-card-review:hover {
+  color: #fff;
+}
+
+.hub-card-review:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.hub-card-flip {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  cursor: pointer;
+}
+
+.hub-card-flip:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* With a mouse the hover does the turning; the button stays for the keyboard. */
+@media (hover: hover) {
+  .hub-card-flip:not(:focus-visible) {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+/* ---- the small charts on the back ---- */
+.hub-mini-bars {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-mini-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 3px;
+}
+
+.hub-mini-bars span {
+  overflow: hidden;
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-mini-bars strong {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.hub-mini-bars i {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.hub-mini-bars b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+}
+
+.hub-mini-hex {
+  width: 100%;
+  max-width: 150px;
+  overflow: visible;
+}
+
+.hub-mini-hex .ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1;
+}
+
+.hub-mini-hex .shape {
+  fill: rgba(255, 255, 255, 0.28);
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.hub-mini-hex text {
+  fill: rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+}
+
+.hub-mini-hex text.top {
+  fill: #fff;
+}
+
+.hub-mini-ring {
+  width: 100%;
+  max-width: 116px;
+}
+
+.hub-mini-ring circle {
+  fill: none;
+  stroke-width: 9;
+}
+
+.hub-mini-ring .track {
+  stroke: rgba(255, 255, 255, 0.18);
+}
+
+.hub-mini-ring .fill {
+  stroke: #fff;
+  stroke-linecap: round;
+}
+
+.hub-mini-ring text {
+  fill: #fff;
+  font-weight: 800;
+}
+
+.hub-mini-ring text.of {
+  fill: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+}
+
+.hub-mini-rank {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: rank;
+}
+
+.hub-mini-rank li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  counter-increment: rank;
+}
+
+.hub-mini-rank li::before {
+  content: counter(rank);
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--hub-card-color);
+  font-weight: 800;
+}
+
+.hub-card[data-kind='interests'] {
+  --hub-card-color: #096371;
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.hub-card[data-kind='values'] {
+  --hub-card-color: #993b25;
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.hub-card[data-kind='subjects'] {
+  --hub-card-color: #195c86;
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.hub-card[data-kind='workimportance'] {
+  --hub-card-color: #455027;
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.hub-card[data-kind='reasoning'] {
+  --hub-card-color: #452657;
+  grid-column: 3;
+  grid-row: 3;
+}
+
+.hub-card:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.hub-card-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px 22px;
+}
+
+.hub-card-body h2 {
+  margin: 0 0 8px;
+  color: #fff;
+  font-size: clamp(1.25rem, 1.9vw, 1.625rem);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.13;
+}
+
+.hub-card-body p {
+  margin: 0;
+  color: #fff;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.hub-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.hub-card-part,
+.hub-card-save {
+  color: #fff;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.hub-card-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hub-card-save button {
+  position: relative;
+  z-index: 2;
+  border: 0;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.hub-card-progress {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.hub-card-progress i {
+  display: block;
+  height: 100%;
+  background: #fff;
+}
+
+.hub-card-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+/* The whole card is the button's target, like the hub it copies. */
+.hub-card-go::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.hub-card-go:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.hub-card-go:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.hub-card-art {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 48%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Personality: the statue stands whole in the right of a navy hero. */
+.hub-card[data-kind='personality'] {
+  --hub-card-color: #0b2a52;
+  --hub-card-cols: 44% 56%;
+  grid-column: 1 / 3;
+  grid-row: 1;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+}
+
+/* The ratio is a floor: longer copy (Uzbek, Russian) may make it taller. */
+.hub-card[data-kind='personality'] .hub-card-front {
+  aspect-ratio: 878 / 300;
+  isolation: isolate;
+  background: linear-gradient(90deg, #0c2849 0, #0b2a52 38%, #062953 60%, #062650 100%);
+  box-shadow: inset 0 0 0 1px rgba(125, 170, 220, 0.32);
+}
+
+.hub-card[data-kind='personality'] .hub-card-chart {
+  padding: 22px 40px 22px 8px;
+}
+
+.hub-card[data-kind='personality'] .hub-card-back .hub-card-body {
+  padding: 22px 30px;
+}
+
+.hub-card[data-kind='personality'] .hub-card-back .hub-card-side {
+  padding-top: 14px;
+}
+
+.hub-card[data-kind='personality'] .hub-card-body {
+  justify-content: center;
+  padding: 30px 34px;
+}
+
+.hub-card[data-kind='personality'] .hub-card-body h2 {
+  margin-bottom: 12px;
+  font-size: clamp(2.5rem, 4.4vw, 3.875rem);
+  line-height: 1.02;
+}
+
+.hub-card[data-kind='personality'] .hub-card-body p {
+  max-width: 21ch;
+  font-size: 1.0625rem;
+}
+
+.hub-card[data-kind='personality'] .hub-card-side {
+  margin-top: 0;
+  padding-top: 24px;
+}
+
+.hub-card[data-kind='personality'] .hub-card-go {
+  min-height: 46px;
+  padding: 10px 20px;
+  font-size: 0.9375rem;
+}
+
+.hub-card[data-kind='personality'] .hub-card-art {
+  top: -7%;
+  left: 33%;
+  right: auto;
+  width: 55%;
+  height: auto;
+  aspect-ratio: 720 / 540;
+  object-fit: contain;
+  z-index: -1;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22%, #000 88%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 22%, #000 88%, transparent 100%);
+}
+
+.hub-card[data-kind='eq'] {
+  --hub-card-color: #235860;
+  --hub-card-cols: minmax(0, 560px) 1fr;
+  grid-column: 1 / -1;
+  grid-row: 4;
+  min-height: 180px;
+}
+
+.hub-card[data-kind='eq'] .hub-card-chart {
+  justify-content: flex-start;
+  max-width: 420px;
+  padding-right: 32px;
+}
+
+.hub-card[data-kind='eq'] .hub-card-progress {
+  max-width: 320px;
+}
+
+.hub-card[data-kind='eq'] .hub-card-art {
+  right: 8%;
+  width: 22%;
+  max-width: 220px;
+  object-fit: contain;
+}
+
+/* ---- the next-step card ---- */
+.hub-next {
+  position: relative;
+  grid-column: 3;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 24px 26px;
+  border: 1px solid #9fb2c6;
+  border-radius: 12px;
+  background: linear-gradient(160deg, #304865, #1e3b55);
+  color: #fff;
+}
+
+.hub-next::after {
+  content: '';
+  position: absolute;
+  top: -88px;
+  right: -86px;
+  width: 210px;
+  height: 210px;
+  border: 1px solid rgba(224, 235, 244, 0.65);
+  border-radius: 50%;
+  box-shadow: 0 0 0 30px rgba(164, 188, 207, 0.1), 0 0 0 58px rgba(164, 188, 207, 0.08);
+  pointer-events: none;
+}
+
+.hub-next > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hub-next-logo {
+  width: 54px;
+  height: 54px;
+  margin-bottom: 22px;
+  padding: 10px;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: contain;
+}
+
+.hub-next-eyebrow {
+  color: #e7edf3;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.hub-next h2 {
+  margin: 10px 0 12px;
+  color: #fff;
+  font-size: clamp(1.6rem, 2.3vw, 2.25rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+.hub-next p {
+  margin: 0;
+  color: #d7e0ea;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.hub-next-status {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  color: #e7edf3;
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.hub-next-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hub-next-dots i {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+}
+
+.hub-next-dots i.is-done {
+  border-color: #4c8ff0;
+  background: #4c8ff0;
+}
+
+.hub-next-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #18334b;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hub-next-button:hover:not(:disabled) {
+  background: #e7edf3;
+}
+
+.hub-next-button:focus-visible {
+  outline: 3px solid #4c8ff0;
+  outline-offset: 3px;
+}
+
+.hub-next-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* With the three majors on it the card keeps its height and drops the logo. */
+.hub-next.has-picks h2 {
+  font-size: clamp(1.5rem, 1.9vw, 1.875rem);
+  margin: 8px 0 6px;
+}
+
+.hub-next-majors {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.hub-next-majors button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hub-next-majors button > span {
+  color: #9fc2ea;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.hub-next-majors strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.hub-next-majors small {
+  display: block;
+  margin-top: 3px;
+  color: #d7e0ea;
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+.hub-next-majors button:hover,
+.hub-next-majors button.selected {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.hub-next-majors button.selected {
+  border-color: #fff;
+}
+
+.hub-next.has-picks .hub-next-button {
+  margin-top: auto;
+}
+
+.hub-next.has-picks .hub-next-majors {
+  margin-bottom: 16px;
+}
+
+.hub-next .hub-next-error {
+  margin-top: 8px;
+  color: #ffd2cc;
+}
+
+/* "See the result" lands on its column and marks it for a moment. */
+.assessment-number-column.is-highlighted {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+  border-radius: 8px;
+}
+
+/* EQ answers on seven points: smaller circles so the row fits a phone. */
+.scale-dots.is-seven {
+  gap: clamp(2px, 1.2vw, var(--space-2));
+}
+
+.scale-dots.is-seven .scale-opt {
+  padding: 3px;
+}
+
+.scale-dots.is-seven .scale-opt.s1 .scale-dot,
+.scale-dots.is-seven .scale-opt.s5 .scale-dot {
+  width: clamp(36px, 9vw, 48px);
+  height: clamp(36px, 9vw, 48px);
+}
+
+.scale-dots.is-seven .scale-opt.s2 .scale-dot,
+.scale-dots.is-seven .scale-opt.s4 .scale-dot {
+  width: clamp(32px, 8vw, 41px);
+  height: clamp(32px, 8vw, 41px);
+}
+
+.scale-dots.is-seven .scale-opt.s3 .scale-dot {
+  width: clamp(30px, 7.4vw, 35px);
+  height: clamp(30px, 7.4vw, 35px);
+}
+
+@media (max-width: 1100px) {
+  .hub-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hub-card[data-kind],
+  .hub-next {
+    grid-row: auto;
+    grid-column: auto;
+  }
+
+  .hub-card[data-kind='personality'],
+  .hub-card[data-kind='reasoning'],
+  .hub-card[data-kind='eq'],
+  .hub-next {
+    grid-column: 1 / -1;
+  }
+
+  /* Narrow screens lead with it, as Naseeb Mind does, so Continue is never
+     a long scroll away. */
+  .hub-next {
+    order: -1;
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 820px) {
+  .hub-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .hub-card {
+    --hub-card-cols: 54% 46%;
+    min-height: 190px;
+  }
+
+  .hub-card-art {
+    width: 46%;
+  }
+
+  .hub-card[data-kind='personality'] .hub-card-front {
+    aspect-ratio: auto;
+    display: flex;
+    flex-direction: column;
+    background: #062650;
+  }
+
+  .hub-card[data-kind='personality'] .hub-card-back {
+    --hub-card-cols: 1fr;
+  }
+
+  .hub-card[data-kind='personality'] .hub-card-art {
+    position: static;
+    order: -1;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .hub-card[data-kind='personality'] .hub-card-body {
+    padding: 22px;
+  }
+
+  .hub-card[data-kind='personality'] .hub-card-body h2 {
+    font-size: 2.5rem;
+  }
+
+  .hub-card[data-kind='eq'] {
+    --hub-card-cols: 62% 38%;
+  }
+
+  .hub-card[data-kind='eq'] .hub-card-art {
+    right: 4%;
+    width: 34%;
+  }
+
+  .hub-next {
+    padding: 22px;
+  }
+}

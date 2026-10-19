@@ -50,12 +50,14 @@ function loadLogo(theme) {
 // `card`: profileCardData() for this student, or null until Interests is done.
 // `student`: the own student record, for the photo. `children`: the detailed
 // scores, shown on the card's back; the PNG is always the front.
-export function ProfileResultCard({ card, student, children }) {
+// `flipRequest`: bump it to turn the card to its back (the hub's "See the result").
+export function ProfileResultCard({ card, student, children, flipRequest = 0 }) {
   const canvasRef = useRef(null);
   const [rendered, setRendered] = useState(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  useEffect(() => { if (flipRequest) setFlipped(true); }, [flipRequest]);
   // CSS hot updates change tokens but cannot repaint existing canvas pixels.
   useEffect(() => {
     if (!import.meta.hot) return undefined;
@@ -79,7 +81,7 @@ export function ProfileResultCard({ card, student, children }) {
     code: t('Interest code'), subjects: t('Strongest Subjects'),
     personality: t('Personality'), majors: t('Recommended majors'),
     issued: t('Date of issue'), signature: t('Signature'),
-    notTaken: t('Not taken yet'), majorsLocked: t('Unlocks once all four challenges are saved.'),
+    notTaken: t('Not taken yet'), majorsLocked: t('Unlocks once all seven tests are saved.'),
   };
   // The page re-scores on every render; redraw only when what the card shows changes.
   const drawing = JSON.stringify({ card, labels, theme });
