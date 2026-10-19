@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # Branches are tested through their pull request; a push run on top would test the same code twice.
   push:
+    branches: [main]
   pull_request:
 
 # Least privilege for the workflow token: CI only needs to read the code.
