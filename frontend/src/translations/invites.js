@@ -75,9 +75,40 @@ export const INVITE_TRANSLATIONS = {
   // Create account now (quick-create)
   'Create account now': ['Hisobni hozir yaratish', 'Создать аккаунт сейчас'],
   'Create login': ['Login yaratish', 'Создать логин'],
-  'Creates the account right away with a temporary password you set: for students without email or a class signing in together. The student is your confirmed student at once.': [
-    'Hisob siz belgilagan vaqtinchalik parol bilan darhol yaratiladi: emaili yo‘q o‘quvchilar yoki birga kirayotgan sinf uchun. O‘quvchi darhol sizning tasdiqlangan o‘quvchingiz bo‘ladi.',
-    'Аккаунт создаётся сразу с временным паролем, который задаёте вы: для учеников без email или класса, который входит вместе. Ученик сразу становится вашим подтверждённым учеником.',
+  'Create the account and give the student the login and password. They choose their own password at the first sign-in.': [
+    'Hisobni yarating va o‘quvchiga login hamda parolni bering. U birinchi kirishda o‘z parolini o‘rnatadi.',
+    'Создайте аккаунт и передайте ученику логин и пароль. При первом входе он задаст свой пароль.',
+  ],
+  'Email (optional)': ['Email (ixtiyoriy)', 'Email (необязательно)'],
+  'Password (optional)': ['Parol (ixtiyoriy)', 'Пароль (необязательно)'],
+  'Leave it empty and a password is made for you.': [
+    'Bo‘sh qoldirsangiz, parol avtomatik yaratiladi.',
+    'Оставьте пустым — пароль будет создан автоматически.',
+  ],
+  'The password is shown only now. Copy it and give it to the student.': [
+    'Parol faqat hozir ko‘rsatiladi. Uni nusxalab, o‘quvchiga bering.',
+    'Пароль показывается только сейчас. Скопируйте его и передайте ученику.',
+  ],
+  'Copy login and password': ['Login va parolni nusxalash', 'Скопировать логин и пароль'],
+  'Your Naseeb Edu account': ['Naseeb Edu hisobingiz', 'Ваш аккаунт Naseeb Edu'],
+  'Sign-in page': ['Kirish sahifasi', 'Страница входа'],
+  'At the first sign-in you will choose your own password.': [
+    'Birinchi kirishda o‘zingiz yangi parol o‘rnatasiz.',
+    'При первом входе вы зададите свой пароль.',
+  ],
+  // First sign-in: the student chooses their own password
+  'Welcome, {name}': ['Xush kelibsiz, {name}', 'Добро пожаловать, {name}'],
+  'Set your own password to open your cabinet. From now on you sign in with it.': [
+    'Kabinetingizni ochish uchun o‘z parolingizni o‘rnating. Bundan keyin shu parol bilan kirasiz.',
+    'Задайте свой пароль, чтобы открыть кабинет. Дальше вы будете входить с ним.',
+  ],
+  'Password requirements': ['Parol talablari', 'Требования к паролю'],
+  'At least 8 characters': ['Kamida 8 ta belgi', 'Не меньше 8 символов'],
+  'Not only numbers': ['Faqat raqamlardan iborat emas', 'Не только из цифр'],
+  'Both passwords match': ['Ikkala parol bir xil', 'Оба пароля совпадают'],
+  'If you sign out now, ask your counselor for a new temporary password.': [
+    'Hozir chiqsangiz, yangi vaqtinchalik parolni maslahatchingizdan so‘rashingiz kerak bo‘ladi.',
+    'Если выйдете сейчас, новый временный пароль придётся попросить у консультанта.',
   ],
   'Login created for {name}': ['{name} uchun login yaratildi', 'Логин для {name} создан'],
   'Select the text and copy it': ['Matnni belgilab, nusxalang', 'Выделите текст и скопируйте его'],

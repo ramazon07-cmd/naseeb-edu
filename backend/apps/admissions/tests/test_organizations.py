@@ -75,14 +75,42 @@ class OrganizationRoleIsolationTests(RoleIsolationBase):
         self.assertTrue(created.user.check_password('NewStudentPass123!'))
         self.assertEqual(created.user.temporary_credentials.get().status, 'issued')
 
-    def test_quick_create_requires_a_strong_initial_password(self):
+    def test_quick_create_generates_the_password_when_none_is_typed(self):
         self.client.force_authenticate(self.organization)
-        missing = self.client.post(
+        response = self.client.post(
             '/api/students/quick-create/',
             {'name': 'No Password Student', 'email': 'no-password@example.com'},
             format='json',
         )
-        self.assertEqual(missing.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        password = response.data['temporary_password']
+        user = User.objects.get(pk=response.data['user'])
+        self.assertEqual(response.data['user_detail']['username'], user.username)
+        self.assertTrue(user.check_password(password))
+        self.assertTrue(user.must_change_password)
+        self.assertEqual(user.temporary_credentials.get().status, 'issued')
+        # A typed password is the counselor's own: it is never echoed back.
+        typed = self.client.post(
+            '/api/students/quick-create/',
+            {'name': 'Typed Student', 'password': 'NewStudentPass123!'},
+            format='json',
+        )
+        self.assertEqual(typed.status_code, status.HTTP_201_CREATED, typed.data)
+        self.assertNotIn('temporary_password', typed.data)
+
+    def test_quick_create_refuses_a_password_like_the_name_without_saving(self):
+        self.client.force_authenticate(self.organization)
+        response = self.client.post(
+            '/api/students/quick-create/',
+            {'name': 'Kamola Karimova', 'password': 'Karimova2026'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertIn('password', response.data)
+        self.assertFalse(User.objects.filter(first_name='Kamola').exists())
+
+    def test_quick_create_refuses_a_weak_typed_password(self):
+        self.client.force_authenticate(self.organization)
         weak = self.client.post(
             '/api/students/quick-create/',
             {'name': 'Weak Password Student', 'email': 'weak-password@example.com', 'password': '12345'},

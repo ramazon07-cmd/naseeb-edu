@@ -114,6 +114,9 @@ TEMPORARY_CREDENTIAL_TTL_HOURS = config('TEMPORARY_CREDENTIAL_TTL_HOURS', defaul
 STUDENT_INVITE_TTL_DAYS = config('STUDENT_INVITE_TTL_DAYS', default=7, cast=int)
 # Students waiting for confirmation a school may hold; joins pause beyond it.
 MAX_PENDING_STUDENTS_PER_SCHOOL = config('MAX_PENDING_STUDENTS_PER_SCHOOL', default=100, cast=int)
+# Off: only staff create student accounts (quick-create, login handed over by the
+# counselor); invite and magic-link sign-ups are refused. Pending students can still be confirmed.
+STUDENT_SELF_JOIN_ENABLED = config('STUDENT_SELF_JOIN_ENABLED', default=False, cast=bool)
 # Domain for students created without an email (.invalid never routes mail).
 PLACEHOLDER_EMAIL_DOMAIN = config('PLACEHOLDER_EMAIL_DOMAIN', default='students.naseeb.invalid')
 

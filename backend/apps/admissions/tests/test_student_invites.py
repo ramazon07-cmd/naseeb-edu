@@ -17,6 +17,8 @@ from ..models import School, StudentInvite, StudentProfile
 PASSWORD = 'Correct-Horse-91'
 
 
+# Self-join is off by default; these tests cover the switched-on flow.
+@override_settings(STUDENT_SELF_JOIN_ENABLED=True)
 class InviteBase(APITestCase):
     def setUp(self):
         cache.clear()
@@ -472,6 +474,49 @@ class PendingStudentTests(InviteBase):
         self.client.force_authenticate(self.organization)
         self.assertEqual(len(self.client.get('/api/pending-students/').data), 1)
         self.assertEqual(self.client.post(f'/api/pending-students/{profile.pk}/confirm/').status_code, 200)
+        profile.refresh_from_db()
+        self.assertFalse(profile.awaiting_confirmation)
+
+
+class SelfJoinDisabledTests(InviteBase):
+    """Off (the default): only staff create student accounts; invite links stop working."""
+
+    def test_me_reports_the_switch(self):
+        self.client.force_authenticate(self.counselor)
+        self.assertTrue(self.client.get('/api/users/accounts/me/').data['student_self_join'])
+        with override_settings(STUDENT_SELF_JOIN_ENABLED=False):
+            self.assertFalse(self.client.get('/api/users/accounts/me/').data['student_self_join'])
+
+    def test_counselor_and_organization_cannot_create_invites(self):
+        with override_settings(STUDENT_SELF_JOIN_ENABLED=False):
+            for user, extra in ((self.counselor, {}), (self.organization, {'counselor': self.counselor.pk})):
+                for kind in ('personal', 'link'):
+                    response = self.create_invite(user, kind=kind, **extra)
+                    self.assertEqual(response.status_code, 403, (user.username, kind))
+                    self.assertEqual(response.data['code'], 'self_join_disabled')
+        self.assertFalse(StudentInvite.objects.exists())
+
+    def test_refusal_is_localized(self):
+        self.client.force_authenticate(self.counselor)
+        with override_settings(STUDENT_SELF_JOIN_ENABLED=False):
+            response = self.client.post('/api/student-invites/', {'kind': 'link'}, format='json', HTTP_ACCEPT_LANGUAGE='uz')
+        self.assertIn('maslahatchisidan', response.data['detail'])
+
+    def test_existing_links_stop_admitting_students(self):
+        token = self.create_link().data['token']
+        with override_settings(STUDENT_SELF_JOIN_ENABLED=False):
+            info = self.client.get(f'/api/public/invites/{token}/')
+            self.assertEqual((info.status_code, info.data['code']), (404, 'invite_unavailable'))
+            accepted = self.accept(token, first_name='Lola', last_name='Usmonova')
+            self.assertEqual((accepted.status_code, accepted.data['code']), (404, 'invite_unavailable'))
+        self.assertFalse(User.objects.filter(username='aziz').exists())
+        self.assertEqual(StudentInvite.objects.get().use_count, 0)
+
+    def test_students_already_waiting_can_still_be_confirmed(self):
+        profile = self.join()
+        with override_settings(STUDENT_SELF_JOIN_ENABLED=False):
+            self.client.force_authenticate(self.counselor)
+            self.assertEqual(self.client.post(f'/api/pending-students/{profile.pk}/confirm/').status_code, 200)
         profile.refresh_from_db()
         self.assertFalse(profile.awaiting_confirmation)
 

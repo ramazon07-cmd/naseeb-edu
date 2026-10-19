@@ -140,6 +140,10 @@ COMMON_API_MESSAGES = {
         'uz': 'O‘quvchilarni faqat maslahatchilar taklif qila oladi.',
         'ru': 'Приглашать учеников могут только консультанты.',
     },
+    'Students get their login from their counselor. Create the student account instead.': {
+        'uz': 'O‘quvchi login va parolni maslahatchisidan oladi. Taklif o‘rniga o‘quvchi hisobini yarating.',
+        'ru': 'Ученик получает логин и пароль от консультанта. Вместо приглашения создайте аккаунт ученика.',
+    },
     'One or more selected students are not available for assignment.': {
         'uz': 'Tanlangan o‘quvchilardan biri yoki bir nechtasi biriktirish uchun mavjud emas.',
         'ru': 'Один или несколько выбранных учеников недоступны для назначения.',

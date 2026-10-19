@@ -506,9 +506,9 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
     <CounselorStudentsPage {...{ user, data, stats, query, setQuery, reload, notify, setPage, onDirect }} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} onAddStudent={() => setAddingStudent(true)} />
     {addingStudent && <AddStudentModal user={user} data={data} onClose={() => setAddingStudent(false)} notify={notify} onJoined={() => setPage('students_joined')} onCreated={reload} />}
   </>;
-  // Organization accounts invite students too and confirm the ones who join.
+  // Organization accounts invite students too (while self-join is on) and confirm the ones who join.
   if (page === 'students' && user.role === 'organization') return <>
-    {!params.studentId && <JoinedBanner count={stats?.badges?.students_pending} onOpen={() => setPage('students_joined')} onInvite={() => setAddingStudent(true)} />}
+    {!params.studentId && <JoinedBanner count={stats?.badges?.students_pending} onOpen={() => setPage('students_joined')} onInvite={user.student_self_join ? () => setAddingStudent(true) : undefined} />}
     <StudentsPage user={user} data={data} query={query} reload={reload} notify={notify} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} />
     {addingStudent && <AddStudentModal user={user} data={data} onClose={() => setAddingStudent(false)} notify={notify} onJoined={() => setPage('students_joined')} onCreated={reload} />}
   </>;

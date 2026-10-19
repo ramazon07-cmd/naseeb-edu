@@ -132,34 +132,24 @@ function MagicLinkTab({ notify, counselors, counselor, setCounselor }) {
   </div>;
 }
 
-// Direct creation with a temporary password (students without email, or a class
-// signing in together): the existing quick-create flow.
-function CreateAccountTab({ user, data, notify, onCreated }) {
-  const [created, setCreated] = useState(null);
-  if (created) return <div className="invite-link-box" role="status">
-    <b>{t('Login created for {name}', { name: created.name })}</b>
-    <p className="invite-note">{t('Username')}: <b>{created.username}</b></p>
-    <CopyField value={created.password} notify={notify} label={t('Temporary password')} />
-    <p className="invite-note">{created.expires ? t('The student signs in with this temporary password and must change it. It expires on {date}.', { date: dateTimeText(created.expires) }) : t('The student signs in with this temporary password and must change it.')}</p>
-    <div className="invite-actions"><button type="button" className="cx-btn" onClick={() => setCreated(null)}><UserPlus size={15} aria-hidden="true" />{t('Create another account')}</button></div>
-  </div>;
+// The counselor creates the account and hands the student the login card.
+function CreateAccountTab({ user, data, notify, onCreated, onClose }) {
   return <>
-    <p className="invite-note">{t('Creates the account right away with a temporary password you set: for students without email or a class signing in together. The student is your confirmed student at once.')}</p>
-    <QuickCreateStudentForm user={user} data={data} notify={notify} onSaved={(profile, values) => {
-      setCreated({ name: values.name, username: profile?.user_detail?.username, password: values.password, expires: profile?.user_detail?.credential_expires_at });
-      onCreated?.();
-    }} />
+    <p className="invite-note">{t('Create the account and give the student the login and password. They choose their own password at the first sign-in.')}</p>
+    <QuickCreateStudentForm user={user} data={data} notify={notify} onCreated={onCreated} onCancel={onClose} />
   </>;
 }
 
-// "Add student": a personal invite, a shareable magic link, or an account created now.
+// "Add student": an account created now and, while self-join is switched on
+// (STUDENT_SELF_JOIN_ENABLED), a personal invite or a shareable magic link.
 // `onJoined` opens Recently joined; `onCreated` runs after a direct creation.
 export function AddStudentModal({ user, data, onClose, notify, onJoined, onCreated }) {
-  const [tab, setTab] = useState('personal');
+  const selfJoin = Boolean(user?.student_self_join);
+  const [tab, setTab] = useState('create');
   const [counselor, setCounselor] = useState('');
   // Organization accounts pick the counselor; counselors invite for themselves.
   const [counselors, setCounselors] = useState(null);
-  const picksCounselor = user?.role === 'organization';
+  const picksCounselor = selfJoin && user?.role === 'organization';
   useEffect(() => {
     if (!picksCounselor) return;
     api.studentInviteCounselors().then((rows) => {
@@ -168,15 +158,18 @@ export function AddStudentModal({ user, data, onClose, notify, onJoined, onCreat
     }, (failure) => notify(failure.message, 'error'));
   }, [picksCounselor, notify]);
   const picker = { counselors: picksCounselor ? counselors || [] : null, counselor, setCounselor };
+  const createTab = <CreateAccountTab user={user} data={data} notify={notify} onCreated={onCreated} onClose={onClose} />;
   return <Modal title={t('Add student')} onClose={onClose}>
     <div className="invite-modal invite-dialog">
-      <CxTabs label={t('How to add the student')} active={tab} onChange={setTab} items={[['personal', 'Invite by email/details'], ['link', 'Magic link'], ['create', 'Create account now']]} />
-      <div role="tabpanel" aria-labelledby={`cx-tab-${tab}`}>
-        {tab === 'personal' && <PersonalInviteTab notify={notify} {...picker} />}
-        {tab === 'link' && <MagicLinkTab notify={notify} {...picker} />}
-        {tab === 'create' && <CreateAccountTab user={user} data={data} notify={notify} onCreated={onCreated} />}
-      </div>
-      {onJoined && tab !== 'create' && <p className="invite-note">{t('Students who join wait for your confirmation in Recently joined.')} <button type="button" className="cx-link" onClick={() => { onClose(); onJoined(); }}>{t('Open Recently joined')}</button></p>}
+      {selfJoin ? <>
+        <CxTabs label={t('How to add the student')} active={tab} onChange={setTab} items={[['create', 'Create account now'], ['personal', 'Invite by email/details'], ['link', 'Magic link']]} />
+        <div role="tabpanel" aria-labelledby={`cx-tab-${tab}`}>
+          {tab === 'personal' && <PersonalInviteTab notify={notify} {...picker} />}
+          {tab === 'link' && <MagicLinkTab notify={notify} {...picker} />}
+          {tab === 'create' && createTab}
+        </div>
+        {onJoined && tab !== 'create' && <p className="invite-note">{t('Students who join wait for your confirmation in Recently joined.')} <button type="button" className="cx-link" onClick={() => { onClose(); onJoined(); }}>{t('Open Recently joined')}</button></p>}
+      </> : createTab}
     </div>
   </Modal>;
 }
