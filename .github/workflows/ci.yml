@@ -11,6 +11,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Normal runs take 15-30 minutes; a hung step fails here instead of after GitHub's 6-hour default.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16
