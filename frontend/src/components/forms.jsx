@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatNumberLocale, t } from '../i18n';
-import { Check, Target, CheckCircle2 } from 'lucide-react';
+import { Check, Target, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 export function Field({ label: title, children, error = '', hint = '' }) {
   return <label className={`field ${error ? 'is-error' : ''}`.trim()}><span>{typeof title === 'string' ? t(title) : title}</span>{children}{error ? <small className="field-error">{error}</small> : hint ? <small className="field-hint">{hint}</small> : null}</label>;
+}
+
+// A password field with a show/hide button (account settings, first sign-in).
+export function PasswordInput({ value, onChange, autoComplete, invalid, ...props }) {
+  const [visible, setVisible] = useState(false);
+  const label = visible ? t('Hide password') : t('Show password');
+  return <span className="account-password-input"><input type={visible ? 'text' : 'password'} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} aria-invalid={invalid || undefined} required {...props} /><button type="button" className="icon-button" onClick={() => setVisible(!visible)} aria-label={label} title={label}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>;
 }
 
 // One choice out of a few short ones, all in view (the radios submit with the form like a select would).

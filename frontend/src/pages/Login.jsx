@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { api } from '../api';
-import { ArrowLeft, ChevronRight, Fingerprint, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Circle, LogOut } from 'lucide-react';
 import { t } from '../i18n';
-import { LanguageSelector, ThemeToggle, BrandLogo, BrandLockup } from '../components/brand';
-import { Field } from '../components/forms';
-import { fullName, label } from '../lib/labels';
+import { LanguageSelector, ThemeToggle, BrandLogo } from '../components/brand';
+import { Field, PasswordInput } from '../components/forms';
+import { fullName } from '../lib/labels';
 
 export const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
 
@@ -90,11 +90,19 @@ export function Login({ onLogin, onBack, theme, toggleTheme, language, changeLan
   );
 }
 
+// First sign-in with a temporary password: the sign-in page's backdrop and card,
+// so choosing a password reads as the next step of signing in.
 export function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, language, changeLanguage }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // What the browser can check while they type; the server also refuses common passwords and ones like the name.
+  const checks = [
+    [t('At least 8 characters'), password.length >= 8],
+    [t('Not only numbers'), password !== '' && !/^\d+$/.test(password)],
+    [t('Both passwords match'), confirmPassword !== '' && password === confirmPassword],
+  ];
   async function submit(event) {
     event.preventDefault();
     if (password !== confirmPassword) {setError(t('Passwords do not match.'));return;}
@@ -103,5 +111,28 @@ export function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggle
     catch (requestError) {setError(requestError.message);} finally
     {setSaving(false);}
   }
-  return <main className="password-change-page"><section className="password-change-card"><header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div></header><div className="password-change-intro"><span className="password-change-icon"><Fingerprint size={24} /></span><span className="eyebrow">{t('Temporary login')}</span><h1>{t('Change temporary password')}</h1><p>{t('Create a permanent password before opening your cabinet.')}</p></div><form className="form-grid" onSubmit={submit}><Field label={t('New password')} hint={t('Use at least 8 characters with upper/lowercase letters and a number.')}><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" autoComplete="new-password" required /></Field><Field label={t('Confirm password')}><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="8" autoComplete="new-password" required /></Field>{error && <div className="alert error form-wide">{error}</div>}<div className="password-change-warning form-wide"><ShieldAlert size={17} /><p>{t('Your temporary password has already been consumed. If you leave now, an administrator must reissue it.')}</p></div><div className="form-actions form-wide"><button type="button" className="button quiet" onClick={onSignOut}>{t('Sign out')}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving securely…") : t("Save new password")}</button></div></form><footer>{fullName(user)} · {user.school_name || label(user.role)}</footer></section></main>;
+  return <main className="login-page">
+    <header className="login-bar">
+      <button type="button" className="login-return" onClick={onSignOut}><LogOut size={17} aria-hidden="true" /> {t('Sign out')}</button>
+      <div className="login-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
+    </header>
+    <section className="login-form-panel" aria-labelledby="password-change-title">
+      <form className="login-card" onSubmit={submit}>
+        <div className="login-card-head">
+          <BrandLogo theme={theme} className="login-emblem password-emblem" />
+          <h1 id="password-change-title">{t('Welcome, {name}', { name: user.first_name || fullName(user) })}</h1>
+          <p className="password-change-lead">{t('Set your own password to open your cabinet. From now on you sign in with it.')}</p>
+        </div>
+        <Field label={t('New password')}><PasswordInput value={password} onChange={setPassword} autoComplete="new-password" minLength="8" /></Field>
+        <Field label={t('Confirm password')}><PasswordInput value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" minLength="8" /></Field>
+        <ul className="password-checks" aria-label={t('Password requirements')}>
+          {checks.map(([text, met]) => <li key={text} className={met ? 'is-met' : undefined}>{met ? <Check size={15} aria-hidden="true" /> : <Circle size={15} aria-hidden="true" />}<span className="sr-only">{met ? t('Done') : t('Not yet')}: </span>{text}</li>)}
+        </ul>
+        {error && <div className="alert error" role="alert">{error}</div>}
+        <button className="button primary full" disabled={saving} aria-busy={saving}>{saving ? t('Saving securely…') : t('Save new password')}<ChevronRight size={18} aria-hidden="true" /></button>
+        <p className="login-help">{user.role === 'student' ? t('If you sign out now, ask your counselor for a new temporary password.') : t('Your temporary password has already been consumed. If you leave now, an administrator must reissue it.')}</p>
+      </form>
+    </section>
+  </main>;
 }
+

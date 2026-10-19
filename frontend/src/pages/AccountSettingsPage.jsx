@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, Globe2, KeyRound, Mail, RefreshCw, ShieldCheck, UserRound, UsersRound } from 'lucide-react';
+import { Globe2, KeyRound, Mail, RefreshCw, ShieldCheck, UserRound, UsersRound } from 'lucide-react';
 import { api } from '../api';
 import { t } from '../i18n';
-import { Field } from '../components/forms';
+import { Field, PasswordInput } from '../components/forms';
 import { LanguageSelector } from '../components/brand';
 import { ProfilePhotoField } from '../components/profileFields';
 import { dateText } from '../lib/format';
@@ -18,12 +18,6 @@ const NEVER_VISIBLE = {
 };
 
 const errorsFrom = (error) => accountFieldErrors(error?.details, error?.message, t);
-
-function PasswordInput({ value, onChange, autoComplete, invalid, ...props }) {
-  const [visible, setVisible] = useState(false);
-  const label = visible ? t('Hide password') : t('Show password');
-  return <span className="account-password-input"><input type={visible ? 'text' : 'password'} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} aria-invalid={invalid || undefined} required {...props} /><button type="button" className="icon-button" onClick={() => setVisible(!visible)} aria-label={label} title={label}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>;
-}
 
 const PROFILE_FIELDS = ['first_name', 'last_name', 'phone', 'position'];
 

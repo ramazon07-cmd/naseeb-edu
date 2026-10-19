@@ -130,9 +130,6 @@ export const TRANSLATIONS = {
 
     "Connecting Students to the World Through Education":
       "O‘quvchilarni ta’lim orqali dunyo bilan bog‘laymiz",
-    "Change temporary password": "Vaqtinchalik parolni o‘zgartirish",
-    "Create a permanent password before opening your cabinet.":
-      "Kabinetga kirishdan oldin doimiy parol yarating.",
     "New password": "Yangi parol",
     "Confirm password": "Parolni tasdiqlang",
     "Save new password": "Yangi parolni saqlash",
@@ -153,7 +150,6 @@ export const TRANSLATIONS = {
     "Switch to light mode": "Yorug‘ rejimga o‘tish",
     "Switch to dark mode": "Tungi rejimga o‘tish",
     Language: "Til",
-    "Temporary login": "Vaqtinchalik login",
     "Reset login": "Login parolini yangilash",
     "Issue a new one-time password": "Yangi bir martalik parol berish",
     "Generate temporary password": "Vaqtinchalik parol yaratish",
@@ -324,9 +320,6 @@ export const TRANSLATIONS = {
 
     "Connecting Students to the World Through Education":
       "Соединяем учащихся с миром через образование",
-    "Change temporary password": "Измените временный пароль",
-    "Create a permanent password before opening your cabinet.":
-      "Создайте постоянный пароль перед входом в кабинет.",
     "New password": "Новый пароль",
     "Confirm password": "Подтвердите пароль",
     "Save new password": "Сохранить новый пароль",
@@ -347,7 +340,6 @@ export const TRANSLATIONS = {
     "Switch to light mode": "Переключить на светлую тему",
     "Switch to dark mode": "Переключить на тёмную тему",
     Language: "Язык",
-    "Temporary login": "Временный вход",
     "Reset login": "Сбросить пароль",
     "Issue a new one-time password": "Выдать новый одноразовый пароль",
     "Generate temporary password": "Создать временный пароль",

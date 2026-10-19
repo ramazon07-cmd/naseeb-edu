@@ -47,6 +47,10 @@ def personal_invite_days():
     return getattr(settings, 'STUDENT_INVITE_TTL_DAYS', 7)
 
 
+def self_join_enabled():
+    return getattr(settings, 'STUDENT_SELF_JOIN_ENABLED', False)
+
+
 def hash_token(raw):
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()
 

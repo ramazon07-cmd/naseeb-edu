@@ -29,11 +29,13 @@ from ..invites import (
     reject_student,
     revoke_invite,
     school_counselors,
+    self_join_enabled,
     usable_invites,
 )
 
 LIST_LIMIT = 100
 PENDING_LIMIT = 200
+SELF_JOIN_DISABLED_MESSAGE = 'Students get their login from their counselor. Create the student account instead.'
 
 
 class StudentInviteViewSet(viewsets.GenericViewSet):
@@ -58,6 +60,8 @@ class StudentInviteViewSet(viewsets.GenericViewSet):
     def create(self, request):
         if not can_create_invites(request.user):
             return Response({'detail': 'Only counselors can invite students.'}, status=403)
+        if not self_join_enabled():
+            return Response({'detail': SELF_JOIN_DISABLED_MESSAGE, 'code': 'self_join_disabled'}, status=403)
         serializer = InviteCreateSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         invite, raw = create_invite(actor=request.user, data=serializer.validated_data)
@@ -142,7 +146,7 @@ class PublicInviteView(APIView):
     throttle_scope = 'invite_public'
 
     def get(self, request, token):
-        invite = find_invite(token)
+        invite = find_invite(token) if self_join_enabled() else None
         if invite is None:
             raise InviteUnavailable(request)
         response = Response(invite_public_info(invite))
@@ -162,6 +166,9 @@ class PublicInviteAcceptView(APIView):
     throttle_classes = [InviteAttemptIPThrottle, InviteTokenThrottle]
 
     def post(self, request, token):
+        if not self_join_enabled():
+            # Old links answer like any unusable token.
+            raise InviteUnavailable(request)
         created = InviteAcceptIPThrottle()
         if not created.allow_request(request, self):
             self.throttled(request, created.wait())

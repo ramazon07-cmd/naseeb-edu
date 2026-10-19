@@ -336,8 +336,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         data['workspace'] = entitlements.workspace_summary(subscription)
         # Same rules as the chat view, so the frontend only offers what will work.
         data['assistant_enabled'] = entitlements.assistant_available(request.user, subscription)
-        from apps.admissions.invites import pending_join_info
+        from apps.admissions.invites import pending_join_info, self_join_enabled
 
+        # Off: "Add student" offers only the account the counselor creates.
+        data['student_self_join'] = self_join_enabled()
         # A student who joined by invite sees only the waiting screen until confirmed.
         data['pending_join'] = pending_join_info(request.user)
         data['awaiting_confirmation'] = data['pending_join'] is not None
