@@ -135,7 +135,7 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
     def research_as_student(self, countries):
         profile = {
             'gpa': '4.70', 'sat_score': 1450, 'ielts_score': '7.5', 'target_major': 'Computer Science',
-            'target_countries': countries, 'budget_usd': 30000, 'scholarship_needed': False,
+            'target_countries': countries, 'scholarship_needed': False,
         }
         for field, value in profile.items():
             setattr(self.student_a, field, value)
@@ -173,7 +173,7 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         scores = [row['fit']['match_score'] for row in rows]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
-    def test_every_university_is_scored_and_the_unrelated_ones_rank_last(self):
+    def test_every_university_is_scored_and_unrelated_ones_share_the_lowest_fit(self):
         target = University.objects.create(name='Target Country University', country='United Kingdom')
         with_data = University.objects.create(name='Data University', country='USA', sat_min=1300, sat_max=1500)
         priced = University.objects.create(name='Priced University', country='Japan', net_price_usd=9000)
@@ -183,8 +183,12 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         self.assertEqual(set(scores), {target.id, with_data.id, priced.id, unrelated.id})
         # The map and the rows agree: what a row shows is what it is sorted and filtered by.
         self.assertEqual({row['id']: (row['fit']['match_score'], row['fit']['admission_band']) for row in rows}, scores)
-        # Not a target country and no admissions data: last, despite the best rank.
-        self.assertEqual(rows[-1]['id'], unrelated.id)
+        # A published price alone gives no fit points. These two unrelated
+        # universities tie; QS rank only orders them within that tie.
+        self.assertEqual(scores[priced.id], scores[unrelated.id])
+        self.assertGreater(scores[target.id][0], scores[unrelated.id][0])
+        self.assertGreater(scores[with_data.id][0], scores[unrelated.id][0])
+        self.assertEqual([row['id'] for row in rows[-2:]], [unrelated.id, priced.id])
 
     def test_fit_sort_queries_do_not_grow_with_the_catalogue(self):
         def queries():

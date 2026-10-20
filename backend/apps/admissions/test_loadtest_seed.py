@@ -16,8 +16,8 @@ from django.test import TestCase
 from apps.users.models import User, WorkspaceSubscription
 
 from .essay_lab.doc import doc_stats, validate_doc
-from .models import Essay, RoadmapMission, School, StudentProfile, XPTransaction
-from .services import LEVEL_ONE_MISSIONS
+from .models import Essay, RoadmapMission, School, StudentProfile, Task, XPTransaction
+from .services import LEVEL_ONE_MISSIONS, ROADMAP_APPROVAL_XP
 
 SEED_PATH = Path(__file__).resolve().parents[3] / 'scripts' / 'loadtest' / 'seed.py'
 
@@ -51,6 +51,15 @@ class LoadtestSeedTests(TestCase):
             self.assertEqual(profile.assigned_counselor.school_id, profile.school_id)
 
     def test_progress_follows_the_approval_rules(self):
+        self.assertTrue(Task.objects.filter(status=Task.Status.APPROVED).exists())
+        self.assertFalse(XPTransaction.objects.filter(source_type=XPTransaction.Source.TASK).exists())
+        completed = RoadmapMission.objects.filter(status=RoadmapMission.Status.COMPLETED)
+        awards = XPTransaction.objects.filter(source_type=XPTransaction.Source.ROADMAP)
+        self.assertGreater(completed.count(), 0)
+        self.assertCountEqual(
+            awards.values_list('student_id', 'source_id', 'amount'),
+            [(mission.student_id, mission.pk, ROADMAP_APPROVAL_XP) for mission in completed],
+        )
         for profile in StudentProfile.objects.all():
             earned = XPTransaction.objects.filter(student=profile).aggregate(total=Sum('amount'))['total'] or 0
             self.assertEqual(profile.xp_total, earned)
