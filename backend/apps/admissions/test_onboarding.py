@@ -150,6 +150,47 @@ class TestScoreOnboardingTests(APITestCase):
                  ielts_speaking=6.5, ielts_test_date='2026-03-14', ielts_attempts=2)
     sat = dict(sat_status='taken', sat_reading=650, sat_math=700, sat_test_date='2026-05-02', sat_attempts=1)
 
+    def test_one_skill_retake_is_stored_and_visible_in_profile(self):
+        response = self.post(**self.ielts, ielts_result_type='one_skill_retake',
+                             ielts_retake_skill='speaking', ielts_retake_date='2026-03-28')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ielts_result_type, 'one_skill_retake')
+        self.assertEqual(self.profile.ielts_retake_skill, 'speaking')
+        self.assertEqual(str(self.profile.ielts_retake_date), '2026-03-28')
+        detail = self.client.get(f'/api/students/{self.profile.id}/').data
+        self.assertEqual(detail['ielts_retake_skill'], 'speaking')
+        self.assertEqual(detail['ielts_retake_date'], '2026-03-28')
+
+    def test_one_skill_retake_requires_skill_date_and_complete_report(self):
+        for changed, field in [
+            ({'ielts_retake_skill': None}, 'ielts_retake_skill'),
+            ({'ielts_retake_skill': 'invalid'}, 'ielts_retake_skill'),
+            ({'ielts_retake_date': None}, 'ielts_retake_date'),
+            ({'ielts_retake_date': '2026-03-14'}, 'ielts_retake_date'),
+            ({'ielts_retake_date': '2026-03-13'}, 'ielts_retake_date'),
+            ({'ielts_retake_date': '2099-01-01'}, 'ielts_retake_date'),
+            ({'ielts_listening': None, 'ielts_reading': None, 'ielts_writing': None, 'ielts_speaking': None}, 'ielts_listening'),
+        ]:
+            with self.subTest(field=field, changed=changed):
+                values = {**self.ielts, 'ielts_result_type': 'one_skill_retake',
+                          'ielts_retake_skill': 'speaking', 'ielts_retake_date': '2026-03-28', **changed}
+                response = self.post(**values)
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertIn(field, response.data)
+
+    def test_full_retake_requires_multiple_full_tests_and_drops_single_skill_details(self):
+        values = {**self.ielts, 'ielts_result_type': 'full_retake', 'ielts_attempts': 1}
+        response = self.post(**values)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('ielts_attempts', response.data)
+        response = self.post(**{**values, 'ielts_attempts': 2, 'ielts_retake_skill': 'speaking', 'ielts_retake_date': '2026-03-28'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ielts_result_type, 'full_retake')
+        self.assertIsNone(self.profile.ielts_retake_skill)
+        self.assertIsNone(self.profile.ielts_retake_date)
+
     def test_ielts_with_sections_is_stored_in_columns(self):
         response = self.post(**self.ielts)
         self.assertEqual(response.status_code, 200, response.data)

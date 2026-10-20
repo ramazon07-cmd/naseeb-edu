@@ -142,6 +142,65 @@ class CollabTestCase(AuditBaseMixin, APITestCase):
         }, format='json')
 
 
+class ApprovedFeedbackTests(CollabTestCase):
+    def setUp(self):
+        super().setUp()
+        self.thread = self.comment().data
+        suggestion = self.suggest([{'bid': 'p1', 'start': 0, 'end': 2, 'text': 'Our'}])
+        self.assertEqual(suggestion.status_code, 201, suggestion.data)
+        self.suggestion = EssaySuggestion.objects.get(essay=self.essay)
+        self.as_user(self.student_user)
+        self.poll_url = f'{LAB}/{self.essay.pk}/changes/'
+        self.before = self.client.get(self.poll_url, {'tab': self.tab.pk})
+        self.as_user(self.counselor)
+        approved = self.client.patch(f'/api/essays/{self.essay.pk}/', {'status': 'approved'}, format='json')
+        self.assertEqual(approved.status_code, 200, approved.data)
+
+    def test_existing_feedback_readable_and_poll_notices_approval(self):
+        self.as_user(self.counselor)
+        review = self.client.get(f'{REVIEW}/{self.essay.pk}/')
+        self.assertEqual(review.status_code, 200)
+        self.assertEqual(review.data['status'], 'approved')
+        self.assertEqual(review.data['capabilities'], ['view'])
+        self.assertEqual(review.data['threads'][0]['id'], self.thread['id'])
+        self.as_user(self.student_user)
+        after = self.client.get(self.poll_url, {'tab': self.tab.pk}, HTTP_IF_NONE_MATCH=self.before['ETag'])
+        self.assertEqual(after.status_code, 200)
+        self.assertEqual(after.data['essay_status'], 'approved')
+        self.assertNotEqual(after['ETag'], self.before['ETag'])
+        self.assertEqual(len(after.data['threads']), 1)
+        same = self.client.get(self.poll_url, {'tab': self.tab.pk}, HTTP_IF_NONE_MATCH=after['ETag'])
+        self.assertEqual(same.status_code, 304)
+
+    def test_approved_feedback_cannot_be_changed_by_either_role(self):
+        for user, prefix in ((self.counselor, REVIEW), (self.student_user, LAB)):
+            self.as_user(user)
+            for action in ('reply', 'resolve', 'reopen'):
+                with self.subTest(role=user.role, action=action):
+                    result = self.client.post(f'{prefix}/{self.essay.pk}/threads/{self.thread["id"]}/{action}/',
+                                              {'body': 'Late feedback'}, format='json')
+                    self.assertEqual(result.status_code, 403 if action == 'reply' else 404, getattr(result, 'data', None))
+        self.assertEqual(self.comment().status_code, 403)
+        self.assertEqual(self.suggest([{'bid': 'p1', 'start': 0, 'end': 2, 'text': 'New'}]).status_code, 403)
+        self.as_user(self.student_user)
+        decision = self.client.post(f'{LAB}/{self.essay.pk}/suggestions/decide/',
+                                   {'tab': self.tab.pk, 'decisions': [{'id': self.suggestion.pk, 'accept': True}]},
+                                   format='json')
+        self.assertEqual(decision.status_code, 403, decision.data)
+        self.assertEqual(EssayComment.objects.filter(thread_id=self.thread['id']).count(), 1)
+        self.suggestion.refresh_from_db()
+        self.assertEqual(self.suggestion.status, 'pending')
+        self.as_user(self.counselor)
+        note = self.client.patch(f'/api/essays/{self.essay.pk}/', {'counselor_comment': 'Late note'}, format='json')
+        self.assertEqual(note.status_code, 400, note.data)
+
+    def test_returning_to_review_reopens_feedback(self):
+        self.as_user(self.counselor)
+        result = self.client.patch(f'/api/essays/{self.essay.pk}/', {'status': 'needs_revision'}, format='json')
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(self.comment().status_code, 201)
+
+
 class AccessTests(CollabTestCase):
     def test_resolve_access_matrix(self):
         essay = Essay.objects.select_related('student__user', 'student__school').get(pk=self.essay.pk)
@@ -260,29 +319,35 @@ class CommentTests(CollabTestCase):
         self.assertEqual(EssayCommentThread.objects.count(), 0)
         self.assertEqual(self.stored(), BASE_DOC)
 
-    def test_student_replies_resolves_and_reopens_and_the_counselor_is_told(self):
+    def test_student_adds_comment_and_the_counselor_is_told(self):
         thread = self.comment().data
         self.as_user(self.student_user)
         reply = self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/reply/', {'body': 'I will.'}, format='json')
         self.assertEqual(reply.status_code, status.HTTP_201_CREATED)
         self.assertEqual([comment['body'] for comment in reply.data['comments']], ['Say more about this.', 'I will.'])
         self.assertTrue(reply.data['comments'][1]['by_me'])
-        resolved = self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/resolve/')
-        self.assertEqual(resolved.data['status'], 'resolved')
-        self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/resolve/')  # idempotent: one notice
-        reopened = self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/reopen/')
-        self.assertEqual(reopened.data['status'], 'open')
         titles = list(Notification.objects.filter(recipient=self.counselor).order_by('id').values_list('title', flat=True))
-        self.assertEqual(titles, ['New reply to your comment', 'Comment resolved'])
+        self.assertEqual(titles, ['New reply to your comment'])
 
-    def test_counselor_replies_and_resolves(self):
+    def test_counselor_adds_comment_to_historically_resolved_thread(self):
         thread = self.comment().data
+        EssayCommentThread.objects.filter(pk=thread['id']).update(status=EssayCommentThread.Status.RESOLVED)
         self.as_user(self.counselor)
         reply = self.client.post(f'{REVIEW}/{self.essay.pk}/threads/{thread["id"]}/reply/', {'body': 'Also this.'},
                                  format='json')
         self.assertEqual(reply.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(self.client.post(f'{REVIEW}/{self.essay.pk}/threads/{thread["id"]}/resolve/').data['status'],
-                         'resolved')
+        self.assertEqual([item['body'] for item in reply.data['comments']], ['Say more about this.', 'Also this.'])
+        self.assertEqual(self.client.get(f'{REVIEW}/{self.essay.pk}/').data['threads'][0]['id'], thread['id'])
+
+
+    def test_resolve_and_reopen_endpoints_are_removed_for_both_roles(self):
+        thread = self.comment().data
+        for user, prefix in ((self.counselor, REVIEW), (self.student_user, LAB)):
+            self.as_user(user)
+            for action in ('resolve', 'reopen'):
+                response = self.client.post(f'{prefix}/{self.essay.pk}/threads/{thread["id"]}/{action}/')
+                self.assertEqual(response.status_code, 404)
+        self.assertEqual(EssayCommentThread.objects.get(pk=thread['id']).status, 'open')
 
 
 class SuggestionTests(CollabTestCase):
@@ -590,9 +655,7 @@ class FeedbackLifecycleTests(CollabTestCase):
         before = Notification.objects.filter(recipient=self.counselor).count()
         response = self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/reply/', {'body': 'Thanks!'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
-        self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/resolve/')
         self.assertEqual(Notification.objects.filter(recipient=self.counselor).count(), before)
         self.client.post(f'{LAB}/{self.essay.pk}/share/', {}, format='json')
-        self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/reopen/')
         self.client.post(f'{LAB}/{self.essay.pk}/threads/{thread["id"]}/reply/', {'body': 'One more'}, format='json')
         self.assertEqual(Notification.objects.filter(recipient=self.counselor, title='New reply to your comment').count(), 1)

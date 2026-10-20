@@ -15,8 +15,7 @@ function FitError({ onRetry }) {
   return <span className="fit-error" role="alert">{t("Couldn't load fit")} <button type="button" className="link-button" onClick={onRetry}>{t("Retry")}</button></span>;
 }
 
-function UniversityOverview({ university, result, fitStatus, onRetryFit, research, researchLoading, student, application, essays, onLeave, setPage }) {
-  const budget = Number(student?.budget_usd) || 0;
+function UniversityOverview({ university, result, fitStatus, onRetryFit, research, researchLoading, student, application, essays, onCompleteProfile, setPage }) {
   const sat = Number(student?.sat_score) || 0;
   const price = priceInfo(university);
   const cost = price.cost;
@@ -26,11 +25,11 @@ function UniversityOverview({ university, result, fitStatus, onRetryFit, researc
   const essay = essayProgress(essays);
   return <div className="two-column">
     <div className="stack-16">
-      <InfoCard title="Fit for your profile">{result ? <div className="fit-summary"><div className="fit-score"><b>{formatNumberLocale(result.match_score)}</b><span>{label(result.match_label)}</span><small>{t("Not an admission probability. It measures fit, preference and affordability.")}</small></div><ScoreBreakdown breakdown={result.score_breakdown} /></div> :
+      <InfoCard title="Fit for your profile">{result ? <div className="fit-summary"><div className="fit-score"><b>{formatNumberLocale(result.match_score)}</b><span>{label(result.match_label)}</span><small>{t("Not an admission probability. It measures academic fit, preferences, financial aid and profile evidence.")}</small></div><ScoreBreakdown breakdown={result.score_breakdown} /></div> :
       researchLoading ? <p className="note"><RefreshCw className="spin" size={14} aria-hidden="true" /> {t("Analyzing your profile")}</p> :
       research?.ready && fitStatus === 'loading' ? <p className="note" role="status"><RefreshCw className="spin" size={14} aria-hidden="true" /> {t("Checking fit…")}</p> :
       research?.ready && fitStatus === 'error' ? <p className="note"><FitError onRetry={onRetryFit} /></p> :
-      <div className="fit-missing"><p className="note">{research?.ready ? t("Detailed scoring is not available for this university yet.") : t("Complete your research profile to see how well this university fits you.")}</p>{!research?.ready && <button type="button" className="button quiet small" onClick={onLeave}>{t("Complete profile")}</button>}</div>}</InfoCard>
+      <div className="fit-missing"><p className="note">{research?.ready ? t("Detailed scoring is not available for this university yet.") : t("Complete your research profile to see how well this university fits you.")}</p>{!research?.ready && <button type="button" className="button quiet small" onClick={onCompleteProfile}>{t("Complete profile")}</button>}</div>}</InfoCard>
       {result && <div className="pair">
         <InfoCard title="Why it fits"><ul className="note-list ok">{result.reasons.map((reason) => <li key={fitReasonText(reason)}><CheckCircle2 size={15} aria-hidden="true" /><span>{fitReasonText(reason)}</span></li>)}</ul></InfoCard>
         <InfoCard title="Watch-outs"><ul className="note-list gap">{result.gaps.map((gap) => <li key={fitReasonText(gap)}><Clock3 size={15} aria-hidden="true" /><span>{fitReasonText(gap)}</span></li>)}{!result.gaps.length && <li><CheckCircle2 size={15} aria-hidden="true" /><span>{t("Nothing to watch out for.")}</span></li>}</ul></InfoCard>
@@ -40,7 +39,7 @@ function UniversityOverview({ university, result, fitStatus, onRetryFit, researc
         <div><span className="k">{t("Acceptance rate")}</span><span className="v">{percentText(rate)}</span><span className="s">{rate == null ? t("Not available in the catalog.") : Number(rate) < 15 ? t("Highly selective: fewer than 15% are admitted.") : Number(rate) >= 45 ? t("Less selective: 45% or more are admitted.") : t("Moderately selective.")}</span></div>
         <div><span className="k">{t("SAT range")}</span><span className="v">{satLabel(university)}</span>{university.sat_min && <SatRange min={university.sat_min} max={university.sat_max} score={sat} />}<span className={`s ${sat && university.sat_min && sat < university.sat_min ? 'warn' : ''}`.trim()}>{!sat || !university.sat_min ? t("No SAT minimum listed.") : sat < university.sat_min ? tx`Your SAT is ${String(sat)}, ${university.sat_min - sat} below` : tx`Your SAT is ${String(sat)}, in range`}</span></div>
         <div><span className="k">{t("Tuition")}</span><span className="v">{money(university.tuition_usd)}</span><span className="s">{t("Per year, before aid.")}</span></div>
-        <div><span className="k">{price.label}</span><span className="v">{money(price.amount)}</span>{price.international && <span className="s">{price.afterAid != null ? afterAidText(price.afterAid) : t("Per year, before aid.")}</span>}{cost != null && <PriceMeter price={cost} budget={budget} />}{(!price.international || (cost != null && budget > 0)) && <span className={`s ${cost != null && budget && cost > budget ? 'warn' : ''}`.trim()}>{cost == null || !budget ? t("Estimated per year, after aid.") : cost > budget ? tx`${money(cost - budget)} above your ${money(budget)} budget` : t("Within your budget")}</span>}</div>
+        <div><span className="k">{price.label}</span><span className="v">{money(price.amount)}</span>{price.international && <span className="s">{price.afterAid != null ? afterAidText(price.afterAid) : t("Per year, before aid.")}</span>}{cost != null && <PriceMeter price={cost} />}{!price.international && <span className="s">{t("Estimated per year, after aid.")}</span>}</div>
         <div><span className="k">{t("Average aid")}</span><span className="v">{money(university.average_aid_usd)}</span><span className="s">{university.students_receiving_aid_percent != null ? tx`${university.students_receiving_aid_percent}% of students receive aid.` : t("Per year.")}</span></div>
         <div><span className="k">{t("Undergraduates")}</span><span className="v">{university.undergrad_enrollment != null ? formatNumberLocale(university.undergrad_enrollment) : '—'}</span><span className="s">{university.student_faculty_ratio ? tx`Student–faculty ratio ${university.student_faculty_ratio}.` : t("Not available in the catalog.")}</span></div>
       </div></InfoCard>
@@ -134,7 +133,7 @@ function UniversityNeeds({ university, needs, setPage }) {
   </div>;
 }
 
-export function UniversityPage({ data, university, result, fitStatus, onRetryFit, research, researchLoading, application, busy, onAdd, onRemove, onBack, setPage }) {
+export function UniversityPage({ data, university, result, fitStatus, onRetryFit, research, researchLoading, application, busy, onAdd, onRemove, onBack, onCompleteProfile, setPage }) {
   const [tab, setTab] = useState('overview');
   const student = ownStudent(data);
   const scholarships = data.scholarships.filter((item) => item.is_active !== false && (item.university === university.id || item.university == null));
@@ -156,7 +155,7 @@ export function UniversityPage({ data, university, result, fitStatus, onRetryFit
       </div>
     </section>
     <PortalTabs active={tab} onChange={setTab} items={[['overview', 'Overview'], ['aid', 'Scholarships & Aid', scholarships.length], ['needs', 'What you need', needs.total]]} />
-    {tab === 'overview' && <UniversityOverview {...{ university, result, fitStatus, onRetryFit, research, researchLoading, student, application, essays, setPage }} onLeave={onBack} />}
+    {tab === 'overview' && <UniversityOverview {...{ university, result, fitStatus, onRetryFit, research, researchLoading, student, application, essays, setPage }} onCompleteProfile={onCompleteProfile} />}
     {tab === 'aid' && <UniversityAid {...{ university, scholarships, student }} />}
     {tab === 'needs' && <UniversityNeeds {...{ university, needs, setPage }} />}
   </div>;

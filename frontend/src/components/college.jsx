@@ -26,8 +26,8 @@ export function SatRange({ min, max, score }) {
   return <span className="range-meter" aria-hidden="true"><i style={{ '--from': scalePercent(min, ...SAT_SCALE), '--to': scalePercent(max || min, ...SAT_SCALE) }} />{Number(score) > 0 && <b style={{ '--at': scalePercent(score, ...SAT_SCALE) }} />}</span>;
 }
 
-export function PriceMeter({ price, budget }) {
-  return <span className="range-meter price" aria-hidden="true"><i style={{ '--from': '0%', '--to': scalePercent(price, 0, PRICE_SCALE_MAX) }} />{Number(budget) > 0 && <b className="budget" style={{ '--at': scalePercent(budget, 0, PRICE_SCALE_MAX) }} />}</span>;
+export function PriceMeter({ price }) {
+  return <span className="range-meter price" aria-hidden="true"><i style={{ '--from': '0%', '--to': scalePercent(price, 0, PRICE_SCALE_MAX) }} /></span>;
 }
 
 export function ScoreBreakdown({ breakdown }) {

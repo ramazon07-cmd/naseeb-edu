@@ -197,11 +197,6 @@
   cursor: pointer;
 }
 
-.cer-comment.is-resolved {
-  border-bottom-color: transparent;
-  background: transparent;
-}
-
 .cer-comment.is-active {
   outline: 2px solid var(--cx-selected-line);
   outline-offset: 1px;
@@ -322,10 +317,6 @@
   border-color: var(--cx-selected-line);
 }
 
-.cer-thread.is-resolved {
-  opacity: 0.8;
-}
-
 .cer-quote {
   padding: 0;
   border: 0;
@@ -341,7 +332,7 @@
 
 .cer-comment-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
   gap: 2px 8px;
   font-size: var(--cx-fs-body);
 }
@@ -371,25 +362,31 @@
 
 .cer-thread-actions {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
 
-.cer-reply {
-  display: grid;
-  gap: 8px;
-}
-
-.cer-resolved summary {
-  margin-bottom: 8px;
-  color: var(--cx-muted);
+.cer-thread .cer-thread-actions .cx-btn {
+  flex: 1 1 120px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
   font-size: var(--cx-fs-meta);
-  font-weight: 600;
-  cursor: pointer;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
-.cer-resolved[open] {
+.cer-comment-row > b,
+.cer-comment-row > time,
+.cer-quote {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cer-reply {
   display: grid;
   gap: 8px;
 }

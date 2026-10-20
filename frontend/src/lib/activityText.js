@@ -6,6 +6,7 @@ import { t } from '../i18n.js';
 
 const SENTENCES = [
   [/^Task approved: (.+) \(\+(\d+) XP\)$/, ([, title, xp]) => t('Task approved: {title} (+{xp} XP)', { title, xp: Number(xp) })],
+  [/^Task approved: (.+)$/, ([, title]) => t('Task approved: {title}', { title })],
   [/^Self-task approved: (.+) \(no XP\)$/, ([, title]) => t('Self-task approved: {title} (no XP)', { title })],
   [/^Roadmap mission approved: (.+) \(\+(\d+) XP\)$/, ([, title, xp]) => t('Mission approved: {title} (+{xp} XP)', { title, xp: Number(xp) })],
   [/^Document approved: (.+)$/, ([, title]) => t('Document approved: {title}', { title })],

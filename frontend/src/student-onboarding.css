@@ -372,6 +372,18 @@
   line-height: 1.45;
 }
 
+.sat-date-question {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.sat-date-question .onboarding-help a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .test-score-block {
   display: grid;
   gap: var(--space-5);

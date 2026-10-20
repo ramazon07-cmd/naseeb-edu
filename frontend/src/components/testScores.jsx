@@ -1,7 +1,8 @@
-import { Children, cloneElement } from 'react';
+import { Children, cloneElement, useState } from 'react';
 import { t, tx, formatNumberLocale } from '../i18n';
-import { dateText } from '../lib/format';
-import { CERTIFICATE_TYPES, IELTS_BANDS, IELTS_SECTIONS, MAX_ATTEMPTS, MAX_CERTIFICATES, SUBJECT_SCORE_MAX, canSuperscore, ieltsOverall, satSentTotal } from '../lib/testScores';
+import { dateText, localDateKey } from '../lib/format';
+import { SAT_CALENDAR_URL, satTestDates } from '../lib/satDates';
+import { CERTIFICATE_TYPES, IELTS_BANDS, IELTS_RESULT_TYPES, IELTS_SECTIONS, MAX_ATTEMPTS, MAX_CERTIFICATES, SUBJECT_SCORE_MAX, canSuperscore, ieltsOverall, satSentTotal } from '../lib/testScores';
 
 // Test-score questions for the profile form. Each block takes the shared form
 // state, so it can later be dropped into an inline editor one section at a time.
@@ -37,16 +38,45 @@ function StatusQuestion({ test, label, help, form, update, errors }) {
   </Question>;
 }
 
-function DateQuestion({ name, status, form, update, errors }) {
-  const label = status === 'taken' ? t('Test date') : status === 'scheduled' ? t('Booked test date') : t('When do you plan to take it? (optional)');
-  const help = status === 'taken' ? t('The day you sat the test. It is printed on your score report.') : status === 'scheduled' ? t('The date on your booking confirmation.') : t('A rough date is fine. You can change it later.');
+function DateQuestion({ name, status, form, update, errors, label: customLabel, help: customHelp }) {
+  const label = customLabel || (status === 'taken' ? t('Test date') : status === 'scheduled' ? t('Booked test date') : t('When do you plan to take it? (optional)'));
+  const help = customHelp || (status === 'taken' ? t('The day you sat the test. It is printed on your score report.') : status === 'scheduled' ? t('The date on your booking confirmation.') : t('A rough date is fine. You can change it later.'));
   return <Question name={name} label={label} help={help} error={errors[name]}>
     <input type="date" value={form[name] || ''} min="2015-01-01" onChange={(e) => update(name, e.target.value)} />
   </Question>;
 }
 
-function AttemptsQuestion({ name, label, form, update, errors }) {
-  return <Question name={name} label={label} help={t('Count every test day, including this one.')} error={errors[name]}>
+function SatDateQuestion({ status, form, update, errors }) {
+  const today = localDateKey();
+  const dates = satTestDates(status, today);
+  const value = form.sat_test_date || '';
+  // Keep previously saved dates intact, including school-day, Sunday and makeup tests.
+  const [customRequested, setCustom] = useState(false);
+  const custom = customRequested || Boolean(value && !dates.includes(value));
+  const label = status === 'taken' ? t('Test date') : status === 'scheduled' ? t('Booked test date') : t('When do you plan to take it? (optional)');
+  function selectDate(event) {
+    const next = event.target.value;
+    setCustom(next === 'other');
+    if (next !== 'other') update('sat_test_date', next);
+  }
+  return <div className="sat-date-question">
+    <Question name="sat_test_date" label={label} error={custom ? undefined : errors.sat_test_date}
+      help={<>{t(status === 'taken' ? 'Choose the official SAT Weekend date printed on your score report.' : 'Choose a published SAT Weekend date. Confirm availability with your test center.')} <a href={SAT_CALENDAR_URL} target="_blank" rel="noreferrer">{t('College Board calendar')}</a></>}>
+      <select value={custom ? 'other' : value} onChange={selectDate}>
+        <option value="">{t('Select SAT test date')}</option>
+        {dates.map((date) => <option key={date} value={date}>{dateText(date)}</option>)}
+        <option value="other">{t('My official test date is not listed')}</option>
+      </select>
+    </Question>
+    {custom && <Question name="sat_test_date_custom" label={t('Date on your score report or booking confirmation')}
+      error={errors.sat_test_date} help={t('For a School Day, Sunday, makeup or older test, copy the exact date from your official document.')}>
+      <input type="date" value={value} min={status === 'taken' ? '2015-01-01' : today} max={status === 'taken' ? today : undefined} onChange={(event) => update('sat_test_date', event.target.value)} />
+    </Question>}
+  </div>;
+}
+
+function AttemptsQuestion({ name, label, form, update, errors, help }) {
+  return <Question name={name} label={label} help={help || t('Count every test day, including this one.')} error={errors[name]}>
     <input type="number" inputMode="numeric" min="1" max={MAX_ATTEMPTS} step="1" placeholder="1" value={form[name] ?? ''} onChange={(e) => update(name, e.target.value)} />
   </Question>;
 }
@@ -76,9 +106,32 @@ export function IeltsFields({ form, update, errors = {} }) {
       {['planning', 'scheduled'].includes(status) && <DateQuestion name="ielts_test_date" status={status} form={form} update={update} errors={errors} />}
     </div>
     {status === 'taken' && <>
+      <div className="onboarding-grid">
+        <Question name="ielts_result_type" label={t('Which IELTS result are you entering?')} help={t('Choose the type shown on the score report you want to use.')} error={errors.ielts_result_type}>
+          <select value={form.ielts_result_type || ''} onChange={(e) => {
+            update('ielts_result_type', e.target.value);
+            if (e.target.value !== 'one_skill_retake') {
+              update('ielts_retake_skill', '');
+              update('ielts_retake_date', '');
+            }
+          }}>
+            <option value="">{t('Select')}</option>
+            {IELTS_RESULT_TYPES.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
+          </select>
+        </Question>
+        {form.ielts_result_type === 'one_skill_retake' && <>
+          <Question name="ielts_retake_skill" label={t('Which section did you retake?')} error={errors.ielts_retake_skill}>
+            <select value={form.ielts_retake_skill || ''} onChange={(e) => update('ielts_retake_skill', e.target.value)}>
+              <option value="">{t('Select')}</option>
+              {IELTS_SECTIONS.map(([key, label]) => <option key={key} value={key.replace('ielts_', '')}>{t(label)}</option>)}
+            </select>
+          </Question>
+          <DateQuestion name="ielts_retake_date" status="taken" label={t('One Skill Retake date')} help={t('The day you retook the selected section.')} form={form} update={update} errors={errors} />
+        </>}
+      </div>
       <fieldset className="test-score-sections">
         <legend>{t('Section scores')}</legend>
-        <p className="onboarding-help">{t('Copy these from your score report. Each section is scored from 0 to 9 in half bands, like 6.5.')}</p>
+        <p className="onboarding-help">{form.ielts_result_type === 'one_skill_retake' ? t('Copy all four scores from your updated One Skill Retake report: the retaken section and the three unchanged sections.') : t('Copy these from one score report. Do not combine sections from different full tests. Each section is scored from 0 to 9 in half bands, like 6.5.')}</p>
         <div className="test-score-section-grid">
           {IELTS_SECTIONS.map(([key, label]) => <Question key={key} name={key} label={t(label)} error={errors[key]}>
             <BandSelect value={form[key]} onChange={(value) => setSection(key, value)} />
@@ -90,8 +143,8 @@ export function IeltsFields({ form, update, errors = {} }) {
           help={computed != null ? t('Worked out from your four section scores.') : t('Fill in the four sections and we work this out for you. If you only know your overall band, choose it here.')}>
           <BandSelect value={computed != null ? String(computed) : form.ielts_score} onChange={(value) => update('ielts_score', value)} disabled={computed != null} />
         </Question>
-        <DateQuestion name="ielts_test_date" status="taken" form={form} update={update} errors={errors} />
-        <AttemptsQuestion name="ielts_attempts" label={t('How many times have you taken IELTS?')} form={form} update={update} errors={errors} />
+        <DateQuestion name="ielts_test_date" status="taken" label={form.ielts_result_type === 'one_skill_retake' ? t('Original full test date') : undefined} form={form} update={update} errors={errors} />
+        <AttemptsQuestion name="ielts_attempts" label={t('How many full IELTS tests have you taken?')} help={t('Count full IELTS tests only. One Skill Retake is recorded separately.')} form={form} update={update} errors={errors} />
       </div>
     </>}
   </section>;
@@ -115,7 +168,7 @@ export function SatFields({ form, update, errors = {} }) {
     <p className="test-score-intro">{t('Many universities do not require the SAT. Skip it if it does not apply to you.')}</p>
     <div className="onboarding-grid">
       <StatusQuestion test="sat" label={t('Have you taken the SAT?')} form={form} update={update} errors={errors} />
-      {['planning', 'scheduled'].includes(status) && <DateQuestion name="sat_test_date" status={status} form={form} update={update} errors={errors} />}
+      {['planning', 'scheduled'].includes(status) && <SatDateQuestion key={status} status={status} form={form} update={update} errors={errors} />}
     </div>
     {status === 'taken' && <>
       <fieldset className="test-score-sections">
@@ -128,7 +181,7 @@ export function SatFields({ form, update, errors = {} }) {
         </div>
       </fieldset>
       <div className="onboarding-grid">
-        <DateQuestion name="sat_test_date" status="taken" form={form} update={update} errors={errors} />
+        <SatDateQuestion key="taken" status="taken" form={form} update={update} errors={errors} />
         <AttemptsQuestion name="sat_attempts" label={t('How many times have you taken the SAT?')} form={form} update={(_, value) => setAttempts(value)} errors={errors} />
       </div>
       {superscore && <fieldset className="test-score-choice" aria-describedby="ts-help-sat_superscore" aria-invalid={errors.sat_superscore ? true : undefined}>
@@ -247,6 +300,7 @@ export function TestScoreSummary({ student }) {
       {ieltsTaken ? <>
         {hasIeltsSections && <dl className="test-score-parts">{IELTS_SECTIONS.map(([key, label]) => <div key={key}><dt>{t(label)}</dt><dd>{band(student[key])}</dd></div>)}</dl>}
         <p>{[student.ielts_test_date && dateText(student.ielts_test_date), student.ielts_attempts && tx`Attempts: ${student.ielts_attempts}`].filter(Boolean).join(' · ') || t('Overall band only')}</p>
+        {student.ielts_result_type && <p className="test-score-note">{t(IELTS_RESULT_TYPES.find(([value]) => value === student.ielts_result_type)?.[1] || '')}{student.ielts_result_type === 'one_skill_retake' && <> · {t(IELTS_SECTIONS.find(([key]) => key === `ielts_${student.ielts_retake_skill}`)?.[1] || '')}{student.ielts_retake_date && <> · {dateText(student.ielts_retake_date)}</>}</>}</p>}
       </> : <p>{statusLine(student.ielts_status, student.ielts_test_date)}</p>}
     </article>
     <article>

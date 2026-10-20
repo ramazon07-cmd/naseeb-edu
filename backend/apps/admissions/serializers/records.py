@@ -2,7 +2,6 @@
 from rest_framework import serializers
 from django.urls import reverse
 from apps.users.models import User
-from ..services import TASK_XP_BY_PRIORITY
 from ..models import (
     Achievement,
     Activity,
@@ -10,6 +9,7 @@ from ..models import (
     Application,
     ApplicationStatusHistory,
     Document,
+    Essay,
     Honor,
     Internship,
     MeetingNote,
@@ -72,22 +72,32 @@ class ApplicationSerializer(StudentRecordSerializerMixin, serializers.ModelSeria
 
     def validate_status(self, value):
         request = self.context.get('request')
-        if request and not request.user.is_counselor_like and value in {
-            Application.Status.ACCEPTED,
-            Application.Status.REJECTED,
-            Application.Status.WAITLISTED,
-        }:
-            raise serializers.ValidationError('Admission decisions can only be recorded by a counselor.')
+        decisions = {Application.Status.ACCEPTED, Application.Status.REJECTED, Application.Status.WAITLISTED}
+        if request and not request.user.is_counselor_like:
+            if getattr(self.instance, 'status', None) in decisions and value != self.instance.status:
+                raise serializers.ValidationError('Only a counselor can change a recorded admission decision.')
+            if value in decisions:
+                raise serializers.ValidationError('Admission decisions can only be recorded by a counselor.')
         return value
 
 
+class TaskSubmissionEssayField(serializers.PrimaryKeyRelatedField):
+    def get_queryset(self):
+        request = self.context.get('request')
+        if not request or request.user.role != User.Role.STUDENT:
+            return Essay.objects.none()
+        return Essay.objects.filter(student__user=request.user, trashed_at__isnull=True)
+
+
 class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
-    STUDENT_PROGRESS_FIELDS = {'status', 'student_response', 'submission_url', 'submission_file'}
+    STUDENT_PROGRESS_FIELDS = {'status', 'student_response', 'submission_url', 'submission_file', 'submission_essay'}
     STUDENT_SELF_TASK_FIELDS = STUDENT_PROGRESS_FIELDS | {'title', 'description', 'due_date', 'priority'}
     student_name = serializers.SerializerMethodField()
     assigned_by_name = serializers.SerializerMethodField()
     is_overdue = serializers.BooleanField(read_only=True)
     submission_preview_url = serializers.SerializerMethodField()
+    submission_essay = TaskSubmissionEssayField(required=False, allow_null=True)
+    submission_essay_detail = serializers.SerializerMethodField()
     submission_file = serializers.FileField(write_only=True, required=False, allow_null=True)
     has_submission_file = serializers.SerializerMethodField()
     xp_reward = serializers.SerializerMethodField()
@@ -110,6 +120,8 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
         current = getattr(self.instance, 'status', None)
         if request and request.user.is_task_manager and value == Task.Status.APPROVED and current != Task.Status.APPROVED:
             raise serializers.ValidationError('Use the approve action so XP is recorded.')
+        if request and request.user.role == request.user.Role.STUDENT and self.instance and not self.instance.is_self_assigned and value != Task.Status.SUBMITTED:
+            raise serializers.ValidationError('Only your counselor or teacher can change an assigned task status. Submit your response instead.')
         if request and not request.user.is_task_manager and value not in {
             Task.Status.TODO,
             Task.Status.IN_PROGRESS,
@@ -121,6 +133,14 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         request = self.context.get('request')
+        if 'submission_essay' in attrs:
+            if not request or request.user.role != User.Role.STUDENT:
+                raise serializers.ValidationError({'submission_essay': 'Only the student can attach their Essay Lab essay.'})
+            essay = attrs['submission_essay']
+            if essay and (not self.instance or self.instance.is_self_assigned):
+                raise serializers.ValidationError({'submission_essay': 'Attach Essay Lab essays to counselor-assigned tasks.'})
+            if essay and essay.student_id != self.instance.student_id:
+                raise serializers.ValidationError({'submission_essay': 'Choose one of your own Essay Lab essays.'})
         if request and request.user.role == request.user.Role.STUDENT:
             if not self.instance and attrs.get('status', Task.Status.TODO) != Task.Status.TODO:
                 raise serializers.ValidationError({'status': 'A self-task must start in To Do status.'})
@@ -138,7 +158,23 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     field: 'Only a teacher or counselor can change this field.' for field in sorted(forbidden)
                 })
+            if self.instance and not self.instance.is_self_assigned:
+                if self.instance.status == Task.Status.SUBMITTED:
+                    raise serializers.ValidationError({'status': 'Your response is awaiting review. Your counselor can return it for changes.'})
+                response = attrs.get('student_response', self.instance.student_response)
+                url = attrs.get('submission_url', self.instance.submission_url)
+                file = attrs.get('submission_file', self.instance.submission_file)
+                essay = attrs.get('submission_essay', self.instance.submission_essay)
+                if not (str(response or '').strip() or url or file or essay):
+                    raise serializers.ValidationError({'student_response': 'Add a written response, a link or a file before submitting.'})
+                # Students submit evidence; only staff control the assigned work's lifecycle.
+                attrs['status'] = Task.Status.SUBMITTED
         return attrs
+
+    def get_submission_essay_detail(self, obj):
+        from ..task_submissions import essay_submission_detail
+        request = self.context.get('request')
+        return essay_submission_detail(obj, request.user) if request else None
 
     def get_submission_preview_url(self, obj):
         return google_docs_preview_url(obj.submission_url)
@@ -147,8 +183,8 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
         return bool(obj.submission_file)
 
     def get_xp_reward(self, obj) -> int:
-        # What approving it awards; a student's own task never does.
-        return 0 if obj.is_self_assigned else TASK_XP_BY_PRIORITY.get(obj.priority, 0)
+        # Ordinary tasks do not participate in roadmap leveling.
+        return 0
 
     @staticmethod
     def _submission_file_metadata(upload):
@@ -190,10 +226,13 @@ class TaskSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):
         if request and request.user.is_organization:
             for field in (
                 'student_response', 'submission_url', 'submission_file', 'submission_preview_url',
+                'submission_essay', 'submission_essay_detail',
                 'has_submission_file', 'submission_file_name', 'submission_file_content_type',
                 'submission_file_size',
             ):
                 data.pop(field, None)
+        elif request and data.get('submission_essay_detail') is None and request.user.role != User.Role.STUDENT:
+            data['submission_essay'] = None
         return data
 
     def get_student_name(self, obj) -> str | None:

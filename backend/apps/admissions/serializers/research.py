@@ -11,7 +11,6 @@ class CollegeResearchProfileSerializer(serializers.Serializer):
     sat_score = serializers.IntegerField(min_value=400, max_value=1600, required=False)
     target_major = serializers.CharField(max_length=160, required=False, allow_blank=False)
     target_countries = serializers.CharField(max_length=255, required=False, allow_blank=False)
-    budget_usd = serializers.IntegerField(min_value=0, max_value=500000, required=False)
     scholarship_needed = serializers.BooleanField(required=False)
 
     def validate(self, attrs):

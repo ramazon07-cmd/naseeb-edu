@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleCheck, ExternalLink, FileX, ListChecks, RefreshCw, ShieldAlert } from 'lucide-react';
 import '@fontsource-variable/newsreader/wght.css';
 import { api } from '../api';
+import { TaskEssayAttachment } from '../components/taskEssays';
 import { t, tx } from '../i18n';
 import { AttachmentRow, documentAttachment, evidenceAttachment, noPreviewText } from '../components/files';
 import { CxAvatar, CxHead, CxPills, CxQueueRow, CxTag, useCounselorUi } from '../components/counselorUi';
@@ -23,7 +24,7 @@ const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
 // student whichever kind it is (see ApproveMixin / SendBackMixin).
 const KIND = {
   task: {
-    approved: (result) => (result.xp_awarded ? tx`Task approved. +${result.xp_awarded} XP` : t("Task approved.")),
+    approved: () => t("Task approved."),
   },
   document: {
     approved: () => t("Document approved."),
@@ -109,6 +110,7 @@ export function Submission({ item, notify }) {
           : <p className="cx-quote cx-quote-muted">{t("No written response.")}</p>}
         {record.submission_url && <ExternalUrl url={record.submission_url} />}
       </div>
+      <TaskEssayAttachment task={record} />
       {file && <InlineFile key={item.id} attachment={file} title={record.title} notify={notify} />}
       {!hasSubmission('task', record) && <NothingAttached />}
     </>;
@@ -173,7 +175,7 @@ export function ReviewWorkspace({ items: allItems, loaded, notify, reload, setPa
   const linkHolds = Boolean(link) && ['pending', 'fetching', 'gone', 'failed'].includes(link.status);
   const selected = items.find((item) => item.id === selectedId) || (linkHolds ? null : items[0]) || null;
   const selectedIndex = selected ? items.findIndex((item) => item.id === selected.id) : -1;
-  const xp = selected?.record?.xp_reward || 0;
+  const xp = selected?.kind === 'roadmap' ? selected.record.xp_reward || 0 : 0;
   const approvable = Boolean(selected) && hasSubmission(selected.kind, selected.record);
   // Once the list no longer holds a decided item, forget it: a resubmission must show again.
   useEffect(() => {

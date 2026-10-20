@@ -54,7 +54,7 @@ ORDERINGS = {
 SORTS = (*ORDERINGS, 'fit')
 # The profile answers scoring needs; College Research asks for the missing ones. Test scores
 # are not among them: a factor without a score is left out of the fit, not guessed.
-RESEARCH_FIELDS = ('gpa', 'target_major', 'target_countries', 'budget_usd')
+RESEARCH_FIELDS = ('gpa', 'target_major', 'target_countries')
 EVIDENCE = ('achievements', 'honors', 'researches', 'projects', 'internships', 'activities')
 SCORING_FIELDS = (
     'id', 'country', 'market', 'ranking', 'sat_min', 'sat_max', 'act_min', 'act_max', 'popular_majors',
@@ -62,7 +62,7 @@ SCORING_FIELDS = (
 )
 TEST_POINTS = 25
 ENGLISH_POINTS = 8
-PRICE_POINTS = 12
+TOTAL_POINTS = 88  # Academic 48, preferences 22, aid 8 and profile evidence 10.
 AID_POINTS = 8
 # How far below a range minimum still counts as "close".
 NEAR_MINIMUM = {'SAT': 80, 'ACT': 2}
@@ -148,7 +148,6 @@ def fit_context(profile):
         'sat_status': profile.sat_status,
         'act': max(act, default=None),
         'english': best_english(profile),
-        'budget': int(profile.budget_usd),
         'countries': sorted({country_key(value) for value in profile.target_countries.split(',') if value.strip()}),
         'major': profile.target_major.strip().lower(),
         'major_name': profile.target_major,
@@ -187,7 +186,7 @@ def range_fit(test, score, low, high):
 
 def score_university(university, ctx):
     """One university's fit for a ready profile. ``university.programs`` must be the eligible ones
-    and ``university.cost`` the ``pricing.with_cost`` annotation."""
+    from the catalog's active programs."""
     reasons = []
     gaps = []
     # Points of factors with no data (the catalogue's or the student's): they are left out, not guessed.
@@ -257,23 +256,7 @@ def score_university(university, ctx):
         preferences += 4
         gaps.append(item('major_check', 'Check the exact program requirements for your selected major'))
 
-    budget = ctx['budget']
-    cost = university.cost
-    if cost is not None:
-        label = 'Estimated cost of attendance for international students'
-        if cost <= budget:
-            financial = 12
-            reasons.append(item('cost_within_budget', f'{label} is within your budget', cost=cost, budget=budget))
-        elif cost <= budget * 1.5:
-            financial = 7
-            gaps.append(item('cost_above_budget', f'{label} is above your budget', cost=cost, budget=budget))
-        else:
-            financial = 2
-            gaps.append(item('cost_far_above_budget', f'{label} is significantly above your budget', cost=cost, budget=budget))
-    else:
-        financial = 0
-        missing += PRICE_POINTS
-        gaps.append(item('cost_missing', 'Estimated cost of attendance for international students is not available in the catalog'))
+    financial = 0
     if ctx['scholarship_needed']:
         if any(getattr(university, name) for name in OFFERED_AID):
             financial += 8
@@ -290,7 +273,7 @@ def score_university(university, ctx):
     earned = academic + preferences + financial + ctx['strength']
     # Score the known factors on the full scale, then take off half the missing weight:
     # a row without admissions data never outscores the same row with data that fits.
-    total = min(100, round(earned * 100 / (100 - missing) * (1 - missing / 200)))
+    total = min(100, round(earned * 100 / (TOTAL_POINTS - missing) * (1 - missing / (2 * TOTAL_POINTS))))
     rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
     if rate is None and not tests:
         # No acceptance rate and no score compared with a range: nothing places the row.
@@ -417,7 +400,7 @@ class CollegeSearchParams(serializers.Serializer):
 
     search = serializers.CharField(required=False, allow_blank=True, default='', max_length=MAX_SEARCH_LENGTH)
     country = serializers.CharField(required=False, allow_blank=True, default='', max_length=120)
-    price = serializers.ChoiceField(choices=('all', 'budget', *PRICE_CAPS), default='all')
+    price = serializers.ChoiceField(choices=('all', *PRICE_CAPS), default='all')
     aid = serializers.CharField(required=False, allow_blank=True, default='')
     # Absent: every band. Present but empty: no band at all (every box unticked).
     # 'unknown' is the rows without a band, so unticking a known band never hides them.
@@ -482,9 +465,9 @@ def filtered_catalog(params, profile):
         queryset = queryset.filter(term_query(SEARCH_FIELDS, term, 'search_text'))
     if params['country']:
         queryset = queryset.filter(country_q(params['country']))
-    # A row without a known cost stays: no published price is not "too expensive". "Within
-    # budget" without a budget in the profile has no cap; the page asks for the budget instead.
-    cap = profile.budget_usd if params['price'] == 'budget' else PRICE_CAPS.get(params['price'])
+    # Published price limits are independent of personal profile data.
+    # A row without a known cost stays: no published price is not "too expensive".
+    cap = PRICE_CAPS.get(params['price'])
     if cap:
         queryset = queryset.filter(Q(cost__isnull=True) | Q(cost__lte=cap))
     for flag in params['aid']:

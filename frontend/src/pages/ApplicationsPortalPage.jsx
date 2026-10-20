@@ -9,9 +9,10 @@ import { label } from '../lib/labels';
 import { institutionStatus } from '../lib/qs';
 import { matchesQuery } from '../lib/searchIndex';
 import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, priceInfo, satLabel, scalePercent, shortDate, stageOf } from '../lib/college';
-import { ResourceForm } from './ResourceSection';
+import { ApplicationPlan } from '../components/ApplicationPlan';
+import { planNextStep } from '../lib/applicationPlan';
 
-function ApplicationSummary({ applications, essays, letters, openUniversity }) {
+function ApplicationSummary({ applications, essays, letters, openApplication }) {
   const next = nextDeadline(applications);
   const tiers = { dream: 0, target: 0, safety: 0 };
   applications.forEach((application) => {tiers[application.tier] = (tiers[application.tier] || 0) + 1;});
@@ -27,7 +28,7 @@ function ApplicationSummary({ applications, essays, letters, openUniversity }) {
       {next ? <>
         <div className="summary-big"><b>{next.days === 0 ? t("Today") : next.days === 1 ? t("Tomorrow") : formatNumberLocale(next.days)}</b>{next.days > 1 && <span>{t("days left")}</span>}</div>
         <p><b>{next.kind === 'aid' ? tx`${nextName} scholarship deadline` : tx`${nextName} application deadline`}</b><br />{longDate(next.date)} · {next.application.program}</p>
-        <button type="button" className="button quiet small" onClick={() => openUniversity(next.application.university)}>{t("Open university page")} <ArrowRight size={14} aria-hidden="true" /></button>
+        <button type="button" className="button quiet small" onClick={() => openApplication(next.application)}>{t("Manage application")} <ArrowRight size={14} aria-hidden="true" /></button>
       </> : <>
         <div className="summary-big"><b>—</b></div>
         <p>{t("No upcoming deadlines. Set deadlines on your applications to see them here.")}</p>
@@ -108,8 +109,8 @@ function ApplicationBrief({ id, briefRef, application, info, essays, name, onOpe
       {info.css_profile_required && <span className="tag">{t("CSS Profile")}</span>}
     </div>}
     <footer className="app-brief-actions">
-      <button type="button" className="button primary small" onClick={onOpen}>{t("Open university page")} <ArrowRight size={14} aria-hidden="true" /></button>
-      {!decided && <button type="button" className="button quiet small" onClick={onEdit}><Pencil size={14} aria-hidden="true" /> {t("Edit details")}</button>}
+      <button type="button" className="button primary small" onClick={onEdit}>{t("Manage application")} <ArrowRight size={14} aria-hidden="true" /></button>
+      <button type="button" className="button quiet small" onClick={onOpen}>{t("Open university page")}</button>
     </footer>
   </div>;
 }
@@ -150,12 +151,13 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
           {menuOpen && <div className="card-menu-list">
             {!decided && <><span className="card-menu-title">{t("Move to")}</span>{['researching', 'shortlisted', 'applying', 'submitted'].filter((status) => status !== application.status).map((status) => <button type="button" key={status} onClick={() => onMove(status)}>{label(status)}</button>)}<hr /></>}
             <button type="button" onClick={onOpen}><ArrowRight size={14} aria-hidden="true" /> {t("Open university page")}</button>
-            {!decided && <button type="button" onClick={onEdit}><Pencil size={14} aria-hidden="true" /> {t("Edit details")}</button>}
+            <button type="button" onClick={onEdit}><Pencil size={14} aria-hidden="true" /> {t("Manage application")}</button>
             {!decided && <button type="button" className="danger" onClick={onRemove}><Trash2 size={14} aria-hidden="true" /> {t("Remove from my list")}</button>}
           </div>}
         </div>
       </div>
       <p className="board-card-program">{application.program}</p>
+      <p className="board-card-next">{t(planNextStep(application, essays))}</p>
       <TierBand value={application.tier} />
       {(decided || deadlines.length > 0) && <div className="tag-row application-card-details">
         {decided ? <DecisionTag application={application} decidedAt={decidedAt} /> : deadlines.map(([kind, date]) => <DeadlineChip key={kind} kind={kind} date={date} />)}
@@ -165,7 +167,7 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
   </>;
 }
 
-export function ApplicationsPortalPage({ user, data, query, reload, notify, setPage }) {
+export function ApplicationsPortalPage({ data, query, reload, notify, setPage }) {
   const [tier, setTier] = useState('all');
   const [sort, setSort] = useState('deadline');
   const [menuId, setMenuId] = useState(null);
@@ -203,6 +205,7 @@ export function ApplicationsPortalPage({ user, data, query, reload, notify, setP
   async function moveTo(application, status) {
     if (!application || application.status === status) return;
     setMenuId(null);
+    if (status === 'submitted') { setBriefId(null); setEditing(application); return; }
     setMoves((current) => ({ ...current, [application.id]: status }));
     try {
       await api.update('applications', application.id, { status });
@@ -227,7 +230,7 @@ export function ApplicationsPortalPage({ user, data, query, reload, notify, setP
   if (!data.applications.length) return <div className="section-stack student-portal"><section className="info-card applications-empty"><h3>{t("Your application list is empty")}</h3><p className="note">{t("Add universities from College Search and they will appear here as cards you can move through each stage.")}</p><button type="button" className="button primary" onClick={() => setPage('college_search')}><Search size={16} aria-hidden="true" /> {t("Find universities")}</button></section></div>;
 
   return <div className="section-stack student-portal applications-page">
-    <ApplicationSummary applications={applications} essays={data.essays} letters={data.recommendations} openUniversity={openUniversity} />
+    <ApplicationSummary applications={applications} essays={data.essays} letters={data.recommendations} openApplication={setEditing} />
     <div className="board-toolbar">
       <div className="chip-row" role="group" aria-label={t("Filter by tier")}>
         <FilterChip active={tier === 'all'} onClick={() => setTier('all')}>{t("All")} <span className="chip-count">{formatNumberLocale(applications.length)}</span></FilterChip>
@@ -258,6 +261,6 @@ export function ApplicationsPortalPage({ user, data, query, reload, notify, setP
           </div>
         </section>;
       })}</div>
-    {editing && <ResourceForm resource="applications" item={editing} data={data} user={user} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}
+    {editing && <ApplicationPlan key={editing.id} application={editing} data={data} setPage={setPage} onClose={() => setEditing(null)} onSaved={reload} notify={notify} />}
   </div>;
 }

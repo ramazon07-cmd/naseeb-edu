@@ -62,8 +62,6 @@ export const essayLabApi = {
   // than `since`, its doc.
   changes: (id, tab, since, etag = null) => request(`${BASE}/essays/${id}/changes/${query({ tab, since })}`, { etag: etag || null, retries: 0 }),
   replyToThread: (id, threadId, body) => request(`${BASE}/essays/${id}/threads/${threadId}/reply/`, json('POST', { body })),
-  resolveThread: (id, threadId) => request(`${BASE}/essays/${id}/threads/${threadId}/resolve/`, { method: 'POST' }),
-  reopenThread: (id, threadId) => request(`${BASE}/essays/${id}/threads/${threadId}/reopen/`, { method: 'POST' }),
   // decisions: [{ id, accept }]; all are applied together or none.
   decideSuggestions: (id, tab, decisions) => request(`${BASE}/essays/${id}/suggestions/decide/`, json('POST', { tab, decisions })),
 

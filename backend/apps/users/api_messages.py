@@ -12,6 +12,23 @@ regex groups as {0}, {1}, ...
 import re
 
 EXACT = {
+    'Only a counselor can change a recorded admission decision.': {'uz': 'Qayd etilgan qabul natijasini faqat counselor o‘zgartiradi.', 'ru': 'Изменить записанное решение о приёме может только консультант.'},
+    'This essay is approved. Feedback is read-only.': {'uz': 'Bu insho tasdiqlangan. Izohlarni faqat o‘qish mumkin.', 'ru': 'Это эссе подтверждено. Отзывы доступны только для чтения.'},
+    'Only the student can attach their Essay Lab essay.': {'uz': 'Essay Lab inshosini faqat studentning o‘zi biriktiradi.', 'ru': 'Прикрепить эссе из Essay Lab может только сам ученик.'},
+    'Attach Essay Lab essays to counselor-assigned tasks.': {'uz': 'Essay Lab inshosini counselor bergan vazifaga biriktiring.', 'ru': 'Прикрепите эссе из Essay Lab к назначенному консультантом заданию.'},
+    'Choose one of your own Essay Lab essays.': {'uz': 'O‘zingizning Essay Lab insholaringizdan birini tanlang.', 'ru': 'Выберите одно из своих эссе из Essay Lab.'},
+    'Choose one of your own available Essay Lab essays.': {'uz': 'O‘zingizga tegishli, savatga tashlanmagan inshoni tanlang.', 'ru': 'Выберите своё эссе, которое не находится в корзине.'},
+    'Write and save your essay before submitting it.': {'uz': 'Yuborishdan oldin inshoni yozib, saqlang.', 'ru': 'Перед отправкой напишите и сохраните эссе.'},
+    'A counselor must be assigned before you submit an essay for review.': {'uz': 'Inshoni tekshirishga yuborish uchun sizga counselor biriktirilgan bo‘lishi kerak.', 'ru': 'Для отправки эссе на проверку вам должен быть назначен консультант.'},
+    'The attached essay is no longer shared or available. Return the task to the student.': {'uz': 'Biriktirilgan insho endi ulashilmagan yoki ochilmayapti. Vazifani studentga qaytaring.', 'ru': 'Прикреплённое эссе больше не доступно для проверки. Верните задание ученику.'},
+    'For a first IELTS result, enter one full test.': {'uz': 'Birinchi IELTS natijasi uchun to‘liq imtihonlar soni 1 bo‘lishi kerak.', 'ru': 'Для первого результата IELTS укажите один полный экзамен.'},
+    'For a full retake, enter at least two full tests.': {'uz': 'To‘liq qayta topshirgan bo‘lsangiz, kamida 2 ta to‘liq imtihonni ko‘rsating.', 'ru': 'Для полной пересдачи укажите не менее двух полных экзаменов.'},
+    'Choose the section you retook.': {'uz': 'Qayta topshirgan bo‘limingizni tanlang.', 'ru': 'Выберите раздел, который вы пересдавали.'},
+    'Enter all four scores from your updated One Skill Retake report.': {'uz': 'Yangilangan One Skill Retake varaqasidagi to‘rtala ballni kiriting.', 'ru': 'Укажите все четыре балла из обновлённого отчёта One Skill Retake.'},
+    'The retake date must be after the original full test date.': {'uz': 'Qayta topshirish sanasi dastlabki to‘liq imtihon sanasidan keyin bo‘lishi kerak.', 'ru': 'Дата пересдачи должна быть позже даты исходного полного экзамена.'},
+    'Add a written response, a link or a file before submitting.': {'uz': 'Yuborishdan oldin yozma javob, havola yoki fayl qo‘shing.', 'ru': 'Перед отправкой добавьте письменный ответ, ссылку или файл.'},
+    'Only your counselor or teacher can change an assigned task status. Submit your response instead.': {'uz': 'Berilgan vazifa holatini faqat counselor yoki o‘qituvchi o‘zgartiradi. Siz javobingizni yuborishingiz mumkin.', 'ru': 'Статус назначенного задания меняет только консультант или учитель. Вы можете отправить ответ.'},
+    'Your response is awaiting review. Your counselor can return it for changes.': {'uz': 'Javobingiz tekshirishni kutmoqda. Counselor uni tuzatish uchun qaytarishi mumkin.', 'ru': 'Ваш ответ ожидает проверки. Консультант может вернуть его на доработку.'},
     # Django REST framework and Django built-ins
     'This field may not be null.': {
         'uz': 'Bu maydonni to‘ldirish shart.',

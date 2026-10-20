@@ -33,7 +33,7 @@ export const DEFAULT_COLLEGE_FILTERS = { country: '', bands: COLLEGE_BANDS, pric
 // Admission band -> Application.tier. An unknown band has no tier: the student picks one.
 export const BAND_TIERS = { reach: 'dream', target: 'target', safety: 'safety' };
 
-export const COLLEGE_PRICE_CAPS = ['all', 'budget', '25000', '40000'];
+export const COLLEGE_PRICE_CAPS = ['all', '25000', '40000'];
 
 export const COLLEGE_AID_FLAGS = [['offers_need_based_aid', 'Need-based'], ['offers_merit_aid', 'Merit'], ['offers_international_aid', 'International aid'], ['meets_full_need', 'Meets full need']];
 
@@ -65,7 +65,7 @@ export function collegeSearchQuery({ query = '', filters = DEFAULT_COLLEGE_FILTE
   return params.toString();
 }
 
-export const SCORE_PARTS = [['academic', 48], ['preferences', 22], ['financial', 20], ['profile_strength', 10]];
+export const SCORE_PARTS = [['academic', 48], ['preferences', 22], ['financial', 8], ['profile_strength', 10]];
 
 export const SAT_SCALE = [1000, 1600];
 
@@ -81,7 +81,7 @@ export const satLabel = (university) => university.sat_min ? satText(university.
 export const scalePercent = (value, min, max) => `${Math.max(0, Math.min(100, (Number(value) - min) / (max - min) * 100))}%`;
 
 // The yearly price the server sends (backend pricing.py): `cost` is what the price filter, the
-// sort and the fit compare with the budget, `cost_label` says what it is, and `after_aid_usd`
+// sort use; `cost_label` says what it is, and `after_aid_usd`
 // (US universities that aid international students) is US students' average after aid, shown
 // only as a secondary line.
 export function priceInfo(university) {
@@ -100,24 +100,21 @@ export function tierPickerState({ research, loading, error }) {
   return research.ready ? 'no_data' : 'incomplete';
 }
 
-// What the page says under a price filter. The server keeps universities without a published
-// price in every price filter and gives "Within budget" no cap until the profile has a budget
-// (college_search.filtered_catalog), so the student is told both.
-export function priceFilterNotes(price, budget, unpricedCount) {
+// Published-price filters keep rows whose price is unknown and explain that to the student.
+export function priceFilterNotes(price, unpricedCount) {
   return {
-    budgetMissing: price === 'budget' && !(Number(budget) > 0),
     unpriced: price !== 'all' && unpricedCount > 0 ? tp('{n} university has no published price|{n} universities have no published price', unpricedCount, { n: formatNumberLocale(unpricedCount) }) : '',
   };
 }
 
-export const priceCapLabel = (cap) => cap === 'all' ? t("Any price") : cap === 'budget' ? t("Within budget") : tx`Up to ${money(Number(cap))}`;
+export const priceCapLabel = (cap) => cap === 'all' ? t("Any price") : tx`Up to ${money(Number(cap))}`;
 
-export function collegeFilterChips(filters, setFilters, budget) {
+export function collegeFilterChips(filters, setFilters) {
   const reset = (change) => () => setFilters((current) => ({ ...current, ...change }));
   const chips = [];
   if (filters.country) chips.push({ key: 'country', text: filters.country, clear: reset({ country: '' }) });
   if (!allBands(filters.bands)) chips.push({ key: 'bands', text: filters.bands.map(bandLabel).join(', ') || t("No band"), clear: reset({ bands: DEFAULT_COLLEGE_FILTERS.bands }) });
-  if (filters.price !== 'all') chips.push({ key: 'price', text: filters.price === 'budget' && budget ? `${t("Within budget")} ${money(budget)}` : priceCapLabel(filters.price), clear: reset({ price: 'all' }) });
+  if (filters.price !== 'all') chips.push({ key: 'price', text: priceCapLabel(filters.price), clear: reset({ price: 'all' }) });
   COLLEGE_AID_FLAGS.filter(([flag]) => filters.aid.includes(flag)).forEach(([flag, title]) => chips.push({ key: flag, text: t(title), clear: reset({ aid: filters.aid.filter((item) => item !== flag) }) }));
   if (filters.testOptional) chips.push({ key: 'testOptional', text: t("Test optional"), clear: reset({ testOptional: false }) });
   if (filters.satFit) chips.push({ key: 'satFit', text: t("My SAT is in range"), clear: reset({ satFit: false }) });

@@ -33,6 +33,7 @@ const MEETING_STATUS = {
 // kind -> [[pattern, (match) => translated text], ...]
 const MESSAGES = {
   task: [
+    [/^Your student attached an Essay Lab essay to an assigned task for your feedback\.$/, () => t('Your student attached an Essay Lab essay to an assigned task for your feedback.')],
     [/^(\d+) task\(s\) are past their deadline\.$/, ([, n]) => tp('{n} task is past its deadline.|{n} tasks are past their deadline.', Number(n), { n: Number(n) })],
     // A counselor's reminder (send_reminder in services.py).
     [new RegExp(`^“(.+)” is due ${ISO_DATE}\\.$`), ([, title, date]) => t('“{title}” is due {date}.', { title, date: formatDateLocale(date) })],

@@ -232,7 +232,7 @@ const PAGE_RESOURCE_KEYS = {
   admin_catalog: [], admin_moderation: [],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
-  roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'students', 'essays', 'recommendations'],
+  roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'students', 'essays', 'documents', 'recommendations'],
   documents: ['documents'], certificates: ['documents'], essays: ['essays'],
   student_center: ['students', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations', 'documents'],
   bookings: ['bookings'], messages: ['messageChannels'],
@@ -493,7 +493,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} moreTickets={Boolean(more?.supportTickets)} loadMoreTickets={() => loadMore('supportTickets')} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query, search, navigate, notify }} />;
-  if (user.role === 'student' && page === 'essay_lab') return <EssayLab user={user} notify={notify} essayId={params.essayId} onEssay={(essayId) => setPage(page, { essayId })} />;
+  if (user.role === 'student' && page === 'essay_lab') return <EssayLab user={user} notify={notify} onTaskSubmitted={reload} essayId={params.essayId} onEssay={(essayId) => setPage(page, { essayId })} />;
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;

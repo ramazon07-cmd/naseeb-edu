@@ -33,7 +33,6 @@ from ..models import (
     StudentProfile,
     Task,
     University,
-    XPTransaction,
 )
 from ..pricing import with_cost
 from ..serializers import (
@@ -59,7 +58,7 @@ from ..progress import DOCUMENT_AWAITING_REVIEW, OPEN_TASK_STATUSES
 from ..progress_cache import invalidate_progress_summary
 from ..scoping import scope_students, without_deactivated_students
 from ..streaming import release_db_connection
-from ..services import TASK_XP_BY_PRIORITY, award_approval_xp, record_approval_note
+from ..services import record_approval_note
 from .common import (
     RECORD_ORDERING,
     ApproveMixin,
@@ -105,15 +104,24 @@ class ApplicationViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.M
         )
 
     def perform_update(self, serializer):
-        old_status = serializer.instance.status
-        application = serializer.save()
-        if application.status != old_status:
-            ApplicationStatusHistory.objects.create(
-                application=application,
-                status=application.status,
-                changed_by=self.request.user,
-                note='Status updated',
-            )
+        with transaction.atomic():
+            # Recheck under the row lock: an open student plan must not undo a
+            # counselor's decision or record a transition from an outdated status.
+            application = self.get_queryset().select_for_update(of=('self',)).get(pk=serializer.instance.pk)
+            serializer.instance = application
+            if 'status' in serializer.validated_data:
+                serializer.validate_status(serializer.validated_data['status'])
+            old_status = application.status
+            application = serializer.save()
+            if application.status != old_status:
+                ApplicationStatusHistory.objects.create(
+                    application=application,
+                    status=application.status,
+                    changed_by=self.request.user,
+                    note='Status updated',
+                )
+                # This locked instance has its own prefetched history; include the new entry in the response.
+                getattr(application, '_prefetched_objects_cache', {}).pop('status_history', None)
 
 
 class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixin, viewsets.ModelViewSet):
@@ -123,9 +131,12 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixi
     send_back_notice_kind = 'task'
     send_back_label = 'Task'
     send_back_managers = 'task_manager'
-    queryset = Task.objects.select_related('student__user', 'assigned_by', 'student__assigned_counselor').all()
+    queryset = Task.objects.select_related('student__user', 'assigned_by', 'student__assigned_counselor',
+                                         'submission_essay__student__user', 'submission_essay__student__school').defer(
+                                             'submission_essay__content', 'submission_essay__prompt', 'submission_essay__counselor_comment').all()
     search_fields = ('title',)
     choice_filters = {'status': ('status', Task.Status.choices), 'priority': ('priority', Task.Priority.choices)}
+    int_filters = {**StudentRecordListMixin.int_filters, 'submission_essay': 'submission_essay_id'}
     bool_filters = {'self_assigned': 'is_self_assigned'}
     date_filters = {**StudentRecordListMixin.date_filters, 'due': 'due_date'}
     ordering_options = {**RECORD_ORDERING, 'due': ('due_date', 'id'), '-due': ('-due_date', '-id')}
@@ -158,15 +169,24 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixi
         )
 
     def perform_update(self, serializer):
-        target_status = serializer.validated_data.get('status', serializer.instance.status)
-        response_changed = bool(
-            {'student_response', 'submission_url', 'submission_file'}
-            & set(serializer.validated_data)
-        )
-        submitted_now = target_status == Task.Status.SUBMITTED and (
-            serializer.instance.status != Task.Status.SUBMITTED or response_changed
-        )
-        serializer.save(submitted_at=timezone.now() if submitted_now else serializer.instance.submitted_at)
+        with transaction.atomic():
+            if self.request.user.role == User.Role.STUDENT:
+                current = Task.objects.select_for_update(of=('self',)).get(pk=serializer.instance.pk)
+                if current.status == Task.Status.APPROVED or (not current.is_self_assigned and current.status == Task.Status.SUBMITTED):
+                    raise ValidationError({'status': 'Your response is awaiting review. Your counselor can return it for changes.'})
+                essay = serializer.validated_data.get('submission_essay', current.submission_essay)
+                if essay:
+                    from ..task_submissions import prepare_essay_submission
+                    serializer.validated_data['submission_essay'] = prepare_essay_submission(current, essay.pk, self.request.user)
+            target_status = serializer.validated_data.get('status', serializer.instance.status)
+            response_changed = bool(
+                {'student_response', 'submission_url', 'submission_file', 'submission_essay'}
+                & set(serializer.validated_data)
+            )
+            submitted_now = target_status == Task.Status.SUBMITTED and (
+                serializer.instance.status != Task.Status.SUBMITTED or response_changed
+            )
+            serializer.save(submitted_at=timezone.now() if submitted_now else serializer.instance.submitted_at)
 
     @action(detail=False, methods=['post'], url_path='bulk')
     def bulk(self, request):
@@ -212,37 +232,26 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixi
             task = Task.objects.select_for_update(of=('self',)).select_related('student').get(pk=scoped_task.pk)
             if task.status not in {Task.Status.SUBMITTED, Task.Status.APPROVED}:
                 return Response({'detail': 'The student must submit the task before approval.'}, status=400)
+            if task.status == Task.Status.SUBMITTED and task.submission_essay_id and not (task.student_response.strip() or task.submission_url or task.submission_file):
+                from ..task_submissions import essay_submission_detail
+                if essay_submission_detail(task, request.user) is None or not task.submission_essay.content.strip():
+                    raise ValidationError({'submission_essay': 'The attached essay is no longer shared or available. Return the task to the student.'})
             newly_approved = task.status != Task.Status.APPROVED
             task.status = Task.Status.APPROVED
             task.save(update_fields=['status', 'updated_at'])
-            xp_amount = 0 if task.is_self_assigned else TASK_XP_BY_PRIORITY[task.priority]
-            xp_created = False
-            if xp_amount:
-                _, xp_created = award_approval_xp(
-                    student=task.student,
-                    source_type=XPTransaction.Source.TASK,
-                    source_id=task.id,
-                    amount=xp_amount,
-                    reason=f'Task approved: {task.title}',
-                    awarded_by=request.user,
-                )
             # One entry per approval event. get_or_create keyed on the text merged
             # two tasks with the same title (and raised once duplicates existed).
             if newly_approved:
                 ActivityLog.objects.create(
                     actor=request.user,
                     student=task.student,
-                    action=(
-                        f'Task approved: {task.title} (+{xp_amount} XP)'
-                        if xp_amount
-                        else f'Self-task approved: {task.title} (no XP)'
-                    ),
+                    action=f'Task approved: {task.title}',
                     metadata={'task': task.id},
                 )
         record_approval_note(record=task, student=task.student, note=note, notice_kind='task')
         task.student.refresh_from_db()
         data = TaskSerializer(task, context={'request': request}).data
-        data['xp_awarded'] = xp_amount if xp_created else 0
+        data['xp_awarded'] = 0
         data['student_leveling'] = StudentProfileSerializer(task.student, context={'request': request}).data
         return Response(data)
 

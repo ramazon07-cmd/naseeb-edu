@@ -4,6 +4,7 @@
 
 export const TEST_STATUSES = ['not_taken', 'planning', 'scheduled', 'taken', 'not_required'];
 export const IELTS_SECTIONS = [['ielts_listening', 'Listening'], ['ielts_reading', 'Reading'], ['ielts_writing', 'Writing'], ['ielts_speaking', 'Speaking']];
+export const IELTS_RESULT_TYPES = [['first_attempt', 'First full test'], ['full_retake', 'Full test retake'], ['one_skill_retake', 'One Skill Retake']];
 export const IELTS_BANDS = Array.from({ length: 19 }, (_, i) => (18 - i) / 2);
 export const SUBJECT_SCORE_MAX = { AP: 5, IB: 7 };
 export const MAX_ATTEMPTS = 20;
@@ -79,6 +80,14 @@ export function validateTestScores(form, today = new Date()) {
     else if (overall != null && !blank(form.ielts_score) && Number(form.ielts_score) !== overall) errors.ielts_score = ['With these section scores your overall band is {0}. Check your test report.', overall];
     checkDate(errors, form, 'ielts_test_date', 'taken', today);
     checkAttempts(errors, form, 'ielts_attempts');
+    if (form.ielts_result_type === 'first_attempt' && num(form.ielts_attempts) != null && num(form.ielts_attempts) !== 1) errors.ielts_attempts = ['For a first IELTS result, enter one full test.'];
+    if (form.ielts_result_type === 'full_retake' && (num(form.ielts_attempts) ?? 1) < 2) errors.ielts_attempts = ['For a full retake, enter at least two full tests.'];
+    if (form.ielts_result_type === 'one_skill_retake') {
+      if (!IELTS_SECTIONS.some(([key]) => key === `ielts_${form.ielts_retake_skill}`)) errors.ielts_retake_skill = ['Choose the section you retook.'];
+      IELTS_SECTIONS.forEach(([key], i) => { if (!given[i]) errors[key] = ['Enter all four scores from your updated One Skill Retake report.']; });
+      checkDate(errors, form, 'ielts_retake_date', 'taken', today);
+      if (form.ielts_retake_date && form.ielts_test_date && form.ielts_retake_date <= form.ielts_test_date) errors.ielts_retake_date = ['The retake date must be after the original full test date.'];
+    }
   } else if (form.ielts_status === 'planning' || form.ielts_status === 'scheduled') {
     checkDate(errors, form, 'ielts_test_date', form.ielts_status, today);
   }
@@ -135,6 +144,9 @@ export function testScoresPayload(form) {
   for (const key of [...ints, ...bands]) out[key] = num(form[key]);
   if (form.ielts_status === 'taken' && out.ielts_score == null) out.ielts_score = ieltsOverallFromForm(form);
   for (const key of ['ielts_test_date', 'sat_test_date']) out[key] = blank(form[key]) ? null : form[key];
+  out.ielts_result_type = form.ielts_status === 'taken' ? form.ielts_result_type || null : null;
+  out.ielts_retake_skill = out.ielts_result_type === 'one_skill_retake' ? form.ielts_retake_skill || null : null;
+  out.ielts_retake_date = out.ielts_result_type === 'one_skill_retake' ? form.ielts_retake_date || null : null;
   out.sat_superscore = canSuperscore(form) ? form.sat_superscore ?? null : null;
   out.subjects = (form.subjects || []).map((row) => ({ type: row.type, subject: String(row.subject || '').trim(), score: num(row.score) }));
   out.certificates = (form.certificates || []).map((row) => ({
@@ -155,6 +167,9 @@ export function testScoresFromProfile(profile) {
     ielts_score: band(profile.ielts_score),
     ielts_test_date: text(profile.ielts_test_date),
     ielts_attempts: text(profile.ielts_attempts),
+    ielts_result_type: profile.ielts_result_type || '',
+    ielts_retake_skill: profile.ielts_retake_skill || '',
+    ielts_retake_date: text(profile.ielts_retake_date),
     sat_status: profile.sat_status || (profile.sat_score != null ? 'taken' : 'not_taken'),
     sat_reading: text(profile.sat_reading),
     sat_math: text(profile.sat_math),

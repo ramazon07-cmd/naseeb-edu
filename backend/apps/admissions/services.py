@@ -7,12 +7,6 @@ from .models import ActivityLog, Document, Notification, RoadmapMission, Student
 from .progress import OPEN_MISSION_STATUSES, OPEN_TASK_STATUSES
 
 
-TASK_XP_BY_PRIORITY = {
-    'low': 25,
-    'medium': 50,
-    'high': 75,
-    'urgent': 100,
-}
 ROADMAP_APPROVAL_XP = 75
 LEVEL_ONE_MISSIONS = (
     {

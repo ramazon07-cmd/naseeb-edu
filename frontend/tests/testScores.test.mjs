@@ -67,6 +67,31 @@ test('profile data maps back into form answers', () => {
   assert.equal(testScoresFromProfile({ ielts_score: '7.0', sat_score: 1400 }).sat_status, 'taken');
 });
 
+test('IELTS retake metadata round-trips and only One Skill Retake keeps skill and date', () => {
+  const form = { ...ielts, ielts_result_type: 'one_skill_retake', ielts_retake_skill: 'speaking', ielts_retake_date: '2026-03-28' };
+  assert.deepEqual(keys(form), []);
+  const payload = testScoresPayload(form);
+  assert.equal(payload.ielts_retake_skill, 'speaking');
+  assert.equal(testScoresFromProfile(payload).ielts_retake_date, '2026-03-28');
+  assert.equal(testScoresFromProfile(payload).ielts_result_type, 'one_skill_retake');
+  for (const changed of [{ ielts_result_type: 'full_retake' }, { ielts_status: 'planning' }]) {
+    const cleared = testScoresPayload({ ...form, ...changed });
+    assert.equal(cleared.ielts_retake_skill, null);
+    assert.equal(cleared.ielts_retake_date, null);
+  }
+});
+
+test('IELTS retakes require a skill, a later past date and a complete updated report', () => {
+  const form = { ...ielts, ielts_result_type: 'one_skill_retake', ielts_retake_skill: 'speaking', ielts_retake_date: '2026-03-28' };
+  assert.deepEqual(keys({ ...form, ielts_retake_skill: '' }), ['ielts_retake_skill']);
+  assert.deepEqual(keys({ ...form, ielts_retake_date: '' }), ['ielts_retake_date']);
+  assert.deepEqual(keys({ ...form, ielts_retake_date: '2026-03-14' }), ['ielts_retake_date']);
+  assert.deepEqual(keys({ ...form, ielts_retake_date: '2027-01-01' }), ['ielts_retake_date']);
+  assert.deepEqual(keys({ ...form, ielts_listening: '', ielts_reading: '', ielts_writing: '', ielts_speaking: '' }), ['ielts_listening', 'ielts_reading', 'ielts_speaking', 'ielts_writing']);
+  assert.deepEqual(keys({ ...ielts, ielts_result_type: 'full_retake', ielts_attempts: '1' }), ['ielts_attempts']);
+  assert.deepEqual(keys({ ...ielts, ielts_result_type: 'first_attempt' }), ['ielts_attempts']);
+});
+
 test('other certificates validate against their own scoring rules and survive a profile edit', () => {
   const certificates = [
     { type: 'toefl', score: '105', test_date: '2026-05-01' },

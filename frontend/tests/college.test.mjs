@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BAND_TIERS, DEFAULT_COLLEGE_FILTERS, afterAidText, collegeFilterChips, priceFilterNotes, priceInfo, tierPickerState } from '../src/lib/college.js';
+import { BAND_TIERS, COLLEGE_PRICE_CAPS, DEFAULT_COLLEGE_FILTERS, afterAidText, collegeFilterChips, priceFilterNotes, priceInfo, tierPickerState } from '../src/lib/college.js';
 import { money } from '../src/lib/format.js';
 
 test('an unknown admission band maps to no tier, never "target"', () => {
@@ -30,18 +30,15 @@ test('the tier picker waits for the research profile before asking to complete i
   assert.equal(tierPickerState({ research: { ready: true }, loading: false, error: '' }), 'no_data');
 });
 
-test('"Within budget" without a budget asks for one instead of showing $0', () => {
-  assert.deepEqual(priceFilterNotes('budget', 0, 0), { budgetMissing: true, unpriced: '' });
-  assert.deepEqual(priceFilterNotes('budget', null, 0).budgetMissing, true);
-  assert.deepEqual(priceFilterNotes('budget', 30000, 0).budgetMissing, false);
-  assert.deepEqual(priceFilterNotes('25000', 0, 0).budgetMissing, false);
-  const [chip] = collegeFilterChips({ ...DEFAULT_COLLEGE_FILTERS, price: 'budget' }, () => {}, 0);
-  assert.equal(chip.text, 'Within budget');
+test('price caps and chips do not depend on a personal budget', () => {
+  assert.deepEqual(COLLEGE_PRICE_CAPS, ['all', '25000', '40000']);
+  const [chip] = collegeFilterChips({ ...DEFAULT_COLLEGE_FILTERS, price: '25000' }, () => {});
+  assert.equal(chip.text, `Up to ${money(25000)}`);
 });
 
 test('a price filter tells how many universities have no published price', () => {
-  assert.equal(priceFilterNotes('40000', 30000, 3).unpriced, '3 universities have no published price');
-  assert.equal(priceFilterNotes('budget', 30000, 1).unpriced, '1 university has no published price');
-  assert.equal(priceFilterNotes('40000', 30000, 0).unpriced, '');
-  assert.equal(priceFilterNotes('all', 30000, 3).unpriced, '');
+  assert.equal(priceFilterNotes('40000', 3).unpriced, '3 universities have no published price');
+  assert.equal(priceFilterNotes('25000', 1).unpriced, '1 university has no published price');
+  assert.equal(priceFilterNotes('40000', 0).unpriced, '');
+  assert.equal(priceFilterNotes('all', 3).unpriced, '');
 });
