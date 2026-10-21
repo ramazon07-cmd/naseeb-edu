@@ -170,6 +170,7 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
 export function ApplicationsPortalPage({ data, query, reload, notify, setPage }) {
   const [tier, setTier] = useState('all');
   const [sort, setSort] = useState('deadline');
+  const [pageWindow, setPageWindow] = useState({ key: '', limit: 10 });
   const [menuId, setMenuId] = useState(null);
   const [briefId, setBriefId] = useState(null);
   const [dragId, setDragId] = useState(null);
@@ -183,6 +184,12 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
   // Each application carries its university, so the board needs no catalogue.
   const nameOf = (application) => application.university_detail?.name || t("University");
   const order = sort === 'name' ? (a, b) => nameOf(a).localeCompare(nameOf(b)) : (a, b) => (a.deadline ? parseDateValue(a.deadline).getTime() : Infinity) - (b.deadline ? parseDateValue(b.deadline).getTime() : Infinity);
+  // Filter/sort changes start a fresh window; summary totals still cover the whole list.
+  const windowKey = JSON.stringify([tier, query, sort]);
+  if (pageWindow.key !== windowKey) setPageWindow({ key: windowKey, limit: 10 });
+  const limit = pageWindow.key === windowKey ? pageWindow.limit : 10;
+  const shown = visible.slice().sort(order).slice(0, limit);
+  const remaining = Math.min(10, visible.length - shown.length);
 
   useEffect(() => {
     if (menuId == null) return undefined;
@@ -242,7 +249,8 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
       </div>
     </div>
     <div className="board">{APPLICATION_STAGES.map((stage) => {
-        const cards = visible.filter((application) => stageOf(application.status) === stage.key).sort(order);
+        const stageCards = visible.filter((application) => stageOf(application.status) === stage.key);
+        const cards = shown.filter((application) => stageOf(application.status) === stage.key);
         return <section key={stage.key} className={`board-column ${overStage === stage.key ? 'is-over' : ''}`.trim()} aria-label={t(stage.title)}
         onDragOver={(event) => {if (dragId != null && !stage.locked) {event.preventDefault();setOverStage(stage.key);}}}
         onDragLeave={(event) => {if (!event.currentTarget.contains(event.relatedTarget)) setOverStage(null);}}
@@ -252,15 +260,19 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
           setDragId(null);setOverStage(null);
           if (record && !stage.locked) moveTo(record, stage.key);
         }}>
-          <header><div><h3>{t(stage.title)}</h3><span className="count-pill neutral">{formatNumberLocale(cards.length)}</span>{stage.locked && <span className="board-lock" role="img" aria-label={t("Set by your counselor")}><Lock size={14} /></span>}</div><p>{t(stage.description)}</p></header>
+          <header><div><h3>{t(stage.title)}</h3><span className="count-pill neutral">{formatNumberLocale(stageCards.length)}</span>{stage.locked && <span className="board-lock" role="img" aria-label={t("Set by your counselor")}><Lock size={14} /></span>}</div><p>{t(stage.description)}</p></header>
           <div className="board-stack">
             {cards.map((application) => <ApplicationCard key={application.id} application={application} university={application.university_detail} essays={data.essays.filter((essay) => essay.application === application.id)} menuOpen={menuId === application.id} briefOpen={briefId === application.id} dragging={dragId === application.id} busy={removingId === application.id || application.id in moves}
             onMenu={() => {setBriefId(null);setMenuId(menuId === application.id ? null : application.id);}} onBrief={() => {setMenuId(null);setBriefId(briefId === application.id ? null : application.id);}} onBriefClose={() => setBriefId(null)} onDragStart={(event) => {event.dataTransfer.setData('text/plain', String(application.id));event.dataTransfer.effectAllowed = 'move';setBriefId(null);setDragId(application.id);}} onDragEnd={() => {setDragId(null);setOverStage(null);}}
             onMove={(status) => moveTo(data.applications.find((item) => item.id === application.id), status)} onOpen={() => openUniversity(application.university)} onEdit={() => {setMenuId(null);setBriefId(null);setEditing(data.applications.find((item) => item.id === application.id));}} onRemove={() => removeApplication(application)} />)}
-            {!cards.length && <p className="board-empty">{stage.locked ? t("No decisions yet.") : t("Nothing here yet.")}</p>}
+            {!stageCards.length && <p className="board-empty">{stage.locked ? t("No decisions yet.") : t("Nothing here yet.")}</p>}
           </div>
         </section>;
       })}</div>
+    <div className="paged-list-footer">
+      <span role="status" aria-live="polite">{tx`${formatNumberLocale(shown.length)} shown`}</span>
+      {remaining > 0 && <button type="button" className="button quiet" onClick={() => setPageWindow({ key: windowKey, limit: limit + 10 })}>{t('Show {n} more', { n: formatNumberLocale(remaining) })}</button>}
+    </div>
     {editing && <ApplicationPlan key={editing.id} application={editing} data={data} setPage={setPage} onClose={() => setEditing(null)} onSaved={reload} notify={notify} />}
   </div>;
 }

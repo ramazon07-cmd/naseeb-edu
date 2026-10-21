@@ -13,21 +13,21 @@ export function PagedListError({ list }) {
 
 // "Load more" for a server-paged list. The button is the keyboard and
 // screen-reader path; scrolling it into view loads the next page as well.
-export function LoadMore({ list }) {
+export function LoadMore({ list, autoLoad = true, pageSize }) {
   const sentinel = useRef(null);
   const { hasMore, loadingMore, loadMore } = list;
   useEffect(() => {
     const node = sentinel.current;
-    if (!node || !hasMore || typeof IntersectionObserver === 'undefined') return undefined;
+    if (!autoLoad || !node || !hasMore || typeof IntersectionObserver === 'undefined') return undefined;
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) loadMore();
     }, { rootMargin: '240px' });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, loadMore]);
+  }, [autoLoad, hasMore, loadMore]);
   return <div className="paged-list-footer" ref={sentinel}>
     <span className="sr-only" role="status" aria-live="polite">{list.loaded ? tx`${formatNumberLocale(list.items.length)} shown` : ''}</span>
-    {hasMore && <button type="button" className="button quiet small" onClick={loadMore} disabled={loadingMore} aria-busy={loadingMore}>{loadingMore ? t("Loading…") : t("Load more")}</button>}
+    {hasMore && <button type="button" className="button quiet small" onClick={loadMore} disabled={loadingMore} aria-busy={loadingMore}>{loadingMore ? t("Loading…") : pageSize ? t('Show {n} more', { n: formatNumberLocale(pageSize) }) : t("Load more")}</button>}
   </div>;
 }
 
