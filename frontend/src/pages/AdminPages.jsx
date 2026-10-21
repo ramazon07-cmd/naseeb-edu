@@ -1,4 +1,5 @@
 import { Stat } from '../components/records';
+import './school-counselors.css';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
 import { Panel, Badge, Empty, Modal } from '../components/ui';
 import { AlertTriangle, Building2, ChevronRight, ExternalLink, Fingerprint, RefreshCw, UserRound, Compass, ShieldAlert, Plus, Pencil, Trash2, ShieldCheck, LifeBuoy } from 'lucide-react';
@@ -103,11 +104,12 @@ function CounselorHandoverModal({ account, students, changes, notify, onClose, o
 export function CounselorEditForm({ account, schoolManaged = false, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   const [handover, setHandover] = useState(null);
+  const [accessEnabled, setAccessEnabled] = useState(account.is_active);
   async function submit(event) {
     event.preventDefault();
     setSaving(true);
     const values = new FormData(event.currentTarget);
-    const changes = { first_name: values.get('first_name'), last_name: values.get('last_name'), ...(!schoolManaged ? { email: values.get('email') } : {}), phone: values.get('phone'), position: values.get('position'), is_active: values.get('is_active') === 'true' };
+    const changes = { first_name: values.get('first_name'), last_name: values.get('last_name'), ...(!schoolManaged ? { email: values.get('email') } : {}), phone: values.get('phone'), is_active: accessEnabled };
     try {
       await api.update('users/accounts', account.id, changes);
       notify(t("Counselor updated."));
@@ -118,13 +120,51 @@ export function CounselorEditForm({ account, schoolManaged = false, onClose, onS
     } finally {setSaving(false);}
   }
   if (handover) return <CounselorHandoverModal account={account} {...handover} notify={notify} onClose={() => setHandover(null)} onDone={onSaved} />;
-  return <Modal title={t("Edit counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("First name")}><input name="first_name" defaultValue={account.first_name} placeholder={t("e.g. Dilnoza")} required /></Field><Field label={t("Last name")}><input name="last_name" defaultValue={account.last_name} placeholder={t("e.g. Karimova")} /></Field>{!schoolManaged && <Field label={t("Email")}><input name="email" type="email" defaultValue={account.email} placeholder={t("e.g. name@example.com")} required /></Field>}<Field label={t("Phone")}><input name="phone" defaultValue={account.phone} placeholder={t("e.g. +998 90 123 45 67")} /></Field><Field label={t("Position")}><input name="position" defaultValue={account.position} placeholder={t("e.g. Senior counselor")} /></Field><Field label={t("Status")}><select name="is_active" defaultValue={String(account.is_active)}><option value="true">{t("Active")}</option><option value="false">{t("Inactive")}</option></select></Field>{!schoolManaged && <p className="form-note form-wide">{t("Reactivation is blocked when the school's plan has no free counselor seat.")}</p>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Saving…") : t("Save")}</button></div></form></Modal>;
+  return <Modal title={t("Edit counselor")} className="counselor-modal" onClose={onClose}>
+    <form className="form-grid" onSubmit={submit}>
+      <Field label={t("First name")}><input name="first_name" defaultValue={account.first_name} placeholder={t("e.g. Dilnoza")} required /></Field>
+      <Field label={t("Last name")}><input name="last_name" defaultValue={account.last_name} placeholder={t("e.g. Karimova")} /></Field>
+      <Field label={t("Phone")}><input name="phone" type="tel" defaultValue={account.phone} placeholder={t("e.g. +998 90 123 45 67")} /></Field>
+      <Field label={t("Email")}><input name="email" type="email" defaultValue={account.email} readOnly={schoolManaged} required /></Field>
+      <div className="counselor-access form-wide">
+        <div><b>{t("Allow platform access")}</b><p>{accessEnabled ? t("The counselor can sign in and work with students.") : t("Sign-in will be blocked. The counselor's records are kept.")}</p><small>{t("Changes apply when you save.")}</small></div>
+        <button type="button" className="counselor-access-switch" role="switch" aria-checked={accessEnabled} aria-label={t("Allow platform access")} onClick={() => setAccessEnabled(!accessEnabled)} />
+      </div>
+      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save")}</button></div>
+    </form>
+  </Modal>;
 }
 
-export function CounselorProvisionForm({ onClose, onSaved, notify }) {
+export function CounselorProvisionForm({ schoolManaged = false, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);try {const payload = Object.fromEntries(new FormData(event.currentTarget).entries());payload.school = Number(payload.school);await api.createCounselor(payload);notify(t("Counselor account created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
-  return <Modal title={t("Add school counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit} autoComplete="off"><Field label={t("First name")}><input name="first_name" placeholder={t("e.g. Dilnoza")} required /></Field><Field label={t("Last name")}><input name="last_name" placeholder={t("e.g. Karimova")} /></Field><Field label={t("Username")}><input name="username" placeholder={t("e.g. d.karimova")} autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" placeholder={t("e.g. name@example.com")} autoComplete="off" required /></Field><SchoolPicker label="Organization school" required filters={ACTIVE_ORGANIZATION_SCHOOLS} /><Field label={t("Position")}><input name="position" placeholder={t("e.g. Senior counselor")} /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("Each school's plan sets how many active counselors it can have.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
+  const [error, setError] = useState('');
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+      if (!schoolManaged) payload.school = Number(payload.school);
+      await api.createCounselor(payload);
+      notify(t("Counselor account created."));
+      onSaved();
+    } catch (error) {
+      setError(error.message);
+    } finally { setSaving(false); }
+  }
+  return <Modal title={t("Add school counselor")} className="counselor-modal" onClose={onClose}>
+    <form className="form-grid counselor-create-form" onSubmit={submit} autoComplete="off">
+      <p className="counselor-form-intro form-wide">{t("Create a login for your counselor. They will set their own password at first sign-in.")}</p>
+      <Field label={t("First name")}><input name="first_name" placeholder={t("e.g. Dilnoza")} required maxLength={150} /></Field>
+      <Field label={t("Last name")}><input name="last_name" placeholder={t("e.g. Karimova")} maxLength={150} /></Field>
+      <Field label={t("Username")}><input name="username" placeholder={t("e.g. d.karimova")} autoComplete="off" autoCapitalize="none" spellCheck={false} required maxLength={150} /></Field>
+      <Field label={t("Email")}><input name="email" type="email" placeholder={t("e.g. name@example.com")} autoComplete="off" autoCapitalize="none" spellCheck={false} required /></Field>
+      {!schoolManaged && <div className="form-wide"><SchoolPicker label="Organization school" required filters={ACTIVE_ORGANIZATION_SCHOOLS} /></div>}
+      <div className="form-wide counselor-password-field"><Field label={t("Temporary password")} hint={t("Share this password privately with the counselor.")}><input name="password" type="password" minLength={8} autoComplete="new-password" required /></Field></div>
+      {error && <p className="counselor-form-error form-wide" role="alert">{error}</p>}
+      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div>
+    </form>
+  </Modal>;
 }
 
 export function AccountTransferForm({ account, onClose, onSaved, notify }) {

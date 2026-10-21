@@ -484,8 +484,13 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='create-counselor')
     def create_counselor(self, request):
-        if not self.is_product_admin(request.user):
-            return Response({'detail': 'Only a product admin can create counselors.', 'code': 'product_admin_required'}, status=403)
+        school_manager = (
+            request.user.role == User.Role.ORGANIZATION
+            and request.user.school_id
+            and request.user.school.is_active
+        )
+        if not self.is_product_admin(request.user) and not school_manager:
+            return Response({'detail': 'Only a product admin or an active school account can create counselors.', 'code': 'counselor_creation_forbidden'}, status=403)
         serializer = CounselorProvisionSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         counselor = serializer.save()

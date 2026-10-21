@@ -1,3 +1,5 @@
+import { CounselorStudentTable } from '../components/CounselorStudentTable';
+import { studentReasons } from '../lib/studentReasons';
 import { useState, useEffect, useRef } from 'react';
 import { Panel, Empty, Modal, Badge } from '../components/ui';
 import { RecordRow } from './ResourceSection';
@@ -339,14 +341,14 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
   const canApproveLevels = isTaskManager(user) && (!isPlatformAdmin(user) || isSuperAdmin(user));
   const actions = user.role !== 'teacher' && !staffReadOnly && <div className="panel-actions">{isCounselor(user) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {isPlatformAdmin(user) ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
   return <>
-    <Panel title={t("Students")} action={actions} className={isPlatformAdmin(user) ? 'admin-students-panel' : ''}>
+    <Panel title={t("Students")} action={actions} className={isPlatformAdmin(user) ? 'admin-students-panel' : user.role === 'organization' ? 'school-students-panel' : ''}>
       {staffReadOnly && <p className="form-note staff-tier-note"><ShieldCheck size={16} /> {t("Only operations staff and super admins can add, assign, edit or deactivate students. You can view profiles and reset logins.")}</p>}
       <div className="paged-list-filters">
         {isPlatformAdmin(user) && <SchoolPicker label="School" value={school} onChange={setSchool} emptyOption={t("All schools")} />}
         <label><span>{t("Grade")}</span><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">{t("All grades")}</option>{['8', '9', '10', '11', 'gap'].map((value) => <option key={value} value={value}>{value === 'gap' ? t("Gap year") : value}</option>)}</select></label>
         {isPlatformAdmin(user) && <label><span>{t("Counselor")}</span><select value={unassigned} onChange={(event) => setUnassigned(event.target.value)}><option value="">{t("Any counselor")}</option><option value="true">{t("No counselor assigned")}</option></select></label>}
       </div>
-      {students.loading && !students.items.length ? <PageSkeleton /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
+      {students.loading && !students.items.length ? <PageSkeleton /> : user.role === 'organization' ? <CounselorStudentTable rows={students.items.map((student) => ({ student, name: fullName(student.user_detail), reasons: studentReasons(student) }))} onPreview={openStudent} onEdit={(student) => {setEditing(student);setOpen(true);}} /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
       <PagedListError list={students} />
       <LoadMore list={students} />
     </Panel>
