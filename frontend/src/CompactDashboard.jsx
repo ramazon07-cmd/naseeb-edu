@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, ChevronRight, Clock3, Fingerprint, Globe2, GraduationCap, Lock, MessageCircle, School, SlidersHorizontal, Target, Telescope, UsersRound, ArrowUpRight, Star, Plus } from 'lucide-react';
-import { api } from './api';
-import { t, tp, tx, formatClockDurationLocale, formatDateLocale } from './i18n';
+import { t, tp, tx, formatDateLocale } from './i18n';
 import { dateTimeText, dayMonthText } from './lib/format';
 import { daysUntil } from './lib/college';
 import { nextPriorities, studentProgress } from './lib/metrics';
@@ -9,7 +8,6 @@ import { upcomingMeetings } from './lib/meetings';
 import { dashboardColumns, normalizeDashboardPreferences } from './dashboardPreferences';
 import './dashboard.css';
 import DashboardScreenTime from './DashboardScreenTime';
-import { SCREEN_TIME_REFRESH_MS } from './screenTimeQueue';
 import { createPoller } from './lib/poller';
 import { listText } from './lib/profileSections';
 import { isPageLocked } from './lib/routes';
@@ -25,20 +23,6 @@ const widgetMeta = {
   programs: ['Programs', Globe2],
 };
 
-export function ScreenTimeShortcut({ setPage, userId }) {
-  const [seconds, setSeconds] = useState(null);
-  useEffect(() => {
-    let active = true;
-    const loop = createPoller({
-      min: SCREEN_TIME_REFRESH_MS,
-      failureCap: SCREEN_TIME_REFRESH_MS * 5,
-      run: () => api.screenTimeSummary(7).then((result) => { if (active) setSeconds(result.own?.today_seconds ?? 0); return true; }, () => { if (active) setSeconds(null); return null; }),
-    });
-    loop.start({ immediate: true });
-    return () => { active = false; loop.stop(); };
-  }, [userId]);
-  return <button className="dashboard-time" onClick={() => setPage('screen_time')} title={t('Screen Time')}><Clock3 size={16} /><span>{t('Screen Time')}</span><b>{seconds === null ? '—' : formatClockDurationLocale(seconds)}</b><ChevronRight size={14} /></button>;
-}
 
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 

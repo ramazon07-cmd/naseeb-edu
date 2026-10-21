@@ -4,7 +4,8 @@ import './landing.css';
 import './mind-section.css';
 import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus, Flag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScreenTimeShortcut } from './CompactDashboard';
+import './dashboard.css';
+import { ScreenTimeShortcut } from './components/ScreenTimeShortcut';
 import { api } from './api';
 import { AssistantCenter } from './components/AssistantCenter';
 import { canUseAssistant } from './lib/assistantAccess';
@@ -17,7 +18,6 @@ import { pageLoadState } from './lib/pageLoadState';
 import { Empty, Modal } from './components/ui';
 import { NotificationPanel } from './components/NotificationPanel';
 import { COUNSELOR_SELF_HEADED, CounselorLayout, counselorPageDescription, counselorPageLabel } from './components/CounselorShell';
-import { CounselorStudentsPage } from './pages/CounselorStudents';
 import { CxHead } from './components/counselorUi';
 import { formatNumberLocale, getLanguage, locale, setLanguage, siteTitle, t, tx } from './i18n';
 import { exportNodePdf } from './lib/exportPdf';
@@ -55,6 +55,7 @@ const ProfileAssessmentPage = lazyWithRetry(() => import('./pages/ProfileAssessm
 // Workspace pages are chunks of their own, loaded on first visit (PageRouter
 // renders inside a Suspense boundary), so landing visitors never download them.
 const lazyNamed = (load, name) => lazyWithRetry(() => load().then((module) => ({ default: module[name] })));
+const CounselorStudentsPage = lazyNamed(() => import('./pages/CounselorStudents'), 'CounselorStudentsPage');
 const EssayLab = lazyWithRetry(() => import('./essayLab/EssayLab.jsx'));
 const AdminAuditPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminAuditPage');
 const AdminModerationPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminModerationPage');
@@ -274,7 +275,7 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, re
   const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
   // A parent page is all parent-portal data: a failed first load is not an empty family.
   const primaryKeys = lazy ? studentPrimaryKeys(page) : keys.filter((key) => key === 'parentPortal');
-  const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys });
+  const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys, progressive: lazy && page === 'dashboard' });
 
   // Rate-limited sections retry on their own (useWorkspaceData): a quiet note, not an error.
   const busy = keys.some((key) => resourceStatus[key]?.busy);
@@ -313,11 +314,12 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   const navigation = navigationFor(user).filter((item) => !['support', 'screen_time'].includes(item));
   const meta = PAGE_META[page];
   // eslint-disable-next-line react-hooks/exhaustive-deps -- language changes the translated labels
-  const searchIndexData = useMemo(() => buildGlobalSearchIndex(user, data), [user, data, language]);
+  const searching = utility === 'search';
+  const searchIndexData = useMemo(() => searching ? buildGlobalSearchIndex(user, data) : [], [searching, user, data, language]);
   // Staff lists are paged, so records beyond what is loaded come from the server.
   // Students hold their own records; only the university catalogue is searched on the server.
   const studentSearch = !usesPagedLists(user) && user?.role === 'student';
-  const remoteSearch = useRemoteSearch(paletteQuery, usesPagedLists(user) || studentSearch, studentSearch ? 'universities' : '');
+  const remoteSearch = useRemoteSearch(paletteQuery, searching && (usesPagedLists(user) || studentSearch), studentSearch ? 'universities' : '');
   const searchResults = useMemo(() => mergeSearchResults(
     globalSearchResults(searchIndexData, paletteQuery),
     remoteSearchEntries(remoteSearch.results, remoteSearchDestinations(user)).map((entry) => ({ ...entry, subtitle: entry.subtitle || t(PAGE_META[entry.destination].label) })),
@@ -351,7 +353,6 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     setActiveSearchIndex(0);
   }, [paletteQuery]);
   // Search covers every record, so opening it loads what pages have not yet.
-  const searching = utility === 'search';
   useEffect(() => {
     if (searching) onSearchOpen();
   }, [searching, onSearchOpen]);
