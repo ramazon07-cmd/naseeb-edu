@@ -30,6 +30,7 @@ outputs/
 # Claude Code — local agent config and project notes, kept out of the repo
 .claude/
 CLAUDE.md
+AGENTS.md
 PROJECT_CHECKLIST.md
 .impeccable/
 .agents/
