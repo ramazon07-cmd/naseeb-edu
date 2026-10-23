@@ -23,6 +23,7 @@ test('a draft round-trips per key and a corrupt or foreign draft is ignored', ()
 test('server errors map to fields and to the first step that shows them', () => {
   const errors = fieldErrorsFrom({ gpa: ['Too high.'], honors: [{}, { role: ['Required.'] }], non_field_errors: ['x'] });
   assert.deepEqual(errors, { gpa: 'Too high.', honors: 'Required.' });
+  assert.deepEqual(fieldErrorsFrom({ honors: { 1: { role: ['Required.'] } } }), { honors: 'Required.' }, 'DRF 3.18 row-indexed list errors');
   assert.equal(firstStepWithError(errors), 1);
   assert.equal(firstStepWithError({ activities: 'x' }), 5);
   assert.equal(firstStepWithError({}), -1);
