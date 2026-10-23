@@ -1,7 +1,6 @@
 // Public-page styles first, in their original cascade position (before the
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
-import './mind-section.css';
 import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus, Flag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTimeShortcut } from './CompactDashboard';

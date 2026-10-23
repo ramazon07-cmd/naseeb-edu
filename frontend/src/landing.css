@@ -4094,16 +4094,6 @@
   }
 }
 
-/* Naseeb Mind section navigation, available in both navigation layouts. */
-.landing-nav nav .landing-mind-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  color: var(--lp-signal);
-  font-weight: 650;
-}
-
 @media (min-width: 821px) and (max-width: 1200px) {
   .landing-nav > .lp-shell {
     grid-template-columns: auto 1fr auto;
