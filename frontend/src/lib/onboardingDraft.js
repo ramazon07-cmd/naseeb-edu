@@ -30,7 +30,8 @@ export function clearDraft(storage, key) {
   try { storage.removeItem(key); } catch { /* private mode */ }
 }
 
-// {"gpa": ["Ensure this value is less than or equal to 5."], "honors": [{}, {"role": [...]}]}
+// {"gpa": ["Ensure this value is less than or equal to 5."], "honors": {"1": {"role": [...]}}}
+// (DRF 3.18+ keys list errors by row index; older DRF sent a list with {} for valid rows. Both flatten.)
 // -> { gpa: "Ensure ...", honors: "Ensure ..." }
 export function fieldErrorsFrom(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return {};
