@@ -135,14 +135,85 @@ class SchoolCounselorTests(APITestCase):
         self.assertEqual(self.counselor.first_name, '')
         self.assertFalse(ProductAuditEvent.objects.filter(actor=self.org).exists())
 
-    def test_creation_deletion_and_admin_actions_are_denied(self):
+    def test_generic_creation_deletion_and_admin_actions_are_denied(self):
         payload = {'username': 'unauthorized', 'email': 'unauthorized@example.com', 'role': 'counselor',
                    'school': self.school.pk, 'first_name': 'Bad', 'password': 'StrongPass123!'}
-        for url in ['/api/users/accounts/', '/api/users/accounts/create-counselor/']:
-            self.assertEqual(self.client.post(url, payload, format='json').status_code, 403)
+        self.assertEqual(self.client.post('/api/users/accounts/', payload, format='json').status_code, 403)
         self.assertEqual(self.client.delete(self.url).status_code, 403)
         for action in ['temporary-credential', 'transfer-school', 'deactivate', 'support-view']:
             self.assertEqual(self.client.post(f'{self.url}{action}/', payload, format='json').status_code, 403)
+
+    def provision(self, **overrides):
+        return self.client.post('/api/users/accounts/create-counselor/', {
+            'username': 'new-counselor', 'email': 'new-counselor@example.com',
+            'first_name': 'Dilnoza', 'last_name': 'Karimova',
+            'phone': '+998901234567', 'position': 'School counselor',
+            'password': 'StrongPass123!', **overrides,
+        }, format='json')
+
+    def test_school_can_create_own_counselor_with_temporary_login_and_audit(self):
+        # Even injected privilege fields cannot change the provisioned role/access.
+        response = self.provision(role='admin', is_staff=True, is_superuser=True, admin_tier='superadmin')
+        self.assertEqual(response.status_code, 201, response.data)
+        account = User.objects.get(pk=response.data['id'])
+        self.assertEqual((account.role, account.school_id), (User.Role.COUNSELOR, self.school.pk))
+        self.assertFalse(account.is_staff)
+        self.assertFalse(account.is_superuser)
+        self.assertEqual(account.admin_tier, '')
+        self.assertTrue(account.check_password('StrongPass123!'))
+        self.assertTrue(account.must_change_password)
+        self.assertTrue(account.temporary_credentials.filter(issued_by=self.org, status='issued').exists())
+        event = ProductAuditEvent.objects.get(action='counselor.created', actor=self.org)
+        self.assertEqual(event.school_id, self.school.pk)
+        self.assertNotIn('password', response.data)
+
+    def test_school_cannot_provision_in_another_school(self):
+        response = self.provision(school=self.other.pk)
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertFalse(User.objects.filter(username='new-counselor').exists())
+
+    def test_school_can_explicitly_provision_in_own_school(self):
+        response = self.provision(school=self.school.pk)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['school'], self.school.pk)
+
+    def test_school_provisioning_obeys_seat_limits(self):
+        use_plan(self.school, max_counselors=1)
+        response = self.provision()
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertFalse(User.objects.filter(username='new-counselor').exists())
+
+    def test_inactive_or_unlinked_school_account_cannot_provision(self):
+        self.school.is_active = False
+        self.school.save(update_fields=['is_active'])
+        self.org.refresh_from_db()
+        self.assertEqual(self.provision().status_code, 403)
+        self.org.school = None
+        self.org.save(update_fields=['school'])
+        self.assertEqual(self.provision(school=self.other.pk).status_code, 403)
+        self.assertFalse(User.objects.filter(username='new-counselor').exists())
+
+    def test_other_roles_cannot_provision_counselors(self):
+        for role in [User.Role.COUNSELOR, User.Role.STUDENT, User.Role.TEACHER, User.Role.PARENT]:
+            school = None if role == User.Role.PARENT else self.school
+            actor = make_user(f'provision-{role}', role, school)
+            self.client.force_authenticate(actor)
+            with self.subTest(role=role):
+                self.assertEqual(self.provision(school=self.school.pk).status_code, 403)
+        self.assertFalse(User.objects.filter(username='new-counselor').exists())
+
+    def test_product_admin_still_needs_to_select_school(self):
+        admin = make_user('provision-admin', User.Role.ADMIN, None)
+        self.client.force_authenticate(admin)
+        response = self.provision()
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('school', response.data)
+
+    def test_provisioning_audit_failure_rolls_back_new_account(self):
+        with patch('apps.users.serializers.audit_product_action', side_effect=RuntimeError('audit unavailable')):
+            with self.assertRaises(RuntimeError):
+                self.provision()
+        self.assertFalse(User.objects.filter(username='new-counselor').exists())
 
     def test_counselors_still_cannot_edit_each_other(self):
         self.client.force_authenticate(self.counselor)

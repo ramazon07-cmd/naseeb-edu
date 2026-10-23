@@ -6,7 +6,7 @@ import { t, tp, tx } from '../i18n';
 import { CxTag } from '../components/counselorUi';
 import { PageSkeleton } from '../components/states';
 import { invalidatePagedLists } from '../hooks/usePagedList';
-import { ESSAY_STATUS_TONE, accessLevel, blockId, isTextBlock, splitThreads, safeHref, textBetween } from '../lib/essayReview';
+import { ESSAY_STATUS_TONE, accessLevel, blockId, isTextBlock, orderedThreads, safeHref, textBetween } from '../lib/essayReview';
 import { dateTimeText, joinParts } from '../lib/format';
 import { label } from '../lib/labels';
 import './counselor-essay-review.css';
@@ -31,8 +31,7 @@ function wrapMarks(node, marks, ctx, key) {
       case 'highlight': return <mark key={k}>{inner}</mark>;
       case 'link': return safeHref(mark.attrs?.href) ? <a key={k} href={mark.attrs.href} target="_blank" rel="noopener noreferrer">{inner}</a> : inner;
       case 'comment': {
-        const thread = ctx.threads.get(id);
-        const classes = `cer-comment${thread?.status === 'resolved' ? ' is-resolved' : ''}${ctx.active === id ? ' is-active' : ''}`;
+        const classes = `cer-comment${ctx.active === id ? ' is-active' : ''}`;
         return <span key={k} className={classes} data-thread={id} onClick={() => ctx.onPick(id)}>{inner}</span>;
       }
       case 'suggestInsert': return <ins key={k} className="cer-ins">{inner}</ins>;
@@ -123,26 +122,23 @@ function Comment({ comment }) {
   return <div className="cer-comment-row"><b>{comment.by_me ? t('You') : comment.author_name}</b><time>{dateTimeText(comment.created_at)}</time><p>{comment.body}</p></div>;
 }
 
-function Thread({ thread, active, canComment, onPick, onReply, onResolve, busy }) {
+function Thread({ thread, active, canComment, onPick, onReply, busy }) {
   const [replying, setReplying] = useState(false);
   const [body, setBody] = useState('');
-  const resolved = thread.status === 'resolved';
   async function send(event) {
     event.preventDefault();
-    if (!body.trim()) return;
+    if (!canComment || busy || !body.trim()) return;
     if (await onReply(thread, body.trim())) { setBody(''); setReplying(false); }
   }
-  return <article className={`cer-thread${active ? ' is-active' : ''}${resolved ? ' is-resolved' : ''}`} data-thread-card={thread.id}>
+  return <article className={`cer-thread${active ? ' is-active' : ''}`} data-thread-card={thread.id}>
     <button type="button" className="cer-quote" onClick={() => onPick(thread.id)}>{thread.quote ? `“${thread.quote}”` : t('Comment')}</button>
     {thread.comments.map((comment) => <Comment key={comment.id} comment={comment} />)}
-    {resolved && <p className="cer-meta">{joinParts(t('Resolved'), thread.resolved_by_name)}</p>}
-    {canComment && <div className="cer-thread-actions">
-      {!resolved && !replying && <button type="button" className="cx-btn" onClick={() => setReplying(true)}>{t('Reply')}</button>}
-      <button type="button" className="cx-btn" disabled={busy} onClick={() => onResolve(thread, !resolved)}>{resolved ? t('Reopen') : t('Resolve')}</button>
+    {canComment && !replying && <div className="cer-thread-actions">
+      <button type="button" disabled={busy} className="cx-btn" onClick={() => setReplying(true)}>{t('Add comment')}</button>
     </div>}
-    {replying && <form className="cer-reply" onSubmit={send}>
-      <textarea value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} rows={2} aria-label={t('Reply')} autoFocus />
-      <div className="cer-thread-actions"><button type="button" className="cx-btn" onClick={() => { setReplying(false); setBody(''); }}>{t('Cancel')}</button><button className="cx-btn primary" disabled={busy || !body.trim()}>{t('Send')}</button></div>
+    {replying && canComment && <form className="cer-reply" onSubmit={send}>
+      <textarea value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} rows={2} aria-label={t('Add comment')} placeholder={t('Write your comment')} autoFocus />
+      <div className="cer-thread-actions"><button type="button" className="cx-btn" onClick={() => { setReplying(false); setBody(''); }}>{t('Cancel')}</button><button className="cx-btn primary" disabled={busy || !body.trim()}>{t('Add comment')}</button></div>
     </form>}
   </article>;
 }
@@ -161,14 +157,15 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
   const shown = useRef('');
   const tabRef = useRef(null);
   const level = accessLevel(review?.capabilities);
-  const canComment = level !== 'view';
-  const canSuggest = level === 'suggest';
+  const approved = (review?.status ?? record?.status) === 'approved';
+  const canComment = !approved && level !== 'view';
+  const canSuggest = !approved && level === 'suggest';
 
   // `silent` refreshes in the background: nothing changes on screen unless the essay did.
   const load = useCallback(async ({ tab = tabRef.current, silent = false } = {}) => {
     try {
       const [next, rec] = await Promise.all([api.reviewEssay(essayId, tab), silent ? null : api.retrieve('essays', essayId)]);
-      const signature = JSON.stringify([next.tab, next.threads, next.suggestions]);
+      const signature = JSON.stringify([next.tab, next.threads, next.suggestions, next.capabilities, next.status]);
       if (!silent || signature !== shown.current) { shown.current = signature; setReview(next); }
       tabRef.current = next.tab.id;
       if (rec) setRecord(rec);
@@ -180,13 +177,12 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
 
   useEffect(() => { tabRef.current = null; shown.current = ''; setPhase('loading'); load({ tab: null }); }, [essayId, load]);
 
-  // The student edits and replies while the counselor reads: pick their changes up, unless a note is being written.
-  const writing = Boolean(draft.trim() || note.trim());
+  // Keep permissions current even while a reply or review note is being written.
   useEffect(() => {
-    if (phase !== 'ready' || writing) return undefined;
+    if (phase !== 'ready') return undefined;
     const timer = setInterval(() => { if (document.visibilityState === 'visible') load({ silent: true }); }, POLL_MS);
     return () => clearInterval(timer);
-  }, [phase, writing, load]);
+  }, [phase, load]);
 
   // What the counselor selected in the text. A selection made elsewhere (the side panel) is ignored, so it stays while they type.
   useEffect(() => {
@@ -211,7 +207,7 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
   }, [review]);
 
   const threads = review?.threads || [];
-  const { open, resolved } = useMemo(() => splitThreads(threads), [threads]);
+  const comments = useMemo(() => orderedThreads(threads), [threads]);
 
   function pick(id) {
     setActive(id);
@@ -240,7 +236,7 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
 
   async function submitFeedback(event) {
     event.preventDefault();
-    if (!selection) return;
+    if (!canComment || busy || !selection) return;
     const { bid, start, end } = selection;
     const tab = review.tab.id;
     const done = await guarded(async () => {
@@ -257,7 +253,6 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
   }
 
   const reply = (thread, body) => guarded(async () => { await api.reviewEssayReply(essayId, thread.id, body); await load({ silent: true }); });
-  const resolveThread = (thread, value) => guarded(async () => { await api.reviewEssayResolve(essayId, thread.id, value); await load({ silent: true }); });
 
   async function decide(action) {
     const text = note.trim();
@@ -291,7 +286,6 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
     </div></div>;
   }
 
-  const approved = record?.status === 'approved';
   const tab = review.tab;
   const tabMeta = review.tabs.find((item) => item.id === tab.id);
   const words = tabMeta?.word_count ?? 0;
@@ -306,7 +300,7 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
         <p>{joinParts(review.student_name, record?.university_name || t('General essay'), record && tx`Version ${record.version}`, tp('{n} word|{n} words', words, { n: words }))}</p>
       </div>
       <div className="cer-head-tags">
-        {record && <CxTag tone={ESSAY_STATUS_TONE[record.status] || 'quiet'}>{label(record.status)}</CxTag>}
+        {record && <CxTag tone={ESSAY_STATUS_TONE[review.status ?? record.status] || 'quiet'}>{label(review.status ?? record.status)}</CxTag>}
         <span className={`cer-access is-${level}`}>{level === 'view' && <Lock size={13} aria-hidden="true" />}{t(ACCESS_TEXT[level])}</span>
       </div>
     </header>
@@ -318,7 +312,7 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
     <div className="cer-layout">
       <article className="cer-paper" aria-label={t('Essay text')}><DocView doc={tab.doc} threads={threads} active={active} onPick={pick} rootRef={docRef} /></article>
       <aside className="cer-side" aria-label={t('Feedback')}>
-        <section className="cer-card">
+        {!approved && <section className="cer-card">
           <h2>{t('Your feedback')}</h2>
           {!canComment && <p className="cer-hint"><Lock size={14} aria-hidden="true" /> {t('The student has not allowed comments on this essay.')}</p>}
           {canComment && !hasSelection && <p className="cer-hint"><MessageSquare size={14} aria-hidden="true" /> {t('Select words in the essay to comment or suggest a change.')}</p>}
@@ -336,16 +330,12 @@ export function CounselorEssayReview({ essayId, notify, reload, onBack }) {
               <button className="cx-btn primary" disabled={busy || (mode === 'comment' ? !canSubmit : !(range || draft))} aria-busy={busy}>{mode === 'suggest' ? t('Suggest') : t('Comment')}</button>
             </div>
           </form>}
-        </section>
+        </section>}
 
         <section className="cer-card">
-          <h2>{tp('{n} comment|{n} comments', open.length, { n: open.length })}</h2>
-          {!open.length && <p className="cer-hint">{t('No open comments.')}</p>}
-          {open.map((thread) => <Thread key={thread.id} thread={thread} active={active === thread.id} canComment={canComment} onPick={pick} onReply={reply} onResolve={resolveThread} busy={busy} />)}
-          {resolved.length > 0 && <details className="cer-resolved">
-            <summary>{tp('{n} resolved|{n} resolved', resolved.length, { n: resolved.length })}</summary>
-            {resolved.map((thread) => <Thread key={thread.id} thread={thread} active={active === thread.id} canComment={canComment} onPick={pick} onReply={reply} onResolve={resolveThread} busy={busy} />)}
-          </details>}
+          <h2>{tp('{n} comment|{n} comments', comments.length, { n: comments.length })}</h2>
+          {!comments.length && <p className="cer-hint">{t('No comments yet.')}</p>}
+          {comments.map((thread) => <Thread key={thread.id} thread={thread} active={active === thread.id} canComment={canComment} onPick={pick} onReply={reply} busy={busy} />)}
         </section>
 
         {review.suggestions.length > 0 && <section className="cer-card">

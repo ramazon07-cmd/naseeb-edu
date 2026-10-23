@@ -16,7 +16,6 @@ COLLEGE_RESEARCH_QUESTIONS = {
     'ielts_score': {'label': 'IELTS score', 'type': 'number', 'placeholder': 'Example: 7.0', 'step': '0.5', 'min': 0, 'max': 9},
     'target_major': {'label': 'Target major', 'type': 'text', 'placeholder': 'Example: Computer Science'},
     'target_countries': {'label': 'Target countries', 'type': 'text', 'placeholder': 'Example: USA, Canada, Singapore'},
-    'budget_usd': {'label': 'Annual budget (USD)', 'type': 'number', 'placeholder': 'Example: 20000', 'min': 0, 'max': 500000},
 }
 
 
@@ -39,11 +38,10 @@ def build_college_research(profile):
             'ielts_score': profile.ielts_score,
             'target_major': profile.target_major,
             'target_countries': profile.target_countries,
-            'budget_usd': profile.budget_usd,
             'scholarship_needed': profile.scholarship_needed,
             'evidence': evidence,
         },
-        'methodology': 'Academic fit, preferences, affordability, aid and verified profile evidence.',
+        'methodology': 'Academic fit, preferences, aid and verified profile evidence.',
         'generated_at': timezone.now(),
     }
 

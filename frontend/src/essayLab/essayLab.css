@@ -544,6 +544,60 @@
   gap: 18px;
 }
 
+.el-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.el-submission-success {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.el-submission-success p {
+  margin: 0;
+  color: var(--el-muted);
+  line-height: 1.6;
+}
+
+.el-task-submissions {
+  flex-shrink: 0;
+  max-height: 24vh;
+  overflow: auto;
+  border-bottom: 1px solid var(--el-line-soft);
+  background: var(--el-soft);
+}
+
+.el-task-submission {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 22px;
+}
+
+.el-task-submission-copy {
+  display: grid;
+  flex: 1;
+  min-width: min(220px, 100%);
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.el-task-submission-copy span {
+  color: var(--el-muted);
+  font-size: var(--text-sm);
+}
+
+.el-submission-error {
+  padding: 0 22px;
+}
+
 .el-dialog .el-form > .el-label + .el-input {
   margin-top: -10px;
 }
@@ -2225,7 +2279,8 @@
 .el-editor-shell.is-focus .el-prompt,
 .el-editor-shell.is-focus .el-welcome,
 .el-editor-shell.is-focus .el-side-panel,
-.el-editor-shell.is-focus .el-banner {
+.el-editor-shell.is-focus .el-banner,
+.el-editor-shell.is-focus .el-task-submissions {
   display: none;
 }
 
@@ -4274,14 +4329,15 @@ span.el-tab-caret {
 }
 
 .el-fb-card {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 12px;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 10px;
   border: 1px solid var(--el-line);
   background: var(--el-surface);
-  border-left: 4px solid rgba(202, 138, 4, 0.7);
+  border-left: 3px solid var(--el-line-strong);
 }
 
 .el-fb-card.is-suggestion {
@@ -4289,21 +4345,18 @@ span.el-tab-caret {
 }
 
 .el-fb-card.is-active {
-  border-color: var(--el-focus);
-  box-shadow: var(--el-shadow);
-}
-
-.el-fb-card.is-resolved {
-  opacity: 0.8;
-  border-left-color: var(--el-line-strong);
+  border-color: var(--el-line-strong);
+  border-left-color: var(--el-focus);
+  box-shadow: none;
 }
 
 .el-fb-select {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 10px;
   width: 100%;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: none;
@@ -4314,12 +4367,28 @@ span.el-tab-caret {
 }
 
 .el-fb-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  width: 100%;
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: var(--text-xs);
   color: var(--el-muted);
 }
 
 .el-fb-meta strong {
+  min-width: 0;
   color: var(--el-ink);
+  font-weight: 600;
+}
+
+.el-fb-meta time {
+  flex-shrink: 0;
+  font-size: 0.75rem;
 }
 
 .el-fb-kind {
@@ -4342,9 +4411,13 @@ span.el-tab-caret {
 
 .el-fb-quote {
   font-family: var(--el-page-font);
+  display: block;
+  max-width: 100%;
   font-size: 0.875rem;
-  padding-left: 8px;
-  border-left: 2px solid rgba(202, 138, 4, 0.55);
+  line-height: 1.5;
+  padding: 6px 10px;
+  border-left: 2px solid var(--el-line-strong);
+  background: var(--el-soft);
   color: var(--el-muted);
   overflow-wrap: anywhere;
 }
@@ -4360,6 +4433,7 @@ span.el-tab-caret {
 }
 
 .el-fb-replies {
+  min-width: 0;
   list-style: none;
   margin: 0;
   padding: 0 0 0 12px;
@@ -4370,9 +4444,22 @@ span.el-tab-caret {
 }
 
 .el-fb-actions {
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.el-fb-actions .el-fb-btn {
+  flex: 1 1 100px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  justify-content: center;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .el-fb-reply {
@@ -4389,10 +4476,6 @@ span.el-tab-caret {
 .el-fb-all {
   align-self: stretch;
   justify-content: center;
-}
-
-.el-fb-toggle {
-  align-self: flex-start;
 }
 
 .el-comments-pill {

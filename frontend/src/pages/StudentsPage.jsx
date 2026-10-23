@@ -1,3 +1,5 @@
+import { CounselorStudentTable } from '../components/CounselorStudentTable';
+import { studentReasons } from '../lib/studentReasons';
 import { useState, useEffect, useRef } from 'react';
 import { Panel, Empty, Modal, Badge } from '../components/ui';
 import { RecordRow } from './ResourceSection';
@@ -11,7 +13,7 @@ import { label, fullName, initials } from '../lib/labels';
 import { Eye, ExternalLink, Fingerprint, UsersRound, ShieldCheck, Search, Plus, LifeBuoy } from 'lucide-react';
 import { api } from '../api';
 import { Field, CheckboxControl } from '../components/forms';
-import { TemporaryCredentialModal } from '../components/TemporaryCredentialModal';
+import { StudentLoginCard, TemporaryCredentialModal } from '../components/TemporaryCredentialModal';
 import { SupportViewModal } from '../components/SupportViewModal';
 import { TestScoreSummary } from '../components/testScores';
 import { PageSkeleton } from '../components/states';
@@ -339,46 +341,54 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
   const canApproveLevels = isTaskManager(user) && (!isPlatformAdmin(user) || isSuperAdmin(user));
   const actions = user.role !== 'teacher' && !staffReadOnly && <div className="panel-actions">{isCounselor(user) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {isPlatformAdmin(user) ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
   return <>
-    <Panel title={t("Students")} action={actions} className={isPlatformAdmin(user) ? 'admin-students-panel' : ''}>
+    <Panel title={t("Students")} action={actions} className={isPlatformAdmin(user) ? 'admin-students-panel' : user.role === 'organization' ? 'school-students-panel' : ''}>
       {staffReadOnly && <p className="form-note staff-tier-note"><ShieldCheck size={16} /> {t("Only operations staff and super admins can add, assign, edit or deactivate students. You can view profiles and reset logins.")}</p>}
       <div className="paged-list-filters">
         {isPlatformAdmin(user) && <SchoolPicker label="School" value={school} onChange={setSchool} emptyOption={t("All schools")} />}
         <label><span>{t("Grade")}</span><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">{t("All grades")}</option>{['8', '9', '10', '11', 'gap'].map((value) => <option key={value} value={value}>{value === 'gap' ? t("Gap year") : value}</option>)}</select></label>
         {isPlatformAdmin(user) && <label><span>{t("Counselor")}</span><select value={unassigned} onChange={(event) => setUnassigned(event.target.value)}><option value="">{t("Any counselor")}</option><option value="true">{t("No counselor assigned")}</option></select></label>}
       </div>
-      {students.loading && !students.items.length ? <PageSkeleton /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
+      {students.loading && !students.items.length ? <PageSkeleton /> : user.role === 'organization' ? <CounselorStudentTable rows={students.items.map((student) => ({ student, name: fullName(student.user_detail), reasons: studentReasons(student) }))} onPreview={openStudent} onEdit={(student) => {setEditing(student);setOpen(true);}} /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
       <PagedListError list={students} />
       <LoadMore list={students} />
     </Panel>
-    {open && <StudentForm user={user} data={data} student={editing} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
+    {open && <StudentForm user={user} data={data} student={editing} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} onCreated={reload} notify={notify} />}
     {assignmentOpen && <StudentAssignmentModal user={user} data={data} onClose={() => setAssignmentOpen(false)} onSaved={() => {setAssignmentOpen(false);reload();}} notify={notify} />}
   </>;
 }
 
-// Quick-create: a student account with a temporary password the counselor sets
-// (the student changes it at first sign-in). `onSaved(created, values)`.
-export function QuickCreateStudentForm({ user, data, onCancel, onSaved, notify }) {
+// Quick-create: staff make the student's account and hand over the login card
+// (the student sets their own password at first sign-in). With no password typed
+// the server generates one. `onCreated(profile)` refreshes lists; the card stays open.
+export function QuickCreateStudentForm({ user, data, onCancel, onCreated, notify }) {
   const [saving, setSaving] = useState(false);
+  const [created, setCreated] = useState(null);
   async function submit(event) {
     event.preventDefault(); setSaving(true);
     const values = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      const created = await api.quickCreateStudent(values);
-      onSaved(created, values);
+      const profile = await api.quickCreateStudent(values);
+      setCreated({
+        name: values.name, username: profile?.user_detail?.username,
+        password: profile?.temporary_password || values.password, expiresAt: profile?.user_detail?.credential_expires_at,
+      });
+      onCreated?.(profile);
     } catch (error) { notify(error.message, 'error'); }
     finally { setSaving(false); }
   }
+  if (created) return <StudentLoginCard {...created} notify={notify} onAnother={() => setCreated(null)} onDone={onCancel} />;
   return <form className="form-grid student-access-form" onSubmit={submit}>
-    <Field label={t('Student name')}><input name="name" placeholder={t('e.g. Aziza Karimova')} required autoComplete="off" /></Field>
-    <Field label={t('Email')}><input name="email" type="email" placeholder={t('e.g. name@example.com')} /></Field>
-    <Field label={t('Temporary password')} hint={t('Use at least 8 characters.')}><input name="password" type="password" minLength={8} required autoComplete="new-password" /></Field>
+    <Field label={t('Student name')}><input name="name" placeholder={t('e.g. Aziza Karimova')} required autoComplete="off" maxLength={150} /></Field>
+    <Field label={t('Email (optional)')}><input name="email" type="email" placeholder={t('e.g. name@example.com')} autoComplete="off" /></Field>
+    <Field label={t('Phone (optional)')}><input name="phone" type="tel" autoComplete="off" maxLength={32} /></Field>
+    <Field label={t('Password (optional)')} hint={t('Leave it empty and a password is made for you.')}><input name="password" type="password" minLength={8} autoComplete="new-password" /></Field>
     {isPlatformAdmin(user) && <SchoolPicker label="School" required filters={ACTIVE_SCHOOLS} />}
     <p className="form-wide">{t('The student completes their profile after signing in.')}</p>
-    <div className="form-actions">{onCancel && <button type="button" className="button quiet" onClick={onCancel}>{t('Cancel')}</button>}<button className="button primary" disabled={saving}>{saving ? t('Saving…') : t('Create login')}</button></div>
+    <div className="form-actions">{onCancel && <button type="button" className="button quiet" onClick={onCancel}>{t('Cancel')}</button>}<button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t('Saving…') : t('Create login')}</button></div>
   </form>;
 }
 
-export function StudentForm({ user, data, student, onClose, onSaved, notify }) {
+export function StudentForm({ user, data, student, onClose, onSaved, onCreated, notify }) {
   const [saving, setSaving] = useState(false);
   async function submit(event) {
     event.preventDefault(); setSaving(true);
@@ -393,6 +403,6 @@ export function StudentForm({ user, data, student, onClose, onSaved, notify }) {
     {student ? <form className="form-grid student-access-form" onSubmit={submit}>
       <Field label={t('Notes')}><textarea name="notes" defaultValue={student.notes} placeholder={t('e.g. Prefers evening calls; interested in UK and Korean universities')} /></Field>
       <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t('Cancel')}</button><button className="button primary" disabled={saving}>{saving ? t('Saving…') : t('Save')}</button></div>
-    </form> : <QuickCreateStudentForm user={user} data={data} onCancel={onClose} onSaved={() => onSaved()} notify={notify} />}
+    </form> : <QuickCreateStudentForm user={user} data={data} onCancel={onClose} onCreated={onCreated} notify={notify} />}
   </Modal>;
 }

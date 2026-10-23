@@ -14,6 +14,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import serializers as drf_serializers
+from apps.users.credentials import generate_temporary_password
 from apps.users.models import User
 from apps.users.serializers import UserSerializer
 from apps.users.images import serve_private_image
@@ -72,6 +73,8 @@ ASSIGNMENT_CANDIDATE_LIMIT = 200
 QUIET_DAYS = 14
 STUDENT_STATUSES = ('need_you', 'late', 'missing_documents', 'quiet', 'on_track')
 MAX_COUNTRY_LENGTH = 80
+# A generated first password the student types from the counselor's message.
+STUDENT_PASSWORD_LENGTH = 10
 
 
 def _country_list():
@@ -726,12 +729,15 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         # different response: create_student_account() attaches a
         # placeholder instead, and the response never echoes the email.
         password = str(request.data.get('password') or '')
-        if not password:
-            return Response({'password': ['Set a strong initial password for this student.']}, status=400)
-        try:
-            validate_password(password)
-        except DjangoValidationError as exc:
-            return Response({'password': list(exc.messages)}, status=400)
+        # Left empty: the server makes the one-time password; the response shows it once.
+        generated = not password
+        if generated:
+            password = generate_temporary_password(STUDENT_PASSWORD_LENGTH)
+        else:
+            try:
+                validate_password(password)
+            except DjangoValidationError as exc:
+                return Response({'password': list(exc.messages)}, status=400)
 
         target_countries = str(
             request.data.get('countries') or request.data.get('target_countries') or ''
@@ -770,8 +776,14 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
             )
         except entitlements.EntitlementError as exc:
             return Response(exc.response_data(), status=400)
+        except DjangoValidationError as exc:
+            # Checked again against the new account (e.g. too similar to the name); nothing was saved.
+            return Response({'password': list(exc.messages)}, status=400)
 
         data = StudentProfileSerializer(student, context={'request': request}).data
         if isinstance(data.get('user_detail'), dict):
             data['user_detail'].pop('email', None)
+        if generated:
+            # Only its hash is stored: the counselor hands it to the student now.
+            data['temporary_password'] = password
         return Response(data, status=201)

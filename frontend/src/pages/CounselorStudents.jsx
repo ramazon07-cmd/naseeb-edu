@@ -1,8 +1,9 @@
+import { CounselorStudentTable as StudentTable, StatusTag, LateWork, targetText } from '../components/CounselorStudentTable';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
-import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag, ReasonTags } from '../components/counselorUi';
+import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag } from '../components/counselorUi';
 import { Field, SegmentedField } from '../components/forms';
 import { Modal } from '../components/ui';
 import { DocumentPreviewModal, TaskSubmissionModal } from '../components/documents';
@@ -24,7 +25,7 @@ import { meetingBadgeStatus, meetingStatus, upcomingMeetings } from '../lib/meet
 import { mergeReviewQueue } from '../lib/reviewQueue';
 import { documentStatus, hasSubmission } from '../lib/reviewSubmission';
 import { failedPage, pageAfterLoad, pageCount } from '../lib/studentListPage';
-import { isQuiet, needsAttention, studentReasons } from '../lib/studentReasons';
+import { studentReasons } from '../lib/studentReasons';
 import { BookingForm, MeetingNoteForm } from './BookingsPage';
 import { ReviewWorkspace } from './ReviewPage';
 import './counselor-students.css';
@@ -142,47 +143,6 @@ function useStudentPage(state, version) {
   return { ...page, summary, stale: page.key !== pageKey };
 }
 
-function StatusTag({ reasons }) {
-  if (needsAttention(reasons)) return <CxTag tone="late">{t("Needs you")}</CxTag>;
-  if (reasons.some((reason) => reason.key === 'to_review')) return <CxTag tone="warn">{t("To review")}</CxTag>;
-  if (isQuiet(reasons)) return <CxTag tone="quiet">{t("Quiet")}</CxTag>;
-  return <CxTag tone="ok">{t("On track")}</CxTag>;
-}
-
-function LateWork({ reasons }) {
-  const late = reasons.filter((reason) => reason.key === 'late_task' || reason.key === 'missing_document');
-  return late.length ? <ReasonTags reasons={late} /> : <span className="cx-faint">{t("No late work")}</span>;
-}
-
-const targetText = (student) => splitList(student.target_countries).map((country) => t(country)).join(', ') || student.target_major || '';
-
-function StudentTable({ rows, selecting, selected, toggle, onPreview }) {
-  return <div className="cx-card cs-table-card">
-    <table className="cs-table">
-      <thead><tr>
-        {selecting && <th scope="col" className="cs-check-col"><span className="sr-only">{t("Select")}</span></th>}
-        <th scope="col">{t("Student")}</th><th scope="col">{t("Late work")}</th><th scope="col">{t("Target")}</th><th scope="col">{t("Status")}</th>
-      </tr></thead>
-      <tbody>
-        {rows.map(({ student, reasons, name }) => <tr key={student.id} className={selecting && selected.has(student.id) ? 'selected' : ''} onClick={() => (selecting ? toggle(student.id) : onPreview(student))}>
-          {selecting && <td className="cs-check-col"><input type="checkbox" checked={selected.has(student.id)} onChange={() => toggle(student.id)} onClick={(event) => event.stopPropagation()} aria-label={tx`Select ${name}`} /></td>}
-          <td>
-            <div className="cx-person">
-              <CxAvatar name={name} />
-              <span className="cx-row-copy">
-                <button type="button" className="cx-name-link" onClick={(event) => { event.stopPropagation(); if (selecting) toggle(student.id); else onPreview(student); }}>{name}</button>
-                <small>{gradeText(student.grade)}</small>
-              </span>
-            </div>
-          </td>
-          <td data-label={t("Late work")}><LateWork reasons={reasons} /></td>
-          <td data-label={t("Target")}>{targetText(student) || <span className="cx-faint">—</span>}</td>
-          <td data-label={t("Status")}><StatusTag reasons={reasons} /></td>
-        </tr>)}
-      </tbody>
-    </table>
-  </div>;
-}
 
 function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
   return <div className="cs-cards">

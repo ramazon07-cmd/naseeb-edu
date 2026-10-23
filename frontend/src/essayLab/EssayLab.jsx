@@ -14,7 +14,7 @@ const EditorScreen = lazyWithRetry(loadEditor)
 // The open essay is part of the URL (/essay-lab/essays/42): it survives a
 // reload, a reopened tab and back/forward. Someone else's essay id gets the
 // editor's normal 404, since the API only returns the signed-in student's.
-export default function EssayLab({ user, notify = () => {}, essayId = null, onEssay = () => {} }) {
+export default function EssayLab({ user, notify = () => {}, essayId = null, onEssay = () => {}, onTaskSubmitted }) {
   // Options that only apply right after opening (panel, focus, a new essay).
   const [openOptions, setOpenOptions] = useState(null)
   const view = essayId ? { name: 'editor', id: essayId, ...(openOptions?.id === essayId ? openOptions : {}) } : { name: 'library' }
@@ -77,7 +77,7 @@ export default function EssayLab({ user, notify = () => {}, essayId = null, onEs
     {view.name === 'editor'
       ? <Suspense fallback={<div className="el-editor-loading" role="status">{t('Opening your essay…')}</div>}>
         <EditorScreen key={view.id} essayId={view.id} user={user} folders={folders} notify={notify}
-          initialPanel={view.panel} initialFocus={view.focus} fresh={view.fresh}
+          initialPanel={view.panel} initialFocus={view.focus} fresh={view.fresh} onTaskSubmitted={onTaskSubmitted}
           onClose={closeEditor} onFoldersChanged={setFolders} />
       </Suspense>
       : <Library user={user} essays={essays} folders={folders} loading={status.loading} error={status.error}

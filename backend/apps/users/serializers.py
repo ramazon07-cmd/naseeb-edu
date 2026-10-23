@@ -241,8 +241,21 @@ class CounselorProvisionSerializer(serializers.Serializer):
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
     position = serializers.CharField(max_length=120, required=False, allow_blank=True)
-    school = serializers.IntegerField(min_value=1)
+    school = serializers.IntegerField(min_value=1, required=False)
     password = serializers.CharField(write_only=True, validators=[validate_password])
+
+    def validate(self, attrs):
+        actor = self.context['request'].user
+        if actor.role == User.Role.ORGANIZATION and not actor.is_product_admin:
+            if not actor.school_id:
+                raise serializers.ValidationError({'school': 'Your account is not connected to a school.'})
+            if attrs.get('school', actor.school_id) != actor.school_id:
+                raise serializers.ValidationError({'school': 'You can only add counselors to your own school.'})
+            # School accounts never choose the workspace receiving a new counselor.
+            attrs['school'] = actor.school_id
+        elif 'school' not in attrs:
+            raise serializers.ValidationError({'school': 'This field is required.'})
+        return attrs
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():

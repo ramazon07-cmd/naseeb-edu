@@ -1,6 +1,7 @@
 """Who may do what with one essay: `resolve_access(user, essay)`.
 
-The owner student can do everything. Anyone else needs the essay shared
+The owner student can edit their text. Approved essays keep feedback read-only
+for everyone. Anyone else needs the essay shared
 (and not in the trash): the student's assigned counselor, in the student's
 own active school, gets what `Essay.counselor_access` allows; a platform
 admin may only read (their reads are audited). Everyone else — other
@@ -19,6 +20,7 @@ DECIDE = 'decide'
 
 NONE = frozenset()
 OWNER = frozenset({VIEW, COMMENT, SUGGEST, EDIT, DECIDE})
+APPROVED_OWNER = frozenset({VIEW, EDIT})
 READ_ONLY = frozenset({VIEW})
 BY_COUNSELOR_ACCESS = {
     'comment': frozenset({VIEW, COMMENT}),
@@ -33,7 +35,9 @@ def resolve_access(user, essay):
         return NONE
     student = essay.student
     if user.role == User.Role.STUDENT and not user.is_product_admin:
-        return OWNER if student.user_id == user.id else NONE
+        if student.user_id != user.id:
+            return NONE
+        return APPROVED_OWNER if essay.status == 'approved' else OWNER
     if not essay.shared_with_counselor or essay.trashed_at is not None:
         return NONE
     if user.is_product_admin:
@@ -49,4 +53,6 @@ def resolve_access(user, essay):
         and student.deactivated_at is None
     ):
         return NONE
+    if essay.status == 'approved':
+        return READ_ONLY
     return BY_COUNSELOR_ACCESS.get(essay.counselor_access, BY_COUNSELOR_ACCESS['comment'])

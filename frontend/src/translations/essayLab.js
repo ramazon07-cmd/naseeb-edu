@@ -419,7 +419,7 @@ export const ESSAY_LAB_TRANSLATIONS = {
   'The highlighted words were changed or removed.': ['Belgilangan so‘zlar o‘zgartirilgan yoki o‘chirilgan.', 'Выделенные слова были изменены или удалены.'],
   'Write a reply…': ['Javob yozing…', 'Напишите ответ…'],
   Reopen: ['Qayta ochish', 'Открыть снова'],
-  Resolve: ['Hal qilindi', 'Решено'],
+  Resolve: ['Hal qilish', 'Отметить решённым'],
   'Accept all {n} suggestions': ['Barcha {n} ta taklifni qabul qilish', 'Принять {n} предложение|Принять все {n} предложения|Принять все {n} предложений'],
   'No open comments. When your counselor comments on this essay or suggests an edit, it shows up here.': ['Ochiq izohlar yo‘q. Maslahatchingiz bu inshoga izoh qoldirsa yoki tahrir taklif qilsa, u shu yerda ko‘rinadi.', 'Открытых комментариев нет. Когда консультант прокомментирует эссе или предложит правку, это появится здесь.'],
   'Hide resolved': ['Hal qilinganlarni yashirish', 'Скрыть решённые'],

@@ -153,6 +153,16 @@ class StudentProfile(TimeStampedModel):
     ielts_speaking = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     ielts_test_date = models.DateField(null=True, blank=True)
     ielts_attempts = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Null means an older profile has not specified the result's origin yet.
+    ielts_result_type = models.CharField(max_length=20, choices=[
+        ('first_attempt', 'First full test'), ('full_retake', 'Full test retake'),
+        ('one_skill_retake', 'One Skill Retake'),
+    ], null=True, blank=True)
+    ielts_retake_skill = models.CharField(max_length=12, choices=[
+        ('listening', 'Listening'), ('reading', 'Reading'),
+        ('writing', 'Writing'), ('speaking', 'Speaking'),
+    ], null=True, blank=True)
+    ielts_retake_date = models.DateField(null=True, blank=True)
     sat_status = models.CharField(max_length=20, choices=TestStatus.choices, default=TestStatus.NOT_TAKEN)
     # The total the student sends: the superscore when sat_superscore is true.
     sat_score = models.PositiveIntegerField(null=True, blank=True)
@@ -707,6 +717,10 @@ class Task(TimeStampedModel):
     due_date = models.DateField()
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.TODO)
+    submission_essay = models.ForeignKey(
+        'Essay', on_delete=models.SET_NULL, null=True, blank=True, related_name='submitted_tasks',
+        help_text='An Essay Lab essay submitted by the task owner for counselor feedback.',
+    )
     student_response = models.TextField(blank=True)
     submission_url = models.URLField(blank=True)
     submission_file = models.FileField(

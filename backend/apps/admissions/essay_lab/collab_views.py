@@ -108,8 +108,8 @@ def feedback_for_tab(tab_id, viewer_id):
     }
 
 
-def make_etag(save_seq, collab_seq, active):
-    return f'"{save_seq}.{collab_seq}.{int(active)}"'
+def make_etag(save_seq, collab_seq, active, essay_status):
+    return f'"{save_seq}.{collab_seq}.{int(active)}.{essay_status}"'
 
 
 def etag_matches(request, etag):
@@ -119,12 +119,13 @@ def etag_matches(request, etag):
 
 def changes_response(request, essay_id, tab_id, since, row, *, active):
     """304 when nothing changed since the client's ETag; otherwise the tab's feedback (and doc when newer)."""
-    etag = make_etag(row['save_seq'], row['collab_seq'], active)
+    etag = make_etag(row['save_seq'], row['collab_seq'], active, row['essay_status'])
     headers = {'ETag': etag, 'Cache-Control': 'private, no-cache'}
     if etag_matches(request, etag):
         return Response(status=status.HTTP_304_NOT_MODIFIED, headers=headers)
     data = {
         'tab': tab_id, 'save_seq': row['save_seq'], 'collab_seq': row['collab_seq'], 'others_active': active,
+        'essay_status': row['essay_status'],
         **feedback_for_tab(tab_id, request.user.pk),
     }
     if since != row['save_seq']:
@@ -193,27 +194,20 @@ def _thread_for(essay_id, thread_id, *, lock=False):
     return thread
 
 
+def require_open_feedback(essay):
+    if essay.status == Essay.Status.APPROVED:
+        raise exceptions.PermissionDenied('This essay is approved. Feedback is read-only.')
+
+
 def add_reply(essay, thread_id, user, body):
     with transaction.atomic():
+        essay = Essay.objects.select_for_update().get(pk=essay.pk)
+        require_open_feedback(essay)
         thread = _thread_for(essay.pk, thread_id, lock=True)
         comment = EssayComment.objects.create(thread=thread, author=user, body=body)
         EssayCommentThread.objects.filter(pk=thread.pk).update(updated_at=timezone.now())
         bump_collab(essay.pk)
     return thread, comment
-
-
-def set_thread_status(essay, thread_id, user, resolved):
-    with transaction.atomic():
-        thread = _thread_for(essay.pk, thread_id, lock=True)
-        wanted = EssayCommentThread.Status.RESOLVED if resolved else EssayCommentThread.Status.OPEN
-        changed = thread.status != wanted
-        if changed:
-            thread.status = wanted
-            thread.resolved_by = user if resolved else None
-            thread.resolved_at = timezone.now() if resolved else None
-            thread.save(update_fields=['status', 'resolved_by', 'resolved_at', 'updated_at'])
-            bump_collab(essay.pk)
-    return thread, changed
 
 
 def thread_response(thread, viewer_id, status_code=status.HTTP_200_OK):
@@ -239,7 +233,8 @@ class StudentCollabMixin:
         # One query answers a 304: the tab, its essay's counters and the owner check.
         row = (
             EssayTab.objects.filter(pk=tab_id, essay_id=pk, essay__student__user=request.user)
-            .values('save_seq', collab_seq=F('essay__collab_seq'), seen=F('essay__staff_seen_at')).first()
+            .values('save_seq', collab_seq=F('essay__collab_seq'), seen=F('essay__staff_seen_at'),
+                    essay_status=F('essay__status')).first()
         )
         if row is None:
             raise exceptions.NotFound('Tab not found.')
@@ -256,21 +251,6 @@ class StudentCollabMixin:
                               f'{person_name(request.user)} replied to your comment on an essay.')
         return thread_response(thread, request.user.pk, status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['post'], url_path=r'threads/(?P<tid>[0-9]+)/resolve')
-    def thread_resolve(self, request, pk=None, tid=None):
-        essay = self.get_essay(pk, defer=('content',))
-        thread, changed = set_thread_status(essay, int(tid), request.user, True)
-        if changed:
-            self._tell_counselors(essay, [thread.author_id], 'Comment resolved',
-                                  f'{person_name(request.user)} resolved your comment on an essay.')
-        return thread_response(thread, request.user.pk)
-
-    @action(detail=True, methods=['post'], url_path=r'threads/(?P<tid>[0-9]+)/reopen')
-    def thread_reopen(self, request, pk=None, tid=None):
-        essay = self.get_essay(pk, defer=('content',))
-        thread, _changed = set_thread_status(essay, int(tid), request.user, False)
-        return thread_response(thread, request.user.pk)
-
     @action(detail=True, methods=['post'], url_path='suggestions/decide')
     def suggestions_decide(self, request, pk=None):
         """Accept or reject suggestions: all of them are applied to the doc in one transaction, or none."""
@@ -279,6 +259,7 @@ class StudentCollabMixin:
         decisions = {item['id']: item['accept'] for item in serializer.validated_data['decisions']}
         with transaction.atomic():
             essay = self.get_essay(pk, lock=True, defer=('content',))
+            require_open_feedback(essay)
             tab = self.resolve_tab(essay, serializer.validated_data['tab'], lock=True)
             suggestions = list(
                 EssaySuggestion.objects.select_for_update().filter(pk__in=decisions, essay_id=essay.pk, tab_id=tab.pk)
@@ -349,6 +330,8 @@ class ReviewEssayViewSet(viewsets.GenericViewSet):
         if access.VIEW not in caps or self.request.user.role == User.Role.STUDENT:
             # Missing, private, not theirs: all look the same.
             raise exceptions.NotFound('Essay not found.')
+        if need != access.VIEW:
+            require_open_feedback(essay)
         if need not in caps:
             raise exceptions.PermissionDenied('Your access to this essay does not allow that.')
         # Any staff request means someone is in the essay: the student's editor polls faster.
@@ -382,7 +365,7 @@ class ReviewEssayViewSet(viewsets.GenericViewSet):
                                  metadata={'essay': essay.pk})
         return Response({
             'id': essay.pk, 'title': essay.title, 'prompt': essay.prompt, 'essay_type': essay.essay_type,
-            'counselor_access': essay.counselor_access, 'capabilities': sorted(caps),
+            'counselor_access': essay.counselor_access, 'capabilities': sorted(caps), 'status': essay.status,
             'student_name': person_name(essay.student.user),
             'tabs': TabMetaSerializer(metas, many=True).data,
             'tab': {'id': tab.pk, 'title': tab.title, 'save_seq': tab.save_seq, 'doc': ensure_bids(tab_doc(tab))},
@@ -396,7 +379,7 @@ class ReviewEssayViewSet(viewsets.GenericViewSet):
         essay, _caps = self.essay_with_access(pk, access.VIEW)
         tab = self.tab_of(essay, query.validated_data['tab'])
         # The student counts as present while their saves keep arriving.
-        row = {'save_seq': tab.save_seq, 'collab_seq': essay.collab_seq}
+        row = {'save_seq': tab.save_seq, 'collab_seq': essay.collab_seq, 'essay_status': essay.status}
         return changes_response(request, essay.pk, tab.pk, query.validated_data.get('since'), row,
                                 active=others_active(tab.last_edited_at))
 
@@ -439,18 +422,6 @@ class ReviewEssayViewSet(viewsets.GenericViewSet):
         notify(essay, title='New feedback on your essay',
                message=f'{person_name(request.user)} replied to a comment on your essay.')
         return thread_response(thread, request.user.pk, status.HTTP_201_CREATED)
-
-    @action(detail=True, methods=['post'], url_path=r'threads/(?P<tid>[0-9]+)/resolve')
-    def thread_resolve(self, request, pk=None, tid=None):
-        essay, _caps = self.essay_with_access(pk, access.COMMENT)
-        thread, _changed = set_thread_status(essay, int(tid), request.user, True)
-        return thread_response(thread, request.user.pk)
-
-    @action(detail=True, methods=['post'], url_path=r'threads/(?P<tid>[0-9]+)/reopen')
-    def thread_reopen(self, request, pk=None, tid=None):
-        essay, _caps = self.essay_with_access(pk, access.COMMENT)
-        thread, _changed = set_thread_status(essay, int(tid), request.user, False)
-        return thread_response(thread, request.user.pk)
 
     @action(detail=True, methods=['post'])
     def suggestions(self, request, pk=None):

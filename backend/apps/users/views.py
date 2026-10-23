@@ -336,8 +336,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         data['workspace'] = entitlements.workspace_summary(subscription)
         # Same rules as the chat view, so the frontend only offers what will work.
         data['assistant_enabled'] = entitlements.assistant_available(request.user, subscription)
-        from apps.admissions.invites import pending_join_info
+        from apps.admissions.invites import pending_join_info, self_join_enabled
 
+        # Off: "Add student" offers only the account the counselor creates.
+        data['student_self_join'] = self_join_enabled()
         # A student who joined by invite sees only the waiting screen until confirmed.
         data['pending_join'] = pending_join_info(request.user)
         data['awaiting_confirmation'] = data['pending_join'] is not None
@@ -482,8 +484,13 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='create-counselor')
     def create_counselor(self, request):
-        if not self.is_product_admin(request.user):
-            return Response({'detail': 'Only a product admin can create counselors.', 'code': 'product_admin_required'}, status=403)
+        school_manager = (
+            request.user.role == User.Role.ORGANIZATION
+            and request.user.school_id
+            and request.user.school.is_active
+        )
+        if not self.is_product_admin(request.user) and not school_manager:
+            return Response({'detail': 'Only a product admin or an active school account can create counselors.', 'code': 'counselor_creation_forbidden'}, status=403)
         serializer = CounselorProvisionSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         counselor = serializer.save()

@@ -7,7 +7,7 @@
 // skeleton stays until every one of the page's keys has arrived or failed, so
 // the page never flashes "nothing here yet" for a list that is still on its
 // way; a background refresh of an already-loaded key keeps the page shown.
-export function pageLoadState({ keys, data, stats, loading, resourceStatus, lazy = false, primaryKeys = [] }) {
+export function pageLoadState({ keys, data, stats, loading, resourceStatus, lazy = false, primaryKeys = [], progressive = false }) {
   const tracked = keys.filter((key) => resourceStatus[key]);
   const loadingKeys = tracked.filter((key) => resourceStatus[key].status === 'loading');
   const failedKeys = tracked.filter((key) => resourceStatus[key].status === 'error');
@@ -19,7 +19,10 @@ export function pageLoadState({ keys, data, stats, loading, resourceStatus, lazy
   const visible = (key) => key === 'dashboard' ? Boolean(stats) : Array.isArray(data[key]) ? data[key].length > 0 : Boolean(data[key] && resourceStatus[key]?.loaded);
   const hasVisibleData = keys.some(visible);
   if (lazy) {
-    const firstLoadKeys = keys.filter((key) => !resourceStatus[key] || (resourceStatus[key].status === 'loading' && !resourceStatus[key].loaded));
+    // Dashboard widgets have their own loading/error states. Only its profile
+    // blocks the shell; a slow meetings/team widget loads in place.
+    const blockingKeys = progressive ? primaryKeys : keys;
+    const firstLoadKeys = blockingKeys.filter((key) => !resourceStatus[key] || (resourceStatus[key].status === 'loading' && !resourceStatus[key].loaded));
     return { loadingKeys, failedKeys, hasVisibleData, contentBlocked, initialLoading: firstLoadKeys.length > 0 };
   }
   const firstLoad = loading && Object.keys(resourceStatus).length === 0;

@@ -148,6 +148,12 @@
   overflow-x: auto;
 }
 
+.school-students-panel .cs-table-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .cs-table {
   width: 100%;
   min-width: 560px;

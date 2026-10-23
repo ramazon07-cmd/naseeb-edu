@@ -83,6 +83,9 @@ class EssayViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelVi
             )
             if essay is None:
                 raise NotFound()
+            if (essay.status == Essay.Status.APPROVED
+                    and serializer.validated_data.get('counselor_comment', essay.counselor_comment) != essay.counselor_comment):
+                raise serializers.ValidationError({'counselor_comment': 'This essay is approved. Feedback is read-only.'})
             changed = changed_fields(essay, serializer.validated_data)
             self._check_unchanged(essay, changed - set(EssaySerializer.REVIEW_FIELDS))
             serializer.instance = essay

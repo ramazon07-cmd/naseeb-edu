@@ -258,8 +258,12 @@ class RoadmapRoleIsolationTests(RoleIsolationBase):
         self.assertEqual(approved_mission.status_code, status.HTTP_200_OK)
         self.assertEqual(approved_mission.data['status'], RoadmapMission.Status.COMPLETED)
         self.assertNotIn('progress_percent', approved_mission.data)
+        self.assertEqual(approved_task.data['xp_awarded'], 0)
+        second = RoadmapMission.objects.create(student=self.student_a, assigned_by=self.teacher,
+                                               title='Second submitted mission', sequence=2, status=RoadmapMission.Status.SUBMITTED)
+        self.assertEqual(self.client.post(f'/api/roadmap-missions/{second.pk}/approve/', {}, format='json').status_code, 200)
         self.student_a.refresh_from_db()
-        self.assertEqual(self.student_a.xp_total, 125)
+        self.assertEqual(self.student_a.xp_total, 150)
         self.assertEqual(self.student_a.level, 1)
         self.assertEqual(self.student_a.eligible_level, 2)
         self.assertTrue(self.student_a.level_up_pending)
@@ -272,7 +276,7 @@ class RoadmapRoleIsolationTests(RoleIsolationBase):
         self.assertEqual(repeated_mission.status_code, status.HTTP_200_OK)
         self.assertEqual(repeated_mission.data['xp_awarded'], 0)
         self.student_a.refresh_from_db()
-        self.assertEqual(self.student_a.xp_total, 125)
+        self.assertEqual(self.student_a.xp_total, 150)
 
         self.client.force_authenticate(self.student_a_user)
         student_approval = self.client.post(f'/api/students/{self.student_a.id}/approve-level/', {}, format='json')

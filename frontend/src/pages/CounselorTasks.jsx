@@ -90,8 +90,8 @@ export function CounselorTasksPage({ user, data, reload, notify }) {
       await api.sendBack('tasks', viewing.id, note);
       notify(t('Sent back to the student.'));
     } else {
-      const result = await api.approveTask(viewing.id, note);
-      notify(result.xp_awarded ? tx`Task approved. +${result.xp_awarded} XP` : t("Personal task approved. Personal tasks don't earn XP."));
+      await api.approveTask(viewing.id, note);
+      notify(t("Task approved."));
     }
     setViewing(null);
     refresh();

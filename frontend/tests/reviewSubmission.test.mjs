@@ -13,6 +13,9 @@ test('a task needs an answer, a file or a link', () => {
   assert.equal(hasSubmission('task', { student_response: 'Done' }), true);
   assert.equal(hasSubmission('task', { has_submission_file: true }), true);
   assert.equal(hasSubmission('task', { submission_url: 'https://example.com' }), true);
+  assert.equal(hasSubmission('task', { submission_essay_detail: { id: 7, title: 'My essay', word_count: 10 } }), true);
+  assert.equal(hasSubmission('task', { submission_essay_detail: { id: 7, word_count: 0 } }), false, 'An emptied essay is not proof');
+  assert.equal(hasSubmission('task', { submission_essay: 7, submission_essay_detail: null }), false, 'An unavailable essay is not proof');
 });
 
 test('an achievement needs its proof file; a mission is unchanged', () => {

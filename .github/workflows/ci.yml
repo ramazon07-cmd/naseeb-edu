@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # Branches are tested through their pull request; a push run on top would test the same code twice.
   push:
+    branches: [main]
   pull_request:
 
 # Least privilege for the workflow token: CI only needs to read the code.
@@ -11,6 +13,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Normal runs take 15-30 minutes; a hung step fails here instead of after GitHub's 6-hour default.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16

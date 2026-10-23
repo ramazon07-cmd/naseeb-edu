@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { TaskEssayAttachment } from './taskEssays';
 import { FileText, Clock3, RefreshCw, Eye, ExternalLink, Download, ShieldAlert } from 'lucide-react';
 import { t, tx } from '../i18n';
 import { Modal, Badge, Empty } from './ui';
@@ -46,7 +47,7 @@ export function EssayDetailModal({ essay, onClose }) {
 }
 
 export function TaskSubmissionModal({ task, onClose, notify }) {
-  return <Modal title={tx`Task response · ${task.title}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{task.status}</Badge><span>{task.submitted_at ? tx`Submitted ${dateTimeText(task.submitted_at)}` : t("Not submitted yet")}</span></div><div className="detail-actions">{task.has_submission_file && <button className="button quiet" onClick={() => downloadTaskSubmission(task, notify)}><Download size={15} /> {task.submission_file_name || t("Download file")}</button>}{task.submission_url && <a className="button primary" href={task.submission_url} target="_blank" rel="noreferrer">{t("Open submission")} <ExternalLink size={15} /></a>}</div></div><section><span className="detail-label">{t("Assigned task")}</span><p>{task.description || t("No additional instructions.")}</p></section><section><span className="detail-label">{t("Student response")}</span><div className="essay-content-preview">{task.student_response || t("The student has not submitted a written response yet.")}</div></section><GoogleDocsPreview previewUrl={task.submission_preview_url} title={task.title} /></div></Modal>;
+  return <Modal title={tx`Task response · ${task.title}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{task.status}</Badge><span>{task.submitted_at ? tx`Submitted ${dateTimeText(task.submitted_at)}` : t("Not submitted yet")}</span></div><div className="detail-actions">{task.has_submission_file && <button className="button quiet" onClick={() => downloadTaskSubmission(task, notify)}><Download size={15} /> {task.submission_file_name || t("Download file")}</button>}{task.submission_url && <a className="button primary" href={task.submission_url} target="_blank" rel="noreferrer">{t("Open submission")} <ExternalLink size={15} /></a>}</div></div><section><span className="detail-label">{t("Assigned task")}</span><p>{task.description || t("No additional instructions.")}</p></section><section><span className="detail-label">{t("Student response")}</span><div className="essay-content-preview">{task.student_response || t("The student has not submitted a written response yet.")}</div></section><TaskEssayAttachment task={task} /><GoogleDocsPreview previewUrl={task.submission_preview_url} title={task.title} /></div></Modal>;
 }
 
 export function downloadTaskSubmission(task, notify) {

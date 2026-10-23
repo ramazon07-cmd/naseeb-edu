@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { busyRetryDelay } from '../lib/backoff';
 import { EMPTY_DATA } from '../lib/emptyData';
 import { createKeyedLatest } from '../lib/latestRequest';
+import { settleWorkspaceRequests } from '../lib/settleWorkspaceRequests';
 import { planWorkspaceReload } from '../lib/reloadPlan';
 import { PAGED_ENDPOINTS, STUDENT_SHELL_KEYS, createInFlight, failedStatsStatus, loadsDashboardStats, loadsLazily, mergeStats, missingKeys, pagedListsAfter, resourcesFor, selectWorkspaceLoad, waitsBeforeLoading } from '../lib/workspaceResources';
 import { clearPagedLists, invalidatePagedLists } from './usePagedList';
@@ -114,22 +115,23 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
           : options.firstPage ? () => firstPage(key, endpoint, query)
             : () => api.list(endpoint, query, { onPage: showPartial(key) }),
       ]);
-      const settled = await Promise.allSettled(requests.map(([, request]) => request()));
       const successfulResources = {};
-      const nextStatuses = {};
-      let dashboardStats;
       let unauthorized = false;
       const busyKeys = [];
       let busyWait = 0;
-      settled.forEach((result, index) => {
-        const key = requests[index][0];
+      const settled = await settleWorkspaceRequests(requests, (key, result) => {
         if (!isCurrent(key)) return;
         settleFreshness(key, result.status === 'fulfilled');
+        let status;
         if (result.status === 'fulfilled') {
           busyAttempts.current.delete(key);
-          nextStatuses[key] = { status: 'success', error: '', loaded: true };
-          if (key === 'dashboard') dashboardStats = result.value;else
-          successfulResources[key] = result.value || [];
+          status = { status: 'success', error: '', loaded: true };
+          if (key === 'dashboard') setStats((current) => mergeStats(current, result.value));
+          else {
+            successfulResources[key] = result.value || [];
+            setData((current) => ({ ...current, [key]: successfulResources[key] }));
+            if (key in nextPages) setMore((current) => ({ ...current, [key]: nextPages[key] }));
+          }
         } else {
           unauthorized ||= result.reason?.status === 401;
           // A poll that hits the rate limit backs off on its own poller instead.
@@ -139,31 +141,21 @@ export function useWorkspaceData(user, onUnauthorized, { statsRequest = defaultS
             busyAttempts.current.set(key, attempt + 1);
             busyKeys.push(key);
             busyWait = Math.max(busyWait, wait);
-            nextStatuses[key] = { status: 'loading', busy: true, error: '', loaded: false };
-            return;
+            status = { status: 'loading', busy: true, error: '', loaded: false };
+          } else {
+            busyAttempts.current.delete(key);
+            status = { status: 'error', error: result.reason?.message || 'Unable to load this section.', loaded: false };
           }
-          busyAttempts.current.delete(key);
-          nextStatuses[key] = { status: 'error', error: result.reason?.message || 'Unable to load this section.', loaded: false };
         }
+        setResourceStatus((current) => {
+          if (background && status.status === 'error' && current[key]?.loaded && !loadsLazily(activeUser)) return current;
+          return { ...current, [key]: { ...status, loaded: status.loaded || Boolean(current[key]?.loaded) } };
+        });
       });
       if (unauthorized) {
         onUnauthorized();
         return;
       }
-      if (dashboardStats !== undefined) setStats((current) => mergeStats(current, dashboardStats));
-      if (Object.keys(successfulResources).length) {
-        setData((current) => ({ ...current, ...successfulResources }));
-        const paged = Object.keys(successfulResources).filter((key) => key in nextPages);
-        if (paged.length) setMore((current) => ({ ...current, ...Object.fromEntries(paged.map((key) => [key, nextPages[key]])) }));
-      }
-      setResourceStatus((current) => {
-        const next = { ...current };
-        Object.entries(nextStatuses).forEach(([key, status]) => {
-          if (background && status.status === 'error' && current[key]?.loaded && !loadsLazily(activeUser)) return;
-          next[key] = { ...status, loaded: status.loaded || Boolean(current[key]?.loaded) };
-        });
-        return next;
-      });
       if (busyKeys.length) {
         busyKeys.forEach((key) => busyPending.current.add(key));
         window.clearTimeout(busyTimer.current);

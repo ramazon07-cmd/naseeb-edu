@@ -38,18 +38,18 @@ class FitFixture(CollegeSearchFixture):
 
 
 class InternationalCostTests(FitFixture, APITestCase):
-    def test_us_rows_are_priced_at_the_international_cost_of_attendance(self):
-        self.ready_profile(budget_usd=30000)
-        mit = self.fit(self.mit)
-        self.assertIn('cost_far_above_budget', codes(mit, 'gaps'))
-        gap = next(entry for entry in mit['gaps'] if entry['code'] == 'cost_far_above_budget')
-        self.assertEqual(gap['params'], {'cost': 85000, 'budget': 30000})
-        self.assertTrue(gap['text'].startswith('Estimated cost of attendance for international students'))
-        self.assertNotIn('after aid', gap['text'])
-        # Outside the US a row keeps its own price.
-        self.assertIn('cost_within_budget', codes(self.fit(self.tashkent), 'reasons'))
-        # MIT and Ohio State are over budget; Oxford and Quiet College have no cost, so they stay.
-        self.assertEqual(set(self.names('price=budget')), {self.tashkent.name, self.oxford.name, self.unranked.name})
+    def test_personal_budget_does_not_gate_research_or_change_scores(self):
+        self.ready_profile(budget_usd=None)
+        research = self.client.get('/api/college-research/').data
+        self.assertTrue(research['ready'])
+        self.assertNotIn('budget_usd', research['profile_snapshot'])
+        self.assertFalse(any(question['field'] == 'budget_usd' for question in research['questions']))
+        initial = self.fit(self.mit)
+        for budget in (0, 2000, 500000):
+            self.student.budget_usd = budget
+            self.student.save(update_fields=['budget_usd'])
+            self.assertEqual(self.fit(self.mit), initial)
+        self.assertFalse(any('budget' in code or code == 'cost_missing' for code in codes(initial, 'reasons') + codes(initial, 'gaps')))
 
     def test_the_aided_net_price_is_never_the_cost(self):
         # Princeton: Scorecard's $6,128 is US students' average after aid, not what a student from abroad pays.
@@ -60,18 +60,13 @@ class InternationalCostTests(FitFixture, APITestCase):
         unpriced = University.objects.create(name='Unpriced College', country='USA', net_price_usd=9000, acceptance_rate='30.00')
         self.ready_profile(budget_usd=10000)
         fit = self.fit(princeton)
-        self.assertIn('cost_far_above_budget', codes(fit, 'gaps'))
-        gap = next(entry for entry in fit['gaps'] if entry['code'] == 'cost_far_above_budget')
-        self.assertEqual(gap['params'], {'cost': 86000, 'budget': 10000})
-        self.assertNotIn('cost_within_budget', codes(fit, 'reasons'))
         row = self.search(f'ids={princeton.id}')['results'][0]
         self.assertEqual(
             (row['cost'], row['cost_label'], row['after_aid_usd']), (86000, 'international_cost', 6128),
         )
         # A US row without an international cost is unpriced, whatever its domestic net price.
-        self.assertIn('cost_missing', codes(self.fit(unpriced), 'gaps'))
         self.assertEqual(self.search(f'ids={unpriced.id}')['results'][0]['cost'], None)
-        within = set(self.names('price=budget&page_size=25'))
+        within = set(self.names('price=25000&page_size=25'))
         self.assertNotIn(princeton.name, within)
         self.assertEqual(within, {self.tashkent.name, unpriced.name, self.oxford.name, self.unranked.name})
         prices = self.names('sort=price&page_size=25')
@@ -91,7 +86,7 @@ class InternationalCostTests(FitFixture, APITestCase):
         tashkent = self.client.get(f'/api/universities/{self.tashkent.id}/').data
         self.assertEqual((tashkent['cost'], tashkent['cost_label'], tashkent['after_aid_usd']), (4000, 'net_price', None))
 
-    def test_the_shipped_scorecard_puts_mit_stanford_and_georgia_tech_above_a_20k_budget(self):
+    def test_the_shipped_scorecard_retains_published_costs_without_budget_scoring(self):
         University.objects.filter(pk__in=[self.mit.pk, self.state.pk]).delete()
         call_command('load_qs_rankings', stdout=StringIO())
         call_command('load_college_scorecard', stdout=StringIO())
@@ -105,8 +100,8 @@ class InternationalCostTests(FitFixture, APITestCase):
         rows = self.search('ids=' + ','.join(str(item.id) for item in universities))['results']
         for row in rows:
             self.assertFalse([code for code in codes(row['fit'], 'reasons') if code.endswith('within_budget')], row['name'])
-            self.assertIn('cost_far_above_budget', codes(row['fit'], 'gaps'), row['name'])
-        within = set(self.names('price=budget&page_size=100&country=United%20States'))
+            self.assertFalse([code for code in codes(row['fit'], 'gaps') if 'budget' in code], row['name'])
+        within = set(self.names('price=25000&page_size=100&country=United%20States'))
         self.assertFalse(within & set(names))
 
 
@@ -128,7 +123,7 @@ class OtherTestsTests(FitFixture, APITestCase):
         breakdown = fit['score_breakdown']
         earned = sum(breakdown.values())
         missing = college_search.TEST_POINTS + college_search.ENGLISH_POINTS
-        self.assertEqual(fit['match_score'], min(100, round(earned * 100 / (100 - missing) * (1 - missing / 200))))
+        self.assertEqual(fit['match_score'], min(100, round(earned * 100 / (college_search.TOTAL_POINTS - missing) * (1 - missing / (2 * college_search.TOTAL_POINTS)))))
 
     def test_act_is_scored_against_the_act_range(self):
         self.ready_profile(sat_score=None)
@@ -331,7 +326,7 @@ class EvidenceQueryTests(FitFixture, APITestCase):
         for query in (f'ids={self.mit.id}', 'sort=ranking', 'sort=price', 'sort=fit&facets=true', 'bands=reach'):
             self.assertEqual(len(self.evidence_queries(query)), 1, query)
         self.assertEqual(self.evidence_queries('search=nowhere-at-all'), [], 'no rows to score')
-        self.student.budget_usd = None
+        self.student.gpa = None
         self.student.save()
         self.assertEqual(self.evidence_queries('sort=fit&facets=true'), [], 'no fit until the profile is ready')
 
@@ -359,7 +354,6 @@ FIT_CODES = {
     'tests_optional', 'tests_required', 'test_score_missing', 'test_range_missing_for', 'test_range_missing',
     'english_strong', 'english_suitable', 'english_check', 'english_missing',
     'country_match', 'major_match', 'major_check',
-    'cost_within_budget', 'cost_above_budget', 'cost_far_above_budget', 'cost_missing',
     'aid_available', 'aid_not_offered', 'aid_unknown',
 }
 
@@ -379,7 +373,7 @@ class ReasonCodeTests(APITestCase):
     def context(self, **values):
         return {
             'gpa': 3.8, 'gpa_scale': 4, 'sat': None, 'sat_status': 'not_taken', 'act': None, 'english': None,
-            'budget': 20000, 'countries': ['us'], 'major': 'computer science', 'major_name': 'Computer Science',
+            'countries': ['us'], 'major': 'computer science', 'major_name': 'Computer Science',
             'scholarship_needed': True, 'strength': 0, **values,
         }
 

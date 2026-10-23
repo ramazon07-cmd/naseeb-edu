@@ -126,7 +126,7 @@ class RecordRoleIsolationTests(RoleIsolationBase):
         self.assertTrue(Task.objects.filter(id=staff_task.id).exists())
         self.assertFalse(Task.objects.filter(id=self_task.id).exists())
 
-    def test_student_can_only_update_task_progress_fields(self):
+    def test_student_cannot_control_assigned_task_progress_or_details(self):
         task = Task.objects.create(
             student=self.student_a,
             assigned_by=self.counselor,
@@ -139,7 +139,7 @@ class RecordRoleIsolationTests(RoleIsolationBase):
             {'status': Task.Status.IN_PROGRESS},
             format='json',
         )
-        self.assertEqual(progressed.status_code, status.HTTP_200_OK)
+        self.assertEqual(progressed.status_code, status.HTTP_400_BAD_REQUEST)
         tampered = self.client.patch(
             f'/api/tasks/{task.id}/',
             {'title': 'Student changed title', 'due_date': date(2030, 1, 1)},
