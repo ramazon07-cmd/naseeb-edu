@@ -439,13 +439,16 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     )
     def temporary_credential(self, request, pk=None):
         target = self.get_object()
-        if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION, User.Role.COUNSELOR}:
+        if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION, User.Role.COUNSELOR, User.Role.ADMIN}:
             return Response({
-                'detail': 'Temporary credentials are only available for student, school and counselor accounts.',
+                'detail': 'Temporary credentials are only available for student, school, counselor and staff accounts.',
                 'code': 'credential_role_unsupported',
             }, status=400)
-        allowed = has_tier(request.user, SUPPORT) or (
-            target.role == User.Role.STUDENT and student_account_in_scope(target, request.user)
+        # Never your own account: a stolen session could otherwise replace the password unseen.
+        # Another staff account is limited to super admins by IsRoleScopedUserAccess.
+        allowed = target.pk != request.user.pk and (
+            has_tier(request.user, SUPPORT)
+            or (target.role == User.Role.STUDENT and student_account_in_scope(target, request.user))
         )
         if not allowed:
             return Response({'detail': 'You cannot issue credentials for this account.', 'code': 'credential_forbidden'}, status=403)

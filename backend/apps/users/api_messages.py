@@ -744,9 +744,9 @@ EXACT = {
         'uz': 'O‘z hisobingizni faolsizlantira olmaysiz.',
         'ru': 'Нельзя деактивировать собственную учётную запись.',
     },
-    'Temporary credentials are only available for student, school and counselor accounts.': {
-        'uz': 'Vaqtinchalik parol faqat o‘quvchi, maktab va counselor hisoblari uchun beriladi.',
-        'ru': 'Временный пароль выдаётся только ученикам, школам и консультантам.',
+    'Temporary credentials are only available for student, school, counselor and staff accounts.': {
+        'uz': 'Vaqtinchalik parol faqat o‘quvchi, maktab, counselor va xodim hisoblari uchun beriladi.',
+        'ru': 'Временный пароль выдаётся только ученикам, школам, консультантам и сотрудникам.',
     },
     'You cannot issue credentials for this account.': {
         'uz': 'Bu hisob uchun vaqtinchalik parol bera olmaysiz.',
