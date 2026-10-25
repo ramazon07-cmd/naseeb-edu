@@ -473,11 +473,12 @@ export const api = {
   retrySignOut,
   forgetSession,
   syncBeforeSignOut,
-  changePassword: async (newPassword, confirmPassword) => {
+  // A student also sends the class they picked at the first sign-in.
+  changePassword: async (newPassword, confirmPassword, grade = '') => {
     const payload = await request('/users/accounts/change-password/', {
       method: 'POST',
       credentials: 'include',
-      body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
+      body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword, ...(grade && { grade }) }),
     })
     saveTokens(payload)
     return payload

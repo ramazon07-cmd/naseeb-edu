@@ -149,6 +149,77 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {changed.data['access']}")
         self.assertEqual(self.client.get('/api/dashboard/stats/').status_code, status.HTTP_200_OK)
 
+    def change_password(self, **extra):
+        access = self.login().data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
+        return self.client.post(
+            '/api/users/accounts/change-password/',
+            {'new_password': 'PermanentPass456!', 'confirm_password': 'PermanentPass456!', **extra},
+            format='json',
+        )
+
+    def test_student_picks_the_class_with_the_new_password_and_the_counselor_sees_it(self):
+        # A counselor-made login carries no class: the student chooses it at the first sign-in.
+        self.assertEqual(self.profile.grade, '')
+        changed = self.change_password(grade='11')
+        self.assertEqual(changed.status_code, status.HTTP_200_OK, changed.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.grade, StudentProfile.Grade.GRADE_11)
+
+        self.client.credentials()
+        self.client.force_authenticate(self.counselor)
+        rows = self.client.get('/api/students/').data['results']
+        self.assertEqual([row['grade'] for row in rows if row['id'] == self.profile.id], ['11'])
+
+    def test_class_stays_hidden_from_a_counselor_of_another_school(self):
+        self.change_password(grade='11')
+        outsider = User.objects.create_user(
+            username='outsider-counselor',
+            email='outsider-counselor@example.com',
+            password='StrongPass123!',
+            role=User.Role.COUNSELOR,
+            school=School.objects.create(name='Other Credential School', code='other-credential-school'),
+        )
+        self.client.credentials()
+        self.client.force_authenticate(outsider)
+        self.assertEqual(self.client.get('/api/students/').data['results'], [])
+        self.assertEqual(self.client.get(f'/api/students/{self.profile.id}/').status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_unknown_class_is_refused_and_the_password_change_stays_pending(self):
+        refused = self.change_password(grade='13')
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('grade', refused.data)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.must_change_password)
+        self.assertTrue(self.student.check_password(self.temporary_password))
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.grade, '')
+
+    def test_the_class_cannot_be_rewritten_by_a_later_password_change(self):
+        changed = self.change_password(grade='11')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {changed.data['access']}")
+        again = self.client.post(
+            '/api/users/accounts/change-password/',
+            {'new_password': 'AnotherPass789!', 'confirm_password': 'AnotherPass789!', 'grade': '8'},
+            format='json',
+        )
+        self.assertEqual(again.status_code, status.HTTP_400_BAD_REQUEST)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.grade, StudentProfile.Grade.GRADE_11)
+
+    def test_a_staff_password_change_leaves_every_student_class_alone(self):
+        self.counselor.must_change_password = True
+        self.counselor.save(update_fields=['must_change_password'])
+        self.client.force_authenticate(self.counselor)
+        changed = self.client.post(
+            '/api/users/accounts/change-password/',
+            {'new_password': 'StaffPermanent456!', 'confirm_password': 'StaffPermanent456!', 'grade': '9'},
+            format='json',
+        )
+        self.assertEqual(changed.status_code, status.HTTP_200_OK, changed.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.grade, '')
+
     def test_refresh_token_rotation_blacklists_the_used_token(self):
         login = self.login()
         refresh = refresh_cookie_value(login)

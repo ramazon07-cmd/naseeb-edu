@@ -17,7 +17,7 @@ import { RecommendationLetters } from '../components/RecommendationLetters';
 import { useStudentRecords } from '../hooks/useStudentRecords';
 import { invalidatePagedLists, usePagedList } from '../hooks/usePagedList';
 import { activityText } from '../lib/activityText';
-import { clockText, dateText, dateTimeText, dayLabel, dayMonthText, gradeText, joinParts, localDateKey, relativeDayText } from '../lib/format';
+import { FILTER_GRADES, clockText, dateText, dateTimeText, dayLabel, dayMonthText, gradeOrPending, gradeText, joinParts, localDateKey, relativeDayText } from '../lib/format';
 import { fullName, initials, label } from '../lib/labels';
 import { createLatestRequest } from '../lib/latestRequest';
 import { splitList } from '../lib/profileSections';
@@ -68,8 +68,7 @@ const PAGE_SIZE = 25;
 const VIEW_KEY = 'naseeb-counselor-students-view';
 const STATUS_PILLS = [['all', 'All'], ['need_you', 'Need you'], ['late', 'Late work'], ['missing_documents', 'Missing documents'], ['quiet', 'Quiet for 14+ days'], ['on_track', 'On track']];
 const SORTS = [['need_you', 'Needs you first'], ['late', 'Most late work'], ['name', 'Name A–Z']];
-const GRADES = ['8', '9', '10', '11', 'gap'];
-const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
+const COUNTRIES =['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
 export const STUDENT_LIST_DEFAULTS = Object.freeze({ status: 'all', grade: '', country: '', ordering: 'need_you', page: 1, search: '' });
 
 function readView() {
@@ -150,7 +149,7 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
       const body = <>
         <span className="cs-card-top">
           <CxAvatar name={name} />
-          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeText(student.grade), targetText(student))}</small></span>
+          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeOrPending(student.grade), targetText(student))}</small></span>
         </span>
         <span className="cs-card-foot"><LateWork reasons={reasons} /><StatusTag reasons={reasons} /></span>
       </>;
@@ -265,7 +264,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
         <label className="cs-field"><span>{t("Grade")}</span>
           <select value={state.grade} onChange={(event) => update({ grade: event.target.value })}>
             <option value="">{t("Any grade")}</option>
-            {(list.summary?.grades || GRADES).map((grade) => <option key={grade} value={grade}>{gradeText(grade)}</option>)}
+            {FILTER_GRADES.map((grade) => <option key={grade} value={grade}>{gradeText(grade)}</option>)}
           </select>
         </label>
         <label className="cs-field"><span>{t("Target country")}</span>
@@ -279,17 +278,17 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
             {SORTS.map(([key, title]) => <option key={key} value={key}>{t(title)}</option>)}
           </select>
         </label>
-      </div>
-      <div className="cs-filter-row cs-filter-foot">
-        <div className="cs-chips">
-          {chips.map(([key, text, remove]) => <button key={key} type="button" className="cs-chip" onClick={remove} aria-label={t('Remove filter: {name}', { name: text })}>{text}<X size={13} aria-hidden="true" /></button>)}
-          {filtered && <button type="button" className="cx-btn cs-clear" onClick={clearFilters}>{t("Clear filters")}</button>}
-        </div>
         <div className="cs-view" role="group" aria-label={t("View")}>
           <button type="button" aria-pressed={view === 'table'} onClick={() => changeView('table')}><Rows3 size={15} aria-hidden="true" />{t("Table")}</button>
           <button type="button" aria-pressed={view === 'cards'} onClick={() => changeView('cards')}><LayoutGrid size={15} aria-hidden="true" />{t("Cards")}</button>
         </div>
       </div>
+      {chips.length > 0 && <div className="cs-filter-row cs-filter-foot">
+        <div className="cs-chips">
+          {chips.map(([key, text, remove]) => <button key={key} type="button" className="cs-chip" onClick={remove} aria-label={t('Remove filter: {name}', { name: text })}>{text}<X size={13} aria-hidden="true" /></button>)}
+          {filtered && <button type="button" className="cx-btn cs-clear" onClick={clearFilters}>{t("Clear filters")}</button>}
+        </div>
+      </div>}
     </div>
 
     {list.error && !moving && <div className="alert error" role="alert">{list.error} <button type="button" className="cx-btn" onClick={() => setVersion((value) => value + 1)}>{t("Retry")}</button></div>}
@@ -602,7 +601,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     });
   }, [records, name]);
   const readiness = student.profile_readiness || { percent: 0, missing: [] };
-  const meta = joinParts(gradeText(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
+  const meta = joinParts(gradeOrPending(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
   const tabs = TABS(student, records, letters);
 
   return <div className="cx-page cx-student-360">

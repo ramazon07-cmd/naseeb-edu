@@ -3,7 +3,7 @@ import { ArrowRight, Lock, MessageCircle, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp } from '../i18n';
 import { CxAvatar, CxTag } from './counselorUi';
-import { dayMonthText, gradeText, joinParts, localDateKey } from '../lib/format';
+import { dayMonthText, gradeOrPending, joinParts, localDateKey } from '../lib/format';
 import { fullName } from '../lib/labels';
 import { splitList } from '../lib/profileSections';
 import { attentionItems, weekDeadlines } from '../lib/studentQuickLook';
@@ -59,7 +59,7 @@ export function StudentQuickPanel({ student, onClose, onOpen, onDirect }) {
   const attention = attentionItems(records, today);
   const deadlines = weekDeadlines(records, today);
   const name = fullName(student.user_detail);
-  const meta = joinParts(gradeText(student.grade), splitList(student.target_countries).map((country) => t(country)).join(', '));
+  const meta = joinParts(gradeOrPending(student.grade), splitList(student.target_countries).map((country) => t(country)).join(', '));
 
   useEffect(() => {
     const previous = document.activeElement;

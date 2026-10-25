@@ -8,7 +8,7 @@ import { AttachmentRow, documentAttachment } from '../components/files';
 import { t, tp, tx, formatPercentLocale, formatNumberLocale } from '../i18n';
 import { countTotal } from '../lib/metrics';
 import { Record, StudentAvatar, Stat, LevelProgress, ProfileCard, Detail, StudentTable } from '../components/records';
-import { dateText, gradeText, joinParts, money } from '../lib/format';
+import { FILTER_GRADES, dateText, gradeText, joinParts, money } from '../lib/format';
 import { label, fullName, initials } from '../lib/labels';
 import { Eye, ExternalLink, Fingerprint, UsersRound, ShieldCheck, Search, Plus, LifeBuoy } from 'lucide-react';
 import { api } from '../api';
@@ -345,7 +345,7 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
       {staffReadOnly && <p className="form-note staff-tier-note"><ShieldCheck size={16} /> {t("Only operations staff and super admins can add, assign, edit or deactivate students. You can view profiles and reset logins.")}</p>}
       <div className="paged-list-filters">
         {isPlatformAdmin(user) && <SchoolPicker label="School" value={school} onChange={setSchool} emptyOption={t("All schools")} />}
-        <label><span>{t("Grade")}</span><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">{t("All grades")}</option>{['8', '9', '10', '11', 'gap'].map((value) => <option key={value} value={value}>{value === 'gap' ? t("Gap year") : value}</option>)}</select></label>
+        <label><span>{t("Grade")}</span><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">{t("All grades")}</option>{FILTER_GRADES.map((value) => <option key={value} value={value}>{value === 'gap' ? t("Gap year") : value}</option>)}</select></label>
         {isPlatformAdmin(user) && <label><span>{t("Counselor")}</span><select value={unassigned} onChange={(event) => setUnassigned(event.target.value)}><option value="">{t("Any counselor")}</option><option value="true">{t("No counselor assigned")}</option></select></label>}
       </div>
       {students.loading && !students.items.length ? <PageSkeleton /> : user.role === 'organization' ? <CounselorStudentTable rows={students.items.map((student) => ({ student, name: fullName(student.user_detail), reasons: studentReasons(student) }))} onPreview={openStudent} onEdit={(student) => {setEditing(student);setOpen(true);}} /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}

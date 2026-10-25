@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const { TRANSLATIONS, setLanguage, tp } = await import('../src/i18n.js');
 const { AUDIT_ACTIONS, LABELS, auditActionLabel, label } = await import('../src/lib/labels.js');
-const { gradeText, joinParts, programUsageCaption, testScoreCaption } = await import('../src/lib/format.js');
+const { FILTER_GRADES, GRADES, gradeOrPending, gradeText, joinParts, programUsageCaption, testScoreCaption } = await import('../src/lib/format.js');
 
 test('document types read as proper names, not raw codes', () => {
   setLanguage('en');
@@ -52,6 +52,33 @@ test('gradeText names gap years and hides a missing grade', () => {
   assert.equal(gradeText('gap'), 'Gap year');
   assert.equal(gradeText(''), '');
   assert.equal(gradeText(null), '');
+});
+
+test('a counselor sees a class that is not chosen yet instead of a blank', () => {
+  setLanguage('en');
+  assert.equal(gradeOrPending('11'), 'Grade 11');
+  assert.equal(gradeOrPending('gap'), 'Gap year');
+  assert.equal(gradeOrPending(''), 'Class not chosen yet');
+  assert.equal(gradeOrPending(null), 'Class not chosen yet');
+  setLanguage('uz');
+  assert.equal(gradeOrPending(''), 'Sinf hali tanlanmagan');
+  setLanguage('en');
+});
+
+test('the classes a student can pick are all named and translated', () => {
+  assert.deepEqual(GRADES, ['8', '9', '10', '11', 'gap']);
+  setLanguage('uz');
+  assert.deepEqual(GRADES.map(gradeText), ['8-sinf', '9-sinf', '10-sinf', '11-sinf', 'Tanaffus yili']);
+  assert.equal(TRANSLATIONS.uz['Your class'], 'Sinfingiz');
+  assert.equal(TRANSLATIONS.ru['Your class'], 'Ваш класс');
+  assert.equal(TRANSLATIONS.uz['Not chosen'], 'Tanlanmagan');
+  assert.equal(TRANSLATIONS.ru['Not chosen'], 'Не выбран');
+  setLanguage('en');
+});
+
+test('the students filters offer grades 9 to 11 for now, each one a class a student can pick', () => {
+  assert.deepEqual(FILTER_GRADES, ['9', '10', '11']);
+  assert.ok(FILTER_GRADES.every((grade) => GRADES.includes(grade)));
 });
 
 test('English plural keys pick the singular form for one', () => {

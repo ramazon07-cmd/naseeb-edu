@@ -43,7 +43,7 @@ class StudentOnboardingTests(APITestCase):
         self.assertEqual(invalid.status_code, 400)
 
     def test_required_income_and_gpa(self):
-        for field in ['gpa']:
+        for field in ['gpa', 'grade']:
             payload = dict(self.payload); payload.pop(field)
             response = self.client.post('/api/students/onboarding/', payload, format='json')
             self.assertEqual(response.status_code, 400)
@@ -83,6 +83,15 @@ class StudentOnboardingTests(APITestCase):
         self.assertIsNone(response.data['gpa'])
         self.assertFalse(response.data['user_detail']['student_profile_complete'])
         self.assertTrue(response.data['user_detail']['must_change_password'])
+
+    def test_login_creation_leaves_the_class_for_the_student_to_pick(self):
+        self.client.force_authenticate(self.counselor)
+        # A class sent by the counselor is not read: the student owns this answer.
+        response = self.client.post('/api/students/quick-create/', {'name': 'Class Pending', 'password': 'ZebRa!42', 'grade': '11'}, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['grade'], '')
+        rows = self.client.get('/api/students/').data['results']
+        self.assertEqual([row['grade'] for row in rows if row['id'] == response.data['id']], [''])
 
     def test_optional_sat_and_multiple_countries(self):
         response = self.client.post('/api/students/onboarding/', {
