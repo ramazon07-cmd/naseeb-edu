@@ -4,15 +4,15 @@ import { api } from '../api';
 import { t } from '../i18n';
 import { gradeText } from '../lib/format';
 import { initials } from '../lib/labels';
-import { BrandLockup, LanguageSelector, ThemeToggle } from '../components/brand';
+import { BrandLockup, LanguageSelector } from '../components/brand';
 import { Field } from '../components/forms';
 import '../invites.css';
 
 const GRADES = ['8', '9', '10', '11', 'gap'];
 
-function Card({ theme, toggleTheme, language, changeLanguage, children, footer }) {
+function Card({ theme, language, changeLanguage, children, footer }) {
   return <main className="password-change-page join-page"><section className="password-change-card">
-    <header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div></header>
+    <header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /></div></header>
     {children}
     {footer && <footer>{footer}</footer>}
   </section></main>;

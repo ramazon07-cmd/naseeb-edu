@@ -613,64 +613,64 @@ button.chat-shared-item {
   --space-10: 40px;
   --space-12: 48px;
   --silver: #c0c0c6;
-  --charcoal: #1a1a1f;
-  --light-grey: #f2f2f5;
-  --ivory: #f5f0e6;
-  --taupe: #b8a58a;
-  --deep-ink: #4a4036;
-  --soft-shadow: #d8cec0;
-  --accent: #b8a58a;
-  --accent-deep: #4a4036;
-  --accent-hover: #9d896e;
-  --accent-contrast: #352d26;
-  --accent-muted: #665a4d;
-  --accent-rgb: 184, 165, 138;
-  --accent-shadow: rgba(74, 64, 54, 0.24);
-  --badge-accent-text: #4a4036;
-  --eyebrow: #766a5d;
-  --accent-gradient: linear-gradient(135deg, #d8cec0 0%, #b8a58a 100%);
-  --canvas: #f7f7f7;
+  --charcoal: #0b1226;
+  --light-grey: #f3f5fa;
+  --ivory: #f3f6fd;
+  --taupe: #8fb2ff;
+  --deep-ink: #17243b;
+  --soft-shadow: #d5dceb;
+  --accent: #0057ff;
+  --accent-deep: #0046d1;
+  --accent-hover: #0039ad;
+  --accent-contrast: #ffffff;
+  --accent-muted: #3d4a60;
+  --accent-rgb: 0, 87, 255;
+  --accent-shadow: rgba(0, 87, 255, 0.24);
+  --badge-accent-text: #0039ad;
+  --eyebrow: #0046d1;
+  --accent-gradient: linear-gradient(135deg, #3d7bff 0%, #0057ff 100%);
+  --canvas: #f6f7fb;
   --surface: #ffffff;
-  --surface-soft: #f7f4ee;
+  --surface-soft: #f1f4fb;
   --sidebar: var(--canvas);
   --sidebar-end: var(--canvas);
-  --sidebar-text: #4a4036;
-  --sidebar-muted: #766a5d;
-  --sidebar-divider: rgba(74, 64, 54, 0.14);
-  --sidebar-hover: rgba(184, 165, 138, 0.18);
-  --sidebar-hover-strong: rgba(184, 165, 138, 0.42);
-  --nav-active-bg: #4a4036;
-  --nav-active-text: #f5f0e6;
+  --sidebar-text: #17243b;
+  --sidebar-muted: #5b6780;
+  --sidebar-divider: rgba(23, 36, 59, 0.12);
+  --sidebar-hover: rgba(0, 87, 255, 0.08);
+  --sidebar-hover-strong: rgba(0, 87, 255, 0.18);
+  --nav-active-bg: #0b1b4d;
+  --nav-active-text: #ffffff;
   /* Counselor workspace ("Counselor Dashboard" design): an ivory canvas, white
      cards with hairline borders, and one dark taupe accent for the active state. */
-  --cx-canvas: #f4f1ea;
+  --cx-canvas: #f3f5fa;
   --cx-card: #ffffff;
-  --cx-line: #e9e7e3;
-  --cx-line-strong: #dedcd7;
-  --cx-field-line: #d5d3cf;
-  --cx-ink: #302922;
-  --cx-text: #4a4036;
-  --cx-muted: #716555;
-  --cx-dark: #4a4036;
-  --cx-on-dark: #fffbf1;
-  --cx-on-dark-muted: rgba(255, 251, 241, 0.72);
-  --cx-avatar: #c8b8a1;
-  --cx-avatar-text: #4a4036;
-  --cx-avatar-self: #1f3a6b;
+  --cx-line: #e4e8f0;
+  --cx-line-strong: #d5dbe8;
+  --cx-field-line: #c6cedd;
+  --cx-ink: #0d1a33;
+  --cx-text: #17243b;
+  --cx-muted: #5b6780;
+  --cx-dark: #0b1b4d;
+  --cx-on-dark: #ffffff;
+  --cx-on-dark-muted: rgba(255, 255, 255, 0.74);
+  --cx-avatar: #c9d6f2;
+  --cx-avatar-text: #17243b;
+  --cx-avatar-self: #0b1b4d;
   --cx-avatar-self-text: #ffffff;
-  --cx-badge: #ece3d4;
-  --cx-inset: #fbf8f1;
-  --cx-hover: rgba(74, 64, 54, 0.05);
-  --cx-selected: #fdf4e3;
-  --cx-selected-line: #beb1a1;
-  --cx-hero-start: #c7b59c;
-  --cx-hero-end: #bba88b;
-  --cx-hero-disc: #f4f1ea;
-  --cx-hero-ink: #2b231b;
-  --cx-hero-muted: #4a4036;
-  --cx-rule: #f0efeb;
-  --cx-progress: #8b7351;
-  --cx-track: #eee5d8;
+  --cx-badge: #e6ecfa;
+  --cx-inset: #f8fafe;
+  --cx-hover: rgba(23, 36, 59, 0.05);
+  --cx-selected: #eaf0ff;
+  --cx-selected-line: #8fb2ff;
+  --cx-hero-start: #dce7ff;
+  --cx-hero-end: #c6d8ff;
+  --cx-hero-disc: #f3f5fa;
+  --cx-hero-ink: #0a1630;
+  --cx-hero-muted: #2c3a56;
+  --cx-rule: #edf0f6;
+  --cx-progress: #0057ff;
+  --cx-track: #e3e9f6;
   --cx-alert: #9b2e05;
   --cx-late-bg: #fbe4de;
   --cx-late-text: #7a2d15;
@@ -678,16 +678,16 @@ button.chat-shared-item {
   --cx-warn-text: #7f4700;
   --cx-ok-bg: #e4eee3;
   --cx-ok-text: #26602d;
-  --cx-quiet-bg: #efeae4;
-  --cx-quiet-text: #383428;
+  --cx-quiet-bg: #edf0f6;
+  --cx-quiet-text: #2c3a56;
   --cx-blue-bg: #e4ecff;
-  --cx-blue-text: #183257;
-  --cx-blue-soft-bg: #e5ecf6;
-  --cx-blue-soft-text: #182e53;
+  --cx-blue-text: #0b2a78;
+  --cx-blue-soft-bg: #eaf0ff;
+  --cx-blue-soft-text: #0b2a78;
   --cx-green-bg: #e3efe3;
   --cx-green-text: #285c2e;
-  --cx-doc-bg: #efebe2;
-  --cx-doc-text: #3a3227;
+  --cx-doc-bg: #edf1f8;
+  --cx-doc-text: #1e2a44;
   --cx-radius-card: 16px;
   --cx-radius-side: 20px;
   --cx-radius-item: 10px;
@@ -721,123 +721,122 @@ button.chat-shared-item {
   --login-card-shadow:
     0 28px 70px rgba(10, 26, 48, 0.28), 0 4px 14px rgba(10, 26, 48, 0.16);
   --login-chip-shadow: 0 6px 18px rgba(10, 26, 48, 0.22);
-  --text: #4a4036;
-  --muted: #766a5d;
-  --text-subtle: #766a5d;
-  --text-disabled: #a79d91;
-  --placeholder: #766a5d;
-  --border: rgba(74, 64, 54, 0.14);
-  --border-subtle: rgba(74, 64, 54, 0.09);
-  --border-strong: rgba(74, 64, 54, 0.25);
-  --border-interactive: rgba(74, 64, 54, 0.34);
+  --text: #17243b;
+  --muted: #5b6780;
+  --text-subtle: #5b6780;
+  --text-disabled: #98a2b3;
+  --placeholder: #5f6b80;
+  --border: rgba(23, 36, 59, 0.14);
+  --border-subtle: rgba(23, 36, 59, 0.08);
+  --border-strong: rgba(23, 36, 59, 0.25);
+  --border-interactive: rgba(0, 87, 255, 0.45);
   --surface-raised: #ffffff;
-  --surface-inset: #f4f0e8;
-  --surface-hover: #f1ece3;
-  --surface-active: #e9e1d5;
-  --control-bg: #faf8f4;
+  --surface-inset: #eef2fa;
+  --surface-hover: #edf2fc;
+  --surface-active: #e1e9fa;
+  --control-bg: #f8fafe;
   --control-bg-hover: #ffffff;
-  --control-bg-disabled: #e9e2d8;
+  --control-bg-disabled: #e6eaf2;
   --control-option-bg: #ffffff;
-  --interactive-hover: rgba(74, 64, 54, 0.075);
-  --interactive-active: rgba(74, 64, 54, 0.12);
-  --selected-bg: rgba(184, 165, 138, 0.19);
-  --selected-border: #8f7a60;
-  --focus-color: #765e42;
-  --focus-ring: rgba(118, 94, 66, 0.22);
+  --interactive-hover: rgba(23, 36, 59, 0.06);
+  --interactive-active: rgba(23, 36, 59, 0.11);
+  --selected-bg: rgba(0, 87, 255, 0.1);
+  --selected-border: #3d7bff;
+  --focus-color: #0057ff;
+  --focus-ring: rgba(0, 87, 255, 0.25);
   --focus-ring-danger: rgba(156, 85, 78, 0.18);
-  --overlay: rgba(35, 29, 24, 0.56);
-  --shadow-card: 0 8px 26px rgba(74, 64, 54, 0.07);
-  --shadow-raised: 0 18px 52px rgba(74, 64, 54, 0.13);
-  --shadow-modal: 0 28px 90px rgba(35, 29, 24, 0.26);
-  --shadow-sidebar: 20px 0 60px rgba(35, 29, 24, 0.18);
-  --badge-bg: rgba(74, 64, 54, 0.09);
+  --overlay: rgba(2, 14, 62, 0.56);
+  --shadow-card: 0 8px 26px rgba(23, 36, 59, 0.07);
+  --shadow-raised: 0 18px 52px rgba(23, 36, 59, 0.13);
+  --shadow-modal: 0 28px 90px rgba(2, 14, 62, 0.26);
+  --shadow-sidebar: 20px 0 60px rgba(2, 14, 62, 0.18);
+  --badge-bg: rgba(23, 36, 59, 0.07);
   /* The two ends of a five-point scale: azure on the disagree/dislike side,
      bronze on the agree/like side. Turquoise against gold is the Samarkand
      tilework pairing, so it belongs on an ivory-and-bronze page in a way
      TestMind's violet did not. Warm against cool also keeps the two ends
      plainly opposite, and neither one is the good end -- which rules out a red
      or green pole, since both would read as a wrong answer. */
-  --scale-neg: #1f6e82;
-  --scale-neg-soft: #a3c6d0;
-  --scale-neg-ring: rgba(31, 110, 130, 0.16);
-  --scale-pos: #8a6a3f;
-  --scale-pos-soft: #bfa77b;
-  --scale-pos-ring: rgba(138, 106, 63, 0.16);
-  --scale-tick: #fffcf7;
-  --success-bg: rgba(85, 112, 91, 0.11);
-  --success-border: rgba(85, 112, 91, 0.27);
-  --danger-bg: rgba(156, 85, 78, 0.09);
-  --danger-border: rgba(156, 85, 78, 0.25);
-  --warning-bg: rgba(154, 117, 62, 0.1);
-  --warning-border: rgba(154, 117, 62, 0.26);
-  --table-hover: rgba(74, 64, 54, 0.045);
-  --progress-track: rgba(74, 64, 54, 0.15);
+  --scale-neg: #0b7f72;
+  --scale-neg-soft: #9bd5cd;
+  --scale-neg-ring: rgba(11, 127, 114, 0.16);
+  --scale-pos: #2b3fc4;
+  --scale-pos-soft: #a5afea;
+  --scale-pos-ring: rgba(43, 63, 196, 0.16);
+  --scale-tick: #ffffff;
+  --success-bg: rgba(31, 122, 90, 0.1);
+  --success-border: rgba(31, 122, 90, 0.27);
+  --danger-bg: rgba(194, 65, 47, 0.09);
+  --danger-border: rgba(194, 65, 47, 0.25);
+  --warning-bg: rgba(178, 106, 0, 0.1);
+  --warning-border: rgba(178, 106, 0, 0.26);
+  --table-hover: rgba(23, 36, 59, 0.04);
+  --progress-track: rgba(23, 36, 59, 0.12);
   --hero-watermark: rgba(255, 255, 255, 0.055);
   --on-accent-muted: rgba(255, 255, 255, 0.7);
   --on-accent-wash: rgba(255, 255, 255, 0.18);
-  --student-hero-start-token: #352d26;
-  --student-hero-mid-token: #675746;
-  --student-hero-end-token: #806c54;
-  --student-hero-text-token: #fffaf2;
-  --student-hero-muted-token: rgba(255, 250, 242, 0.78);
-  --student-hero-line-token: rgba(255, 250, 242, 0.18);
-  --student-hero-shadow-token: rgba(74, 64, 54, 0.18);
-  --student-hero-core-token: rgba(74, 64, 54, 0.92);
-  --student-accent-token: #6f5d48;
-  --student-accent-hover-token: #5c4c3b;
-  --student-accent-soft-token: #eee6da;
-  --student-accent-wash-token: rgba(111, 93, 72, 0.11);
-  --student-accent-text-token: #fffaf2;
-  --student-hero-decoration: rgba(255, 250, 242, 0.14);
+  --student-hero-start-token: #020e3e;
+  --student-hero-mid-token: #0a2670;
+  --student-hero-end-token: #0a3aa8;
+  --student-hero-text-token: #ffffff;
+  --student-hero-muted-token: rgba(255, 255, 255, 0.8);
+  --student-hero-line-token: rgba(255, 255, 255, 0.18);
+  --student-hero-shadow-token: rgba(2, 14, 62, 0.28);
+  --student-hero-core-token: rgba(2, 14, 62, 0.92);
+  --student-accent-token: #0057ff;
+  --student-accent-hover-token: #0046d1;
+  --student-accent-soft-token: #eaf0ff;
+  --student-accent-wash-token: rgba(0, 87, 255, 0.1);
+  --student-accent-text-token: #ffffff;
+  --student-hero-decoration: rgba(255, 255, 255, 0.14);
   --student-hero-avatar-ring: rgba(255, 255, 255, 0.72);
-  --student-hero-eyebrow: #d8c7ad;
-  --student-hero-button-bg: #fffaf2;
-  --student-hero-button-hover: #f5f0e6;
-  --student-hero-button-text: #4a4036;
-  --student-hero-ghost-bg: rgba(255, 250, 242, 0.07);
-  --student-hero-ghost-hover: rgba(255, 250, 242, 0.14);
-  --student-hero-ghost-border: rgba(255, 250, 242, 0.34);
-  --student-hero-ring-progress: #f2e4cf;
-  --student-hero-ring-track: rgba(255, 250, 242, 0.2);
-  --student-hero-ring-border: rgba(255, 250, 242, 0.12);
-  --student-hero-button-shadow: 0 9px 24px rgba(42, 34, 28, 0.16);
-  --brand-logo-image: url('/brand/naseeb-gold-shield.png');
+  --student-hero-eyebrow: #a9c4ff;
+  --student-hero-button-bg: #ffffff;
+  --student-hero-button-hover: #eaf0ff;
+  --student-hero-button-text: #020e3e;
+  --student-hero-ghost-bg: rgba(255, 255, 255, 0.08);
+  --student-hero-ghost-hover: rgba(255, 255, 255, 0.16);
+  --student-hero-ghost-border: rgba(255, 255, 255, 0.38);
+  --student-hero-ring-progress: #9dbcff;
+  --student-hero-ring-track: rgba(255, 255, 255, 0.2);
+  --student-hero-ring-border: rgba(255, 255, 255, 0.12);
+  --student-hero-button-shadow: 0 9px 24px rgba(2, 14, 62, 0.28);
+  --brand-logo-image: url('/brand/naseeb-logo-navy.png');
   --assistant-logo-image: url('/brand/assistant-bird.png');
-  --assistant-logo-color: #f1d390;
+  --assistant-logo-color: #ffffff;
   --assistant-logo-filter: none;
-  --assistant-launcher-logo-filter: brightness(1.1)
-    drop-shadow(0 1px 3px rgba(0, 0, 0, 0.2));
-  --assistant-surface: var(--accent-deep);
-  --assistant-surface-hover: var(--accent-contrast);
-  --assistant-surface-fg: var(--ivory);
+  --assistant-launcher-logo-filter: drop-shadow(0 1px 3px rgba(2, 14, 62, 0.3));
+  --assistant-surface: #0b1b4d;
+  --assistant-surface-hover: #14297a;
+  --assistant-surface-fg: #ffffff;
   --assistant-dock-shadow:
-    0 6px 22px rgba(74, 64, 54, 0.1), 0 1px 3px rgba(74, 64, 54, 0.06);
-  --bubble-shadow: 0 1px 2px rgba(74, 64, 54, 0.12);
-  --chat-canvas-dot: rgba(74, 64, 54, 0.05);
+    0 6px 22px rgba(23, 36, 59, 0.12), 0 1px 3px rgba(23, 36, 59, 0.08);
+  --bubble-shadow: 0 1px 2px rgba(23, 36, 59, 0.14);
+  --chat-canvas-dot: rgba(23, 36, 59, 0.05);
   --brand-logo-border: var(--accent);
   --brand-logo-shadow: 0 5px 18px var(--accent-shadow);
-  --progress-roadmap: #806c54;
-  --progress-overall: #55705b;
-  --hero-roadmap-mid: #62513f;
-  --hero-roadmap-end: #806b50;
-  --hero-essay-mid: #695243;
-  --hero-essay-end: #85634e;
-  --hero-college-mid: #5f5445;
-  --hero-college-end: #7d6d56;
+  --progress-roadmap: #0057ff;
+  --progress-overall: #1f8a63;
+  --hero-roadmap-mid: #0a2670;
+  --hero-roadmap-end: #0b3fb5;
+  --hero-essay-mid: #171f6b;
+  --hero-essay-end: #3340b5;
+  --hero-college-mid: #0a2e5c;
+  --hero-college-end: #0e5a9e;
   --silver-gradient: linear-gradient(
     135deg,
     #f2f2f5 0%,
     #c0c0c6 48%,
     #f2f2f5 100%
   );
-  --success: #55705b;
-  --danger: #9c554e;
-  --warning: #9a753e;
-  --warning-text: #7c5c25;
+  --success: #1f7a5a;
+  --danger: #c2412f;
+  --warning: #b26a00;
+  --warning-text: #8a5200;
   /* One bronze ramp for reach / target / safety; the shapes carry the meaning too. */
-  --tier-reach: #5f4e3b;
-  --tier-target: #9a8666;
-  --tier-safety: #c2ae8f;
+  --tier-reach: #0b1b4d;
+  --tier-target: #5c86e0;
+  --tier-safety: #86a3e3;
   --radius: 16px;
   --radius-control: 11px;
   --control-height: 44px;
@@ -855,208 +854,6 @@ button.chat-shared-item {
   font-family: 'Montserrat', system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-}
-
-:root[data-theme='dark'] {
-  /* Midnight blue surfaces, ice-blue accents and neutral white text. */
-  --silver: #c5d0d8;
-  --silver-gradient: linear-gradient(
-    135deg,
-    #f7f7f7 0%,
-    #c5d0d8 48%,
-    #f7f7f7 100%
-  );
-  --charcoal: #0c1923;
-  --light-grey: #f7f7f7;
-  --accent: #9fc6e2;
-  --accent-deep: #9fc6e2;
-  --accent-hover: #c3dced;
-  --accent-contrast: #10202d;
-  --accent-muted: #c5d0d8;
-  --accent-rgb: 159, 198, 226;
-  --accent-shadow: rgba(159, 198, 226, 0.18);
-  --badge-accent-text: #c3dced;
-  --eyebrow: #9fc6e2;
-  --accent-gradient: linear-gradient(135deg, #7da8c5 0%, #c3dced 100%);
-  --canvas: #10202d;
-  --surface: #162936;
-  --surface-soft: #1c3241;
-  --sidebar: var(--canvas);
-  --sidebar-end: var(--canvas);
-  --sidebar-text: #f7f7f7;
-  --sidebar-muted: #b5c3ce;
-  --sidebar-divider: rgba(181, 199, 211, 0.16);
-  --sidebar-hover: rgba(159, 198, 226, 0.1);
-  --sidebar-hover-strong: rgba(159, 198, 226, 0.24);
-  --nav-active-bg: #9fc6e2;
-  --nav-active-text: #10202d;
-  /* Counselor workspace: the same roles on the midnight palette. */
-  --cx-canvas: var(--canvas);
-  --cx-card: var(--surface);
-  --cx-line: var(--border);
-  --cx-line-strong: var(--border-strong);
-  --cx-field-line: var(--border-strong);
-  --cx-ink: var(--text);
-  --cx-text: var(--text);
-  --cx-muted: var(--muted);
-  --cx-dark: var(--accent);
-  --cx-on-dark: var(--accent-contrast);
-  --cx-on-dark-muted: rgba(16, 32, 45, 0.72);
-  --cx-avatar: var(--surface-active);
-  --cx-avatar-text: var(--text);
-  --cx-avatar-self: var(--accent);
-  --cx-avatar-self-text: var(--accent-contrast);
-  --cx-badge: var(--surface-hover);
-  --cx-inset: var(--surface-soft);
-  --cx-hover: var(--sidebar-hover);
-  --cx-selected: var(--selected-bg);
-  --cx-selected-line: var(--selected-border);
-  --cx-hero-start: #24465a;
-  --cx-hero-end: #1c3a4b;
-  --cx-hero-disc: var(--surface);
-  --cx-hero-ink: var(--text);
-  --cx-hero-muted: var(--muted);
-  --cx-rule: var(--border-subtle);
-  --cx-progress: var(--progress-roadmap);
-  --cx-track: var(--progress-track);
-  --cx-alert: var(--danger);
-  --cx-late-bg: var(--danger-bg);
-  --cx-late-text: var(--danger);
-  --cx-warn-bg: var(--warning-bg);
-  --cx-warn-text: var(--warning-text);
-  --cx-ok-bg: var(--success-bg);
-  --cx-ok-text: var(--success);
-  --cx-quiet-bg: var(--badge-bg);
-  --cx-quiet-text: var(--muted);
-  --cx-blue-bg: rgba(159, 198, 226, 0.16);
-  --cx-blue-text: var(--accent-hover);
-  --cx-blue-soft-bg: rgba(159, 198, 226, 0.11);
-  --cx-blue-soft-text: var(--accent-hover);
-  --cx-green-bg: var(--success-bg);
-  --cx-green-text: var(--success);
-  --cx-doc-bg: var(--badge-bg);
-  --cx-doc-text: var(--text);
-  --cx-radius-card: 16px;
-  --cx-radius-side: 20px;
-  --cx-radius-item: 10px;
-  --cx-radius-btn: 11px;
-  --login-sky: #0e1a2b;
-  --login-scrim: linear-gradient(
-    180deg,
-    rgba(6, 12, 24, 0.68) 0%,
-    rgba(6, 12, 24, 0.46) 42%,
-    rgba(6, 12, 24, 0.8) 100%
-  );
-  --login-card-shadow:
-    0 28px 70px rgba(0, 0, 0, 0.58), 0 4px 14px rgba(0, 0, 0, 0.42);
-  --login-chip-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-  --text: #f7f7f7;
-  --muted: #b5c3ce;
-  --text-subtle: #9cafbc;
-  --text-disabled: #708592;
-  --placeholder: #9cafbc;
-  --border: rgba(181, 199, 211, 0.16);
-  --border-subtle: rgba(181, 199, 211, 0.09);
-  --border-strong: rgba(181, 199, 211, 0.3);
-  --border-interactive: rgba(159, 198, 226, 0.55);
-  --surface-raised: #213947;
-  --surface-inset: #0c1923;
-  --surface-hover: #284452;
-  --surface-active: #304e5d;
-  --control-bg: #142733;
-  --control-bg-hover: #213947;
-  --control-bg-disabled: #12222d;
-  --control-option-bg: #1c3241;
-  --interactive-hover: rgba(181, 199, 211, 0.075);
-  --interactive-active: rgba(181, 199, 211, 0.12);
-  --selected-bg: rgba(159, 198, 226, 0.16);
-  --selected-border: #6f99b5;
-  --focus-color: #c3dced;
-  --focus-ring: rgba(159, 198, 226, 0.25);
-  --focus-ring-danger: rgba(224, 144, 136, 0.2);
-  --overlay: rgba(6, 15, 22, 0.76);
-  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.18);
-  --shadow-raised: 0 18px 54px rgba(0, 0, 0, 0.28);
-  --shadow-modal: 0 30px 100px rgba(0, 0, 0, 0.48);
-  --shadow-sidebar: 20px 0 60px rgba(0, 0, 0, 0.42);
-  --badge-bg: rgba(181, 199, 211, 0.09);
-  /* Lifted off the dark surface: the light theme's #1F6E82 and #8A6A3F both sink
-     into the navy surfaces. The tick flips dark to stay readable on the lighter fill. */
-  --scale-neg: #6fbbd0;
-  --scale-neg-soft: rgba(111, 187, 208, 0.45);
-  --scale-neg-ring: rgba(111, 187, 208, 0.2);
-  --scale-pos: #a8c0e8;
-  --scale-pos-soft: rgba(168, 192, 232, 0.45);
-  --scale-pos-ring: rgba(168, 192, 232, 0.2);
-  --scale-tick: #10202d;
-  --success-bg: rgba(137, 180, 146, 0.12);
-  --success-border: rgba(137, 180, 146, 0.3);
-  --danger-bg: rgba(224, 144, 136, 0.11);
-  --danger-border: rgba(224, 144, 136, 0.3);
-  --warning-bg: rgba(230, 167, 140, 0.11);
-  --warning-border: rgba(230, 167, 140, 0.29);
-  --table-hover: rgba(181, 199, 211, 0.045);
-  --progress-track: rgba(181, 199, 211, 0.15);
-  --hero-watermark: rgba(16, 32, 45, 0.07);
-  --on-accent-muted: rgba(16, 32, 45, 0.8);
-  --on-accent-wash: rgba(16, 32, 45, 0.12);
-  --student-hero-start-token: #0c1923;
-  --student-hero-mid-token: #193241;
-  --student-hero-end-token: #294757;
-  --student-hero-text-token: #f7f7f7;
-  --student-hero-muted-token: rgba(225, 234, 240, 0.8);
-  --student-hero-line-token: rgba(159, 198, 226, 0.2);
-  --student-hero-shadow-token: rgba(6, 15, 22, 0.46);
-  --student-hero-core-token: rgba(12, 25, 35, 0.96);
-  --student-accent-token: #9fc6e2;
-  --student-accent-hover-token: #c3dced;
-  --student-accent-soft-token: #1b3547;
-  --student-accent-wash-token: rgba(159, 198, 226, 0.14);
-  --student-accent-text-token: #10202d;
-  --student-hero-decoration: rgba(159, 198, 226, 0.16);
-  --student-hero-avatar-ring: rgba(247, 247, 247, 0.26);
-  --student-hero-eyebrow: #c3dced;
-  --student-hero-button-bg: #9fc6e2;
-  --student-hero-button-hover: #c3dced;
-  --student-hero-button-text: #10202d;
-  --student-hero-ghost-bg: rgba(159, 198, 226, 0.08);
-  --student-hero-ghost-hover: rgba(159, 198, 226, 0.16);
-  --student-hero-ghost-border: rgba(159, 198, 226, 0.38);
-  --student-hero-ring-progress: #9fc6e2;
-  --student-hero-ring-track: rgba(159, 198, 226, 0.2);
-  --student-hero-ring-border: rgba(159, 198, 226, 0.18);
-  --student-hero-button-shadow: 0 10px 28px rgba(6, 15, 22, 0.32);
-  --brand-logo-image: url('/brand/naseeb-midnight-shield.png');
-  --assistant-logo-image: url('/brand/assistant-bird.png');
-  --assistant-logo-color: #f7f7f7;
-  --assistant-logo-filter: none;
-  --assistant-launcher-logo-filter: brightness(1.12)
-    drop-shadow(0 0 4px rgba(159, 198, 226, 0.22));
-  --assistant-surface: var(--surface-inset);
-  --assistant-surface-hover: var(--surface-raised);
-  --assistant-surface-fg: var(--accent);
-  --assistant-dock-shadow:
-    0 6px 22px rgba(6, 15, 22, 0.28), 0 1px 3px rgba(6, 15, 22, 0.18);
-  --bubble-shadow: 0 1px 2px rgba(6, 15, 22, 0.4);
-  --chat-canvas-dot: rgba(159, 198, 226, 0.06);
-  --brand-logo-border: var(--accent);
-  --brand-logo-shadow: 0 5px 18px var(--accent-shadow);
-  --progress-roadmap: #9fc6e2;
-  --progress-overall: #89b492;
-  --hero-roadmap-mid: #193241;
-  --hero-roadmap-end: #294757;
-  --hero-essay-mid: #203644;
-  --hero-essay-end: #354d58;
-  --hero-college-mid: #19323f;
-  --hero-college-end: #294957;
-  --success: #89b492;
-  --danger: #e09088;
-  --warning: #e6a78c;
-  --warning-text: #e6a78c;
-  --tier-reach: #c3dced;
-  --tier-target: #7da8c5;
-  --tier-safety: #4f7a96;
-  color-scheme: dark;
 }
 
 * {
@@ -3369,26 +3166,29 @@ td small {
   align-items: center;
   gap: var(--space-6);
   padding: 24px;
-  background: var(--accent-gradient);
-  color: var(--accent-contrast);
-  border: 1px solid var(--accent);
+  /* Logo navy with one soft blue glow behind the readiness figure, so the
+     white copy keeps AA contrast across the whole banner. */
+  background:
+    radial-gradient(
+      ellipse 55% 130% at 90% 0%,
+      color-mix(in srgb, var(--student-hero-ring-progress) 30%, transparent),
+      transparent 64%
+    ),
+    linear-gradient(
+      118deg,
+      var(--student-hero-start-token) 0%,
+      var(--student-hero-mid-token) 58%,
+      var(--student-hero-end-token) 100%
+    );
+  color: var(--student-hero-text-token);
+  border: 1px solid var(--student-hero-line-token);
   border-radius: var(--radius);
   overflow: hidden;
   position: relative;
 }
-/* Secondary copy takes the banner's own ink on the taupe light banner: the
-   muted token reads below 4.5:1 on the darker end of its gradient. */
-.student-overview-hero {
-  --accent-muted: var(--accent-contrast);
-}
 
-/* Secondary copy stays readable on the ice-blue overview banner. */
-:root[data-theme='dark'] .student-overview-hero {
-  --accent-muted: var(--on-accent-muted);
-  --eyebrow: var(--accent-contrast);
-  --border-interactive: var(--accent-contrast);
-  --progress-track: var(--on-accent-wash);
-  --silver: var(--accent-contrast);
+.student-overview-hero {
+  --accent-muted: var(--student-hero-muted-token);
 }
 
 .student-overview-hero::after {
@@ -3414,9 +3214,9 @@ td small {
 }
 
 .student-overview-title .button.quiet {
-  background: transparent;
-  color: var(--accent-contrast);
-  border-color: var(--border-interactive);
+  background: var(--student-hero-ghost-bg);
+  color: var(--student-hero-text-token);
+  border-color: var(--student-hero-ghost-border);
 }
 
 .student-overview-title .profile-identity,
@@ -3450,9 +3250,9 @@ td small {
 .student-overview-actions .button {
   width: 100%;
   justify-content: flex-start;
-  background: transparent;
-  color: var(--accent-contrast);
-  border-color: var(--border-interactive);
+  background: var(--student-hero-ghost-bg);
+  color: var(--student-hero-text-token);
+  border-color: var(--student-hero-ghost-border);
 }
 
 .overview-progress {
@@ -3490,6 +3290,14 @@ td small {
 
 .progress.wide span {
   background: var(--silver);
+}
+
+.student-overview-hero .progress.wide {
+  background: var(--student-hero-ring-track);
+}
+
+.student-overview-hero .progress.wide span {
+  background: var(--student-hero-ring-progress);
 }
 
 .overview-grid {

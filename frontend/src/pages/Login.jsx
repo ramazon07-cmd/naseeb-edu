@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { api } from '../api';
 import { ArrowLeft, Check, ChevronRight, Circle, LogOut } from 'lucide-react';
 import { t } from '../i18n';
-import { LanguageSelector, ThemeToggle, BrandLogo } from '../components/brand';
+import { LanguageSelector, BrandLogo } from '../components/brand';
 import { Field, PasswordInput } from '../components/forms';
 import { GRADES, gradeText } from '../lib/format';
 import { fullName } from '../lib/labels';
 
 export const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
 
-export function Login({ onLogin, onBack, theme, toggleTheme, language, changeLanguage }) {
+export function Login({ onLogin, onBack, theme, language, changeLanguage }) {
   const [form, setForm] = useState(SHOW_DEMO_ACCOUNTS ?
   { username: 'counselor', password: 'admin12345' } :
   { username: '', password: '' });
@@ -42,7 +42,6 @@ export function Login({ onLogin, onBack, theme, toggleTheme, language, changeLan
             onChange={changeLanguage}
             compact
           />
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
         </div>
       </header>
       <section className="login-form-panel" aria-label={t("Sign in")}>
@@ -93,7 +92,7 @@ export function Login({ onLogin, onBack, theme, toggleTheme, language, changeLan
 
 // First sign-in with a temporary password: the sign-in page's backdrop and card,
 // so choosing a password reads as the next step of signing in.
-export function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggleTheme, language, changeLanguage }) {
+export function ForcedPasswordChange({ user, onChanged, onSignOut, theme, language, changeLanguage }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [grade, setGrade] = useState('');
@@ -120,7 +119,7 @@ export function ForcedPasswordChange({ user, onChanged, onSignOut, theme, toggle
   return <main className="login-page">
     <header className="login-bar">
       <button type="button" className="login-return" onClick={onSignOut}><LogOut size={17} aria-hidden="true" /> {t('Sign out')}</button>
-      <div className="login-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
+      <div className="login-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /></div>
     </header>
     <section className="login-form-panel" aria-labelledby="password-change-title">
       <form className="login-card" onSubmit={submit}>
