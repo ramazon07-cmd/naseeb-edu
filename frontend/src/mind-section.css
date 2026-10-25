@@ -8,6 +8,7 @@
   padding-block: clamp(40px, 6vw, 88px);
   scroll-margin-top: 125px;
 }
+
 .landing-mind-panel {
   display: grid;
   grid-template-columns: 1.15fr 1fr;
@@ -105,6 +106,7 @@
   object-fit: cover;
   object-position: 60% center;
 }
+
 .landing-mind-facts {
   grid-column: 1 / -1;
   margin: 0;

@@ -3426,10 +3426,6 @@
   }
 }
 
-@media (max-width: 1100px) {
-
-}
-
 @media (max-width: 560px) {
   .landing-product-layout {
     grid-template-columns: 44px minmax(0, 1fr);
