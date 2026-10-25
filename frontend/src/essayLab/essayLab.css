@@ -1984,7 +1984,7 @@
   padding: 16px 18px;
   border-radius: 14px;
   background: #0d1a33;
-  color: #f5f0e6;
+  color: #f3f6fd;
   animation: el-rise 0.2s ease-out;
 }
 
@@ -2002,13 +2002,13 @@
 
 .el-welcome span {
   font-size: var(--text-sm);
-  color: #d8cec0;
+  color: #c9d6f2;
 }
 
 .el-btn.is-light {
-  background: #f5f0e6;
+  background: #f3f6fd;
   color: #0d1a33;
-  border-color: #f5f0e6;
+  border-color: #f3f6fd;
 }
 
 .el-btn.is-light:hover {
