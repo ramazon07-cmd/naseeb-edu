@@ -14,11 +14,9 @@ import {
   HeartHandshake,
   Mail,
   MessageSquareText,
-  Moon,
   PenLine,
   Presentation,
   ShieldCheck,
-  Sun,
   UserRoundCheck,
 } from "lucide-react";
 
@@ -37,7 +35,7 @@ import { deferSvgImages } from "./deferSvgImages";
 const HERO_WIDTHS = [640, 960, 1448];
 const HERO_SIZES = "(max-width: 820px) 100vw, 760px";
 const heroSource = (theme, width) =>
-  `/landing/hero-${theme === "dark" ? "cool" : "light"}-${width}.webp`;
+  `/landing/hero-light-${width}.webp`;
 const heroSrcSet = (theme) =>
   HERO_WIDTHS.map((width) => `${heroSource(theme, width)} ${width}w`).join(", ");
 
@@ -536,26 +534,9 @@ function LanguageSelector({ language, onChange }) {
   );
 }
 
-function ThemeToggle({ theme, onToggle }) {
-  const isDark = theme === "dark";
-  return (
-    <button
-      type="button"
-      className="icon-button theme-toggle"
-      onClick={onToggle}
-      title={isDark ? t("Light mode") : t("Dark mode")}
-      aria-label={isDark ? t("Switch to light mode") : t("Switch to dark mode")}
-      aria-pressed={isDark}
-    >
-      {isDark ? <Sun size={18} /> : <Moon size={18} />}
-    </button>
-  );
-}
-
 export default function LandingPage({
   onLogin,
   theme,
-  toggleTheme,
   language,
   changeLanguage,
 }) {
@@ -821,7 +802,6 @@ export default function LandingPage({
           </nav>
           <div className="landing-nav-actions">
             <LanguageSelector language={language} onChange={changeLanguage} />
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <button
               type="button"
               className="landing-login-button"

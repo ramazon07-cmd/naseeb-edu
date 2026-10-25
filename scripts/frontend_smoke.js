@@ -185,12 +185,12 @@ for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchra
 }
 if (app.includes('className="palette-row"')) throw new Error('Login palette swatches must not be rendered.');
 if (!app.includes("if (role === 'organization') return [staff.bookings, staff.messageChannels, staff.supportTickets]") || !app.includes("usePagedList('students'")) throw new Error('Organization data scope is missing: school rosters must be server-paged.');
-if (!app.includes("const THEME_KEY = 'naseeb-edu-theme'")) throw new Error('Persistent theme support is missing.');
-if (!app.includes("light: '/brand/favicon-light-32.png'") || !app.includes("dark: '/brand/favicon-dark-32.png'") || !app.includes('favicon.href = themeIconFor(theme)')) throw new Error('The favicon must follow the active app theme.');
-if (!html.includes("favicon.href = theme === 'dark' ? '/brand/favicon-dark-32.png' : '/brand/favicon-light-32.png'")) throw new Error('The pre-paint favicon must follow the initial app theme.');
+if (!app.includes("document.documentElement.dataset.theme = 'light'")) throw new Error('The single light theme must be applied to <html>.');
+if (app.includes('ThemeToggle') || app.includes('toggleTheme')) throw new Error('Naseeb Edu is light-only; the theme toggle must not return.');
+if (/data-theme='dark'|prefers-color-scheme/.test(html) || /\[data-theme=.dark.\]/.test(styles)) throw new Error('Dark-theme rules must not return.');
 const imagePreloads = html.match(/<link\b[^>]*rel="preload"[^>]*as="image"[^>]*>/g) || [];
 if (imagePreloads.length !== 1 || !imagePreloads[0].includes('data-theme-hero') || !imagePreloads[0].includes('fetchpriority="high"')) throw new Error('Only the active landing hero should have a high-priority image preload.');
-for (const variant of ['light', 'cool']) {
+for (const variant of ['light']) {
   for (const width of [640, 960, 1448]) {
     const hero = `/landing/hero-${variant}-${width}.webp`;
     if (!fs.existsSync(path.join(root, 'frontend/public', hero))) throw new Error(`Hero asset missing: ${hero}`);
@@ -216,13 +216,13 @@ if (!app.includes('function ChannelListSkeleton(') || !app.includes('function Me
 if (!app.includes('The preview is taking longer than expected.') || !styles.includes('.embedded-preview-state')) throw new Error('Embedded preview slow-loading fallback is missing.');
 if (!app.includes('Create self-task') || !app.includes("t('Personal task')") || !app.includes('item.is_self_assigned')) throw new Error('Student zero-XP self-task UI is missing.');
 if (!app.includes('Only students connected to your account are listed.')) throw new Error('Scoped task-assignment guidance is missing.');
-if (!styles.includes('--sidebar: var(--canvas)') || !styles.includes('--canvas: #f7f7f7') || !styles.includes('--canvas: #10202d')) throw new Error('Theme-aware page and sidebar colors are missing.');
-if (!styles.includes('--accent: #B8A58A') || !styles.includes('--accent: #9fc6e2')) throw new Error('Light/dark accent palettes are missing.');
-if (!styles.includes("--brand-logo-image: url('/brand/naseeb-gold-shield.png')") || !styles.includes("--brand-logo-image: url('/brand/naseeb-midnight-shield.png')") || !styles.includes('center / contain no-repeat')) throw new Error('Light and dark shields must render without cropping through the brand token.');
-if (styles.includes('--nav-active-bg: var(--silver-gradient)')) throw new Error('Dark navigation must not reuse the light silver active state.');
-if (styles.includes('--student-accent-token: #C8B99F')) throw new Error('Dark student UI must not reuse the beige light accent.');
+if (!styles.includes('--sidebar: var(--canvas)') || !styles.includes('--canvas: #f6f7fb')) throw new Error('Theme-aware page and sidebar colors are missing.');
+if (!styles.includes('--accent: #0057ff') || styles.includes('--accent: #6e9bff')) throw new Error('The light accent palette is missing.');
+if (!styles.includes("--brand-logo-image: url('/brand/naseeb-logo-navy.png')") || !styles.includes('center / contain no-repeat')) throw new Error('The navy brand logo must render without cropping through the brand token.');
+
+
 if (!app.includes("user.role === 'student' ? 'student-portal' : ''")) throw new Error('Student messaging must inherit the student theme scope.');
-if (!styles.includes('.student-portal .message-bubble:not(.mine) footer button')) throw new Error('Student message actions need dark-mode contrast.');
+
 for (const token of [
   '--border-subtle', '--border-strong', '--border-interactive', '--surface-hover',
   '--control-bg', '--control-bg-disabled', '--control-option-bg', '--selected-border',
@@ -233,7 +233,7 @@ for (const token of [
 const normalizedStyles = styles.replace(/\r\n/g, '\n')
 // mask-image gradients only carry alpha (the counselor shell fades its tab
 // strip with one); their colour is never painted, so they are not themed.
-const componentStyles = (normalizedStyles.split("color-scheme: dark;\n}")[1] || '')
+const componentStyles = (normalizedStyles.split('\n* {\n  box-sizing: border-box;')[1] || '')
   .split('\n').filter((line) => !/^\s*(-webkit-)?mask-image:/.test(line)).join('\n')
 if (/#[0-9a-f]{3,8}|rgba?\(/i.test(componentStyles)) throw new Error('Component-level hardcoded color remains outside the theme token blocks.')
 const landingSentinel = '/* == landing tokens end == */'
@@ -244,17 +244,17 @@ const tokenDefinitions = new Set([...styles.matchAll(/--([a-z0-9-]+)\s*:/gi)].ma
 const tokenReferences = new Set([...styles.matchAll(/var\(--([a-z0-9-]+)/gi)].map((match) => match[1]))
 const undefinedTokens = [...tokenReferences].filter((token) => !tokenDefinitions.has(token))
 if (undefinedTokens.length) throw new Error(`Undefined CSS variables: ${undefinedTokens.join(', ')}`)
-if (!html.includes("localStorage.getItem('naseeb-edu-theme')") || !app.includes('useLayoutEffect')) throw new Error('Pre-paint theme initialization is missing.')
+if (!html.includes("document.documentElement.dataset.theme = 'light'") || !app.includes('useLayoutEffect')) throw new Error('Pre-paint theme initialization is missing.')
 if (!app.includes('function CheckboxControl(') || !app.includes('function ChoiceCards(')) throw new Error('Accessible reusable form controls are missing.')
 if (app.includes('program-type-tabs') || app.includes('check-filter')) throw new Error('Legacy program filters are still rendered.')
 // Profile Assessment's majors no longer have an AI action, so the workspace may have none.
 if ((app.match(/<Sparkles/g) || []).length > 1) throw new Error('The sparkle icon is reserved for Naseeb AI actions only.')
 if ((html.match(/name="theme-color"/g) || []).length !== 1) throw new Error('Exactly one dynamic theme-color meta tag is required.');
 if (app.includes('AdmitFlow') || html.includes('AdmitFlow')) throw new Error('Legacy AdmitFlow branding is still rendered.');
-for (const asset of ['naseeb-gold-shield.png', 'naseeb-midnight-shield.png', 'assistant-bird.png', 'favicon-light-32.png', 'favicon-dark-32.png', 'apple-touch-icon.png']) {
+for (const asset of ['naseeb-logo-navy.png', 'assistant-bird.png', 'favicon-light-32.png', 'apple-touch-icon.png']) {
   if (!fs.existsSync(path.join(root, 'frontend/public/brand', asset))) throw new Error(`Brand asset missing: ${asset}`);
 }
-for (const color of ['#10202d', '#9fc6e2', '#f7f7f7']) {
+for (const color of ['#0057ff', '#020e3e', '#17243b']) {
   if (!styles.includes(color)) throw new Error(`Palette color missing: ${color}`)
 }
 

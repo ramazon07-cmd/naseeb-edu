@@ -1,23 +1,13 @@
 /* A self-contained editorial feature inside the existing landing page. */
 .landing-mind {
-  --mind-surface: #eeebe4;
-  --mind-ink: #352f27;
-  --mind-muted: #655c50;
-  --mind-accent: #7d5c29;
-  --mind-line: #d5ccbc;
+  --mind-surface: #f3f6fd;
+  --mind-ink: #17243b;
+  --mind-muted: #5b6780;
+  --mind-accent: #0057ff;
+  --mind-line: #d8e0f0;
   padding-block: clamp(40px, 6vw, 88px);
   scroll-margin-top: 125px;
 }
-/* Dark mode wears Naseeb Mind's own dark palette (assets/site.css on
-   personality.naseebedu.com), so the card and the site it links to match. */
-[data-theme='dark'] .landing-mind {
-  --mind-surface: #162936;
-  --mind-ink: #f7f7f7;
-  --mind-muted: #b5c3ce;
-  --mind-accent: #9fc6e2;
-  --mind-line: rgba(181, 199, 211, 0.16);
-}
-
 .landing-mind-panel {
   display: grid;
   grid-template-columns: 1.15fr 1fr;
@@ -81,20 +71,15 @@
   gap: var(--space-6);
   min-height: 52px;
   padding: 15px 22px;
-  border-radius: var(--radius-base);
-  background: #403526;
-  color: #fffaf1;
+  border-radius: var(--radius-pill);
+  background: #0057ff;
+  color: #ffffff;
   font-size: var(--text-sm);
   font-weight: 600;
   text-decoration: none;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
-}
-
-[data-theme='dark'] .landing-mind .landing-mind-cta {
-  background: #9fc6e2;
-  color: #10202d;
 }
 
 .landing-mind-cta:hover {
@@ -120,21 +105,6 @@
   object-fit: cover;
   object-position: 60% center;
 }
-/* opacity, not display:none: a hidden lazy image is never fetched, so the
-   first switch to dark would show an empty frame while it downloads. */
-/* Same 1536x1024 frame as the light image, head in the same place, so the two
-   share one object-position and the head does not jump when the theme flips. */
-.landing-mind-art .landing-mind-art-dark {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-[data-theme='dark'] .landing-mind-art .landing-mind-art-dark {
-  opacity: 1;
-}
-
 .landing-mind-facts {
   grid-column: 1 / -1;
   margin: 0;
@@ -273,6 +243,7 @@
   flex-shrink: 0;
 }
 
-[data-theme='dark'] .landing-mind-logo {
-  filter: brightness(0) invert(1);
+/* The light artwork is a gold glass head; rotate it into the brand blue. */
+.landing-mind-art img {
+  filter: hue-rotate(185deg) saturate(0.9);
 }

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta id="theme-color" name="theme-color" content="#f7f7f7" />
+    <meta id="theme-color" name="theme-color" content="#f6f7fb" />
     <meta name="description" content="Naseeb Edu o‘quvchilar, oilalar va maktablar uchun universitetga ariza jarayonini boshqaradigan ta’lim maslahat platformasi." />
     <link rel="canonical" href="https://naseebedu.com/" />
     <link rel="alternate" hreflang="uz" href="https://naseebedu.com/?lang=uz" />
@@ -29,32 +29,23 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/montserrat-latin.woff2" crossorigin />
     <link rel="preload" as="image" type="image/webp" data-theme-hero fetchpriority="high" imagesizes="(max-width: 820px) 100vw, 760px" />
-    <link rel="icon" type="image/png" sizes="32x32" data-theme-icon href="/brand/favicon-light-32.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-light-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png" />
     <title>Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi</title>
     <style>
-      html { background: #f7f7f7; color-scheme: light; }
-      html[data-theme='dark'] { background: #10202d; color-scheme: dark; }
+      html { background: #f6f7fb; color-scheme: light; }
       body { margin: 0; min-width: 320px; min-height: 100dvh; background: inherit; }
-      .app-boot { min-height: 100dvh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; color: #4A4036; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-      html[data-theme='dark'] .app-boot { color: #f7f7f7; }
+      .app-boot { min-height: 100dvh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; color: #17243B; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
       .app-boot-card { width: min(360px, 100%); display: grid; justify-items: center; gap: 18px; text-align: center; }
-      .app-boot-mark { width: 96px; height: 96px; position: relative; display: grid; place-items: center; border: 1px solid rgba(74,64,54,.22); border-radius: 50%; }
-      .app-boot-mark i { width: 52px; height: 52px; display: block; background: #765E42; -webkit-mask: url('/brand/assistant-bird.png') center / contain no-repeat; mask: url('/brand/assistant-bird.png') center / contain no-repeat; animation: boot-pulse 1.6s ease-in-out infinite; }
-      html[data-theme='dark'] .app-boot-mark i { background: #9fc6e2; }
-      html[data-theme='dark'] .app-boot-mark { border-color: rgba(159,198,226,.34); }
-      .app-boot-mark::before, .app-boot-mark::after { content: ''; position: absolute; inset: -1px; border: 2px solid transparent; border-top-color: #765E42; border-radius: 50%; animation: boot-spin 1.05s linear infinite; }
-      .app-boot-mark::after { inset: 9px; border-top-color: transparent; border-bottom-color: #B8A58A; animation-direction: reverse; animation-duration: 1.4s; }
-      html[data-theme='dark'] .app-boot-mark::before { border-top-color: #9fc6e2; }
-      html[data-theme='dark'] .app-boot-mark::after { border-bottom-color: #6f99b5; }
+      .app-boot-mark { width: 96px; height: 96px; position: relative; display: grid; place-items: center; border: 1px solid rgba(23,36,59,.22); border-radius: 50%; }
+      .app-boot-mark i { width: 52px; height: 52px; display: block; background: #0057FF; -webkit-mask: url('/brand/assistant-bird.png') center / contain no-repeat; mask: url('/brand/assistant-bird.png') center / contain no-repeat; animation: boot-pulse 1.6s ease-in-out infinite; }
+      .app-boot-mark::before, .app-boot-mark::after { content: ''; position: absolute; inset: -1px; border: 2px solid transparent; border-top-color: #0057FF; border-radius: 50%; animation: boot-spin 1.05s linear infinite; }
+      .app-boot-mark::after { inset: 9px; border-top-color: transparent; border-bottom-color: #8FB2FF; animation-direction: reverse; animation-duration: 1.4s; }
       .app-boot-copy b, .app-boot-copy span { display: block; }
       .app-boot-copy b { font: 600 20px/1.2 Georgia, serif; letter-spacing: .035em; }
-      .app-boot-copy span { margin-top: 7px; color: #766A5D; font-size: 12px; }
-      html[data-theme='dark'] .app-boot-copy span { color: #b5c3ce; }
-      .app-boot-line { width: 190px; height: 4px; overflow: hidden; background: rgba(74,64,54,.13); border-radius: 99px; }
-      html[data-theme='dark'] .app-boot-line { background: rgba(181,199,211,.13); }
-      .app-boot-line::after { content: ''; width: 42%; height: 100%; display: block; background: #765E42; border-radius: inherit; animation: boot-slide 1.25s ease-in-out infinite; }
-      html[data-theme='dark'] .app-boot-line::after { background: #9fc6e2; }
+      .app-boot-copy span { margin-top: 7px; color: #5B6780; font-size: 12px; }
+      .app-boot-line { width: 190px; height: 4px; overflow: hidden; background: rgba(23,36,59,.13); border-radius: 99px; }
+      .app-boot-line::after { content: ''; width: 42%; height: 100%; display: block; background: #0057FF; border-radius: inherit; animation: boot-slide 1.25s ease-in-out infinite; }
       @keyframes boot-spin { to { transform: rotate(360deg); } }
       @keyframes boot-pulse { 0%, 100% { opacity: .55; transform: scale(.94); } 50% { opacity: 1; transform: scale(1); } }
       @keyframes boot-slide { 0% { transform: translateX(-120%); } 100% { transform: translateX(340%); } }
@@ -68,15 +59,9 @@
           const storedLanguage = localStorage.getItem('naseeb-edu-language-v1')
           const browserLanguage = navigator.language?.split('-')[0]
           document.documentElement.lang = [urlLanguage, storedLanguage, browserLanguage].find((value) => supportedLanguages.includes(value)) || 'en'
-          const saved = localStorage.getItem('naseeb-edu-theme')
-          const theme = saved === 'light' || saved === 'dark'
-            ? saved
-            : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-          document.documentElement.dataset.theme = theme
-          document.documentElement.style.colorScheme = theme
-          document.getElementById('theme-color').content = theme === 'dark' ? '#10202d' : '#f7f7f7'
-          const favicon = document.querySelector('link[data-theme-icon]')
-          if (favicon) favicon.href = theme === 'dark' ? '/brand/favicon-dark-32.png' : '/brand/favicon-light-32.png'
+          document.documentElement.dataset.theme = 'light'
+          document.documentElement.style.colorScheme = 'light'
+          document.getElementById('theme-color').content = '#f6f7fb'
         } catch {
           document.documentElement.dataset.theme = 'light'
           document.documentElement.style.colorScheme = 'light'
@@ -93,7 +78,7 @@
         if (hero && (signedIn || location.hash === '#/login')) hero.remove()
         else if (hero) {
           // Match the rendered hero, including the storage-disabled fallback.
-          const variant = document.documentElement.dataset.theme === 'dark' ? 'cool' : 'light'
+          const variant = 'light'
           hero.setAttribute('imagesrcset', [640, 960, 1448].map((w) => '/landing/hero-' + variant + '-' + w + '.webp ' + w + 'w').join(', '))
           hero.href = '/landing/hero-' + variant + '-1448.webp'
         }

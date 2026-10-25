@@ -6,8 +6,8 @@ import { t, tx } from '../i18n';
 import { CARD_HEIGHT, CARD_WIDTH, drawProfileCard } from '../lib/profileCard';
 import './profile-card.css';
 
-// The shields --brand-logo-image uses in styles.css: gold on light, midnight on dark.
-const LOGOS = { light: '/brand/naseeb-gold-shield.png', dark: '/brand/naseeb-midnight-shield.png' };
+// The shields --brand-logo-image uses in styles.css: navy on light, white on dark.
+const LOGOS = { light: '/brand/naseeb-logo-navy.png', dark: '/brand/naseeb-logo-white.png' };
 
 // Canvas and PNG use the active theme's palette (profile-card.css).
 function readPalette(element) {
