@@ -94,3 +94,12 @@ export const gradeText = (grade) => {
   if (!grade) return '';
   return grade === 'gap' ? t('Gap year') : tx`Grade ${grade}`;
 };
+
+// The classes a student can pick, in the order the profile form lists them.
+export const GRADES = ['8', '9', '10', '11', 'gap'];
+
+// The classes the students filters offer for now; a student can still pick any of GRADES.
+export const FILTER_GRADES = ['9', '10', '11'];
+
+// A counselor's list: a class the student has not picked yet says so, instead of leaving a blank.
+export const gradeOrPending = (grade) => gradeText(grade) || t('Class not chosen yet');

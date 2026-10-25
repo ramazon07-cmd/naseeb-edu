@@ -35,7 +35,7 @@ export function CxAvatar({ name, className = '' }) {
   return <span className={`cx-avatar ${className}`.trim()} aria-hidden="true">{initials(name)}</span>;
 }
 
-// `tone`: late | warn | ok | quiet | task | roadmap | portfolio | document.
+// `tone`: late | warn | ok | quiet | task | roadmap | portfolio | document | pending (dashed; styled in counselor-students.css).
 export function CxTag({ tone = 'quiet', small = false, children }) {
   return <span className={`cx-tag cx-tag-${tone}${small ? ' cx-tag-sm' : ''}`}>{children}</span>;
 }

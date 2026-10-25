@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
+from apps.admissions.models import StudentProfile
 from . import entitlements
 from .admin_permissions import has_tier
 from .credentials import issue_temporary_credential
@@ -433,6 +434,8 @@ class CounselorTransferSerializer(serializers.Serializer):
 class PasswordChangeSerializer(serializers.Serializer):
     new_password = serializers.CharField(write_only=True, validators=[validate_password])
     confirm_password = serializers.CharField(write_only=True)
+    # A student also picks their class here: the first sign-in is the one step every student passes.
+    grade = serializers.ChoiceField(choices=StudentProfile.Grade.choices, required=False)
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['confirm_password']:

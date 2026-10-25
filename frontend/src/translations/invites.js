@@ -98,6 +98,9 @@ export const INVITE_TRANSLATIONS = {
   ],
   // First sign-in: the student chooses their own password
   'Welcome, {name}': ['Xush kelibsiz, {name}', 'Добро пожаловать, {name}'],
+  'Your class': ['Sinfingiz', 'Ваш класс'],
+  'Class not chosen yet': ['Sinf hali tanlanmagan', 'Класс ещё не выбран'],
+  'Not chosen': ['Tanlanmagan', 'Не выбран'],
   'Set your own password to open your cabinet. From now on you sign in with it.': [
     'Kabinetingizni ochish uchun o‘z parolingizni o‘rnating. Bundan keyin shu parol bilan kirasiz.',
     'Задайте свой пароль, чтобы открыть кабинет. Дальше вы будете входить с ним.',

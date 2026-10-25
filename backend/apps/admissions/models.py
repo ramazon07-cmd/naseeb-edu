@@ -118,7 +118,8 @@ class StudentProfile(TimeStampedModel):
         blank=True,
         related_name='assigned_students',
     )
-    grade = models.CharField(max_length=10, choices=Grade.choices, default=Grade.GRADE_10)
+    # Empty until the student picks it at the first sign-in; a preset class would be a guess.
+    grade = models.CharField(max_length=10, choices=Grade.choices, blank=True, default='')
     school_name = models.CharField(max_length=180, default='Naseeb Edu')
     school = models.ForeignKey(
         School,
