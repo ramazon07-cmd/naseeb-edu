@@ -25,7 +25,7 @@ function PreviewSidebar({ items, active, initials, name, role }) {
     <aside className="landing-preview-sidebar">
       <div className="landing-preview-brand">
         <span className="brand-logo landing-preview-emblem" />
-        <div><b>Naseeb Edu</b><small>{t('Education Counseling Platform')}</small></div>
+        <div><b>Naseeb Edu</b><small>{t('AI admission platform')}</small></div>
       </div>
       <div className="landing-preview-nav">
         {items.map(([Icon, label]) => (

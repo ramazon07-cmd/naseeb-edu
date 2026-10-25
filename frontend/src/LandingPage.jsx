@@ -3,22 +3,28 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Bot,
+  Brain,
   Building2,
   ChevronRight,
   CircleDollarSign,
-  ClipboardCheck,
   Compass,
-  FileText,
+  Database,
   Globe2,
   GraduationCap,
   HeartHandshake,
+  Layers,
+  LayoutDashboard,
   Mail,
-  MessageSquareText,
   Moon,
   PenLine,
+  Plug,
   Presentation,
   ShieldCheck,
+  Sparkles,
   Sun,
+  Trophy,
+  UserRound,
   UserRoundCheck,
 } from "lucide-react";
 
@@ -28,7 +34,6 @@ import {
   StudentDashboardPreview,
 } from "./LandingDashboardPreviews";
 import HeroParticleNetwork from "./HeroParticleNetwork";
-import MindSection from "./MindSection";
 import useStoryMarquee from "./useStoryMarquee";
 import { deferSvgImages } from "./deferSvgImages";
 
@@ -357,7 +362,7 @@ const INTERNATIONAL_PROGRAMS = [
 const PLACEMENT_ROWS = [
   {
     id: "universities",
-    title: "Our students were admitted to",
+    title: "Students using Naseeb Edu were admitted to",
     directory: "universities",
     entries: UNIVERSITY_PLACEMENTS,
   },
@@ -370,70 +375,88 @@ const PLACEMENT_ROWS = [
 ].filter(({ entries }) => entries.length > 0);
 
 /* ---------------------------------------------------------------------------
-   Frequently asked questions. Answers are product claims, so every line here
-   must stay true of what the platform actually does: readiness is preparation
-   progress and never an admission probability, accounts are provisioned by a
-   school, and matching is profile-driven rather than a ranking table.
+   Frequently asked questions. Answers are product claims and follow the
+   platform description filed with IT Park: Naseeb Edu is software sold by
+   subscription, not a consulting service. Keep the two qualifiers: readiness
+   is preparation progress and never an admission probability, and Reach /
+   Target / Safety are a comparison, not a guarantee.
    `answer` is an array so a question can carry a qualifying second paragraph
    without a second component. The final entry is the contact hand-off and
    renders the support address as a real mailto action rather than prose.
+   Every string here needs an entry in translations/landing.js.
 --------------------------------------------------------------------------- */
 const FAQS = [
-  {
-    id: "faq-counselor",
-    question: "Who is a school counselor?",
-    answer: [
-      "A school counselor helps students understand their strengths, interests and career options. They guide students in choosing suitable majors and universities, finding scholarships, and preparing strong applications.",
-    ],
-  },
   {
     id: "faq-what",
     question: "What is Naseeb Edu?",
     answer: [
-      "Naseeb Edu is a university and career counseling platform for schools. It brings student discovery, university matching, application planning, progress tracking and counselor guidance together in one structured system.",
+      "Naseeb Edu is a fully automated cloud (SaaS) platform built on artificial intelligence (LLM and NLP) and machine learning. It processes your academic results, test scores, psychometric answers and essays in real time and builds a personalized admission roadmap, a ranking of universities and scholarships, and an essay analysis report.",
     ],
   },
   {
-    id: "faq-counselors",
-    question: "How does Naseeb Edu help school counselors?",
+    id: "faq-software",
+    question: "Is Naseeb Edu a consulting service?",
     answer: [
-      "Naseeb Edu gives counselors a clear overview of every student\u2019s journey. They can create personalized roadmaps, assign tasks, track progress, manage deadlines, review application materials and identify students who need additional support.",
+      "No. Naseeb Edu is software. You get the right to use the platform\u2019s software modules by subscription, and every result is produced by the platform\u2019s algorithms.",
     ],
   },
   {
-    id: "faq-students",
-    question: "What can students do on Naseeb Edu?",
+    id: "faq-profile",
+    question: "How does psychometric profiling work?",
     answer: [
-      "Students can explore their personality, interests and career options, discover matching universities, follow a personalized roadmap, manage tasks and deadlines, prepare application materials and message their counselor \u2014 all from one account.",
-    ],
-  },
-  {
-    id: "faq-discovery",
-    question: "How does Naseeb Edu help students discover their path?",
-    answer: [
-      "Naseeb Edu helps students explore their personality, interests and possible career paths before choosing a major or university. These insights give students a clearer understanding of themselves and help counselors provide more personalized guidance.",
+      "The platform calculates your personality type, interests and cognitive scores with standardised models \u2014 Big Five, RIASEC and ICAR-16. AI Major Match then ranks study majors against your profile, academic results and labour market data.",
+      "The profile is a starting point for exploring options, not a diagnosis.",
     ],
   },
   {
     id: "faq-match",
-    question: "How does University Match work?",
+    question: "How does university and scholarship matching work?",
     answer: [
-      "University Match uses each student\u2019s profile \u2014 interests, career goals, academic performance, test scores, financial needs and preferences \u2014 to recommend suitable universities. Students explore and compare those options with guidance from their counselor.",
+      "The matching algorithm compares your SAT/IELTS scores, GPA, budget and country preferences with each university\u2019s requirements using a multi-factor scoring model. It sorts the results into Reach, Target and Safety and lists matching scholarships and financial aid programmes.",
+      "Reach, Target and Safety show how your profile compares with a university\u2019s requirements. They are not a guarantee of admission.",
+    ],
+  },
+  {
+    id: "faq-essay",
+    question: "What does Essay Lab check?",
+    answer: [
+      "Essay Lab uses large language models to analyse motivation essays and supplements in Uzbek and English against standard criteria: structure, content relevance, grammatical accuracy and impact. It returns an automatic report and keeps a revision history.",
+    ],
+  },
+  {
+    id: "faq-data",
+    question: "Where does the university data come from?",
+    answer: [
+      "From admission statistics, test requirements, tuition fees and scholarship terms published by universities and international education organisations. An automated data pipeline collects them only from a whitelist of official sources, and each record shows its source link and update time.",
+    ],
+  },
+  {
+    id: "faq-ai",
+    question: "How does Naseeb Edu reduce AI mistakes?",
+    answer: [
+      "Models answer only from verified records in the database (retrieval-augmented generation), show a source for every recommendation and do not show low-confidence results. Values such as deadlines and score thresholds are checked against the database automatically, and accuracy is monitored with evaluation and regression tests.",
+    ],
+  },
+  {
+    id: "faq-plans",
+    question: "Who can subscribe?",
+    answer: [
+      "Individual users can take a monthly or yearly subscription. Educational institutions use a corporate plan with the school dashboard and API integration, and third-party platforms can license the algorithms through the API. Contact our team to choose a plan.",
     ],
   },
   {
     id: "faq-progress",
-    question: "Can schools and parents track student progress?",
+    question: "Can schools track student progress?",
     answer: [
-      "Yes. Naseeb Edu shows each student\u2019s university readiness as a clear percentage based on completed tasks and application milestones. Schools monitor progress through their dashboard, and parents review it from the student\u2019s account.",
+      "Yes. The school dashboard shows each student\u2019s progress as a percentage based on completed tasks and application milestones, with separate access for students, teachers and school coordinators.",
       "The readiness percentage reflects preparation progress, not the probability of admission.",
     ],
   },
   {
-    id: "faq-join",
-    question: "How can my school join Naseeb Edu?",
+    id: "faq-support",
+    question: "How do I get technical help?",
     answer: [
-      "Contact our team to tell us about your school and counseling needs. We will introduce the platform, help set up your school workspace, and guide your counselors and students through onboarding.",
+      "Through the in-app support system: the FAQ, the support chatbot and support tickets. Technical issues are fixed as part of the platform\u2019s technical support.",
     ],
   },
   {
@@ -451,6 +474,10 @@ const SUPPORT_EMAIL = (
    is a proper noun, not copy: it stays in Uzbek in every language. */
 const DEFAULT_CONTACT_LOCATION =
   "Toshkent shahri, Olmazor tumani, Miskin MFY, Shimoliy Olmazor-2 mavzesi, 13-uy, 17-xonadon";
+/* The registered legal entity and its tax number (STIR), as filed with IT Park.
+   Proper nouns: printed as registered in every language. */
+const COMPANY_LEGAL_NAME = "“NASEEB” MChJ";
+const COMPANY_TIN = "313283281";
 const CONTACT_LOCATION = (
   import.meta.env.VITE_CONTACT_LOCATION || DEFAULT_CONTACT_LOCATION
 ).trim();
@@ -512,7 +539,7 @@ function BrandLockup() {
       <BrandLogo />
       <div>
         <b>{t("Naseeb Edu")}</b>
-        <small>{t("Education Counseling Platform")}</small>
+        <small>{t("AI admission platform")}</small>
       </div>
     </div>
   );
@@ -568,78 +595,115 @@ export default function LandingPage({
      closing call to action under a wall of prose. The first is open on load
      so the section reads as answers rather than as a row of shut drawers. */
   const [openFaq, setOpenFaq] = useState(FAQS[0]?.id || "");
+  /* All copy below follows the platform description filed with IT Park and
+     is translated in translations/landing.js. The modules and plans render
+     in a two-column register, so keep both lists at an even length. */
   const path = [
     {
-      title: "Set the direction",
+      title: "Enter your data",
       description:
-        "Turn a student’s goals into a focused university and scholarship strategy.",
+        "Grades, SAT/IELTS scores, psychometric test answers and essay drafts go into one profile.",
     },
     {
-      title: "Build the profile",
+      title: "Get your profile",
       description:
-        "Academics, activities, honors and documents collected in one verified profile.",
+        "Big Five, RIASEC and ICAR-16 models calculate your personality type, interests and cognitive scores, then rank the majors that fit you.",
     },
     {
-      title: "Prepare applications",
+      title: "See your matches",
       description:
-        "Tasks, essays, recommendations and deadlines, each with a clear owner.",
+        "A scoring model compares your profile with university requirements, sorts the results into Reach, Target and Safety, and lists matching scholarships.",
     },
     {
-      title: "Make the decision",
+      title: "Follow the roadmap",
       description:
-        "Compare offers, funding and fit, then commit to the right final choice.",
+        "Step-by-step tasks are generated from your universities’ deadlines, and your completion percentage updates in real time.",
     },
   ];
   const capabilities = [
     {
-      icon: Compass,
-      title: "Roadmap",
+      icon: Brain,
+      title: "Psychometric Profiling",
       description:
-        "Level-linked missions a teacher or counselor approves, so progress is earned rather than claimed.",
-      note: "Staff approved",
+        "Personality type, interests and cognitive scores calculated with the Big Five, RIASEC and ICAR-16 models.",
+      note: "Psychometrics",
+    },
+    {
+      icon: Sparkles,
+      title: "AI Major Match",
+      description:
+        "Ranks study majors by comparing your psychometric profile, academic results and labour market data.",
+      note: "Machine learning",
     },
     {
       icon: GraduationCap,
-      title: "College Search",
+      title: "University & Scholarship Match",
       description:
-        "Universities ranked against the student’s real GPA, SAT, IELTS, budget and scholarship needs.",
-      note: "Profile driven",
+        "Multi-factor scoring of SAT/IELTS scores, GPA, budget and country preferences, sorted into Reach, Target and Safety.",
+      note: "Scoring model",
     },
     {
       icon: PenLine,
-      title: "Essay Lab",
+      title: "NLP Essay Lab",
       description:
-        "Drafts, revision history and counselor feedback stay with the application they belong to.",
-      note: "Versioned",
+        "Analyses motivation essays and supplements with large language models for structure, content, grammar and impact. Works in Uzbek and English.",
+      note: "Revision history",
     },
     {
-      icon: FileText,
-      title: "Documents",
+      icon: Compass,
+      title: "Personalized Admission Roadmap",
       description:
-        "Transcripts, certificates and evidence stream through authenticated links, never public URLs.",
-      note: "Private storage",
+        "Builds a step-by-step task plan from your universities’ deadlines and calculates your completion percentage in real time.",
+      note: "Real time",
     },
     {
-      icon: MessageSquareText,
-      title: "Messaging",
+      icon: Bot,
+      title: "AI Assistant",
       description:
-        "Direct, group and school channels, with moderation and reporting built in.",
-      note: "Moderated",
+        "Answers questions about the platform and the university database, and shows the source with every answer.",
+      note: "Cites sources",
     },
     {
-      icon: ClipboardCheck,
-      title: "Student 360",
+      icon: LayoutDashboard,
+      title: "School Dashboard",
       description:
-        "One reviewable view per student for staff — with private notes and drafts deliberately excluded.",
-      note: "Audited",
+        "A multi-tenant panel for schools: student progress, groups and statistics, with separate student, teacher and coordinator roles.",
+      note: "For schools",
+    },
+    {
+      icon: Trophy,
+      title: "Progress & Gamification",
+      description:
+        "Visual reports of where you got stuck, an XP and level system, and Screen Time analysis of time spent on the platform.",
+      note: "Screen Time",
+    },
+    {
+      icon: Plug,
+      title: "API Integration",
+      description:
+        "Connects the profiling and matching algorithms to third-party platforms, school CRM systems and mobile apps.",
+      note: "For partners",
+    },
+    {
+      icon: Database,
+      title: "Data Pipeline",
+      description:
+        "Collects university data from a whitelist of official sources, validates it and keeps a version history.",
+      note: "Official sources",
     },
   ];
   const ledger = [
     {
-      figure: 6,
-      label: "Roles",
+      figure: 4,
+      label: "Core AI modules",
       description:
-        "Admin, counselor, teacher, school, student and parent — each with its own data scope.",
+        "Psychometric profiling, university matching, Essay Lab and the admission dashboard.",
+    },
+    {
+      figure: 3,
+      label: "Match categories",
+      description:
+        "Universities are sorted into Reach, Target and Safety by comparing your profile with their requirements.",
     },
     {
       figure: 3,
@@ -647,28 +711,57 @@ export default function LandingPage({
       description:
         "Uzbek, Russian and English across the whole product, not just the marketing page.",
     },
-    {
-      figure: 0,
-      label: "Public sign-ups",
-      description:
-        "Accounts are issued by a school or counselor. Nobody can register their way into student data.",
-    },
   ];
   const aboutPrinciples = [
     {
-      title: "Built for international applications",
+      title: "Official sources only",
       description:
-        "Designed for students, counselors and schools navigating universities across borders.",
+        "Admission statistics, test requirements, tuition and scholarship terms come only from a whitelist of official sources. Every record carries its source link and update time.",
     },
     {
-      title: "Human guidance, supported by software",
+      title: "Checked automatically",
       description:
-        "The platform organizes progress and evidence; counselors keep every decision personal.",
+        "New values pass format and logic validation and anomaly detection. A version history is kept, and if an error is found the system rolls back to the last correct version.",
     },
     {
-      title: "From first plan to final offer",
+      title: "AI grounded in data",
       description:
-        "Goals, documents, applications and outcomes stay connected across the whole journey.",
+        "Models answer only from verified records (retrieval-augmented generation), show a source for every recommendation and withhold low-confidence results. Deadlines and score thresholds are checked against the database.",
+    },
+    {
+      title: "Quality is measured",
+      description:
+        "Model accuracy is monitored with automated evaluation and regression test suites and with user feedback signals.",
+    },
+  ];
+  const plans = [
+    {
+      icon: UserRound,
+      title: "Individual subscription",
+      description:
+        "Monthly or yearly access for individual users to the AI assistant, admission roadmap, university and scholarship matching, and Essay Lab.",
+      note: "Monthly · yearly",
+    },
+    {
+      icon: Building2,
+      title: "School subscription",
+      description:
+        "A corporate plan for educational institutions with the multi-tenant dashboard and API integration.",
+      note: "Corporate",
+    },
+    {
+      icon: Plug,
+      title: "API license",
+      description:
+        "Third-party platforms use the profiling and matching algorithms through the API.",
+      note: "For partners",
+    },
+    {
+      icon: Layers,
+      title: "Included in every plan",
+      description:
+        "Tasks, guides and digital materials matched to your stage, selected and shown automatically by the platform.",
+      note: "Included",
     },
   ];
   const connectedRoles = [
@@ -689,8 +782,9 @@ export default function LandingPage({
     {
       title: "Platform",
       links: [
-        { label: "Journey", href: "#journey" },
-        { label: "Platform", href: "#platform" },
+        { label: "How it works", href: "#journey" },
+        { label: "Modules", href: "#platform" },
+        { label: "Plans", href: "#plans" },
       ],
     },
     {
@@ -812,10 +906,10 @@ export default function LandingPage({
             <BrandLockup />
           </a>
           <nav aria-label={t("Landing navigation")}>
-            <a href="#journey">{t("Journey")}</a>
-            <a href="#platform">{t("Platform")}</a>
-            <a className="landing-mind-link" href="#naseeb-mind">Naseeb Mind</a>
+            <a href="#journey">{t("How it works")}</a>
+            <a href="#platform">{t("Modules")}</a>
             <a href="#about">{t("About us")}</a>
+            <a href="#plans">{t("Plans")}</a>
             {hasReviews && <a href="#reviews">{t("Stories")}</a>}
             <a href="#faq">{t("FAQ")}</a>
           </nav>
@@ -839,16 +933,16 @@ export default function LandingPage({
           <div className="lp-shell landing-hero-grid">
             <div className="landing-hero-copy">
               <p className="lp-eyebrow">
-                {t("For schools, counselors and students in Uzbekistan")}
+                {t("AI-powered SaaS platform for university admission")}
               </p>
               <h1>
-                <span>{t("Applying to university")}</span>{" "}
-                <span>{t("is a long process.")}</span>{" "}
-                <em>{t("You are not alone on this journey.")}</em>
+                <span>{t("Your path to university,")}</span>{" "}
+                <span>{t("built from your profile.")}</span>{" "}
+                <em>{t("Calculated by AI in real time.")}</em>
               </h1>
               <p className="landing-hero-lede">
                 {t(
-                  "One workspace where a school, a counselor and a student run an international university application together - from the first goal to the final offer.",
+                  "Naseeb Edu processes your grades, test scores, psychometric answers and essays, then automatically builds a personalized admission roadmap, a ranking of universities and scholarships, and an essay analysis report.",
                 )}
               </p>
               <div className="landing-hero-actions">
@@ -1021,12 +1115,8 @@ export default function LandingPage({
           <div className="lp-shell">
             <div className="landing-journey-grid">
               <div className="landing-section-head" data-reveal>
-                <h2>{t("Four steps, in order.")}</h2>
-                <p>
-                  {t(
-                    "The application journey moves through four clear stages.",
-                  )}
-                </p>
+                <h2>{t("How the platform works.")}</h2>
+                <p>{t("Four steps from your data to a ready plan.")}</p>
               </div>
               <ol className="landing-path-list">
                 {path.map((step) => (
@@ -1038,7 +1128,7 @@ export default function LandingPage({
               </ol>
               <figure className="landing-specimen">
                 <figcaption>
-                  {t("Step 3")} · {t("Applications")}
+                  {t("Step 4")} · {t("Admission roadmap")}
                 </figcaption>
                 <p>{t("Build a balanced university shortlist")}</p>
                 <div>
@@ -1049,7 +1139,7 @@ export default function LandingPage({
                 </div>
                 <small>
                   {t(
-                    "The next step stays locked until a counselor approves this one. XP counts toward the student’s level.",
+                    "Approved tasks add to your completion percentage and XP level.",
                   )}
                 </small>
               </figure>
@@ -1064,7 +1154,7 @@ export default function LandingPage({
               </div>
               <p className="landing-showcase-note">
                 {t(
-                  "Follow your roadmap, prepare each application and ask for help before a deadline becomes a problem.",
+                  "Your roadmap, deadlines and progress in one dashboard, recalculated every time you finish a task.",
                 )}
               </p>
               <StudentDashboardPreview />
@@ -1075,8 +1165,8 @@ export default function LandingPage({
         <section className="landing-band landing-platform" id="platform">
           <div className="lp-shell">
             <div className="landing-section-head" data-reveal>
-              <h2>{t("What the workspace actually does.")}</h2>
-              <p>{t("Six connected surfaces, not six separate tools.")}</p>
+              <h2>{t("One platform, ten modules.")}</h2>
+              <p>{t("Every result is produced by software algorithms.")}</p>
             </div>
             <div className="landing-register">
               {capabilities.map(({ icon: Icon, title, description, note }) => (
@@ -1093,12 +1183,12 @@ export default function LandingPage({
               data-reveal
             >
               <div className="landing-showcase-copy">
-                <p className="lp-eyebrow">{t("For counselors")}</p>
+                <p className="lp-eyebrow">{t("For schools")}</p>
                 <h3>{t("Every student, one clear view.")}</h3>
               </div>
               <p className="landing-showcase-note">
                 {t(
-                  "See progress, deadlines and submitted work without losing the person behind the application.",
+                  "Coordinators and teachers see every student’s progress, deadlines and submitted work in one panel.",
                 )}
               </p>
               <CounselorDashboardPreview />
@@ -1106,20 +1196,14 @@ export default function LandingPage({
           </div>
         </section>
 
-        <MindSection language={language} />
-
         <section className="landing-band landing-about" id="about">
           <div className="lp-shell landing-about-grid">
             <header className="landing-about-head" data-reveal>
               <p className="lp-eyebrow">{t("About Naseeb Edu")}</p>
-              <h2>
-                {t(
-                  "Guidance works better when everyone works from the same record.",
-                )}
-              </h2>
+              <h2>{t("Results built on verified data.")}</h2>
               <p>
                 {t(
-                  "Naseeb Edu is an education counseling platform built for schools, counselors, students and families navigating international university applications from Uzbekistan.",
+                  "Naseeb Edu is a cloud (SaaS) platform built on artificial intelligence (LLM and NLP) and machine learning. Users get subscription access to its software modules: every analysis, ranking and report is produced by the platform’s algorithms.",
                 )}
               </p>
             </header>
@@ -1134,6 +1218,29 @@ export default function LandingPage({
                 </div>
               ))}
             </dl>
+          </div>
+        </section>
+
+        <section className="landing-band landing-platform landing-plans" id="plans">
+          <div className="lp-shell">
+            <div className="landing-section-head" data-reveal>
+              <h2>{t("One subscription, every module.")}</h2>
+              <p>
+                {t(
+                  "Access to the platform is provided as a software license (subscription).",
+                )}
+              </p>
+            </div>
+            <div className="landing-register">
+              {plans.map(({ icon: Icon, title, description, note }) => (
+                <article className="landing-capability" key={title}>
+                  <Icon size={19} aria-hidden="true" />
+                  <h3>{t(title)}</h3>
+                  <p>{t(description)}</p>
+                  <span className="landing-capability-note">{t(note)}</span>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -1192,7 +1299,7 @@ export default function LandingPage({
               <header className="landing-reviews-head" data-reveal>
                 <div className="landing-reviews-title">
                   <div>
-                    <h2>{t("Hear from our students.")}</h2>
+                    <h2>{t("Hear from students who used Naseeb Edu.")}</h2>
                     <p>
                       {t(
                         "How students describe running an application inside Naseeb Edu.",
@@ -1312,10 +1419,10 @@ export default function LandingPage({
           <div className="lp-shell landing-faq-grid">
             <header className="landing-faq-head" data-reveal>
               <p className="lp-eyebrow">{t("Frequently asked questions")}</p>
-              <h2>{t("What schools and students ask before they start.")}</h2>
+              <h2>{t("What users ask before they subscribe.")}</h2>
               <p>
                 {t(
-                  "What the platform does, who it is for, and what it takes for a school to begin.",
+                  "How the platform works, where its data comes from and how to get access.",
                 )}
               </p>
             </header>
@@ -1371,10 +1478,10 @@ export default function LandingPage({
 
         <section className="landing-closing">
           <div className="lp-shell" data-reveal>
-            <h2>{t("Bring every application into one clear workspace.")}</h2>
+            <h2>{t("Start with your own admission roadmap.")}</h2>
             <p>
               {t(
-                "Give counselors and students one shared place to plan, review and move forward.",
+                "Choose an individual or school subscription and get access to every module of the platform.",
               )}
             </p>
             <div className="landing-closing-actions">
@@ -1443,7 +1550,8 @@ export default function LandingPage({
               )}
             </p>
             <small>
-              © {new Date().getFullYear()} Naseeb Edu, {CONTACT_LOCATION}.{" "}
+              © {new Date().getFullYear()} {COMPANY_LEGAL_NAME} (Naseeb Edu),{" "}
+              {t("TIN")} {COMPANY_TIN}, {CONTACT_LOCATION}.{" "}
               {t("All rights reserved.")}
             </small>
           </div>
