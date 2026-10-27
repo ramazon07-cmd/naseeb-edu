@@ -9,7 +9,7 @@ import { Field } from '../components/forms';
 import '../invites.css';
 
 
-function Card({ theme, language, changeLanguage, children, footer }) {
+export function Card({ theme, language, changeLanguage, children, footer }) {
   return <main className="password-change-page join-page"><section className="password-change-card">
     <header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /></div></header>
     {children}
@@ -18,7 +18,7 @@ function Card({ theme, language, changeLanguage, children, footer }) {
 }
 
 // Which school and counselor the student is joining (schools have no logo yet: their initials).
-function SchoolCard({ school, counselor }) {
+export function SchoolCard({ school, counselor }) {
   return <div className="join-school">
     <span className="join-school-logo" aria-hidden="true">{initials(school.name)}</span>
     <span className="join-school-copy"><span>{t('You are joining')}</span><b>{school.name}</b>{counselor && <small>{t('Counselor: {name}', { name: counselor })}</small>}</span>

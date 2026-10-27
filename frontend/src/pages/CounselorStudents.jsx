@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
-import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag } from '../components/counselorUi';
+import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag, ReasonTags } from '../components/counselorUi';
 import { Field, SegmentedField } from '../components/forms';
 import { Modal } from '../components/ui';
 import { DocumentPreviewModal, TaskSubmissionModal } from '../components/documents';
@@ -14,7 +14,7 @@ import { StudentQuickPanel } from '../components/StudentQuickPanel';
 import { DownloadCvButton } from '../components/CvDocument';
 import { mergeSaved } from '../lib/mergeSaved';
 import { RecommendationLetters } from '../components/RecommendationLetters';
-import { useStudentRecords } from '../hooks/useStudentRecords';
+import { studentRecordEndpoints, useStudentRecords } from '../hooks/useStudentRecords';
 import { invalidatePagedLists, usePagedList } from '../hooks/usePagedList';
 import { activityText } from '../lib/activityText';
 import { FILTER_GRADES, clockText, dateText, dateTimeText, dayLabel, dayMonthText, gradeOrPending, gradeText, joinParts, localDateKey, relativeDayText } from '../lib/format';
@@ -161,6 +161,7 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
 }
 
 function CounselorStudentList({ user, data, query, setQuery, listState, setListState, onItems, onOpen, onDirect, onAddStudent, notify, reload }) {
+  const readOnly = user.role === 'assistant';
   const [view, setView] = useState(readView);
   const [version, setVersion] = useState(0);
   const [selecting, setSelecting] = useState(false);
@@ -246,11 +247,11 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
   return <div className="cx-page cx-students cs-page">
     <CxHead title={t("Students")} subtitle={t("Your students and what they need from you")}>
       {selecting && <button type="button" className="cx-btn" onClick={stopSelecting}>{t("Cancel")}</button>}
-      <button type="button" className="cx-btn" disabled={selecting && !selected.size} onClick={() => (selecting ? setAssigning(true) : setSelecting(true))}>
+      {!readOnly && <button type="button" className="cx-btn" disabled={selecting && !selected.size} onClick={() => (selecting ? setAssigning(true) : setSelecting(true))}>
         <Plus size={15} aria-hidden="true" />{selecting && selected.size ? tp('Assign task to {n} student|Assign task to {n} students', selected.size, { n: selected.size }) : t("Assign task to several")}
-      </button>
+      </button>}
       {/* "Add student" slot: the page's onAddStudent decides what adding a student means. */}
-      <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>
+      {!readOnly && <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>}
     </CxHead>
 
     <CxPills label={t("Filter students")} active={state.status} onChange={(status) => update({ status })} items={STATUS_PILLS.map(([key, title]) => [key, title, counts[key]])} />
@@ -310,14 +311,14 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
       </div>
     </nav>}
     <p className="cx-footnote">{t("Click a student for a quick look; “Open student” shows their Student 360.")}</p>
-    <CxAccountActions>
+    {!readOnly && <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setConnecting(true)}>{t("Connect students")}</button>
-    </CxAccountActions>
+    </CxAccountActions>}
 
-    {preview && <StudentQuickPanel student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
-    {assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
-    {adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
-    {connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
+    {preview && <StudentQuickPanel user={user} student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
+    {!readOnly && assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
+    {!readOnly && adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
+    {!readOnly && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
   </div>;
 }
 
@@ -493,7 +494,7 @@ function useDocumentHistory(studentId, version) {
   return state.studentId === studentId ? state : { byDocument: new Map(), error: '' };
 }
 
-const REVIEW_ENDPOINTS = ['tasks', 'documents', 'roadmap-missions', 'achievements'];
+const REVIEW_ENDPOINTS = ['tasks', 'documents', 'achievements'];
 const DECISION_ACTIONS = { approved: /^Document approved: /, rejected: /^Document sent back: / };
 
 function documentWhen(doc, history) {
@@ -538,6 +539,91 @@ function useStudentMeetings(studentId, tab) {
   return { upcoming, history };
 }
 
+function Student360Header({ student, onBack, children }) {
+  const name = fullName(student.user_detail);
+  const readiness = student.profile_readiness || { percent: 0, missing: [] };
+  const missing = readiness.missing || [];
+  const meta = joinParts(gradeOrPending(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
+  return <>
+    <div className="cx-s360-top">
+      <button type="button" className="cx-back" onClick={onBack}><ChevronLeft size={16} aria-hidden="true" /><b>{t('Students')}</b></button>
+      <span className="cx-crumb">/ {name}</span>
+      <div className="cx-s360-actions">{children}</div>
+    </div>
+    <section className="cx-hero">
+      <span className="cx-hero-disc" aria-hidden="true">{initials(name)}</span>
+      <div className="cx-hero-copy"><span>{t('STUDENT 360°')}</span><h1>{name}</h1><p>{meta}</p></div>
+      <dl className="cx-hero-stats">
+        <div><dt>{formatPercentLocale(student.progress_percent || 0)}</dt><dd>{t('Application readiness')}</dd><dd>{tp('{done} of {n} item finished|{done} of {n} items finished', student.readiness_items_total ?? 0, { done: student.readiness_items_done ?? 0, n: student.readiness_items_total ?? 0 })}</dd></div>
+        <div><dt>{formatPercentLocale(readiness.percent)}</dt><dd>{t('Profile ready')}</dd><dd>{tp('{n} answer missing|{n} answers missing', missing.length, { n: missing.length })}</dd></div>
+      </dl>
+    </section>
+  </>;
+}
+
+const ASSISTANT_STUDENT_TABS = [['overview', 'Overview'], ['tasks', 'Tasks'], ['documents', 'Documents'], ['applications', 'Applications'], ['portfolio', 'Portfolio']];
+const ASSISTANT_PORTFOLIO = [['researches', 'Research'], ['projects', 'Projects'], ['internships', 'Internships'], ['activities', 'Activities'], ['honors', 'Honors'], ['achievements', 'Achievements']];
+
+// Read-only Student 360 uses the counselor's header, tabs, progress and record cards.
+// No counselor-only hooks (notes, essays, letters, meetings or activity) run here.
+function AssistantStudent360({ student, user, onBack, onDirect, notify, reload, refreshStudent }) {
+  const [tab, setTab] = useState('overview');
+  const [task, setTask] = useState(null);
+  const [document, setDocument] = useState(null);
+  const loaded = useStudentRecords(student.id, true, studentRecordEndpoints(user));
+  const { records } = loaded;
+  const reasons = studentReasons(student, new Date());
+  async function sendBack(note) {
+    await api.sendBack('tasks', task.id, note);
+    setTask(null);
+    notify(t('Sent back to the student.'));
+    loaded.reload(['tasks']);
+    invalidatePagedLists(['tasks', 'students']);
+    refreshStudent();
+    reload();
+  }
+  return <div className="cx-page cx-student-360">
+    <Student360Header student={student} onBack={onBack}>
+      <button type="button" className="cx-btn" onClick={() => onDirect(student.user_detail?.id)}><MessageCircle size={15} aria-hidden="true" />{t('Message')}</button>
+    </Student360Header>
+    <CxTabs items={ASSISTANT_STUDENT_TABS} active={tab} onChange={setTab} label={t('Student sections')} />
+    {loaded.error && <div className="alert error" role="alert">{loaded.error}</div>}
+    {tab === 'overview' && <>
+      <div className="cx-overview">
+        <CxCard title={t('What needs attention')}><div className="cx-progress-list">
+          {reasons.length ? <ReasonTags reasons={reasons} /> : <p className="cx-empty">{t('Nothing needs your attention right now.')}</p>}
+        </div></CxCard>
+        <CxCard title={t('Progress')}><div className="cx-progress-list">
+          <ProgressItem title={t('Application readiness')} percent={student.progress_percent} />
+          <ProgressItem title={t('Tasks')} percent={student.task_progress_percent} />
+          <ProgressItem title={t('Profile ready')} percent={student.profile_readiness?.percent} />
+        </div></CxCard>
+        <CxCard title={t('Test scores')}><TestScores student={student} /></CxCard>
+      </div>
+      <RecordCard title={t('Academic & planning')} count={1}>
+        <RecordRow title={t('GPA')} meta={student.gpa == null ? t('Not provided') : formatNumberLocale(student.gpa)} />
+        <RecordRow title={t('Target major')} meta={student.target_major || t('Not provided')} />
+        <RecordRow title={t('Target countries')} meta={targetText(student) || t('Not provided')} />
+        <RecordRow title={t('Counselor')} meta={student.counselor_name || t('Not provided')} />
+      </RecordCard>
+    </>}
+    {tab === 'tasks' && <RecordCard title={t('Tasks')} count={records.tasks?.length} loading={loaded.loading} empty={t('No assigned tasks found.')}>
+      {(records.tasks || []).map((item) => <RecordRow key={item.id} title={item.title} meta={item.due_date && tx`Due ${dateText(item.due_date)}`} status={item.status} onClick={() => setTask(item)} />)}
+    </RecordCard>}
+    {tab === 'documents' && <RecordCard title={t('Documents')} count={records.documents?.length} loading={loaded.loading} empty={t('No documents yet.')}>
+      {(records.documents || []).map((item) => <RecordRow key={item.id} title={item.title} meta={label(item.document_type)} status={documentStatus(item)} onClick={() => setDocument(item)} />)}
+    </RecordCard>}
+    {tab === 'applications' && <RecordCard title={t('Applications')} count={records.applications?.length} loading={loaded.loading} empty={t('The student has not added any universities to the college list yet.')}>
+      {(records.applications || []).map((item) => <RecordRow key={item.id} title={item.university_detail?.name || t('University')} meta={item.program} status={item.status} />)}
+    </RecordCard>}
+    {tab === 'portfolio' && <div className="section-stack">{ASSISTANT_PORTFOLIO.map(([resource, title]) => <RecordCard key={resource} title={t(title)} count={records[resource]?.length} loading={loaded.loading} empty={t('No information available yet.')}>
+      {(records[resource] || []).map((item) => <RecordRow key={item.id} title={item.title || item.organization || item.name} meta={item.description} />)}
+    </RecordCard>)}</div>}
+    {task && <TaskSubmissionModal task={task} onClose={() => setTask(null)} notify={notify} onSendBack={task.status === 'submitted' ? sendBack : null} />}
+    {document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}
+  </div>;
+}
+
 function CounselorStudent360({ student, user, data, onBack, onDirect, notify, reload: reloadWorkspace, setPage, refreshStudent }) {
   const [tab, setTab] = useState('overview');
   const [booking, setBooking] = useState(false);
@@ -547,7 +633,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
   const [document, setDocument] = useState(null);
   const [task, setTask] = useState(null);
   const [noteFor, setNoteFor] = useState(null);
-  const loaded = useStudentRecords(student.id, true);
+  const loaded = useStudentRecords(student.id, true, studentRecordEndpoints(user));
   const records = loaded.records;
   const [historyVersion, setHistoryVersion] = useState(0);
   // Only review decisions and level approvals change the workspace's stats and badges.
@@ -596,34 +682,18 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     return mergeReviewQueue({
       tasks: named((records.tasks || []).filter((item) => item.status === 'submitted')),
       documents: named((records.documents || []).filter((item) => ['uploaded', 'reviewing'].includes(item.status) && hasSubmission('document', item))),
-      roadmapMissions: named((records['roadmap-missions'] || []).filter((item) => item.status === 'submitted')),
       achievements: named((records.achievements || []).filter((item) => !item.verified && !item.counselor_comment)),
     });
   }, [records, name]);
-  const readiness = student.profile_readiness || { percent: 0, missing: [] };
-  const meta = joinParts(gradeOrPending(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
   const tabs = TABS(student, records, letters);
 
   return <div className="cx-page cx-student-360">
-    <div className="cx-s360-top">
-      <button type="button" className="cx-back" onClick={onBack}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button>
-      <span className="cx-crumb">/ {name}</span>
-      <div className="cx-s360-actions">
+    <Student360Header student={student} onBack={onBack}>
         <DownloadCvButton studentId={student.id} className="cx-btn" notify={notify} />
         <button type="button" className="cx-btn" onClick={() => onDirect(student.user_detail?.id)}><MessageCircle size={15} aria-hidden="true" />{t("Message")}</button>
         <button type="button" className="cx-btn" onClick={() => setBooking(true)}><Calendar size={15} aria-hidden="true" />{t("Book meeting")}</button>
         <button type="button" className="cx-btn primary" onClick={() => setAssigning(true)}><Plus size={15} aria-hidden="true" />{t("Assign task")}</button>
-      </div>
-    </div>
-
-    <section className="cx-hero">
-      <span className="cx-hero-disc" aria-hidden="true">{initials(name)}</span>
-      <div className="cx-hero-copy"><span>{t("STUDENT 360°")}</span><h1>{name}</h1><p>{meta}</p></div>
-      <dl className="cx-hero-stats">
-        <div><dt>{formatPercentLocale(student.progress_percent || 0)}</dt><dd>{t("Application readiness")}</dd><dd>{tp('{done} of {n} item finished|{done} of {n} items finished', student.readiness_items_total ?? 0, { done: student.readiness_items_done ?? 0, n: student.readiness_items_total ?? 0 })}</dd></div>
-        <div><dt>{formatPercentLocale(readiness.percent)}</dt><dd>{t("Profile ready")}</dd><dd>{tp('{n} answer missing|{n} answers missing', readiness.missing.length, { n: readiness.missing.length })}</dd></div>
-      </dl>
-    </section>
+    </Student360Header>
 
     <CxTabs items={tabs} active={tab} onChange={setTab} label={t("Student sections")} />
     {loaded.error && <div className="alert error" role="alert">{loaded.error}</div>}
@@ -710,6 +780,7 @@ export function CounselorStudentsPage({ user, data, query, setQuery, reload, not
 
   if (studentId && error) return <div className="cx-page"><button type="button" className="cx-back" onClick={() => onStudent(null)}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button><div className="alert error" role="alert">{error} <button type="button" className="cx-btn" onClick={() => setAttempt((n) => n + 1)}>{t("Retry")}</button></div></div>;
   if (studentId && selected?.id !== studentId) return <PageSkeleton />;
+  if (studentId && user.role === 'assistant') return <AssistantStudent360 student={selected} {...{ user, onDirect, notify, reload, refreshStudent }} onBack={() => onStudent(null)} />;
   if (studentId) return <CounselorStudent360 student={selected} {...{ user, data, onDirect, notify, reload, setPage, refreshStudent }} onBack={() => onStudent(null)} />;
   return <CounselorStudentList {...{ user, data, query, setQuery, listState, setListState, onItems, onDirect, onAddStudent, notify, reload }} onOpen={(student) => onStudent(student.id)} />;
 }

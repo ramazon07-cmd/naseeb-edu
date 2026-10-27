@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { isPageLocked } from '../lib/routes';
 
 // The per-student collections a Student 360 view shows. One student's records
 // are small, so each is loaded whole (?student=<id>) in parallel.
 export const STUDENT_RECORD_ENDPOINTS = ['tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations', 'roadmap-missions'];
 
+// Essays and recommendation letters stay with the counselor; a counselor's assistant never asks for them.
+const NON_ROADMAP_RECORD_ENDPOINTS = STUDENT_RECORD_ENDPOINTS.filter((endpoint) => endpoint !== 'roadmap-missions');
+const ASSISTANT_RECORD_ENDPOINTS = NON_ROADMAP_RECORD_ENDPOINTS.filter((endpoint) => !['essays', 'recommendations'].includes(endpoint));
+export const studentRecordEndpoints = (user) => (user?.role === 'assistant' ? ASSISTANT_RECORD_ENDPOINTS : isPageLocked('roadmap', user) ? NON_ROADMAP_RECORD_ENDPOINTS : STUDENT_RECORD_ENDPOINTS);
+
 const EMPTY = Object.freeze({});
 
 // The current records stay on screen while a reload runs.
-export function useStudentRecords(studentId, enabled = true) {
+export function useStudentRecords(studentId, enabled = true, allEndpoints = STUDENT_RECORD_ENDPOINTS) {
   const [state, setState] = useState({ studentId: null, records: EMPTY, errors: {}, loading: false });
   const [version, setVersion] = useState(0);
   // Sections asked for that no finished load has fetched yet: a newer reload cancels the
@@ -17,7 +23,7 @@ export function useStudentRecords(studentId, enabled = true) {
   const loadedFor = useRef(null);
   useEffect(() => {
     if (!enabled || !studentId) return undefined;
-    const endpoints = loadedFor.current === studentId ? [...pending.current] : STUDENT_RECORD_ENDPOINTS;
+    const endpoints = loadedFor.current === studentId ? [...pending.current] : allEndpoints;
     if (!endpoints.length) return undefined;
     // Switching students drops the old student's records, so coming back to them is a full load again.
     if (loadedFor.current !== studentId) loadedFor.current = null;
@@ -47,11 +53,11 @@ export function useStudentRecords(studentId, enabled = true) {
     });
     // A slower response for a previously opened student (or an older reload) must not show here.
     return () => {current = false;};
-  }, [studentId, enabled, version]);
-  const reload = useCallback((endpoints = STUDENT_RECORD_ENDPOINTS) => {
-    endpoints.forEach((endpoint) => pending.current.add(endpoint));
+  }, [studentId, enabled, version, allEndpoints]);
+  const reload = useCallback((endpoints = allEndpoints) => {
+    endpoints.filter((endpoint) => allEndpoints.includes(endpoint)).forEach((endpoint) => pending.current.add(endpoint));
     setVersion((value) => value + 1);
-  }, []);
+  }, [allEndpoints]);
   const shown = state.studentId === studentId ? state : { studentId, records: EMPTY, errors: {}, loading: enabled && Boolean(studentId) };
   return { studentId: shown.studentId, records: shown.records, loading: shown.loading, error: Object.values(shown.errors)[0] || '', reload };
 }

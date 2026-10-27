@@ -25,9 +25,9 @@ export function LateWork({ reasons }) {
 
 export const targetText = (student) => splitList(student.target_countries).map((country) => t(country)).join(', ') || student.target_major || '';
 
-export function CounselorStudentTable({ rows, selecting = false, selected, toggle, onPreview, onEdit, onDeactivate }) {
+export function CounselorStudentTable({ rows, selecting = false, selected, toggle, onPreview, onEdit, onDeactivate, framed = true }) {
   if (!rows.length) return <p className="cx-empty">{t("No students found.")}</p>;
-  return <div className="cx-card cs-table-card">
+  return <div className={`${framed ? 'cx-card ' : ''}cs-table-card`}>
     <table className="cs-table">
       <thead><tr>
         {selecting && <th scope="col" className="cs-check-col"><span className="sr-only">{t("Select")}</span></th>}

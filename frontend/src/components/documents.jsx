@@ -46,8 +46,8 @@ export function EssayDetailModal({ essay, onClose }) {
   return <Modal title={essay.title} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{essay.status}</Badge><span>{t("Version")} {essay.version} · {essay.university_name || t("General essay")}</span></div><GoogleDocsActions item={essay} /></div><section><span className="detail-label">{t("Essay prompt")}</span><p>{essay.prompt}</p></section>{essay.google_docs_preview_url ? <GoogleDocsPreview previewUrl={essay.google_docs_preview_url} title={essay.title} /> : <section><span className="detail-label">{t("Current draft")}</span><div className="essay-content-preview">{essay.content || t("No draft content has been added yet.")}</div></section>}{essay.counselor_comment && <section className="counselor-feedback"><span className="detail-label">{t("Counselor feedback")}</span><p>{essay.counselor_comment}</p></section>}{essay.revisions?.length > 0 && <section><span className="detail-label">{t("Revision history")}</span><div className="revision-chips">{essay.revisions.map((revision) => <span key={revision.id}>{t("v")}{revision.version} · {label(revision.status)} · {dateText(revision.created_at)}</span>)}</div></section>}</div></Modal>;
 }
 
-export function TaskSubmissionModal({ task, onClose, notify }) {
-  return <Modal title={tx`Task response · ${task.title}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{task.status}</Badge><span>{task.submitted_at ? tx`Submitted ${dateTimeText(task.submitted_at)}` : t("Not submitted yet")}</span></div><div className="detail-actions">{task.has_submission_file && <button className="button quiet" onClick={() => downloadTaskSubmission(task, notify)}><Download size={15} /> {task.submission_file_name || t("Download file")}</button>}{task.submission_url && <a className="button primary" href={task.submission_url} target="_blank" rel="noreferrer">{t("Open submission")} <ExternalLink size={15} /></a>}</div></div><section><span className="detail-label">{t("Assigned task")}</span><p>{task.description || t("No additional instructions.")}</p></section><section><span className="detail-label">{t("Student response")}</span><div className="essay-content-preview">{task.student_response || t("The student has not submitted a written response yet.")}</div></section><TaskEssayAttachment task={task} /><GoogleDocsPreview previewUrl={task.submission_preview_url} title={task.title} /></div></Modal>;
+export function TaskSubmissionModal({ task, onClose, notify, onSendBack = null }) {
+  return <Modal title={tx`Task response · ${task.title}`} onClose={onClose}><div className="workspace-detail"><div className="workspace-detail-toolbar"><div><Badge>{task.status}</Badge><span>{task.submitted_at ? tx`Submitted ${dateTimeText(task.submitted_at)}` : t("Not submitted yet")}</span></div><div className="detail-actions">{task.has_submission_file && <button className="button quiet" onClick={() => downloadTaskSubmission(task, notify)}><Download size={15} /> {task.submission_file_name || t("Download file")}</button>}{task.submission_url && <a className="button primary" href={task.submission_url} target="_blank" rel="noreferrer">{t("Open submission")} <ExternalLink size={15} /></a>}</div></div><section><span className="detail-label">{t("Assigned task")}</span><p>{task.description || t("No additional instructions.")}</p></section><section><span className="detail-label">{t("Student response")}</span><div className="essay-content-preview">{task.student_response || t("The student has not submitted a written response yet.")}</div></section><TaskEssayAttachment task={task} /><GoogleDocsPreview previewUrl={task.submission_preview_url} title={task.title} />{onSendBack && task.status === 'submitted' && <DocumentDecision canApprove={false} onDecide={(_action, note) => onSendBack(note)} notify={notify} />}</div></Modal>;
 }
 
 export function downloadTaskSubmission(task, notify) {
@@ -121,10 +121,11 @@ function DocumentHistory({ entries }) {
   })}</ul></section>;
 }
 
-export function DocumentDecision({ approvable, onDecide, notify }) {
+export function DocumentDecision({ approvable, onDecide, notify, canApprove = true }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   async function decide(action) {
+    if (action === 'approve' && !canApprove) return;
     const text = note.trim();
     if (action === 'sendBack' && !text) {
       notify(t("Add a note explaining what needs to change."), 'error');
@@ -138,7 +139,7 @@ export function DocumentDecision({ approvable, onDecide, notify }) {
       setSaving(false);
     }
   }
-  return <section className="document-decision"><label className="detail-label" htmlFor="document-decision-note">{t("Note to the student (optional for approve, required to send back)")}</label><textarea id="document-decision-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} />{!approvable && <p role="status"><b>{t("No file attached yet")}</b> {t("There is nothing to approve until the student adds it. You can send it back with a note.")}</p>}<div className="detail-actions"><button type="button" className="button quiet" disabled={saving} onClick={() => decide('sendBack')}>{t("Send back with note")}</button><button type="button" className="button primary" disabled={saving || !approvable} aria-busy={saving} onClick={() => decide('approve')}>{t("Approve")}</button></div></section>;
+  return <section className="document-decision"><label className="detail-label" htmlFor="document-decision-note">{canApprove ? t("Note to the student (optional for approve, required to send back)") : t("Add a note explaining what needs to change.")}</label><textarea id="document-decision-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} />{canApprove && !approvable && <p role="status"><b>{t("No file attached yet")}</b> {t("There is nothing to approve until the student adds it. You can send it back with a note.")}</p>}<div className="detail-actions"><button type="button" className="button quiet" disabled={saving} onClick={() => decide('sendBack')}>{t("Send back with note")}</button>{canApprove && <button type="button" className="button primary" disabled={saving || !approvable} aria-busy={saving} onClick={() => decide('approve')}>{t("Approve")}</button>}</div></section>;
 }
 
 export function visibilityItemTitle(item) {

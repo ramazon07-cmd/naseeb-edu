@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canDownloadCv, canManageWorkspaces, hasStaffTier, isCounselor, isPlatformAdmin, isSuperAdmin, isTaskManager, workspaceRole } from '../src/lib/roles.js';
+import { canDownloadCv, canManageWorkspaces, hasStaffTier, isCounselor, isPlatformAdmin, isSuperAdmin, isTaskManager, usesCounselorLayout, workspaceRole } from '../src/lib/roles.js';
 import { resourcesFor } from '../src/lib/workspaceResources.js';
 
 test('admins and superusers of any role are platform admins', () => {
@@ -16,6 +16,18 @@ test('platform admins inherit counselor and task-manager access', () => {
   assert.equal(isTaskManager(superuser), true);
   assert.equal(isCounselor({ role: 'teacher' }), false);
   assert.equal(isTaskManager({ role: 'teacher' }), true);
+});
+
+test('assistants share the counselor layout without inheriting counselor permissions', () => {
+  const assistant = { role: 'assistant' };
+  assert.equal(usesCounselorLayout(assistant), true);
+  assert.equal(usesCounselorLayout({ role: 'counselor' }), true);
+  assert.equal(isCounselor(assistant), false);
+  assert.equal(isTaskManager(assistant), false);
+  assert.equal(canDownloadCv(assistant), false);
+  assert.equal(canManageWorkspaces(assistant), false);
+  for (const role of ['teacher', 'student', 'admin', 'organization', 'parent']) assert.equal(usesCounselorLayout({ role }), false, role);
+  assert.equal(usesCounselorLayout({ role: 'assistant', is_superuser: true }), false);
 });
 
 test('a superuser loads the admin workspace whatever its stored role', () => {

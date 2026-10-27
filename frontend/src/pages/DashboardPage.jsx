@@ -11,7 +11,8 @@ import { api } from '../api';
 import { Field, CheckboxControl } from '../components/forms';
 import { usePagedList } from '../hooks/usePagedList';
 import { StudentPicker } from '../components/paged';
-import { REVIEW_SOURCES } from '../lib/reviewQueue';
+import { REVIEW_SOURCE, REVIEW_SOURCES } from '../lib/reviewQueue';
+import { isPageLocked } from '../lib/routes';
 import { reviewCounts, statsBadges } from '../lib/counselorCounts';
 import { isExpiredMeeting } from '../lib/meetings';
 import { CxHead } from '../components/counselorUi';
@@ -20,6 +21,7 @@ import { WIDE_CARDS, addCheckedIn, allClear, allSetSeen, checkInKey, checkInOutc
 import './counselor-home.css';
 import { MeetingNoteForm } from './BookingsPage';
 import { inServerZone } from '../lib/serverTime';
+import { AssistantHome } from './AssistantHome';
 
 // The first screen of staff dashboards: a page of students and the nearest
 // deadlines, fetched from the server rather than the whole roster.
@@ -37,6 +39,7 @@ export function Dashboard({ user, data, stats, reload, notify, setPage, onDirect
 }
 
 function StaffDashboard({ user, data, stats, reload, notify, setPage, refreshStats, updateStats }) {
+  if (user.role === 'assistant') return <AssistantHome {...{ user, data, stats, setPage }} />;
   if (user.role === 'organization') return <OrganizationDashboard {...{ user, data, stats, setPage }} />;
   if (isCounselor(user)) return <CounselorHome {...{ user, stats, notify, setPage, refreshStats, updateStats }} />;
   return <TeacherDashboard {...{ user, data, stats, reload, notify, setPage }} />;
@@ -53,9 +56,10 @@ function OrganizationDashboard({ user, data, stats, setPage }) {
 // Today: counselor and teacher, once teacher gets its own "Today's queue" (S3.7).
 function TeacherDashboard({ user, data, stats, reload, notify, setPage }) {
   const { students, tasks } = useDashboardLists(user);
+  const roadmapVisible = !isPageLocked('roadmap', user);
   return <>
-    <div className="stat-grid"><Stat label={t("Students")} value={formatNumberLocale(stats?.students_total ?? students.items.length)} /><Stat label={t("Task progress")} value={formatPercentLocale(stats?.average_task_progress ?? 0)} /><Stat label={t("Roadmap progress")} value={formatPercentLocale(stats?.average_roadmap_progress ?? 0)} /><Stat label={t("Need attention")} value={formatNumberLocale(stats?.students_at_risk ?? 0)} tone="danger" /></div>
-    <div className="split-grid wide-left"><Panel title={t("Student progress")} action={<button className="button quiet" onClick={() => setPage('students')}>{t("View all")} <ChevronRight size={16} /></button>}><StudentTable data={data} students={students.items} readOnly /></Panel><div className="section-stack"><Panel title={t("Upcoming deadlines")}>{tasks.items.map((task) => <Record key={task.id} title={task.title} meta={joinParts(task.student_name || studentName(data, task.student), task.due_date && tx`Due ${dateText(task.due_date)}`)} badge={task.status} />)}{tasks.loaded && !tasks.items.length && <Empty text={t("No task deadlines yet.")} />}</Panel>{isCounselor(user) && <ProgramUsageSummary {...{ user, data, reload, notify }} />}</div></div>
+    <div className="stat-grid"><Stat label={t("Students")} value={formatNumberLocale(stats?.students_total ?? students.items.length)} /><Stat label={t("Task progress")} value={formatPercentLocale(stats?.average_task_progress ?? 0)} />{roadmapVisible && <Stat label={t("Roadmap progress")} value={formatPercentLocale(stats?.average_roadmap_progress ?? 0)} />}<Stat label={t("Need attention")} value={formatNumberLocale(stats?.students_at_risk ?? 0)} tone="danger" /></div>
+    <div className="split-grid wide-left"><Panel title={t("Student progress")} action={<button className="button quiet" onClick={() => setPage('students')}>{t("View all")} <ChevronRight size={16} /></button>}><StudentTable data={data} students={students.items} readOnly roadmapVisible={roadmapVisible} /></Panel><div className="section-stack"><Panel title={t("Upcoming deadlines")}>{tasks.items.map((task) => <Record key={task.id} title={task.title} meta={joinParts(task.student_name || studentName(data, task.student), task.due_date && tx`Due ${dateText(task.due_date)}`)} badge={task.status} />)}{tasks.loaded && !tasks.items.length && <Empty text={t("No task deadlines yet.")} />}</Panel>{isCounselor(user) && <ProgramUsageSummary {...{ user, data, reload, notify }} />}</div></div>
   </>;
 }
 
@@ -217,7 +221,7 @@ function CounselorHome({ user, stats, notify, setPage, refreshStats, updateStats
   const openStudent = (studentId) => setPage('students', studentId ? { studentId } : {});
   const cards = {
     stats: <StatCards review={review} breakdown={breakdown} needYou={home.need_you.total} meetings={meetingsToday} requests={pendingRequests} messages={home.messages} setPage={setPage} />,
-    review: <ReviewCard items={home.review_items} total={review.total} onOpen={(item) => setPage('review', item ? { item: item.id } : {})} />,
+    review: <ReviewCard items={(home.review_items || []).filter((item) => REVIEW_SOURCE[item.kind])} total={review.total} onOpen={(item) => setPage('review', item ? { item: item.id } : {})} />,
     need_you: <NeedYouCard needYou={home.need_you} onOpen={openStudent} />,
     today: <TodayCard week={home.week} today={home.today} meetings={home.meetings} onOpenMeeting={() => setPage('bookings')} onNotes={setNoteFor} />,
     deadlines: <DeadlinesCard deadlines={home.deadlines} onOpenStudents={() => setPage('students')} />,

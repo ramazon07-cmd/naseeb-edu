@@ -47,7 +47,7 @@ from ..scoping import scope_students, student_lookups, tenant_school, tenant_sch
 from .common import CONTACT_LIST_LIMIT, serve_private_file
 
 
-STAFF_ROLES = (User.Role.ORGANIZATION, User.Role.TEACHER, User.Role.COUNSELOR)
+STAFF_ROLES = (User.Role.ORGANIZATION, User.Role.TEACHER, User.Role.COUNSELOR, User.Role.ASSISTANT)
 
 
 def messaging_contacts_for(user):
@@ -78,7 +78,15 @@ def messaging_contacts_for(user):
         return queryset.none()
     school_staff = Q(school_id=school_id, role__in=STAFF_ROLES)
     if user.role == User.Role.STUDENT:
-        return queryset.filter(school_staff).order_by(*order)
+        # An unassigned student must not open a chat into an assistant's limited workspace.
+        assistants = StudentProfile.objects.filter(
+            user=user, school_id=school_id, deactivated_at__isnull=True, awaiting_confirmation=False,
+            assigned_counselor_id=F('assigned_assistant__supervising_counselor_id'),
+            assigned_counselor__is_active=True, assigned_counselor__role=User.Role.COUNSELOR,
+            assigned_counselor__school_id=school_id,
+        ).values('assigned_assistant_id')
+        reachable_staff = school_staff & (~Q(role=User.Role.ASSISTANT) | Q(id__in=assistants))
+        return queryset.filter(reachable_staff).order_by(*order)
     if user.role not in STAFF_ROLES:
         return queryset.none()
     lookups = student_lookups(user)

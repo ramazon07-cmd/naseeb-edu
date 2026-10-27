@@ -8,6 +8,7 @@ export const PAGE_PATHS = {
   dashboard: '/dashboard',
   schools: '/schools',
   school_counselors: '/counselors',
+  assistants: '/assistants',
   students: '/students',
   students_joined: '/students/joined',
   review: '/review',
@@ -133,11 +134,11 @@ export function buildPath({ page, params = {} } = {}) {
 
 // Sidebar order of the counselor workspace, and the pages that left it: still
 // openable by a direct link (search results, old bookmarks), just not listed.
-// Unreleased templates stay out of the admin sidebar; counselors see a locked placeholder.
+// Unreleased templates stay out of the sidebar.
 const OFF_PAGES = new Set(FEATURES.counselorRoadmapTemplates ? [] : ['counselor_roadmap']);
 const offered = (pages) => pages.filter((page) => !OFF_PAGES.has(page));
 
-export const COUNSELOR_NAV = ['dashboard', 'students', 'tasks', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap'];
+export const COUNSELOR_NAV = ['dashboard', 'students', 'assistants', 'tasks', 'review', 'essays', 'bookings', 'messages'];
 const COUNSELOR_DIRECT_LINK_PAGES = ['students_joined', 'academics', 'portfolio', 'activities', 'recommendations', 'roadmap', 'applications', 'documents', 'certificates'];
 
 // Sidebar order per role.
@@ -150,15 +151,18 @@ export function navigationFor(user) {
   // read per student in Student 360; the old flat pages stay reachable by link.
   if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
+  // A counselor's assistant: only the students their counselor gave them, read and sent back, never approved.
+  if (user?.role === 'assistant') return ['dashboard', 'students', 'tasks', 'messages'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'school_counselors', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'roadmap', 'store', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
 }
 
-// Pages a role sees in its navigation but cannot open yet: the sidebar shows
-// them locked ("Coming soon") and their paths fall back to the home page.
+// Unavailable pages fall back to Home, including old bookmarks. Only pages
+// still offered in navigation (such as Store) get a "Coming soon" placeholder.
 const LOCKED_PAGES = {
   student: ['store', 'roadmap'],
   counselor: ['roadmap', 'counselor_roadmap'],
+  assistant: ['roadmap', 'counselor_roadmap'],
 };
 
 export function lockedPages(user) {
@@ -170,11 +174,11 @@ export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
 // Pages opened from the account menu (or, for counselors, the shell's
 // Notifications item) rather than the sidebar list.
-const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'] };
+const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings'] };
 
 export function reachablePages(user) {
   if (!user) return new Set();
-  const extra = user.role === 'parent' && !isPlatformAdmin(user) ? [] : ['screen_time'];
+  const extra = ['parent', 'assistant'].includes(user.role) && !isPlatformAdmin(user) ? [] : ['screen_time'];
   if (!isPlatformAdmin(user)) extra.push(...(ACCOUNT_MENU_PAGES[user.role] || []));
   if (user.role === 'counselor' && !isPlatformAdmin(user)) extra.push(...COUNSELOR_DIRECT_LINK_PAGES);
   // Organization accounts confirm the students who joined by invite.
@@ -233,11 +237,19 @@ export function joinTokenFor(pathname) {
   return normalizePath(pathname).match(JOIN_PATTERN)?.[1] || null;
 }
 
-// Public pages: '/login' (and the old '#/login' link), a join link or the landing page.
+// A counselor's assistant invitation: '/assistant-invite/<token>' -> the token, else null.
+const ASSISTANT_INVITE_PATTERN = /^\/assistant-invite\/([A-Za-z0-9_-]{16,128})$/;
+export function assistantInviteTokenFor(pathname) {
+  return normalizePath(pathname).match(ASSISTANT_INVITE_PATTERN)?.[1] || null;
+}
+
+// Public pages: '/login' (and the old '#/login' link), a join link, an assistant
+// invitation or the landing page.
 export function publicPageFor(pathname, hash = '') {
   const path = normalizePath(pathname);
   if (path === LOGIN_PATH || (path === LANDING_PATH && hash === '#/login')) return 'login';
   if (joinTokenFor(path)) return 'join';
+  if (assistantInviteTokenFor(path)) return 'assistant_invite';
   if (path === LANDING_PATH) return 'landing';
   return null;
 }

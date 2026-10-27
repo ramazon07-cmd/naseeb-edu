@@ -3,6 +3,7 @@
 Canonical rule:
 * product admin (superuser or ADMIN role): every student;
 * counselor: students assigned to them *in their own school*;
+* assistant: students their counselor gave them, while still that counselor's;
 * teacher / organization: students of their school;
 * student: their own profile;
 * anyone else, or staff without a school: nobody;
@@ -69,6 +70,17 @@ def student_lookups(user):
         return {
             'assigned_counselor': user, 'school_id': user.school_id,
             'school__is_active': True, 'user__is_active': True, 'awaiting_confirmation': False,
+        }
+    if user.role == User.Role.ASSISTANT:
+        if not user.school_id or not user.supervising_counselor_id:
+            return _NOBODY
+        # Still the supervising counselor's student: a reassigned student drops out.
+        return {
+            'assigned_assistant': user, 'assigned_counselor_id': user.supervising_counselor_id,
+            'assigned_counselor__is_active': True, 'assigned_counselor__role': User.Role.COUNSELOR,
+            'assigned_counselor__school_id': user.school_id,
+            'school_id': user.school_id, 'school__is_active': True, 'user__is_active': True,
+            'awaiting_confirmation': False,
         }
     if user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
         if not user.school_id:

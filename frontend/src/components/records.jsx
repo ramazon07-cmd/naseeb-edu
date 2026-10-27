@@ -82,7 +82,7 @@ export function Detail({ label: title, value }) {
 // Students are never deleted: the row action deactivates (data is kept).
 // `students`: rows already searched on the server (staff lists); otherwise
 // the in-memory students are filtered by `query`.
-export function StudentTable({ data, students = null, onView, onEdit, onDeactivate, onApproveLevel, readOnly = false, query = '' }) {
+export function StudentTable({ data, students = null, onView, onEdit, onDeactivate, onApproveLevel, readOnly = false, query = '', roadmapVisible = true }) {
   const rows = students ?? data.students.filter((student) => fullName(student.user_detail).toLowerCase().includes(query.toLowerCase()));
   if (!rows.length) return <Empty text={t("No students found.")} />;
   const hasActions = Boolean(onView || onApproveLevel || !readOnly && (onEdit || onDeactivate));
@@ -96,7 +96,7 @@ export function StudentTable({ data, students = null, onView, onEdit, onDeactiva
       <td data-label={t("School")}>{student.school_name || <span className="cx-faint">—</span>}</td>
       <td data-label={t("Target")} className="cs-col-target"><span className="cx-row-copy">{student.target_major ? <b>{student.target_major}</b> : <span className="cx-faint">—</span>}{student.target_countries && <small>{splitList(student.target_countries).map((country) => t(country)).join(', ')}</small>}</span></td>
       <td data-label={t("Scores")} className="cs-col-nowrap">{student.gpa || testScoreCaption(student) ? <span className="cx-row-copy">{student.gpa && <b>{t("GPA")} {student.gpa}</b>}<small>{testScoreCaption(student)}</small></span> : <span className="cx-faint">{t("No scores yet")}</span>}</td>
-      {hasActions && <td className="cs-col-edit"><div className="row-actions">{onApproveLevel && student.level_up_pending && <button type="button" className="button quiet small" onClick={act(onApproveLevel, student)}><CheckCircle2 size={15} /> {t("Approve level")}</button>}{onView && <button type="button" className="icon-button" onClick={act(onView, student)} title={t("Full profile")} aria-label={t("Full profile")}><Eye size={16} /></button>}{!readOnly && onEdit && <button type="button" className="icon-button" onClick={act(onEdit, student)} title={t("Edit")} aria-label={tx`Edit ${name}`}><Pencil size={16} /></button>}{!readOnly && onDeactivate && <button type="button" className="icon-button danger" onClick={act(onDeactivate, student)} title={t("Deactivate student")} aria-label={tx`Deactivate ${name}`}><UserX size={16} /></button>}</div></td>}
+      {hasActions && <td className="cs-col-edit"><div className="row-actions">{roadmapVisible && onApproveLevel && student.level_up_pending && <button type="button" className="button quiet small" onClick={act(onApproveLevel, student)}><CheckCircle2 size={15} /> {t("Approve level")}</button>}{onView && <button type="button" className="icon-button" onClick={act(onView, student)} title={t("Full profile")} aria-label={t("Full profile")}><Eye size={16} /></button>}{!readOnly && onEdit && <button type="button" className="icon-button" onClick={act(onEdit, student)} title={t("Edit")} aria-label={tx`Edit ${name}`}><Pencil size={16} /></button>}{!readOnly && onDeactivate && <button type="button" className="icon-button danger" onClick={act(onDeactivate, student)} title={t("Deactivate student")} aria-label={tx`Deactivate ${name}`}><UserX size={16} /></button>}</div></td>}
     </tr>;
   })}</tbody></table></div>;
 }

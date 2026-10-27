@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attentionItems, weekDeadlines, weekOf } from '../src/lib/studentQuickLook.js';
+import { attentionItems, quickRecordEndpoints, weekDeadlines, weekOf } from '../src/lib/studentQuickLook.js';
+
+test('assistant quick look requests only permitted student collections', () => {
+  const endpoints = quickRecordEndpoints({ role: 'assistant' });
+  assert.deepEqual(endpoints, ['tasks', 'documents', 'applications', 'achievements']);
+  for (const role of ['assistant', 'counselor', 'student']) assert.ok(!quickRecordEndpoints({ role }).includes('roadmap-missions'));
+  assert.ok(quickRecordEndpoints({ role: 'teacher' }).includes('roadmap-missions'));
+  assert.ok(quickRecordEndpoints({ role: 'counselor' }).includes('recommendations'));
+  assert.equal(quickRecordEndpoints({ role: 'assistant' }), endpoints, 'the hook receives a stable dependency');
+});
 
 test('a week runs Monday to Sunday', () => {
   assert.deepEqual(weekOf('2026-10-11'), ['2026-10-05', '2026-10-11']);

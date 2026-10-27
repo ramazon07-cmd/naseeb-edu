@@ -66,6 +66,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         # Test detail is written only through onboarding, which validates it as a whole.
         read_only_fields = (
             'xp_total', 'level', 'application_profile', 'profile_completed_at', 'deactivated_at',
+            # Changed only through /assistants/{id}/students/.
+            'assigned_assistant',
             *sorted(EXAM_KEYS - {'ielts_score', 'sat_score'}),
         )
 

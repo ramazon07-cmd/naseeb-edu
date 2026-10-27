@@ -499,6 +499,15 @@ export const api = {
   // The public join page: no session is sent, whoever is signed in on this device.
   joinInvite: (token) => request(`/public/invites/${encodeURIComponent(token)}/`, { auth: false }),
   acceptInvite: (token, payload) => request(`/public/invites/${encodeURIComponent(token)}/accept/`, { auth: false, method: 'POST', body: JSON.stringify(payload) }),
+  // A counselor's assistants. The invite link comes back only from create (and goes out by email).
+  assistants: () => listAll('assistants'),
+  setAssistantStudents: (id, students) => request(`/assistants/${id}/students/`, { method: 'PUT', body: JSON.stringify({ students }) }),
+  deactivateAssistant: (id) => request(`/assistants/${id}/deactivate/`, { method: 'POST' }),
+  assistantInvites: () => listAll('assistant-invites'),
+  createAssistantInvite: (payload) => request('/assistant-invites/', { method: 'POST', body: JSON.stringify(payload) }),
+  revokeAssistantInvite: (id) => request(`/assistant-invites/${id}/revoke/`, { method: 'POST' }),
+  assistantInvite: (token) => request(`/public/assistant-invites/${encodeURIComponent(token)}/`, { auth: false }),
+  acceptAssistantInvite: (token, payload) => request(`/public/assistant-invites/${encodeURIComponent(token)}/accept/`, { auth: false, method: 'POST', body: JSON.stringify(payload) }),
   // Account settings. A password change ends the other sessions and hands this
   // one a new access token (kept here) and refresh cookie, so it stays signed in.
   changeOwnPassword: async (currentPassword, newPassword, confirmPassword) => {

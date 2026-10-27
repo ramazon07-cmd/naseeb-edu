@@ -812,6 +812,34 @@ EXACT = {
         'uz': 'Ota-ona hisoblari maktabga biriktirilmaydi.',
         'ru': 'Учётные записи родителей не привязываются к школе.',
     },
+    'Assistants must be connected to a school.': {
+        'uz': 'Assistent maktabga biriktirilgan bo‘lishi kerak.',
+        'ru': 'Ассистент должен быть привязан к школе.',
+    },
+    'This email address already has an account.': {
+        'uz': 'Bu email manzili bilan hisob allaqachon mavjud.',
+        'ru': 'С этим адресом электронной почты уже есть учётная запись.',
+    },
+    'This email address is already used by another account.': {
+        'uz': 'Bu email manzili boshqa hisobda ishlatilgan.',
+        'ru': 'Этот адрес электронной почты уже используется другой учётной записью.',
+    },
+    'This username or email address is already in use.': {
+        'uz': 'Bu login yoki email manzili band.',
+        'ru': 'Этот логин или адрес электронной почты уже занят.',
+    },
+    'Choose only your own active students.': {
+        'uz': 'Faqat o‘zingizning faol o‘quvchilaringizni tanlang.',
+        'ru': 'Выбирайте только своих активных учеников.',
+    },
+    'This assistant is deactivated.': {
+        'uz': 'Bu assistent o‘chirilgan.',
+        'ru': 'Этот ассистент отключён.',
+    },
+    'Only a counselor can manage assistants.': {
+        'uz': 'Assistentlarni faqat maslahatchi boshqara oladi.',
+        'ru': 'Управлять ассистентами может только консультант.',
+    },
     'Create students with quick-create so they get a school, a profile and a credential.': {
         'uz': 'O‘quvchini tezkor qo‘shish orqali yarating: shunda unga maktab, profil va parol beriladi.',
         'ru': 'Создавайте учеников через быстрое добавление — так они получат школу, профиль и пароль.',

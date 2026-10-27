@@ -3,7 +3,7 @@ import { t } from '../i18n.js';
 
 export const LABELS = {
   admin: 'Admin', counselor: 'School Counselor', teacher: 'Teacher', organization: 'Organization School', student: 'Student',
-  parent: 'Parent', mother: 'Mother', father: 'Father', guardian: 'Guardian',
+  parent: 'Parent', assistant: 'Counselor assistant', mother: 'Mother', father: 'Father', guardian: 'Guardian',
   todo: 'To do', in_progress: 'In progress', submitted: 'Submitted', approved: 'Approved', late: 'Late',
   low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent', researching: 'Researching',
   shortlisted: 'Shortlisted', applying: 'Applying', accepted: 'Accepted', rejected: 'Rejected',
@@ -71,13 +71,15 @@ export const AUDIT_ACTIONS = {
   'store_item.created': 'Store item added', 'store_item.updated': 'Store item updated', 'store_item.deleted': 'Store item deleted',
   'staff.created': 'Staff account added', 'staff.tier_changed': 'Staff access tier changed',
   'student_invite.created': 'Student invite created', 'student_invite.revoked': 'Student invite revoked',
-  'student.joined_by_invite': 'Student joined by invite', 'student.join_confirmed': 'Student join confirmed', 'student.join_rejected': 'Student join rejected'
+  'student.joined_by_invite': 'Student joined by invite', 'student.join_confirmed': 'Student join confirmed', 'student.join_rejected': 'Student join rejected',
+  'assistant_invite.created': 'Assistant invited', 'assistant_invite.revoked': 'Assistant invitation revoked',
+  'assistant.joined_by_invite': 'Assistant joined by invite', 'assistant.students_set': 'Assistant students changed'
 };
 
 // The audit filter picks a group: the API matches every action under the prefix.
 export const AUDIT_GROUPS = {
   task: 'Tasks',
-  account: 'Accounts', counselor: 'Counselors', counselor_roadmap: 'Counselor roadmaps',
+  account: 'Accounts', assistant: 'Counselor assistants', assistant_invite: 'Assistant invitations', counselor: 'Counselors', counselor_roadmap: 'Counselor roadmaps',
   counselor_roadmap_mission: 'Counselor mission reviews', counselor_roadmap_template: 'Roadmap templates',
   credential: 'Temporary passwords', essay: 'Essays', message_report: 'Message moderation',
   opportunity_program: 'Opportunity programs', organization_account: 'School logins', parent: 'Parent invitations',

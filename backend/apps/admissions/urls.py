@@ -4,6 +4,9 @@ from .telegram_feed import TelegramFeedView
 from .assistant import AssistantChatView
 from .views.admin_portal import AdminAiUsageView, AdminHealthView, AdminSummaryView
 from .views.review_today import ReviewedTodayView
+from .views.assistants import (
+    AssistantInviteViewSet, AssistantViewSet, PublicAssistantInviteAcceptView, PublicAssistantInviteView,
+)
 from .views.invites import PendingStudentViewSet, PublicInviteAcceptView, PublicInviteView, StudentInviteViewSet
 from .views import (
     AchievementViewSet,
@@ -96,6 +99,8 @@ router.register('parent-links', ParentStudentLinkViewSet, basename='parent-links
 router.register('challenge-attempts', ChallengeAttemptViewSet, basename='challenge-attempts')
 router.register('student-invites', StudentInviteViewSet, basename='student-invites')
 router.register('pending-students', PendingStudentViewSet, basename='pending-students')
+router.register('assistants', AssistantViewSet, basename='assistants')
+router.register('assistant-invites', AssistantInviteViewSet, basename='assistant-invites')
 
 urlpatterns = [
     path('telegram-feed/', TelegramFeedView.as_view(), name='telegram-feed'),
@@ -103,6 +108,8 @@ urlpatterns = [
     path('public/reach/', PublicReachView.as_view(), name='public-reach'),
     path('public/invites/<str:token>/', PublicInviteView.as_view(), name='public-invite'),
     path('public/invites/<str:token>/accept/', PublicInviteAcceptView.as_view(), name='public-invite-accept'),
+    path('public/assistant-invites/<str:token>/', PublicAssistantInviteView.as_view(), name='public-assistant-invite'),
+    path('public/assistant-invites/<str:token>/accept/', PublicAssistantInviteAcceptView.as_view(), name='public-assistant-invite-accept'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('admin/summary/', AdminSummaryView.as_view(), name='admin-summary'),
     path('admin/ai-usage/', AdminAiUsageView.as_view(), name='admin-ai-usage'),

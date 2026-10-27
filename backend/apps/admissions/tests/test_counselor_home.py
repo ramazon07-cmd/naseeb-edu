@@ -87,14 +87,22 @@ class ReviewItemsTests(HomeBase):
                                    due_date=self.today, submitted_at=timezone.now() - timedelta(days=3))
         document = Document.objects.create(student=self.student, title='Transcript', status=Document.Status.UPLOADED, google_docs_url='https://docs.google.com/document/d/x')
         Document.objects.filter(pk=document.pk).update(updated_at=timezone.now() - timedelta(days=5))
-        mission = RoadmapMission.objects.create(student=self.student, title='Baseline', status=RoadmapMission.Status.SUBMITTED)
+        RoadmapMission.objects.create(student=self.student, title='Baseline', status=RoadmapMission.Status.SUBMITTED)
         Achievement.objects.create(student=self.student, title='Sent back', category='olympiad', description='x',
                                    counselor_comment='More')
         Document.objects.create(student=self.student, title='Passport', status=Document.Status.REQUIRED)
         items = self.home()['review_items']
-        self.assertEqual([item['id'] for item in items], [f'document-{document.pk}', f'task-{task.pk}', f'roadmap-{mission.pk}'])
+        self.assertEqual([item['id'] for item in items], [f'document-{document.pk}', f'task-{task.pk}'])
         self.assertEqual(items[0]['student_name'], 'Ramazon Ergashev')
         self.assertEqual(items[0]['record_id'], document.pk)
+
+    def test_closed_roadmap_cannot_fill_the_visible_review_page(self):
+        for index in range(10):
+            RoadmapMission.objects.create(student=self.student, title=f'Hidden {index}', status=RoadmapMission.Status.SUBMITTED)
+        RoadmapMission.objects.filter(student=self.student).update(updated_at=timezone.now() - timedelta(days=5))
+        task = Task.objects.create(student=self.student, title='Visible task', status=Task.Status.SUBMITTED,
+                                   due_date=self.today, submitted_at=timezone.now())
+        self.assertEqual([item['id'] for item in self.home()['review_items']], [f'task-{task.pk}'])
 
     def test_another_counselors_work_is_not_listed(self):
         Task.objects.create(student=self.student_b, title='B', status=Task.Status.SUBMITTED, due_date=self.today)

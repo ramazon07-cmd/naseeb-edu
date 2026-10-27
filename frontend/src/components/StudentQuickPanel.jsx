@@ -6,31 +6,31 @@ import { CxAvatar, CxTag } from './counselorUi';
 import { dayMonthText, gradeOrPending, joinParts, localDateKey } from '../lib/format';
 import { fullName } from '../lib/labels';
 import { splitList } from '../lib/profileSections';
-import { attentionItems, weekDeadlines } from '../lib/studentQuickLook';
+import { attentionItems, quickRecordEndpoints, weekDeadlines } from '../lib/studentQuickLook';
 
 // Only what the quick look lists. Essays, notes and letter files are never loaded here;
 // achievements only while they wait for review, as the list's "To review" counts them.
-const ENDPOINTS = ['tasks', 'roadmap-missions', 'documents', 'applications', 'recommendations', 'achievements'];
 const ATTENTION_LIMIT = 6;
 
-function useQuickRecords(studentId) {
+function useQuickRecords(studentId, user) {
+  const endpoints = quickRecordEndpoints(user);
   const [state, setState] = useState({ studentId: null, records: {}, loading: true, error: '' });
   useEffect(() => {
     let current = true;
     setState({ studentId, records: {}, loading: true, error: '' });
     const student = `student=${encodeURIComponent(studentId)}`;
-    Promise.allSettled(ENDPOINTS.map((endpoint) => api.list(endpoint, endpoint === 'achievements' ? `?awaiting_review=true&${student}` : `?${student}`))).then((settled) => {
+    Promise.allSettled(endpoints.map((endpoint) => api.list(endpoint, endpoint === 'achievements' ? `?awaiting_review=true&${student}` : `?${student}`))).then((settled) => {
       if (!current) return;
       const records = {};
       let error = '';
       settled.forEach((result, index) => {
-        if (result.status === 'fulfilled') records[ENDPOINTS[index]] = result.value || [];
+        if (result.status === 'fulfilled') records[endpoints[index]] = result.value || [];
         else error ||= result.reason?.message || t('Some information could not be loaded');
       });
       setState({ studentId, records, loading: false, error });
     });
     return () => {current = false;};
-  }, [studentId]);
+  }, [studentId, endpoints]);
   return state.studentId === studentId ? state : { records: {}, loading: true, error: '' };
 }
 
@@ -51,10 +51,10 @@ const ATTENTION_TAG = { late_task: 'Late', missing_document: 'Missing', review: 
 
 // A side panel (a bottom sheet on phones) with one student's urgent work and this
 // week's deadlines; Student 360 stays one click away.
-export function StudentQuickPanel({ student, onClose, onOpen, onDirect }) {
+export function StudentQuickPanel({ user, student, onClose, onOpen, onDirect }) {
   const titleId = useId();
   const closeRef = useRef(null);
-  const { records, loading, error } = useQuickRecords(student.id);
+  const { records, loading, error } = useQuickRecords(student.id, user);
   const today = localDateKey();
   const attention = attentionItems(records, today);
   const deadlines = weekDeadlines(records, today);
