@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
-import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag } from '../components/counselorUi';
+import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag, ReasonTags } from '../components/counselorUi';
 import { Field, SegmentedField } from '../components/forms';
 import { Modal } from '../components/ui';
 import { DocumentPreviewModal, TaskSubmissionModal } from '../components/documents';

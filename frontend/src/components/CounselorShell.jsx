@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@fontsource-variable/roboto/wght.css';
 import '../pages/counselor-shell.css';
-import { Bell, Calendar, Check, CheckSquare, ChevronDown, ChevronsLeft, ChevronsRight, Compass, Ellipsis, Globe2, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, Pencil, Search, Settings, Users, UsersRound, X } from 'lucide-react';
+import { Bell, Calendar, Check, CheckSquare, ChevronDown, ChevronsLeft, ChevronsRight, Ellipsis, Globe2, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, Pencil, Search, Settings, Users, UsersRound, X } from 'lucide-react';
 import { LANGUAGE_OPTIONS, formatNumberLocale, t, tx } from '../i18n';
 import { fullName, initials } from '../lib/labels';
 import { counselorCounts } from '../lib/counselorCounts';
