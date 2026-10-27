@@ -450,8 +450,9 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 'code': 'credential_role_unsupported',
             }, status=400)
         # Never your own account: a stolen session could otherwise replace the password unseen.
-        # Another staff account is limited to super admins by IsRoleScopedUserAccess.
-        allowed = target.pk != request.user.pk and (
+        # Another staff account is limited to super admins by IsRoleScopedUserAccess, and a Django
+        # superuser (who can use /admin/, where the forced password change does not apply) to superusers.
+        allowed = target.pk != request.user.pk and (request.user.is_superuser or not target.is_superuser) and (
             has_tier(request.user, SUPPORT)
             or (target.role == User.Role.STUDENT and student_account_in_scope(target, request.user))
         )

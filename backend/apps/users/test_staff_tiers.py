@@ -104,6 +104,27 @@ class StaffTierTests(APITestCase):
         self.assertEqual((lost.password_version, lost.must_change_password), (version + 1, True))
         self.assertTrue(ProductAuditEvent.objects.filter(action='credential.issued', actor=self.superadmin).exists())
 
+    def test_only_a_django_superuser_resets_a_django_superuser(self):
+        # A superuser can sign in to /admin/, which the forced password change
+        # does not guard, so a product super admin must not be able to take it over.
+        owner = User.objects.create_superuser('owner', 'owner@example.com', 'StrongPass123!')
+        version = owner.password_version
+        url = f'/api/users/accounts/{owner.id}/temporary-credential/'
+        self.login(self.superadmin)
+        denied = self.client.post(url, {}, format='json')
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(denied.data['code'], 'credential_forbidden')
+        owner.refresh_from_db()
+        self.assertEqual((owner.password_version, owner.must_change_password), (version, False))
+        self.assertTrue(owner.check_password('StrongPass123!'))
+
+        backup_owner = User.objects.create_superuser('backup-owner', 'backup-owner@example.com', 'StrongPass123!')
+        self.login(backup_owner)
+        allowed = self.client.post(url, {}, format='json')
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+        owner.refresh_from_db()
+        self.assertTrue(owner.must_change_password)
+
     def test_staff_cannot_issue_themselves_a_temporary_password(self):
         # Otherwise a stolen session could replace the password without knowing it.
         for actor in (self.support, self.superadmin):
