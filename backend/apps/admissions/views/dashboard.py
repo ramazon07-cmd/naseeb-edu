@@ -242,7 +242,8 @@ class DashboardStatsView(APIView):
         )
         task_by_status = list(tasks.order_by().values('status').annotate(count=Count('id')).order_by('status'))
 
-        if user.role == User.Role.TEACHER:
+        if user.role in {User.Role.TEACHER, User.Role.ASSISTANT}:
+            # Assistants get the teacher's numbers: no essays, which stay with the counselor.
             return Response({
                 'students_total': students_total,
                 **progress_summary,

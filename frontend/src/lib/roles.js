@@ -15,6 +15,9 @@ export const isSuperAdmin = (user) => hasStaffTier(user, 'superadmin');
 
 export const isCounselor = (user) => isPlatformAdmin(user) || user?.role === 'counselor';
 
+// Presentation only: assistants share the counselor design, never its permissions.
+export const usesCounselorLayout = (user) => !isPlatformAdmin(user) && ['counselor', 'assistant'].includes(user?.role);
+
 // Staff the student CV endpoint lets in (CounselorOrOwnerPermission): counselors
 // and product admins, and the teachers and organization account of the school.
 export const canDownloadCv = (user) => isCounselor(user) || ['teacher', 'organization'].includes(user?.role);

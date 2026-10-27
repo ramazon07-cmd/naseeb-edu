@@ -66,7 +66,8 @@ test('each student page fetches its own collections the first time it opens, onc
   assert.deepEqual(s.open('applications'), []);
   assert.deepEqual(s.open('store'), ['store-items']);
   assert.deepEqual(s.open('messages'), ['message-channels']);
-  assert.deepEqual(s.open('roadmap'), ['roadmap-missions']);
+  assert.deepEqual(s.open('roadmap'), []);
+  assert.ok(!s.fetched.includes('roadmap-missions'), 'closed Roadmap never loads, even for an old page key');
   // Revisiting any page (or StrictMode running the effect twice) refetches nothing.
   for (const page of Object.keys(STUDENT_PAGE_KEYS)) s.open(page);
   for (const page of Object.keys(STUDENT_PAGE_KEYS)) assert.deepEqual(s.open(page), [], page);

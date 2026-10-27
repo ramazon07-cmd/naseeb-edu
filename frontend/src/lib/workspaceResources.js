@@ -1,4 +1,5 @@
 import { workspaceRole } from './roles.js';
+import { isPageLocked } from './routes.js';
 
 // Which API collections each role keeps in memory, as [dataKey, endpoint, query?].
 //
@@ -48,11 +49,13 @@ export function resourcesFor(user, now = new Date()) {
   const role = workspaceRole(user);
   if (role === 'parent') return [['parentPortal', 'parent-portal'], ['messageChannels', 'message-channels']];
   if (role === 'admin') return ADMIN_RESOURCES;
-  if (!['organization', 'teacher', 'counselor'].includes(role)) return [...STUDENT_RESOURCES, ...PORTAL_RESOURCES];
+  if (!['organization', 'teacher', 'counselor', 'assistant'].includes(role)) return [...STUDENT_RESOURCES, ...PORTAL_RESOURCES.filter(([key]) => key !== 'roadmapMissions' || !isPageLocked('roadmap', user))];
   const staff = staffResources(now);
+  // A counselor's assistant has no meetings or tickets of their own here: only chats.
+  if (role === 'assistant') return [staff.messageChannels];
   if (role === 'organization') return [staff.bookings, staff.messageChannels, staff.supportTickets];
   if (role === 'teacher') return [staff.bookings, staff.messageChannels];
-  return [['schools', 'schools'], ...ROADMAP_ADMIN, ['programServices', 'program-services'], staff.bookings, staff.messageChannels, staff.supportTickets];
+  return [['schools', 'schools'], ['programServices', 'program-services'], staff.bookings, staff.messageChannels, staff.supportTickets];
 }
 
 // One request per key at a time: `join(key)` hands a caller the request
@@ -115,7 +118,6 @@ export const STUDENT_PAGE_KEYS = {
   student_center: ['tasks', 'applications', 'essays', 'documents', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations'],
   find_personality: [],
   tasks: ['tasks'],
-  roadmap: ['roadmapMissions', 'tasks'],
   bookings: ['bookings'],
   messages: ['messageChannels'],
   programs: ['opportunityPrograms'],

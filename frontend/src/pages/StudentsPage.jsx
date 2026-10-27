@@ -18,8 +18,9 @@ import { PageSkeleton } from '../components/states';
 import { createLatestRequest } from '../lib/latestRequest';
 import { canDownloadCv, canManageWorkspaces, isCounselor, isPlatformAdmin, isSuperAdmin, isTaskManager } from '../lib/roles';
 import { usePagedList } from '../hooks/usePagedList';
-import { useStudentRecords } from '../hooks/useStudentRecords';
+import { studentRecordEndpoints, useStudentRecords } from '../hooks/useStudentRecords';
 import { usesPagedLists } from '../lib/workspaceResources';
+import { isPageLocked } from '../lib/routes';
 import { DownloadCvButton } from '../components/CvDocument';
 import { AccountPicker, LoadMore, PagedListError, SchoolPicker } from '../components/paged';
 
@@ -123,7 +124,7 @@ export function ParentInviteModal({ student, onClose, notify }) {
 // summarised there too. `roadmapLocked`: the student cannot reach the roadmap
 // yet, so mission progress, level and stars are left out. Tasks are independent
 // and remain part of application readiness.
-export function StudentOverview({ student, data: workspaceData, onBack, user, notify, profile = null, roadmapLocked = false }) {
+export function StudentOverview({ student, data: workspaceData, onBack, user, notify, profile = null, roadmapLocked = isPageLocked('roadmap', user) }) {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedEssay, setSelectedEssay] = useState(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
@@ -131,8 +132,14 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
   const [credentialOpen, setCredentialOpen] = useState(false);
   // Staff do not hold every student's records in memory: load this student's.
   const remote = usesPagedLists(user);
-  const studentRecords = useStudentRecords(student?.id, remote);
+  const studentRecords = useStudentRecords(student?.id, remote, studentRecordEndpoints(user));
   const data = remote ? { ...workspaceData, ...studentRecords.records } : workspaceData;
+  async function sendTaskBack(note) {
+    await api.sendBack('tasks', selectedTask.id, note);
+    setSelectedTask(null);
+    notify(t('Sent back to the student.'));
+    studentRecords.reload(['tasks']);
+  }
   if (!student) return <Empty text={t("Student profile not found.")} />;
   const documents = studentItems(data, 'documents', student.id);
   const certificates = documents.filter((item) => item.document_type === 'certificate');
@@ -157,12 +164,12 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
       <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} className="print-private" ><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget")} value={student.budget_usd == null ? null : money(student.budget_usd)} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
       <Panel title={t("Guardian")} className="print-private" ><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
     </>}
-    <div className="overview-grid student-workspace-grid">{!roadmapLocked && <StudentTaskList items={tasks} onView={setSelectedTask} />}<StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} /></div>
+    <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} />{user?.role !== 'assistant' && <StudentEssayList items={essays} onView={setSelectedEssay} />}<StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} /></div>
     <div className="overview-grid">
-      {STUDENT_RESOURCE_GROUPS.filter(([, resource]) => !profile || !PROFILE_SUMMARY_RESOURCES.includes(resource)).map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
+      {STUDENT_RESOURCE_GROUPS.filter(([, resource]) => studentRecordEndpoints(user).includes(resource) && (!profile || !PROFILE_SUMMARY_RESOURCES.includes(resource))).map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
       <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} />
     </div>
-    {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} notify={notify} />}
+    {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} notify={notify} onSendBack={user?.role === 'assistant' ? sendTaskBack : null} />}
     {selectedEssay && <EssayDetailModal essay={selectedEssay} onClose={() => setSelectedEssay(null)} />}
     {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} showStatus={!profile} />}
     {parentInviteOpen && <ParentInviteModal student={student} onClose={() => setParentInviteOpen(false)} notify={notify} />}
@@ -337,7 +344,9 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
   // Product staff below the ops tier read and reset logins only; level approvals need a super admin.
   const staffReadOnly = isPlatformAdmin(user) && !canManageWorkspaces(user);
   const canApproveLevels = isTaskManager(user) && (!isPlatformAdmin(user) || isSuperAdmin(user));
-  const actions = user.role !== 'teacher' && !staffReadOnly && <div className="panel-actions">{isCounselor(user) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {isPlatformAdmin(user) ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
+  // Teachers and counselors' assistants read student profiles; they never add or edit them.
+  const editsStudents = !['teacher', 'assistant'].includes(user.role) && !staffReadOnly;
+  const actions = editsStudents && <div className="panel-actions">{isCounselor(user) && <button className="button quiet" onClick={() => setAssignmentOpen(true)}><UsersRound size={17} /> {isPlatformAdmin(user) ? t("Assign counselor") : t("Connect students")}</button>}<button className="button primary" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Add student")}</button></div>;
   return <>
     <Panel title={t("Students")} action={actions} className={isPlatformAdmin(user) ? 'admin-students-panel' : ''}>
       {staffReadOnly && <p className="form-note staff-tier-note"><ShieldCheck size={16} /> {t("Only operations staff and super admins can add, assign, edit or deactivate students. You can view profiles and reset logins.")}</p>}
@@ -346,7 +355,7 @@ export function StudentsPage({ user, data, query, reload, notify, studentId = nu
         <label><span>{t("Grade")}</span><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">{t("All grades")}</option>{['8', '9', '10', '11', 'gap'].map((value) => <option key={value} value={value}>{value === 'gap' ? t("Gap year") : value}</option>)}</select></label>
         {isPlatformAdmin(user) && <label><span>{t("Counselor")}</span><select value={unassigned} onChange={(event) => setUnassigned(event.target.value)}><option value="">{t("Any counselor")}</option><option value="true">{t("No counselor assigned")}</option></select></label>}
       </div>
-      {students.loading && !students.items.length ? <PageSkeleton /> : <StudentTable data={data} students={students.items} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={user.role !== 'teacher' && !staffReadOnly ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
+      {students.loading && !students.items.length ? <PageSkeleton /> : <StudentTable data={data} students={students.items} roadmapVisible={!isPageLocked('roadmap', user)} onView={openStudent} onApproveLevel={canApproveLevels ? approveLevel : undefined} onEdit={editsStudents ? (student) => {setEditing(student);setOpen(true);} : undefined} onDeactivate={isPlatformAdmin(user) && !staffReadOnly ? deactivate : undefined} />}
       <PagedListError list={students} />
       <LoadMore list={students} />
     </Panel>

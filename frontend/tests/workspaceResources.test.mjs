@@ -24,7 +24,7 @@ test('the admin loads no school or account list at sign-in', () => {
 
 test('students and parents keep their own bounded collections in memory', () => {
   const student = resourcesFor({ role: 'student' }).map(([key]) => key);
-  for (const key of ['students', 'tasks', 'applications', 'documents', 'roadmapMissions', 'supportTickets']) assert.ok(student.includes(key), key);
+  for (const key of ['students', 'tasks', 'applications', 'documents', 'supportTickets']) assert.ok(student.includes(key), key);
   assert.deepEqual(resourcesFor({ role: 'parent' }), [['parentPortal', 'parent-portal'], ['messageChannels', 'message-channels']]);
   assert.equal(usesPagedLists({ role: 'student' }), false);
   assert.equal(usesPagedLists({ role: 'parent' }), false);
@@ -137,4 +137,21 @@ test('a failed stats refresh never leaves the dashboard loading', () => {
   assert.deepEqual(failedStatsStatus(undefined, {}), { status: 'error', error: 'Unable to load this section.', loaded: false });
   // Stats on screen stay up after a failed refresh.
   assert.deepEqual(failedStatsStatus({ status: 'loading', error: '', loaded: true }, error), { status: 'success', error: '', loaded: true });
+});
+
+test('a counselor assistant loads only their chats up front, never essays or letters', () => {
+  const assistant = { role: 'assistant' };
+  assert.deepEqual(resourcesFor(assistant).map(([key]) => key), ['messageChannels']);
+  assert.equal(usesPagedLists(assistant), true);
+  assert.equal(loadsDashboardStats(assistant), true);
+});
+
+// Closed modules must not send requests just because the workspace signed in.
+test('closed roadmap collections are absent from student and counselor workspace loads', () => {
+  for (const role of ['student', 'counselor', 'assistant']) {
+    for (const [, endpoint] of resourcesFor({ role })) {
+      assert.ok(!endpoint.includes('roadmap'), `${role}: ${endpoint}`);
+    }
+  }
+  assert.ok(resourcesFor({ role: 'admin' }).some(([, endpoint]) => endpoint === 'counselor-roadmap-templates'));
 });

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PAGE_PATHS, ROADMAP_TABS, STUDENT_CENTER_TABS, buildPath, roadmapTab, canOpenPage, homePage, openablePage, loginPath, navigationFor, parsePath,
-  isPageLocked, joinTokenFor, lockedPages, publicPageFor, reachablePages, resolveRoute, safeNextPath, withQuery,
+  assistantInviteTokenFor, isPageLocked, joinTokenFor, lockedPages, publicPageFor, reachablePages, resolveRoute, safeNextPath, withQuery,
 } from '../src/lib/routes.js';
 
 const student = { id: 1, role: 'student' };
@@ -175,9 +175,11 @@ test('the store is shown locked to students and cannot be opened', () => {
 });
 
 test('roadmap pages stay locked for students and counselors, including direct tab links', () => {
-  assert.ok(navigationFor(student).includes('roadmap'));
-  assert.ok(navigationFor(counselor).includes('counselor_roadmap'));
-  for (const user of [student, counselor]) {
+  assert.ok(!navigationFor(student).includes('roadmap'));
+  assert.ok(!navigationFor(counselor).includes('counselor_roadmap'));
+  for (const user of [student, counselor, { role: 'assistant' }]) {
+    assert.ok(!navigationFor(user).includes('roadmap'));
+    assert.ok(!navigationFor(user).includes('counselor_roadmap'));
     assert.equal(isPageLocked('roadmap', user), true);
     assert.equal(canOpenPage('roadmap', user), false);
     assert.equal(openablePage('roadmap', user), null);
@@ -252,4 +254,23 @@ test('staff pages open only for the tiers that use them', () => {
   assert.equal(resolveRoute({ page: 'admin_health', params: {} }, ops).page, 'admin_health');
   for (const page of ['admin_staff', 'admin_health', 'admin_plans']) assert.equal(resolveRoute({ page, params: {} }, superadmin).page, page);
   assert.equal(resolveRoute({ page: 'admin_plans', params: {} }, support).page, 'admin_plans');
+});
+
+test('a counselor assistant reaches only their read-only pages; counselors manage assistants', () => {
+  const assistant = { id: 6, role: 'assistant' };
+  assert.deepEqual(navigationFor(assistant), ['dashboard', 'students', 'tasks', 'messages']);
+  assert.ok(canOpenPage('account_settings', assistant));
+  for (const page of ['assistants', 'review', 'essays', 'screen_time', 'bookings', 'support', 'roadmap']) {
+    assert.ok(!canOpenPage(page, assistant), `${page} is not an assistant page`);
+  }
+  assert.ok(canOpenPage('assistants', counselor));
+  for (const role of [teacher, organization, student, parent]) assert.ok(!canOpenPage('assistants', role), role.role);
+});
+
+test('an assistant invitation link is a public page with its token', () => {
+  const token = 'abcDEF123_-abcDEF123_-';
+  assert.equal(publicPageFor(`/assistant-invite/${token}`), 'assistant_invite');
+  assert.equal(assistantInviteTokenFor(`/assistant-invite/${token}/`), token);
+  assert.equal(assistantInviteTokenFor('/assistant-invite/short'), null);
+  assert.equal(joinTokenFor(`/assistant-invite/${token}`), null);
 });

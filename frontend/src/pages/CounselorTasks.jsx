@@ -29,7 +29,7 @@ const VIEWS = {
 
 function TaskLine({ task, today, user, onOpen, onEdit, onDelete }) {
   const status = taskStatus(task, today);
-  const editable = task.status !== 'approved' && editableFields(task, RESOURCE_FIELDS.tasks).length > 0;
+  const editable = isTaskManager(user) && task.status !== 'approved' && editableFields(task, RESOURCE_FIELDS.tasks).length > 0;
   const detail = joinParts(
     task.due_date && tx`Due ${dateText(task.due_date)}`,
     task.priority && tx`Priority: ${label(task.priority)}`,
@@ -48,7 +48,7 @@ function TaskLine({ task, today, user, onOpen, onEdit, onDelete }) {
 
 // One task: what was asked, what the student sent (their words, link or file, shown in
 // place) and, while it waits for the counselor, the decision with a note.
-function TaskDetailModal({ task, today, canDecide, onDecide, onClose, notify }) {
+function TaskDetailModal({ task, today, canDecide, canSendBack, onDecide, onClose, notify }) {
   const status = taskStatus(task, today);
   const sent = hasSubmission('task', task);
   return <Modal title={task.title} onClose={onClose}><div className="workspace-detail">
@@ -60,7 +60,7 @@ function TaskDetailModal({ task, today, canDecide, onDecide, onClose, notify }) 
     <section>
       {sent ? <Submission item={{ kind: 'task', record: task }} notify={notify} /> : <><span className="detail-label">{t('Student response')}</span><p className="cg-none">{t('The student has not submitted a written response yet.')}</p></>}
     </section>
-    {canDecide && task.status === 'submitted' && <DocumentDecision approvable={sent} onDecide={onDecide} notify={notify} />}
+    {(canDecide || canSendBack) && task.status === 'submitted' && <DocumentDecision canApprove={canDecide} approvable={sent} onDecide={onDecide} notify={notify} />}
   </div></Modal>;
 }
 
@@ -76,7 +76,8 @@ export function CounselorTasksPage({ user, data, reload, notify }) {
   const list = useRecordList({ user, data, endpoint: 'tasks', query: search, filters: VIEWS[view][1], ordering: 'due' });
   const today = localDateKey();
   const groups = useMemo(() => groupTasksByStudent(list.items, today), [list.items, today]);
-  const pills = Object.entries(VIEWS).map(([key, [pill]]) => [key, pill, key === 'review' ? stats?.review?.tasks : undefined]);
+  const submitted = stats?.review?.tasks ?? stats?.task_by_status?.find((row) => row.status === 'submitted')?.count;
+  const pills = Object.entries(VIEWS).map(([key, [pill]]) => [key, pill, key === 'review' ? submitted : undefined]);
 
   function refresh() {
     invalidatePagedLists(['tasks']);
@@ -131,7 +132,7 @@ export function CounselorTasksPage({ user, data, reload, notify }) {
     </div>
     <PagedListError list={list} />
     <LoadMore list={list} />
-    {viewing && <TaskDetailModal task={viewing} today={today} canDecide={isTaskManager(user)} onDecide={decide} onClose={() => setViewing(null)} notify={notify} />}
+    {viewing && <TaskDetailModal task={viewing} today={today} canDecide={isTaskManager(user)} canSendBack={user.role === 'assistant'} onDecide={decide} onClose={() => setViewing(null)} notify={notify} />}
     {form && <ResourceForm resource="tasks" item={form.item} data={data} user={user} onClose={() => setForm(null)} onSaved={() => { setForm(null); refresh(); }} notify={notify} />}
   </div>;
 }

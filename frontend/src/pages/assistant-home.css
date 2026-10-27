@@ -1,0 +1,8 @@
+/* Share the counselor table directly in Home's card, with one enclosing surface. */
+.ah-students {
+  overflow: hidden;
+}
+
+.ah-students .ch-card-body {
+  padding: 6px 0 0;
+}

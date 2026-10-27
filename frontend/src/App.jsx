@@ -22,8 +22,8 @@ import { CxHead } from './components/counselorUi';
 import { formatNumberLocale, getLanguage, locale, setLanguage, siteTitle, t, tx } from './i18n';
 import { exportNodePdf } from './lib/exportPdf';
 import { fullName, initials, label, ownStudent } from './lib/labels';
-import { isCounselor, isPlatformAdmin, isTaskManager } from './lib/roles';
-import { LANDING_PATH, LOGIN_PATH, buildPath, canOpenPage, isPageLocked, joinTokenFor, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
+import { isCounselor, isPlatformAdmin, isTaskManager, usesCounselorLayout } from './lib/roles';
+import { LANDING_PATH, LOGIN_PATH, assistantInviteTokenFor, buildPath, canOpenPage, isPageLocked, joinTokenFor, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
 import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchResultTarget, searchText } from './lib/searchIndex';
 import { STUDENT_SHELL_KEYS, loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
@@ -90,6 +90,8 @@ const SupportPage = lazyNamed(() => import('./pages/SupportPage'), 'SupportPage'
 const AccountSettingsPage = lazyNamed(() => import('./pages/AccountSettingsPage'), 'AccountSettingsPage');
 const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
 const AwaitingConfirmation = lazyNamed(() => import('./pages/JoinPage'), 'AwaitingConfirmation');
+const AssistantInvitePage = lazyNamed(() => import('./pages/AssistantInvitePage'), 'AssistantInvitePage');
+const AssistantsPage = lazyNamed(() => import('./pages/AssistantsPage'), 'AssistantsPage');
 const RecentlyJoinedPage = lazyNamed(() => import('./components/StudentInvites'), 'RecentlyJoinedPage');
 const JoinedBanner = lazyNamed(() => import('./components/StudentInvites'), 'JoinedBanner');
 const AddStudentModal = lazyNamed(() => import('./components/StudentInvites'), 'AddStudentModal');
@@ -115,6 +117,7 @@ const PAGE_META = {
   dashboard: { label: 'Dashboard', icon: LayoutDashboard, description: 'A complete view of the application journey' },
   schools: { label: 'Schools', icon: Building2, description: 'Schools and organization accounts' },
   school_counselors: { label: 'Counselors', icon: UserRound, description: 'Manage counselors in your school' },
+  assistants: { label: 'Assistants', icon: UsersRound, description: 'Assistants who work with some of your students' },
   students: { label: 'Students', icon: Users, description: 'Student profiles and progress' },
   students_joined: { label: 'Recently joined', icon: UserPlus, description: 'Students who joined with your invitation or magic link' },
   review: { label: 'Review', icon: CheckSquare, description: 'Submitted work waiting for your decision' },
@@ -227,7 +230,7 @@ function remoteSearchDestinations(user) {
 
 const PAGE_RESOURCE_KEYS = {
   dashboard: ['dashboard', 'students', 'tasks', 'applications', 'essays', 'achievements', 'honors', 'bookings', 'team', 'programServices', 'parentPortal'],
-  school_counselors: [], schools: ['schools'], students: ['students'], students_joined: [], review: [], academics: ['students', 'researches'],
+  school_counselors: [], assistants: [], schools: ['schools'], students: ['students'], students_joined: [], review: [], academics: ['students', 'researches'],
   // The catalog editor pages its own lists from the server.
   admin_catalog: [], admin_moderation: [],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
@@ -392,20 +395,20 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     }
   }
   const collapseLabel = collapsed ? t("Expand navigation") : t("Collapse navigation");
-  const counselorShell = user.role === 'counselor' && !isPlatformAdmin(user);
+  const counselorShell = usesCounselorLayout(user);
   const banners = <>
     {user.workspace?.read_only && <div className="data-state workspace-read-only" role="status"><ShieldAlert size={18} /><div><b>{t('This workspace is read-only')}</b><p>{t('You can view everything, but changes are paused until an administrator renews the workspace subscription.')}</p></div></div>}
     {!isOnline && <div className="data-state offline" role="status"><WifiOff size={18} /><div><b>{t('You are offline')}</b><p>{t('Current information remains available. Reconnect before saving changes.')}</p></div></div>}
     {error && <div className="alert error workspace-alert">{error}</div>}
   </>;
   const overlays = <>
-    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');setPaletteQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(paletteQuery.trim() ? searchResults : navigation.filter((destination) => !isPageLocked(destination, user)).map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}{result.kind === 'record' && result.subtitle && <small>{result.subtitle}</small>}</span><ChevronRight size={16} /></button>)}{paletteQuery.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} onSeeAll={counselorShell ? () => {invalidatePagedLists(['notifications']);openFromNotification('notifications', {});} : undefined} />}</Modal>}
+    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');setPaletteQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(paletteQuery.trim() ? searchResults : navigation.filter((destination) => !isPageLocked(destination, user)).map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}{result.kind === 'record' && result.subtitle && <small>{result.subtitle}</small>}</span><ChevronRight size={16} /></button>)}{paletteQuery.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} onSeeAll={canOpenPage('notifications', user) ? () => {invalidatePagedLists(['notifications']);openFromNotification('notifications', {});} : undefined} />}</Modal>}
     {canOpenPage('screen_time', user) && <ScreenTimeTracker page={page} userId={user.id} />}
     {canUseAssistant(user) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} onUnavailable={(message) => {updateUser({ assistant_enabled: false });notify(message, 'error');}} />}
   </>;
   if (counselorShell) {
     const pageTitle = t(counselorPageLabel(page) || meta.label);
-    return <div className="app-shell cx-shell role-counselor">
+    return <div className={`app-shell cx-shell role-${user.role}`}>
       <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} bell={bell.summary} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={() => setAssistantRequest((current) => current + 1)} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
         <main className={`cx-main${page === 'messages' ? ' cx-main-messages' : ''}`}>
           {banners}
@@ -497,12 +500,13 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
-  if (['student', 'counselor', 'parent'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
+  if (['student', 'counselor', 'parent', 'assistant'].includes(user.role) && page === 'account_settings') return <AccountSettingsPage {...{ user, language, changeLanguage, notify }} onUserChange={updateUser} />;
   if (page === 'school_counselors' && user.role === 'organization') return <SchoolCounselorsPage {...{ query, reload, notify }} />;
+  if (page === 'assistants' && isCounselorShell(user)) return <AssistantsPage notify={notify} />;
   if (page === 'schools') return <SchoolsPage user={user} data={data} query={query} reload={reload} notify={notify} />;
   if (page === 'students_joined' && ['counselor', 'organization'].includes(user.role)) return <RecentlyJoinedPage user={user} data={data} notify={notify} onChanged={() => { refreshStats(user); reload(); }} onBack={() => setPage('students')} headless={user.role === 'organization'} />;
-  if (page === 'students' && user.role === 'counselor') return <>
-    {!params.studentId && <JoinedBanner count={stats?.badges?.students_pending} onOpen={() => setPage('students_joined')} />}
+  if (page === 'students' && usesCounselorLayout(user)) return <>
+    {user.role === 'counselor' && !params.studentId && <JoinedBanner count={stats?.badges?.students_pending} onOpen={() => setPage('students_joined')} />}
     <CounselorStudentsPage {...{ user, data, stats, query, setQuery, reload, notify, setPage, onDirect }} studentId={params.studentId} onStudent={(studentId) => setPage(page, { studentId })} onAddStudent={() => setAddingStudent(true)} />
     {addingStudent && <AddStudentModal user={user} data={data} onClose={() => setAddingStudent(false)} notify={notify} onJoined={() => setPage('students_joined')} onCreated={reload} />}
   </>;
@@ -522,7 +526,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (page === 'certificates') return <DocumentsPage typeFilter="certificate" title={t("Certificates")} {...{ user, data, query, reload, notify }} />;
   if (page === 'notifications' && isCounselorShell(user)) return <NotificationsPage {...{ notify, setPage }} />;
   if (page === 'essays' && isCounselorShell(user)) return params.essayId ? <CounselorEssayReview key={params.essayId} essayId={params.essayId} notify={notify} reload={reload} onBack={() => setPage('essays')} /> : <CounselorEssaysPage {...{ user, data }} onOpen={(essayId) => setPage('essays', { essayId })} />;
-  if (page === 'tasks' && isCounselorShell(user)) return <CounselorTasksPage resource="tasks" {...{ user, data, reload, notify }} />;
+  if (page === 'tasks' && usesCounselorLayout(user)) return <CounselorTasksPage resource="tasks" {...{ user, data, reload, notify }} />;
   const titleMap = { tasks: 'Tasks', applications: 'University applications', essays: 'Essays' };
   return <ResourceSection title={titleMap[page] || label(page)} resource={page} {...{ user, data, query, reload, notify }} />;
 }
@@ -642,7 +646,7 @@ export default function App() {
   // unknown and forbidden paths. Waits until onboarding is done so a deep
   // link survives it.
   useEffect(() => {
-    if (!inWorkspace || publicPage === 'join') return;
+    if (!inWorkspace || ['join', 'assistant_invite'].includes(publicPage)) return;
     if (publicPage === 'login') {
       const next = safeNextPath(new URLSearchParams(location.search).get('next'));
       if (next) {navigate(next, { replace: true });return;}
@@ -663,8 +667,21 @@ export default function App() {
   }, [inWorkspace, page, language]);
 
   async function afterLogin() {
+    // An invitation can replace another account in this tab. Drop its records
+    // and pending responses before rendering the new user's workspace.
+    resetWorkspace();
     const current = await loadUser();
     if (!current.must_change_password && !current.awaiting_confirmation) await loadInitial(current);
+  }
+  async function afterAssistantLogin() {
+    await afterLogin();
+    navigate(buildPath({ page: 'dashboard' }), { replace: true });
+  }
+  async function signInFromAssistantInvite() {
+    // The public invitation must not bounce back into the inviting counselor's
+    // still-open session when the assistant chooses the regular sign-in form.
+    if (user) await finishSignOut({ keepDrafts: true });
+    else showPublicPage('login');
   }
   // The waiting screen's "Check again": once confirmed, the workspace (or onboarding) opens.
   async function checkConfirmation() {
@@ -739,7 +756,7 @@ export default function App() {
   // the stats: keep them current while the tab is open. Meetings and chats
   // reload only on their own page or when their badge moved; the bell is told
   // only when its summary changed, so its own back-off stands.
-  const counselorLive = inWorkspace && !publicPage && isCounselorShell(user);
+  const counselorLive = inWorkspace && !publicPage && usesCounselorLayout(user);
   useEffect(() => {
     if (!counselorLive) return undefined;
     let lastRun = Date.now();
@@ -763,7 +780,7 @@ export default function App() {
         // Thrown, not null: the poller then waits out a 429's Retry-After.
         if (fresh.status === 'rejected') throw fresh.reason;
         if (!fresh.value) return null;
-        const reload = liveReloadKeys(pageRef.current, previous, fresh.value);
+        const reload = liveReloadKeys(pageRef.current, previous, fresh.value).filter((key) => user.role !== 'assistant' || key === 'messageChannels');
         if (reload.length) await loadData(user, reload, { background: true });
         return true;
       },
@@ -787,6 +804,7 @@ export default function App() {
   if (bootstrapping) return <AppBootLoader message={bootstrapBusy ? t('Busy, retrying…') : 'Checking your secure session…'} />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={() => bootstrapSession()} onSignOut={logout} />;
   if (publicPage === 'join') return <LazyBoundary fallback={<AppBootLoader />}><JoinPage token={joinTokenFor(location.pathname)} onSignIn={() => showPublicPage('login')} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;
+  if (publicPage === 'assistant_invite') return <LazyBoundary fallback={<AppBootLoader />}><AssistantInvitePage token={assistantInviteTokenFor(location.pathname)} onSignIn={signInFromAssistantInvite} onLogin={afterAssistantLogin} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;
   if (!user) return publicPage !== 'landing' ?
   <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> :
   <LazyBoundary fallback={<AppBootLoader />}><LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /></LazyBoundary>;

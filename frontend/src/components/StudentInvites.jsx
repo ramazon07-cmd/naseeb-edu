@@ -14,9 +14,9 @@ const GRADES = ['8', '9', '10', '11', 'gap'];
 // Magic link lifetimes the counselor can pick; one day is the default.
 const LINK_HOURS = [[24, '1 day'], [72, '3 days'], [168, '7 days']];
 
-const inviteUrl = (path) => `${window.location.origin}${path}`;
+export const inviteUrl = (path) => `${window.location.origin}${path}`;
 
-function CopyField({ value, notify, label = t('Invitation link') }) {
+export function CopyField({ value, notify, label = t('Invitation link') }) {
   async function copy(event) {
     const input = event.currentTarget.parentElement.querySelector('input');
     try {

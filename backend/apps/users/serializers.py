@@ -30,6 +30,7 @@ class UserSerializer(serializers.ModelSerializer):
     school_workspace_type = serializers.CharField(source='school.workspace_type', read_only=True)
     credential_status = serializers.SerializerMethodField()
     credential_expires_at = serializers.SerializerMethodField()
+    supervising_counselor_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -38,6 +39,7 @@ class UserSerializer(serializers.ModelSerializer):
             'role', 'phone', 'position', 'avatar', 'school', 'school_name', 'school_workspace_type',
             'is_active', 'is_superuser', 'admin_tier', 'staff_tier', 'last_login',
             'must_change_password', 'password_changed_at', 'credential_status', 'credential_expires_at',
+            'supervising_counselor_name',
         )
         read_only_fields = (
             'id', 'full_name', 'must_change_password', 'password_changed_at', 'last_login',
@@ -48,6 +50,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj) -> str | None:
         return obj.get_full_name() or obj.username
+
+    def get_supervising_counselor_name(self, obj) -> str | None:
+        # Only assistants have one; skip the lookup for everyone else.
+        counselor = obj.supervising_counselor if obj.role == User.Role.ASSISTANT else None
+        return (counselor.get_full_name() or counselor.username) if counselor else None
 
     def _credential(self, obj):
         if not hasattr(obj, '_latest_temporary_credential'):
@@ -167,6 +174,8 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'school': 'Counselors must be connected to a school.'})
         if role == User.Role.PARENT and school:
             raise serializers.ValidationError({'school': 'Parent accounts are not connected to a school.'})
+        if role == User.Role.ASSISTANT and not school:
+            raise serializers.ValidationError({'school': 'Assistants must be connected to a school.'})
         try:
             validate_workspace_membership(role=role, school=school, user=self.instance)
         except DjangoValidationError as exc:

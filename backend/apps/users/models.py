@@ -27,6 +27,7 @@ class User(AbstractUser):
         ORGANIZATION = 'organization', 'Organization School'
         STUDENT = 'student', 'Student'
         PARENT = 'parent', 'Parent'
+        ASSISTANT = 'assistant', 'Counselor assistant'
 
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.STUDENT)
@@ -39,6 +40,14 @@ class User(AbstractUser):
         null=True,
         blank=True,
         related_name='users',
+    )
+    # An assistant works for one counselor and sees only students that counselor gave them.
+    supervising_counselor = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assistants',
     )
     must_change_password = models.BooleanField(default=False)
     password_version = models.PositiveIntegerField(default=1)
@@ -66,6 +75,10 @@ class User(AbstractUser):
                 condition=~models.Q(role='parent') | models.Q(school__isnull=True),
                 name='parent_has_no_school',
             ),
+            models.CheckConstraint(
+                condition=~models.Q(role='assistant') | models.Q(school__isnull=False),
+                name='assistant_requires_school',
+            ),
         ]
         indexes = [models.Index(fields=['first_name', 'last_name', 'id'], name='user_name_order_idx')]
 
@@ -73,6 +86,8 @@ class User(AbstractUser):
         super().clean()
         if self.role == self.Role.COUNSELOR and not self.school_id:
             raise ValidationError({'school': 'Counselors must be connected to a school.'})
+        if self.role == self.Role.ASSISTANT and not self.school_id:
+            raise ValidationError({'school': 'Assistants must be connected to a school.'})
         if self.role == self.Role.PARENT and self.school_id:
             raise ValidationError({'school': 'Parent accounts are not connected to a school.'})
         if self.role == self.Role.STUDENT and not self.is_superuser and not self.school_id:
@@ -118,6 +133,10 @@ class User(AbstractUser):
     @property
     def is_organization(self):
         return self.role == self.Role.ORGANIZATION
+
+    @property
+    def is_assistant(self):
+        return self.role == self.Role.ASSISTANT
 
 
 class TemporaryCredential(models.Model):

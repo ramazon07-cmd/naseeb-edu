@@ -9,11 +9,14 @@ Production-oriented CRM for schools and counselors managing students who apply t
 | Admin | Product staff (tiers: support, ops, super admin). Provisions schools, counselors and plans, opens Student 360 for any student, reads the audit log and handles support |
 | Organization School | Its own school's students: create and edit them, read-only Student 360, meetings and messages; lists and edits its counselors (name, phone, position, active status) |
 | Counselor | Only the students assigned to them: review queue, Student 360, essays, applications, documents, meetings and messages; invites parents |
+| Counselor assistant | Only students assigned by their supervising counselor; reads progress and submissions, sends tasks back with a note, messages assigned students and school staff; cannot approve work, edit profiles, or read essays, recommendation letters and counselor notes |
 | Teacher | Students in their own school; creates Tasks and Roadmap missions and approves submitted work |
 | Student | Their own profile, assessment, roadmap, tasks, applications, documents, essays, meetings and messages |
 | Parent | Read-only view of linked children (progress, tasks, applications, documents, meetings) once they accept a counselor's invite |
 
-Public registration is disabled. Students are created by a counselor or their school; parents join through an invite.
+Public registration is disabled. Students are created by a counselor or their school; parents and counselor assistants join through an invite.
+
+Counselors open **Assistants**, invite by email, and assign students after the assistant sets their username and password. Invite links are single use and expire after `ASSISTANT_INVITE_TTL_DAYS` (default 7). Configure `FRONTEND_URL` to the public web app origin and the backend `EMAIL_*` / `DEFAULT_FROM_EMAIL` settings in `backend/.env.production.example` to send mail. With the default console backend, the counselor copies and shares the link. Failed email delivery also leaves the link available to copy. Deactivating an assistant revokes their sessions and clears their student assignments.
 
 ## Brand and themes
 

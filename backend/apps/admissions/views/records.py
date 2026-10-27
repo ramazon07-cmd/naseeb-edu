@@ -570,7 +570,7 @@ def audience_filter(user):
 
 def reads_addressed_notices(user):
     """Staff whose own addressed notices (e.g. a meeting request) are theirs whatever the student's scope."""
-    return user.is_counselor_like or user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}
+    return user.is_counselor_like or user.role in {User.Role.TEACHER, User.Role.ORGANIZATION, User.Role.ASSISTANT}
 
 
 class NotificationViewSet(ScopedQuerysetMixin, viewsets.ModelViewSet):

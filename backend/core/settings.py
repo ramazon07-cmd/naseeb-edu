@@ -119,6 +119,20 @@ MAX_PENDING_STUDENTS_PER_SCHOOL = config('MAX_PENDING_STUDENTS_PER_SCHOOL', defa
 STUDENT_SELF_JOIN_ENABLED = config('STUDENT_SELF_JOIN_ENABLED', default=False, cast=bool)
 # Domain for students created without an email (.invalid never routes mail).
 PLACEHOLDER_EMAIL_DOMAIN = config('PLACEHOLDER_EMAIL_DOMAIN', default='students.naseeb.invalid')
+# How long a counselor's assistant invitation stays valid.
+ASSISTANT_INVITE_TTL_DAYS = config('ASSISTANT_INVITE_TTL_DAYS', default=7, cast=int)
+# Where invitation emails link to (the web app, not this API).
+FRONTEND_URL = config('FRONTEND_URL', default='http://127.0.0.1:5173').rstrip('/')
+# Outgoing mail (assistant invitations). The console backend sends nothing: the
+# counselor copies the link instead, and outside DEBUG it is not even printed.
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=10, cast=int)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Naseeb Edu <no-reply@naseebedu.com>')
 
 environment_errors = validate_runtime_environment(
     app_env=APP_ENV,
