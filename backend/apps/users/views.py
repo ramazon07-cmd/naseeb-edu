@@ -357,14 +357,19 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def change_password(self, request):
         if not request.user.must_change_password:
             return Response({'detail': 'No mandatory password change is pending.'}, status=400)
+        from apps.admissions.services import choose_student_grade
+
         serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         try:
-            user = complete_password_change(
-                user=request.user,
-                new_password=serializer.validated_data['new_password'],
-                request=request,
-            )
+            with transaction.atomic():
+                user = complete_password_change(
+                    user=request.user,
+                    new_password=serializer.validated_data['new_password'],
+                    request=request,
+                )
+                if serializer.validated_data.get('grade'):
+                    choose_student_grade(user, serializer.validated_data['grade'])
         except ValueError as exc:
             if str(exc) == 'password_reuse':
                 return Response({'new_password': ['Choose a password different from the temporary password.']}, status=400)
@@ -439,13 +444,16 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     )
     def temporary_credential(self, request, pk=None):
         target = self.get_object()
-        if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION, User.Role.COUNSELOR}:
+        if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION, User.Role.COUNSELOR, User.Role.ADMIN}:
             return Response({
-                'detail': 'Temporary credentials are only available for student, school and counselor accounts.',
+                'detail': 'Temporary credentials are only available for student, school, counselor and staff accounts.',
                 'code': 'credential_role_unsupported',
             }, status=400)
-        allowed = has_tier(request.user, SUPPORT) or (
-            target.role == User.Role.STUDENT and student_account_in_scope(target, request.user)
+        # Never your own account: a stolen session could otherwise replace the password unseen.
+        # Another staff account is limited to super admins by IsRoleScopedUserAccess.
+        allowed = target.pk != request.user.pk and (
+            has_tier(request.user, SUPPORT)
+            or (target.role == User.Role.STUDENT and student_account_in_scope(target, request.user))
         )
         if not allowed:
             return Response({'detail': 'You cannot issue credentials for this account.', 'code': 'credential_forbidden'}, status=403)
@@ -484,8 +492,13 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='create-counselor')
     def create_counselor(self, request):
-        if not self.is_product_admin(request.user):
-            return Response({'detail': 'Only a product admin can create counselors.', 'code': 'product_admin_required'}, status=403)
+        school_manager = (
+            request.user.role == User.Role.ORGANIZATION
+            and request.user.school_id
+            and request.user.school.is_active
+        )
+        if not self.is_product_admin(request.user) and not school_manager:
+            return Response({'detail': 'Only a product admin or an active school account can create counselors.', 'code': 'counselor_creation_forbidden'}, status=403)
         serializer = CounselorProvisionSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         counselor = serializer.save()

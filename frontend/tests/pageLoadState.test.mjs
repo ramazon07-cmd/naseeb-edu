@@ -54,3 +54,22 @@ test('parent portal: a failed first load blocks the page, a reload keeps it visi
   const first = pageLoadState({ keys, data, stats: null, loading: true, primaryKeys: keys, resourceStatus: { parentPortal: { status: 'loading', error: '', loaded: false } } });
   assert.equal(first.initialLoading, true);
 });
+
+test('progressive dashboard opens after its profile while widgets keep loading', () => {
+  const base = {
+    keys: ['students', 'tasks', 'bookings'], primaryKeys: ['students'],
+    data: { students: [{ id: 1 }], tasks: [], bookings: [] },
+    stats: null, loading: true, lazy: true, progressive: true,
+  };
+  const resourceStatus = {
+    students: { status: 'success', loaded: true },
+    tasks: { status: 'loading', loaded: false },
+    bookings: { status: 'loading', loaded: false },
+  };
+  assert.equal(pageLoadState({ ...base, resourceStatus }).initialLoading, false);
+  assert.equal(pageLoadState({ ...base, resourceStatus, progressive: false }).initialLoading, true);
+  assert.equal(pageLoadState({ ...base, resourceStatus: { ...resourceStatus, students: { status: 'loading', loaded: false } } }).initialLoading, true);
+  const failed = pageLoadState({ ...base, resourceStatus: { ...resourceStatus, students: { status: 'error', loaded: false } } });
+  assert.equal(failed.contentBlocked, true);
+  assert.deepEqual(failed.failedKeys, ['students']);
+});

@@ -10,7 +10,7 @@ import { dateText, joinParts } from '../lib/format';
 import { fullName } from '../lib/labels';
 import { inServerZone } from '../lib/serverTime';
 import { studentReasons } from '../lib/studentReasons';
-import { CounselorStudentTable } from './CounselorStudents';
+import { CounselorStudentTable } from '../components/CounselorStudentTable';
 import './assistant-home.css';
 
 // The counselor's visual language, using only the assistant's scoped reads.

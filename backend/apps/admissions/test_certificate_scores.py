@@ -75,7 +75,12 @@ class CertificateBase(APITestCase):
         return self.client.post(URL, {**self.payload, KEY: rows}, format='json', **extra)
 
     def assert_row_errors(self, rows, expected):
-        """Both a section edit (PATCH) and a full POST answer 400 with these per-row errors, and store nothing."""
+        """Both a section edit (PATCH) and a full POST answer 400 with these per-row errors, and store nothing.
+
+        `expected` lists one entry per row ({} for a valid row). The API keys errors by row index and
+        leaves valid rows out, so this compares against that shape.
+        """
+        expected = {index: errors for index, errors in enumerate(expected) if errors}
         before = self.stored()
         for send in (self.patch, self.post):
             response = send(rows)
@@ -289,14 +294,17 @@ class CertificateValidationTests(CertificateBase):
             self.assertEqual(response.data[KEY], {'non_field_errors': [too_many]})
         self.assertEqual(len(self.stored()), 30, 'a rejected list changes nothing')
 
-    def test_errors_come_back_as_a_list_with_one_entry_per_row(self):
+    def test_errors_are_keyed_by_row_index_and_skip_valid_rows(self):
         response = self.patch([{'type': 'toefl', 'score': 90}, {'type': 'toefl', 'score': 121}, {'type': 'zzz', 'score': 1}])
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data[KEY], [
-            {},
-            {'score': ['TOEFL iBT scores go from 0 to 120.']},
-            {'type': ['Choose the type of test or certificate.']},
-        ])
+        self.assertEqual(response.data[KEY], {
+            1: {'score': ['TOEFL iBT scores go from 0 to 120.']},
+            2: {'type': ['Choose the type of test or certificate.']},
+        })
+        self.assertEqual(response.json()[KEY], {
+            '1': {'score': ['TOEFL iBT scores go from 0 to 120.']},
+            '2': {'type': ['Choose the type of test or certificate.']},
+        }, 'row indexes are strings in JSON')
 
     def test_the_list_itself_must_be_a_list(self):
         for value in ('toefl', {'type': 'toefl', 'score': 90}, 90):
@@ -334,12 +342,13 @@ class CertificateLocalizationTests(CertificateBase):
             with self.subTest(language=language):
                 response = self.patch(rows, HTTP_ACCEPT_LANGUAGE=language)
                 self.assertEqual(response.status_code, 400)
-                got = [next(iter(entry.values()))[0] for entry in response.data[KEY]]
+                self.assertEqual(list(response.data[KEY]), list(range(len(rows))), 'every row is invalid')
+                got = [next(iter(entry.values()))[0] for entry in response.data[KEY].values()]
                 self.assertEqual(got, [api_messages.EXACT[message][language] for message in english])
         uz = self.patch(rows[:1], HTTP_ACCEPT_LANGUAGE='uz')
         ru = self.patch(rows[:1], HTTP_ACCEPT_LANGUAGE='ru')
-        self.assertEqual(uz.data[KEY], [{'score': ['TOEFL iBT ballari 0 dan 120 gacha bo‘ladi.']}])
-        self.assertEqual(ru.data[KEY], [{'score': ['Баллы TOEFL iBT — от 0 до 120.']}])
+        self.assertEqual(uz.data[KEY], {0: {'score': ['TOEFL iBT ballari 0 dan 120 gacha bo‘ladi.']}})
+        self.assertEqual(ru.data[KEY], {0: {'score': ['Баллы TOEFL iBT — от 0 до 120.']}})
 
     def test_the_row_limit_message_keeps_its_number_in_every_language(self):
         rows = [{'type': 'act', 'score': 30}] * (MAX_CERTIFICATES + 1)

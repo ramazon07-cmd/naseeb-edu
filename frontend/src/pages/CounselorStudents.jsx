@@ -1,8 +1,9 @@
+import { CounselorStudentTable as StudentTable, StatusTag, LateWork, targetText } from '../components/CounselorStudentTable';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
-import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag, ReasonTags } from '../components/counselorUi';
+import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag } from '../components/counselorUi';
 import { Field, SegmentedField } from '../components/forms';
 import { Modal } from '../components/ui';
 import { DocumentPreviewModal, TaskSubmissionModal } from '../components/documents';
@@ -16,7 +17,7 @@ import { RecommendationLetters } from '../components/RecommendationLetters';
 import { studentRecordEndpoints, useStudentRecords } from '../hooks/useStudentRecords';
 import { invalidatePagedLists, usePagedList } from '../hooks/usePagedList';
 import { activityText } from '../lib/activityText';
-import { clockText, dateText, dateTimeText, dayLabel, dayMonthText, gradeText, joinParts, localDateKey, relativeDayText } from '../lib/format';
+import { FILTER_GRADES, clockText, dateText, dateTimeText, dayLabel, dayMonthText, gradeOrPending, gradeText, joinParts, localDateKey, relativeDayText } from '../lib/format';
 import { fullName, initials, label } from '../lib/labels';
 import { createLatestRequest } from '../lib/latestRequest';
 import { splitList } from '../lib/profileSections';
@@ -24,7 +25,7 @@ import { meetingBadgeStatus, meetingStatus, upcomingMeetings } from '../lib/meet
 import { mergeReviewQueue } from '../lib/reviewQueue';
 import { documentStatus, hasSubmission } from '../lib/reviewSubmission';
 import { failedPage, pageAfterLoad, pageCount } from '../lib/studentListPage';
-import { isQuiet, needsAttention, studentReasons } from '../lib/studentReasons';
+import { studentReasons } from '../lib/studentReasons';
 import { BookingForm, MeetingNoteForm } from './BookingsPage';
 import { ReviewWorkspace } from './ReviewPage';
 import './counselor-students.css';
@@ -67,8 +68,7 @@ const PAGE_SIZE = 25;
 const VIEW_KEY = 'naseeb-counselor-students-view';
 const STATUS_PILLS = [['all', 'All'], ['need_you', 'Need you'], ['late', 'Late work'], ['missing_documents', 'Missing documents'], ['quiet', 'Quiet for 14+ days'], ['on_track', 'On track']];
 const SORTS = [['need_you', 'Needs you first'], ['late', 'Most late work'], ['name', 'Name A–Z']];
-const GRADES = ['8', '9', '10', '11', 'gap'];
-const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
+const COUNTRIES =['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China', 'Europe', 'Other'];
 export const STUDENT_LIST_DEFAULTS = Object.freeze({ status: 'all', grade: '', country: '', ordering: 'need_you', page: 1, search: '' });
 
 function readView() {
@@ -142,47 +142,6 @@ function useStudentPage(state, version) {
   return { ...page, summary, stale: page.key !== pageKey };
 }
 
-function StatusTag({ reasons }) {
-  if (needsAttention(reasons)) return <CxTag tone="late">{t("Needs you")}</CxTag>;
-  if (reasons.some((reason) => reason.key === 'to_review')) return <CxTag tone="warn">{t("To review")}</CxTag>;
-  if (isQuiet(reasons)) return <CxTag tone="quiet">{t("Quiet")}</CxTag>;
-  return <CxTag tone="ok">{t("On track")}</CxTag>;
-}
-
-function LateWork({ reasons }) {
-  const late = reasons.filter((reason) => reason.key === 'late_task' || reason.key === 'missing_document');
-  return late.length ? <ReasonTags reasons={late} /> : <span className="cx-faint">{t("No late work")}</span>;
-}
-
-const targetText = (student) => splitList(student.target_countries).map((country) => t(country)).join(', ') || student.target_major || '';
-
-export function CounselorStudentTable({ rows, selecting = false, selected, toggle, onPreview, framed = true }) {
-  return <div className={`${framed ? 'cx-card ' : ''}cs-table-card`}>
-    <table className="cs-table">
-      <thead><tr>
-        {selecting && <th scope="col" className="cs-check-col"><span className="sr-only">{t("Select")}</span></th>}
-        <th scope="col">{t("Student")}</th><th scope="col">{t("Late work")}</th><th scope="col">{t("Target")}</th><th scope="col">{t("Status")}</th>
-      </tr></thead>
-      <tbody>
-        {rows.map(({ student, reasons, name }) => <tr key={student.id} className={selecting && selected.has(student.id) ? 'selected' : ''} onClick={() => (selecting ? toggle(student.id) : onPreview(student))}>
-          {selecting && <td className="cs-check-col"><input type="checkbox" checked={selected.has(student.id)} onChange={() => toggle(student.id)} onClick={(event) => event.stopPropagation()} aria-label={tx`Select ${name}`} /></td>}
-          <td>
-            <div className="cx-person">
-              <CxAvatar name={name} />
-              <span className="cx-row-copy">
-                <button type="button" className="cx-name-link" onClick={(event) => { event.stopPropagation(); if (selecting) toggle(student.id); else onPreview(student); }}>{name}</button>
-                <small>{gradeText(student.grade)}</small>
-              </span>
-            </div>
-          </td>
-          <td data-label={t("Late work")}><LateWork reasons={reasons} /></td>
-          <td data-label={t("Target")}>{targetText(student) || <span className="cx-faint">—</span>}</td>
-          <td data-label={t("Status")}><StatusTag reasons={reasons} /></td>
-        </tr>)}
-      </tbody>
-    </table>
-  </div>;
-}
 
 function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
   return <div className="cs-cards">
@@ -190,7 +149,7 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
       const body = <>
         <span className="cs-card-top">
           <CxAvatar name={name} />
-          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeText(student.grade), targetText(student))}</small></span>
+          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeOrPending(student.grade), targetText(student))}</small></span>
         </span>
         <span className="cs-card-foot"><LateWork reasons={reasons} /><StatusTag reasons={reasons} /></span>
       </>;
@@ -306,7 +265,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
         <label className="cs-field"><span>{t("Grade")}</span>
           <select value={state.grade} onChange={(event) => update({ grade: event.target.value })}>
             <option value="">{t("Any grade")}</option>
-            {(list.summary?.grades || GRADES).map((grade) => <option key={grade} value={grade}>{gradeText(grade)}</option>)}
+            {FILTER_GRADES.map((grade) => <option key={grade} value={grade}>{gradeText(grade)}</option>)}
           </select>
         </label>
         <label className="cs-field"><span>{t("Target country")}</span>
@@ -320,23 +279,23 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
             {SORTS.map(([key, title]) => <option key={key} value={key}>{t(title)}</option>)}
           </select>
         </label>
-      </div>
-      <div className="cs-filter-row cs-filter-foot">
-        <div className="cs-chips">
-          {chips.map(([key, text, remove]) => <button key={key} type="button" className="cs-chip" onClick={remove} aria-label={t('Remove filter: {name}', { name: text })}>{text}<X size={13} aria-hidden="true" /></button>)}
-          {filtered && <button type="button" className="cx-btn cs-clear" onClick={clearFilters}>{t("Clear filters")}</button>}
-        </div>
         <div className="cs-view" role="group" aria-label={t("View")}>
           <button type="button" aria-pressed={view === 'table'} onClick={() => changeView('table')}><Rows3 size={15} aria-hidden="true" />{t("Table")}</button>
           <button type="button" aria-pressed={view === 'cards'} onClick={() => changeView('cards')}><LayoutGrid size={15} aria-hidden="true" />{t("Cards")}</button>
         </div>
       </div>
+      {chips.length > 0 && <div className="cs-filter-row cs-filter-foot">
+        <div className="cs-chips">
+          {chips.map(([key, text, remove]) => <button key={key} type="button" className="cs-chip" onClick={remove} aria-label={t('Remove filter: {name}', { name: text })}>{text}<X size={13} aria-hidden="true" /></button>)}
+          {filtered && <button type="button" className="cx-btn cs-clear" onClick={clearFilters}>{t("Clear filters")}</button>}
+        </div>
+      </div>}
     </div>
 
     {list.error && !moving && <div className="alert error" role="alert">{list.error} <button type="button" className="cx-btn" onClick={() => setVersion((value) => value + 1)}>{t("Retry")}</button></div>}
     <div className="cs-results" aria-busy={list.loading}>
       {(list.loading || moving) && !list.items.length ? <PageSkeleton /> : rows.length
-        ? (view === 'cards' ? <StudentCards {...shown} /> : <CounselorStudentTable {...shown} />)
+        ? (view === 'cards' ? <StudentCards {...shown} /> : <StudentTable {...shown} />)
         : !list.error && <div className="cx-card cs-empty">
           <p>{filtered ? t("No students match these filters.") : t("No students assigned to you yet.")}</p>
           {filtered && <button type="button" className="cx-btn" onClick={clearFilters}>{t("Clear filters")}</button>}
@@ -584,7 +543,7 @@ function Student360Header({ student, onBack, children }) {
   const name = fullName(student.user_detail);
   const readiness = student.profile_readiness || { percent: 0, missing: [] };
   const missing = readiness.missing || [];
-  const meta = joinParts(gradeText(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
+  const meta = joinParts(gradeOrPending(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
   return <>
     <div className="cx-s360-top">
       <button type="button" className="cx-back" onClick={onBack}><ChevronLeft size={16} aria-hidden="true" /><b>{t('Students')}</b></button>

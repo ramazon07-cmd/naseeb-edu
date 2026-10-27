@@ -7,7 +7,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("admissions", "0079_delete_parent_screen_time"),
+        ("admissions", "0083_student_grades_from_five"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

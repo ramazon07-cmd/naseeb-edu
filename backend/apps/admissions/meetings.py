@@ -12,6 +12,8 @@ MEETING_DURATIONS = (30, 45, 60)
 MAX_MEETING_MINUTES = max(MEETING_DURATIONS)
 # "Repeat weekly" covers at most this many days, so one request adds at most ~85 slots.
 MAX_REPEAT_DAYS = 12 * 7
+# One request may add at most this many times (a 12-week range of full days would be thousands).
+MAX_REPEAT_SLOTS = 400
 # Each staff member's next slots; a busy colleague cannot crowd out the rest.
 SLOTS_PER_PARTICIPANT = 200
 # A student's all-staff overview: the next few free times of each staff member, and a hard total.
@@ -107,10 +109,21 @@ def with_availability(slots, moving=None):
     return [(slot, is_free(slot)) for slot in slots]
 
 
-def weekly_starts(weekdays, time, start_date, end_date, tz):
-    """Start times on the given weekdays (Monday = 0) between two dates inclusive, at `time` in `tz`."""
+def weekly_starts(weekdays, time, start_date, end_date, tz, until=None, step=None):
+    """Start times on the given weekdays (Monday = 0) between two dates inclusive, at `time` in `tz`.
+
+    With `until`, each day is a range: a start every `step` minutes from `time`
+    while that slot still ends by `until` (09:00-11:00 at 45 min gives 09:00, 09:45).
+    """
     day = start_date
     while day <= end_date:
         if day.weekday() in weekdays:
-            yield datetime.combine(day, time, tzinfo=tz)
+            start = datetime.combine(day, time, tzinfo=tz)
+            if until is None:
+                yield start
+            else:
+                end = datetime.combine(day, until, tzinfo=tz)
+                while start + timedelta(minutes=step) <= end:
+                    yield start
+                    start += timedelta(minutes=step)
         day += timedelta(days=1)

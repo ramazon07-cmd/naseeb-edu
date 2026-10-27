@@ -62,6 +62,8 @@ class JourneyBase(APITestCase):
     def create_student(self, name, school=None):
         self.as_user(self.admin)
         return self.post('/api/students/quick-create/', {
+            'email': 'student@example.com',
+            'phone': '+998901234567',
             'name': name, 'password': PASSWORD, 'school': (school or self.school).id,
         }, expected=201)
 
@@ -131,7 +133,7 @@ class TaskJourneyTests(JourneyBase):
         super().setUp()
         self.assign(self.student['id'])
 
-    def test_tasks_from_assignment_to_level_up(self):
+    def test_tasks_complete_without_awarding_xp_or_unlocking_levels(self):
         late = self.task('Finish activity list', 'high', -1)
         urgent = self.task('Book IELTS', 'urgent', 2)
         low = self.task('Tidy CV', 'low', 2)
@@ -166,12 +168,12 @@ class TaskJourneyTests(JourneyBase):
                          (0, 0, 20))
 
         approved = self.approve(late['id'])
-        self.assertEqual(approved['xp_awarded'], 75)  # high priority
-        self.assertEqual(approved['student_leveling']['xp_total'], 75)
+        self.assertEqual(approved['xp_awarded'], 0)
+        self.assertEqual(approved['student_leveling']['xp_total'], 0)
         self.assert_numbers({
             'task_progress_percent': 25, 'progress_percent': 25, 'readiness_items_done': 1,
-            'xp_total': 75, 'level': 1, 'eligible_level': 1, 'next_level_xp': 100,
-            'xp_progress_percent': 75, 'level_up_pending': False,
+            'xp_total': 0, 'level': 1, 'eligible_level': 1, 'next_level_xp': 100,
+            'xp_progress_percent': 0, 'level_up_pending': False,
         })
         # Approving twice awards nothing more.
         self.assertEqual(self.approve(late['id'])['xp_awarded'], 0)
@@ -183,26 +185,20 @@ class TaskJourneyTests(JourneyBase):
         self.assert_numbers({'task_progress_percent': 35})  # (100 + 40) / 4
 
         self.student_submits(urgent['id'])
-        self.assertEqual(self.approve(urgent['id'], user=self.teacher)['xp_awarded'], 100)
+        self.assertEqual(self.approve(urgent['id'], user=self.teacher)['xp_awarded'], 0)
         self.assert_numbers({
-            'task_progress_percent': 50, 'progress_percent': 50, 'xp_total': 175, 'level': 1,
-            'eligible_level': 2, 'level_up_pending': True, 'xp_progress_percent': 100,
+            'task_progress_percent': 50, 'progress_percent': 50, 'xp_total': 0, 'level': 1,
+            'eligible_level': 1, 'level_up_pending': False, 'xp_progress_percent': 0,
         })
 
         # The student cannot undo an approval.
         self.as_user(self.student_user)
         self.patch(f'/api/tasks/{urgent["id"]}/', {'status': 'todo'}, expected=400)
 
-        # Level approval by a teacher: Level 2 spans 100..300 XP.
-        self.as_user(self.teacher)
-        leveled = self.post(f'/api/students/{self.student["id"]}/approve-level/')
-        self.assertEqual((leveled['level'], leveled['approved_from_level']), (2, 1))
-        self.assert_numbers({
-            'level': 2, 'eligible_level': 2, 'level_up_pending': False, 'next_level_xp': 300,
-            'xp_progress_percent': 38,  # 75 of 200 = 37.5
-        })
+        # Completing ordinary tasks never makes a roadmap level eligible.
         self.as_user(self.teacher)
         self.post(f'/api/students/{self.student["id"]}/approve-level/', expected=400)
+        self.assert_numbers({'level': 1, 'eligible_level': 1, 'level_up_pending': False, 'xp_total': 0})
 
         # Late means owed and past due: the `late` status alone, before the date, is not at risk.
         self.as_user(self.counselor)

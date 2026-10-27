@@ -1,4 +1,6 @@
 import { Stat } from '../components/records';
+import './school-counselors.css';
+import './admin-lists.css';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
 import { Panel, Badge, Empty, Modal } from '../components/ui';
 import { AlertTriangle, Building2, ChevronRight, ExternalLink, Fingerprint, RefreshCw, UserRound, Compass, ShieldAlert, Plus, Pencil, Trash2, ShieldCheck, LifeBuoy } from 'lucide-react';
@@ -68,7 +70,7 @@ export function AdminCounselorsPage({ user, query, reload, notify }) {
       else notify(error.message, 'error');
     }
   }
-  return <><Panel title={t("Counselor provisioning")} action={canManage && <button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {t("Add counselor")}</button>}><div className="record-list" aria-busy={list.loading}>{counselors.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.school_name || t("No school"))}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.school_workspace_type === 'individual' ? t("Individual workspace") : t("Organization school")}</span></div></div><div className="record-actions"><button className="icon-button" onClick={() => setSupportTarget(account)} title={t("Support view")} aria-label={t("Support view")}><LifeBuoy size={16} /></button>{account.is_active && <button className="icon-button" onClick={() => setCredentialTarget(account)} title={t("Reset login")} aria-label={t("Reset login")}><Fingerprint size={16} /></button>}{canManage && <button className="icon-button" onClick={() => setEditing(account)} title={t("Edit counselor")}><Pencil size={16} /></button>}{canManage && account.is_active && account.school_workspace_type !== 'individual' && <button className="button quiet" onClick={() => setTransfer(account)}><Building2 size={15} /> {t("Transfer")}</button>}{canManage && account.is_active && <button className="icon-button danger" onClick={() => deactivate(account)} title={t("Deactivate counselor")}><Trash2 size={16} /></button>}</div></article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !counselors.length && <Empty text={t("No counselors found.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{open && <CounselorProvisionForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{editing && <CounselorEditForm account={editing} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}{transfer && <AccountTransferForm account={transfer} onClose={() => setTransfer(null)} onSaved={() => {setTransfer(null);reload();}} notify={notify} />}{supportTarget && <SupportViewModal account={supportTarget} onClose={() => setSupportTarget(null)} notify={notify} />}{credentialTarget && <TemporaryCredentialModal account={credentialTarget} onClose={() => setCredentialTarget(null)} notify={notify} />}{handover && <CounselorHandoverModal {...handover} notify={notify} onClose={() => setHandover(null)} onDone={() => {setHandover(null);list.reload();reload();}} />}</>;
+  return <><Panel title={t("Counselor provisioning")} action={canManage && <button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {t("Add counselor")}</button>}><div className="record-list admin-list" aria-busy={list.loading}>{counselors.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.school_name || t("No school"))}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.school_workspace_type === 'individual' ? t("Individual workspace") : t("Organization school")}</span></div></div><div className="record-actions"><button className="icon-button" onClick={() => setSupportTarget(account)} title={t("Support view")} aria-label={t("Support view")}><LifeBuoy size={16} /></button>{account.is_active && <button className="icon-button" onClick={() => setCredentialTarget(account)} title={t("Reset login")} aria-label={t("Reset login")}><Fingerprint size={16} /></button>}{canManage && <button className="icon-button" onClick={() => setEditing(account)} title={t("Edit counselor")}><Pencil size={16} /></button>}{canManage && account.is_active && account.school_workspace_type !== 'individual' && <button className="button quiet" onClick={() => setTransfer(account)}><Building2 size={15} /> {t("Transfer")}</button>}{canManage && account.is_active && <button className="icon-button danger" onClick={() => deactivate(account)} title={t("Deactivate counselor")}><Trash2 size={16} /></button>}</div></article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !counselors.length && <Empty text={t("No counselors found.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{open && <CounselorProvisionForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{editing && <CounselorEditForm account={editing} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}{transfer && <AccountTransferForm account={transfer} onClose={() => setTransfer(null)} onSaved={() => {setTransfer(null);reload();}} notify={notify} />}{supportTarget && <SupportViewModal account={supportTarget} onClose={() => setSupportTarget(null)} notify={notify} />}{credentialTarget && <TemporaryCredentialModal account={credentialTarget} onClose={() => setCredentialTarget(null)} notify={notify} />}{handover && <CounselorHandoverModal {...handover} notify={notify} onClose={() => setHandover(null)} onDone={() => {setHandover(null);list.reload();reload();}} />}</>;
 }
 
 const HANDOVER_OPTIONS = [
@@ -103,11 +105,12 @@ function CounselorHandoverModal({ account, students, changes, notify, onClose, o
 export function CounselorEditForm({ account, schoolManaged = false, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   const [handover, setHandover] = useState(null);
+  const [accessEnabled, setAccessEnabled] = useState(account.is_active);
   async function submit(event) {
     event.preventDefault();
     setSaving(true);
     const values = new FormData(event.currentTarget);
-    const changes = { first_name: values.get('first_name'), last_name: values.get('last_name'), ...(!schoolManaged ? { email: values.get('email') } : {}), phone: values.get('phone'), position: values.get('position'), is_active: values.get('is_active') === 'true' };
+    const changes = { first_name: values.get('first_name'), last_name: values.get('last_name'), ...(!schoolManaged ? { email: values.get('email') } : {}), phone: values.get('phone'), is_active: accessEnabled };
     try {
       await api.update('users/accounts', account.id, changes);
       notify(t("Counselor updated."));
@@ -118,13 +121,51 @@ export function CounselorEditForm({ account, schoolManaged = false, onClose, onS
     } finally {setSaving(false);}
   }
   if (handover) return <CounselorHandoverModal account={account} {...handover} notify={notify} onClose={() => setHandover(null)} onDone={onSaved} />;
-  return <Modal title={t("Edit counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit}><Field label={t("First name")}><input name="first_name" defaultValue={account.first_name} placeholder={t("e.g. Dilnoza")} required /></Field><Field label={t("Last name")}><input name="last_name" defaultValue={account.last_name} placeholder={t("e.g. Karimova")} /></Field>{!schoolManaged && <Field label={t("Email")}><input name="email" type="email" defaultValue={account.email} placeholder={t("e.g. name@example.com")} required /></Field>}<Field label={t("Phone")}><input name="phone" defaultValue={account.phone} placeholder={t("e.g. +998 90 123 45 67")} /></Field><Field label={t("Position")}><input name="position" defaultValue={account.position} placeholder={t("e.g. Senior counselor")} /></Field><Field label={t("Status")}><select name="is_active" defaultValue={String(account.is_active)}><option value="true">{t("Active")}</option><option value="false">{t("Inactive")}</option></select></Field>{!schoolManaged && <p className="form-note form-wide">{t("Reactivation is blocked when the school's plan has no free counselor seat.")}</p>}<div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Saving…") : t("Save")}</button></div></form></Modal>;
+  return <Modal title={t("Edit counselor")} className="counselor-modal" onClose={onClose}>
+    <form className="form-grid" onSubmit={submit}>
+      <Field label={t("First name")}><input name="first_name" defaultValue={account.first_name} placeholder={t("e.g. Dilnoza")} required /></Field>
+      <Field label={t("Last name")}><input name="last_name" defaultValue={account.last_name} placeholder={t("e.g. Karimova")} /></Field>
+      <Field label={t("Phone")}><input name="phone" type="tel" defaultValue={account.phone} placeholder={t("e.g. +998 90 123 45 67")} /></Field>
+      <Field label={t("Email")}><input name="email" type="email" defaultValue={account.email} readOnly={schoolManaged} required /></Field>
+      <div className="counselor-access form-wide">
+        <div><b>{t("Allow platform access")}</b><p>{accessEnabled ? t("The counselor can sign in and work with students.") : t("Sign-in will be blocked. The counselor's records are kept.")}</p><small>{t("Changes apply when you save.")}</small></div>
+        <button type="button" className="counselor-access-switch" role="switch" aria-checked={accessEnabled} aria-label={t("Allow platform access")} onClick={() => setAccessEnabled(!accessEnabled)} />
+      </div>
+      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save")}</button></div>
+    </form>
+  </Modal>;
 }
 
-export function CounselorProvisionForm({ onClose, onSaved, notify }) {
+export function CounselorProvisionForm({ schoolManaged = false, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
-  async function submit(event) {event.preventDefault();setSaving(true);try {const payload = Object.fromEntries(new FormData(event.currentTarget).entries());payload.school = Number(payload.school);await api.createCounselor(payload);notify(t("Counselor account created."));onSaved();} catch (error) {notify(error.message, 'error');} finally {setSaving(false);}}
-  return <Modal title={t("Add school counselor")} onClose={onClose}><form className="form-grid" onSubmit={submit} autoComplete="off"><Field label={t("First name")}><input name="first_name" placeholder={t("e.g. Dilnoza")} required /></Field><Field label={t("Last name")}><input name="last_name" placeholder={t("e.g. Karimova")} /></Field><Field label={t("Username")}><input name="username" placeholder={t("e.g. d.karimova")} autoComplete="off" required /></Field><Field label={t("Email")}><input name="email" type="email" placeholder={t("e.g. name@example.com")} autoComplete="off" required /></Field><SchoolPicker label="Organization school" required filters={ACTIVE_ORGANIZATION_SCHOOLS} /><Field label={t("Position")}><input name="position" placeholder={t("e.g. Senior counselor")} /></Field><Field label={t("Temporary password")}><input name="password" type="password" minLength="8" autoComplete="new-password" required /></Field><p className="form-note form-wide"><ShieldCheck size={16} /> {t("Each school's plan sets how many active counselors it can have.")}</p><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div></form></Modal>;
+  const [error, setError] = useState('');
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+      if (!schoolManaged) payload.school = Number(payload.school);
+      await api.createCounselor(payload);
+      notify(t("Counselor account created."));
+      onSaved();
+    } catch (error) {
+      setError(error.message);
+    } finally { setSaving(false); }
+  }
+  return <Modal title={t("Add school counselor")} className="counselor-modal" onClose={onClose}>
+    <form className="form-grid counselor-create-form" onSubmit={submit} autoComplete="off">
+      <p className="counselor-form-intro form-wide">{t("Create a login for your counselor. They will set their own password at first sign-in.")}</p>
+      <Field label={t("First name")}><input name="first_name" placeholder={t("e.g. Dilnoza")} required maxLength={150} /></Field>
+      <Field label={t("Last name")}><input name="last_name" placeholder={t("e.g. Karimova")} maxLength={150} /></Field>
+      <Field label={t("Username")}><input name="username" placeholder={t("e.g. d.karimova")} autoComplete="off" autoCapitalize="none" spellCheck={false} required maxLength={150} /></Field>
+      <Field label={t("Email")}><input name="email" type="email" placeholder={t("e.g. name@example.com")} autoComplete="off" autoCapitalize="none" spellCheck={false} required /></Field>
+      {!schoolManaged && <div className="form-wide"><SchoolPicker label="Organization school" required filters={ACTIVE_ORGANIZATION_SCHOOLS} /></div>}
+      <div className="form-wide counselor-password-field"><Field label={t("Temporary password")} hint={t("Share this password privately with the counselor.")}><input name="password" type="password" minLength={8} autoComplete="new-password" required /></Field></div>
+      {error && <p className="counselor-form-error form-wide" role="alert">{error}</p>}
+      <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Creating…") : t("Create counselor")}</button></div>
+    </form>
+  </Modal>;
 }
 
 export function AccountTransferForm({ account, onClose, onSaved, notify }) {
@@ -280,7 +321,7 @@ export function AdminAuditPage({ query }) {
     <Field label={t("From")}><input type="date" value={filters.date_from} onChange={(event) => change('date_from', event.target.value)} /></Field>
     <Field label={t("To")}><input type="date" value={filters.date_to} onChange={(event) => change('date_to', event.target.value)} /></Field>
   </div>;
-  return <Panel title={t("Product administration audit")}>{filterBar}<div className="record-list audit-list" aria-busy={list.loading}>{events.map((event) => <AuditRecord key={event.id} event={event} />)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !events.length && <Empty text={t("No audit events found.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>;
+  return <Panel title={t("Product administration audit")}>{filterBar}<div className="record-list audit-list admin-list" aria-busy={list.loading}>{events.map((event) => <AuditRecord key={event.id} event={event} />)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !events.length && <Empty text={t("No audit events found.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>;
 }
 
 function AuditRecord({ event }) {
@@ -358,7 +399,7 @@ export function AdminPlansPage({ user, notify }) {
     {!canEdit && <p className="form-note staff-tier-note"><ShieldCheck size={16} /> {t("Only super admins can create, edit or retire plans.")}</p>}
     {plans.error && <InlineLoadError message={plans.error} onRetry={plans.retry} />}
     {!plans.data && !plans.error && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}
-    <div className="card-grid">{list.map((plan) => <article className="plan-card" key={plan.id}>
+    <div className="card-grid admin-list">{list.map((plan) => <article className="plan-card" key={plan.id}>
       <header><div><h3>{plan.name}</h3><small>{plan.code}</small></div><div className="workspace-plan-badges"><Badge>{plan.workspace_type === 'individual' ? t("Individual workspaces") : t("Organization schools")}</Badge>{!plan.is_active && <Badge tone="urgent">{t("Retired")}</Badge>}</div></header>
       {plan.description && <p>{plan.description}</p>}
       <PlanFacts plan={plan} />
@@ -418,14 +459,15 @@ export function AdminStaffPage({ user, query, notify, reload }) {
   const list = usePagedList('users/accounts', { search: query, filters: { role: 'admin' }, ordering: 'name', pageSize: 50 });
   const [adding, setAdding] = useState(false);
   const [tierTarget, setTierTarget] = useState(null);
+  const [credentialTarget, setCredentialTarget] = useState(null);
   async function deactivate(account) {
     if (!window.confirm(tx`Deactivate ${fullName(account)}? They lose ${label(account.staff_tier)} access and are signed out.`)) return;
     try {await api.deactivateAccount(account.id);notify(t("Staff account deactivated."));reload();} catch (error) {notify(error.message, 'error');}
   }
   return <><Panel title={t("Product staff")} action={<button className="button primary" onClick={() => setAdding(true)}><Plus size={16} /> {t("Add staff")}</button>}>
-    <div className="record-list staff-roster" aria-busy={list.loading}>{list.items.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.username)}</p><div className="record-meta"><Badge tone="reviewing">{label(account.staff_tier)}</Badge><Badge tone={account.is_active ? 'success' : 'urgent'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.last_login ? tx`Last sign-in ${dateTimeText(account.last_login)}` : t("Never signed in")}</span></div></div>{account.id !== user.id && !account.is_superuser && account.is_active && <div className="record-actions"><button className="button quiet small" onClick={() => setTierTarget(account)}>{t("Change tier")}</button><button className="icon-button danger" onClick={() => deactivate(account)} aria-label={tx`Deactivate ${fullName(account)}`} title={t("Deactivate")}><Trash2 size={16} /></button></div>}</article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !list.items.length && <Empty text={t("No staff accounts found.")} />}</div>
+    <div className="record-list staff-roster admin-list" aria-busy={list.loading}>{list.items.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.username)}</p><div className="record-meta"><Badge tone="reviewing">{label(account.staff_tier)}</Badge><Badge tone={account.is_active ? 'success' : 'urgent'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.last_login ? tx`Last sign-in ${dateTimeText(account.last_login)}` : t("Never signed in")}</span></div></div>{account.id !== user.id && account.is_active && <div className="record-actions"><button className="icon-button" onClick={() => setCredentialTarget(account)} title={t("Reset login")} aria-label={t("Reset login")}><Fingerprint size={16} /></button>{!account.is_superuser && <><button className="button quiet small" onClick={() => setTierTarget(account)}>{t("Change tier")}</button><button className="icon-button danger" onClick={() => deactivate(account)} aria-label={tx`Deactivate ${fullName(account)}`} title={t("Deactivate")}><Trash2 size={16} /></button></>}</div>}</article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !list.items.length && <Empty text={t("No staff accounts found.")} />}</div>
     <PagedListError list={list} /><LoadMore list={list} />
-  </Panel>{adding && <StaffForm onClose={() => setAdding(false)} onCreated={reload} notify={notify} />}{tierTarget && <StaffTierForm account={tierTarget} onClose={() => setTierTarget(null)} onSaved={() => {setTierTarget(null);reload();}} notify={notify} />}</>;
+  </Panel>{adding && <StaffForm onClose={() => setAdding(false)} onCreated={reload} notify={notify} />}{tierTarget && <StaffTierForm account={tierTarget} onClose={() => setTierTarget(null)} onSaved={() => {setTierTarget(null);reload();}} notify={notify} />}{credentialTarget && <TemporaryCredentialModal account={credentialTarget} onClose={() => setCredentialTarget(null)} notify={notify} />}</>;
 }
 
 function TierChoice({ value, onChange }) {

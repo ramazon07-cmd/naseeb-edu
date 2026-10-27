@@ -289,7 +289,7 @@ export const channelTint = (id) => CHANNEL_TINTS[(id || 0) % CHANNEL_TINTS.lengt
 
 const TELEGRAM_CHANNEL_ID = 'naseeb-telegram';
 
-// Telegram-style group preview: "You: hi" / "Madina: hi". Direct chats show the text alone.
+// Telegram-style group preview: "You: hi" / "Firdavs: hi". Direct chats show the text alone.
 function previewSender(channel, user) {
   const { sender_id: senderId, sender_name: sender } = channel.last_message || {};
   if (channel.kind === 'direct' || channel.is_saved_messages || !sender || sender === 'Anonymous') return '';

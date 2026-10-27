@@ -83,7 +83,7 @@ class Command(BaseCommand):
             username='counselor',
             defaults={
                 'email': 'counselor@naseeb.local',
-                'first_name': 'Madina',
+                'first_name': 'Firdavs',
                 'last_name': 'Counselor',
                 'role': User.Role.COUNSELOR,
                 'is_staff': True,

@@ -6,7 +6,7 @@ from decimal import ROUND_FLOOR, Decimal
 
 IELTS_SECTIONS = ('ielts_listening', 'ielts_reading', 'ielts_writing', 'ielts_speaking')
 SAT_DETAIL_FIELDS = ('sat_reading', 'sat_math', 'sat_superscore', 'sat_superscore_reading', 'sat_superscore_math')
-IELTS_FIELDS = ('ielts_status', 'ielts_score', *IELTS_SECTIONS, 'ielts_test_date', 'ielts_attempts')
+IELTS_FIELDS = ('ielts_status', 'ielts_score', *IELTS_SECTIONS, 'ielts_test_date', 'ielts_attempts', 'ielts_result_type', 'ielts_retake_skill', 'ielts_retake_date')
 SAT_FIELDS = ('sat_status', 'sat_score', *SAT_DETAIL_FIELDS, 'sat_test_date', 'sat_attempts')
 EXAM_KEYS = frozenset((*IELTS_FIELDS, *SAT_FIELDS))
 MAX_ATTEMPTS = 20

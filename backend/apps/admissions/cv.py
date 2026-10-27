@@ -33,7 +33,7 @@ assert CERTIFICATE_LABELS.keys() == CERTIFICATE_RULES.keys()
 # Onboarding activity types that read as work or research, not leadership.
 EXPERIENCE_TYPES = {'Research', 'Internship'}
 HONOR_LEVELS = {'school': 'School', 'regional': 'Regional', 'national': 'National', 'international': 'International'}
-GRADE_LABELS = {'8': 'Grade 8', '9': 'Grade 9', '10': 'Grade 10', '11': 'Grade 11', '12': 'Grade 12', 'gap': 'Gap year'}
+GRADE_LABELS = {'5': 'Grade 5', '6': 'Grade 6', '7': 'Grade 7', '8': 'Grade 8', '9': 'Grade 9', '10': 'Grade 10', '11': 'Grade 11', '12': 'Grade 12', 'gap': 'Gap year'}
 
 _BULLET = re.compile(r'^\s*(?:[-*•●▪◦]|\d+[.)])\s*')
 _NOT_WORD = re.compile(r'[^\w]+')

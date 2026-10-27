@@ -2,25 +2,25 @@
    Everything is scoped under .essay-lab so nothing leaks into the rest of Naseeb. */
 
 .essay-lab {
-  --el-bg: #f6f2ea;
+  --el-bg: #f4f6fb;
   --el-surface: #ffffff;
   --el-paper: #ffffff;
-  --el-soft: #fbf8f2;
-  --el-warm: #fbf3e4;
-  --el-hover: #f1ece3;
-  --el-active: #ede5d8;
-  --el-track: #ede5d8;
-  --el-ink: #2e2721;
-  --el-text: #4a4036;
-  --el-muted: #6e6255;
-  --el-faint: #8c8072;
-  --el-line: rgba(74, 64, 54, 0.12);
-  --el-line-soft: rgba(74, 64, 54, 0.08);
-  --el-line-strong: rgba(74, 64, 54, 0.22);
-  --el-primary: #4a4036;
-  --el-primary-hover: #3a322a;
-  --el-on-primary: #f5f0e6;
-  --el-accent: #8a7254;
+  --el-soft: #f8faff;
+  --el-warm: #eef3ff;
+  --el-hover: #edf2fc;
+  --el-active: #e3eaf8;
+  --el-track: #e3eaf8;
+  --el-ink: #0d1a33;
+  --el-text: #17243b;
+  --el-muted: #5b6780;
+  --el-faint: #7a8499;
+  --el-line: rgba(23, 36, 59, 0.12);
+  --el-line-soft: rgba(23, 36, 59, 0.08);
+  --el-line-strong: rgba(23, 36, 59, 0.22);
+  --el-primary: #0057ff;
+  --el-primary-hover: #0046d1;
+  --el-on-primary: #ffffff;
+  --el-accent: #0057ff;
   --el-good: #2f5e3f;
   --el-good-bg: #e4eee6;
   --el-ok: #3f7a55;
@@ -28,18 +28,18 @@
   --el-warn-bg: #fcebdd;
   --el-info: #1e3a6e;
   --el-info-bg: #e3eaf5;
-  --el-neutral-bg: #f1ece3;
+  --el-neutral-bg: #edf2fc;
   --el-danger: #9a3412;
-  --el-focus: #765e42;
+  --el-focus: #0057ff;
   --el-shadow:
-    0 1px 3px rgba(46, 39, 33, 0.08), 0 12px 32px rgba(46, 39, 33, 0.06);
-  --el-shadow-pop: 0 14px 36px rgba(46, 39, 33, 0.22);
+    0 1px 3px rgba(23, 36, 59, 0.08), 0 12px 32px rgba(23, 36, 59, 0.06);
+  --el-shadow-pop: 0 14px 36px rgba(23, 36, 59, 0.22);
   --el-reflect: #c2410c;
   --el-reflect-bg: rgba(234, 88, 12, 0.12);
   --el-specific: #1d4ed8;
   --el-specific-bg: rgba(37, 99, 235, 0.1);
-  --el-clarity: #7c3aed;
-  --el-clarity-bg: rgba(124, 58, 237, 0.09);
+  --el-clarity: #2b3fc4;
+  --el-clarity-bg: rgba(43, 63, 196, 0.09);
   --el-strength: #2f7a4a;
   --el-strength-bg: rgba(47, 122, 74, 0.1);
   --el-serif:
@@ -56,55 +56,6 @@
   --el-suggest-del: #b42318;
   color: var(--el-text);
   font-family: var(--el-sans);
-}
-
-:root[data-theme='dark'] .essay-lab {
-  --el-comment-bg: rgba(250, 204, 21, 0.2);
-  --el-comment-active: rgba(250, 204, 21, 0.4);
-  --el-suggest-ins: #8fe0ad;
-  --el-suggest-ins-bg: rgba(95, 200, 130, 0.16);
-  --el-suggest-del: #ff9d8f;
-  --el-tab-on: rgba(159, 198, 226, 0.18);
-  --el-tab-on-ink: #d6e7f5;
-  --el-bg: var(--canvas, #10202d);
-  --el-surface: var(--surface, #162936);
-  --el-paper: #182d3b;
-  --el-soft: var(--surface-soft, #1c3241);
-  --el-warm: #22384a;
-  --el-hover: var(--surface-hover, #284452);
-  --el-active: var(--surface-active, #304e5d);
-  --el-track: rgba(181, 199, 211, 0.18);
-  --el-ink: #f7f7f7;
-  --el-text: #e4ebf0;
-  --el-muted: var(--muted, #b5c3ce);
-  --el-faint: #8fa3b1;
-  --el-line: rgba(181, 199, 211, 0.16);
-  --el-line-soft: rgba(181, 199, 211, 0.09);
-  --el-line-strong: rgba(181, 199, 211, 0.3);
-  --el-primary: var(--accent, #9fc6e2);
-  --el-primary-hover: #c3dced;
-  --el-on-primary: #10202d;
-  --el-accent: #9fc6e2;
-  --el-good: #9fdcb3;
-  --el-good-bg: rgba(95, 170, 120, 0.18);
-  --el-ok: #8fd4a6;
-  --el-warn: #f2b58c;
-  --el-warn-bg: rgba(234, 128, 60, 0.18);
-  --el-info: #a9c6f0;
-  --el-info-bg: rgba(110, 150, 220, 0.2);
-  --el-neutral-bg: rgba(181, 199, 211, 0.12);
-  --el-danger: #f2a08c;
-  --el-focus: #c3dced;
-  --el-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.25);
-  --el-shadow-pop: 0 14px 36px rgba(0, 0, 0, 0.5);
-  --el-reflect: #fb9a64;
-  --el-reflect-bg: rgba(251, 146, 60, 0.2);
-  --el-specific: #8ab4ff;
-  --el-specific-bg: rgba(96, 150, 255, 0.2);
-  --el-clarity: #c4a5ff;
-  --el-clarity-bg: rgba(167, 139, 250, 0.2);
-  --el-strength: #86d3a0;
-  --el-strength-bg: rgba(74, 190, 120, 0.18);
 }
 
 .essay-lab *,
@@ -212,10 +163,6 @@
   background: var(--el-danger);
   border-color: var(--el-danger);
   color: #fff;
-}
-
-:root[data-theme='dark'] .essay-lab .el-btn.is-danger-solid {
-  color: #1b0f0a;
 }
 
 .el-btn.is-ghost {
@@ -465,10 +412,6 @@
   animation: el-fade 0.14s ease-out;
 }
 
-:root[data-theme='dark'] .essay-lab .el-overlay {
-  background: rgba(4, 10, 16, 0.66);
-}
-
 .el-dialog {
   width: min(520px, 100%);
   max-height: calc(100vh - 32px);
@@ -542,6 +485,60 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.el-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.el-submission-success {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.el-submission-success p {
+  margin: 0;
+  color: var(--el-muted);
+  line-height: 1.6;
+}
+
+.el-task-submissions {
+  flex-shrink: 0;
+  max-height: 24vh;
+  overflow: auto;
+  border-bottom: 1px solid var(--el-line-soft);
+  background: var(--el-soft);
+}
+
+.el-task-submission {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 22px;
+}
+
+.el-task-submission-copy {
+  display: grid;
+  flex: 1;
+  min-width: min(220px, 100%);
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.el-task-submission-copy span {
+  color: var(--el-muted);
+  font-size: var(--text-sm);
+}
+
+.el-submission-error {
+  padding: 0 22px;
 }
 
 .el-dialog .el-form > .el-label + .el-input {
@@ -1986,14 +1983,9 @@
   gap: 14px;
   padding: 16px 18px;
   border-radius: 14px;
-  background: #2e2721;
-  color: #f5f0e6;
+  background: #0d1a33;
+  color: #f3f6fd;
   animation: el-rise 0.2s ease-out;
-}
-
-:root[data-theme='dark'] .essay-lab .el-welcome {
-  background: #0c1923;
-  border: 1px solid var(--el-line);
 }
 
 .el-welcome > div {
@@ -2010,13 +2002,13 @@
 
 .el-welcome span {
   font-size: var(--text-sm);
-  color: #d8cec0;
+  color: #c9d6f2;
 }
 
 .el-btn.is-light {
-  background: #f5f0e6;
-  color: #2e2721;
-  border-color: #f5f0e6;
+  background: #f3f6fd;
+  color: #0d1a33;
+  border-color: #f3f6fd;
 }
 
 .el-btn.is-light:hover {
@@ -2124,10 +2116,6 @@
   background: rgba(138, 114, 84, 0.28);
 }
 
-:root[data-theme='dark'] .essay-lab .el-prose ::selection {
-  background: rgba(159, 198, 226, 0.32);
-}
-
 .el-prose :where(p, ul, ol, blockquote) {
   margin: 0;
 }
@@ -2225,7 +2213,8 @@
 .el-editor-shell.is-focus .el-prompt,
 .el-editor-shell.is-focus .el-welcome,
 .el-editor-shell.is-focus .el-side-panel,
-.el-editor-shell.is-focus .el-banner {
+.el-editor-shell.is-focus .el-banner,
+.el-editor-shell.is-focus .el-task-submissions {
   display: none;
 }
 
@@ -2333,7 +2322,7 @@
   border-radius: 999px;
   background: var(--el-surface);
   border: 1px solid var(--el-line);
-  box-shadow: 0 8px 24px rgba(46, 39, 33, 0.08);
+  box-shadow: 0 8px 24px rgba(23, 36, 59, 0.08);
   font-size: var(--text-sm);
   color: var(--el-muted);
   white-space: nowrap;
@@ -2693,10 +2682,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-:root[data-theme='dark'] .essay-lab .el-pill-count {
-  color: #1b0f0a;
 }
 
 .el-coach-head {
@@ -3423,10 +3408,6 @@
   color: inherit;
   border-radius: 2px;
   padding: 0 1px;
-}
-
-:root[data-theme='dark'] .essay-lab .el-prose .el-highlight {
-  color: #1b1b1b;
 }
 
 .el-prose a,
@@ -4274,14 +4255,15 @@ span.el-tab-caret {
 }
 
 .el-fb-card {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 12px;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 10px;
   border: 1px solid var(--el-line);
   background: var(--el-surface);
-  border-left: 4px solid rgba(202, 138, 4, 0.7);
+  border-left: 3px solid var(--el-line-strong);
 }
 
 .el-fb-card.is-suggestion {
@@ -4289,21 +4271,18 @@ span.el-tab-caret {
 }
 
 .el-fb-card.is-active {
-  border-color: var(--el-focus);
-  box-shadow: var(--el-shadow);
-}
-
-.el-fb-card.is-resolved {
-  opacity: 0.8;
-  border-left-color: var(--el-line-strong);
+  border-color: var(--el-line-strong);
+  border-left-color: var(--el-focus);
+  box-shadow: none;
 }
 
 .el-fb-select {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 10px;
   width: 100%;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: none;
@@ -4314,12 +4293,28 @@ span.el-tab-caret {
 }
 
 .el-fb-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  width: 100%;
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: var(--text-xs);
   color: var(--el-muted);
 }
 
 .el-fb-meta strong {
+  min-width: 0;
   color: var(--el-ink);
+  font-weight: 600;
+}
+
+.el-fb-meta time {
+  flex-shrink: 0;
+  font-size: 0.75rem;
 }
 
 .el-fb-kind {
@@ -4342,9 +4337,13 @@ span.el-tab-caret {
 
 .el-fb-quote {
   font-family: var(--el-page-font);
+  display: block;
+  max-width: 100%;
   font-size: 0.875rem;
-  padding-left: 8px;
-  border-left: 2px solid rgba(202, 138, 4, 0.55);
+  line-height: 1.5;
+  padding: 6px 10px;
+  border-left: 2px solid var(--el-line-strong);
+  background: var(--el-soft);
   color: var(--el-muted);
   overflow-wrap: anywhere;
 }
@@ -4360,6 +4359,7 @@ span.el-tab-caret {
 }
 
 .el-fb-replies {
+  min-width: 0;
   list-style: none;
   margin: 0;
   padding: 0 0 0 12px;
@@ -4370,9 +4370,22 @@ span.el-tab-caret {
 }
 
 .el-fb-actions {
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.el-fb-actions .el-fb-btn {
+  flex: 1 1 100px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  justify-content: center;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .el-fb-reply {
@@ -4389,10 +4402,6 @@ span.el-tab-caret {
 .el-fb-all {
   align-self: stretch;
   justify-content: center;
-}
-
-.el-fb-toggle {
-  align-self: flex-start;
 }
 
 .el-comments-pill {

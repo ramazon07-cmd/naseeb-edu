@@ -209,7 +209,7 @@ class ApproveWithNoteTests(WorkspaceBase):
         self.act_as(self.counselor)
         response = self.client.post(f'/api/tasks/{submitted.pk}/approve/', {'note': 'Well done.'}, format='json')
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data['xp_awarded'], 100)
+        self.assertEqual(response.data['xp_awarded'], 0)
         self.assertEqual(self.client.post(f'/api/tasks/{quiet.pk}/approve/', {}, format='json').status_code, 200)
         notices = Notification.objects.filter(kind=Notification.Kind.TASK)
         self.assertEqual([notice.message for notice in notices], ['Personal Statement draft: Well done.'])
@@ -223,11 +223,11 @@ class ApproveWithNoteTests(WorkspaceBase):
         self.achievement.refresh_from_db()
         self.assertFalse(self.achievement.verified)
 
-    def test_the_xp_a_task_will_award_is_in_the_payload(self):
+    def test_ordinary_task_payloads_never_offer_xp(self):
         self.act_as(self.counselor)
         urgent = self.task(priority=Task.Priority.URGENT, status=Task.Status.SUBMITTED)
         own = self.task(is_self_assigned=True, priority=Task.Priority.URGENT)
-        self.assertEqual(self.client.get(f'/api/tasks/{urgent.pk}/').data['xp_reward'], 100)
+        self.assertEqual(self.client.get(f'/api/tasks/{urgent.pk}/').data['xp_reward'], 0)
         self.assertEqual(self.client.get(f'/api/tasks/{own.pk}/').data['xp_reward'], 0)
 
 

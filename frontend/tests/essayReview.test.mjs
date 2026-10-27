@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { accessLevel, blockLength, leafSpans, safeHref, splitThreads, textBetween } from '../src/lib/essayReview.js';
+import { accessLevel, blockLength, leafSpans, safeHref, orderedThreads, textBetween } from '../src/lib/essayReview.js';
 
 const text = (value, marks) => ({ type: 'text', text: value, ...(marks ? { marks } : {}) });
 const paragraph = (...content) => ({ type: 'paragraph', content });
@@ -36,14 +36,13 @@ test('what a reader may do follows the owner\'s choice', () => {
   assert.equal(accessLevel(), 'view');
 });
 
-test('open threads come before resolved ones, oldest first', () => {
-  const { open, resolved } = splitThreads([
+test('all comment threads remain visible, oldest first', () => {
+  const comments = orderedThreads([
     { id: 2, status: 'open', created_at: '2026-10-02' },
     { id: 3, status: 'resolved', created_at: '2026-10-01' },
     { id: 1, status: 'open', created_at: '2026-10-01' },
   ]);
-  assert.deepEqual(open.map((thread) => thread.id), [1, 2]);
-  assert.deepEqual(resolved.map((thread) => thread.id), [3]);
+  assert.deepEqual(comments.map((thread) => thread.id), [3, 1, 2]);
 });
 
 test('only web and mail links are followed', () => {

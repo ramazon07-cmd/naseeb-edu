@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
+from apps.admissions.models import StudentProfile
 from . import entitlements
 from .admin_permissions import has_tier
 from .credentials import issue_temporary_credential
@@ -250,8 +251,21 @@ class CounselorProvisionSerializer(serializers.Serializer):
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
     position = serializers.CharField(max_length=120, required=False, allow_blank=True)
-    school = serializers.IntegerField(min_value=1)
+    school = serializers.IntegerField(min_value=1, required=False)
     password = serializers.CharField(write_only=True, validators=[validate_password])
+
+    def validate(self, attrs):
+        actor = self.context['request'].user
+        if actor.role == User.Role.ORGANIZATION and not actor.is_product_admin:
+            if not actor.school_id:
+                raise serializers.ValidationError({'school': 'Your account is not connected to a school.'})
+            if attrs.get('school', actor.school_id) != actor.school_id:
+                raise serializers.ValidationError({'school': 'You can only add counselors to your own school.'})
+            # School accounts never choose the workspace receiving a new counselor.
+            attrs['school'] = actor.school_id
+        elif 'school' not in attrs:
+            raise serializers.ValidationError({'school': 'This field is required.'})
+        return attrs
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
@@ -429,6 +443,8 @@ class CounselorTransferSerializer(serializers.Serializer):
 class PasswordChangeSerializer(serializers.Serializer):
     new_password = serializers.CharField(write_only=True, validators=[validate_password])
     confirm_password = serializers.CharField(write_only=True)
+    # A student also picks their class here: the first sign-in is the one step every student passes.
+    grade = serializers.ChoiceField(choices=StudentProfile.PICKABLE_GRADES, required=False)
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['confirm_password']:

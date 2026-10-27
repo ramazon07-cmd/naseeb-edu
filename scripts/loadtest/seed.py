@@ -21,10 +21,10 @@ for the Locust file to log in with.
 Rows are bulk-inserted for speed, but every value that has a production code
 path comes from it: schools are created through the ORM (so each gets its
 plan), profiles take ``student_profile_defaults``, the Level 1 roadmap comes
-from ``extend_level_one_roadmap``, XP uses the approval amounts, and essay
-documents pass ``validate_doc`` before ``derive``. ``seed()`` is exercised at a
-tiny size by the backend test suite so the dataset cannot drift from the real
-data format.
+from ``extend_level_one_roadmap``, XP comes only from approved roadmap missions,
+and essay documents pass ``validate_doc`` before ``derive``. ``seed()`` is
+exercised at a tiny size by the backend test suite so the dataset cannot drift
+from the real data format.
 """
 import argparse
 import csv
@@ -59,7 +59,7 @@ def setup_django():
     django.setup()
 
 
-FIRST = ['Aziz', 'Madina', 'Jasur', 'Dilnoza', 'Timur', 'Nodira', 'Bekzod', 'Malika', 'Sardor', 'Shahzoda',
+FIRST = ['Aziz', 'Firdavs', 'Jasur', 'Dilnoza', 'Timur', 'Nodira', 'Bekzod', 'Malika', 'Sardor', 'Shahzoda',
          'Otabek', 'Kamola', 'Rustam', 'Zarina', 'Farrux', 'Laylo', 'Javohir', 'Sevara', 'Ulugbek', 'Gulnora']
 LAST = ['Karimov', 'Rashidova', 'Tursunov', 'Yusupova', 'Aliev', 'Nazarova', 'Saidov', 'Qodirova', 'Ergashev',
         'Mirzaeva', 'Xolmatov', 'Abdullaeva', 'Rahimov', 'Usmonova', 'Sharipov']
@@ -133,7 +133,7 @@ def seed(*, student_count, school_count, rng_seed):
         StudentProfile, SupportTicket, Task, University, XPTransaction,
     )
     from apps.admissions.services import (
-        ROADMAP_APPROVAL_XP, TASK_XP_BY_PRIORITY, extend_level_one_roadmap, student_profile_defaults,
+        ROADMAP_APPROVAL_XP, extend_level_one_roadmap, student_profile_defaults,
     )
     from apps.users.models import User
 
@@ -307,15 +307,9 @@ def seed(*, student_count, school_count, rng_seed):
             bulk(model, rows)
         print(f'{len(tasks)} tasks, {len(missions)} missions, {len(applications)} applications')
 
-        # Approval XP exactly as award_approval_xp records it, and each total
-        # and level consistent with the student's transactions.
+        # Only completed roadmap missions earn approval XP. Ordinary tasks do
+        # not award it; each total and level agrees with the seeded transactions.
         xp_rows = [
-            XPTransaction(student_id=task.student_id, source_type=XPTransaction.Source.TASK, source_id=task.pk,
-                          amount=TASK_XP_BY_PRIORITY[task.priority], reason=f'Task approved: {task.title}',
-                          awarded_by_id=task.assigned_by_id)
-            for task in Task.objects.filter(status=Task.Status.APPROVED, is_self_assigned=False)
-            .only('id', 'student_id', 'assigned_by_id', 'priority', 'title')
-        ] + [
             XPTransaction(student_id=mission.student_id, source_type=XPTransaction.Source.ROADMAP,
                           source_id=mission.pk, amount=ROADMAP_APPROVAL_XP,
                           reason=f'Roadmap mission approved: {mission.title}', awarded_by_id=mission.assigned_by_id)

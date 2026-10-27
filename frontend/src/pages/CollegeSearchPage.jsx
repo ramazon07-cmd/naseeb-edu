@@ -28,13 +28,13 @@ function UniversityLogo({ university }) {
   return <span className="catalog-university-logo" aria-hidden="true">{src && failedSrc !== src ? <img src={src} alt="" loading="lazy" onError={() => setFailedSrc(src)} /> : <b>{initials}</b>}</span>;
 }
 
-function CollegeFilters({ filters, setFilters, facets, budget, showBands, chips }) {
+function CollegeFilters({ filters, setFilters, facets, showBands, chips }) {
   const patch = (change) => setFilters((current) => ({ ...current, ...change }));
   const clear = chips.length > 0 && <button type="button" className="link-button" onClick={() => setFilters(DEFAULT_COLLEGE_FILTERS)}>{t("Clear")}</button>;
   const groups = <>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Where")}</legend><select className="filter-country" aria-label={t("Country")} value={filters.country} onChange={(event) => patch({ country: event.target.value })}><option value="">{t("All countries")}</option>{Object.entries(facets.countries).sort(([a], [b]) => a.localeCompare(b)).map(([country, count]) => <option key={country} value={country}>{`${country} (${formatNumberLocale(count)})`}</option>)}</select></fieldset>
     {showBands && <fieldset className="filter-set"><legend className="college-filter-legend">{t("Admission band")}</legend>{COLLEGE_BANDS.map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={facets.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
-    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Estimated cost per year")}</legend><small className="college-filter-hint">{t("US universities: cost of attendance for international students, before any aid.")}</small>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} onChange={() => patch({ price: cap })} count={cap === 'budget' && budget ? money(budget) : null}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
+    <fieldset className="filter-set"><legend className="college-filter-legend">{t("Estimated cost per year")}</legend><small className="college-filter-hint">{t("US universities: cost of attendance for international students, before any aid.")}</small>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} onChange={() => patch({ price: cap })}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={facets.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Testing & type")}</legend>
       <FilterOption checked={filters.testOptional} onChange={() => patch({ testOptional: !filters.testOptional })} count={facets.test_optional}>{t("Test optional")}</FilterOption>
@@ -66,7 +66,7 @@ function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
   const updated = research.generated_at ? `${t("Updated")} ${clockText(research.generated_at)}` : t("Refresh");
   return <section className="profile-strip" aria-label={t("Ranked for your profile")}>
     <span className="college-profile-caption"><GraduationCap size={18} aria-hidden="true" />{t('Your profile')}</span>
-    <div className="college-profile-values">{[['SAT', profile.sat_score], ['GPA', profile.gpa], ['IELTS', profile.ielts_score], ['Major', profile.target_major], ['Budget', money(profile.budget_usd)]].map(([title, value]) => <span key={title}><small>{t(title)}</small><b>{value ?? '—'}</b></span>)}</div>
+    <div className="college-profile-values">{[['SAT', profile.sat_score], ['GPA', profile.gpa], ['IELTS', profile.ielts_score], ['Major', profile.target_major]].map(([title, value]) => <span key={title}><small>{t(title)}</small><b>{value ?? '—'}</b></span>)}</div>
     <div className="profile-strip-actions">
       <button type="button" className="icon-button" title={t("Edit profile")} aria-label={t("Edit profile")} onClick={onEdit}><Pencil size={15} /></button>
       <button type="button" className="icon-button" title={updated} aria-label={t("Refresh")} disabled={refreshing} aria-busy={refreshing} onClick={onRefresh}><RefreshCw className={refreshing ? 'spin' : ''} size={15} /></button>
@@ -191,6 +191,8 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [openedFitAttempt, setOpenedFitAttempt] = useState(0);
   const [busyId, setBusyId] = useState(null);
   const [tierFor, setTierFor] = useState(null);
+  const [profileFocusRequested, setProfileFocusRequested] = useState(false);
+  const profileQuestionsRef = useRef(null);
   // Rows are slim; the QS panel loads the university's full record.
   const [details, setDetails] = useState({});
   const [detailError, setDetailError] = useState('');
@@ -205,7 +207,6 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
   const closeUniversity = useCallback(() => setPage('college_search'), [setPage]);
   const student = ownStudent(data);
-  const budget = Number(student?.budget_usd) || 0;
   const search = useCollegeSearch(collegeSearchQuery({ query: searchTerm, filters, qsFilters, sort, view, pageSize }), researchVersion);
   const rows = search.rows;
   // The open university's fit as its row on screen has it, when that row is for the current profile.
@@ -359,26 +360,36 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   function completeProfileFirst() {
     setTierFor(null);
     closeUniversity();
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    setProfileFocusRequested(true);
   }
+
+  // Wait for the dialog to close and the research form to mount before focusing it.
+  // scrollIntoView also handles the workspace's own scroll container.
+  useEffect(() => {
+    if (!profileFocusRequested || universityId != null || tierFor || !profileQuestionsRef.current) return;
+    const target = profileQuestionsRef.current.querySelector('input:not(:disabled)') || profileQuestionsRef.current;
+    target.scrollIntoView({ block: 'center', behavior: 'auto' });
+    target.focus({ preventScroll: true });
+    setProfileFocusRequested(false);
+  }, [profileFocusRequested, universityId, tierFor, research]);
 
   const tierPicker = tierFor && <TierPicker university={tierFor.university} state={tierPickerState({ research, loading: researchLoading, error: researchError })} onRetry={refreshResearch} busy={busyId === tierFor.university.id} onPick={(tier) => addToList(tierFor.university, tierFor.fit, tier)} onCompleteProfile={completeProfileFirst} onClose={() => setTierFor(null)} />;
   if (universityId != null) {
-    if (opened?.university) return <><UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} fitStatus={fitState.status} onRetryFit={() => setOpenedFitAttempt((value) => value + 1)} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} />{tierPicker}</>;
+    if (opened?.university) return <><UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} fitStatus={fitState.status} onRetryFit={() => setOpenedFitAttempt((value) => value + 1)} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} onCompleteProfile={completeProfileFirst} />{tierPicker}</>;
     if (opened?.error) return <div className="section-stack student-portal college-page"><div className="college-research-state error"><X size={22} /><div><b>{t("This university could not be opened")}</b><p>{opened.error}</p></div><button className="button quiet small" onClick={closeUniversity}>{t("Back to College Search")}</button></div></div>;
     return <PageSkeleton />;
   }
 
-  const chips = collegeFilterChips(filters, setFilters, budget);
+  const chips = collegeFilterChips(filters, setFilters);
   const ready = Boolean(research?.ready);
-  const filtersPanel = <CollegeFilters {...{ filters, setFilters, facets, budget, chips }} showBands={ready} />;
+  const filtersPanel = <CollegeFilters {...{ filters, setFilters, facets, chips }} showBands={ready} />;
   const remaining = Math.min(pageSize, search.count - rows.length);
-  const priceNotes = priceFilterNotes(filters.price, budget, search.unpricedCount);
+  const priceNotes = priceFilterNotes(filters.price, search.unpricedCount);
   return <div className="section-stack student-portal college-page">
     <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><span className="catalog-eyebrow">NASEEB EDU / {t('College Search')}</span><h1>{t('College Search')}</h1><p>{t('Explore admissions, cost, deadlines, and your personal fit in one place.')}</p><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
-    {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, budget, and portfolio evidence.")}</p></div></div>}
+    {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
-    {research && !research.ready && <CollegeProfileQuestions research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
+    {research && !research.ready && <CollegeProfileQuestions sectionRef={profileQuestionsRef} research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
     {(ready || view === 'qs') && <div className="college-layout">
       <div className="college-main">
       <section className="college-toolbar" aria-label={t('University data view')} ref={resultsRef}>
@@ -398,7 +409,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
           <div className="sort-control"><span>{t('Sort by')}</span><select aria-label={t('Sort by')} value={sort} onChange={(event) => setSort(event.target.value)}>{COLLEGE_SORTS.map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
           <div className="sort-control"><span>{t('Show')}</span><select aria-label={t('Universities per page')} value={pageSize} onChange={(event) => changePageSize(Number(event.target.value))}>{COLLEGE_PAGE_SIZES.map((size) => <option value={size} key={size}>{formatNumberLocale(size)}</option>)}</select></div>
         </div>
-        {(priceNotes.budgetMissing || priceNotes.unpriced) && <p className="college-price-notes" role="status">{priceNotes.budgetMissing && <span>{t("Add your budget in your profile to filter by price")} <button type="button" className="link-button" onClick={() => setPage('student_center')}>{t("Open profile")}</button></span>}{priceNotes.unpriced && <span>{priceNotes.unpriced}</span>}</p>}
+        {priceNotes.unpriced && <p className="college-price-notes" role="status">{priceNotes.unpriced}</p>}
         {ready && <CollegeProfileStrip research={research} refreshing={researchLoading} onRefresh={refreshResearch} onEdit={() => setPage('student_center')} />}
       </section>
       <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''} ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} role="table" aria-label={t("Universities")} aria-busy={search.loading}>
@@ -417,11 +428,11 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   </div>;
 }
 
-export function CollegeProfileQuestions({ research, saving, onComplete }) {
+export function CollegeProfileQuestions({ research, saving, onComplete, sectionRef }) {
   const [answers, setAnswers] = useState(() => Object.fromEntries(research.questions.map((question) => [question.field, research.profile_snapshot?.[question.field] ?? ''])));
   function submit(event) {
     event.preventDefault();
     onComplete(answers);
   }
-  return <section className="college-profile-questions"><div className="research-question-copy"><span><ClipboardCheck size={20} /></span><div><span className="eyebrow">{t("PROFILE DATA REQUIRED")}</span><h2>{t("A few details are missing from your research profile")}</h2><p>{t("Your answers will be saved to your student profile and used to rank universities for you.")}</p></div></div><form onSubmit={submit}><div className="research-question-grid">{research.questions.map((question) => <label key={question.field}><span>{question.label}</span><input type={question.type} min={question.min} max={question.max} step={question.step || (question.type === 'number' ? '1' : undefined)} placeholder={question.placeholder} value={answers[question.field] ?? ''} onChange={(event) => setAnswers((current) => ({ ...current, [question.field]: event.target.value }))} required /></label>)}</div><footer><small>{tp('{n} answer required|{n} answers required', research.questions.length, { n: research.questions.length })}</small><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? <><RefreshCw className="spin" size={16} /> {t("Researching…")}</> : <><Search size={16} /> {t("Save & research")}</>}</button></footer></form></section>;
+  return <section ref={sectionRef} tabIndex={-1} className="college-profile-questions"><div className="research-question-copy"><span><ClipboardCheck size={20} /></span><div><span className="eyebrow">{t("PROFILE DATA REQUIRED")}</span><h2>{t("A few details are missing from your research profile")}</h2><p>{t("Your answers will be saved to your student profile and used to rank universities for you.")}</p></div></div><form onSubmit={submit}><div className="research-question-grid">{research.questions.map((question) => <label key={question.field}><span>{question.label}</span><input type={question.type} min={question.min} max={question.max} step={question.step || (question.type === 'number' ? '1' : undefined)} placeholder={question.placeholder} value={answers[question.field] ?? ''} onChange={(event) => setAnswers((current) => ({ ...current, [question.field]: event.target.value }))} required /></label>)}</div><footer><small>{tp('{n} answer required|{n} answers required', research.questions.length, { n: research.questions.length })}</small><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? <><RefreshCw className="spin" size={16} /> {t("Researching…")}</> : <><Search size={16} /> {t("Save & research")}</>}</button></footer></form></section>;
 }

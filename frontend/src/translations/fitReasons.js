@@ -102,26 +102,6 @@ export const FIT_REASON_TEMPLATES = {
     uz: 'Tanlagan yo‘nalishingiz bo‘yicha dastur talablarini aniq tekshiring',
     ru: 'Уточните требования программы по выбранной специальности',
   },
-  cost_within_budget: {
-    en: 'Estimated cost of attendance for international students is within your budget',
-    uz: 'Xalqaro talabalar uchun taxminiy o‘qish xarajati byudjetingizga sig‘adi',
-    ru: 'Ориентировочная стоимость обучения для иностранных студентов укладывается в ваш бюджет',
-  },
-  cost_above_budget: {
-    en: 'Estimated cost of attendance for international students is above your budget',
-    uz: 'Xalqaro talabalar uchun taxminiy o‘qish xarajati byudjetingizdan yuqori',
-    ru: 'Ориентировочная стоимость обучения для иностранных студентов выше вашего бюджета',
-  },
-  cost_far_above_budget: {
-    en: 'Estimated cost of attendance for international students is significantly above your budget',
-    uz: 'Xalqaro talabalar uchun taxminiy o‘qish xarajati byudjetingizdan ancha yuqori',
-    ru: 'Ориентировочная стоимость обучения для иностранных студентов значительно выше вашего бюджета',
-  },
-  cost_missing: {
-    en: 'Estimated cost of attendance for international students is not available in the catalog',
-    uz: 'Xalqaro talabalar uchun taxminiy o‘qish xarajati katalogda ko‘rsatilmagan',
-    ru: 'Ориентировочной стоимости обучения для иностранных студентов нет в каталоге',
-  },
   aid_available: {
     en: 'A suitable type of financial aid is available',
     uz: 'Mos moliyaviy yordam turi mavjud',

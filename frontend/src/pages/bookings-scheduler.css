@@ -607,6 +607,13 @@
   outline-offset: 1px;
 }
 
+/* Save sits under every option it saves, not beside the time fields. */
+.availability-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
 .availability-add .button.primary {
   min-height: 44px;
   margin-left: auto;

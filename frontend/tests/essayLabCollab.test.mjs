@@ -6,7 +6,7 @@ import { BlockConflict, applyOpsV2, blockHash, changedRange, diffBlocksV2, merge
 import { deriveText } from '../src/essayLab/docText.js';
 import { createSaveQueue } from '../src/essayLab/saveQueue.js';
 import {
-  POLL_ACTIVE_MS, POLL_IDLE_MS, acceptAllIds, collabPollDelay, feedbackItems, historyLine, openCount, replaceById,
+  POLL_ACTIVE_MS, POLL_IDLE_MS, acceptAllIds, collabPollDelay, feedbackItems, historyLine, feedbackCount, replaceById,
 } from '../src/essayLab/collabModel.js';
 import { accessOf, setSharing, sharingFields } from '../src/essayLab/sharing.js';
 
@@ -140,7 +140,7 @@ test('a merged save becomes the new base and hands the server doc to the editor'
   assert.equal(h.queue.getState().seq, 6);
 });
 
-test('feedback cards follow the text; resolved threads go last', () => {
+test('all feedback cards follow the text, including historically resolved threads', () => {
   const threads = [
     {id: 1, status: 'open', created_at: '2026-09-01'},
     {id: 2, status: 'resolved', created_at: '2026-09-02'},
@@ -148,10 +148,9 @@ test('feedback cards follow the text; resolved threads go last', () => {
   ];
   const suggestions = [{id: 5, status: 'pending', created_at: '2026-09-04'}, {id: 6, status: 'accepted'}];
   const positions = new Map([['thread:3', 10], ['suggestion:5', 4]]);
-  const {open, resolved} = feedbackItems(threads, suggestions, positions);
-  assert.deepEqual(open.map((item) => `${item.kind}:${item.id}:${item.anchored}`), ['suggestion:5:true', 'thread:3:true', 'thread:1:false']);
-  assert.deepEqual(resolved.map((item) => item.id), [2]);
-  assert.equal(openCount(threads, suggestions), 3);
+  const items = feedbackItems(threads, suggestions, positions);
+  assert.deepEqual(items.map((item) => `${item.kind}:${item.id}:${item.anchored}`), ['suggestion:5:true', 'thread:3:true', 'thread:1:false', 'thread:2:false']);
+  assert.equal(feedbackCount(threads, suggestions), 4);
   assert.deepEqual(acceptAllIds(suggestions, new Set([5, 6])), [5]);
   assert.deepEqual(replaceById(threads, {id: 2, status: 'open'})[1], {id: 2, status: 'open'});
 });
@@ -164,7 +163,7 @@ test('polling is fast only while someone else is in the essay', () => {
 });
 
 test('history names who suggested and who decided', () => {
-  assert.deepEqual(historyLine({kind: 'suggest', author_name: 'Madina', detail: {suggestions: 2}}), {key: '{name} suggested {n} edits', n: 2, name: 'Madina'});
+  assert.deepEqual(historyLine({kind: 'suggest', author_name: 'Firdavs', detail: {suggestions: 2}}), {key: '{name} suggested {n} edits', n: 2, name: 'Firdavs'});
   assert.equal(historyLine({kind: 'suggest', detail: {suggestions: 1}}).key, '{name} suggested 1 edit');
   assert.equal(historyLine({kind: 'decision', author_name: 'Ramazon', detail: {accepted: 1, rejected: 0}}).key, '{name} accepted 1 suggestion');
   assert.equal(historyLine({kind: 'decision', detail: {accepted: 0, rejected: 3}}).key, '{name} rejected {n} suggestions');

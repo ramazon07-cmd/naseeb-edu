@@ -60,6 +60,7 @@ class OrganizationRoleIsolationTests(RoleIsolationBase):
         response = self.client.post(
             '/api/students/quick-create/',
             {
+                'phone': '+998901234567',
                 'name': 'New School Student',
                 'email': 'new-school-student@example.com',
                 'grade': '11',
@@ -79,7 +80,7 @@ class OrganizationRoleIsolationTests(RoleIsolationBase):
         self.client.force_authenticate(self.organization)
         response = self.client.post(
             '/api/students/quick-create/',
-            {'name': 'No Password Student', 'email': 'no-password@example.com'},
+            {'phone': '+998901234567', 'name': 'No Password Student', 'email': 'no-password@example.com'},
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
@@ -92,7 +93,7 @@ class OrganizationRoleIsolationTests(RoleIsolationBase):
         # A typed password is the counselor's own: it is never echoed back.
         typed = self.client.post(
             '/api/students/quick-create/',
-            {'name': 'Typed Student', 'password': 'NewStudentPass123!'},
+            {'email': 'student@example.com', 'phone': '+998901234567', 'name': 'Typed Student', 'password': 'NewStudentPass123!'},
             format='json',
         )
         self.assertEqual(typed.status_code, status.HTTP_201_CREATED, typed.data)
@@ -102,7 +103,7 @@ class OrganizationRoleIsolationTests(RoleIsolationBase):
         self.client.force_authenticate(self.organization)
         response = self.client.post(
             '/api/students/quick-create/',
-            {'name': 'Kamola Karimova', 'password': 'Karimova2026'},
+            {'email': 'student@example.com', 'phone': '+998901234567', 'name': 'Kamola Karimova', 'password': 'Karimova2026'},
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
@@ -113,7 +114,7 @@ class OrganizationRoleIsolationTests(RoleIsolationBase):
         self.client.force_authenticate(self.organization)
         weak = self.client.post(
             '/api/students/quick-create/',
-            {'name': 'Weak Password Student', 'email': 'weak-password@example.com', 'password': '12345'},
+            {'phone': '+998901234567', 'name': 'Weak Password Student', 'email': 'weak-password@example.com', 'password': '12345'},
             format='json',
         )
         self.assertEqual(weak.status_code, status.HTTP_400_BAD_REQUEST)
@@ -123,6 +124,7 @@ class OrganizationRoleIsolationTests(RoleIsolationBase):
         response = self.client.post(
             '/api/students/quick-create/',
             {
+                'phone': '+998901234567',
                 'name': 'Long Country List Student',
                 'email': 'long-country-list@example.com',
                 'password': 'NewStudentPass123!',

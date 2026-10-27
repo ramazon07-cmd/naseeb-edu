@@ -19,7 +19,7 @@ export const LABELS = {
   four_year: '4-year', two_year: '2-year', merit: 'Merit', need_based: 'Need-based', athletic: 'Athletic',
   full_ride: 'Full ride', full: 'Full funding', partial: 'Partial funding', fixed: 'Fixed amount',
   onsite: 'On-site', online: 'Online', hybrid: 'Hybrid', reach: 'Reach',
-  academic: 'Academic', preferences: 'Preferences', financial: 'Financial', profile_strength: 'Profile strength',
+  academic: 'Academic', preferences: 'Preferences', financial: 'Financial aid', profile_strength: 'Profile strength',
   harassment: 'Harassment or bullying', unsafe: 'Unsafe content', privacy: 'Privacy concern', misinformation: 'Misinformation',
   open: 'Open', closed: 'Closed', technical: 'Technical', account: 'Account', application: 'Application', billing: 'Billing', other: 'Other',
   resolved: 'Resolved', dismissed: 'Dismissed', none: 'No action', content_removed: 'Content removed',
@@ -40,6 +40,7 @@ export const LABELS = {
 
 // Product audit actions are stable dotted codes; show them as sentences.
 export const AUDIT_ACTIONS = {
+  'task.essay_submitted': 'Essay submitted for a task',
   'account.created': 'Account created', 'account.deactivated': 'Account deactivated', 'account.moved': 'Account moved to another school',
   'counselor.created': 'Counselor created', 'counselor.created_individual': 'Individual counselor created',
   'counselor.updated': 'Counselor updated', 'counselor.transferred': 'Counselor transferred',
@@ -77,6 +78,7 @@ export const AUDIT_ACTIONS = {
 
 // The audit filter picks a group: the API matches every action under the prefix.
 export const AUDIT_GROUPS = {
+  task: 'Tasks',
   account: 'Accounts', assistant: 'Counselor assistants', assistant_invite: 'Assistant invitations', counselor: 'Counselors', counselor_roadmap: 'Counselor roadmaps',
   counselor_roadmap_mission: 'Counselor mission reviews', counselor_roadmap_template: 'Roadmap templates',
   credential: 'Temporary passwords', essay: 'Essays', message_report: 'Message moderation',

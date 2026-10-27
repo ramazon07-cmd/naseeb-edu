@@ -4,12 +4,13 @@ import './landing.css';
 import './mind-section.css';
 import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus, Flag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScreenTimeShortcut } from './CompactDashboard';
+import './dashboard.css';
+import { ScreenTimeShortcut } from './components/ScreenTimeShortcut';
 import { api } from './api';
 import { AssistantCenter } from './components/AssistantCenter';
 import { canUseAssistant } from './lib/assistantAccess';
 import { ScreenTimeTracker, flushActiveScreenTime } from './components/ScreenTimeTracker';
-import { AppBootLoader, BootstrapError, BrandLockup, LanguageSelector, SignOutFailed, ThemeToggle } from './components/brand';
+import { AppBootLoader, BootstrapError, BrandLockup, LanguageSelector, SignOutFailed } from './components/brand';
 import { ProfileCard, StudentAvatar } from './components/records';
 import { LazyBoundary, PageSkeleton } from './components/states';
 import { lazyWithRetry } from './lib/retryableLazy';
@@ -17,7 +18,6 @@ import { pageLoadState } from './lib/pageLoadState';
 import { Empty, Modal } from './components/ui';
 import { NotificationPanel } from './components/NotificationPanel';
 import { COUNSELOR_SELF_HEADED, CounselorLayout, counselorPageDescription, counselorPageLabel } from './components/CounselorShell';
-import { CounselorStudentsPage } from './pages/CounselorStudents';
 import { CxHead } from './components/counselorUi';
 import { formatNumberLocale, getLanguage, locale, setLanguage, siteTitle, t, tx } from './i18n';
 import { exportNodePdf } from './lib/exportPdf';
@@ -55,6 +55,7 @@ const ProfileAssessmentPage = lazyWithRetry(() => import('./pages/ProfileAssessm
 // Workspace pages are chunks of their own, loaded on first visit (PageRouter
 // renders inside a Suspense boundary), so landing visitors never download them.
 const lazyNamed = (load, name) => lazyWithRetry(() => load().then((module) => ({ default: module[name] })));
+const CounselorStudentsPage = lazyNamed(() => import('./pages/CounselorStudents'), 'CounselorStudentsPage');
 const EssayLab = lazyWithRetry(() => import('./essayLab/EssayLab.jsx'));
 const AdminAuditPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminAuditPage');
 const AdminModerationPage = lazyNamed(() => import('./pages/AdminPages'), 'AdminModerationPage');
@@ -235,7 +236,7 @@ const PAGE_RESOURCE_KEYS = {
   admin_catalog: [], admin_moderation: [],
   portfolio: ['projects', 'internships'], activities: ['activities', 'honors', 'achievements'],
   recommendations: ['recommendations'], tasks: ['tasks', 'students'],
-  roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'students', 'essays', 'recommendations'],
+  roadmap: ['roadmapMissions', 'tasks', 'students'], applications: ['applications', 'students', 'essays', 'documents', 'recommendations'],
   documents: ['documents'], certificates: ['documents'], essays: ['essays'],
   student_center: ['students', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations', 'documents'],
   bookings: ['bookings'], messages: ['messageChannels'],
@@ -277,7 +278,7 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, re
   const keys = lazy ? studentPageKeys(page) : PAGE_RESOURCE_KEYS[page] || [page];
   // A parent page is all parent-portal data: a failed first load is not an empty family.
   const primaryKeys = lazy ? studentPrimaryKeys(page) : keys.filter((key) => key === 'parentPortal');
-  const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys });
+  const { loadingKeys, failedKeys, hasVisibleData, initialLoading, contentBlocked } = pageLoadState({ keys, data, stats, loading, resourceStatus, lazy, primaryKeys, progressive: lazy && page === 'dashboard' });
 
   // Rate-limited sections retry on their own (useWorkspaceData): a quiet note, not an error.
   const busy = keys.some((key) => resourceStatus[key]?.busy);
@@ -291,7 +292,7 @@ function PageDataBoundary({ page, data, stats, loading, resourceStatus, lazy, re
   </>;
 }
 
-function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, onSearchOpen, isOnline, notify, logout, theme, toggleTheme, language, changeLanguage, children }) {
+function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuery, loading, error, refresh, retryResources, resourceStatus, onSearchOpen, isOnline, notify, logout, theme, language, changeLanguage, children }) {
   const [utility, setUtility] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileMenuRef = useRef(null);
@@ -316,11 +317,12 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   const navigation = navigationFor(user).filter((item) => !['support', 'screen_time'].includes(item));
   const meta = PAGE_META[page];
   // eslint-disable-next-line react-hooks/exhaustive-deps -- language changes the translated labels
-  const searchIndexData = useMemo(() => buildGlobalSearchIndex(user, data), [user, data, language]);
+  const searching = utility === 'search';
+  const searchIndexData = useMemo(() => searching ? buildGlobalSearchIndex(user, data) : [], [searching, user, data, language]);
   // Staff lists are paged, so records beyond what is loaded come from the server.
   // Students hold their own records; only the university catalogue is searched on the server.
   const studentSearch = !usesPagedLists(user) && user?.role === 'student';
-  const remoteSearch = useRemoteSearch(paletteQuery, usesPagedLists(user) || studentSearch, studentSearch ? 'universities' : '');
+  const remoteSearch = useRemoteSearch(paletteQuery, searching && (usesPagedLists(user) || studentSearch), studentSearch ? 'universities' : '');
   const searchResults = useMemo(() => mergeSearchResults(
     globalSearchResults(searchIndexData, paletteQuery),
     remoteSearchEntries(remoteSearch.results, remoteSearchDestinations(user)).map((entry) => ({ ...entry, subtitle: entry.subtitle || t(PAGE_META[entry.destination].label) })),
@@ -354,7 +356,6 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     setActiveSearchIndex(0);
   }, [paletteQuery]);
   // Search covers every record, so opening it loads what pages have not yet.
-  const searching = utility === 'search';
   useEffect(() => {
     if (searching) onSearchOpen();
   }, [searching, onSearchOpen]);
@@ -409,7 +410,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   if (counselorShell) {
     const pageTitle = t(counselorPageLabel(page) || meta.label);
     return <div className={`app-shell cx-shell role-${user.role}`}>
-      <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, supportBadge }} bell={bell.summary} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={() => setAssistantRequest((current) => current + 1)} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
+      <CounselorLayout {...{ user, data, stats, page, setPage, setQuery, theme, language, changeLanguage, logout, supportBadge }} bell={bell.summary} title={pageTitle} openNotifications={openNotifications} openSearch={() => setUtility('search')} openAssistant={() => setAssistantRequest((current) => current + 1)} openSupport={navigationFor(user).includes('support') ? () => {setPage('support');setQuery('');} : null}>
         <main className={`cx-main${page === 'messages' ? ' cx-main-messages' : ''}`}>
           {banners}
           {!COUNSELOR_SELF_HEADED.has(page) && <CxHead title={pageTitle} subtitle={t(counselorPageDescription(page) || meta.description)} />}
@@ -444,7 +445,6 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
         <div className="header-actions">
           {page !== 'essay_lab' && <button type="button" className="icon-button" onClick={() => setUtility('search')} title={`${t("Search pages and records")} (Ctrl+K)`} aria-label={t("Search pages and records")} aria-keyshortcuts="Control+K Meta+K"><Search size={19} /></button>}
           <LanguageSelector language={language} onChange={changeLanguage} compact />
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           {PDF_EXPORT_PAGES.has(page) && <button className="icon-button" onClick={() => exportNodePdf(document.querySelector('.page-content'))} title={t("Export PDF")} aria-label={t("Export PDF")}><Download size={19} /></button>}
         </div>
       </header>
@@ -496,7 +496,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} moreTickets={Boolean(more?.supportTickets)} loadMoreTickets={() => loadMore('supportTickets')} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;
   if (user.role === 'student' && page === 'programs') return <ProgramsPage {...{ data, query, search, navigate, notify }} />;
-  if (user.role === 'student' && page === 'essay_lab') return <EssayLab user={user} notify={notify} essayId={params.essayId} onEssay={(essayId) => setPage(page, { essayId })} />;
+  if (user.role === 'student' && page === 'essay_lab') return <EssayLab user={user} notify={notify} onTaskSubmitted={reload} essayId={params.essayId} onEssay={(essayId) => setPage(page, { essayId })} />;
   if (user.role === 'student' && page === 'applications') return <ApplicationsPortalPage {...{ user, data, query, reload, notify, setPage }} />;
   if (user.role === 'student' && page === 'college_search') return <CollegeSearchPage {...{ data, query, reload, notify, setPage }} universityId={params.universityId} />;
   if (user.role === 'student' && page === 'store') return <StorePage {...{ data, query, setPage }} />;
@@ -532,7 +532,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
 }
 
 export default function App() {
-  const [theme, toggleTheme] = useTheme();
+  const theme = useTheme();
   const [language, setLanguageState] = useState(getLanguage);
   const [location, setLocation] = useState(readLocation);
   const [user, setUser] = useState(null);
@@ -803,16 +803,16 @@ export default function App() {
   if (signOutFailure) return <SignOutFailed retrying={signOutFailure.retrying} onRetry={retrySignOut} onDismiss={dismissSignOutFailure} />;
   if (bootstrapping) return <AppBootLoader message={bootstrapBusy ? t('Busy, retrying…') : 'Checking your secure session…'} />;
   if (bootstrapError && !user) return <BootstrapError message={bootstrapError} onRetry={() => bootstrapSession()} onSignOut={logout} />;
-  if (publicPage === 'join') return <LazyBoundary fallback={<AppBootLoader />}><JoinPage token={joinTokenFor(location.pathname)} onSignIn={() => showPublicPage('login')} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;
-  if (publicPage === 'assistant_invite') return <LazyBoundary fallback={<AppBootLoader />}><AssistantInvitePage token={assistantInviteTokenFor(location.pathname)} onSignIn={signInFromAssistantInvite} onLogin={afterAssistantLogin} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;
+  if (publicPage === 'join') return <LazyBoundary fallback={<AppBootLoader />}><JoinPage token={joinTokenFor(location.pathname)} onSignIn={() => showPublicPage('login')} {...{ theme, language, changeLanguage }} /></LazyBoundary>;
+  if (publicPage === 'assistant_invite') return <LazyBoundary fallback={<AppBootLoader />}><AssistantInvitePage token={assistantInviteTokenFor(location.pathname)} onSignIn={signInFromAssistantInvite} onLogin={afterAssistantLogin} {...{ theme, language, changeLanguage }} /></LazyBoundary>;
   if (!user) return publicPage !== 'landing' ?
-  <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /> :
-  <LazyBoundary fallback={<AppBootLoader />}><LandingPage onLogin={() => showPublicPage('login')} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} /></LazyBoundary>;
-  if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} toggleTheme={toggleTheme} language={language} changeLanguage={changeLanguage} />;
-  if (user.awaiting_confirmation) return <LazyBoundary fallback={<AppBootLoader />}><AwaitingConfirmation user={user} onCheck={checkConfirmation} onSignOut={logout} {...{ theme, toggleTheme, language, changeLanguage }} /></LazyBoundary>;
+  <Login onLogin={afterLogin} onBack={() => showPublicPage('landing')} theme={theme} language={language} changeLanguage={changeLanguage} /> :
+  <LazyBoundary fallback={<AppBootLoader />}><LandingPage onLogin={() => showPublicPage('login')} theme={theme} language={language} changeLanguage={changeLanguage} /></LazyBoundary>;
+  if (user.must_change_password) return <ForcedPasswordChange user={user} onChanged={afterPasswordChanged} onSignOut={logout} theme={theme} language={language} changeLanguage={changeLanguage} />;
+  if (user.awaiting_confirmation) return <LazyBoundary fallback={<AppBootLoader />}><AwaitingConfirmation user={user} onCheck={checkConfirmation} onSignOut={logout} {...{ theme, language, changeLanguage }} /></LazyBoundary>;
   if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
-    <AppShell {...{ user, updateUser, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, toggleTheme, language, changeLanguage }}>
+    <AppShell {...{ user, updateUser, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, language, changeLanguage }}>
       <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, setQuery, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources, refreshStats, updateStats, more, loadMore }} /></LazyBoundary>
     </AppShell>
     {signOutPrompt && <Modal title={t("Sign out?")} backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>

@@ -121,33 +121,32 @@ class FilterAndSortTests(CollegeSearchFixture, APITestCase):
         self.assertEqual(set(self.names('price=25000')), {self.tashkent.name, *unpriced})
         self.assertEqual(set(self.names('price=40000')), {self.tashkent.name, *unpriced})
         self.ready_profile(budget_usd=5000)
-        self.assertEqual(set(self.names('price=budget')), {self.tashkent.name, *unpriced})
+        self.assertEqual(self.client.get(f'{URL}?price=budget').status_code, 400)
         self.assertEqual(self.names('aid=offers_need_based_aid,meets_full_need'), [self.mit.name])
         self.assertEqual(set(self.names('test_optional=true')), {self.state.name, self.tashkent.name})
         self.assertEqual(set(self.names('public=true')), {self.state.name, self.oxford.name})
         self.assertEqual(self.names('region=Europe'), [self.oxford.name])
         self.assertEqual(self.names('size=XL&region=Americas'), [self.state.name])
 
-    def test_within_budget_without_a_budget_has_no_cap(self):
+    def test_profile_is_ready_without_budget_and_budget_filter_is_removed(self):
         self.ready_profile(budget_usd=None)
-        data = self.search('price=budget&page_size=25')
-        self.assertEqual(data['count'], University.objects.count())
-        self.assertEqual(data['unpriced_count'], 2)
+        self.assertTrue(self.client.get('/api/college-research/').data['ready'])
+        self.assertEqual(self.client.get(f'{URL}?price=budget').status_code, 400)
 
     def test_a_price_cap_keeps_unpriced_rows_and_counts_them(self):
         self.ready_profile(budget_usd=50000)
-        data = self.search('price=budget&page_size=25')
+        data = self.search('price=40000&page_size=25')
         self.assertEqual(
             {row['name'] for row in data['results']},
-            {self.tashkent.name, self.state.name, self.oxford.name, self.unranked.name},
+            {self.tashkent.name, self.oxford.name, self.unranked.name},
         )
         self.assertEqual(data['unpriced_count'], 2)
         self.assertEqual(self.search('price=25000&search=oxford')['unpriced_count'], 1)
         self.assertEqual(self.search('price=25000&search=tashkent')['unpriced_count'], 0)
         # The same filter with a fit sort and a band filter: the unpriced rows still count.
-        self.assertEqual(self.search('price=budget&sort=fit&bands=reach,target,safety,unknown')['unpriced_count'], 2)
+        self.assertEqual(self.search('price=40000&sort=fit&bands=reach,target,safety,unknown')['unpriced_count'], 2)
         # Only the first page of a price filter counts them.
-        self.assertNotIn('unpriced_count', self.search('price=budget&page_size=10&page=2'))
+        self.assertNotIn('unpriced_count', self.search('price=40000&page_size=10&page=2'))
         self.assertNotIn('unpriced_count', self.search())
 
     def test_price_sort_puts_unpriced_rows_last(self):
@@ -157,10 +156,21 @@ class FilterAndSortTests(CollegeSearchFixture, APITestCase):
         names = self.names('sort=price')
         self.assertEqual(set(names[-2:]), {self.oxford.name, self.unranked.name})
 
-    def test_the_fit_budget_factor_still_scores_an_unknown_cost_as_missing(self):
-        self.ready_profile(budget_usd=5000)
+    def test_missing_cost_does_not_penalize_fit_without_budget_scoring(self):
+        self.ready_profile(budget_usd=None)
         fit = next(row for row in self.search('search=oxford')['results'])['fit']
-        self.assertIn('cost_missing', [gap['code'] for gap in fit['gaps']])
+        self.assertNotIn('cost_missing', [gap['code'] for gap in fit['gaps']])
+        self.oxford.net_price_usd = 100000
+        self.oxford.save()
+        priced_fit = next(row for row in self.search('search=oxford')['results'])['fit']
+        self.assertEqual(priced_fit, fit)
+
+    def test_europe_matches_universities_qs_places_in_europe(self):
+        from .college_search import country_match
+        self.assertTrue(country_match(self.oxford, ['europe']))
+        self.assertFalse(country_match(self.state, ['europe']))
+        self.assertFalse(country_match(self.unranked, ['europe']))
+        self.assertTrue(country_match(self.state, ['us']))
 
     def test_sat_in_range_means_a_met_minimum_or_test_optional_without_one(self):
         self.ready_profile(sat_score=1300)

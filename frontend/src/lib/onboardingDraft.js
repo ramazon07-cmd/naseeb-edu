@@ -4,7 +4,7 @@
 export const ONBOARDING_STEP_FIELDS = [
   ['first_name', 'middle_name', 'last_name', 'gender', 'grade', 'graduation_year', 'first_generation', 'family_income', 'residency_status', 'guardian_name', 'guardian_relation', 'guardian_contact', 'linkedin_url', 'website_url', 'photo'],
   ['school_name', 'country', 'state', 'city', 'class_size', 'class_rank', 'gpa_scale', 'gpa'],
-  ['ielts_status', 'ielts_score', 'ielts_listening', 'ielts_reading', 'ielts_writing', 'ielts_speaking', 'ielts_test_date', 'ielts_attempts',
+  ['ielts_status', 'ielts_score', 'ielts_listening', 'ielts_reading', 'ielts_writing', 'ielts_speaking', 'ielts_test_date', 'ielts_attempts', 'ielts_result_type', 'ielts_retake_skill', 'ielts_retake_date',
     'sat_status', 'sat_reading', 'sat_math', 'sat_test_date', 'sat_attempts', 'sat_superscore', 'sat_superscore_reading', 'sat_superscore_math', 'subjects', 'certificates'],
   ['target_countries', 'interests', 'program_strengths', 'personal_story', 'languages', 'skills', 'hobbies'],
   ['honors'],
@@ -30,7 +30,8 @@ export function clearDraft(storage, key) {
   try { storage.removeItem(key); } catch { /* private mode */ }
 }
 
-// {"gpa": ["Ensure this value is less than or equal to 5."], "honors": [{}, {"role": [...]}]}
+// {"gpa": ["Ensure this value is less than or equal to 5."], "honors": {"1": {"role": [...]}}}
+// (DRF 3.18+ keys list errors by row index; older DRF sent a list with {} for valid rows. Both flatten.)
 // -> { gpa: "Ensure ...", honors: "Ensure ..." }
 export function fieldErrorsFrom(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return {};

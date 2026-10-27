@@ -241,7 +241,7 @@ class CheckInTests(HomeBase):
         MeetingNote.objects.create(student=self.student, counselor=self.counselor, title='Call', summary='x',
                                    meeting_date=self.week[0])
         ActivityLog.objects.create(actor=self.counselor, student=abbos, action='Document approved: Passport')
-        ActivityLog.objects.create(actor=self.counselor, student=abbos, action='Student assigned to counselor: Madina')
+        ActivityLog.objects.create(actor=self.counselor, student=abbos, action='Student assigned to counselor: Firdavs')
         ActivityLog.objects.create(actor=self.counselor_peer, student=self.student, action='Task approved: x')
         Task.objects.create(student=self.student, title='Assigned', assigned_by=self.counselor, due_date=self.today)
         home = self.home()

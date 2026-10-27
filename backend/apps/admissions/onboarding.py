@@ -10,9 +10,11 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .exam_scores import EXAM_KEYS, IELTS_FIELDS, IELTS_SECTIONS, MAX_ATTEMPTS, SAT_FIELDS, ielts_overall, sat_sent_total
+from .models import StudentProfile
 from .progress import percent
 
-COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China']
+# 'Europe' and 'Other' are regions, not countries: see college_search.country_match.
+COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China', 'Europe', 'Other']
 
 TEST_STATUSES = ['not_taken', 'planning', 'scheduled', 'taken', 'not_required']
 EARLIEST_TEST_DATE = datetime.date(2015, 1, 1)
@@ -267,7 +269,7 @@ class OnboardingSerializer(serializers.Serializer):
     middle_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150)
     gender = serializers.ChoiceField(choices=['Male', 'Female', 'Prefer not to say'])
-    grade = serializers.ChoiceField(choices=['8', '9', '10', '11', 'gap'])
+    grade = serializers.ChoiceField(choices=StudentProfile.PICKABLE_GRADES)
     graduation_year = serializers.IntegerField(min_value=2000, max_value=2100)
     first_generation = serializers.ChoiceField(choices=['', 'Yes', 'No', 'Not sure'], required=False)
     # Optional: many students are minors and may not know or want to share it.
@@ -298,6 +300,13 @@ class OnboardingSerializer(serializers.Serializer):
     ielts_speaking = band_field()
     ielts_test_date = serializers.DateField(required=False, allow_null=True)
     ielts_attempts = attempts_field()
+    ielts_result_type = serializers.ChoiceField(
+        choices=['first_attempt', 'full_retake', 'one_skill_retake'], required=False, allow_null=True,
+    )
+    ielts_retake_skill = serializers.ChoiceField(
+        choices=['listening', 'reading', 'writing', 'speaking'], required=False, allow_null=True,
+    )
+    ielts_retake_date = serializers.DateField(required=False, allow_null=True)
     sat_status = serializers.ChoiceField(choices=TEST_STATUSES, required=False)
     sat_reading = sat_section_field()
     sat_math = sat_section_field()
@@ -430,6 +439,22 @@ class OnboardingSerializer(serializers.Serializer):
                 errors['ielts_score'] = f'With these section scores your overall band is {overall:g}. Check your test report.'
         self._check_date(attrs, errors, 'ielts_test_date', status)
         self._check_attempts(attrs, errors, 'ielts_attempts')
+        result_type = attrs.get('ielts_result_type')
+        if result_type == 'first_attempt' and attrs['ielts_attempts'] != 1:
+            errors['ielts_attempts'] = 'For a first IELTS result, enter one full test.'
+        elif result_type == 'full_retake' and attrs['ielts_attempts'] < 2:
+            errors['ielts_attempts'] = 'For a full retake, enter at least two full tests.'
+        if result_type != 'one_skill_retake':
+            attrs.update(ielts_retake_skill=None, ielts_retake_date=None)
+        else:
+            if not attrs.get('ielts_retake_skill'):
+                errors['ielts_retake_skill'] = 'Choose the section you retook.'
+            for name, present in zip(IELTS_SECTIONS, given):
+                if not present:
+                    errors[name] = 'Enter all four scores from your updated One Skill Retake report.'
+            self._check_date(attrs, errors, 'ielts_retake_date', 'taken')
+            if attrs.get('ielts_retake_date') and attrs.get('ielts_test_date') and attrs['ielts_retake_date'] <= attrs['ielts_test_date']:
+                errors['ielts_retake_date'] = 'The retake date must be after the original full test date.'
 
     def _validate_sat(self, attrs, errors):
         status = attrs.setdefault('sat_status', 'taken' if attrs.get('sat_reading') or attrs.get('sat_math') else 'not_taken')

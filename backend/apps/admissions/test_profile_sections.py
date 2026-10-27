@@ -76,6 +76,25 @@ class ProfileSectionEditTests(APITestCase):
         self.profile.refresh_from_db()
         self.assertEqual((self.profile.ielts_score, self.profile.ielts_listening, self.profile.ielts_attempts), (Decimal('7.5'), Decimal('9.0'), 2))
 
+    def test_retake_metadata_survives_partial_edits_and_is_cleared_when_not_applicable(self):
+        response = self.patch({'ielts_result_type': 'one_skill_retake', 'ielts_retake_skill': 'speaking', 'ielts_retake_date': '2026-03-28'})
+        self.assertEqual(response.status_code, 200, response.data)
+        response = self.patch({'city': 'Samarkand'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ielts_retake_skill, 'speaking')
+        response = self.patch({'ielts_retake_date': '2026-03-01'})
+        self.assertEqual(response.status_code, 400)
+        response = self.patch({'ielts_result_type': 'full_retake'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertIsNone(self.profile.ielts_retake_skill)
+        self.assertIsNone(self.profile.ielts_retake_date)
+        response = self.patch({'ielts_status': 'planning', 'ielts_test_date': '2027-01-10'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertIsNone(self.profile.ielts_result_type)
+
     def test_gpa_is_checked_against_the_stored_scale(self):
         response = self.patch({'gpa': 4.9})
         self.assertEqual(response.status_code, 200, response.data)

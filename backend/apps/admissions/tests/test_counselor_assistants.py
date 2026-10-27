@@ -308,6 +308,21 @@ class AssistantScopeTests(AssistantBase):
         contacts = self.client.get('/api/message-channels/contacts/').data
         self.assertIn(self.assistant.pk, {row['id'] for row in contacts})
 
+    def test_another_schools_students_and_records_stay_out_of_reach(self):
+        south_counselor = User.objects.create_user('sam', 'sam@example.com', PASSWORD, role=User.Role.COUNSELOR, school=self.other_school)
+        south = self.make_student('sardor', south_counselor, self.other_school)
+        south_task = Task.objects.create(student=south, assigned_by=south_counselor, title='South task', due_date=date(2027, 1, 1))
+        # Even a stale assistant pointer on a foreign student does not pull it in.
+        StudentProfile.objects.filter(pk=south.pk).update(assigned_assistant=self.assistant)
+        self.assertEqual(self.client.get(f'/api/students/{south.pk}/').status_code, 404)
+        self.assertEqual(self.client.get(f'/api/tasks/{south_task.pk}/').status_code, 404)
+        self.assertEqual([row['id'] for row in self.client.get('/api/students/').data['results']], [self.mine.pk])
+        # A given student who moves to another school drops out too.
+        StudentProfile.objects.filter(pk=self.mine.pk).update(school=self.other_school)
+        self.assertEqual(self.client.get('/api/students/').data['results'], [])
+        # The other school's counselor cannot reach this assistant.
+        self.assertEqual(self.give(self.assistant, south, counselor=south_counselor).status_code, 404)
+
     def test_an_inactive_or_transferred_supervisor_removes_student_access(self):
         for changes in ({'is_active': False}, {'school': self.other_school}, {'role': User.Role.TEACHER}):
             with self.subTest(changes=changes):

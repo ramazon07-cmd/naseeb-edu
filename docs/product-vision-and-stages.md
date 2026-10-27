@@ -89,7 +89,7 @@ Source: `origin/main` @ `465cf9a`, the code, git history and `todo.todo` (the Uz
 | University Match (profile-based, filters, shortlist) | 🟡 | The catalog is small (16 universities) |
 | Programs (154) and the Scholarship catalog | ✅ | No tracking of scholarship applications |
 | Roadmap: Level 1 (8 missions), prerequisites, staff approval, stars/XP, level-up approval | ✅ | No Level 2+ |
-| Tasks (staff tasks + self-tasks; self-tasks award no XP) | ✅ | |
+| Tasks (staff tasks + self-tasks; all ordinary tasks award no XP) | ✅ | |
 | Applications (tier, status history) | ✅ | No offer/decision stage |
 | Documents (private storage, 25 MB, review states) | ✅ | |
 | Essay Lab (versions, comments, Google Docs) | ✅ | No inline comments |
@@ -218,7 +218,7 @@ Daily flow: sign in → "today's most important step" → do a task or mission �
 | University Match | By profile (GPA, SAT, IELTS, budget, scholarship need, portfolio); a reason for each match; filters; shortlist; tier suggestion | 🟡 → S4.4, S4.9 |
 | Scholarship search and tracking | Matching scholarships; requirements (essay, recommendation, financial documents) turn into tasks and documents; deadlines on the calendar | 🟡 tracking → S4.2 |
 | Roadmap | Levels suited to the student's grade, prerequisites, submit → staff approval → star; level-up needs staff approval | 🟡 Level 2+ → S3.8 |
-| Tasks | Staff task (deadline, priority, file/URL submission); self-tasks award no XP | ✅ |
+| Tasks | Staff task (deadline, priority, file/URL/Essay Lab submission); ordinary tasks award no XP | ✅ |
 | Documents | Type, status (required → uploaded → reviewing → approved / rejected), private streaming, 25 MB | ✅ |
 | Document expiry reminders | A reminder before a passport or test result expires | ⬜ → S3.1 |
 | Essay Lab | Essays tied to an application, versions, staff comments, Google Docs; inline comments | 🟡 → S4.5 |

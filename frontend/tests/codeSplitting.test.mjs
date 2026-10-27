@@ -11,7 +11,7 @@ test('the navigation challenge count matches the question banks it no longer imp
 });
 
 test('heavy and role-specific modules stay out of the main bundle', () => {
-  for (const module of ['./challenges', './careers', './LandingPage', './StudentOnboarding', './pages/ProfileAssessmentPage']) {
+  for (const module of ['./challenges', './careers', './CompactDashboard', './pages/CounselorStudents', './LandingPage', './StudentOnboarding', './pages/ProfileAssessmentPage']) {
     const escaped = module.replace(/[./]/g, (c) => `\\${c}`);
     assert.ok(!new RegExp(`^import[^;]*from\\s*['"]${escaped}['"]`, 'm').test(app), `${module} must be imported lazily`);
   }

@@ -11,7 +11,7 @@ for (const language of ['uz', 'ru']) {
     if (language === 'ru') assert.match(t(key), /[А-Яа-яЁё]/, key);
   }
   assert.ok(!tx`Search ${t('Direct')}`.includes('Direct'));
-  assert.ok(!t('Meeting with {name}', { name: 'Madina' }).includes('{name}'));
+  assert.ok(!t('Meeting with {name}', { name: 'Firdavs' }).includes('{name}'));
   assert.equal(t('My original student message'), 'My original student message');
 }
 // The same welcome key must respond immediately to language changes.

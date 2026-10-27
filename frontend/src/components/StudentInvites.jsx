@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Copy, Link2, UserPlus } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, t, tp } from '../i18n';
-import { dateTimeText, gradeText, joinParts } from '../lib/format';
+import { GRADES, dateTimeText, gradeText, joinParts } from '../lib/format';
 import { Field } from './forms';
 import { Modal } from './ui';
 import { CxAvatar, CxCard, CxHead, CxTabs, CxTag } from './counselorUi';
@@ -10,7 +10,6 @@ import { QuickCreateStudentForm } from '../pages/StudentsPage';
 import { PageSkeleton } from './states';
 import '../invites.css';
 
-const GRADES = ['8', '9', '10', '11', 'gap'];
 // Magic link lifetimes the counselor can pick; one day is the default.
 const LINK_HOURS = [[24, '1 day'], [72, '3 days'], [168, '7 days']];
 

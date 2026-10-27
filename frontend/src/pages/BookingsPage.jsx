@@ -6,7 +6,8 @@ import { Field, PortalTabs } from '../components/forms';
 import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
 import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil } from 'lucide-react';
-import { clockText, dateTimeText, dayLabel, joinParts, relativeDayText } from '../lib/format';
+import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, dayLabel as viewerDayLabel, joinParts, relativeDayText } from '../lib/format';
+import { SERVER_TIME_ZONE, inServerZone } from '../lib/serverTime';
 import { isPlatformAdmin } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
 import { isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook } from '../lib/meetings';
@@ -14,12 +15,28 @@ import { StudentSearchInput } from '../components/StudentSearchInput';
 import './bookings-scheduler.css';
 import { InlineLoadError } from '../components/states';
 
-// Local calendar day of a timestamp, as YYYY-MM-DD.
+// Meetings are planned in Tashkent time wherever the viewer is: every time on
+// this page is shown and entered there (Uzbekistan has no daylight saving, so
+// it is always UTC+5). A viewer in another zone also sees their own clock.
+const TASHKENT_OFFSET = '+05:00';
+const clockText = (value) => viewerClockText(inServerZone(value));
+const dateTimeText = (value) => viewerDateTimeText(inServerZone(value));
+const dayLabel = (value) => viewerDayLabel(inServerZone(value));
+const viewerElsewhere = () => new Date().getTimezoneOffset() !== -300;
+// "27 Oct, 01:00 your time" when the viewer's clock differs from Tashkent, else nothing.
+const viewerTimeHint = (value) => (viewerElsewhere() ? t('{time} your time', { time: viewerDateTimeText(value) }) : '');
+// A Tashkent wall-clock "YYYY-MM-DDTHH:MM" (a datetime-local value) as an instant.
+const fromTashkent = (local) => new Date(`${local}:00${TASHKENT_OFFSET}`);
+
+// Calendar key of a local Date (grid days, date arithmetic), as YYYY-MM-DD.
 function dayKey(value) {
   const date = new Date(value);
   const pad = (part) => String(part).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+
+// The Tashkent calendar day of a timestamp (or of now).
+const meetingDay = (value = new Date()) => dayKey(inServerZone(value));
 
 const byStart = (x, y) => new Date(x.starts_at) - new Date(y.starts_at);
 const NO_SLOTS = [];
@@ -41,12 +58,15 @@ const monthStart = (value) => { const date = new Date(value); return new Date(da
 const uzbek = () => locale().startsWith('uz');
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-// The viewer's own time zone ("Uzbekistan Standard Time"), in the UI language.
-const timeZoneName = () => new Intl.DateTimeFormat(locale(), { timeZoneName: uzbek() ? 'shortOffset' : 'long' }).formatToParts(new Date()).find((part) => part.type === 'timeZoneName')?.value || '';
+// "14:00 (Tashkent time)", plus "· 17:00 your time" for a viewer in another zone.
+const timeZoneName = () => joinParts(
+  t('{time} (Tashkent time)', { time: clockText(new Date()) }),
+  viewerElsewhere() && t('{time} your time', { time: viewerClockText(new Date()) }),
+);
 
 function slotRange(slot) {
   const end = new Date(new Date(slot.starts_at).getTime() + slot.duration_minutes * 60000);
-  return `${clockText(slot.starts_at)} – ${clockText(end)}, ${formatDateLocale(slot.starts_at, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`;
+  return joinParts(`${clockText(slot.starts_at)} – ${clockText(end)}, ${formatDateLocale(inServerZone(slot.starts_at), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`, viewerTimeHint(slot.starts_at));
 }
 
 // "Sunday, 4 October". Uzbek gets the translated weekday (see WEEKDAYS).
@@ -59,7 +79,7 @@ function dayTitle(key) {
 // One month of day buttons, Monday first. `marked` days are tinted (they have
 // times); only days `canPick` accepts are clickable.
 function MonthGrid({ month, onMonth, canBack, canForward, marked, canPick, selected, onPick, label }) {
-  const today = dayKey(new Date());
+  const today = meetingDay();
   const offset = (month.getDay() + 6) % 7;
   const length = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const days = Array.from({ length }, (_, index) => new Date(month.getFullYear(), month.getMonth(), index + 1));
@@ -84,15 +104,15 @@ function MonthGrid({ month, onMonth, canBack, canForward, marked, canPick, selec
 // Month view of one person's open slots: available days are tinted, the chosen
 // day lists its times, and choosing a time reveals "Next" beside it.
 function SlotCalendar({ slots, selectedDate, onDate, selectedSlot, onSlot, onNext }) {
-  const openDays = new Set(slots.filter((slot) => slot.available).map((slot) => dayKey(slot.starts_at)));
+  const openDays = new Set(slots.filter((slot) => slot.available).map((slot) => meetingDay(slot.starts_at)));
   const firstOpen = [...openDays].sort()[0];
   const lastOpen = [...openDays].sort().at(-1);
   const [viewMonth, setViewMonth] = useState(() => monthStart(firstOpen ? `${firstOpen}T00:00` : new Date()));
-  const daySlots = slots.filter((slot) => dayKey(slot.starts_at) === selectedDate);
+  const daySlots = slots.filter((slot) => meetingDay(slot.starts_at) === selectedDate);
   return <div className={`booking-cal-picker ${selectedDate ? 'has-day' : ''}`.trim()}>
     <div>
       <MonthGrid month={viewMonth} onMonth={setViewMonth} canBack={viewMonth > monthStart(new Date())} canForward={Boolean(lastOpen) && monthStart(`${lastOpen}T00:00`) > viewMonth} marked={openDays} canPick={(key) => openDays.has(key)} selected={selectedDate} onPick={onDate} label={t("Available dates")} />
-      <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()} ({clockText(new Date())})</p>
+      <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p>
     </div>
     {selectedDate && <div className="booking-cal-times" role="group" aria-label={t("Available times")}>
       <b>{dayTitle(selectedDate)}</b>
@@ -143,7 +163,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
       const first = nextPeople.find((person) => firstFree(person.id)) || nextPeople[0];
       setParticipantId(String(first?.id || ''));
       const firstSlot = first && firstFree(first.id);
-      if (firstSlot) setSelectedDate(dayKey(firstSlot.starts_at));
+      if (firstSlot) setSelectedDate(meetingDay(firstSlot.starts_at));
     }).finally(() => {
       if (active) setLoading(false);
     });
@@ -161,7 +181,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
       setSlotStates((current) => ({ ...current, [id]: { loading: false, error: '' } }));
       setSlots((current) => [...current.filter((slot) => slot.participant !== id), ...theirs]);
       const first = [...theirs].sort(byStart).find((slot) => slot.available);
-      setSelectedDate((day) => theirs.some((slot) => slot.available && dayKey(slot.starts_at) === day) ? day : first ? dayKey(first.starts_at) : '');
+      setSelectedDate((day) => theirs.some((slot) => slot.available && meetingDay(slot.starts_at) === day) ? day : first ? meetingDay(first.starts_at) : '');
     }).catch((err) => { if (active) setSlotStates((current) => ({ ...current, [id]: { loading: false, error: err.message } })); });
     return () => { active = false; };
   }, [staff, participantId, slotAttempt]);
@@ -180,7 +200,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
     setSlotStates((current) => ({ ...current, [id]: { loading: true, error: '' } }));
     const next = (slotsByPerson.get(id) || NO_SLOTS).find((slot) => slot.available);
     setParticipantId(String(id));
-    setSelectedDate(next ? dayKey(next.starts_at) : '');
+    setSelectedDate(next ? meetingDay(next.starts_at) : '');
     setSelectedSlot(null);
   }
   async function submit(event) {
@@ -192,7 +212,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
       await api.create('bookings', staff ? {
         student: Number(values.get('student')),
         topic: values.get('topic'),
-        starts_at: new Date(values.get('starts_at')).toISOString(),
+        starts_at: fromTashkent(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
         notes: values.get('notes')
       } : {
@@ -271,14 +291,18 @@ function AvailabilityManager({ onClose, notify }) {
   const [slots, setSlots] = useState([]);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [selectedDay, setSelectedDay] = useState(() => dayKey(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => meetingDay());
   const [viewMonth, setViewMonth] = useState(() => monthStart(new Date()));
   const [time, setTime] = useState('');
+  // Optional: with an end time the range is cut into `duration` slots (09:00–12:00 → 09:00, 09:45, …).
+  const [endTime, setEndTime] = useState('');
   const [duration, setDuration] = useState(45);
   const [repeat, setRepeat] = useState(false);
   const [repeatUntil, setRepeatUntil] = useState('');
   const [repeatDays, setRepeatDays] = useState([]);
   const [editing, setEditing] = useState(null);
+  // A day that already has times shows them, with the add form behind one button.
+  const [adding, setAdding] = useState(false);
   const sortSlots = (items) => [...items].sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
   useEffect(() => {
     let active = true;
@@ -286,19 +310,20 @@ function AvailabilityManager({ onClose, notify }) {
       if (!active) return;
       const next = sortSlots(items || []);
       setSlots(next);
-      if (next[0]) { setSelectedDay(dayKey(next[0].starts_at)); setViewMonth(monthStart(next[0].starts_at)); }
+      if (next[0]) { setSelectedDay(meetingDay(next[0].starts_at)); setViewMonth(monthStart(inServerZone(next[0].starts_at))); }
     }).catch((err) => { if (active) notify(err.message, 'error'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [notify]);
-  const today = dayKey(new Date());
-  const slotDays = new Set(slots.map((slot) => dayKey(slot.starts_at)));
-  const daySlots = slots.filter((slot) => dayKey(slot.starts_at) === selectedDay);
+  const today = meetingDay();
+  const slotDays = new Set(slots.map((slot) => meetingDay(slot.starts_at)));
+  const daySlots = slots.filter((slot) => meetingDay(slot.starts_at) === selectedDay);
   const openCount = slots.filter((slot) => slot.available).length;
   const selectedWeekday = (new Date(`${selectedDay}T00:00`).getDay() + 6) % 7;
   // The server repeats for at most 12 weeks counted from the first day.
   const lastRepeatDay = dayKey(new Date(new Date(`${selectedDay}T00:00`).getTime() + 83 * 86400000));
   function pickDay(key) {
     setSelectedDay(key);
+    setAdding(false);
     setEditing(null);
     if (repeat) setRepeatDays([(new Date(`${key}T00:00`).getDay() + 6) % 7]);
   }
@@ -309,15 +334,17 @@ function AvailabilityManager({ onClose, notify }) {
   }
   async function add(event) {
     event.preventDefault();
-    const startsAt = new Date(`${selectedDay}T${time}`);
+    const startsAt = fromTashkent(`${selectedDay}T${time}`);
     if (!time || (!repeat && startsAt <= new Date())) { notify(t("Choose a time in the future."), 'error'); return; }
     if (repeat && (!repeatUntil || repeatUntil < selectedDay || repeatUntil > lastRepeatDay || !repeatDays.length)) { notify(t("Repeat for at most 12 weeks."), 'error'); return; }
+    if (endTime && endTime <= time) { notify(t("Choose an end time after the start time."), 'error'); return; }
     setBusy(true);
     try {
-      if (repeat) {
+      if (repeat || endTime) {
+        // One day's range goes through the same endpoint as a weekly one.
         const result = await api.repeatBookingAvailability({
-          weekdays: repeatDays, time, duration_minutes: duration, start_date: selectedDay, end_date: repeatUntil,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          weekdays: repeat ? repeatDays : [selectedWeekday], time, end_time: endTime || null, duration_minutes: duration,
+          start_date: selectedDay, end_date: repeat ? repeatUntil : selectedDay, timezone: SERVER_TIME_ZONE,
         });
         setSlots((current) => sortSlots([...current, ...(result.slots || [])]));
         notify(result.skipped
@@ -329,6 +356,8 @@ function AvailabilityManager({ onClose, notify }) {
         notify(t("Available time added."));
       }
       setTime('');
+      setEndTime('');
+      setAdding(false);
     } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
   }
   async function remove(id) {
@@ -338,22 +367,22 @@ function AvailabilityManager({ onClose, notify }) {
   }
   async function saveEdit(event) {
     event.preventDefault();
-    const startsAt = new Date(`${editing.date}T${editing.time}`);
+    const startsAt = fromTashkent(`${editing.date}T${editing.time}`);
     if (!editing.date || !editing.time || startsAt <= new Date()) { notify(t("Choose a time in the future."), 'error'); return; }
     setBusy(true);
     try {
       const slot = await api.editBookingAvailability(editing.id, { starts_at: startsAt.toISOString(), duration_minutes: editing.duration });
       setSlots((current) => sortSlots(current.map((item) => (item.id === slot.id ? slot : item))));
-      setSelectedDay(dayKey(slot.starts_at));
+      setSelectedDay(meetingDay(slot.starts_at));
       setEditing(null);
       notify(t("Available time updated."));
     } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
   }
-  const startEdit = (slot) => setEditing({ id: slot.id, date: dayKey(slot.starts_at), time: localInputValue(slot.starts_at).slice(11), duration: slot.duration_minutes });
+  const startEdit = (slot) => setEditing({ id: slot.id, date: meetingDay(slot.starts_at), time: localInputValue(slot.starts_at).slice(11), duration: slot.duration_minutes });
   return <Modal title={t("My available hours")} onClose={onClose} className="booking-scheduler-modal">
     <div className="booking-cal availability-cal">
       <aside className="booking-cal-side">
-        <p className="booking-cal-note">{t("Add times students can choose when requesting a meeting. Times are shown in your local time zone.")}</p>
+        <p className="booking-cal-note">{t("Add times students can choose when requesting a meeting. Times are in Tashkent time.")}</p>
         <MonthGrid month={viewMonth} onMonth={setViewMonth} canBack={viewMonth > monthStart(new Date())} canForward marked={slotDays} canPick={(key) => key >= today} selected={selectedDay} onPick={pickDay} label={t("Choose a date and time")} />
         <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}{!loading && <> · {t("{n} available times", { n: openCount })}</>}</p>
       </aside>
@@ -375,27 +404,31 @@ function AvailabilityManager({ onClose, notify }) {
             </span>
           </>}
         </li>)}</ul> : <p className="booking-cal-note">{t("No times on this day yet.")}</p>}
-        <form className="availability-add" onSubmit={add}>
+        {daySlots.length > 0 && !adding ? <div className="availability-add-actions"><button type="button" className="button light" onClick={() => setAdding(true)}><Plus size={16} aria-hidden="true" /> {t("Add more times")}</button></div> : <form className="availability-add" onSubmit={add}>
           <b>{t("Add available time")}</b>
+          <p className="booking-cal-note">{t("Set an end time to fill the whole range with meeting slots.")}</p>
           <div className="availability-add-row">
             <label className="availability-time"><span className="sr-only">{t("Time")}</span><input type="time" required value={time} onChange={(event) => setTime(event.target.value)} /></label>
+            <span aria-hidden="true">–</span>
+            <label className="availability-time"><span className="sr-only">{t("Until (optional)")}</span><input type="time" min={time || undefined} value={endTime} onChange={(event) => setEndTime(event.target.value)} title={t("Until (optional)")} /></label>
             <fieldset className="availability-durations"><legend className="sr-only">{t("Duration")}</legend>{[30, 45, 60].map((value) => <label key={value}><input type="radio" name="availability-duration" checked={duration === value} onChange={() => setDuration(value)} /><span>{value} {t("min")}</span></label>)}</fieldset>
-            <button className="button primary" disabled={busy || !time} aria-busy={busy}><Plus size={16} aria-hidden="true" /> {t("Add")}</button>
           </div>
           <div className="availability-add-row">
             <label><input type="checkbox" checked={repeat} onChange={(event) => toggleRepeat(event.target.checked)} /> {t("Repeat weekly until…")}</label>
             {repeat && <label className="availability-time"><span className="sr-only">{t("Repeat until")}</span><input type="date" required min={selectedDay} max={lastRepeatDay} value={repeatUntil} onChange={(event) => setRepeatUntil(event.target.value)} /></label>}
           </div>
           {repeat && <fieldset className="availability-durations"><legend className="sr-only">{t("Repeat on")}</legend>{WEEKDAYS.map((name, index) => <label key={name}><input type="checkbox" checked={repeatDays.includes(index)} onChange={(event) => setRepeatDays((current) => (event.target.checked ? [...current, index] : current.filter((day) => day !== index)))} /><span>{uzbek() ? t(name).slice(0, 2) : formatDateLocale(new Date(2024, 0, 1 + index), { weekday: 'short' })}</span></label>)}</fieldset>}
-        </form>
+          {/* An empty start time is caught by the input's `required`, so Save stays clickable and says why. */}
+          <div className="availability-add-actions"><button type="submit" className="button primary" disabled={busy} aria-busy={busy}><Check size={16} aria-hidden="true" /> {t("Save")}</button></div>
+        </form>}
       </section>
     </div>
   </Modal>;
 }
 
-// `datetime-local` wants local wall-clock time without a zone.
+// `datetime-local` wants wall-clock time without a zone: Tashkent's, like the rest of the page.
 function localInputValue(iso) {
-  const date = new Date(iso);
+  const date = inServerZone(iso);
   const pad = (value) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
@@ -428,7 +461,7 @@ export function RescheduleForm({ booking, staff = false, onClose, onSaved, notif
         .sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
       setSlots(next);
       const first = next.find((slot) => slot.available);
-      if (first) setSelectedDate(dayKey(first.starts_at));
+      if (first) setSelectedDate(meetingDay(first.starts_at));
     }).catch((err) => { if (active) setSlotsError(err.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [staff, booking.id, booking.participant, booking.availability_slot, booking.starts_at, slotsAttempt]);
@@ -445,7 +478,7 @@ export function RescheduleForm({ booking, staff = false, onClose, onSaved, notif
       await api.rescheduleBooking(booking.id, chosen ? {
         starts_at: chosen.starts_at, duration_minutes: chosen.duration_minutes, availability_slot: chosen.id,
       } : {
-        starts_at: new Date(values.get('starts_at')).toISOString(),
+        starts_at: fromTashkent(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
       });
       notify(staff ? t("Meeting moved.") : t("New time sent for confirmation."));
@@ -476,7 +509,7 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
   const [earlier, setEarlier] = useState([]);
   // The meeting's local calendar day; the ISO string is UTC and can be a day off.
   // A bare YYYY-MM-DD is already a local day (new Date() would read it as UTC).
-  const meetingDate = /^\d{4}-\d{2}-\d{2}$/.test(booking.starts_at) ? booking.starts_at : dayKey(booking.starts_at);
+  const meetingDate = /^\d{4}-\d{2}-\d{2}$/.test(booking.starts_at) ? booking.starts_at : meetingDay(booking.starts_at);
   // Opened from a meeting: show what was already written about that day, so "Notes" reads them back.
   useEffect(() => {
     if (!booking.id) return undefined;
@@ -537,14 +570,29 @@ function StudentBookingsPage({ data, reload, notify }) {
       setSavingId(null);
     }
   }
-  return <div className="section-stack student-portal"><div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} /><button className="button primary" onClick={() => setOpen(true)}><Plus size={17} /> {t("Request meeting")}</button></div><div className="booking-grid">{items.map((item) => { const status = meetingBadgeStatus(meetingStatus(item, now, { student: true })); return <article className={`booking-card is-${status}`} key={item.id}><div className="booking-date"><strong>{new Date(item.starts_at).getDate()}</strong><span>{formatDateLocale(item.starts_at, { month: 'short' })}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p><small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{status}</Badge>{isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Reschedule")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button></div>}</div></article>; })}{!items.length && <Empty text={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}</div>;
+  return <div className="section-stack student-portal"><div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} /><button className="button primary" onClick={() => setOpen(true)}><Plus size={17} /> {t("Request meeting")}</button></div><p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p><div className="booking-grid">{items.map((item) => { const status = meetingBadgeStatus(meetingStatus(item, now, { student: true })); return <article className={`booking-card is-${status}`} key={item.id}><div className="booking-date"><strong>{inServerZone(item.starts_at).getDate()}</strong><span>{formatDateLocale(item.starts_at, { month: 'short' })}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p><small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{status}</Badge>{isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Reschedule")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button></div>}{!isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}><Trash2 size={14} /> {t("Delete")}</button></div>}</div></article>; })}{!items.length && <Empty text={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}</div>;
 }
 
 const meetingTone = (status) => ({ confirmed: 'ok', pending: 'warn' }[status] || 'quiet');
-const clockAndLength = (item) => joinParts(clockText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`);
+const clockAndLength = (item) => joinParts(clockText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`, viewerTimeHint(item.starts_at));
 
 // "Requests, today and this week" in the Counselor Dashboard design: requests
 // waiting for a decision on the left, the week's meetings on the right.
+// Staff clear a closed or past meeting off their list (the API refuses an upcoming open one).
+async function deleteMeeting(item, { setSavingId, reload, notify, question = t("Delete this meeting? It disappears for the student too.") }) {
+  if (!window.confirm(question)) return;
+  setSavingId(item.id);
+  try {
+    await api.remove('bookings', item.id);
+    notify(t("Meeting deleted."));
+    reload();
+  } catch (err) {
+    notify(err.message, 'error');
+  } finally {
+    setSavingId(null);
+  }
+}
+
 function CounselorMeetingsPage({ data, reload, notify }) {
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
@@ -557,11 +605,12 @@ function CounselorMeetingsPage({ data, reload, notify }) {
 
   async function transition(item, action) {
     if (action === 'reject' && !window.confirm(t("Decline this meeting?"))) return;
+    if (action === 'cancel' && !window.confirm(t("Cancel this meeting?"))) return;
     setSavingId(item.id);
     try {
-      const methods = { approve: api.approveBooking, reject: api.rejectBooking, complete: api.completeBooking };
+      const methods = { approve: api.approveBooking, reject: api.rejectBooking, complete: api.completeBooking, cancel: api.cancelBooking };
       await methods[action](item.id);
-      notify({ approve: t("Meeting confirmed."), reject: t("Meeting declined."), complete: t("Meeting marked as completed.") }[action]);
+      notify({ approve: t("Meeting confirmed."), reject: t("Meeting declined."), complete: t("Meeting marked as completed."), cancel: t("Meeting cancelled.") }[action]);
       reload();
     } catch (err) {
       notify(err.message, 'error');
@@ -581,12 +630,13 @@ function CounselorMeetingsPage({ data, reload, notify }) {
     return <>
       {status === 'approved' && !isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} onClick={() => transition(item, 'complete')}>{t("Mark completed")}</button>}
       {status === 'approved' && isOpenMeeting(item, now) && <button type="button" className="cx-btn" onClick={() => setRescheduling(item)}>{t("Move meeting")}</button>}
+      {status === 'approved' && isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}>{t("Cancel meeting")}</button>}
       <button type="button" className="cx-btn" onClick={() => setAddingNote(item)}>{t("Notes")}</button>
     </>;
   }
 
   return <div className="cx-page cx-meetings">
-    <CxHead title={t("Meetings")} subtitle={t("Requests, today and this week")}>
+    <CxHead title={t("Meetings")} subtitle={joinParts(t("Requests, today and this week"), timeZoneName())}>
       <button type="button" className="cx-btn" onClick={() => setAvailabilityOpen(true)}><Calendar size={15} aria-hidden="true" />{t("My available hours")}</button>
       <button type="button" className="cx-btn primary" onClick={() => setBooking({})}><Plus size={15} aria-hidden="true" />{t("Book with a student")}</button>
     </CxHead>
@@ -601,6 +651,7 @@ function CounselorMeetingsPage({ data, reload, notify }) {
                 <small>{joinParts(
                   `${dayLabel(item.starts_at)} ${clockText(item.starts_at)}`,
                   item.duration_minutes > 0 && tx`${item.duration_minutes} min`,
+                  viewerTimeHint(item.starts_at),
                   item.previous_starts_at ? t('rescheduled from {when}', { when: `${dayLabel(item.previous_starts_at)} ${clockText(item.previous_starts_at)}` }) : item.created_at && t('requested {when}', { when: relativeDayText(item.created_at).toLowerCase() }),
                 )}</small>
               </span>
@@ -622,7 +673,7 @@ function CounselorMeetingsPage({ data, reload, notify }) {
               <span className="cx-week-when"><b>{dayLabel(item.starts_at)}</b><small>{clockAndLength(item)}</small></span>
               <span className="cx-row-copy"><b>{item.student_name}</b><small>{item.topic}</small></span>
               <CxTag tone={meetingTone(status)}>{label(status)}</CxTag>
-              <span className="cx-week-actions">{weekActions(item)}</span>
+              <span className="cx-week-actions">{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={15} aria-hidden="true" />{t("Delete")}</button>}</span>
             </div>;
           })}
         </div>
@@ -650,11 +701,12 @@ function StaffMeetingsPage({ data, reload, notify }) {
 
   async function transition(item, action) {
     if (action === 'reject' && !window.confirm(t("Decline this meeting?"))) return;
+    if (action === 'cancel' && !window.confirm(t("Cancel this meeting?"))) return;
     setSavingId(item.id);
     try {
-      const methods = { approve: api.approveBooking, reject: api.rejectBooking, complete: api.completeBooking };
+      const methods = { approve: api.approveBooking, reject: api.rejectBooking, complete: api.completeBooking, cancel: api.cancelBooking };
       await methods[action](item.id);
-      notify({ approve: t("Meeting confirmed."), reject: t("Meeting declined."), complete: t("Meeting marked as completed.") }[action]);
+      notify({ approve: t("Meeting confirmed."), reject: t("Meeting declined."), complete: t("Meeting marked as completed."), cancel: t("Meeting cancelled.") }[action]);
       reload();
     } catch (err) {
       notify(err.message, 'error');
@@ -675,11 +727,13 @@ function StaffMeetingsPage({ data, reload, notify }) {
       <button type="button" className="button quiet small" onClick={() => setAddingNote(item)}>{t("Notes")}</button>
       {status === 'approved' && !isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'complete')}><CheckCircle2 size={14} /> {t("Mark completed")}</button>}
       {status === 'approved' && isOpenMeeting(item, now) && <button type="button" className="button quiet small" onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Move meeting")}</button>}
+      {status === 'approved' && isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button>}
     </>;
   }
 
   return <div className="section-stack meetings-staff">
     <div className="portal-toolbar"><h2>{t("Meetings")}</h2><div className="booking-toolbar-actions"><button className="button secondary" onClick={() => setAvailabilityOpen(true)}><Calendar size={17} /> {t("My available hours")}</button><button className="button primary" onClick={() => setBooking({})}><Plus size={17} /> {t("Book with a student")}</button></div></div>
+    <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p>
     <div className="split-grid wide-left">
       <Panel title={tx`Requests waiting for you · ${pending.length}`}>
         <div className="record-list">
@@ -698,7 +752,7 @@ function StaffMeetingsPage({ data, reload, notify }) {
       </Panel>
       <Panel title={t("This week")}>
         <div className="record-list">
-          {thisWeek.map((item) => <Record key={item.id} title={joinParts(dateTimeText(item.starts_at), item.topic)} meta={item.student_name} badge={meetingBadgeStatus(meetingStatus(item, now, { student: false }))} actions={weekActions(item)} />)}
+          {thisWeek.map((item) => <Record key={item.id} title={joinParts(dateTimeText(item.starts_at), item.topic)} meta={joinParts(item.student_name, viewerTimeHint(item.starts_at))} badge={meetingBadgeStatus(meetingStatus(item, now, { student: false }))} actions={<>{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} title={t("Delete")} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={14} aria-hidden="true" /> {t("Delete")}</button>}</>} />)}
           {!thisWeek.length && <Empty text={t("Nothing scheduled this week.")} />}
         </div>
       </Panel>

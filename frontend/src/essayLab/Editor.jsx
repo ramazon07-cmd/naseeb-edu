@@ -22,6 +22,8 @@ import { documentStats, readCounter, writeCounter } from './counts.js'
 import { Dialog, Menu } from './ui.jsx'
 import EditorPage from './EditorPage.jsx'
 import ShareControl from './ShareControl.jsx'
+import SubmitToTask from './SubmitToTask.jsx'
+import EssayTaskStatus from './EssayTaskStatus.jsx'
 import { PageControls, pageMenuItems, usePageCount, usePageMode } from './PageControls.jsx'
 import { Pagination } from './pagination.js'
 import {
@@ -34,7 +36,7 @@ import {
   BlockIds, CollabFocus, CommentMark, SuggestDeleteMark, SuggestInsertMark, anchoredIds, itemRange, setCollabFocus,
 } from './collabMarks.js'
 import { applyDocChanges, editorDoc } from './editorMerge.js'
-import { acceptAllIds, collabPollDelay, feedbackItems, openCount, replaceById } from './collabModel.js'
+import { acceptAllIds, collabPollDelay, feedbackItems, feedbackCount as countFeedback, replaceById } from './collabModel.js'
 import { createPoller } from '../lib/poller.js'
 import { loadFontsIn } from './fonts.js'
 import { errorCode, essayLabApi, essayTypeName } from './essayLabApi.js'
@@ -146,10 +148,11 @@ function summaryOf(detail) {
 }
 
 // The open document: header, formatting toolbar, tabs rail and the open tab.
-function DocumentEditor({ initial, user, folders, notify, initialFocus, initialPanel, fresh, onClose }) {
+function DocumentEditor({ initial, user, folders, notify, initialFocus, initialPanel, fresh, onClose, onTaskSubmitted }) {
   const storage = useMemo(safeStorage, [])
   const userId = user?.id ?? 'me'
   const [essay, setEssay] = useState(() => summaryOf(initial))
+  const [submittedTask, setSubmittedTask] = useState(null)
   const [tabs, setTabs] = useState(initial.tabs)
   const [activeId, setActiveId] = useState(initial.tab.id)
   const [editor, setEditor] = useState(null)
@@ -412,6 +415,13 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
         </div>}
       <div className="el-head-status">{saveBadge}</div>
       <div className="el-head-actions">
+        <SubmitToTask essay={essay} notify={notify} disabled={busy || previewing} beforeSubmit={async () => (await syncTabs(sessions.all())).length === 0}
+          onSubmitted={(task) => {
+            setSubmittedTask(task);
+            const shared = task.submission_essay_detail;
+            if (shared) setEssay((current) => ({ ...current, shared_with_counselor: shared.shared_with_counselor, shared_at: shared.shared_at, counselor_access: shared.counselor_access }));
+            onTaskSubmitted?.();
+          }} />
         <ShareControl essay={essay} notify={notify} onSaved={(saved) => setEssay((current) => ({ ...current, ...saved }))} />
         {!phone && counterEl}
         {!phone && <PageControls editor={editor} mode={pageMode.mode} onModeChange={pageMode.setMode} essay={essay} notify={notify} disabled={locked}
@@ -435,6 +445,8 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
     </header>
 
     {!phone && <div className="el-toolbar-bar"><Toolbar editor={editor} disabled={locked} /></div>}
+
+    <EssayTaskStatus essayId={essay.id} submittedTask={submittedTask} onComments={() => setPanel('comments')} />
 
     <div className="el-editor-body">
       {railOpen && !phone && !focusMode && <TabsRail tabs={tabs} activeId={activeId} outline={outline} busy={busy} onOpen={openTab} onAdd={addTab} onRename={renameTab}
@@ -808,7 +820,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
       pollState.current.etag = response.etag
       const data = response.data || {}
       pollState.current.othersActive = Boolean(data.others_active)
-      setFeedback({ threads: data.threads || [], suggestions: data.suggestions || [], loaded: true, error: '' })
+      setFeedback({ threads: data.threads || [], suggestions: data.suggestions || [], status: data.essay_status, loaded: true, error: '' })
       if (data.doc) absorbRemote(data.doc, data.save_seq)
       return true
     } catch (error) {
@@ -846,7 +858,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     }
     return feedbackItems(feedback.threads, feedback.suggestions, positions)
   }, [feedback, collabDoc, anchors])
-  const feedbackCount = openCount(feedback.threads, feedback.suggestions)
+  const feedbackCount = countFeedback(feedback.threads, feedback.suggestions)
   useEffect(() => { onCollab({ count: feedbackCount }) }, [feedbackCount, onCollab])
   const allIds = useMemo(() => acceptAllIds(feedback.suggestions, anchors.suggestion), [feedback.suggestions, anchors])
 
@@ -870,12 +882,6 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     setFeedback((current) => ({ ...current, threads: replaceById(current.threads, thread) }))
     return true
   }, 'Could not send the reply.'), [essay.id, withFeedbackBusy])
-
-  const setThreadResolved = useCallback((item, resolved) => withFeedbackBusy(`thread:${item.id}`, async () => {
-    const thread = await (resolved ? essayLabApi.resolveThread(essay.id, item.id) : essayLabApi.reopenThread(essay.id, item.id))
-    setFeedback((current) => ({ ...current, threads: replaceById(current.threads, thread) }))
-    return true
-  }, 'Could not update the comment.'), [essay.id, withFeedbackBusy])
 
   // Accept / reject: the server applies the decisions to the saved text in one
   // step; the editor is paused meanwhile so nothing typed can be lost.
@@ -994,10 +1000,9 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     {panel === 'history' && !focusMode && <History essayId={essay.id} tabId={session.id} version={historyVersion} words={tabWords}
       savedAt={state.savedAt} previewId={preview?.checkpoint.id ?? null}
       onPreview={previewCheckpoint} onRestore={restoreCheckpoint} onBeforeName={flushBeforeName} onClose={closeHistory} />}
-    {panel === 'comments' && !focusMode && <CommentsPanel items={items} activeKey={activeItem ? `${activeItem.kind}:${activeItem.id}` : null}
+    {panel === 'comments' && !focusMode && <CommentsPanel readOnly={(feedback.status ?? essay.status) === 'approved'} items={items} activeKey={activeItem ? `${activeItem.kind}:${activeItem.id}` : null}
       busyKey={feedbackBusy} acceptAll={allIds} loaded={feedback.loaded} error={feedback.error}
-      onSelect={selectItem} onDecide={decide} onReply={replyToThread} onResolve={(item) => setThreadResolved(item, true)}
-      onReopen={(item) => setThreadResolved(item, false)} onRetry={() => poller.current?.poke()} onClose={closeComments} />}
+      onSelect={selectItem} onDecide={decide} onReply={replyToThread} onRetry={() => poller.current?.poke()} onClose={closeComments} />}
     {panel === 'coach' && !focusMode && <CoachPanel check={check} status={checkStatus} anchored={anchored} activeId={activeNoteId} dismissed={dismissed}
       words={tabWords}
       onCheck={runCheck} onSelect={selectNote} onJump={jumpToNote} onDismiss={dismissNote} onClose={closePanel} />}

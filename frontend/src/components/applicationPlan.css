@@ -1,0 +1,146 @@
+.modal.application-plan {
+  width: min(860px, 100%);
+}
+
+.application-plan .form-grid {
+  align-items: start;
+}
+
+.application-plan-form {
+  display: grid;
+  gap: 24px;
+}
+
+.application-plan-head,
+.application-plan-essays li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.application-plan h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.application-plan p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.application-plan small,
+.application-plan-note,
+.application-plan-head p {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.application-plan-next {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--control-bg);
+}
+
+.application-plan-section,
+.application-plan-confirm {
+  display: grid;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.application-plan-links,
+.application-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.application-plan-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+}
+
+.application-plan-essays {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.application-plan-essays li > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.application-plan-link-essay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.application-plan-link-essay .field {
+  flex: 1 1 240px;
+}
+
+.application-plan .link-button,
+.application-plan-confirm > .button {
+  justify-self: start;
+}
+
+.application-plan-history summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.application-plan-history ol {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0 0;
+  list-style: none;
+}
+
+.application-plan-history li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8125rem;
+}
+
+.application-plan-error {
+  color: var(--danger);
+}
+
+.application-plan-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .application-plan .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .application-plan-actions .button {
+    flex: 1 1 140px;
+  }
+}
+
+.board-card .board-card-next {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}

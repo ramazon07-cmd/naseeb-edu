@@ -13,9 +13,9 @@ test('a default search asks for one small page sorted by ranking', () => {
 });
 
 test('only filters that differ from the defaults are sent', () => {
-  const filters = { ...DEFAULT_COLLEGE_FILTERS, country: 'United States', price: 'budget', aid: ['offers_merit_aid', 'meets_full_need'], bands: ['reach'], testOptional: true, satFit: true, publicOnly: true };
+  const filters = { ...DEFAULT_COLLEGE_FILTERS, country: 'United States', price: '25000', aid: ['offers_merit_aid', 'meets_full_need'], bands: ['reach'], testOptional: true, satFit: true, publicOnly: true };
   assert.deepEqual(query({ query: '  tashkent  ', filters, sort: 'fit', view: 'admissions', pageSize: 25, qsFilters: { region: 'Asia' } }), {
-    search: 'tashkent', country: 'United States', price: 'budget', aid: 'offers_merit_aid,meets_full_need', bands: 'reach',
+    search: 'tashkent', country: 'United States', price: '25000', aid: 'offers_merit_aid,meets_full_need', bands: 'reach',
     test_optional: 'true', sat_fit: 'true', public: 'true', sort: 'fit', page_size: '25',
   });
 });

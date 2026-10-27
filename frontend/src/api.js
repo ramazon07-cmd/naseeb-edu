@@ -473,11 +473,12 @@ export const api = {
   retrySignOut,
   forgetSession,
   syncBeforeSignOut,
-  changePassword: async (newPassword, confirmPassword) => {
+  // A student also sends the class they picked at the first sign-in.
+  changePassword: async (newPassword, confirmPassword, grade = '') => {
     const payload = await request('/users/accounts/change-password/', {
       method: 'POST',
       credentials: 'include',
-      body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
+      body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword, ...(grade && { grade }) }),
     })
     saveTokens(payload)
     return payload
@@ -699,7 +700,6 @@ export const api = {
   // The reader's comments (a quoted range of one paragraph), replies, and suggested edits.
   reviewEssayThread: (id, payload) => request(`/essay-lab/review/essays/${id}/threads/`, { method: 'POST', body: JSON.stringify(payload) }, true, false),
   reviewEssayReply: (id, thread, body) => request(`/essay-lab/review/essays/${id}/threads/${thread}/reply/`, { method: 'POST', body: JSON.stringify({ body }) }, true, false),
-  reviewEssayResolve: (id, thread, resolved) => request(`/essay-lab/review/essays/${id}/threads/${thread}/${resolved ? 'resolve' : 'reopen'}/`, { method: 'POST' }, true, false),
   reviewEssaySuggest: (id, payload) => request(`/essay-lab/review/essays/${id}/suggestions/`, { method: 'POST', body: JSON.stringify(payload) }, true, false),
   sendBack: (endpoint, id, note) => request(`/${endpoint}/${id}/send-back/`, { method: 'POST', body: JSON.stringify({ note }) }),
   // What this counselor approved or sent back since midnight in Tashkent, newest first.
@@ -714,7 +714,7 @@ export const api = {
   addBookingAvailability: (payload) => request('/bookings/availability/', { method: 'POST', body: JSON.stringify(payload) }),
   removeBookingAvailability: (id) => request('/bookings/availability/', { method: 'DELETE', body: JSON.stringify({ id }) }),
   editBookingAvailability: (id, payload) => request('/bookings/availability/', { method: 'PATCH', body: JSON.stringify({ ...payload, id }) }),
-  // { weekdays: [0-6, Monday = 0], time: 'HH:MM', duration_minutes, start_date, end_date, timezone } → { created, skipped, slots }
+  // { weekdays: [0-6, Monday = 0], time: 'HH:MM', end_time?: 'HH:MM' (a range cut into slots), duration_minutes, start_date, end_date, timezone } → { created, skipped, slots }
   repeatBookingAvailability: (payload) => request('/bookings/availability/repeat/', { method: 'POST', body: JSON.stringify(payload) }),
   approveBooking: (id) => request(`/bookings/${id}/approve/`, { method: 'POST' }),
   rejectBooking: (id) => request(`/bookings/${id}/reject/`, { method: 'POST' }),

@@ -59,10 +59,9 @@ export function accessLevel(capabilities = []) {
 
 const byTime = (a, b) => String(a.created_at).localeCompare(String(b.created_at));
 
-// Threads in reading order of their creation; resolved ones apart.
-export function splitThreads(threads = []) {
-  const sorted = [...threads].sort(byTime);
-  return { open: sorted.filter((thread) => thread.status !== 'resolved'), resolved: sorted.filter((thread) => thread.status === 'resolved') };
+// All comment threads, oldest first; historic resolution never hides a comment.
+export function orderedThreads(threads = []) {
+  return [...threads].sort(byTime);
 }
 
 // Only web and mail links are followed (the same rule as the editor's link mark).

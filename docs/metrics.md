@@ -51,7 +51,7 @@ move a record out of an approved state. The rules:
 | `journey_progress_percent` | Overall journey | The rounded mean of task and roadmap progress, `(task + roadmap + 1) // 2`. If the student has only tasks or only missions, it is that one number; with neither it is 0. |
 | `is_at_risk` | Needs attention | Any late task (see below), **or** any open mission past its due date. Submitted work is waiting on the reviewer, so it is never late. |
 | `task_status_counts`, `roadmap_status_counts` | "0/4 Tasks" etc. | A count for every status (zeros included). |
-| `xp_total` | XP | The sum of approval awards. Each approved piece of work earns XP at most once. A task earns 25/50/75/100 for low/medium/high/urgent priority; a task the student set themselves earns 0; a mission earns 75. |
+| `xp_total` | XP | The sum of approval awards. Each approved piece of work earns XP at most once. New XP awards come only from roadmap missions (75 per approval). Ordinary assigned and personal tasks earn 0, regardless of priority. Historical awards stay in the ledger. |
 | `level` | Level | The approved level. It only changes when a teacher or counselor approves it. |
 | `eligible_level` | — | The highest level `L` (maximum 100) with `xp_total ≥ 100·L·(L−1)/2`. Reaching Level 2 needs 100 XP, Level 3 needs 300, Level 4 needs 600. |
 | `level_up_pending` | "Level N approval pending" | `eligible_level > level`. |

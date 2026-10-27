@@ -47,7 +47,7 @@ for dark), and components use the semantic tokens (`--canvas`, `--surface`,
 - Role-specific dashboards, navigation and data isolation per school and per assigned counselor
 - Student Center: academics, test scores, portfolio (projects, internships, research), activities, honors, certificates and documents
 - Profile Assessment challenges that suggest best-fit study directions
-- Roadmap missions and Tasks with deadlines, submissions and staff approval; approval-backed XP and level-ups
+- Roadmap missions and Tasks with deadlines, submissions and staff approval; roadmap-only XP and level-ups
 - Counselor Review queue and Student 360 view
 - University application tracker, College Search (filters, shortlist, scholarships) and a Programs catalog of national and international opportunities
 - Essay Lab: drafts, revision history, sharing and counselor feedback; optional AI checks under the plan's `essay_coach` feature

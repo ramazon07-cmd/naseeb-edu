@@ -5,7 +5,7 @@
 export function hasSubmission(kind, record) {
   if (!record) return false;
   if (kind === 'document') return Boolean(record.has_file || record.google_docs_url);
-  if (kind === 'task') return Boolean(String(record.student_response || '').trim() || record.has_submission_file || record.submission_url);
+  if (kind === 'task') return Boolean(String(record.student_response || '').trim() || record.has_submission_file || record.submission_url || (record.submission_essay_detail && Number(record.submission_essay_detail.word_count) > 0));
   return true;
 }
 

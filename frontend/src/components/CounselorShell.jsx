@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@fontsource-variable/roboto/wght.css';
 import '../pages/counselor-shell.css';
-import { Bell, Calendar, Check, CheckSquare, ChevronDown, ChevronsLeft, ChevronsRight, Ellipsis, Globe2, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, Moon, Pencil, Search, Settings, Sun, Users, UsersRound, X } from 'lucide-react';
+import { Bell, Calendar, Check, CheckSquare, ChevronDown, ChevronsLeft, ChevronsRight, Compass, Ellipsis, Globe2, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, Pencil, Search, Settings, Users, UsersRound, X } from 'lucide-react';
 import { LANGUAGE_OPTIONS, formatNumberLocale, t, tx } from '../i18n';
 import { fullName, initials } from '../lib/labels';
 import { counselorCounts } from '../lib/counselorCounts';
@@ -89,15 +89,9 @@ function LanguageMenu({ language, changeLanguage }) {
   </div>;
 }
 
-function ThemeButton({ theme, toggleTheme, className = 'cx-topbtn cx-topicon' }) {
-  const dark = theme === 'dark';
-  const label = dark ? t('Switch to light mode') : t('Switch to dark mode');
-  return <button type="button" className={className} aria-label={label} title={label} onClick={toggleTheme}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button>;
-}
-
-// On the phone the menu also carries language and theme, which the top bar
+// On the phone the menu also carries language, which the top bar
 // has no room for.
-function AccountMenu({ user, variant, theme, toggleTheme, language, changeLanguage, logout, openSupport, openAssistant, openAccountSettings, supportBadge, setAccountActionsHost, rail }) {
+function AccountMenu({ user, variant, theme, language, changeLanguage, logout, openSupport, openAssistant, openAccountSettings, supportBadge, setAccountActionsHost, rail }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const photo = useAccountPhoto(user);
@@ -106,7 +100,6 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
   const attachActions = useCallback((element) => {
     setAccountActionsHost(element ? { element, close: () => setOpen(false) } : null);
   }, [setAccountActionsHost]);
-  const dark = theme === 'dark';
   const name = fullName(user);
   const face = photo ? <img src={photo} alt="" /> : initials(name);
   const phone = variant === 'avatar';
@@ -124,7 +117,6 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
         <span>{t('Language')}</span>
         <div className="cx-segmented">{LANGUAGE_OPTIONS.map((option) => <button type="button" key={option.value} className={language === option.value ? 'active' : ''} aria-pressed={language === option.value} onClick={() => changeLanguage(option.value)}>{option.short}</button>)}</div>
       </div>}
-      {phone && <button type="button" role="menuitem" aria-pressed={dark} onClick={toggleTheme}>{dark ? <Sun size={17} /> : <Moon size={17} />}{dark ? t('Light mode') : t('Dark mode')}</button>}
       <button type="button" role="menuitem" onClick={() => { setOpen(false); openAccountSettings(); }}><Settings size={17} />{t('Account settings')}</button>
       {openAssistant && <button type="button" role="menuitem" onClick={() => { setOpen(false); openAssistant(); }}><span className="cx-bird" aria-hidden="true" />{t('Naseeb AI assistant')}</button>}
       {openSupport && <button type="button" role="menuitem" onClick={() => { setOpen(false); openSupport(); }}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <i className="cx-count">{formatNumberLocale(supportBadge)}</i>}</button>}
@@ -134,7 +126,7 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
   </div>;
 }
 
-export function CounselorLayout({ user, data, stats, bell, page, title, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, openNotifications, openSearch, openAssistant, openSupport, supportBadge, children }) {
+export function CounselorLayout({ user, data, stats, bell, page, title, setPage, setQuery, theme, language, changeLanguage, logout, openNotifications, openSearch, openAssistant, openSupport, supportBadge, children }) {
   const [drawer, setDrawer] = useState(false);
   const [rail, setRail] = useState(readRail);
   const [accountActionsHost, setAccountActionsHost] = useState(null);
@@ -158,7 +150,7 @@ export function CounselorLayout({ user, data, stats, bell, page, title, setPage,
     if (!canOpenPage('notifications', user)) { openNotifications(); return; }
     invalidatePagedLists(['notifications']); go('notifications');
   };
-  const account = { user, theme, toggleTheme, language, changeLanguage, logout, rail, openAssistant: canUseAssistant(user) ? openAssistant : null, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), openAccountSettings: () => go('account_settings'), supportBadge, setAccountActionsHost };
+  const account = { user, theme, language, changeLanguage, logout, rail, openAssistant: canUseAssistant(user) ? openAssistant : null, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), openAccountSettings: () => go('account_settings'), supportBadge, setAccountActionsHost };
   const item = (next, className = 'cx-nav-item', badges = true) => {
     const { label, icon: Icon, badge } = NAV[next];
     const active = page === next;
@@ -195,7 +187,6 @@ export function CounselorLayout({ user, data, stats, bell, page, title, setPage,
           <Search size={17} aria-hidden="true" /><span>{t('Search students and work…')}</span><kbd aria-hidden="true">{SEARCH_SHORTCUT}</kbd>
         </button>
         <LanguageMenu language={language} changeLanguage={changeLanguage} />
-        <ThemeButton theme={theme} toggleTheme={toggleTheme} />
         <button type="button" className="cx-topbtn cx-topicon cx-bell" onClick={openNotifications} aria-label={bellLabel} title={bellLabel}><Bell size={18} />{bellCount > 0 && <i className="cx-bell-dot" aria-hidden="true" />}</button>
         <AccountMenu {...account} variant="avatar" />
       </header>
