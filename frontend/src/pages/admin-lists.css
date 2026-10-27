@@ -1,0 +1,137 @@
+/* Superadmin lists (Schools, Counselors, Staff, Plans, Audit log): flat rows
+   divided by a line, like the catalog, instead of a grey card per item.
+   Scoped to .admin-list because .record is shared with student and counselor pages. */
+.admin-list {
+  gap: 0;
+  border-top: 1px solid var(--border);
+}
+
+.record-list.admin-list > .record,
+.card-grid.admin-list > .school-card,
+.card-grid.admin-list > .plan-card {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  transition: background 160ms ease;
+}
+
+.record-list.admin-list > .record:hover,
+.record-list.admin-list > .record:focus-within,
+.card-grid.admin-list > .school-card:hover,
+.card-grid.admin-list > .school-card:focus-within,
+.card-grid.admin-list > .plan-card:hover,
+.card-grid.admin-list > .plan-card:focus-within {
+  background: var(--surface-soft);
+}
+
+.admin-list .record-main {
+  min-width: 0;
+  display: grid;
+  justify-content: stretch;
+  gap: var(--space-1);
+}
+
+.admin-list .record h3,
+.admin-list .school-card h3,
+.admin-list .plan-card h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.admin-list .record p,
+.admin-list .school-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.record-list.admin-list > .record > .record-actions,
+.card-grid.admin-list .school-card-actions {
+  grid-column: auto;
+  margin-top: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: var(--space-1-5);
+}
+
+/* Schools: the building icon becomes a small tile instead of a floating glyph. */
+.admin-list .school-number {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-base);
+  background: var(--surface-inset);
+  color: var(--accent-deep);
+}
+
+.admin-list .school-card > div:not(.school-number):not(.school-card-actions) {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.admin-list .workspace-plan {
+  margin-top: var(--space-1);
+}
+
+/* Counts read as quiet facts; only the numbers carry weight. */
+.admin-list .school-card > div > span,
+.admin-list .seat-usage span {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.admin-list .seat-usage span:not(.full):not(.over) b {
+  color: var(--text);
+}
+
+/* Plans: one column; the facts sit flat on the row. */
+.card-grid.admin-list > .plan-card {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.admin-list .plan-facts {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+/* Audit log: the icon lines up with the title; expandable details stay on the left. */
+.audit-list.admin-list > .record {
+  align-items: start;
+}
+
+.audit-list.admin-list > .record > svg {
+  margin-top: 2px;
+}
+
+@media (max-width: 560px) {
+  .record-list.admin-list > .record,
+  .card-grid.admin-list > .school-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    padding: var(--space-3);
+  }
+
+  .record-list.admin-list > .record > .record-actions,
+  .card-grid.admin-list .school-card-actions {
+    grid-column: 2 / -1;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding-top: 0;
+    border-top: 0;
+  }
+}
