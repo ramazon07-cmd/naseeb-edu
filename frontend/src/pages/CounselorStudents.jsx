@@ -247,9 +247,9 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
   return <div className="cx-page cx-students cs-page">
     <CxHead title={t("Students")} subtitle={t("Your students and what they need from you")}>
       {selecting && <button type="button" className="cx-btn" onClick={stopSelecting}>{t("Cancel")}</button>}
-      {!readOnly && <button type="button" className="cx-btn" disabled={selecting && !selected.size} onClick={() => (selecting ? setAssigning(true) : setSelecting(true))}>
+      <button type="button" className="cx-btn" disabled={selecting && !selected.size} onClick={() => (selecting ? setAssigning(true) : setSelecting(true))}>
         <Plus size={15} aria-hidden="true" />{selecting && selected.size ? tp('Assign task to {n} student|Assign task to {n} students', selected.size, { n: selected.size }) : t("Assign task to several")}
-      </button>}
+      </button>
       {/* "Add student" slot: the page's onAddStudent decides what adding a student means. */}
       {!readOnly && <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>}
     </CxHead>
@@ -316,7 +316,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
     </CxAccountActions>}
 
     {preview && <StudentQuickPanel user={user} student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
-    {!readOnly && assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
+    {assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
     {!readOnly && adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
     {!readOnly && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
   </div>;
@@ -570,6 +570,7 @@ function AssistantStudent360({ student, user, onBack, onDirect, notify, reload, 
   const [tab, setTab] = useState('overview');
   const [task, setTask] = useState(null);
   const [document, setDocument] = useState(null);
+  const [assigning, setAssigning] = useState(false);
   const loaded = useStudentRecords(student.id, true, studentRecordEndpoints(user));
   const { records } = loaded;
   const reasons = studentReasons(student, new Date());
@@ -585,6 +586,7 @@ function AssistantStudent360({ student, user, onBack, onDirect, notify, reload, 
   return <div className="cx-page cx-student-360">
     <Student360Header student={student} onBack={onBack}>
       <button type="button" className="cx-btn" onClick={() => onDirect(student.user_detail?.id)}><MessageCircle size={15} aria-hidden="true" />{t('Message')}</button>
+      <button type="button" className="cx-btn primary" onClick={() => setAssigning(true)}><Plus size={15} aria-hidden="true" />{t("Assign task")}</button>
     </Student360Header>
     <CxTabs items={ASSISTANT_STUDENT_TABS} active={tab} onChange={setTab} label={t('Student sections')} />
     {loaded.error && <div className="alert error" role="alert">{loaded.error}</div>}
@@ -621,6 +623,7 @@ function AssistantStudent360({ student, user, onBack, onDirect, notify, reload, 
     </RecordCard>)}</div>}
     {task && <TaskSubmissionModal task={task} onClose={() => setTask(null)} notify={notify} onSendBack={task.status === 'submitted' ? sendBack : null} />}
     {document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}
+    {assigning && <BulkTaskForm studentIds={[student.id]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); loaded.reload(['tasks']); invalidatePagedLists(['tasks', 'students']); }} notify={notify} />}
   </div>;
 }
 

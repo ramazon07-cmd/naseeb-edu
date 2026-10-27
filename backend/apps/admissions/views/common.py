@@ -250,8 +250,11 @@ class StaffControlledWorkPermission(permissions.BasePermission):
         if user.is_task_manager:
             return user.role != User.Role.TEACHER or bool(user.school_id)
         if user.is_assistant:
-            # They review and send work back; approving (XP, levels) stays with the counselor.
-            return request.method in permissions.SAFE_METHODS or view.action == 'send_back'
+            # They assign tasks, review and send work back; approving (XP, levels) stays with the counselor.
+            return (
+                request.method in permissions.SAFE_METHODS or view.action == 'send_back'
+                or (view.basename == 'tasks' and view.action in {'create', 'bulk', 'update', 'partial_update', 'destroy'})
+            )
         if user.is_organization:
             return view.basename in {'tasks', 'roadmap-missions'} and request.method in permissions.SAFE_METHODS
         if user.role == User.Role.STUDENT:
@@ -270,8 +273,12 @@ class StaffControlledWorkPermission(permissions.BasePermission):
         if user.role == User.Role.TEACHER:
             return bool(user.school_id and student.school_id == user.school_id)
         if user.is_assistant:
+            # Editing and deleting stay limited to the tasks they assigned, until the counselor approves them.
+            own_open_task = bool(
+                view.basename == 'tasks' and obj.assigned_by_id == user.id and obj.status != obj.Status.APPROVED
+            )
             return bool(
-                (request.method in permissions.SAFE_METHODS or view.action == 'send_back')
+                (request.method in permissions.SAFE_METHODS or view.action == 'send_back' or own_open_task)
                 and visible_students(user).filter(pk=student.pk).exists()
             )
         if user.is_organization:

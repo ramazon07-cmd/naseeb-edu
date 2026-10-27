@@ -444,7 +444,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     )
     def temporary_credential(self, request, pk=None):
         target = self.get_object()
-        if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION, User.Role.COUNSELOR, User.Role.ADMIN}:
+        if target.role not in {User.Role.STUDENT, User.Role.ORGANIZATION, User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.ADMIN}:
             return Response({
                 'detail': 'Temporary credentials are only available for student, school, counselor and staff accounts.',
                 'code': 'credential_role_unsupported',

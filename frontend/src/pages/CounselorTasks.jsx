@@ -29,7 +29,9 @@ const VIEWS = {
 
 function TaskLine({ task, today, user, onOpen, onEdit, onDelete }) {
   const status = taskStatus(task, today);
-  const editable = isTaskManager(user) && task.status !== 'approved' && editableFields(task, RESOURCE_FIELDS.tasks).length > 0;
+  // An assistant manages only the tasks they assigned, until they are approved.
+  const ownsTask = user.role === 'assistant' && task.assigned_by === user.id && task.status !== 'approved';
+  const editable = (isTaskManager(user) || ownsTask) && task.status !== 'approved' && editableFields(task, RESOURCE_FIELDS.tasks).length > 0;
   const detail = joinParts(
     task.due_date && tx`Due ${dateText(task.due_date)}`,
     task.priority && tx`Priority: ${label(task.priority)}`,
@@ -41,7 +43,7 @@ function TaskLine({ task, today, user, onOpen, onEdit, onDelete }) {
     <CxTag tone={TASK_STATUS_TONE[status] || 'quiet'}>{label(status)}</CxTag>
     <div className="cg-actions">
       {editable && <button type="button" className="icon-button" onClick={() => onEdit(task)} aria-label={tx`Edit ${task.title}`}><Pencil size={15} /></button>}
-      {isTaskManager(user) && <button type="button" className="icon-button danger" onClick={() => onDelete(task)} aria-label={tx`Delete ${task.title}`}><Trash2 size={15} /></button>}
+      {(isTaskManager(user) || ownsTask) && <button type="button" className="icon-button danger" onClick={() => onDelete(task)} aria-label={tx`Delete ${task.title}`}><Trash2 size={15} /></button>}
     </div>
   </div>;
 }

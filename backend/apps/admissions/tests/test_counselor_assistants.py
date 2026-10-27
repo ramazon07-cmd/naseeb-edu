@@ -275,14 +275,44 @@ class AssistantScopeTests(AssistantBase):
         self.assertEqual(self.client.get(f'/api/tasks/{other.pk}/').status_code, 404)
         self.assertEqual(self.client.post(f'/api/tasks/{own.pk}/approve/', {}, format='json').status_code, 403)
         self.assertEqual(self.client.patch(f'/api/tasks/{own.pk}/', {'status': 'approved'}, format='json').status_code, 403)
+        # Assistants assign tasks to their own students only, and never as already approved.
         created = self.client.post('/api/tasks/', {'student': self.mine.pk, 'title': 'New', 'due_date': '2027-02-01'}, format='json')
-        self.assertEqual(created.status_code, 403)
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(Task.objects.get(pk=created.data['id']).assigned_by, self.assistant)
+        bulk = self.client.post('/api/tasks/bulk/', {'students': [self.mine.pk], 'title': 'Bulk', 'due_date': '2027-02-01'}, format='json')
+        self.assertEqual(bulk.status_code, 201, bulk.data)
+        for student in (self.also_mine, self.colleagues):
+            with self.subTest(student=student.user.username):
+                self.assertEqual(self.client.post('/api/tasks/', {'student': student.pk, 'title': 'No', 'due_date': '2027-02-01'}, format='json').status_code, 400)
+                self.assertEqual(self.client.post('/api/tasks/bulk/', {'students': [student.pk], 'title': 'No', 'due_date': '2027-02-01'}, format='json').status_code, 400)
+        approved = self.client.post('/api/tasks/', {'student': self.mine.pk, 'title': 'Done', 'due_date': '2027-02-01', 'status': 'approved'}, format='json')
+        self.assertEqual(approved.status_code, 400)
+        self.assertEqual(self.client.post('/api/roadmap-missions/', {'student': self.mine.pk, 'title': 'No'}, format='json').status_code, 403)
         self.assertEqual(self.client.post(f'/api/tasks/{other.pk}/send-back/', {'note': 'Add dates.'}, format='json').status_code, 404)
 
         sent = self.client.post(f'/api/tasks/{own.pk}/send-back/', {'note': 'Add dates.'}, format='json')
         self.assertEqual(sent.status_code, 200, sent.data)
         own.refresh_from_db()
         self.assertNotEqual(own.status, Task.Status.APPROVED)
+
+    def test_assistant_edits_and_deletes_only_their_own_open_tasks(self):
+        def make(by, **extra):
+            return Task.objects.create(student=self.mine, assigned_by=by, title='Essay plan', due_date=date(2027, 1, 1), **extra)
+        own, counselors, approved = make(self.assistant), make(self.counselor), make(self.assistant, status=Task.Status.APPROVED)
+        edited = self.client.patch(f'/api/tasks/{own.pk}/', {'title': 'Essay outline'}, format='json')
+        self.assertEqual(edited.status_code, 200, edited.data)
+        own.refresh_from_db()
+        self.assertEqual(own.title, 'Essay outline')
+        for task in (counselors, approved):
+            with self.subTest(task=task.pk):
+                self.assertEqual(self.client.patch(f'/api/tasks/{task.pk}/', {'title': 'x'}, format='json').status_code, 403)
+                self.assertEqual(self.client.delete(f'/api/tasks/{task.pk}/').status_code, 403)
+        self.assertEqual(self.client.delete(f'/api/tasks/{own.pk}/').status_code, 204)
+        self.assertFalse(Task.objects.filter(pk=own.pk).exists())
+        # A student moved away takes their tasks out of the assistant's reach.
+        moved = make(self.assistant)
+        StudentProfile.objects.filter(pk=self.mine.pk).update(assigned_counselor=self.colleague)
+        self.assertEqual(self.client.delete(f'/api/tasks/{moved.pk}/').status_code, 404)
 
     def test_a_student_moved_to_another_counselor_drops_out(self):
         StudentProfile.objects.filter(pk=self.mine.pk).update(assigned_counselor=self.colleague)
