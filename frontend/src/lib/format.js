@@ -58,6 +58,9 @@ export const money = (value) => formatCurrencyLocale(value);
 
 // Joins the parts of a meta line with " · ", skipping missing values so a line
 // never starts, ends or doubles up on a separator.
+// Students created without an email get a placeholder on the reserved .invalid domain; never show it.
+export const contactEmail = (email) => (/\.invalid$/i.test(email || '') ? '' : email || '');
+
 export const joinParts = (...parts) => parts.flat().filter((part) => {
   if (part === null || part === undefined || part === false) return false;
   const text = String(part).trim();
@@ -96,10 +99,11 @@ export const gradeText = (grade) => {
 };
 
 // The classes a student can pick, in the order the profile form lists them.
-export const GRADES = ['8', '9', '10', '11', 'gap'];
+// Gap year is no longer offered; gradeText still labels students who have it.
+export const GRADES = ['5', '6', '7', '8', '9', '10', '11'];
 
-// The classes the students filters offer for now; a student can still pick any of GRADES.
-export const FILTER_GRADES = ['9', '10', '11'];
+// The students filters offer every class a student can pick.
+export const FILTER_GRADES = GRADES;
 
 // A counselor's list: a class the student has not picked yet says so, instead of leaving a blank.
 export const gradeOrPending = (grade) => gradeText(grade) || t('Class not chosen yet');

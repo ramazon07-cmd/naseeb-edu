@@ -435,7 +435,7 @@ class PasswordChangeSerializer(serializers.Serializer):
     new_password = serializers.CharField(write_only=True, validators=[validate_password])
     confirm_password = serializers.CharField(write_only=True)
     # A student also picks their class here: the first sign-in is the one step every student passes.
-    grade = serializers.ChoiceField(choices=StudentProfile.Grade.choices, required=False)
+    grade = serializers.ChoiceField(choices=StudentProfile.PICKABLE_GRADES, required=False)
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['confirm_password']:

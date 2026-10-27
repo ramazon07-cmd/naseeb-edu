@@ -282,6 +282,12 @@ export function TestScoresFields(props) {
 const band = (value) => (value == null || value === '' ? null : formatNumberLocale(Number(value), { minimumFractionDigits: 1 }));
 const STATUS_SUMMARY = { not_taken: 'Not taken yet', planning: 'Planning to take', scheduled: 'Test date booked', not_required: 'Not required' };
 
+// Label–value rows, so every number and date says what it is.
+function Facts({ rows }) {
+  const shown = rows.filter(([, value]) => value != null && value !== '');
+  return shown.length ? <dl className="test-score-parts test-score-facts">{shown.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : null;
+}
+
 function statusLine(status, date) {
   const text = t(STATUS_SUMMARY[status] || 'Not taken yet');
   return date ? `${text} · ${dateText(date)}` : text;
@@ -292,22 +298,30 @@ export function TestScoreSummary({ student }) {
   const ieltsTaken = student.ielts_score != null;
   const satTaken = student.sat_score != null;
   const hasIeltsSections = IELTS_SECTIONS.every(([key]) => student[key] != null);
+  const retake = student.ielts_result_type === 'one_skill_retake';
   const subjects = student.application_profile?.subjects || [];
   const certificates = student.application_profile?.certificates || [];
   return <div className="test-score-summary">
     <article>
-      <header><span>IELTS</span><b>{ieltsTaken ? band(student.ielts_score) : '—'}</b></header>
+      <header><span>IELTS</span><span className="test-score-total">{ieltsTaken && <small>{t('Overall band')}</small>}<b>{ieltsTaken ? band(student.ielts_score) : '—'}</b></span></header>
       {ieltsTaken ? <>
         {hasIeltsSections && <dl className="test-score-parts">{IELTS_SECTIONS.map(([key, label]) => <div key={key}><dt>{t(label)}</dt><dd>{band(student[key])}</dd></div>)}</dl>}
-        <p>{[student.ielts_test_date && dateText(student.ielts_test_date), student.ielts_attempts && tx`Attempts: ${student.ielts_attempts}`].filter(Boolean).join(' · ') || t('Overall band only')}</p>
-        {student.ielts_result_type && <p className="test-score-note">{t(IELTS_RESULT_TYPES.find(([value]) => value === student.ielts_result_type)?.[1] || '')}{student.ielts_result_type === 'one_skill_retake' && <> · {t(IELTS_SECTIONS.find(([key]) => key === `ielts_${student.ielts_retake_skill}`)?.[1] || '')}{student.ielts_retake_date && <> · {dateText(student.ielts_retake_date)}</>}</>}</p>}
+        {!hasIeltsSections && <p>{t('Overall band only')}</p>}
+        {student.ielts_result_type === 'full_retake' && <p className="test-score-note">{t('Full test retake')}</p>}
+        <Facts rows={[
+          [retake ? t('Original full test date') : t('Test date'), student.ielts_test_date && dateText(student.ielts_test_date)],
+          [t('Retaken section'), retake && t(IELTS_SECTIONS.find(([key]) => key === `ielts_${student.ielts_retake_skill}`)?.[1] || '')],
+          [t('One Skill Retake date'), retake && student.ielts_retake_date && dateText(student.ielts_retake_date)],
+          [t('Attempts'), student.ielts_attempts && formatNumberLocale(student.ielts_attempts)],
+        ]} />
       </> : <p>{statusLine(student.ielts_status, student.ielts_test_date)}</p>}
     </article>
     <article>
-      <header><span>SAT</span><b>{satTaken ? formatNumberLocale(student.sat_score, { useGrouping: false }) : '—'}</b></header>
+      <header><span>SAT</span><span className="test-score-total">{satTaken && <small>{t('Total')}</small>}<b>{satTaken ? formatNumberLocale(student.sat_score, { useGrouping: false }) : '—'}</b></span></header>
       {satTaken ? <>
         {student.sat_reading != null && <dl className="test-score-parts"><div><dt>{t('Reading and Writing')}</dt><dd>{student.sat_reading}</dd></div><div><dt>{t('Math')}</dt><dd>{student.sat_math}</dd></div></dl>}
-        <p>{[student.sat_test_date && dateText(student.sat_test_date), student.sat_attempts && tx`Attempts: ${student.sat_attempts}`].filter(Boolean).join(' · ') || t('Total only')}</p>
+        {student.sat_reading == null && <p>{t('Total only')}</p>}
+        <Facts rows={[[t('Test date'), student.sat_test_date && dateText(student.sat_test_date)], [t('Attempts'), student.sat_attempts && formatNumberLocale(student.sat_attempts)]]} />
         {student.sat_superscore === true && <p className="test-score-note">{tx`Sends a superscore: Reading and Writing ${student.sat_superscore_reading}, Math ${student.sat_superscore_math}`}</p>}
         {student.sat_superscore === false && <p className="test-score-note">{t('Sends scores from one test day')}</p>}
       </> : <p>{statusLine(student.sat_status, student.sat_test_date)}</p>}

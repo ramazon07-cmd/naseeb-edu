@@ -83,7 +83,7 @@ export function CounselorDashboardPreview() {
   return (
     <ProductChrome label="Counselor Students page preview: who needs attention, late work, targets and status.">
       <div className="landing-product-layout landing-counselor-ui">
-        <PreviewSidebar items={COUNSELOR_NAV} active="Students" locked={['Roadmap']} initials="MC" name="Madina" role="School Counselor" />
+        <PreviewSidebar items={COUNSELOR_NAV} active="Students" locked={['Roadmap']} initials="FC" name="Firdavs" role="School Counselor" />
         <div className="landing-preview-main">
           <PreviewToolbar title="Students" />
           <div className="landing-preview-page-head">

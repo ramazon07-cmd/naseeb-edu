@@ -104,11 +104,18 @@ class StudentProfile(TimeStampedModel):
         GUARDIAN = 'guardian', 'Guardian'
 
     class Grade(models.TextChoices):
+        GRADE_5 = '5', '5-sinf'
+        GRADE_6 = '6', '6-sinf'
+        GRADE_7 = '7', '7-sinf'
         GRADE_8 = '8', '8-sinf'
         GRADE_9 = '9', '9-sinf'
         GRADE_10 = '10', '10-sinf'
         GRADE_11 = '11', '11-sinf'
+        # No longer offered to pick; kept so existing gap-year students stay valid.
         GAP_YEAR = 'gap', 'Gap year'
+
+    # What a student or staff member may choose today (gap year is no longer offered).
+    PICKABLE_GRADES = ['5', '6', '7', '8', '9', '10', '11']
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='student_profile')
     assigned_counselor = models.ForeignKey(

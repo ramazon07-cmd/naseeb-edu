@@ -12517,11 +12517,28 @@ a:focus-visible {
   color: var(--text);
 }
 
+/* One label–value row per line: two columns side by side read as one run of words. */
 .test-score-parts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 4px 12px;
-  margin: 8px 0 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  margin: 10px 0 0;
+}
+
+.test-score-facts {
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.test-score-total {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.test-score-total small {
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 
 .test-score-parts div {
@@ -16831,7 +16848,8 @@ button.cx-search {
 .cx-week-row {
   min-height: 61px;
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr) auto auto;
+  /* The name keeps a readable width; three actions wrap instead of squeezing it to nothing. */
+  grid-template-columns: 86px minmax(120px, 1fr) auto auto;
   column-gap: 14px;
   align-items: center;
   border-bottom: 1px solid var(--cx-line);
@@ -16862,6 +16880,7 @@ button.cx-search {
 .cx-week-actions {
   min-width: 66px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }

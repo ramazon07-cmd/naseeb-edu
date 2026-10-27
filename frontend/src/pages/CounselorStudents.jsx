@@ -68,7 +68,7 @@ const PAGE_SIZE = 25;
 const VIEW_KEY = 'naseeb-counselor-students-view';
 const STATUS_PILLS = [['all', 'All'], ['need_you', 'Need you'], ['late', 'Late work'], ['missing_documents', 'Missing documents'], ['quiet', 'Quiet for 14+ days'], ['on_track', 'On track']];
 const SORTS = [['need_you', 'Needs you first'], ['late', 'Most late work'], ['name', 'Name A–Z']];
-const COUNTRIES =['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
+const COUNTRIES =['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China', 'Europe', 'Other'];
 export const STUDENT_LIST_DEFAULTS = Object.freeze({ status: 'all', grade: '', country: '', ordering: 'need_you', page: 1, search: '' });
 
 function readView() {

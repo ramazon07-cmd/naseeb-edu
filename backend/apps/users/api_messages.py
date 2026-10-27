@@ -888,9 +888,21 @@ EXACT = {
         'uz': 'Yo‘l xaritasi shablonlarini faqat platforma administratori o‘chira oladi.',
         'ru': 'Удалять шаблоны планов может только администратор платформы.',
     },
-    'Only a product admin can deactivate a student.': {
-        'uz': 'O‘quvchini faqat platforma administratori faolsizlantira oladi.',
-        'ru': 'Деактивировать ученика может только администратор платформы.',
+    'Choose an end time after the start time.': {
+        'uz': 'Tugash vaqtini boshlanish vaqtidan keyin tanlang.',
+        'ru': 'Выберите время окончания позже времени начала.',
+    },
+    'That adds too many times at once. Choose fewer days or a shorter range.': {
+        'uz': 'Bir martada juda ko‘p vaqt qo‘shilyapti. Kamroq kun yoki qisqaroq oraliq tanlang.',
+        'ru': 'Слишком много времени за один раз. Выберите меньше дней или короче промежуток.',
+    },
+    'Cancel this meeting first. Only closed or past meetings can be deleted.': {
+        'uz': 'Avval uchrashuvni bekor qiling. Faqat yopilgan yoki o‘tib ketgan uchrashuvlarni o‘chirish mumkin.',
+        'ru': 'Сначала отмените встречу. Удалять можно только закрытые или прошедшие встречи.',
+    },
+    'Only the school or a product admin can deactivate a student.': {
+        'uz': 'O‘quvchini faqat maktab yoki platforma administratori faolsizlantira oladi.',
+        'ru': 'Деактивировать ученика может только школа или администратор платформы.',
     },
     'Only a product admin can edit counselor roadmaps.': {
         'uz': 'Maslahatchi yo‘l xaritalarini faqat platforma administratori tahrirlay oladi.',

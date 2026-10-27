@@ -1,5 +1,5 @@
 import { t, tp, formatNumberLocale, tx, formatPercentLocale } from '../i18n';
-import { testScoreCaption } from '../lib/format';
+import { contactEmail, testScoreCaption } from '../lib/format';
 import { Star, CheckCircle2, Eye, Pencil, UserX } from 'lucide-react';
 import { Badge, Panel, Empty } from './ui';
 import { fullName, initials } from '../lib/labels';
@@ -7,6 +7,9 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { createBlobUrlCache } from '../lib/blobUrlCache';
 import { TestScoreSummary } from './testScores';
+import { CxAvatar, CxTag } from './counselorUi';
+import { splitList } from '../lib/profileSections';
+import '../pages/counselor-students.css';
 
 export function LevelProgress({ student }) {
   if (!student) return null;
@@ -35,7 +38,7 @@ export function Record({ title, meta, description, badge, extraBadge = null, att
 
 export function ProfileCard({ student }) {
   if (!student) return <Panel title={t("Profile")}><Empty text={t("Student profile not found.")} /></Panel>;
-  return <Panel title={t("Profile overview")} className="profile-card" ><div className="profile-identity"><StudentAvatar student={student} className="large" /><div><h3>{fullName(student.user_detail)}</h3><p>{student.user_detail?.email}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : student.grade ? tx`Grade ${student.grade}` : null} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div><h3 className="test-score-heading">{t("Test scores")}</h3><TestScoreSummary student={student} /></Panel>;
+  return <Panel title={t("Profile overview")} className="profile-card" ><div className="profile-identity"><StudentAvatar student={student} className="large" /><div><h3>{fullName(student.user_detail)}</h3><p>{contactEmail(student.user_detail?.email)}</p></div></div><div className="detail-grid"><Detail label={t("School")} value={student.school_name} /><Detail label={t("Grade")} value={student.grade === 'gap' ? t("Gap year") : student.grade ? tx`Grade ${student.grade}` : null} /><Detail label={t("Counselor")} value={student.counselor_name} /><Detail label={t("Major")} value={student.target_major} /><Detail label={t("GPA")} value={student.gpa} /><Detail label={t("Countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /></div><h3 className="test-score-heading">{t("Test scores")}</h3><TestScoreSummary student={student} /></Panel>;
 }
 
 // Shared by every avatar on screen; entries are keyed by photo version, so an
@@ -83,5 +86,17 @@ export function StudentTable({ data, students = null, onView, onEdit, onDeactiva
   const rows = students ?? data.students.filter((student) => fullName(student.user_detail).toLowerCase().includes(query.toLowerCase()));
   if (!rows.length) return <Empty text={t("No students found.")} />;
   const hasActions = Boolean(onView || onApproveLevel || !readOnly && (onEdit || onDeactivate));
-  return <div className="table-wrap"><table><thead><tr><th>{t("Student")}</th><th>{t("School")}</th><th>{t("Target")}</th><th>{t("Scores")}</th><th>{t("Level")}</th><th>{t("Progress")}</th>{hasActions && <th />}</tr></thead><tbody>{rows.map((student) => <tr key={student.id} className={onView ? "clickable-row" : ''} onDoubleClick={() => onView?.(student)}><td><div className="person"><span className="avatar">{initials(fullName(student.user_detail))}</span><div><b>{fullName(student.user_detail)}</b><small>{student.user_detail?.email}</small>{student.is_at_risk && <span className="risk-note">{t("Needs attention")}</span>}</div></div></td><td>{student.school_name || '—'}</td><td className="student-target-cell"><b>{student.target_major || '—'}</b><small>{student.target_countries || '—'}</small></td><td>{student.gpa || testScoreCaption(student) ? <>{student.gpa ? `${t("GPA")} ${student.gpa}` : ''}<small>{testScoreCaption(student)}</small></> : <small>{t("No scores yet")}</small>}</td><td><b>{t("Level")} {formatNumberLocale(student.level ?? 1)}</b><small>{formatNumberLocale(student.xp_total ?? 0)} {t("XP")}</small>{student.level_up_pending && <span className="risk-note">{tx`Level ${student.eligible_level} approval pending`}</span>}</td><td><div className="student-progress-stack">{[['Tasks', student.task_progress_percent], ['Roadmap', student.roadmap_progress_percent], ['Overall', student.journey_progress_percent]].map(([title, value]) => <div key={title}><span>{t(title)}</span><div className="progress"><i style={{ width: `${value || 0}%` }} /></div><b>{formatPercentLocale(value || 0)}</b></div>)}</div></td>{hasActions && <td><div className="row-actions">{onApproveLevel && student.level_up_pending && <button className="button quiet small" onClick={() => onApproveLevel(student)}><CheckCircle2 size={15} /> {t("Approve level")}</button>}{onView && <button className="icon-button" onClick={() => onView(student)} title={t("Full profile")}><Eye size={16} /></button>}{!readOnly && onEdit && <button className="icon-button" onClick={() => onEdit(student)} title={t("Edit")}><Pencil size={16} /></button>}{!readOnly && onDeactivate && <button className="icon-button danger" onClick={() => onDeactivate(student)} title={t("Deactivate student")} aria-label={t("Deactivate student")}><UserX size={16} /></button>}</div></td>}</tr>)}</tbody></table></div>;
+  // Buttons inside a clickable row must not also open the profile.
+  const act = (handler, student) => (event) => { event.stopPropagation(); handler(student); };
+  return <div className="cs-table-card student-table-card"><table className="cs-table student-table"><thead><tr><th scope="col">{t("Student")}</th><th scope="col">{t("School")}</th><th scope="col">{t("Target")}</th><th scope="col">{t("Scores")}</th>{hasActions && <th scope="col"><span className="sr-only">{t("Actions")}</span></th>}</tr></thead><tbody>{rows.map((student) => {
+    const name = fullName(student.user_detail);
+    const email = contactEmail(student.user_detail?.email);
+    return <tr key={student.id} className={onView ? '' : 'cs-static'} onClick={onView ? () => onView(student) : undefined}>
+      <td><div className="cx-person"><CxAvatar name={name} /><span className="cx-row-copy">{onView ? <button type="button" className="cx-name-link" onClick={act(onView, student)}>{name}</button> : <b>{name}</b>}{email && <small>{email}</small>}{student.is_at_risk && <span><CxTag tone="late" small>{t("Needs attention")}</CxTag></span>}</span></div></td>
+      <td data-label={t("School")}>{student.school_name || <span className="cx-faint">—</span>}</td>
+      <td data-label={t("Target")} className="cs-col-target"><span className="cx-row-copy">{student.target_major ? <b>{student.target_major}</b> : <span className="cx-faint">—</span>}{student.target_countries && <small>{splitList(student.target_countries).map((country) => t(country)).join(', ')}</small>}</span></td>
+      <td data-label={t("Scores")} className="cs-col-nowrap">{student.gpa || testScoreCaption(student) ? <span className="cx-row-copy">{student.gpa && <b>{t("GPA")} {student.gpa}</b>}<small>{testScoreCaption(student)}</small></span> : <span className="cx-faint">{t("No scores yet")}</span>}</td>
+      {hasActions && <td className="cs-col-edit"><div className="row-actions">{onApproveLevel && student.level_up_pending && <button type="button" className="button quiet small" onClick={act(onApproveLevel, student)}><CheckCircle2 size={15} /> {t("Approve level")}</button>}{onView && <button type="button" className="icon-button" onClick={act(onView, student)} title={t("Full profile")} aria-label={t("Full profile")}><Eye size={16} /></button>}{!readOnly && onEdit && <button type="button" className="icon-button" onClick={act(onEdit, student)} title={t("Edit")} aria-label={tx`Edit ${name}`}><Pencil size={16} /></button>}{!readOnly && onDeactivate && <button type="button" className="icon-button danger" onClick={act(onDeactivate, student)} title={t("Deactivate student")} aria-label={tx`Deactivate ${name}`}><UserX size={16} /></button>}</div></td>}
+    </tr>;
+  })}</tbody></table></div>;
 }

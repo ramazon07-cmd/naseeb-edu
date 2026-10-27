@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, Clock3, LogIn, UserPlus } from 'lucide-react';
 import { api } from '../api';
 import { t } from '../i18n';
-import { gradeText } from '../lib/format';
+import { GRADES, gradeText } from '../lib/format';
 import { initials } from '../lib/labels';
 import { BrandLockup, LanguageSelector } from '../components/brand';
 import { Field } from '../components/forms';
 import '../invites.css';
 
-const GRADES = ['8', '9', '10', '11', 'gap'];
 
 function Card({ theme, language, changeLanguage, children, footer }) {
   return <main className="password-change-page join-page"><section className="password-change-card">

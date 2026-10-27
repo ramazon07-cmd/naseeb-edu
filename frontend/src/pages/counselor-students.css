@@ -188,6 +188,11 @@
   vertical-align: middle;
 }
 
+/* Edit and deactivate sit side by side. */
+.cs-table td.cs-col-edit {
+  white-space: nowrap;
+}
+
 .cs-table th:first-child,
 .cs-table td:first-child {
   padding-left: 18px;
@@ -195,6 +200,11 @@
 
 .cs-table tbody tr {
   cursor: pointer;
+}
+
+/* Read-only rows (dashboards) open nothing. */
+.cs-table tbody tr.cs-static {
+  cursor: default;
 }
 
 .cs-table tbody tr:last-child td {
@@ -218,6 +228,27 @@
 
 .cs-table .cs-col-grade {
   width: 1%;
+}
+
+/* The staff table carries more columns: names keep a usable width, short facts never break mid-phrase. */
+.student-table .cx-person {
+  min-width: 190px;
+}
+
+.student-table .cs-col-nowrap .cx-row-copy b,
+.student-table .cs-col-nowrap .cx-row-copy small {
+  overflow: visible;
+  white-space: nowrap;
+}
+
+/* A list of countries wraps instead of being cut off. */
+.student-table .cs-col-target small {
+  white-space: normal;
+}
+
+/* A major breaks between words only, so the column never squeezes "Economics" into "Econo mics". */
+.student-table .cs-col-target b {
+  overflow-wrap: break-word;
 }
 
 /* "Not chosen yet" is an empty slot, not a problem: a dashed outline and no status colour.

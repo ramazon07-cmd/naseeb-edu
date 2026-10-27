@@ -77,7 +77,7 @@ class StudentOnboardingTests(APITestCase):
 
     def test_login_creation_ignores_student_details(self):
         self.client.force_authenticate(self.counselor)
-        response = self.client.post('/api/students/quick-create/', {'name': 'New Student', 'password': 'ZebRa!42', 'gpa': 5, 'countries': 'US'}, format='json')
+        response = self.client.post('/api/students/quick-create/', {'email': 'student@example.com', 'phone': '+998901234567', 'name': 'New Student', 'password': 'ZebRa!42', 'gpa': 5, 'countries': 'US'}, format='json')
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data['school'], self.school.pk)
         self.assertIsNone(response.data['gpa'])
@@ -87,7 +87,7 @@ class StudentOnboardingTests(APITestCase):
     def test_login_creation_leaves_the_class_for_the_student_to_pick(self):
         self.client.force_authenticate(self.counselor)
         # A class sent by the counselor is not read: the student owns this answer.
-        response = self.client.post('/api/students/quick-create/', {'name': 'Class Pending', 'password': 'ZebRa!42', 'grade': '11'}, format='json')
+        response = self.client.post('/api/students/quick-create/', {'email': 'student@example.com', 'phone': '+998901234567', 'name': 'Class Pending', 'password': 'ZebRa!42', 'grade': '11'}, format='json')
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data['grade'], '')
         rows = self.client.get('/api/students/').data['results']

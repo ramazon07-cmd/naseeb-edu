@@ -62,6 +62,8 @@ class JourneyBase(APITestCase):
     def create_student(self, name, school=None):
         self.as_user(self.admin)
         return self.post('/api/students/quick-create/', {
+            'email': 'student@example.com',
+            'phone': '+998901234567',
             'name': name, 'password': PASSWORD, 'school': (school or self.school).id,
         }, expected=201)
 

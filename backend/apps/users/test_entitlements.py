@@ -98,6 +98,8 @@ class SeatLimitTests(APITestCase):
 
     def quick_create(self, name):
         return self.client.post('/api/students/quick-create/', {
+            'email': 'student@example.com',
+            'phone': '+998901234567',
             'name': name, 'password': 'StrongPass123!',
         }, format='json')
 
@@ -178,6 +180,8 @@ class SeatLimitTests(APITestCase):
         )
         self.client.force_authenticate(self.admin)
         response = self.client.post('/api/students/quick-create/', {
+            'email': 'student@example.com',
+            'phone': '+998901234567',
             'name': 'Blocked Student', 'password': 'StrongPass123!', 'school': self.school.id,
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

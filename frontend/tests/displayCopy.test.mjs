@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const { TRANSLATIONS, setLanguage, tp } = await import('../src/i18n.js');
 const { AUDIT_ACTIONS, LABELS, auditActionLabel, label } = await import('../src/lib/labels.js');
-const { FILTER_GRADES, GRADES, gradeOrPending, gradeText, joinParts, programUsageCaption, testScoreCaption } = await import('../src/lib/format.js');
+const { FILTER_GRADES, GRADES, contactEmail, gradeOrPending, gradeText, joinParts, programUsageCaption, testScoreCaption } = await import('../src/lib/format.js');
 
 test('document types read as proper names, not raw codes', () => {
   setLanguage('en');
@@ -66,9 +66,10 @@ test('a counselor sees a class that is not chosen yet instead of a blank', () =>
 });
 
 test('the classes a student can pick are all named and translated', () => {
-  assert.deepEqual(GRADES, ['8', '9', '10', '11', 'gap']);
+  // Grades 5 to 11; gap year is no longer offered (gradeText still names it for existing students).
+  assert.deepEqual(GRADES, ['5', '6', '7', '8', '9', '10', '11']);
   setLanguage('uz');
-  assert.deepEqual(GRADES.map(gradeText), ['8-sinf', '9-sinf', '10-sinf', '11-sinf', 'Tanaffus yili']);
+  assert.deepEqual(GRADES.map(gradeText), ['5-sinf', '6-sinf', '7-sinf', '8-sinf', '9-sinf', '10-sinf', '11-sinf']);
   assert.equal(TRANSLATIONS.uz['Your class'], 'Sinfingiz');
   assert.equal(TRANSLATIONS.ru['Your class'], 'Ваш класс');
   assert.equal(TRANSLATIONS.uz['Not chosen'], 'Tanlanmagan');
@@ -76,9 +77,15 @@ test('the classes a student can pick are all named and translated', () => {
   setLanguage('en');
 });
 
-test('the students filters offer grades 9 to 11 for now, each one a class a student can pick', () => {
-  assert.deepEqual(FILTER_GRADES, ['9', '10', '11']);
+test('the students filters offer every class from 5 to 11', () => {
+  assert.deepEqual(FILTER_GRADES, GRADES);
   assert.ok(FILTER_GRADES.every((grade) => GRADES.includes(grade)));
+});
+
+test('placeholder student emails are never shown', () => {
+  assert.equal(contactEmail('sarvinoz@students.naseeb.invalid'), '');
+  assert.equal(contactEmail('aziza@example.com'), 'aziza@example.com');
+  assert.equal(contactEmail(undefined), '');
 });
 
 test('English plural keys pick the singular form for one', () => {

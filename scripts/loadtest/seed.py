@@ -59,7 +59,7 @@ def setup_django():
     django.setup()
 
 
-FIRST = ['Aziz', 'Madina', 'Jasur', 'Dilnoza', 'Timur', 'Nodira', 'Bekzod', 'Malika', 'Sardor', 'Shahzoda',
+FIRST = ['Aziz', 'Firdavs', 'Jasur', 'Dilnoza', 'Timur', 'Nodira', 'Bekzod', 'Malika', 'Sardor', 'Shahzoda',
          'Otabek', 'Kamola', 'Rustam', 'Zarina', 'Farrux', 'Laylo', 'Javohir', 'Sevara', 'Ulugbek', 'Gulnora']
 LAST = ['Karimov', 'Rashidova', 'Tursunov', 'Yusupova', 'Aliev', 'Nazarova', 'Saidov', 'Qodirova', 'Ergashev',
         'Mirzaeva', 'Xolmatov', 'Abdullaeva', 'Rahimov', 'Usmonova', 'Sharipov']

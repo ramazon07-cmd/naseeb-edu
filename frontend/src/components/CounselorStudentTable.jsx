@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { t, tx } from '../i18n';
 import { CxAvatar, CxTag, ReasonTags } from './counselorUi';
 import { gradeText } from '../lib/format';
@@ -25,13 +25,13 @@ export function LateWork({ reasons }) {
 
 export const targetText = (student) => splitList(student.target_countries).map((country) => t(country)).join(', ') || student.target_major || '';
 
-export function CounselorStudentTable({ rows, selecting = false, selected, toggle, onPreview, onEdit }) {
+export function CounselorStudentTable({ rows, selecting = false, selected, toggle, onPreview, onEdit, onDeactivate }) {
   if (!rows.length) return <p className="cx-empty">{t("No students found.")}</p>;
   return <div className="cx-card cs-table-card">
     <table className="cs-table">
       <thead><tr>
         {selecting && <th scope="col" className="cs-check-col"><span className="sr-only">{t("Select")}</span></th>}
-        <th scope="col">{t("Student")}</th><th scope="col">{t("Grade")}</th><th scope="col">{t("Late work")}</th><th scope="col">{t("Target")}</th><th scope="col">{t("Status")}</th>{onEdit && <th scope="col"><span className="sr-only">{t("Edit")}</span></th>}
+        <th scope="col">{t("Student")}</th><th scope="col">{t("Grade")}</th><th scope="col">{t("Late work")}</th><th scope="col">{t("Target")}</th><th scope="col">{t("Status")}</th>{(onEdit || onDeactivate) && <th scope="col"><span className="sr-only">{t("Edit")}</span></th>}
       </tr></thead>
       <tbody>
         {rows.map(({ student, reasons, name }) => <tr key={student.id} className={selecting && selected.has(student.id) ? 'selected' : ''} onClick={() => (selecting ? toggle(student.id) : onPreview(student))}>
@@ -48,7 +48,7 @@ export function CounselorStudentTable({ rows, selecting = false, selected, toggl
           <td data-label={t("Late work")} className="cs-col-late"><LateWork reasons={reasons} /></td>
           <td data-label={t("Target")}>{targetText(student) || <span className="cx-faint">—</span>}</td>
           <td data-label={t("Status")} className="cs-col-status"><StatusTag reasons={reasons} /></td>
-          {onEdit && <td className="cs-col-edit"><button type="button" className="icon-button" title={t("Edit")} aria-label={tx`Edit ${name}`} onClick={(event) => { event.stopPropagation(); onEdit(student); }}><Pencil size={16} /></button></td>}
+          {(onEdit || onDeactivate) && <td className="cs-col-edit">{onEdit && <button type="button" className="icon-button" title={t("Edit")} aria-label={tx`Edit ${name}`} onClick={(event) => { event.stopPropagation(); onEdit(student); }}><Pencil size={16} /></button>}{onDeactivate && <button type="button" className="icon-button danger" title={t("Deactivate student")} aria-label={tx`Deactivate ${name}`} onClick={(event) => { event.stopPropagation(); onDeactivate(student); }}><Trash2 size={16} /></button>}</td>}
         </tr>)}
       </tbody>
     </table>

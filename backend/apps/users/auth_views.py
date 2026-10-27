@@ -66,7 +66,7 @@ class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
                     username='counselor',
                     defaults={
                         'email': 'counselor@naseeb.local',
-                        'first_name': 'Madina',
+                        'first_name': 'Firdavs',
                         'last_name': 'Counselor',
                         'role': 'counselor',
                         'is_staff': True,

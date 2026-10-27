@@ -165,6 +165,13 @@ class FilterAndSortTests(CollegeSearchFixture, APITestCase):
         priced_fit = next(row for row in self.search('search=oxford')['results'])['fit']
         self.assertEqual(priced_fit, fit)
 
+    def test_europe_matches_universities_qs_places_in_europe(self):
+        from .college_search import country_match
+        self.assertTrue(country_match(self.oxford, ['europe']))
+        self.assertFalse(country_match(self.state, ['europe']))
+        self.assertFalse(country_match(self.unranked, ['europe']))
+        self.assertTrue(country_match(self.state, ['us']))
+
     def test_sat_in_range_means_a_met_minimum_or_test_optional_without_one(self):
         self.ready_profile(sat_score=1300)
         self.assertEqual(set(self.names('sat_fit=true')), {self.state.name, self.tashkent.name})

@@ -10,9 +10,11 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .exam_scores import EXAM_KEYS, IELTS_FIELDS, IELTS_SECTIONS, MAX_ATTEMPTS, SAT_FIELDS, ielts_overall, sat_sent_total
+from .models import StudentProfile
 from .progress import percent
 
-COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China']
+# 'Europe' and 'Other' are regions, not countries: see college_search.country_match.
+COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China', 'Europe', 'Other']
 
 TEST_STATUSES = ['not_taken', 'planning', 'scheduled', 'taken', 'not_required']
 EARLIEST_TEST_DATE = datetime.date(2015, 1, 1)
@@ -267,7 +269,7 @@ class OnboardingSerializer(serializers.Serializer):
     middle_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150)
     gender = serializers.ChoiceField(choices=['Male', 'Female', 'Prefer not to say'])
-    grade = serializers.ChoiceField(choices=['8', '9', '10', '11', 'gap'])
+    grade = serializers.ChoiceField(choices=StudentProfile.PICKABLE_GRADES)
     graduation_year = serializers.IntegerField(min_value=2000, max_value=2100)
     first_generation = serializers.ChoiceField(choices=['', 'Yes', 'No', 'Not sure'], required=False)
     # Optional: many students are minors and may not know or want to share it.
