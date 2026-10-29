@@ -8,8 +8,7 @@ import { isPageLocked } from './routes.js';
 
 const QUICK_RECORD_ENDPOINTS = ['tasks', 'roadmap-missions', 'documents', 'applications', 'recommendations', 'achievements'];
 const CLOSED_ROADMAP_ENDPOINTS = QUICK_RECORD_ENDPOINTS.filter((endpoint) => endpoint !== 'roadmap-missions');
-const ASSISTANT_QUICK_ENDPOINTS = CLOSED_ROADMAP_ENDPOINTS.filter((endpoint) => endpoint !== 'recommendations');
-export const quickRecordEndpoints = (user) => user?.role === 'assistant' ? ASSISTANT_QUICK_ENDPOINTS : isPageLocked('roadmap', user) ? CLOSED_ROADMAP_ENDPOINTS : QUICK_RECORD_ENDPOINTS;
+export const quickRecordEndpoints = (user) => isPageLocked('roadmap', user) ? CLOSED_ROADMAP_ENDPOINTS : QUICK_RECORD_ENDPOINTS;
 
 const OPEN_TASK = ['todo', 'in_progress', 'late'];
 const APPLICATION_DONE = ['submitted', 'accepted', 'rejected', 'waitlisted'];

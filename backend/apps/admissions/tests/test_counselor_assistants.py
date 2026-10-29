@@ -1,4 +1,4 @@
-"""Counselor assistants: email invitations, accepting, splitting students and the assistant's limited reach."""
+"""Counselor assistants: email invitations, accepting, splitting students and the assistant's counselor reach over their own students."""
 from datetime import date, timedelta
 from unittest.mock import patch
 from smtplib import SMTPException
@@ -256,33 +256,65 @@ class AssistantScopeTests(AssistantBase):
             with self.subTest(student=other.user.username):
                 self.assertEqual(self.client.get(f'/api/students/{other.pk}/').status_code, 404)
 
-    def test_assistant_never_sees_internal_counselor_notes(self):
+    def test_assistant_reads_and_edits_counselor_notes_of_their_students(self):
         StudentProfile.objects.filter(pk=self.mine.pk).update(notes='Private counselor note')
-        self.assertNotIn('notes', self.client.get(f'/api/students/{self.mine.pk}/').data)
+        self.assertEqual(self.client.get(f'/api/students/{self.mine.pk}/').data['notes'], 'Private counselor note')
+        response = self.client.patch(f'/api/students/{self.mine.pk}/', {'notes': 'Call parents'}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(self.client.patch(f'/api/students/{self.also_mine.pk}/', {'notes': 'x'}, format='json').status_code, 404)
 
-    def test_assistant_cannot_edit_students_or_read_essays_and_meeting_notes(self):
-        self.assertEqual(self.client.patch(f'/api/students/{self.mine.pk}/', {'notes': 'x'}, format='json').status_code, 403)
-        Essay.objects.create(student=self.mine, title='Why me', shared_with_counselor=True)
-        self.assertEqual(self.client.get('/api/essays/').status_code, 403)
-        self.assertEqual(self.client.get('/api/meetings/').status_code, 403)
-        self.assertEqual(self.client.get('/api/recommendations/').status_code, 403)
+    def test_assistant_reads_shared_essays_letters_and_meetings_of_their_students_only(self):
+        own = Essay.objects.create(student=self.mine, title='Why me', shared_with_counselor=True)
+        Essay.objects.create(student=self.also_mine, title='Hidden', shared_with_counselor=True)
+        Essay.objects.create(student=self.mine, title='Private draft')
+        listed = self.client.get('/api/essays/').data
+        self.assertEqual([row['id'] for row in listed.get('results', listed)], [own.pk])
+        for path in ('/api/meetings/', '/api/recommendations/'):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 200)
 
-    def test_assistant_reviews_tasks_but_only_the_counselor_approves(self):
+    def test_essay_lab_access_follows_the_assistants_students(self):
+        from ..essay_lab.access import NONE, resolve_access
+
+        own = Essay.objects.create(student=self.mine, title='Why me', shared_with_counselor=True)
+        hidden = Essay.objects.create(student=self.also_mine, title='Hidden', shared_with_counselor=True)
+        self.assertEqual(resolve_access(self.assistant, own), resolve_access(self.counselor, own))
+        self.assertEqual(resolve_access(self.assistant, hidden), NONE)
+        StudentProfile.objects.filter(pk=self.mine.pk).update(assigned_counselor=self.colleague)
+        self.assertEqual(resolve_access(self.assistant, Essay.objects.get(pk=own.pk)), NONE)
+
+    def test_assistant_assigns_and_approves_tasks_of_their_students_only(self):
         own = Task.objects.create(student=self.mine, assigned_by=self.counselor, title='Draft list', due_date=date(2027, 1, 1), status=Task.Status.SUBMITTED)
         other = Task.objects.create(student=self.also_mine, assigned_by=self.counselor, title='Hidden', due_date=date(2027, 1, 1), status=Task.Status.SUBMITTED)
         listed = self.client.get('/api/tasks/').data
         self.assertEqual([row['id'] for row in listed.get('results', listed)], [own.pk])
         self.assertEqual(self.client.get(f'/api/tasks/{other.pk}/').status_code, 404)
-        self.assertEqual(self.client.post(f'/api/tasks/{own.pk}/approve/', {}, format='json').status_code, 403)
-        self.assertEqual(self.client.patch(f'/api/tasks/{own.pk}/', {'status': 'approved'}, format='json').status_code, 403)
-        created = self.client.post('/api/tasks/', {'student': self.mine.pk, 'title': 'New', 'due_date': '2027-02-01'}, format='json')
-        self.assertEqual(created.status_code, 403)
+        self.assertEqual(self.client.post(f'/api/tasks/{other.pk}/approve/', {}, format='json').status_code, 404)
         self.assertEqual(self.client.post(f'/api/tasks/{other.pk}/send-back/', {'note': 'Add dates.'}, format='json').status_code, 404)
 
-        sent = self.client.post(f'/api/tasks/{own.pk}/send-back/', {'note': 'Add dates.'}, format='json')
-        self.assertEqual(sent.status_code, 200, sent.data)
+        approved = self.client.post(f'/api/tasks/{own.pk}/approve/', {}, format='json')
+        self.assertEqual(approved.status_code, 200, approved.data)
         own.refresh_from_db()
-        self.assertNotEqual(own.status, Task.Status.APPROVED)
+        self.assertEqual(own.status, Task.Status.APPROVED)
+        created = self.client.post('/api/tasks/', {'student': self.mine.pk, 'title': 'New', 'due_date': '2027-02-01'}, format='json')
+        self.assertEqual(created.status_code, 201, created.data)
+        refused = self.client.post('/api/tasks/', {'student': self.also_mine.pk, 'title': 'New', 'due_date': '2027-02-01'}, format='json')
+        self.assertIn(refused.status_code, {400, 403, 404})
+        bulk = self.client.post('/api/tasks/bulk/', {'students': [self.mine.pk, self.also_mine.pk], 'title': 'All', 'due_date': '2027-02-01'}, format='json')
+        self.assertEqual(bulk.status_code, 400)
+        self.assertFalse(Task.objects.filter(student=self.also_mine, title__in=['New', 'All']).exists())
+
+    def test_assistant_cannot_add_students_or_move_them_to_another_counselor(self):
+        moved = self.client.patch(f'/api/students/{self.mine.pk}/', {'assigned_counselor': self.colleague.pk}, format='json')
+        self.assertEqual(moved.status_code, 400)
+        self.mine.refresh_from_db()
+        self.assertEqual(self.mine.assigned_counselor, self.counselor)
+        quick = {'name': 'New Student', 'email': 'new@example.com', 'phone': '+998901234567', 'school': self.other_school.pk}
+        self.assertEqual(self.client.post('/api/students/quick-create/', quick, format='json').status_code, 403)
+        self.assertEqual(self.client.post('/api/students/', {'school': self.school.pk}, format='json').status_code, 403)
+        self.assertEqual(self.client.get('/api/students/assignment-candidates/').status_code, 403)
+        self.assertEqual(self.client.post('/api/students/assign-counselor/', {'students': [self.colleagues.pk]}, format='json').status_code, 403)
+        self.assertFalse(User.objects.filter(email='new@example.com').exists())
 
     def test_a_student_moved_to_another_counselor_drops_out(self):
         StudentProfile.objects.filter(pk=self.mine.pk).update(assigned_counselor=self.colleague)
@@ -332,23 +364,41 @@ class AssistantScopeTests(AssistantBase):
                     is_active=True, school=self.school, role=User.Role.COUNSELOR,
                 )
 
-    def test_assistant_can_return_a_roadmap_mission_but_cannot_approve_it(self):
-        mission = RoadmapMission.objects.create(
+    def test_assistant_approves_roadmap_missions_of_their_students_only(self):
+        own = RoadmapMission.objects.create(
             student=self.mine, assigned_by=self.counselor, title='Shortlist',
             status=RoadmapMission.Status.SUBMITTED, reflection='My shortlist',
         )
-        self.assertEqual(self.client.post(f'/api/roadmap-missions/{mission.pk}/approve/').status_code, 403)
-        self.assertEqual(self.client.post(
-            f'/api/roadmap-missions/{mission.pk}/send-back/', {'note': 'Add scholarship deadlines.'}, format='json',
-        ).status_code, 200)
-        mission.refresh_from_db()
-        self.assertNotEqual(mission.status, RoadmapMission.Status.COMPLETED)
+        other = RoadmapMission.objects.create(
+            student=self.also_mine, assigned_by=self.counselor, title='Hidden',
+            status=RoadmapMission.Status.SUBMITTED, reflection='Hidden',
+        )
+        self.assertEqual(self.client.post(f'/api/roadmap-missions/{other.pk}/approve/').status_code, 404)
+        self.assertEqual(self.client.post(f'/api/roadmap-missions/{own.pk}/approve/').status_code, 200)
+        own.refresh_from_db()
+        self.assertEqual(own.status, RoadmapMission.Status.COMPLETED)
 
-    def test_assistant_dashboard_has_no_essay_numbers(self):
-        response = self.client.get('/api/dashboard/stats/')
+    def test_assistant_dashboard_has_the_counselor_numbers_over_their_students(self):
+        Essay.objects.create(student=self.mine, title='Why me', shared_with_counselor=True, status=Essay.Status.NEEDS_REVISION)
+        Essay.objects.create(student=self.also_mine, title='Hidden', shared_with_counselor=True, status=Essay.Status.NEEDS_REVISION)
+        response = self.client.get('/api/dashboard/stats/', {'include': 'home'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['students_total'], 1)
-        self.assertNotIn('essays_need_revision', response.data)
+        self.assertEqual(response.data['essays_need_revision'], 1)
+        self.assertIn('home', response.data)
+        self.assertEqual(self.client.get('/api/dashboard/stats/', {'snapshot': self.also_mine.pk}).status_code, 404)
+
+    def test_assistant_books_meetings_with_their_students_only(self):
+        start = (timezone.now() + timedelta(days=3)).replace(microsecond=0)
+        booking = {'topic': 'Shortlist', 'starts_at': start.isoformat(), 'duration_minutes': 30}
+        own = self.client.post('/api/bookings/', {**booking, 'student': self.mine.pk}, format='json')
+        self.assertEqual(own.status_code, 201, own.data)
+        self.assertEqual(own.data['participant'], self.assistant.pk)
+        later = (start + timedelta(hours=2)).isoformat()
+        other = self.client.post('/api/bookings/', {**booking, 'starts_at': later, 'student': self.also_mine.pk}, format='json')
+        self.assertEqual(other.status_code, 400)
+        listed = self.client.get('/api/bookings/').data
+        self.assertEqual([row['id'] for row in listed.get('results', listed)], [own.data['id']])
 
     def test_assistant_without_a_counselor_sees_nobody(self):
         User.objects.filter(pk=self.assistant.pk).update(supervising_counselor=None)

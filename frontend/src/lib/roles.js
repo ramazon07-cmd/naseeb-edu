@@ -13,9 +13,10 @@ export const canManageWorkspaces = (user) => hasStaffTier(user, 'ops');
 // Writes no lower tier's route list allows: roadmap templates and reviews, level approvals, staff accounts.
 export const isSuperAdmin = (user) => hasStaffTier(user, 'superadmin');
 
-export const isCounselor = (user) => isPlatformAdmin(user) || user?.role === 'counselor';
+// An assistant works as their counselor does, over the students given to them
+// (the server scopes every list); adding students, parents and assistants stays with the counselor.
+export const isCounselor = (user) => isPlatformAdmin(user) || ['counselor', 'assistant'].includes(user?.role);
 
-// Presentation only: assistants share the counselor design, never its permissions.
 export const usesCounselorLayout = (user) => !isPlatformAdmin(user) && ['counselor', 'assistant'].includes(user?.role);
 
 // Staff the student CV endpoint lets in (CounselorOrOwnerPermission): counselors

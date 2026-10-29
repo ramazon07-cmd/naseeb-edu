@@ -158,11 +158,11 @@ if (!app.includes("bookings: { label: 'Meetings'")) throw new Error('Booking wor
 // The retired standalone notification page and launcher stay gone; server
 // notices are shown by the sidebar bell instead.
 // The counselor shell has its own notifications page (bell in the sidebar);
-// it must stay counselor-only, and the old centre and launcher stay retired.
+// it must stay in that shell (counselors and their assistants), and the old centre and launcher stay retired.
 const notificationsPageUses = app.split('<NotificationsPage').length - 1;
 if (app.includes('function NotificationCenter(') || styles.includes('.notification-launcher')
   || notificationsPageUses !== 1
-  || !app.includes("page === 'notifications' && isCounselorShell(user)) return <NotificationsPage")) throw new Error('The retired notification page and launcher must not come back.');
+  || !app.includes("page === 'notifications' && usesCounselorLayout(user)) return <NotificationsPage")) throw new Error('The retired notification page and launcher must not come back.');
 if (!api.includes("'/notifications/summary/'") || !api.includes('markAllNotificationsRead')) throw new Error('The notification bell must load and clear server notifications.');
 if (!app.includes('function AssistantCenter(') || !styles.includes('.assistant-launcher') || !styles.includes('.assistant-drawer')) throw new Error('Corner AI assistant is missing.');
 if (!app.includes('Role-scoped context only') || !app.includes('History is kept only while this page is open.')) throw new Error('Assistant privacy and retention guidance is missing.');

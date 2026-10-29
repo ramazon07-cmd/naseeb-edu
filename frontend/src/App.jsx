@@ -267,8 +267,8 @@ function routedPage(activeUser) {
 
 // Counselor Home renders from the stats call itself (?include=home), so on
 // Home the badges and the cards share one request.
-const workspaceStatsRequest = (activeUser) => (activeUser?.role === 'counselor' && routedPage(activeUser) === 'dashboard' ? api.counselorHome() : api.dashboard());
-const workspaceStatsKey = (activeUser) => (activeUser?.role === 'counselor' && routedPage(activeUser) === 'dashboard' ? 'home' : 'dashboard');
+const workspaceStatsRequest = (activeUser) => (usesCounselorLayout(activeUser) && routedPage(activeUser) === 'dashboard' ? api.counselorHome() : api.dashboard());
+const workspaceStatsKey = (activeUser) => (usesCounselorLayout(activeUser) && routedPage(activeUser) === 'dashboard' ? 'home' : 'dashboard');
 
 // `lazy`: a student's page waits for exactly the collections it fetches.
 // Student pages that cannot render without these collections. Essays, documents and
@@ -524,8 +524,8 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (page === 'recommendations') return <ResourceSection title={t("Recommendation letters")} resource="recommendations" {...{ user, data, query, reload, notify }} />;
   if (page === 'documents') return <DocumentsPage {...{ user, data, query, reload, notify }} />;
   if (page === 'certificates') return <DocumentsPage typeFilter="certificate" title={t("Certificates")} {...{ user, data, query, reload, notify }} />;
-  if (page === 'notifications' && isCounselorShell(user)) return <NotificationsPage {...{ notify, setPage }} />;
-  if (page === 'essays' && isCounselorShell(user)) return params.essayId ? <CounselorEssayReview key={params.essayId} essayId={params.essayId} notify={notify} reload={reload} onBack={() => setPage('essays')} /> : <CounselorEssaysPage {...{ user, data }} onOpen={(essayId) => setPage('essays', { essayId })} />;
+  if (page === 'notifications' && usesCounselorLayout(user)) return <NotificationsPage {...{ notify, setPage }} />;
+  if (page === 'essays' && usesCounselorLayout(user)) return params.essayId ? <CounselorEssayReview key={params.essayId} essayId={params.essayId} notify={notify} reload={reload} onBack={() => setPage('essays')} /> : <CounselorEssaysPage {...{ user, data }} onOpen={(essayId) => setPage('essays', { essayId })} />;
   if (page === 'tasks' && usesCounselorLayout(user)) return <CounselorTasksPage resource="tasks" {...{ user, data, reload, notify }} />;
   const titleMap = { tasks: 'Tasks', applications: 'University applications', essays: 'Essays' };
   return <ResourceSection title={titleMap[page] || label(page)} resource={page} {...{ user, data, query, reload, notify }} />;
@@ -780,7 +780,7 @@ export default function App() {
         // Thrown, not null: the poller then waits out a 429's Retry-After.
         if (fresh.status === 'rejected') throw fresh.reason;
         if (!fresh.value) return null;
-        const reload = liveReloadKeys(pageRef.current, previous, fresh.value).filter((key) => user.role !== 'assistant' || key === 'messageChannels');
+        const reload = liveReloadKeys(pageRef.current, previous, fresh.value);
         if (reload.length) await loadData(user, reload, { background: true });
         return true;
       },

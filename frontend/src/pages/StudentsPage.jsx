@@ -136,12 +136,6 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
   const remote = usesPagedLists(user);
   const studentRecords = useStudentRecords(student?.id, remote, studentRecordEndpoints(user));
   const data = remote ? { ...workspaceData, ...studentRecords.records } : workspaceData;
-  async function sendTaskBack(note) {
-    await api.sendBack('tasks', selectedTask.id, note);
-    setSelectedTask(null);
-    notify(t('Sent back to the student.'));
-    studentRecords.reload(['tasks']);
-  }
   if (!student) return <Empty text={t("Student profile not found.")} />;
   const documents = studentItems(data, 'documents', student.id);
   const certificates = documents.filter((item) => item.document_type === 'certificate');
@@ -166,12 +160,12 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
       <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} className="print-private" ><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget")} value={student.budget_usd == null ? null : money(student.budget_usd)} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
       <Panel title={t("Guardian")} className="print-private" ><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
     </>}
-    <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} />{user?.role !== 'assistant' && <StudentEssayList items={essays} onView={setSelectedEssay} />}<StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} /></div>
+    <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} /></div>
     <div className="overview-grid">
       {STUDENT_RESOURCE_GROUPS.filter(([, resource]) => studentRecordEndpoints(user).includes(resource) && (!profile || !PROFILE_SUMMARY_RESOURCES.includes(resource))).map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
       <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} />
     </div>
-    {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} notify={notify} onSendBack={user?.role === 'assistant' ? sendTaskBack : null} />}
+    {selectedTask && <TaskSubmissionModal task={selectedTask} onClose={() => setSelectedTask(null)} notify={notify} />}
     {selectedEssay && <EssayDetailModal essay={selectedEssay} onClose={() => setSelectedEssay(null)} />}
     {selectedDocument && <DocumentPreviewModal document={selectedDocument} onClose={() => setSelectedDocument(null)} notify={notify} showStatus={!profile} />}
     {parentInviteOpen && <ParentInviteModal student={student} onClose={() => setParentInviteOpen(false)} notify={notify} />}

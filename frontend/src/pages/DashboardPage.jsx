@@ -21,7 +21,6 @@ import { WIDE_CARDS, addCheckedIn, allClear, allSetSeen, checkInKey, checkInOutc
 import './counselor-home.css';
 import { MeetingNoteForm } from './BookingsPage';
 import { inServerZone } from '../lib/serverTime';
-import { AssistantHome } from './AssistantHome';
 
 // The first screen of staff dashboards: a page of students and the nearest
 // deadlines, fetched from the server rather than the whole roster.
@@ -39,7 +38,6 @@ export function Dashboard({ user, data, stats, reload, notify, setPage, onDirect
 }
 
 function StaffDashboard({ user, data, stats, reload, notify, setPage, refreshStats, updateStats }) {
-  if (user.role === 'assistant') return <AssistantHome {...{ user, data, stats, setPage }} />;
   if (user.role === 'organization') return <OrganizationDashboard {...{ user, data, stats, setPage }} />;
   if (isCounselor(user)) return <CounselorHome {...{ user, stats, notify, setPage, refreshStats, updateStats }} />;
   return <TeacherDashboard {...{ user, data, stats, reload, notify, setPage }} />;

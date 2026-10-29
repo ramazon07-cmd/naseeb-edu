@@ -256,11 +256,13 @@ test('staff pages open only for the tiers that use them', () => {
   assert.equal(resolveRoute({ page: 'admin_plans', params: {} }, support).page, 'admin_plans');
 });
 
-test('a counselor assistant reaches only their read-only pages; counselors manage assistants', () => {
+test('a counselor assistant gets the counselor pages; only counselors manage assistants', () => {
   const assistant = { id: 6, role: 'assistant' };
-  assert.deepEqual(navigationFor(assistant), ['dashboard', 'students', 'tasks', 'messages']);
-  assert.ok(canOpenPage('account_settings', assistant));
-  for (const page of ['assistants', 'review', 'essays', 'screen_time', 'bookings', 'support', 'roadmap']) {
+  assert.deepEqual(navigationFor(assistant), ['dashboard', 'students', 'tasks', 'review', 'essays', 'bookings', 'messages']);
+  for (const page of ['account_settings', 'notifications', 'review', 'essays', 'bookings', 'documents', 'recommendations']) {
+    assert.ok(canOpenPage(page, assistant), `${page} is an assistant page`);
+  }
+  for (const page of ['assistants', 'students_joined', 'screen_time', 'support', 'roadmap']) {
     assert.ok(!canOpenPage(page, assistant), `${page} is not an assistant page`);
   }
   assert.ok(canOpenPage('assistants', counselor));

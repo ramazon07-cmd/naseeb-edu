@@ -80,13 +80,17 @@ class StudentCollaborationPermission(permissions.BasePermission):
         user = request.user
         if user.is_product_admin:
             return True
-        if user.role == User.Role.COUNSELOR:
+        if user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT}:
             if isinstance(obj, Booking):
                 return obj.counselor_id == user.id
             if isinstance(obj, StudentMessage):
                 return user.id in {obj.sender_id, obj.recipient_id}
             return False
         return getattr(obj, 'student_id', None) == user.student_profile.id
+
+
+# Staff who take meetings with their students; an assistant has their own calendar.
+BOOKING_STAFF_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACHER, User.Role.ORGANIZATION}
 
 
 class BookingPermission(permissions.BasePermission):
@@ -103,7 +107,7 @@ class BookingPermission(permissions.BasePermission):
             return True
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
             return view.action in self.STUDENT_ACTIONS
-        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if user.role in BOOKING_STAFF_ROLES:
             return view.action in self.STAFF_ACTIONS
         return False
 
@@ -141,7 +145,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         user = self.request.user
         if user.is_superuser or user.role == User.Role.ADMIN:
             return self.queryset
-        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if user.role in BOOKING_STAFF_ROLES:
             # Meetings stay with the school: staff who moved on lose them.
             if not user.school_id:
                 return self.queryset.none()
@@ -152,7 +156,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if user.role in BOOKING_STAFF_ROLES:
             student_id = int_param(self.request.data, 'student')
             profile = visible_students(user).filter(id=student_id).first()
             if not profile:
@@ -211,7 +215,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def availability(self, request):
         """Student sees free slots; staff manages only their own dated slots."""
         user = request.user
-        staff = user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}
+        staff = user.role in BOOKING_STAFF_ROLES
         if request.method != 'GET' and not staff:
             return Response({'detail': 'Only staff can manage availability.'}, status=403)
         if request.method == 'POST':
@@ -306,7 +310,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def availability_repeat(self, request):
         """Weekly slots up to 12 weeks ahead; times that are past or overlap are skipped, not errors."""
         user = request.user
-        if user.role not in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if user.role not in BOOKING_STAFF_ROLES:
             return Response({'detail': 'Only staff can manage availability.'}, status=403)
         payload = MeetingAvailabilityRepeatSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
@@ -513,7 +517,7 @@ class StudentMessageViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_product_admin:
             return self.queryset
-        if user.role == User.Role.COUNSELOR:
+        if user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT}:
             # Only threads with students the counselor still serves in their
             # current school; a move or reassignment ends access to the rest.
             return scope_students(

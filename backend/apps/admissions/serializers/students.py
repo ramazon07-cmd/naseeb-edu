@@ -225,7 +225,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({'assigned_counselor': 'Only a counselor can change this assignment.'})
             if 'notes' in attrs and attrs['notes'] != getattr(self.instance, 'notes', ''):
                 raise serializers.ValidationError({'notes': 'Internal counselor notes are not available to school accounts.'})
-        if request and request.user.role == request.user.Role.COUNSELOR and 'assigned_counselor' in attrs:
+        if request and request.user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT} and 'assigned_counselor' in attrs:
             current = getattr(self.instance, 'assigned_counselor', None)
             requested = attrs['assigned_counselor']
             if requested != current:
