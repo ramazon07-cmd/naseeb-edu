@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { attentionItems, quickRecordEndpoints, weekDeadlines, weekOf } from '../src/lib/studentQuickLook.js';
 
-test('assistant quick look requests only permitted student collections', () => {
+test('quick look requests the counselor collections, roadmap only while it is open', () => {
   const endpoints = quickRecordEndpoints({ role: 'assistant' });
-  assert.deepEqual(endpoints, ['tasks', 'documents', 'applications', 'achievements']);
+  assert.deepEqual(endpoints, quickRecordEndpoints({ role: 'counselor' }));
   for (const role of ['assistant', 'counselor', 'student']) assert.ok(!quickRecordEndpoints({ role }).includes('roadmap-missions'));
   assert.ok(quickRecordEndpoints({ role: 'teacher' }).includes('roadmap-missions'));
   assert.ok(quickRecordEndpoints({ role: 'counselor' }).includes('recommendations'));

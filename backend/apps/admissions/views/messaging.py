@@ -181,7 +181,7 @@ def moderatable_channels_for(user):
     queryset = MessageChannel.objects.select_related('school', 'created_by')
     if user.is_superuser or user.role == User.Role.ADMIN:
         return queryset
-    if user.role not in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+    if user.role not in {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACHER, User.Role.ORGANIZATION}:
         return queryset.none()
     moderator_memberships = Q(
         memberships__user=user,
@@ -721,7 +721,7 @@ class MessageReportPermission(permissions.BasePermission):
             return False
         if request.user.is_product_admin:
             return True
-        if request.user.role not in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if request.user.role not in {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACHER, User.Role.ORGANIZATION}:
             return False
         return MessageChannel.objects.filter(
             memberships__user=request.user,

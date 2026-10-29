@@ -18,13 +18,13 @@ test('platform admins inherit counselor and task-manager access', () => {
   assert.equal(isTaskManager({ role: 'teacher' }), true);
 });
 
-test('assistants share the counselor layout without inheriting counselor permissions', () => {
+test('assistants work as counselors, never as product staff', () => {
   const assistant = { role: 'assistant' };
   assert.equal(usesCounselorLayout(assistant), true);
   assert.equal(usesCounselorLayout({ role: 'counselor' }), true);
-  assert.equal(isCounselor(assistant), false);
-  assert.equal(isTaskManager(assistant), false);
-  assert.equal(canDownloadCv(assistant), false);
+  assert.equal(isCounselor(assistant), true);
+  assert.equal(isTaskManager(assistant), true);
+  assert.equal(canDownloadCv(assistant), true);
   assert.equal(canManageWorkspaces(assistant), false);
   for (const role of ['teacher', 'student', 'admin', 'organization', 'parent']) assert.equal(usesCounselorLayout({ role }), false, role);
   assert.equal(usesCounselorLayout({ role: 'assistant', is_superuser: true }), false);

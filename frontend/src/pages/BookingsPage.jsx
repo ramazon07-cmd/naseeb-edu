@@ -8,7 +8,7 @@ import { Record } from '../components/records';
 import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil } from 'lucide-react';
 import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, dayLabel as viewerDayLabel, joinParts, relativeDayText } from '../lib/format';
 import { SERVER_TIME_ZONE, inServerZone } from '../lib/serverTime';
-import { isPlatformAdmin } from '../lib/roles';
+import { usesCounselorLayout } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
 import { isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook } from '../lib/meetings';
 import { StudentSearchInput } from '../components/StudentSearchInput';
@@ -544,7 +544,7 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
 
 export function BookingsPage({ user, data, reload, notify }) {
   if (user.role === 'student') return <StudentBookingsPage data={data} reload={reload} notify={notify} />;
-  if (user.role === 'counselor' && !isPlatformAdmin(user)) return <CounselorMeetingsPage data={data} reload={reload} notify={notify} />;
+  if (usesCounselorLayout(user)) return <CounselorMeetingsPage data={data} reload={reload} notify={notify} />;
   return <StaffMeetingsPage data={data} reload={reload} notify={notify} />;
 }
 

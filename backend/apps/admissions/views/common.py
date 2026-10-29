@@ -14,7 +14,7 @@ from apps.users.models import User
 from core.storage import presigned_file_url
 from ..models import School, StudentProfile
 from ..listing import ListQueryMixin
-from ..scoping import scope_students, visible_students
+from ..scoping import scope_students
 from ..services import NOTE_LIMIT, record_approval_note, record_send_back
 from ..models import ActivityLog
 from ..serializers.common import INLINE_FILE_EXTENSIONS, staff_created
@@ -85,23 +85,20 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         'researches', 'projects', 'internships', 'activities',
         'honors', 'recommendations',
     }
-    # Assistants read their students' work; essays and letters stay with the counselor.
-    assistant_read_resources = {
-        'students', 'tasks', 'applications', 'documents', 'achievements',
-        'researches', 'projects', 'internships', 'activities', 'honors',
-    }
+    # Adding students is how the counselor fills their own list; an assistant only works on the ones given to them.
+    assistant_denied_student_actions = {'create', 'quick_create'}
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         user = request.user
+        if user.is_assistant and view.basename == 'students' and view.action in self.assistant_denied_student_actions:
+            return False
         if user.is_counselor_like:
             return True
-        if view.basename == 'notifications' and user.role in {User.Role.TEACHER, User.Role.ORGANIZATION, User.Role.ASSISTANT}:
+        if view.basename == 'notifications' and user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
             # Their own bell only: the viewset narrows them to notices addressed to them.
             return view.action in {'list', 'retrieve', 'read', 'read_all', 'summary'}
-        if user.is_assistant:
-            return request.method in permissions.SAFE_METHODS and view.basename in self.assistant_read_resources
         if user.role == User.Role.TEACHER:
             return bool(
                 view.basename == 'students'
@@ -147,16 +144,8 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
             return True
         if request.user.is_counselor_like:
             return True
-        if view.basename == 'notifications' and request.user.role in {User.Role.TEACHER, User.Role.ORGANIZATION, User.Role.ASSISTANT}:
+        if view.basename == 'notifications' and request.user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
             return obj.recipient_id == request.user.id
-        if request.user.is_assistant:
-            # The queryset is already scoped to the assistant's students; this is the second lock.
-            student = obj if isinstance(obj, StudentProfile) else getattr(obj, 'student', None)
-            return bool(
-                request.method in permissions.SAFE_METHODS
-                and view.basename in self.assistant_read_resources
-                and visible_students(request.user).filter(pk=getattr(student, 'pk', None)).exists()
-            )
         if request.user.role == User.Role.TEACHER:
             student = obj if isinstance(obj, StudentProfile) else getattr(obj, 'student', None)
             return bool(
@@ -249,12 +238,6 @@ class StaffControlledWorkPermission(permissions.BasePermission):
         user = request.user
         if user.is_task_manager:
             return user.role != User.Role.TEACHER or bool(user.school_id)
-        if user.is_assistant:
-            # They assign tasks, review and send work back; approving (XP, levels) stays with the counselor.
-            return (
-                request.method in permissions.SAFE_METHODS or view.action == 'send_back'
-                or (view.basename == 'tasks' and view.action in {'create', 'bulk', 'update', 'partial_update', 'destroy'})
-            )
         if user.is_organization:
             return view.basename in {'tasks', 'roadmap-missions'} and request.method in permissions.SAFE_METHODS
         if user.role == User.Role.STUDENT:
@@ -272,15 +255,6 @@ class StaffControlledWorkPermission(permissions.BasePermission):
             return True
         if user.role == User.Role.TEACHER:
             return bool(user.school_id and student.school_id == user.school_id)
-        if user.is_assistant:
-            # Editing and deleting stay limited to the tasks they assigned, until the counselor approves them.
-            own_open_task = bool(
-                view.basename == 'tasks' and obj.assigned_by_id == user.id and obj.status != obj.Status.APPROVED
-            )
-            return bool(
-                (request.method in permissions.SAFE_METHODS or view.action == 'send_back' or own_open_task)
-                and visible_students(user).filter(pk=student.pk).exists()
-            )
         if user.is_organization:
             return bool(
                 request.method in permissions.SAFE_METHODS
@@ -382,7 +356,7 @@ class SendBackMixin:
     def send_back(self, request, pk=None):
         user = request.user
         if self.send_back_managers == 'task_manager':
-            allowed = user.is_task_manager or user.is_assistant
+            allowed = user.is_task_manager
         else:
             allowed = user.is_counselor_like
         if not allowed:

@@ -195,7 +195,7 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixi
         The task fields are validated as a single create validates them. Every
         student must be in the caller's scope, or nothing is created.
         """
-        if not (request.user.is_task_manager or request.user.is_assistant):
+        if not request.user.is_task_manager:
             return Response({'detail': 'Only a teacher or counselor can assign tasks.'}, status=403)
         raw = request.data.get('students')
         if not isinstance(raw, list) or not raw:

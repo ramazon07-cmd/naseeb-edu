@@ -6,10 +6,8 @@ import { isPageLocked } from '../lib/routes';
 // are small, so each is loaded whole (?student=<id>) in parallel.
 export const STUDENT_RECORD_ENDPOINTS = ['tasks', 'applications', 'documents', 'essays', 'achievements', 'researches', 'projects', 'internships', 'activities', 'honors', 'recommendations', 'roadmap-missions'];
 
-// Essays and recommendation letters stay with the counselor; a counselor's assistant never asks for them.
 const NON_ROADMAP_RECORD_ENDPOINTS = STUDENT_RECORD_ENDPOINTS.filter((endpoint) => endpoint !== 'roadmap-missions');
-const ASSISTANT_RECORD_ENDPOINTS = NON_ROADMAP_RECORD_ENDPOINTS.filter((endpoint) => !['essays', 'recommendations'].includes(endpoint));
-export const studentRecordEndpoints = (user) => (user?.role === 'assistant' ? ASSISTANT_RECORD_ENDPOINTS : isPageLocked('roadmap', user) ? NON_ROADMAP_RECORD_ENDPOINTS : STUDENT_RECORD_ENDPOINTS);
+export const studentRecordEndpoints = (user) => (isPageLocked('roadmap', user) ? NON_ROADMAP_RECORD_ENDPOINTS : STUDENT_RECORD_ENDPOINTS);
 
 const EMPTY = Object.freeze({});
 

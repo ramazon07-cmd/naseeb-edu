@@ -29,6 +29,9 @@ from ..scoping import active_visible_students, shared_essay_lookups
 from ..progress import APPLICATION_DONE, DOCUMENT_AWAITING_REVIEW, OPEN_TASK_STATUSES, late_tasks
 from ..progress_cache import cached_progress_summary
 
+# A counselor's assistant gets the counselor's numbers and Home over their own students.
+COUNSELOR_HOME_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT}
+
 
 def support_unread(user):
     """The user's own tickets with an answer they have not opened (SupportTicket.has_unread_response), in one query."""
@@ -203,11 +206,11 @@ class DashboardStatsView(APIView):
         students = active_visible_students(user)
         today = timezone.localdate()
 
-        if user.role == User.Role.COUNSELOR and request.query_params.get('check_ins') == 'all':
+        if user.role in COUNSELOR_HOME_ROLES and request.query_params.get('check_ins') == 'all':
             limit, offset = _check_in_page(request.query_params)
             return Response({'check_ins': weekly_check_ins(user, students, today, week_of(today), limit=limit, offset=offset)})
 
-        if user.role == User.Role.COUNSELOR and 'snapshot' in request.query_params:
+        if user.role in COUNSELOR_HOME_ROLES and 'snapshot' in request.query_params:
             student_id = int_param(request.query_params, 'snapshot')
             snapshot = student_snapshot(students, student_id, today) if student_id is not None else None
             if snapshot is None:
@@ -242,8 +245,7 @@ class DashboardStatsView(APIView):
         )
         task_by_status = list(tasks.order_by().values('status').annotate(count=Count('id')).order_by('status'))
 
-        if user.role in {User.Role.TEACHER, User.Role.ASSISTANT}:
-            # Assistants get the teacher's numbers: no essays, which stay with the counselor.
+        if user.role == User.Role.TEACHER:
             return Response({
                 'students_total': students_total,
                 **progress_summary,
@@ -277,7 +279,7 @@ class DashboardStatsView(APIView):
             'task_by_status': task_by_status,
             'support_unread': support_unread(user),
         }
-        if user.role == User.Role.COUNSELOR:
+        if user.role in COUNSELOR_HOME_ROLES:
             data.update(counselor_summary(
                 user, students, today,
                 tasks_submitted=sum(row['count'] for row in task_by_status if row['status'] == Task.Status.SUBMITTED),
@@ -308,7 +310,7 @@ class DashboardStatsView(APIView):
     def post(self, request):
         """A counselor ticks or un-ticks a day of this week (up to today) for one of their students on Home."""
         user = request.user
-        if user.role != User.Role.COUNSELOR:
+        if user.role not in COUNSELOR_HOME_ROLES:
             return Response({'detail': 'Only a counselor can record a check-in.'}, status=403)
         payload = CheckInSerializer(data=request.data)
         payload.is_valid(raise_exception=True)

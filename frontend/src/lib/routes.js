@@ -149,10 +149,10 @@ export function navigationFor(user) {
   // The counselor sidebar includes Tasks independently of the locked Roadmap.
   // Tasks, documents, roadmap, portfolio and the rest are reviewed in Review and
   // read per student in Student 360; the old flat pages stay reachable by link.
+  // A counselor's assistant: the counselor's pages over their own students, without Assistants or Support.
+  if (user?.role === 'assistant') return COUNSELOR_NAV.filter((page) => page !== 'assistants');
   if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
-  // A counselor's assistant: only the students their counselor gave them, read and sent back, never approved.
-  if (user?.role === 'assistant') return ['dashboard', 'students', 'tasks', 'messages'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'school_counselors', 'bookings', 'messages', 'screen_time', 'support'];
   return ['dashboard', 'student_center', 'find_personality', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
 }
@@ -174,13 +174,15 @@ export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
 // Pages opened from the account menu (or, for counselors, the shell's
 // Notifications item) rather than the sidebar list.
-const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings'] };
+const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings', 'notifications'] };
 
 export function reachablePages(user) {
   if (!user) return new Set();
   const extra = ['parent', 'assistant'].includes(user.role) && !isPlatformAdmin(user) ? [] : ['screen_time'];
   if (!isPlatformAdmin(user)) extra.push(...(ACCOUNT_MENU_PAGES[user.role] || []));
   if (user.role === 'counselor' && !isPlatformAdmin(user)) extra.push(...COUNSELOR_DIRECT_LINK_PAGES);
+  // Students who join by invite are confirmed by the counselor.
+  if (user.role === 'assistant' && !isPlatformAdmin(user)) extra.push(...COUNSELOR_DIRECT_LINK_PAGES.filter((page) => page !== 'students_joined'));
   // Organization accounts confirm the students who joined by invite.
   if (user.role === 'organization' && !isPlatformAdmin(user)) extra.push('students_joined');
   const locked = lockedPages(user);

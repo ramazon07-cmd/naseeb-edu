@@ -139,9 +139,9 @@ test('a failed stats refresh never leaves the dashboard loading', () => {
   assert.deepEqual(failedStatsStatus({ status: 'loading', error: '', loaded: true }, error), { status: 'success', error: '', loaded: true });
 });
 
-test('a counselor assistant loads only their chats up front, never essays or letters', () => {
+test('a counselor assistant loads the counselor workspace without program services or tickets', () => {
   const assistant = { role: 'assistant' };
-  assert.deepEqual(resourcesFor(assistant).map(([key]) => key), ['messageChannels']);
+  assert.deepEqual(resourcesFor(assistant).map(([key]) => key), ['schools', 'bookings', 'messageChannels']);
   assert.equal(usesPagedLists(assistant), true);
   assert.equal(loadsDashboardStats(assistant), true);
 });

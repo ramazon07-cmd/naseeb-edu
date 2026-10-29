@@ -144,7 +144,7 @@ export function CounselorLayout({ user, data, stats, bell, page, title, setPage,
   });
   const go = (next) => { setPage(next); setQuery(''); setDrawer(false); };
   const navigation = navigationFor(user).filter((next) => NAV[next]);
-  const tabs = user.role === 'assistant' ? navigation : TAB_PAGES;
+  const tabs = TAB_PAGES;
   // The full list always opens on the newest notices, never a cached page.
   const openNotificationsPage = () => {
     if (!canOpenPage('notifications', user)) { openNotifications(); return; }

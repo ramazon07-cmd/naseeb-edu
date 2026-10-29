@@ -124,7 +124,8 @@ class User(AbstractUser):
 
     @property
     def is_counselor_like(self):
-        return self.is_product_admin or self.role == self.Role.COUNSELOR
+        # An assistant works as their counselor does; scoping.student_lookups narrows them to their students.
+        return self.is_product_admin or self.role in {self.Role.COUNSELOR, self.Role.ASSISTANT}
 
     @property
     def is_task_manager(self):

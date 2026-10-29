@@ -51,8 +51,8 @@ export function resourcesFor(user, now = new Date()) {
   if (role === 'admin') return ADMIN_RESOURCES;
   if (!['organization', 'teacher', 'counselor', 'assistant'].includes(role)) return [...STUDENT_RESOURCES, ...PORTAL_RESOURCES.filter(([key]) => key !== 'roadmapMissions' || !isPageLocked('roadmap', user))];
   const staff = staffResources(now);
-  // A counselor's assistant has no meetings or tickets of their own here: only chats.
-  if (role === 'assistant') return [staff.messageChannels];
+  // A counselor's assistant: no program services or support tickets of their own.
+  if (role === 'assistant') return [['schools', 'schools'], staff.bookings, staff.messageChannels];
   if (role === 'organization') return [staff.bookings, staff.messageChannels, staff.supportTickets];
   if (role === 'teacher') return [staff.bookings, staff.messageChannels];
   return [['schools', 'schools'], ['programServices', 'program-services'], staff.bookings, staff.messageChannels, staff.supportTickets];

@@ -5,8 +5,9 @@
 * Accepting creates a ``User.Role.ASSISTANT`` account in the counselor's school,
   supervised by that counselor. Single use, claimed with a conditional UPDATE.
 * An assistant sees only students their counselor gave them, while those
-  students stay with that counselor (scoping.student_lookups). They read and send
-  work back; approving, XP and levels stay with the counselor.
+  students stay with that counselor (scoping.student_lookups). Over those
+  students they work as the counselor does (User.is_counselor_like); adding
+  students, reassigning them and managing assistants stay with the counselor.
 """
 import logging
 from datetime import timedelta

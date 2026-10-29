@@ -29,9 +29,7 @@ const VIEWS = {
 
 function TaskLine({ task, today, user, onOpen, onEdit, onDelete }) {
   const status = taskStatus(task, today);
-  // An assistant manages only the tasks they assigned, until they are approved.
-  const ownsTask = user.role === 'assistant' && task.assigned_by === user.id && task.status !== 'approved';
-  const editable = (isTaskManager(user) || ownsTask) && task.status !== 'approved' && editableFields(task, RESOURCE_FIELDS.tasks).length > 0;
+  const editable = isTaskManager(user) && task.status !== 'approved' && editableFields(task, RESOURCE_FIELDS.tasks).length > 0;
   const detail = joinParts(
     task.due_date && tx`Due ${dateText(task.due_date)}`,
     task.priority && tx`Priority: ${label(task.priority)}`,
@@ -43,14 +41,14 @@ function TaskLine({ task, today, user, onOpen, onEdit, onDelete }) {
     <CxTag tone={TASK_STATUS_TONE[status] || 'quiet'}>{label(status)}</CxTag>
     <div className="cg-actions">
       {editable && <button type="button" className="icon-button" onClick={() => onEdit(task)} aria-label={tx`Edit ${task.title}`}><Pencil size={15} /></button>}
-      {(isTaskManager(user) || ownsTask) && <button type="button" className="icon-button danger" onClick={() => onDelete(task)} aria-label={tx`Delete ${task.title}`}><Trash2 size={15} /></button>}
+      {isTaskManager(user) && <button type="button" className="icon-button danger" onClick={() => onDelete(task)} aria-label={tx`Delete ${task.title}`}><Trash2 size={15} /></button>}
     </div>
   </div>;
 }
 
 // One task: what was asked, what the student sent (their words, link or file, shown in
 // place) and, while it waits for the counselor, the decision with a note.
-function TaskDetailModal({ task, today, canDecide, canSendBack, onDecide, onClose, notify }) {
+function TaskDetailModal({ task, today, canDecide, onDecide, onClose, notify }) {
   const status = taskStatus(task, today);
   const sent = hasSubmission('task', task);
   return <Modal title={task.title} onClose={onClose}><div className="workspace-detail">
@@ -62,7 +60,7 @@ function TaskDetailModal({ task, today, canDecide, canSendBack, onDecide, onClos
     <section>
       {sent ? <Submission item={{ kind: 'task', record: task }} notify={notify} /> : <><span className="detail-label">{t('Student response')}</span><p className="cg-none">{t('The student has not submitted a written response yet.')}</p></>}
     </section>
-    {(canDecide || canSendBack) && task.status === 'submitted' && <DocumentDecision canApprove={canDecide} approvable={sent} onDecide={onDecide} notify={notify} />}
+    {canDecide && task.status === 'submitted' && <DocumentDecision canApprove={canDecide} approvable={sent} onDecide={onDecide} notify={notify} />}
   </div></Modal>;
 }
 
@@ -134,7 +132,7 @@ export function CounselorTasksPage({ user, data, reload, notify }) {
     </div>
     <PagedListError list={list} />
     <LoadMore list={list} />
-    {viewing && <TaskDetailModal task={viewing} today={today} canDecide={isTaskManager(user)} canSendBack={user.role === 'assistant'} onDecide={decide} onClose={() => setViewing(null)} notify={notify} />}
+    {viewing && <TaskDetailModal task={viewing} today={today} canDecide={isTaskManager(user)} onDecide={decide} onClose={() => setViewing(null)} notify={notify} />}
     {form && <ResourceForm resource="tasks" item={form.item} data={data} user={user} onClose={() => setForm(null)} onSaved={() => { setForm(null); refresh(); }} notify={notify} />}
   </div>;
 }

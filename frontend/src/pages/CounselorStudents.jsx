@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
-import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag, ReasonTags } from '../components/counselorUi';
+import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag } from '../components/counselorUi';
 import { Field, SegmentedField } from '../components/forms';
 import { Modal } from '../components/ui';
 import { DocumentPreviewModal, TaskSubmissionModal } from '../components/documents';
@@ -161,7 +161,8 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
 }
 
 function CounselorStudentList({ user, data, query, setQuery, listState, setListState, onItems, onOpen, onDirect, onAddStudent, notify, reload }) {
-  const readOnly = user.role === 'assistant';
+  // Adding and connecting students stays with the counselor; an assistant works on the ones given to them.
+  const addsStudents = user.role !== 'assistant';
   const [view, setView] = useState(readView);
   const [version, setVersion] = useState(0);
   const [selecting, setSelecting] = useState(false);
@@ -251,7 +252,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
         <Plus size={15} aria-hidden="true" />{selecting && selected.size ? tp('Assign task to {n} student|Assign task to {n} students', selected.size, { n: selected.size }) : t("Assign task to several")}
       </button>
       {/* "Add student" slot: the page's onAddStudent decides what adding a student means. */}
-      {!readOnly && <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>}
+      {addsStudents && <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>}
     </CxHead>
 
     <CxPills label={t("Filter students")} active={state.status} onChange={(status) => update({ status })} items={STATUS_PILLS.map(([key, title]) => [key, title, counts[key]])} />
@@ -311,14 +312,14 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
       </div>
     </nav>}
     <p className="cx-footnote">{t("Click a student for a quick look; “Open student” shows their Student 360.")}</p>
-    {!readOnly && <CxAccountActions>
+    {addsStudents && <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setConnecting(true)}>{t("Connect students")}</button>
     </CxAccountActions>}
 
     {preview && <StudentQuickPanel user={user} student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
     {assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
-    {!readOnly && adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
-    {!readOnly && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
+    {addsStudents && adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
+    {addsStudents && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
   </div>;
 }
 
@@ -561,72 +562,6 @@ function Student360Header({ student, onBack, children }) {
   </>;
 }
 
-const ASSISTANT_STUDENT_TABS = [['overview', 'Overview'], ['tasks', 'Tasks'], ['documents', 'Documents'], ['applications', 'Applications'], ['portfolio', 'Portfolio']];
-const ASSISTANT_PORTFOLIO = [['researches', 'Research'], ['projects', 'Projects'], ['internships', 'Internships'], ['activities', 'Activities'], ['honors', 'Honors'], ['achievements', 'Achievements']];
-
-// Read-only Student 360 uses the counselor's header, tabs, progress and record cards.
-// No counselor-only hooks (notes, essays, letters, meetings or activity) run here.
-function AssistantStudent360({ student, user, onBack, onDirect, notify, reload, refreshStudent }) {
-  const [tab, setTab] = useState('overview');
-  const [task, setTask] = useState(null);
-  const [document, setDocument] = useState(null);
-  const [assigning, setAssigning] = useState(false);
-  const loaded = useStudentRecords(student.id, true, studentRecordEndpoints(user));
-  const { records } = loaded;
-  const reasons = studentReasons(student, new Date());
-  async function sendBack(note) {
-    await api.sendBack('tasks', task.id, note);
-    setTask(null);
-    notify(t('Sent back to the student.'));
-    loaded.reload(['tasks']);
-    invalidatePagedLists(['tasks', 'students']);
-    refreshStudent();
-    reload();
-  }
-  return <div className="cx-page cx-student-360">
-    <Student360Header student={student} onBack={onBack}>
-      <button type="button" className="cx-btn" onClick={() => onDirect(student.user_detail?.id)}><MessageCircle size={15} aria-hidden="true" />{t('Message')}</button>
-      <button type="button" className="cx-btn primary" onClick={() => setAssigning(true)}><Plus size={15} aria-hidden="true" />{t("Assign task")}</button>
-    </Student360Header>
-    <CxTabs items={ASSISTANT_STUDENT_TABS} active={tab} onChange={setTab} label={t('Student sections')} />
-    {loaded.error && <div className="alert error" role="alert">{loaded.error}</div>}
-    {tab === 'overview' && <>
-      <div className="cx-overview">
-        <CxCard title={t('What needs attention')}><div className="cx-progress-list">
-          {reasons.length ? <ReasonTags reasons={reasons} /> : <p className="cx-empty">{t('Nothing needs your attention right now.')}</p>}
-        </div></CxCard>
-        <CxCard title={t('Progress')}><div className="cx-progress-list">
-          <ProgressItem title={t('Application readiness')} percent={student.progress_percent} />
-          <ProgressItem title={t('Tasks')} percent={student.task_progress_percent} />
-          <ProgressItem title={t('Profile ready')} percent={student.profile_readiness?.percent} />
-        </div></CxCard>
-        <CxCard title={t('Test scores')}><TestScores student={student} /></CxCard>
-      </div>
-      <RecordCard title={t('Academic & planning')} count={1}>
-        <RecordRow title={t('GPA')} meta={student.gpa == null ? t('Not provided') : formatNumberLocale(student.gpa)} />
-        <RecordRow title={t('Target major')} meta={student.target_major || t('Not provided')} />
-        <RecordRow title={t('Target countries')} meta={targetText(student) || t('Not provided')} />
-        <RecordRow title={t('Counselor')} meta={student.counselor_name || t('Not provided')} />
-      </RecordCard>
-    </>}
-    {tab === 'tasks' && <RecordCard title={t('Tasks')} count={records.tasks?.length} loading={loaded.loading} empty={t('No assigned tasks found.')}>
-      {(records.tasks || []).map((item) => <RecordRow key={item.id} title={item.title} meta={item.due_date && tx`Due ${dateText(item.due_date)}`} status={item.status} onClick={() => setTask(item)} />)}
-    </RecordCard>}
-    {tab === 'documents' && <RecordCard title={t('Documents')} count={records.documents?.length} loading={loaded.loading} empty={t('No documents yet.')}>
-      {(records.documents || []).map((item) => <RecordRow key={item.id} title={item.title} meta={label(item.document_type)} status={documentStatus(item)} onClick={() => setDocument(item)} />)}
-    </RecordCard>}
-    {tab === 'applications' && <RecordCard title={t('Applications')} count={records.applications?.length} loading={loaded.loading} empty={t('The student has not added any universities to the college list yet.')}>
-      {(records.applications || []).map((item) => <RecordRow key={item.id} title={item.university_detail?.name || t('University')} meta={item.program} status={item.status} />)}
-    </RecordCard>}
-    {tab === 'portfolio' && <div className="section-stack">{ASSISTANT_PORTFOLIO.map(([resource, title]) => <RecordCard key={resource} title={t(title)} count={records[resource]?.length} loading={loaded.loading} empty={t('No information available yet.')}>
-      {(records[resource] || []).map((item) => <RecordRow key={item.id} title={item.title || item.organization || item.name} meta={item.description} />)}
-    </RecordCard>)}</div>}
-    {task && <TaskSubmissionModal task={task} onClose={() => setTask(null)} notify={notify} onSendBack={task.status === 'submitted' ? sendBack : null} />}
-    {document && <DocumentPreviewModal document={document} onClose={() => setDocument(null)} notify={notify} />}
-    {assigning && <BulkTaskForm studentIds={[student.id]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); loaded.reload(['tasks']); invalidatePagedLists(['tasks', 'students']); }} notify={notify} />}
-  </div>;
-}
-
 function CounselorStudent360({ student, user, data, onBack, onDirect, notify, reload: reloadWorkspace, setPage, refreshStudent }) {
   const [tab, setTab] = useState('overview');
   const [booking, setBooking] = useState(false);
@@ -704,10 +639,11 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     {tab === 'overview' && <>
       <Overview student={student} records={records} meetings={upcoming} name={student.user_detail?.first_name || name} notify={notify} reload={reload} goTo={setTab} />
     </>}
-    <CxAccountActions>
+    {/* Logins and parents are the counselor's; an assistant has neither. */}
+    {user.role !== 'assistant' && <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setCredential(true)}>{t("Reset login")}</button>
       <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>
-    </CxAccountActions>
+    </CxAccountActions>}
     {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={() => reload({ endpoints: REVIEW_ENDPOINTS, workspace: true })} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}
     {tab === 'tasks' && <div className="section-stack">
       <RecordCard title={t("Tasks")} count={records.tasks?.length} loading={loaded.loading} empty={t("No assigned tasks found.")}>
@@ -783,7 +719,6 @@ export function CounselorStudentsPage({ user, data, query, setQuery, reload, not
 
   if (studentId && error) return <div className="cx-page"><button type="button" className="cx-back" onClick={() => onStudent(null)}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button><div className="alert error" role="alert">{error} <button type="button" className="cx-btn" onClick={() => setAttempt((n) => n + 1)}>{t("Retry")}</button></div></div>;
   if (studentId && selected?.id !== studentId) return <PageSkeleton />;
-  if (studentId && user.role === 'assistant') return <AssistantStudent360 student={selected} {...{ user, onDirect, notify, reload, refreshStudent }} onBack={() => onStudent(null)} />;
   if (studentId) return <CounselorStudent360 student={selected} {...{ user, data, onDirect, notify, reload, setPage, refreshStudent }} onBack={() => onStudent(null)} />;
   return <CounselorStudentList {...{ user, data, query, setQuery, listState, setListState, onItems, onDirect, onAddStudent, notify, reload }} onOpen={(student) => onStudent(student.id)} />;
 }
