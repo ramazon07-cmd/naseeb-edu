@@ -73,11 +73,31 @@ cross-origin API calls with credentials (`api.js` already does this).
 | Render | `AUTH_REFRESH_COOKIE_SAMESITE` | `Lax` |
 | Render | `AUTH_REFRESH_COOKIE_SECURE` | `True` |
 | Render | `AUTH_REFRESH_COOKIE_DOMAIN` | leave unset (host-only) |
-| Render | `NUM_PROXIES` | `1` for direct requests through Render's edge with Cloudflare DNS only; verify the real chain in a request log |
+| Render | `NUM_PROXIES` | `1` while the Cloudflare `api` record is **DNS only**; the orange cloud adds a hop. Measure it, do not guess: see [Measure `NUM_PROXIES`](#measure-num_proxies) |
 
 Production does not need `NASEEB_API_ORIGIN` for direct API calls. Keep Preview's
 `VITE_API_URL` unset and configure `NASEEB_API_ORIGIN` in Preview as described in A.
-Cloudflare's `api` DNS record must be **DNS only** for this proxy-count assumption.
+### Measure `NUM_PROXIES`
+
+A wrong value either puts every user behind one proxy address (shared throttles and
+lockouts) or lets a client choose its own address, so measure it once before schools sign in.
+The `Procfile` start command appends the raw `X-Forwarded-For` header to every access-log
+line as `xff="..."`. Paste the same command into the Render start command.
+
+1. From a phone on mobile data, open `https://www.naseebedu.com/` and note your public IP
+   (any "what is my IP" page).
+2. In the Render service logs, find your `/api/` request and read its `xff="..."` list.
+3. `NUM_PROXIES` is your IP's position counted from the right: `xff="<you>"` is `1`,
+   `xff="<you>, <proxy>"` is `2`.
+4. Set it in the `naseeb-backend` environment group and redeploy.
+
+The service also answers on its `onrender.com` host, and a request there skips Cloudflare, so
+it has one hop fewer. With the orange cloud and `NUM_PROXIES=2`, a client using that host can
+send its own `X-Forwarded-For` and pick the address that throttles and lockouts see. Keep the
+`api` record **DNS only** (value `1`) or accept that limit knowingly.
+
+The log line then contains client IPs; drop `--access-logformat` again once the value is
+confirmed if you do not want them in the logs.
 If additional frontend domains also serve the app, explicitly add those origins
 rather than allowing arbitrary Vercel projects.
 
