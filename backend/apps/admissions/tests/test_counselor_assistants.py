@@ -304,16 +304,34 @@ class AssistantScopeTests(AssistantBase):
         self.assertEqual(bulk.status_code, 400)
         self.assertFalse(Task.objects.filter(student=self.also_mine, title__in=['New', 'All']).exists())
 
-    def test_assistant_cannot_add_students_or_move_them_to_another_counselor(self):
+    def test_assistant_cannot_move_students_to_another_counselor_or_connect_them(self):
         moved = self.client.patch(f'/api/students/{self.mine.pk}/', {'assigned_counselor': self.colleague.pk}, format='json')
         self.assertEqual(moved.status_code, 400)
         self.mine.refresh_from_db()
         self.assertEqual(self.mine.assigned_counselor, self.counselor)
-        quick = {'name': 'New Student', 'email': 'new@example.com', 'phone': '+998901234567', 'school': self.other_school.pk}
-        self.assertEqual(self.client.post('/api/students/quick-create/', quick, format='json').status_code, 403)
         self.assertEqual(self.client.post('/api/students/', {'school': self.school.pk}, format='json').status_code, 403)
         self.assertEqual(self.client.get('/api/students/assignment-candidates/').status_code, 403)
         self.assertEqual(self.client.post('/api/students/assign-counselor/', {'students': [self.colleagues.pk]}, format='json').status_code, 403)
+
+    def test_assistant_adds_a_student_for_their_counselor_and_themselves(self):
+        quick = {'name': 'New Student', 'email': 'new@example.com', 'phone': '+998901234567'}
+        elsewhere = self.client.post('/api/students/quick-create/', {**quick, 'school': self.other_school.pk}, format='json')
+        self.assertEqual(elsewhere.status_code, 400)
+        response = self.client.post('/api/students/quick-create/', quick, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data['temporary_password'])
+        added = StudentProfile.objects.get(pk=response.data['id'])
+        self.assertEqual((added.school, added.assigned_counselor, added.assigned_assistant), (self.school, self.counselor, self.assistant))
+        self.assertEqual(self.client.get(f'/api/students/{added.pk}/').status_code, 200)
+        self.client.force_authenticate(self.counselor)
+        self.assertEqual(self.client.get(f'/api/students/{added.pk}/').status_code, 200)
+
+    def test_assistant_without_a_counselor_cannot_add_students(self):
+        User.objects.filter(pk=self.assistant.pk).update(supervising_counselor=None)
+        self.assistant.refresh_from_db()
+        self.client.force_authenticate(self.assistant)
+        quick = {'name': 'New Student', 'email': 'new@example.com', 'phone': '+998901234567'}
+        self.assertEqual(self.client.post('/api/students/quick-create/', quick, format='json').status_code, 400)
         self.assertFalse(User.objects.filter(email='new@example.com').exists())
 
     def test_a_student_moved_to_another_counselor_drops_out(self):

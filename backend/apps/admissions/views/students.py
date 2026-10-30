@@ -766,7 +766,9 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
                 'target_countries': [f'Use {target_countries_max_length} characters or fewer.'],
             }, status=400)
 
-        if request.user.is_organization or request.user.role == User.Role.COUNSELOR:
+        if request.user.is_assistant and not request.user.supervising_counselor_id:
+            return Response({'detail': 'Your assistant account is not connected to a counselor.'}, status=400)
+        if request.user.is_organization or request.user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT}:
             # Staff add students to their own school, and only while it is active.
             school = request.user.school
             if not school or not school.is_active:

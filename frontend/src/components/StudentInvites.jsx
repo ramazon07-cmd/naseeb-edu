@@ -143,7 +143,8 @@ function CreateAccountTab({ user, data, notify, onCreated, onClose }) {
 // (STUDENT_SELF_JOIN_ENABLED), a personal invite or a shareable magic link.
 // `onJoined` opens Recently joined; `onCreated` runs after a direct creation.
 export function AddStudentModal({ user, data, onClose, notify, onJoined, onCreated }) {
-  const selfJoin = Boolean(user?.student_self_join);
+  // Invites wait for the counselor's confirmation, so an assistant creates the account directly.
+  const selfJoin = Boolean(user?.student_self_join) && user?.role !== 'assistant';
   const [tab, setTab] = useState('create');
   const [counselor, setCounselor] = useState('');
   // Organization accounts pick the counselor; counselors invite for themselves.

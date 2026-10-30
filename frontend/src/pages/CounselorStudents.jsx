@@ -161,8 +161,8 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
 }
 
 function CounselorStudentList({ user, data, query, setQuery, listState, setListState, onItems, onOpen, onDirect, onAddStudent, notify, reload }) {
-  // Adding and connecting students stays with the counselor; an assistant works on the ones given to them.
-  const addsStudents = user.role !== 'assistant';
+  // Connecting unassigned students stays with the counselor; an assistant adds new ones, which become theirs.
+  const connectsStudents = user.role !== 'assistant';
   const [view, setView] = useState(readView);
   const [version, setVersion] = useState(0);
   const [selecting, setSelecting] = useState(false);
@@ -252,7 +252,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
         <Plus size={15} aria-hidden="true" />{selecting && selected.size ? tp('Assign task to {n} student|Assign task to {n} students', selected.size, { n: selected.size }) : t("Assign task to several")}
       </button>
       {/* "Add student" slot: the page's onAddStudent decides what adding a student means. */}
-      {addsStudents && <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>}
+      <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>
     </CxHead>
 
     <CxPills label={t("Filter students")} active={state.status} onChange={(status) => update({ status })} items={STATUS_PILLS.map(([key, title]) => [key, title, counts[key]])} />
@@ -312,14 +312,14 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
       </div>
     </nav>}
     <p className="cx-footnote">{t("Click a student for a quick look; “Open student” shows their Student 360.")}</p>
-    {addsStudents && <CxAccountActions>
+    {connectsStudents && <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setConnecting(true)}>{t("Connect students")}</button>
     </CxAccountActions>}
 
     {preview && <StudentQuickPanel user={user} student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
     {assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
-    {addsStudents && adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
-    {addsStudents && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
+    {adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
+    {connectsStudents && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
   </div>;
 }
 
