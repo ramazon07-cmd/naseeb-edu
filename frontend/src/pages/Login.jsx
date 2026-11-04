@@ -90,6 +90,23 @@ export function Login({ onLogin, onBack, theme, language, changeLanguage }) {
   );
 }
 
+// Django's UserAttributeSimilarityValidator (max_similarity 0.7), so the checklist refuses what the server refuses.
+function looksLikeAccount(password, user) {
+  const typed = Array.from(password.toLowerCase());
+  return [user.username, user.first_name, user.last_name, user.email].some((value) => {
+    if (!value) return false;
+    const whole = value.toLowerCase();
+    return [...whole.split(/[^\p{L}\p{N}_]+/u), whole].some((part) => {
+      const chars = Array.from(part);
+      if (typed.length >= 10 * chars.length && chars.length < 0.35 * typed.length) return false;
+      const left = {};
+      chars.forEach((char) => {left[char] = (left[char] || 0) + 1;});
+      const shared = typed.filter((char) => left[char] > 0 && left[char]--).length;
+      return 2 * shared / (typed.length + chars.length) >= 0.7;
+    });
+  });
+}
+
 // First sign-in with a temporary password: the sign-in page's backdrop and card,
 // so choosing a password reads as the next step of signing in.
 export function ForcedPasswordChange({ user, onChanged, onSignOut, theme, language, changeLanguage }) {
@@ -102,10 +119,11 @@ export function ForcedPasswordChange({ user, onChanged, onSignOut, theme, langua
   const asksClass = isStudent && !user.student_profile_complete;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  // What the browser can check while they type; the server also refuses common passwords and ones like the name.
+  // What the browser can check while they type; the server also refuses common passwords.
   const checks = [
     [t('At least 8 characters'), password.length >= 8],
     [t('Not only numbers'), password !== '' && !/^\d+$/.test(password)],
+    [t('Not like your name or login'), password !== '' && !looksLikeAccount(password, user)],
     [t('Both passwords match'), confirmPassword !== '' && password === confirmPassword],
   ];
   async function submit(event) {

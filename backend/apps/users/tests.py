@@ -195,6 +195,20 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.grade, '')
 
+    def test_a_password_like_the_username_is_refused_with_400_not_500(self):
+        # Only the user-aware validators catch this, so the serializer must run them.
+        access = self.login().data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
+        refused = self.client.post(
+            '/api/users/accounts/change-password/',
+            {'new_password': 'credential-student1', 'confirm_password': 'credential-student1', 'grade': '10'},
+            format='json',
+        )
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('new_password', refused.data)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.must_change_password)
+
     def test_the_class_cannot_be_rewritten_by_a_later_password_change(self):
         changed = self.change_password(grade='11')
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {changed.data['access']}")
