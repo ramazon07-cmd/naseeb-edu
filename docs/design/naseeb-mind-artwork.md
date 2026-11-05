@@ -1,11 +1,6 @@
 # Naseeb Mind artwork
 
-Asset: `frontend/public/landing/mind-self-discovery.webp` (1536 × 1024).
-Created with the built-in image generation tool, then encoded as WebP for the website.
-
-## Generation prompt
-
-Create a premium editorial 3D artwork for Naseeb Mind, a personality exploration product for students. Landscape 3:2 composition, no text, no logos, no UI. A sculptural human head in profile facing right, made from translucent warm amber glass and matte ivory nested layers, like a gently opened dimensional contour map of the mind. Three offset profile layers create a sense of self-discovery. Beautiful realistic caustics, precise glass edges, sophisticated studio product photography. Main sculpture centered with generous breathing space, occupies 70% of frame. Background seamless very pale warm gray #f4f2ee, subtle studio shadows, soft directional sun from upper left. Restrained amber and cream monochrome palette. Museum-quality art direction, tactile materials, quiet optimistic mood, clean not sci-fi, not a brain illustration. Output high quality landscape image.
+The landing-page banner artwork (`mind-self-discovery.webp`) was removed with the banner.
 
 ## Mind logo
 
