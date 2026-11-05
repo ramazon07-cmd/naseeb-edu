@@ -322,18 +322,39 @@ class SharedAddressAuthThrottleTests(APITestCase):
         # The second use fails because the token was rotated; the third is throttled.
         self.assertEqual(codes, [200, 401, 429])
 
+    def change_password(self, password):
+        return self.client.post('/api/users/accounts/change-password/',
+                                {'new_password': password, 'confirm_password': password},
+                                format='json', REMOTE_ADDR=self.SCHOOL_IP)
+
     def test_credential_endpoints_are_limited_per_user(self):
         first, second = self.users[:2]
+        User.objects.filter(pk__in=[first.pk, second.pk]).update(must_change_password=True)
+        first.refresh_from_db()
+        second.refresh_from_db()
         with rates(password_change='1/hour'):
             self.client.force_authenticate(first)
-            self.client.post('/api/users/accounts/change-password/', {}, format='json', REMOTE_ADDR=self.SCHOOL_IP)
-            again = self.client.post('/api/users/accounts/change-password/', {}, format='json',
-                                     REMOTE_ADDR=self.SCHOOL_IP)
+            # A valid password equal to the current one: it costs a hash, so it counts.
+            self.change_password('StrongPass123!')
+            again = self.change_password('StrongPass123!')
             self.client.force_authenticate(second)
-            other = self.client.post('/api/users/accounts/change-password/', {}, format='json',
-                                     REMOTE_ADDR=self.SCHOOL_IP)
+            other = self.change_password('StrongPass123!')
         self.assertEqual(again.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertNotEqual(other.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_refused_passwords_do_not_lock_a_student_out_of_the_first_sign_in(self):
+        student = self.users[0]
+        User.objects.filter(pk=student.pk).update(must_change_password=True)
+        student.refresh_from_db()
+        self.client.force_authenticate(student)
+        with rates(password_change='2/hour'):
+            codes = [self.change_password(weak).status_code
+                     for weak in ('12345678', 'qwerty123', 'pupil01', 'password1', 'pupil0123', 'abc')]
+            accepted = self.change_password('Yashil-Olma-Bog-58')
+        self.assertEqual(codes, [status.HTTP_400_BAD_REQUEST] * 6)
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        student.refresh_from_db()
+        self.assertFalse(student.must_change_password)
 
     def test_malformed_login_body_is_not_a_server_error(self):
         response = self.client.post('/api/auth/token/', [1, 2], format='json')

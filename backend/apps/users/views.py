@@ -8,7 +8,7 @@ from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ErrorDetail, ValidationError
 from rest_framework.response import Response
-from apps.users.throttles import ScopedRateThrottle
+from apps.users.throttles import ScopedRateThrottle, UserRateThrottle
 from apps.admissions.listing import ListQueryMixin
 from core.exceptions import CodedError
 from . import entitlements
@@ -351,7 +351,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         detail=False,
         methods=['post'],
         url_path='change-password',
-        throttle_classes=[ScopedRateThrottle],
+        throttle_classes=[UserRateThrottle],
         throttle_scope='password_change',
     )
     def change_password(self, request):
@@ -361,6 +361,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
         serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
+        # Counted only now: a refused password costs no hash and must not lock a student out for an hour.
+        limit = ScopedRateThrottle()
+        if not limit.allow_request(request, self):
+            self.throttled(request, limit.wait())
         try:
             with transaction.atomic():
                 user = complete_password_change(
