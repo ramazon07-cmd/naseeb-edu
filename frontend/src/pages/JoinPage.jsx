@@ -2,15 +2,14 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, Clock3, LogIn, UserPlus } from 'lucide-react';
 import { api } from '../api';
 import { t } from '../i18n';
-import { gradeText } from '../lib/format';
+import { GRADES, gradeText } from '../lib/format';
 import { initials } from '../lib/labels';
 import { BrandLockup, LanguageSelector } from '../components/brand';
 import { Field } from '../components/forms';
 import '../invites.css';
 
-const GRADES = ['8', '9', '10', '11', 'gap'];
 
-function Card({ theme, language, changeLanguage, children, footer }) {
+export function Card({ theme, language, changeLanguage, children, footer }) {
   return <main className="password-change-page join-page"><section className="password-change-card">
     <header><BrandLockup theme={theme} /><div className="password-change-preferences"><LanguageSelector language={language} onChange={changeLanguage} compact /></div></header>
     {children}
@@ -19,7 +18,7 @@ function Card({ theme, language, changeLanguage, children, footer }) {
 }
 
 // Which school and counselor the student is joining (schools have no logo yet: their initials).
-function SchoolCard({ school, counselor }) {
+export function SchoolCard({ school, counselor }) {
   return <div className="join-school">
     <span className="join-school-logo" aria-hidden="true">{initials(school.name)}</span>
     <span className="join-school-copy"><span>{t('You are joining')}</span><b>{school.name}</b>{counselor && <small>{t('Counselor: {name}', { name: counselor })}</small>}</span>

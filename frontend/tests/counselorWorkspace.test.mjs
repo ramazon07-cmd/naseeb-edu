@@ -14,12 +14,12 @@ const now = new Date('2026-09-25T12:00:00Z');
 
 test('review counts come from the stats, one number per Review kind', () => {
   const stats = { review: { tasks: 2, documents: 3, roadmap: 1, portfolio: 4, essays: 5 } };
-  assert.deepEqual(reviewCounts(stats), { task: 2, document: 3, roadmap: 1, portfolio: 4, total: 10 });
+  assert.deepEqual(reviewCounts(stats), { task: 2, document: 3, portfolio: 4, total: 9 });
   // Essays have their own badge and never count towards Review.
   assert.equal(counselorCounts(stats, {}).essays, 5);
-  assert.equal(counselorCounts(stats, {}).review, 10);
-  assert.deepEqual(reviewCounts(null), { task: 0, document: 0, roadmap: 0, portfolio: 0, total: 0 });
-  assert.deepEqual(reviewCounts({ review: { tasks: -3, documents: 'x' } }), { task: 0, document: 0, roadmap: 0, portfolio: 0, total: 0 });
+  assert.equal(counselorCounts(stats, {}).review, 9);
+  assert.deepEqual(reviewCounts(null), { task: 0, document: 0, portfolio: 0, total: 0 });
+  assert.deepEqual(reviewCounts({ review: { tasks: -3, documents: 'x' } }), { task: 0, document: 0, portfolio: 0, total: 0 });
 });
 
 test('badges count pending requests and unread messages from what the browser holds', () => {
@@ -122,7 +122,7 @@ test('the review queue merges every kind oldest first and keeps what an action c
     roadmapMissions: [{ id: 3, title: 'Shortlist', student: 1, student_name: 'Ramazon', updated_at: '2026-09-24T10:00:00Z' }],
     achievements: [{ id: 9, title: 'Olympiad', student: 3, student_name: 'Sevara', created_at: '2026-09-21T10:00:00Z' }],
   });
-  assert.deepEqual(queue.map((item) => item.id), ['portfolio-9', 'document-7', 'task-7', 'roadmap-3']);
+  assert.deepEqual(queue.map((item) => item.id), ['portfolio-9', 'document-7', 'task-7']);
   const task = queue.find((item) => item.kind === 'task');
   assert.deepEqual([task.recordId, task.endpoint, task.studentId, task.studentName], [7, 'tasks', 1, 'Ramazon']);
   assert.equal(task.record.title, 'PS draft');
@@ -158,7 +158,7 @@ test('known server activity sentences are rewritten, unknown ones are kept', () 
 
 test('the counselor sidebar includes a locked Roadmap; other old flat pages stay reachable but unlisted', () => {
   const counselor = { id: 2, role: 'counselor' };
-  assert.deepEqual(COUNSELOR_NAV, ['dashboard', 'students', 'tasks', 'review', 'essays', 'bookings', 'messages', 'counselor_roadmap']);
+  assert.deepEqual(COUNSELOR_NAV, ['dashboard', 'students', 'assistants', 'tasks', 'review', 'essays', 'bookings', 'messages']);
   assert.deepEqual(navigationFor(counselor), [...COUNSELOR_NAV, 'support']);
   for (const page of ['documents', 'portfolio', 'certificates', 'recommendations']) {
     assert.ok(!navigationFor(counselor).includes(page), `${page} is not in the sidebar`);
@@ -172,7 +172,7 @@ test('the counselor sidebar includes a locked Roadmap; other old flat pages stay
 test('roadmap templates stay locked for counselors and hidden from admins', () => {
   const counselor = { id: 2, role: 'counselor' };
   const admin = { id: 1, role: 'admin' };
-  assert.ok(navigationFor(counselor).includes('counselor_roadmap'));
+  assert.ok(!navigationFor(counselor).includes('counselor_roadmap'));
   assert.equal(isPageLocked('counselor_roadmap', counselor), true);
   assert.ok(!navigationFor(admin).includes('counselor_roadmap'));
   for (const user of [counselor, admin]) {

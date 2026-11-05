@@ -160,10 +160,14 @@ class BodyIdTests(AuditBaseMixin, APITestCase):
         ), 'assign counselor students list')
         for user in (self.admin, self.counselor):
             self.assert_client_error(self.post(user, '/api/students/quick-create/', {
+                'email': 'student@example.com',
+                'phone': '+998901234567',
                 'name': 'Quick Student', 'password': 'Very-Strong-Pass-918!', 'school': 'abc',
             }), f'quick-create ({user.username})')
         # A JSON boolean is not an id either.
         self.assert_client_error(self.post(self.admin, '/api/students/quick-create/', {
+            'email': 'student@example.com',
+            'phone': '+998901234567',
             'name': 'Quick Student', 'password': 'Very-Strong-Pass-918!', 'school': True,
         }), 'quick-create bool school')
 

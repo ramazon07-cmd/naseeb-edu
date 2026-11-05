@@ -13,10 +13,12 @@ import { joinParts } from '../lib/format';
 import { plansFor, seatUsage, subscriptionPayload } from '../lib/workspacePlan';
 import { PlanFacts } from '../components/plans';
 import { formFieldErrors } from '../lib/apiErrors';
+import './admin-lists.css';
 
 export function SchoolsPage({ user, data, query = '', reload, notify }) {
   const isAdmin = isPlatformAdmin(user);
-  const [status, setStatus] = useState('');
+  // Deactivated schools stay one filter away instead of crowding the list.
+  const [status, setStatus] = useState('true');
   const [type, setType] = useState('');
   // Admins page through every school; other roles only ever see their own.
   const list = usePagedList('schools', { search: query, filters: { is_active: status, workspace_type: type }, ordering: 'name', pageSize: 50, enabled: isAdmin });
@@ -44,7 +46,7 @@ export function SchoolsPage({ user, data, query = '', reload, notify }) {
         <label><span>{t("Status")}</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">{t("All")}</option><option value="true">{t("Active")}</option><option value="false">{t("Inactive")}</option></select></label>
         <label><span>{t("Type")}</span><select value={type} onChange={(event) => setType(event.target.value)}><option value="">{t("All")}</option><option value="school">{t("Organization schools")}</option><option value="individual">{t("Individual workspaces")}</option></select></label>
       </div>}
-      <div className="card-grid">{schools.map((school) => <article className={`school-card ${school.workspace_type === 'individual' ? 'individual' : ''}`} key={school.id}>
+      <div className="card-grid admin-list">{schools.map((school) => <article className={`school-card ${school.workspace_type === 'individual' ? 'individual' : ''}`} key={school.id}>
       <div className="school-number" aria-hidden="true">{school.workspace_type === 'individual' ? <UserRound size={22} /> : <Building2 size={22} />}</div>
       <div><div className="school-card-title"><h3>{school.name}</h3><Badge>{school.workspace_type === 'individual' ? t("Individual workspace") : t("School")}</Badge>{!school.is_active && <Badge tone="urgent">{t("Inactive")}</Badge>}</div><p>{school.workspace_type === 'individual' ? tx`Owner: ${school.owner_counselor_name || t("Not assigned")}` : joinParts(school.contact_email, school.contact_phone) || t("No contact details")}</p><span>{joinParts(tp('{n} student|{n} students', school.students_count || 0, { n: school.students_count || 0 }), school.organization_account_username ? tx`Login: ${school.organization_account_username}` : isAdmin && school.workspace_type === 'school' && t("No school login"))}</span>{isAdmin && <WorkspacePlanSummary school={school} />}</div>
       {isAdmin && <div className="school-card-actions">

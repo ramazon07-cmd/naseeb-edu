@@ -104,11 +104,18 @@ class StudentProfile(TimeStampedModel):
         GUARDIAN = 'guardian', 'Guardian'
 
     class Grade(models.TextChoices):
+        GRADE_5 = '5', '5-sinf'
+        GRADE_6 = '6', '6-sinf'
+        GRADE_7 = '7', '7-sinf'
         GRADE_8 = '8', '8-sinf'
         GRADE_9 = '9', '9-sinf'
         GRADE_10 = '10', '10-sinf'
         GRADE_11 = '11', '11-sinf'
+        # No longer offered to pick; kept so existing gap-year students stay valid.
         GAP_YEAR = 'gap', 'Gap year'
+
+    # What a student or staff member may choose today (gap year is no longer offered).
+    PICKABLE_GRADES = ['5', '6', '7', '8', '9', '10', '11']
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='student_profile')
     assigned_counselor = models.ForeignKey(
@@ -118,7 +125,17 @@ class StudentProfile(TimeStampedModel):
         blank=True,
         related_name='assigned_students',
     )
-    grade = models.CharField(max_length=10, choices=Grade.choices, default=Grade.GRADE_10)
+    # The counselor's assistant for this student; only counts while the student
+    # stays with that assistant's counselor (scoping.student_lookups).
+    assigned_assistant = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assisted_students',
+    )
+    # Empty until the student picks it at the first sign-in; a preset class would be a guess.
+    grade = models.CharField(max_length=10, choices=Grade.choices, blank=True, default='')
     school_name = models.CharField(max_length=180, default='Naseeb Edu')
     school = models.ForeignKey(
         School,
@@ -2226,3 +2243,40 @@ class StudentInvite(TimeStampedModel):
 
     def __str__(self):
         return f'{self.get_kind_display()} · {self.school} · {self.status}'
+
+class AssistantInvite(TimeStampedModel):
+    """A counselor's invitation for an assistant to set up their own login.
+
+    Only the SHA-256 of the token is stored; the raw token goes out once, in the
+    email and in the create response. Single use: accepting creates the account.
+    """
+
+    token_hash = models.CharField(max_length=64, unique=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='assistant_invites')
+    counselor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='assistant_invites')
+    email = models.EmailField()
+    first_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['counselor', '-created_at'], name='assistant_invite_counselor_idx')]
+
+    @property
+    def status(self):
+        if self.accepted_at:
+            return 'accepted'
+        if self.revoked_at:
+            return 'revoked'
+        if self.expires_at <= timezone.now():
+            return 'expired'
+        return 'active'
+
+    def __str__(self):
+        return f'{self.email} · {self.school} · {self.status}'

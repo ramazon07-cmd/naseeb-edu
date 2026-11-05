@@ -41,6 +41,42 @@ class BookingChangeTests(RoleIsolationBase):
         self.assertEqual([(row['id'], row['status']) for row in rows], [(self.booking.pk, 'cancelled')])
         self.assertIn(notice.pk, [row['id'] for row in self.results(self.client.get('/api/notifications/'))])
 
+    def test_participant_deletes_only_closed_or_past_meetings(self):
+        url = f'/api/bookings/{self.booking.pk}/'
+        self.client.force_authenticate(self.counselor)
+        # Upcoming and still open: it has to be cancelled first, so the student hears about it.
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_400_BAD_REQUEST)
+        # Its student may not either while it is open, and another school's counselor never.
+        self.client.force_authenticate(self.student_a_user)
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_400_BAD_REQUEST)
+        self.client.force_authenticate(self.counselor_b)
+        self.assertIn(self.client.delete(url).status_code, {403, 404})
+        self.assertTrue(Booking.objects.filter(pk=self.booking.pk).exists())
+        self.post(self.counselor, 'cancel')
+        self.client.force_authenticate(self.counselor)
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Booking.objects.filter(pk=self.booking.pk).exists())
+
+    def test_participant_deletes_a_meeting_that_already_happened(self):
+        past = Booking.objects.create(
+            student=self.student_a, participant=self.counselor, topic='Old', status=Booking.Status.APPROVED,
+            starts_at=timezone.now() - timedelta(days=1),
+        )
+        self.client.force_authenticate(self.counselor)
+        self.assertEqual(self.client.delete(f'/api/bookings/{past.pk}/').status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_student_deletes_only_their_own_closed_meeting(self):
+        url = f'/api/bookings/{self.booking.pk}/'
+        self.post(self.student_a_user, 'cancel')
+        # A classmate and another school's student cannot see it, so it is not found.
+        for user in (self.classmate, self.student_b_user):
+            self.client.force_authenticate(user)
+            self.assertEqual(self.client.delete(url).status_code, status.HTTP_404_NOT_FOUND, user.username)
+        self.assertTrue(Booking.objects.filter(pk=self.booking.pk).exists())
+        self.client.force_authenticate(self.student_a_user)
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Booking.objects.filter(pk=self.booking.pk).exists())
+
     def test_cancel_is_idempotent(self):
         self.post(self.student_a_user, 'cancel')
         again = self.post(self.student_a_user, 'cancel')

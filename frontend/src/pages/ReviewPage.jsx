@@ -369,7 +369,7 @@ function ReviewedToday({ today }) {
   </section>;
 }
 
-// "Documents, tasks, missions and portfolio waiting for you".
+// Documents, tasks and portfolio waiting for the counselor.
 export function ReviewPage({ setPage, notify, reload, initialItem = null, onLinkDone }) {
   const { stats } = useCounselorUi();
   const queue = useReviewQueue();
@@ -392,7 +392,7 @@ export function ReviewPage({ setPage, notify, reload, initialItem = null, onLink
   </div>;
 
   return <div className="cx-page cx-review-page rv-page">
-    <CxHead title={t("Review queue")} subtitle={t("Documents, tasks, missions and portfolio waiting for you")} />
+    <CxHead title={t("Review queue")} subtitle={t("Documents, tasks and portfolio waiting for you")} />
     <div className="rv-tabs"><CxPills items={pills} active={filter} onChange={setFilter} label={t("Filter by kind")} /></div>
     {queue.error && <div className="data-state error" role="alert"><div><b>{t("Some information could not be loaded")}</b><p>{queue.error}</p></div><button type="button" className="button quiet small" onClick={queue.retry}><RefreshCw size={14} /> {t("Retry")}</button></div>}
     <ReviewWorkspace key={filter} items={items} loaded={queue.loaded} notify={notify} reload={reload} setPage={setPage} footer={footer} initialItem={filter === 'all' ? initialItem : null} onLinkDone={onLinkDone} onDecided={today.add} aside={<ReviewedToday today={today} />} total={counted ? totals[filter === 'all' ? 'total' : filter] : null} />

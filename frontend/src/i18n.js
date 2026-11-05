@@ -17,6 +17,7 @@ import { counselorStudentsMessages } from "./translations/counselorStudents.js";
 import { reviewMessages } from "./translations/review.js";
 import { counselorShellMessages } from "./translations/counselorShell.js";
 import { assessmentHubMessages } from "./translations/assessmentHub.js";
+import { landingMessages } from "./translations/landing.js";
 
 import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
 
@@ -51,6 +52,7 @@ export const TRANSLATIONS = {
     ...reviewMessages("uz"),
     ...counselorShellMessages("uz"),
     ...assessmentHubMessages("uz"),
+    ...landingMessages("uz"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
@@ -243,6 +245,7 @@ export const TRANSLATIONS = {
     ...reviewMessages("ru"),
     ...counselorShellMessages("ru"),
     ...assessmentHubMessages("ru"),
+    ...landingMessages("ru"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",
@@ -433,16 +436,16 @@ function urlLanguage() {
 
 const DOCUMENT_META = {
   uz: {
-    title: "Naseeb Edu - Ta’lim bo‘yicha maslahat platformasi",
-    description: "Naseeb Edu o‘quvchilar, oilalar va maktablar uchun universitetga ariza jarayonini boshqaradigan ta’lim maslahat platformasi.",
+    title: "Naseeb Edu - Universitetga qabul uchun AI platforma",
+    description: "Naseeb Edu — sun’iy intellektga asoslangan SaaS platforma: psixometrik profil, universitet va grantlar reytingi, insho tahlili va shaxsiy qabul traektoriyasi.",
   },
   ru: {
-    title: "Naseeb Edu — платформа образовательного консалтинга",
-    description: "Naseeb Edu — платформа образовательного консалтинга, которая помогает ученикам, семьям и школам вести процесс поступления в университеты.",
+    title: "Naseeb Edu — AI-платформа для поступления в университет",
+    description: "Naseeb Edu — SaaS-платформа на основе искусственного интеллекта: психометрический профиль, рейтинг университетов и грантов, анализ эссе и персональная дорожная карта поступления.",
   },
   en: {
-    title: "Naseeb Edu - Education counseling platform",
-    description: "Naseeb Edu is an education counseling platform that helps students, families and schools manage the university application process.",
+    title: "Naseeb Edu - AI platform for university admission",
+    description: "Naseeb Edu is an AI-powered SaaS platform: psychometric profiling, university and scholarship matching, essay analysis and a personalized admission roadmap.",
   },
 };
 

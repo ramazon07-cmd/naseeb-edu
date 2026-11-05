@@ -287,9 +287,14 @@ def create_student_account(*, school, full_name, password, created_by, email='',
     user, _, _, _ = issue_temporary_credential(
         user=user, issued_by=created_by, raw_password=password, request=request,
     )
+    counselor = created_by.supervising_counselor if created_by.role == User.Role.ASSISTANT else created_by
     profile = ensure_student_profile(
         user,
-        assigned_counselor=created_by if created_by.role == User.Role.COUNSELOR else None,
+        assigned_counselor=counselor if counselor.role == User.Role.COUNSELOR else None,
     )
+    if created_by.role == User.Role.ASSISTANT:
+        # The student stays the counselor's and is given to the assistant who added them.
+        StudentProfile.objects.filter(pk=profile.pk).update(assigned_assistant=created_by)
+        profile.assigned_assistant = created_by
     ActivityLog.objects.create(actor=created_by, student=profile, action=f'Student profile created: {full_name}')
     return profile

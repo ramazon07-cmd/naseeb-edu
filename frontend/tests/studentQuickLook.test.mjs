@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attentionItems, weekDeadlines, weekOf } from '../src/lib/studentQuickLook.js';
+import { attentionItems, quickRecordEndpoints, weekDeadlines, weekOf } from '../src/lib/studentQuickLook.js';
+
+test('quick look requests the counselor collections, roadmap only while it is open', () => {
+  const endpoints = quickRecordEndpoints({ role: 'assistant' });
+  assert.deepEqual(endpoints, quickRecordEndpoints({ role: 'counselor' }));
+  for (const role of ['assistant', 'counselor', 'student']) assert.ok(!quickRecordEndpoints({ role }).includes('roadmap-missions'));
+  assert.ok(quickRecordEndpoints({ role: 'teacher' }).includes('roadmap-missions'));
+  assert.ok(quickRecordEndpoints({ role: 'counselor' }).includes('recommendations'));
+  assert.equal(quickRecordEndpoints({ role: 'assistant' }), endpoints, 'the hook receives a stable dependency');
+});
 
 test('a week runs Monday to Sunday', () => {
   assert.deepEqual(weekOf('2026-10-11'), ['2026-10-05', '2026-10-11']);

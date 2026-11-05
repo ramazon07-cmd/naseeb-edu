@@ -163,7 +163,7 @@ test('polling is fast only while someone else is in the essay', () => {
 });
 
 test('history names who suggested and who decided', () => {
-  assert.deepEqual(historyLine({kind: 'suggest', author_name: 'Madina', detail: {suggestions: 2}}), {key: '{name} suggested {n} edits', n: 2, name: 'Madina'});
+  assert.deepEqual(historyLine({kind: 'suggest', author_name: 'Firdavs', detail: {suggestions: 2}}), {key: '{name} suggested {n} edits', n: 2, name: 'Firdavs'});
   assert.equal(historyLine({kind: 'suggest', detail: {suggestions: 1}}).key, '{name} suggested 1 edit');
   assert.equal(historyLine({kind: 'decision', author_name: 'Ramazon', detail: {accepted: 1, rejected: 0}}).key, '{name} accepted 1 suggestion');
   assert.equal(historyLine({kind: 'decision', detail: {accepted: 0, rejected: 3}}).key, '{name} rejected {n} suggestions');

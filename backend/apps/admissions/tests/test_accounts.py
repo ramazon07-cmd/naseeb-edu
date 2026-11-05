@@ -72,12 +72,12 @@ class AccountRoleIsolationTests(RoleIsolationBase):
         self.student_a_user.refresh_from_db()
         self.assertEqual(self.student_a_user.school, self.school_a)
 
-    def test_organization_cannot_delete_own_student(self):
+    def test_organization_deactivates_own_student_without_deleting(self):
         self.client.force_authenticate(self.organization)
         user_id = self.student_a_user.id
         response = self.client.delete(f'/api/students/{self.student_a.id}/')
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertTrue(User.objects.filter(id=user_id, is_active=True).exists())
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertTrue(User.objects.filter(id=user_id, is_active=False).exists())
 
     def test_counselor_cannot_create_account_for_another_school(self):
         self.client.force_authenticate(self.counselor)

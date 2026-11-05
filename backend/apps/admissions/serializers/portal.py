@@ -152,6 +152,8 @@ class MeetingAvailabilityRepeatSerializer(serializers.Serializer):
 
     weekdays = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), min_length=1, max_length=7)
     time = serializers.TimeField()
+    # Optional: the range runs from `time` to `end_time`, cut into `duration_minutes` slots.
+    end_time = serializers.TimeField(required=False, allow_null=True, default=None)
     duration_minutes = serializers.IntegerField(required=False, default=45)
     start_date = serializers.DateField()
     end_date = serializers.DateField()
@@ -171,6 +173,8 @@ class MeetingAvailabilityRepeatSerializer(serializers.Serializer):
             raise serializers.ValidationError({'end_date': 'Choose an end date on or after the start date.'})
         if attrs['end_date'] - attrs['start_date'] >= timedelta(days=MAX_REPEAT_DAYS):
             raise serializers.ValidationError({'end_date': 'Repeat for at most 12 weeks.'})
+        if attrs['end_time'] is not None and attrs['end_time'] <= attrs['time']:
+            raise serializers.ValidationError({'end_time': 'Choose an end time after the start time.'})
         return attrs
 
 

@@ -220,6 +220,27 @@ class MeetingAvailabilityTests(RoleIsolationBase):
         }, format='json')
         self.assertEqual((again.status_code, again.data['created'], again.data['skipped']), (200, 0, 8))
 
+    def test_a_time_range_is_cut_into_slots(self):
+        tz = ZoneInfo('Asia/Tashkent')
+        day = timezone.localdate() + timedelta(days=3)
+        payload = {'weekdays': [day.weekday()], 'time': '09:00', 'end_time': '11:00', 'duration_minutes': 45,
+                   'start_date': day.isoformat(), 'end_date': day.isoformat(), 'timezone': 'Asia/Tashkent'}
+        self.client.force_authenticate(self.counselor)
+        response = self.client.post('/api/bookings/availability/repeat/', payload, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        starts = sorted(MeetingAvailability.objects.filter(participant=self.counselor).values_list('starts_at', flat=True))
+        # 10:30 would end at 11:15, past the range.
+        self.assertEqual([start.astimezone(tz).strftime('%H:%M') for start in starts], ['09:00', '09:45'])
+        backwards = self.client.post('/api/bookings/availability/repeat/', {**payload, 'end_time': '08:00'}, format='json')
+        self.assertEqual(backwards.status_code, 400)
+        self.assertIn('end_time', backwards.data)
+        # Every day for 12 weeks, all day long, is far past the per-request cap and adds nothing.
+        huge = self.client.post('/api/bookings/availability/repeat/', {
+            **payload, 'weekdays': list(range(7)), 'time': '00:00', 'end_time': '23:30', 'duration_minutes': 30,
+            'end_date': (day + timedelta(weeks=11)).isoformat()}, format='json')
+        self.assertEqual(huge.status_code, 400)
+        self.assertEqual(MeetingAvailability.objects.filter(participant=self.counselor).count(), 2)
+
     def test_repeat_weekly_is_capped_and_staff_only(self):
         start = timezone.localdate() + timedelta(days=1)
         payload = {'weekdays': [0], 'time': '10:00', 'start_date': start.isoformat(),

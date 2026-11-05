@@ -37,7 +37,7 @@ export function replaceById(list, next) {
 }
 
 // History line for a version made by feedback or decisions, as a message key
-// plus its values: "Madina suggested 2 edits", "Ramazon accepted 1 suggestion".
+// plus its values: "Firdavs suggested 2 edits", "Ramazon accepted 1 suggestion".
 // Null for ordinary versions (they keep their usual title).
 export function historyLine(checkpoint) {
   const name = checkpoint?.author_name

@@ -12,7 +12,6 @@
 export const REVIEW_SOURCES = [
   { kind: 'task', listKey: 'tasks', endpoint: 'tasks', filters: { status: 'submitted' }, label: 'Task', pill: 'Tasks', when: 'submitted {when}', countPattern: '{n} task|{n} tasks', at: (item) => item.submitted_at || item.updated_at },
   { kind: 'document', listKey: 'documents', endpoint: 'documents', filters: { awaiting_review: 'true' }, label: 'Document', pill: 'Documents', when: 'uploaded {when}', countPattern: '{n} document|{n} documents', at: (item) => item.updated_at },
-  { kind: 'roadmap', listKey: 'roadmapMissions', endpoint: 'roadmap-missions', filters: { status: 'submitted' }, label: 'Roadmap', pill: 'Roadmap', when: 'submitted {when}', countPattern: '{n} mission|{n} missions', at: (item) => item.updated_at },
   { kind: 'portfolio', listKey: 'achievements', endpoint: 'achievements', filters: { awaiting_review: 'true' }, label: 'Portfolio', pill: 'Portfolio', when: 'added {when}', countPattern: '{n} portfolio item|{n} portfolio items', at: (item) => item.created_at },
 ];
 

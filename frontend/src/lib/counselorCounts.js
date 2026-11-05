@@ -8,8 +8,8 @@ import { pendingMeetings } from './meetings.js';
 const count = (value) => Math.max(0, Number(value) || 0);
 
 // Review's kinds, in the order of its filter pills, and the stats field of each.
-export const REVIEW_KINDS = ['task', 'document', 'roadmap', 'portfolio'];
-const REVIEW_STAT = { task: 'tasks', document: 'documents', roadmap: 'roadmap', portfolio: 'portfolio' };
+export const REVIEW_KINDS = ['task', 'document', 'portfolio'];
+const REVIEW_STAT = { task: 'tasks', document: 'documents', portfolio: 'portfolio' };
 
 export function reviewCounts(stats) {
   const byKind = Object.fromEntries(REVIEW_KINDS.map((kind) => [kind, count(stats?.review?.[REVIEW_STAT[kind]])]));

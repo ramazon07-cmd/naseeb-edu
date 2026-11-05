@@ -53,6 +53,31 @@ MESSAGES = {
         'ru': 'Эта ссылка-приглашение больше не действует. Попросите у консультанта новую.',
         'en': 'This invitation link is no longer valid. Ask your counselor for a new one.',
     },
+    'assistant_invite_subject': {
+        'uz': '{counselor} sizni Naseeb Edu’da assistent bo‘lishga taklif qildi',
+        'ru': '{counselor} приглашает вас стать ассистентом в Naseeb Edu',
+        'en': '{counselor} invited you to be their assistant on Naseeb Edu',
+    },
+    'assistant_invite_body': {
+        'uz': (
+            'Assalomu alaykum, {name}!\n\n'
+            '{counselor} ({school}) sizni Naseeb Edu’da counselor assistenti sifatida taklif qildi.\n'
+            'Login va parolingizni o‘rnatish uchun havolani oching:\n\n{link}\n\n'
+            'Havola {days} kun amal qiladi va faqat bir marta ishlaydi.'
+        ),
+        'ru': (
+            'Здравствуйте, {name}!\n\n'
+            '{counselor} ({school}) приглашает вас стать ассистентом консультанта в Naseeb Edu.\n'
+            'Откройте ссылку, чтобы задать логин и пароль:\n\n{link}\n\n'
+            'Ссылка действует {days} дн. и срабатывает один раз.'
+        ),
+        'en': (
+            'Hello {name},\n\n'
+            '{counselor} ({school}) invited you to Naseeb Edu as their counselor assistant.\n'
+            'Open this link to set your login and password:\n\n{link}\n\n'
+            'The link works once and stays valid for {days} days.'
+        ),
+    },
     'awaiting_confirmation': {
         'uz': 'Maslahatchingiz sizni hali tasdiqlamadi.',
         'ru': 'Ваш консультант ещё не подтвердил вас.',

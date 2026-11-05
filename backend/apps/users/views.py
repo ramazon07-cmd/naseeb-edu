@@ -357,14 +357,19 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def change_password(self, request):
         if not request.user.must_change_password:
             return Response({'detail': 'No mandatory password change is pending.'}, status=400)
+        from apps.admissions.services import choose_student_grade
+
         serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         try:
-            user = complete_password_change(
-                user=request.user,
-                new_password=serializer.validated_data['new_password'],
-                request=request,
-            )
+            with transaction.atomic():
+                user = complete_password_change(
+                    user=request.user,
+                    new_password=serializer.validated_data['new_password'],
+                    request=request,
+                )
+                if serializer.validated_data.get('grade'):
+                    choose_student_grade(user, serializer.validated_data['grade'])
         except ValueError as exc:
             if str(exc) == 'password_reuse':
                 return Response({'new_password': ['Choose a password different from the temporary password.']}, status=400)

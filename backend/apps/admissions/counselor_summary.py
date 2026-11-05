@@ -268,12 +268,13 @@ def review_items(students, limit=REVIEW_ITEM_LIMIT):
 
     ``id`` is the Review page's own item id (``kind-recordId``) and ``at`` the
     moment it uses for "oldest first", so a click opens the same item.
+    Roadmap is closed in this workspace: exclude it before applying the limit,
+    so hidden missions cannot push visible tasks out of Home's first page.
     """
     sources = (
         ('task', Task.objects.filter(student__in=students, status=Task.Status.SUBMITTED)
          .annotate(at=Coalesce('submitted_at', 'updated_at'))),
         ('document', Document.objects.filter(DOCUMENT_AWAITING_REVIEW, student__in=students).annotate(at=F('updated_at'))),
-        ('roadmap', RoadmapMission.objects.filter(student__in=students, status=RoadmapMission.Status.SUBMITTED).annotate(at=F('updated_at'))),
         ('portfolio', Achievement.objects.filter(student__in=students, verified=False, counselor_comment='').annotate(at=F('created_at'))),
     )
     items = []

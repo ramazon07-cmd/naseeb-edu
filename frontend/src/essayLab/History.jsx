@@ -13,7 +13,7 @@ const REASONS = {
   manual: { title: 'Saved by you', note: 'named by you' },
 }
 
-// "Madina suggested 2 edits", "You accepted 1 suggestion": versions made by feedback name the person.
+// "Firdavs suggested 2 edits", "You accepted 1 suggestion": versions made by feedback name the person.
 function checkpointTitle(checkpoint) {
   const line = historyLine(checkpoint)
   if (line) {

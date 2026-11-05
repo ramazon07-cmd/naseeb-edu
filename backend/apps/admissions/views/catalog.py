@@ -83,7 +83,7 @@ class SchoolViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         if self.request.user.is_product_admin:
             return self.queryset
-        if self.request.user.role == User.Role.COUNSELOR and self.request.user.school_id:
+        if self.request.user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT} and self.request.user.school_id:
             return self.queryset.filter(id=self.request.user.school_id)
         if self.request.user.is_organization and self.request.user.school_id:
             return self.queryset.filter(id=self.request.user.school_id)

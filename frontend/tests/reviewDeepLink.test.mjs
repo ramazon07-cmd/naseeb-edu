@@ -16,7 +16,7 @@ test('a malformed review item falls back to the bare queue', () => {
 
 test('review links name a kind and a record id', () => {
   assert.deepEqual(parseReviewItemId('document-12'), { kind: 'document', recordId: 12 });
-  for (const id of ['essay-3', 'task-0', 'task-', 'task-1x', null, undefined, '']) assert.equal(parseReviewItemId(id), null, String(id));
+  for (const id of ['essay-3', 'roadmap-3', 'task-0', 'task-', 'task-1x', null, undefined, '']) assert.equal(parseReviewItemId(id), null, String(id));
 });
 
 test('a linked item opens only itself: found, wait for the lists, or fetch it alone', () => {
@@ -48,4 +48,9 @@ test('a fetched record is shown only while it still waits for review', () => {
   assert.equal(awaitingReview('portfolio', { verified: false, counselor_comment: '' }), true);
   assert.equal(awaitingReview('portfolio', { verified: false, counselor_comment: 'Add proof' }), false);
   assert.equal(awaitingReview('portfolio', { verified: true }), false);
+});
+
+test('old roadmap links never fetch a closed module from Review', () => {
+  assert.equal(deepLinkStep('roadmap-3', [], true), 'gone');
+  assert.equal(linkedReviewItem('roadmap-3', { id: 3, status: 'submitted' }), null);
 });
