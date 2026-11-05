@@ -247,6 +247,8 @@ class StudentProfileProvisioningTests(APITestCase):
     def test_admin_created_student_account_gets_profile_and_can_onboard(self):
         self.client.force_authenticate(self.admin)
         response = self.client.post('/api/students/quick-create/', {
+            'email': 'student@example.com',
+            'phone': '+998901234567',
             'name': 'Prov Student', 'password': 'StrongStudent123!', 'school': self.school.id,
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
@@ -261,6 +263,8 @@ class StudentProfileProvisioningTests(APITestCase):
     def test_counselor_created_student_is_assigned_to_them(self):
         self.client.force_authenticate(self.counselor)
         response = self.client.post('/api/students/quick-create/', {
+            'email': 'student@example.com',
+            'phone': '+998901234567',
             'name': 'Prov Student Two', 'password': 'StrongStudent123!',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)

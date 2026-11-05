@@ -691,12 +691,13 @@ class QuickCreateTests(AuditFixtureMixin, APITestCase):
     """Quick-create usernames, email case and placeholder domain."""
 
     def create(self, **extra):
-        payload = {'name': 'Aziz Karimov', 'password': 'StudentPass123!', **extra}
+        payload = {'name': 'Aziz Karimov', 'password': 'StudentPass123!', 'email': 'new-student@example.com', 'phone': '+998901234567', **extra}
         return self.client.post('/api/students/quick-create/', payload, format='json')
 
     def test_usernames_are_unique_and_placeholder_domain_is_invalid(self):
         self.client.force_authenticate(self.counselor)
-        first, second = self.create(), self.create()
+        # The fixture already holds this address, so both accounts get a placeholder.
+        first, second = self.create(email='audit-student@example.com'), self.create(email='audit-student@example.com')
         self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
         self.assertEqual(second.status_code, status.HTTP_201_CREATED, second.data)
         users = User.objects.filter(first_name='Aziz').order_by('id')
@@ -717,6 +718,17 @@ class QuickCreateTests(AuditFixtureMixin, APITestCase):
         self.assertEqual(User.objects.filter(email__iexact='audit-student@example.com').count(), 1)
         self.assertTrue(User.objects.get(first_name='Taken').email.endswith('@students.naseeb.invalid'))
         self.assertEqual(User.objects.get(first_name='Free').email, 'brand-new-address@example.com')
+
+    def test_email_and_phone_are_required(self):
+        self.client.force_authenticate(self.counselor)
+        for missing in ('email', 'phone'):
+            response = self.create(name='No Contact', **{missing: ''})
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, missing)
+            self.assertIn(missing, response.data)
+        bad = self.create(name='No Contact', email='not-an-email')
+        self.assertEqual(bad.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', bad.data)
+        self.assertFalse(User.objects.filter(first_name='No').exists())
 
     def test_username_race_falls_through_to_next_name(self):
         from unittest import mock

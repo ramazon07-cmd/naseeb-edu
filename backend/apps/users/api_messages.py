@@ -744,9 +744,9 @@ EXACT = {
         'uz': 'O‘z hisobingizni faolsizlantira olmaysiz.',
         'ru': 'Нельзя деактивировать собственную учётную запись.',
     },
-    'Temporary credentials are only available for student, school and counselor accounts.': {
-        'uz': 'Vaqtinchalik parol faqat o‘quvchi, maktab va counselor hisoblari uchun beriladi.',
-        'ru': 'Временный пароль выдаётся только ученикам, школам и консультантам.',
+    'Temporary credentials are only available for student, school, counselor and staff accounts.': {
+        'uz': 'Vaqtinchalik parol faqat o‘quvchi, maktab, counselor va xodim hisoblari uchun beriladi.',
+        'ru': 'Временный пароль выдаётся только ученикам, школам, консультантам и сотрудникам.',
     },
     'You cannot issue credentials for this account.': {
         'uz': 'Bu hisob uchun vaqtinchalik parol bera olmaysiz.',
@@ -811,6 +811,34 @@ EXACT = {
     'Parent accounts are not connected to a school.': {
         'uz': 'Ota-ona hisoblari maktabga biriktirilmaydi.',
         'ru': 'Учётные записи родителей не привязываются к школе.',
+    },
+    'Assistants must be connected to a school.': {
+        'uz': 'Assistent maktabga biriktirilgan bo‘lishi kerak.',
+        'ru': 'Ассистент должен быть привязан к школе.',
+    },
+    'This email address already has an account.': {
+        'uz': 'Bu email manzili bilan hisob allaqachon mavjud.',
+        'ru': 'С этим адресом электронной почты уже есть учётная запись.',
+    },
+    'This email address is already used by another account.': {
+        'uz': 'Bu email manzili boshqa hisobda ishlatilgan.',
+        'ru': 'Этот адрес электронной почты уже используется другой учётной записью.',
+    },
+    'This username or email address is already in use.': {
+        'uz': 'Bu login yoki email manzili band.',
+        'ru': 'Этот логин или адрес электронной почты уже занят.',
+    },
+    'Choose only your own active students.': {
+        'uz': 'Faqat o‘zingizning faol o‘quvchilaringizni tanlang.',
+        'ru': 'Выбирайте только своих активных учеников.',
+    },
+    'This assistant is deactivated.': {
+        'uz': 'Bu assistent o‘chirilgan.',
+        'ru': 'Этот ассистент отключён.',
+    },
+    'Only a counselor can manage assistants.': {
+        'uz': 'Assistentlarni faqat maslahatchi boshqara oladi.',
+        'ru': 'Управлять ассистентами может только консультант.',
     },
     'Create students with quick-create so they get a school, a profile and a credential.': {
         'uz': 'O‘quvchini tezkor qo‘shish orqali yarating: shunda unga maktab, profil va parol beriladi.',
@@ -888,9 +916,21 @@ EXACT = {
         'uz': 'Yo‘l xaritasi shablonlarini faqat platforma administratori o‘chira oladi.',
         'ru': 'Удалять шаблоны планов может только администратор платформы.',
     },
-    'Only a product admin can deactivate a student.': {
-        'uz': 'O‘quvchini faqat platforma administratori faolsizlantira oladi.',
-        'ru': 'Деактивировать ученика может только администратор платформы.',
+    'Choose an end time after the start time.': {
+        'uz': 'Tugash vaqtini boshlanish vaqtidan keyin tanlang.',
+        'ru': 'Выберите время окончания позже времени начала.',
+    },
+    'That adds too many times at once. Choose fewer days or a shorter range.': {
+        'uz': 'Bir martada juda ko‘p vaqt qo‘shilyapti. Kamroq kun yoki qisqaroq oraliq tanlang.',
+        'ru': 'Слишком много времени за один раз. Выберите меньше дней или короче промежуток.',
+    },
+    'Cancel this meeting first. Only closed or past meetings can be deleted.': {
+        'uz': 'Avval uchrashuvni bekor qiling. Faqat yopilgan yoki o‘tib ketgan uchrashuvlarni o‘chirish mumkin.',
+        'ru': 'Сначала отмените встречу. Удалять можно только закрытые или прошедшие встречи.',
+    },
+    'Only the school or a product admin can deactivate a student.': {
+        'uz': 'O‘quvchini faqat maktab yoki platforma administratori faolsizlantira oladi.',
+        'ru': 'Деактивировать ученика может только школа или администратор платформы.',
     },
     'Only a product admin can edit counselor roadmaps.': {
         'uz': 'Maslahatchi yo‘l xaritalarini faqat platforma administratori tahrirlay oladi.',

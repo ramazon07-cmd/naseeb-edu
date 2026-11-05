@@ -42,7 +42,7 @@ export const sectionFromNotice = (targetId) => PROFILE_SECTIONS[Number(targetId)
 
 export const sectionByKey = (key) => PROFILE_SECTIONS.find((section) => section.key === key) || null;
 
-export const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
+export const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China', 'Europe', 'Other'];
 // Older records hold spellings this form never offered ('USA', 'Singapore').
 // They match no checkbox, so they stay invisible on screen yet are still sent
 // on save, and the backend rejects the whole field for a country the student

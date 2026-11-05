@@ -13,14 +13,14 @@ const SERVER = {
   documents: { kind: 'document', title: 'Required documents are missing', message: '2 required document(s) still need to be uploaded.' },
   deadline: { kind: 'deadline', title: 'University deadline approaching', message: 'Stanford University deadline is 2026-10-01.' },
   essay: { kind: 'essay', title: 'Essay shared with counselor', message: 'Ramazon Ergashev shared an essay for review.' },
-  approved: { kind: 'meeting', title: 'Meeting approved', message: 'Your meeting with Madina Counselor on 29 Sep 2026, 17:42 is now approved.' },
+  approved: { kind: 'meeting', title: 'Meeting approved', message: 'Your meeting with Firdavs Counselor on 29 Sep 2026, 17:42 is now approved.' },
   rejected: { kind: 'meeting', title: 'Meeting rejected', message: 'Your meeting with your meeting participant on 01 Oct 2026, 09:00 is now rejected.' },
-  completed: { kind: 'meeting', title: 'Meeting completed', message: 'Your meeting with Madina Counselor on 29 Sep 2026, 17:42 is now completed.' },
-  cancelledByStaff: { kind: 'meeting', title: 'Meeting cancelled', message: 'Your meeting with Madina Counselor on 29 Sep 2026, 17:42 was cancelled.' },
+  completed: { kind: 'meeting', title: 'Meeting completed', message: 'Your meeting with Firdavs Counselor on 29 Sep 2026, 17:42 is now completed.' },
+  cancelledByStaff: { kind: 'meeting', title: 'Meeting cancelled', message: 'Your meeting with Firdavs Counselor on 29 Sep 2026, 17:42 was cancelled.' },
   cancelledByStudent: { kind: 'meeting', title: 'Meeting cancelled', message: 'Ramazon cancelled the meeting "Essay review" on 29 Sep 2026, 17:42.' },
   reschedule: { kind: 'meeting', title: 'Meeting reschedule requested', message: 'Ramazon asked to move "Essay review" to 2 Oct 2026, 10:30.' },
-  confirmed: { kind: 'meeting', title: 'Meeting confirmed', message: 'Your meeting with Madina Counselor on 29 Sep 2026, 17:42 (Tashkent time) is now confirmed.' },
-  ownReschedule: { kind: 'meeting', title: 'Meeting reschedule requested', message: 'You asked to move "Essay review" to 02 Oct 2026, 18:00 (Tashkent time). Waiting for Madina Counselor to confirm.' },
+  confirmed: { kind: 'meeting', title: 'Meeting confirmed', message: 'Your meeting with Firdavs Counselor on 29 Sep 2026, 17:42 (Tashkent time) is now confirmed.' },
+  ownReschedule: { kind: 'meeting', title: 'Meeting reschedule requested', message: 'You asked to move "Essay review" to 02 Oct 2026, 18:00 (Tashkent time). Waiting for Firdavs Counselor to confirm.' },
   remindTask: { kind: 'task', title: 'Your counselor sent a reminder', message: '“Recommendation letter request” is due 2026-07-18.' },
   remindMission: { kind: 'task', title: 'Your counselor sent a reminder', message: '“Research 10 universities” is on your roadmap.' },
   remindDocument: { kind: 'document', title: 'Your counselor sent a reminder', message: 'Please upload “Passport”.' },
@@ -40,15 +40,15 @@ test('known server notices are rewritten in Uzbek and Russian', () => {
   setLanguage('uz');
   assert.equal(notificationMessage(SERVER.lateTasks), '3 ta vazifaning muddati o‘tib ketgan.');
   assert.match(notificationMessage(SERVER.deadline), /^Stanford University uchun topshirish muddati: /);
-  assert.match(notificationMessage(SERVER.approved), /^Madina Counselor bilan uchrashuvingiz \(29.*2026.*17:42\) tasdiqlandi\.$/);
+  assert.match(notificationMessage(SERVER.approved), /^Firdavs Counselor bilan uchrashuvingiz \(29.*2026.*17:42\) tasdiqlandi\.$/);
   setLanguage('ru');
   assert.equal(notificationMessage(SERVER.oneTask), '1 задача просрочена.');
   assert.equal(notificationMessage(SERVER.lateTasks), '3 задачи просрочены.');
   assert.match(notificationMessage(SERVER.rejected), /^Ваша встреча с участником встречи \(.+\) отклонена\.$/);
   assert.match(notificationMessage(SERVER.reschedule), /«Essay review»/);
-  assert.match(notificationMessage(SERVER.ownReschedule), /^Вы попросили перенести встречу «Essay review» на .*18:00 \(по ташкентскому времени\)\. Madina Counselor /);
+  assert.match(notificationMessage(SERVER.ownReschedule), /^Вы попросили перенести встречу «Essay review» на .*18:00 \(по ташкентскому времени\)\. Firdavs Counselor /);
   setLanguage('uz');
-  assert.match(notificationMessage(SERVER.confirmed), /^Madina Counselor bilan uchrashuvingiz \(.*17:42 \(Toshkent vaqti\)\) tasdiqlandi\.$/);
+  assert.match(notificationMessage(SERVER.confirmed), /^Firdavs Counselor bilan uchrashuvingiz \(.*17:42 \(Toshkent vaqti\)\) tasdiqlandi\.$/);
 });
 
 test('English keeps the details and reads naturally', () => {
@@ -56,10 +56,10 @@ test('English keeps the details and reads naturally', () => {
   assert.equal(notificationMessage(SERVER.oneTask), '1 task is past its deadline.');
   assert.equal(notificationMessage(SERVER.documents), '2 required documents still need to be uploaded.');
   assert.equal(notificationMessage(SERVER.essay), 'Ramazon Ergashev shared an essay for review.');
-  assert.match(notificationMessage(SERVER.approved), /^Your meeting with Madina Counselor on .*2026.* was approved\.$/);
+  assert.match(notificationMessage(SERVER.approved), /^Your meeting with Firdavs Counselor on .*2026.* was approved\.$/);
   assert.equal(notificationTitle(SERVER.approved), 'Meeting approved');
-  assert.match(notificationMessage(SERVER.confirmed), /^Your meeting with Madina Counselor on .*2026.*17:42 \(Tashkent time\) was confirmed\.$/);
-  assert.match(notificationMessage(SERVER.ownReschedule), /^You asked to move “Essay review” to .*18:00 \(Tashkent time\)\. Waiting for Madina Counselor to confirm\.$/);
+  assert.match(notificationMessage(SERVER.confirmed), /^Your meeting with Firdavs Counselor on .*2026.*17:42 \(Tashkent time\) was confirmed\.$/);
+  assert.match(notificationMessage(SERVER.ownReschedule), /^You asked to move “Essay review” to .*18:00 \(Tashkent time\)\. Waiting for Firdavs Counselor to confirm\.$/);
 });
 
 test('unknown kinds and sentences fall back to the server text', () => {

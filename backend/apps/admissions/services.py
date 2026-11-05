@@ -248,3 +248,11 @@ def ensure_student_profile(user, *, assigned_counselor=None, actor=None):
 
         move_student(profile, school, actor)
     return profile
+
+
+def choose_student_grade(user, grade):
+    """Save the class a student picks at their first sign-in. Staff have no profile, so nothing changes for them."""
+    profile = StudentProfile.objects.filter(user=user).first()
+    if profile:
+        profile.grade = grade
+        profile.save(update_fields=['grade', 'updated_at'])

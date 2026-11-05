@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Copy, Link2, UserPlus } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, t, tp } from '../i18n';
-import { dateTimeText, gradeText, joinParts } from '../lib/format';
+import { GRADES, dateTimeText, gradeText, joinParts } from '../lib/format';
 import { Field } from './forms';
 import { Modal } from './ui';
 import { CxAvatar, CxCard, CxHead, CxTabs, CxTag } from './counselorUi';
@@ -10,13 +10,12 @@ import { QuickCreateStudentForm } from '../pages/StudentsPage';
 import { PageSkeleton } from './states';
 import '../invites.css';
 
-const GRADES = ['8', '9', '10', '11', 'gap'];
 // Magic link lifetimes the counselor can pick; one day is the default.
 const LINK_HOURS = [[24, '1 day'], [72, '3 days'], [168, '7 days']];
 
-const inviteUrl = (path) => `${window.location.origin}${path}`;
+export const inviteUrl = (path) => `${window.location.origin}${path}`;
 
-function CopyField({ value, notify, label = t('Invitation link') }) {
+export function CopyField({ value, notify, label = t('Invitation link') }) {
   async function copy(event) {
     const input = event.currentTarget.parentElement.querySelector('input');
     try {
@@ -144,7 +143,8 @@ function CreateAccountTab({ user, data, notify, onCreated, onClose }) {
 // (STUDENT_SELF_JOIN_ENABLED), a personal invite or a shareable magic link.
 // `onJoined` opens Recently joined; `onCreated` runs after a direct creation.
 export function AddStudentModal({ user, data, onClose, notify, onJoined, onCreated }) {
-  const selfJoin = Boolean(user?.student_self_join);
+  // Invites wait for the counselor's confirmation, so an assistant creates the account directly.
+  const selfJoin = Boolean(user?.student_self_join) && user?.role !== 'assistant';
   const [tab, setTab] = useState('create');
   const [counselor, setCounselor] = useState('');
   // Organization accounts pick the counselor; counselors invite for themselves.

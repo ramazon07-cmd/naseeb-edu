@@ -14,10 +14,10 @@ import { StudentQuickPanel } from '../components/StudentQuickPanel';
 import { DownloadCvButton } from '../components/CvDocument';
 import { mergeSaved } from '../lib/mergeSaved';
 import { RecommendationLetters } from '../components/RecommendationLetters';
-import { useStudentRecords } from '../hooks/useStudentRecords';
+import { studentRecordEndpoints, useStudentRecords } from '../hooks/useStudentRecords';
 import { invalidatePagedLists, usePagedList } from '../hooks/usePagedList';
 import { activityText } from '../lib/activityText';
-import { clockText, dateText, dateTimeText, dayLabel, dayMonthText, gradeText, joinParts, localDateKey, relativeDayText } from '../lib/format';
+import { FILTER_GRADES, clockText, dateText, dateTimeText, dayLabel, dayMonthText, gradeOrPending, gradeText, joinParts, localDateKey, relativeDayText } from '../lib/format';
 import { fullName, initials, label } from '../lib/labels';
 import { createLatestRequest } from '../lib/latestRequest';
 import { splitList } from '../lib/profileSections';
@@ -68,8 +68,7 @@ const PAGE_SIZE = 25;
 const VIEW_KEY = 'naseeb-counselor-students-view';
 const STATUS_PILLS = [['all', 'All'], ['need_you', 'Need you'], ['late', 'Late work'], ['missing_documents', 'Missing documents'], ['quiet', 'Quiet for 14+ days'], ['on_track', 'On track']];
 const SORTS = [['need_you', 'Needs you first'], ['late', 'Most late work'], ['name', 'Name A–Z']];
-const GRADES = ['8', '9', '10', '11', 'gap'];
-const COUNTRIES = ['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China'];
+const COUNTRIES =['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China', 'Europe', 'Other'];
 export const STUDENT_LIST_DEFAULTS = Object.freeze({ status: 'all', grade: '', country: '', ordering: 'need_you', page: 1, search: '' });
 
 function readView() {
@@ -150,7 +149,7 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
       const body = <>
         <span className="cs-card-top">
           <CxAvatar name={name} />
-          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeText(student.grade), targetText(student))}</small></span>
+          <span className="cx-row-copy"><b>{name}</b><small>{joinParts(gradeOrPending(student.grade), targetText(student))}</small></span>
         </span>
         <span className="cs-card-foot"><LateWork reasons={reasons} /><StatusTag reasons={reasons} /></span>
       </>;
@@ -162,6 +161,8 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
 }
 
 function CounselorStudentList({ user, data, query, setQuery, listState, setListState, onItems, onOpen, onDirect, onAddStudent, notify, reload }) {
+  // Connecting unassigned students stays with the counselor; an assistant adds new ones, which become theirs.
+  const connectsStudents = user.role !== 'assistant';
   const [view, setView] = useState(readView);
   const [version, setVersion] = useState(0);
   const [selecting, setSelecting] = useState(false);
@@ -265,7 +266,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
         <label className="cs-field"><span>{t("Grade")}</span>
           <select value={state.grade} onChange={(event) => update({ grade: event.target.value })}>
             <option value="">{t("Any grade")}</option>
-            {(list.summary?.grades || GRADES).map((grade) => <option key={grade} value={grade}>{gradeText(grade)}</option>)}
+            {FILTER_GRADES.map((grade) => <option key={grade} value={grade}>{gradeText(grade)}</option>)}
           </select>
         </label>
         <label className="cs-field"><span>{t("Target country")}</span>
@@ -279,17 +280,17 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
             {SORTS.map(([key, title]) => <option key={key} value={key}>{t(title)}</option>)}
           </select>
         </label>
-      </div>
-      <div className="cs-filter-row cs-filter-foot">
-        <div className="cs-chips">
-          {chips.map(([key, text, remove]) => <button key={key} type="button" className="cs-chip" onClick={remove} aria-label={t('Remove filter: {name}', { name: text })}>{text}<X size={13} aria-hidden="true" /></button>)}
-          {filtered && <button type="button" className="cx-btn cs-clear" onClick={clearFilters}>{t("Clear filters")}</button>}
-        </div>
         <div className="cs-view" role="group" aria-label={t("View")}>
           <button type="button" aria-pressed={view === 'table'} onClick={() => changeView('table')}><Rows3 size={15} aria-hidden="true" />{t("Table")}</button>
           <button type="button" aria-pressed={view === 'cards'} onClick={() => changeView('cards')}><LayoutGrid size={15} aria-hidden="true" />{t("Cards")}</button>
         </div>
       </div>
+      {chips.length > 0 && <div className="cs-filter-row cs-filter-foot">
+        <div className="cs-chips">
+          {chips.map(([key, text, remove]) => <button key={key} type="button" className="cs-chip" onClick={remove} aria-label={t('Remove filter: {name}', { name: text })}>{text}<X size={13} aria-hidden="true" /></button>)}
+          {filtered && <button type="button" className="cx-btn cs-clear" onClick={clearFilters}>{t("Clear filters")}</button>}
+        </div>
+      </div>}
     </div>
 
     {list.error && !moving && <div className="alert error" role="alert">{list.error} <button type="button" className="cx-btn" onClick={() => setVersion((value) => value + 1)}>{t("Retry")}</button></div>}
@@ -311,14 +312,14 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
       </div>
     </nav>}
     <p className="cx-footnote">{t("Click a student for a quick look; “Open student” shows their Student 360.")}</p>
-    <CxAccountActions>
+    {connectsStudents && <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setConnecting(true)}>{t("Connect students")}</button>
-    </CxAccountActions>
+    </CxAccountActions>}
 
-    {preview && <StudentQuickPanel student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
+    {preview && <StudentQuickPanel user={user} student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
     {assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
     {adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
-    {connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
+    {connectsStudents && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
   </div>;
 }
 
@@ -494,7 +495,7 @@ function useDocumentHistory(studentId, version) {
   return state.studentId === studentId ? state : { byDocument: new Map(), error: '' };
 }
 
-const REVIEW_ENDPOINTS = ['tasks', 'documents', 'roadmap-missions', 'achievements'];
+const REVIEW_ENDPOINTS = ['tasks', 'documents', 'achievements'];
 const DECISION_ACTIONS = { approved: /^Document approved: /, rejected: /^Document sent back: / };
 
 function documentWhen(doc, history) {
@@ -539,6 +540,28 @@ function useStudentMeetings(studentId, tab) {
   return { upcoming, history };
 }
 
+function Student360Header({ student, onBack, children }) {
+  const name = fullName(student.user_detail);
+  const readiness = student.profile_readiness || { percent: 0, missing: [] };
+  const missing = readiness.missing || [];
+  const meta = joinParts(gradeOrPending(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
+  return <>
+    <div className="cx-s360-top">
+      <button type="button" className="cx-back" onClick={onBack}><ChevronLeft size={16} aria-hidden="true" /><b>{t('Students')}</b></button>
+      <span className="cx-crumb">/ {name}</span>
+      <div className="cx-s360-actions">{children}</div>
+    </div>
+    <section className="cx-hero">
+      <span className="cx-hero-disc" aria-hidden="true">{initials(name)}</span>
+      <div className="cx-hero-copy"><span>{t('STUDENT 360°')}</span><h1>{name}</h1><p>{meta}</p></div>
+      <dl className="cx-hero-stats">
+        <div><dt>{formatPercentLocale(student.progress_percent || 0)}</dt><dd>{t('Application readiness')}</dd><dd>{tp('{done} of {n} item finished|{done} of {n} items finished', student.readiness_items_total ?? 0, { done: student.readiness_items_done ?? 0, n: student.readiness_items_total ?? 0 })}</dd></div>
+        <div><dt>{formatPercentLocale(readiness.percent)}</dt><dd>{t('Profile ready')}</dd><dd>{tp('{n} answer missing|{n} answers missing', missing.length, { n: missing.length })}</dd></div>
+      </dl>
+    </section>
+  </>;
+}
+
 function CounselorStudent360({ student, user, data, onBack, onDirect, notify, reload: reloadWorkspace, setPage, refreshStudent }) {
   const [tab, setTab] = useState('overview');
   const [booking, setBooking] = useState(false);
@@ -548,7 +571,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
   const [document, setDocument] = useState(null);
   const [task, setTask] = useState(null);
   const [noteFor, setNoteFor] = useState(null);
-  const loaded = useStudentRecords(student.id, true);
+  const loaded = useStudentRecords(student.id, true, studentRecordEndpoints(user));
   const records = loaded.records;
   const [historyVersion, setHistoryVersion] = useState(0);
   // Only review decisions and level approvals change the workspace's stats and badges.
@@ -597,34 +620,18 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     return mergeReviewQueue({
       tasks: named((records.tasks || []).filter((item) => item.status === 'submitted')),
       documents: named((records.documents || []).filter((item) => ['uploaded', 'reviewing'].includes(item.status) && hasSubmission('document', item))),
-      roadmapMissions: named((records['roadmap-missions'] || []).filter((item) => item.status === 'submitted')),
       achievements: named((records.achievements || []).filter((item) => !item.verified && !item.counselor_comment)),
     });
   }, [records, name]);
-  const readiness = student.profile_readiness || { percent: 0, missing: [] };
-  const meta = joinParts(gradeText(student.grade), student.school_name, student.target_major, splitList(student.target_countries).map((country) => t(country)).join(', '));
   const tabs = TABS(student, records, letters);
 
   return <div className="cx-page cx-student-360">
-    <div className="cx-s360-top">
-      <button type="button" className="cx-back" onClick={onBack}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button>
-      <span className="cx-crumb">/ {name}</span>
-      <div className="cx-s360-actions">
+    <Student360Header student={student} onBack={onBack}>
         <DownloadCvButton studentId={student.id} className="cx-btn" notify={notify} />
         <button type="button" className="cx-btn" onClick={() => onDirect(student.user_detail?.id)}><MessageCircle size={15} aria-hidden="true" />{t("Message")}</button>
         <button type="button" className="cx-btn" onClick={() => setBooking(true)}><Calendar size={15} aria-hidden="true" />{t("Book meeting")}</button>
         <button type="button" className="cx-btn primary" onClick={() => setAssigning(true)}><Plus size={15} aria-hidden="true" />{t("Assign task")}</button>
-      </div>
-    </div>
-
-    <section className="cx-hero">
-      <span className="cx-hero-disc" aria-hidden="true">{initials(name)}</span>
-      <div className="cx-hero-copy"><span>{t("STUDENT 360°")}</span><h1>{name}</h1><p>{meta}</p></div>
-      <dl className="cx-hero-stats">
-        <div><dt>{formatPercentLocale(student.progress_percent || 0)}</dt><dd>{t("Application readiness")}</dd><dd>{tp('{done} of {n} item finished|{done} of {n} items finished', student.readiness_items_total ?? 0, { done: student.readiness_items_done ?? 0, n: student.readiness_items_total ?? 0 })}</dd></div>
-        <div><dt>{formatPercentLocale(readiness.percent)}</dt><dd>{t("Profile ready")}</dd><dd>{tp('{n} answer missing|{n} answers missing', readiness.missing.length, { n: readiness.missing.length })}</dd></div>
-      </dl>
-    </section>
+    </Student360Header>
 
     <CxTabs items={tabs} active={tab} onChange={setTab} label={t("Student sections")} />
     {loaded.error && <div className="alert error" role="alert">{loaded.error}</div>}
@@ -632,10 +639,11 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     {tab === 'overview' && <>
       <Overview student={student} records={records} meetings={upcoming} name={student.user_detail?.first_name || name} notify={notify} reload={reload} goTo={setTab} />
     </>}
-    <CxAccountActions>
+    {/* Logins and parents are the counselor's; an assistant has neither. */}
+    {user.role !== 'assistant' && <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setCredential(true)}>{t("Reset login")}</button>
       <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>
-    </CxAccountActions>
+    </CxAccountActions>}
     {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={() => reload({ endpoints: REVIEW_ENDPOINTS, workspace: true })} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}
     {tab === 'tasks' && <div className="section-stack">
       <RecordCard title={t("Tasks")} count={records.tasks?.length} loading={loaded.loading} empty={t("No assigned tasks found.")}>

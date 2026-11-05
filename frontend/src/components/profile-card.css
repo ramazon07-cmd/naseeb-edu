@@ -12,19 +12,6 @@
   --id-card-button-text: #fff;
 }
 
-:root[data-theme='dark'] {
-  --id-card-paper: var(--canvas);
-  --id-card-ink: var(--text);
-  --id-card-label: var(--muted);
-  --id-card-primary: var(--text);
-  --id-card-secondary: var(--accent);
-  --id-card-accent: var(--accent-muted);
-  --id-card-border: var(--border);
-  --id-card-button: var(--accent);
-  --id-card-button-hover: var(--accent-hover);
-  --id-card-button-text: var(--accent-contrast);
-}
-
 /* The card and its copy side by side; the detailed scores are on the card's back. */
 .profile-card-panel {
   display: grid;

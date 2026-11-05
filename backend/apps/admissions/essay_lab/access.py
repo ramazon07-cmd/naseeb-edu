@@ -3,7 +3,8 @@
 The owner student can edit their text. Approved essays keep feedback read-only
 for everyone. Anyone else needs the essay shared
 (and not in the trash): the student's assigned counselor, in the student's
-own active school, gets what `Essay.counselor_access` allows; a platform
+own active school, gets what `Essay.counselor_access` allows, and so does
+the assistant that counselor gave the student to; a platform
 admin may only read (their reads are audited). Everyone else — other
 counselors, school accounts, teachers, parents — gets nothing, so the essay
 and its comments look missing to them.
@@ -42,9 +43,14 @@ def resolve_access(user, essay):
         return NONE
     if user.is_product_admin:
         return READ_ONLY
-    if user.role != User.Role.COUNSELOR:
+    if user.role == User.Role.ASSISTANT:
+        from ..scoping import visible_students
+
+        if not visible_students(user).filter(pk=student.pk, deactivated_at__isnull=True).exists():
+            return NONE
+    elif user.role != User.Role.COUNSELOR:
         return NONE
-    if not (
+    elif not (
         user.school_id
         and student.assigned_counselor_id == user.id
         and student.school_id == user.school_id

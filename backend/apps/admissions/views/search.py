@@ -104,6 +104,7 @@ STUDENT_RECORD_TYPES = (
 # students, tasks, missions and bookings; parents have no list endpoints here.
 ROLE_SEARCH_TYPES = {
     User.Role.COUNSELOR: (*STUDENT_RECORD_TYPES, 'supportTickets'),
+    User.Role.ASSISTANT: STUDENT_RECORD_TYPES,
     User.Role.ORGANIZATION: (*STUDENT_RECORD_TYPES, 'supportTickets'),
     User.Role.STUDENT: (*STUDENT_RECORD_TYPES, 'supportTickets', 'universities'),
     User.Role.TEACHER: ('students', 'tasks', 'roadmapMissions', 'bookings'),

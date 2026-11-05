@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
+from apps.admissions.models import StudentProfile
 from . import entitlements
 from .admin_permissions import has_tier
 from .credentials import issue_temporary_credential
@@ -30,6 +31,7 @@ class UserSerializer(serializers.ModelSerializer):
     school_workspace_type = serializers.CharField(source='school.workspace_type', read_only=True)
     credential_status = serializers.SerializerMethodField()
     credential_expires_at = serializers.SerializerMethodField()
+    supervising_counselor_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -38,6 +40,7 @@ class UserSerializer(serializers.ModelSerializer):
             'role', 'phone', 'position', 'avatar', 'school', 'school_name', 'school_workspace_type',
             'is_active', 'is_superuser', 'admin_tier', 'staff_tier', 'last_login',
             'must_change_password', 'password_changed_at', 'credential_status', 'credential_expires_at',
+            'supervising_counselor_name',
         )
         read_only_fields = (
             'id', 'full_name', 'must_change_password', 'password_changed_at', 'last_login',
@@ -48,6 +51,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj) -> str | None:
         return obj.get_full_name() or obj.username
+
+    def get_supervising_counselor_name(self, obj) -> str | None:
+        # Only assistants have one; skip the lookup for everyone else.
+        counselor = obj.supervising_counselor if obj.role == User.Role.ASSISTANT else None
+        return (counselor.get_full_name() or counselor.username) if counselor else None
 
     def _credential(self, obj):
         if not hasattr(obj, '_latest_temporary_credential'):
@@ -167,6 +175,8 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'school': 'Counselors must be connected to a school.'})
         if role == User.Role.PARENT and school:
             raise serializers.ValidationError({'school': 'Parent accounts are not connected to a school.'})
+        if role == User.Role.ASSISTANT and not school:
+            raise serializers.ValidationError({'school': 'Assistants must be connected to a school.'})
         try:
             validate_workspace_membership(role=role, school=school, user=self.instance)
         except DjangoValidationError as exc:
@@ -431,12 +441,19 @@ class CounselorTransferSerializer(serializers.Serializer):
 
 
 class PasswordChangeSerializer(serializers.Serializer):
-    new_password = serializers.CharField(write_only=True, validators=[validate_password])
+    new_password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
+    # A student also picks their class here: the first sign-in is the one step every student passes.
+    grade = serializers.ChoiceField(choices=StudentProfile.PICKABLE_GRADES, required=False)
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['confirm_password']:
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
+        # With the user, so "too similar to the username" is a 400 here, not a 500 in complete_password_change.
+        try:
+            validate_password(attrs['new_password'], user=self.context['request'].user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'new_password': list(exc.messages)}) from exc
         return attrs
 
 

@@ -16,23 +16,10 @@
   --chat-name-3: #94524b;
   --chat-name-4: #64568a;
   --chat-name-5: #8a5b72;
-  --chat-wall-ink: rgba(74, 64, 54, 0.055);
-  --chat-wall-tint: rgba(184, 165, 138, 0.1);
-  --chat-tail-shadow: rgba(74, 64, 54, 0.1);
+  --chat-wall-ink: rgba(23, 36, 59, 0.055);
+  --chat-wall-tint: rgba(0, 87, 255, 0.07);
+  --chat-tail-shadow: rgba(23, 36, 59, 0.1);
   --avatar-ink: #ffffff;
-}
-
-:root[data-theme='dark'] {
-  --chat-name-0: #debc83;
-  --chat-name-1: #8fc8da;
-  --chat-name-2: #a3cbac;
-  --chat-name-3: #e6a199;
-  --chat-name-4: #b9abe0;
-  --chat-name-5: #e0a7c0;
-  --chat-wall-ink: rgba(199, 219, 232, 0.05);
-  --chat-wall-tint: rgba(159, 198, 226, 0.05);
-  --chat-tail-shadow: rgba(0, 0, 0, 0.3);
-  --avatar-ink: #10202d;
 }
 
 /* ================================================================== Messages */

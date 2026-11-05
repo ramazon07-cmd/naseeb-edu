@@ -85,6 +85,15 @@ class StudentListFilterTests(RoleIsolationBase):
         self.assertEqual(self.client.get('/api/students/', {'country': 'US,UK'}).status_code, 400)
         self.assertEqual(self.client.get('/api/students/', {'grade': '13'}).status_code, 400)
 
+    def test_a_student_without_a_class_is_listed_but_matches_no_class_filter(self):
+        self.add_student('Uma', grade='11')
+        self.add_student('Nia')  # a new login: the class is empty until the student picks it
+        self.assertIn('Nia', self.names({}))
+        self.assertEqual(self.names({'grade': '11'}), ['Uma'])
+        self.assertNotIn('Nia', self.names({'grade': 'gap'}))
+        # An empty value means "no class filter", not "no class".
+        self.assertIn('Nia', self.names({'grade': ''}))
+
     def test_country_filter_reads_older_spellings(self):
         # Profiles saved before onboarding's list: "USA", no space after the comma, other countries.
         self.add_student('Old', target_countries='Singapore,Hong Kong,USA')

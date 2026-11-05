@@ -7,7 +7,7 @@ from apps.users.models import User
 from ..models import ChallengeAttempt, StudentProfile
 from ..serializers import ChallengeAttemptSerializer
 from ..params import int_param
-from ..scoping import scope_students
+from ..scoping import scope_students, visible_students
 
 
 class ChallengeAttemptPermission(permissions.BasePermission):
@@ -43,6 +43,8 @@ class ChallengeAttemptPermission(permissions.BasePermission):
             return True
         if user.role == User.Role.ADMIN or user.is_superuser:
             return True
+        if user.is_assistant:
+            return visible_students(user).filter(pk=obj.student_id).exists()
         return user.is_counselor_like and obj.student.assigned_counselor_id == user.id
 
 

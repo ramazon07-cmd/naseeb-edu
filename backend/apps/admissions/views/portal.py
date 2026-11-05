@@ -31,7 +31,7 @@ from ..serializers import (
 )
 from ..serializers.portal import CHOOSE_AVAILABLE_TIME, MeetingAvailabilityRepeatSerializer, MeetingAvailabilitySerializer
 from ..listing import ListQueryMixin
-from ..meetings import clashes, free_slots, overlapping, upcoming_slots, weekly_starts, with_availability
+from ..meetings import MAX_REPEAT_SLOTS, clashes, free_slots, overlapping, upcoming_slots, weekly_starts, with_availability
 from ..params import int_param
 from ..scoping import booking_participants_for, scope_students, visible_students
 from .common import CONTACT_LIST_LIMIT, SCREEN_TIME_TEAM_LIMIT
@@ -80,7 +80,7 @@ class StudentCollaborationPermission(permissions.BasePermission):
         user = request.user
         if user.is_product_admin:
             return True
-        if user.role == User.Role.COUNSELOR:
+        if user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT}:
             if isinstance(obj, Booking):
                 return obj.counselor_id == user.id
             if isinstance(obj, StudentMessage):
@@ -89,11 +89,15 @@ class StudentCollaborationPermission(permissions.BasePermission):
         return getattr(obj, 'student_id', None) == user.student_profile.id
 
 
+# Staff who take meetings with their students; an assistant has their own calendar.
+BOOKING_STAFF_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACHER, User.Role.ORGANIZATION}
+
+
 class BookingPermission(permissions.BasePermission):
     """Keep meeting requests scoped to the student and the selected staff participant."""
 
-    STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'availability', 'cancel', 'reschedule'}
-    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'availability', 'availability_repeat', 'approve', 'reject', 'complete', 'cancel', 'reschedule'}
+    STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'availability', 'cancel', 'reschedule', 'destroy'}
+    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'availability', 'availability_repeat', 'approve', 'reject', 'complete', 'cancel', 'reschedule', 'destroy'}
 
     def has_permission(self, request, view):
         user = request.user
@@ -103,7 +107,7 @@ class BookingPermission(permissions.BasePermission):
             return True
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
             return view.action in self.STUDENT_ACTIONS
-        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if user.role in BOOKING_STAFF_ROLES:
             return view.action in self.STAFF_ACTIONS
         return False
 
@@ -112,8 +116,8 @@ class BookingPermission(permissions.BasePermission):
         if user.is_superuser or user.role == User.Role.ADMIN:
             return True
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
-            return obj.student_id == user.student_profile.id and view.action in {'retrieve', 'cancel', 'reschedule'}
-        return obj.participant_id == user.id and view.action in {'retrieve', 'approve', 'reject', 'complete', 'cancel', 'reschedule'}
+            return obj.student_id == user.student_profile.id and view.action in {'retrieve', 'cancel', 'reschedule', 'destroy'}
+        return obj.participant_id == user.id and view.action in {'retrieve', 'approve', 'reject', 'complete', 'cancel', 'reschedule', 'destroy'}
 
 
 class StudentPortalOwnedViewSet(viewsets.ModelViewSet):
@@ -141,7 +145,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         user = self.request.user
         if user.is_superuser or user.role == User.Role.ADMIN:
             return self.queryset
-        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if user.role in BOOKING_STAFF_ROLES:
             # Meetings stay with the school: staff who moved on lose them.
             if not user.school_id:
                 return self.queryset.none()
@@ -152,7 +156,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if user.role in BOOKING_STAFF_ROLES:
             student_id = int_param(self.request.data, 'student')
             profile = visible_students(user).filter(id=student_id).first()
             if not profile:
@@ -211,7 +215,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def availability(self, request):
         """Student sees free slots; staff manages only their own dated slots."""
         user = request.user
-        staff = user.role in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}
+        staff = user.role in BOOKING_STAFF_ROLES
         if request.method != 'GET' and not staff:
             return Response({'detail': 'Only staff can manage availability.'}, status=403)
         if request.method == 'POST':
@@ -306,14 +310,19 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
     def availability_repeat(self, request):
         """Weekly slots up to 12 weeks ahead; times that are past or overlap are skipped, not errors."""
         user = request.user
-        if user.role not in {User.Role.COUNSELOR, User.Role.TEACHER, User.Role.ORGANIZATION}:
+        if user.role not in BOOKING_STAFF_ROLES:
             return Response({'detail': 'Only staff can manage availability.'}, status=403)
         payload = MeetingAvailabilityRepeatSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         data = payload.validated_data
         duration = data['duration_minutes']
         now = timezone.now()
-        starts = list(weekly_starts(set(data['weekdays']), data['time'], data['start_date'], data['end_date'], data['timezone']))
+        starts = list(weekly_starts(
+            set(data['weekdays']), data['time'], data['start_date'], data['end_date'], data['timezone'],
+            until=data['end_time'], step=duration,
+        ))
+        if len(starts) > MAX_REPEAT_SLOTS:
+            return Response({'end_time': 'That adds too many times at once. Choose fewer days or a shorter range.'}, status=400)
         future = [start for start in starts if start > now]
         created = []
         try:
@@ -394,6 +403,14 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 booking, f'Meeting {word}', f'Your meeting with {participant_name} on {meeting_time} is now {word}.',
             )
         return Response(self.get_serializer(booking).data)
+
+    def destroy(self, request, *args, **kwargs):
+        """Either side clears a closed or past meeting off the list; an upcoming one is cancelled first, so the other side is told."""
+        booking = self.get_object()
+        if booking.status in Booking.OPEN_STATUSES and not booking.has_started:
+            return Response({'detail': 'Cancel this meeting first. Only closed or past meetings can be deleted.'}, status=400)
+        booking.delete()
+        return Response(status=204)
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -500,7 +517,7 @@ class StudentMessageViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_product_admin:
             return self.queryset
-        if user.role == User.Role.COUNSELOR:
+        if user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT}:
             # Only threads with students the counselor still serves in their
             # current school; a move or reassignment ends access to the rest.
             return scope_students(

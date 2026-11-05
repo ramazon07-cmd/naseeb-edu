@@ -747,12 +747,18 @@ class StudentDeactivationTests(RoleIsolationBase):
         ActivityLog.objects.create(actor=self.counselor, student=self.student_a, action='Kept record')
 
     def test_only_product_admins_deactivate_and_nothing_is_deleted(self):
-        for user in (self.organization, self.counselor, self.teacher, self.student_a_user):
+        for user in (self.counselor, self.teacher, self.student_a_user):
             self.client.force_authenticate(user)
             self.assertIn(self.client.delete(f'/api/students/{self.student_a.id}/').status_code, {403}, user.role)
         # Wrong tenant: another school's staff cannot even find the student.
         self.client.force_authenticate(self.counselor_b)
         self.assertEqual(self.client.delete(f'/api/students/{self.student_a.id}/').status_code, 403)
+        organization_b = User.objects.create_user(
+            username='deact-org-b', email='deact-org-b@example.com', password='StrongPass123!',
+            role=User.Role.ORGANIZATION, school=self.school_b,
+        )
+        self.client.force_authenticate(organization_b)
+        self.assertEqual(self.client.delete(f'/api/students/{self.student_a.id}/').status_code, 404)
         self.student_a_user.refresh_from_db()
         self.assertTrue(self.student_a_user.is_active)
 
@@ -767,6 +773,16 @@ class StudentDeactivationTests(RoleIsolationBase):
         self.assertEqual(
             ProductAuditEvent.objects.filter(action='student.deactivated', target_id=str(self.student_a.id)).count(), 1,
         )
+
+    def test_school_deactivates_its_own_student_and_keeps_the_data(self):
+        self.client.force_authenticate(self.organization)
+        self.assertEqual(self.client.delete(f'/api/students/{self.student_a.id}/').status_code, 204)
+        self.student_a_user.refresh_from_db()
+        self.assertFalse(self.student_a_user.is_active)
+        self.assertTrue(ActivityLog.objects.filter(student=self.student_a, action='Kept record').exists())
+        self.assertTrue(ProductAuditEvent.objects.filter(action='student.deactivated', actor=self.organization).exists())
+        # Gone from the school's lists, so a second delete finds nothing.
+        self.assertEqual(self.client.delete(f'/api/students/{self.student_a.id}/').status_code, 404)
 
     def test_deactivated_students_disappear_from_lists_but_admins_can_open_them(self):
         from .tenancy import set_student_active
@@ -896,7 +912,7 @@ class AccountCreationTests(RoleIsolationBase):
 
         self.client.force_authenticate(self.organization)
         response = self.client.post(
-            '/api/students/quick-create/', {'name': 'Quick Student', 'password': 'StrongStudent123!'}, format='json',
+            '/api/students/quick-create/', {'email': 'student@example.com', 'phone': '+998901234567', 'name': 'Quick Student', 'password': 'StrongStudent123!'}, format='json',
         )
         self.assertEqual(response.status_code, 201, response.data)
         student = User.objects.get(username='quick-student')
@@ -920,7 +936,7 @@ class AccountCreationTests(RoleIsolationBase):
             creator.refresh_from_db()
             self.client.force_authenticate(creator)
             response = self.client.post(
-                '/api/students/quick-create/', {'name': f'Late {creator.role}', 'password': 'StrongStudent123!'},
+                '/api/students/quick-create/', {'email': 'student@example.com', 'phone': '+998901234567', 'name': f'Late {creator.role}', 'password': 'StrongStudent123!'},
                 format='json',
             )
             self.assertEqual(response.status_code, 400, creator.role)
@@ -928,6 +944,8 @@ class AccountCreationTests(RoleIsolationBase):
         # Wrong tenant: school B's counselor cannot place a student in school A.
         self.client.force_authenticate(self.counselor_b)
         response = self.client.post('/api/students/quick-create/', {
+            'email': 'student@example.com',
+            'phone': '+998901234567',
             'name': 'Wrong School', 'password': 'StrongStudent123!', 'school': self.school_a.id,
         }, format='json')
         self.assertEqual(response.status_code, 400)
@@ -1076,7 +1094,7 @@ class IndividualWorkspaceTests(RoleIsolationBase):
     def test_owner_adds_students_and_other_schools_cannot_reach_them(self):
         self.client.force_authenticate(self.owner)
         response = self.client.post(
-            '/api/students/quick-create/', {'name': 'Solo Student', 'password': 'StrongStudent123!'}, format='json',
+            '/api/students/quick-create/', {'email': 'student@example.com', 'phone': '+998901234567', 'name': 'Solo Student', 'password': 'StrongStudent123!'}, format='json',
         )
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data['school'], self.workspace.id)

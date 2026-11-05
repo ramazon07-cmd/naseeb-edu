@@ -14,7 +14,7 @@ const resources = read('pages/ResourceSection.jsx');
 const studentTable = records.slice(records.indexOf('export function StudentTable'));
 
 test('student rows offer deactivate, not delete', () => {
-  assert.match(studentTable, /onDeactivate && <button className="icon-button danger" onClick=\{\(\) => onDeactivate\(student\)\} title=\{t\("Deactivate student"\)\} aria-label=\{t\("Deactivate student"\)\}><UserX size=\{16\} \/><\/button>/);
+  assert.match(studentTable, /onDeactivate && <button type="button" className="icon-button danger" onClick=\{act\(onDeactivate, student\)\} title=\{t\("Deactivate student"\)\} aria-label=\{tx`Deactivate \$\{name\}`\}><UserX size=\{16\} \/><\/button>/);
   assert.doesNotMatch(studentTable, /Trash2|onDelete|t\("Delete"\)/);
   assert.match(records, /import \{[^}]*\bUserX\b[^}]*\} from 'lucide-react'/);
   assert.doesNotMatch(records, /\bTrash2\b/);

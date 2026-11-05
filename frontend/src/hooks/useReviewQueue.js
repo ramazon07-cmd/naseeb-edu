@@ -16,15 +16,14 @@ export function useReviewQueue() {
   const options = (listKey) => ({ filters: filters[listKey], ordering: REVIEW_ORDERING, pageSize: PAGE_SIZE });
   const tasks = usePagedList('tasks', options('tasks'));
   const documents = usePagedList('documents', options('documents'));
-  const roadmapMissions = usePagedList('roadmap-missions', options('roadmapMissions'));
   const achievements = usePagedList('achievements', options('achievements'));
-  const lists = { tasks, documents, roadmapMissions, achievements };
+  const lists = { tasks, documents, achievements };
   // A source that failed has settled too: the page shows its error, not an endless wait.
   const loaded = Object.values(lists).every((list) => list.loaded || Boolean(list.error));
   const failed = Object.values(lists).filter((list) => list.error);
   const items = useMemo(
-    () => mergeReviewQueue({ tasks: tasks.items, documents: documents.items, roadmapMissions: roadmapMissions.items, achievements: achievements.items }),
-    [tasks.items, documents.items, roadmapMissions.items, achievements.items],
+    () => mergeReviewQueue({ tasks: tasks.items, documents: documents.items, achievements: achievements.items }),
+    [tasks.items, documents.items, achievements.items],
   );
   return {
     items, loaded, lists,

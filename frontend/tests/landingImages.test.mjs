@@ -39,23 +39,31 @@ function boot({ saved, systemDark = false, storageBlocked = false, lang = 'en', 
 
 const heroSet = (variant) => [640, 960, 1448].map((w) => `/landing/hero-${variant}-${w}.webp ${w}w`).join(', ');
 
-test('only the hero has an image preload and it matches the active theme', () => {
+test('only the light hero is preloaded regardless of the saved theme', () => {
   const imagePreloads = html.match(/<link\b[^>]*rel="preload"[^>]*as="image"[^>]*>/g);
   assert.equal(imagePreloads.length, 1);
   assert.match(imagePreloads[0], /fetchpriority="high"/);
   const sizes = imagePreloads[0].match(/imagesizes="([^"]+)"/)[1];
   assert.ok(landing.includes(`HERO_SIZES = "${sizes}"`), 'preload sizes must match the JSX sizes');
   assert.ok(landing.includes('const HERO_WIDTHS = [640, 960, 1448]'), 'preload widths must match the JSX srcset');
-  for (const [theme, variant] of Object.entries({ light: 'light', dark: 'cool' })) {
-    assert.deepEqual(boot({ saved: theme }), { href: `/landing/hero-${variant}-1448.webp`, srcset: heroSet(variant), theme, fonts: [] });
+  for (const saved of [undefined, 'light', 'dark']) {
+    assert.deepEqual(boot({ saved }), {
+      href: '/landing/hero-light-1448.webp', srcset: heroSet('light'), theme: 'light', fonts: [],
+    });
   }
 });
 
-test('the hero is preloaded for system-dark and storage-disabled visitors', () => {
-  assert.equal(boot({ systemDark: true }).srcset, heroSet('cool'));
-  assert.deepEqual(boot({ storageBlocked: true }), {
-    href: '/landing/hero-light-1448.webp', srcset: heroSet('light'), theme: 'light', fonts: [],
-  });
+test('system-dark and storage-disabled visitors still preload the light hero', () => {
+  for (const options of [
+    { systemDark: true },
+    { saved: 'dark', systemDark: true },
+    { storageBlocked: true },
+    { storageBlocked: true, systemDark: true },
+  ]) {
+    assert.deepEqual(boot(options), {
+      href: '/landing/hero-light-1448.webp', srcset: heroSet('light'), theme: 'light', fonts: [],
+    });
+  }
 });
 
 test('signed-in users and the login route skip the hero preload', () => {

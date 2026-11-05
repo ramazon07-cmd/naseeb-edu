@@ -89,6 +89,29 @@
   font-size: var(--text-xs);
 }
 
+/* A counselor's assistants: picking their students */
+.assistant-student-list {
+  display: grid;
+  gap: var(--space-2);
+  max-height: min(55vh, 28rem);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.assistant-student-list .checkbox-card > span:last-child {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.assistant-student-list small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
 /* Recently joined */
 .joined-list {
   display: grid;

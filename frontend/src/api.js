@@ -473,11 +473,12 @@ export const api = {
   retrySignOut,
   forgetSession,
   syncBeforeSignOut,
-  changePassword: async (newPassword, confirmPassword) => {
+  // A student also sends the class they picked at the first sign-in.
+  changePassword: async (newPassword, confirmPassword, grade = '') => {
     const payload = await request('/users/accounts/change-password/', {
       method: 'POST',
       credentials: 'include',
-      body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
+      body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword, ...(grade && { grade }) }),
     })
     saveTokens(payload)
     return payload
@@ -498,6 +499,15 @@ export const api = {
   // The public join page: no session is sent, whoever is signed in on this device.
   joinInvite: (token) => request(`/public/invites/${encodeURIComponent(token)}/`, { auth: false }),
   acceptInvite: (token, payload) => request(`/public/invites/${encodeURIComponent(token)}/accept/`, { auth: false, method: 'POST', body: JSON.stringify(payload) }),
+  // A counselor's assistants. The invite link comes back only from create (and goes out by email).
+  assistants: () => listAll('assistants'),
+  setAssistantStudents: (id, students) => request(`/assistants/${id}/students/`, { method: 'PUT', body: JSON.stringify({ students }) }),
+  deactivateAssistant: (id) => request(`/assistants/${id}/deactivate/`, { method: 'POST' }),
+  assistantInvites: () => listAll('assistant-invites'),
+  createAssistantInvite: (payload) => request('/assistant-invites/', { method: 'POST', body: JSON.stringify(payload) }),
+  revokeAssistantInvite: (id) => request(`/assistant-invites/${id}/revoke/`, { method: 'POST' }),
+  assistantInvite: (token) => request(`/public/assistant-invites/${encodeURIComponent(token)}/`, { auth: false }),
+  acceptAssistantInvite: (token, payload) => request(`/public/assistant-invites/${encodeURIComponent(token)}/accept/`, { auth: false, method: 'POST', body: JSON.stringify(payload) }),
   // Account settings. A password change ends the other sessions and hands this
   // one a new access token (kept here) and refresh cookie, so it stays signed in.
   changeOwnPassword: async (currentPassword, newPassword, confirmPassword) => {
@@ -704,7 +714,7 @@ export const api = {
   addBookingAvailability: (payload) => request('/bookings/availability/', { method: 'POST', body: JSON.stringify(payload) }),
   removeBookingAvailability: (id) => request('/bookings/availability/', { method: 'DELETE', body: JSON.stringify({ id }) }),
   editBookingAvailability: (id, payload) => request('/bookings/availability/', { method: 'PATCH', body: JSON.stringify({ ...payload, id }) }),
-  // { weekdays: [0-6, Monday = 0], time: 'HH:MM', duration_minutes, start_date, end_date, timezone } → { created, skipped, slots }
+  // { weekdays: [0-6, Monday = 0], time: 'HH:MM', end_time?: 'HH:MM' (a range cut into slots), duration_minutes, start_date, end_date, timezone } → { created, skipped, slots }
   repeatBookingAvailability: (payload) => request('/bookings/availability/repeat/', { method: 'POST', body: JSON.stringify(payload) }),
   approveBooking: (id) => request(`/bookings/${id}/approve/`, { method: 'POST' }),
   rejectBooking: (id) => request(`/bookings/${id}/reject/`, { method: 'POST' }),

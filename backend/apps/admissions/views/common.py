@@ -85,11 +85,15 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         'researches', 'projects', 'internships', 'activities',
         'honors', 'recommendations',
     }
+    # An assistant adds students through quick-create only, which ties them to their counselor and to them.
+    assistant_denied_student_actions = {'create'}
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         user = request.user
+        if user.is_assistant and view.basename == 'students' and view.action in self.assistant_denied_student_actions:
+            return False
         if user.is_counselor_like:
             return True
         if view.basename == 'notifications' and user.role in {User.Role.TEACHER, User.Role.ORGANIZATION}:
@@ -351,7 +355,10 @@ class SendBackMixin:
     @action(detail=True, methods=['post'], url_path='send-back')
     def send_back(self, request, pk=None):
         user = request.user
-        allowed = user.is_task_manager if self.send_back_managers == 'task_manager' else user.is_counselor_like
+        if self.send_back_managers == 'task_manager':
+            allowed = user.is_task_manager
+        else:
+            allowed = user.is_counselor_like
         if not allowed:
             return Response({'detail': 'Only a counselor can send work back.'}, status=403)
         note = clean_note(request)

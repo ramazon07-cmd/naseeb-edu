@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@fontsource-variable/roboto/wght.css';
 import '../pages/counselor-shell.css';
-import { Bell, Calendar, Check, CheckSquare, ChevronDown, ChevronsLeft, ChevronsRight, Compass, Ellipsis, Globe2, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, Moon, Pencil, Search, Settings, Sun, Users, X } from 'lucide-react';
+import { Bell, Calendar, Check, CheckSquare, ChevronDown, ChevronsLeft, ChevronsRight, Ellipsis, Globe2, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageCircle, Pencil, Search, Settings, Users, UsersRound, X } from 'lucide-react';
 import { LANGUAGE_OPTIONS, formatNumberLocale, t, tx } from '../i18n';
 import { fullName, initials } from '../lib/labels';
 import { counselorCounts } from '../lib/counselorCounts';
 import { canUseAssistant } from '../lib/assistantAccess';
-import { COUNSELOR_NAV, isPageLocked } from '../lib/routes';
+import { canOpenPage, navigationFor, isPageLocked } from '../lib/routes';
 import { invalidatePagedLists } from '../hooks/usePagedList';
 import { CounselorUiContext } from './counselorUi';
 import { useAccountPhoto } from './records';
@@ -16,18 +16,18 @@ import { useAccountPhoto } from './records';
 const NAV = {
   dashboard: { label: 'Home', icon: LayoutDashboard },
   students: { label: 'Students', icon: Users, badge: 'students' },
+  assistants: { label: 'Assistants', icon: UsersRound },
   tasks: { label: 'Tasks', icon: CheckSquare },
   review: { label: 'Review', icon: CheckSquare, badge: 'review' },
   essays: { label: 'Essays', icon: Pencil, badge: 'essays' },
   bookings: { label: 'Meetings', icon: Calendar, badge: 'meetings' },
   messages: { label: 'Messages', icon: MessageCircle, badge: 'messages' },
-  counselor_roadmap: { label: 'Roadmap', icon: Compass },
 };
 // The phone's bottom bar keeps the four daily pages; "More" opens the full list.
 const TAB_PAGES = ['dashboard', 'students', 'review', 'messages'];
 
 // Pages that draw their own title row; every other page gets a plain one from the shell.
-export const COUNSELOR_SELF_HEADED = new Set(['dashboard', 'students', 'students_joined', 'review', 'bookings', 'notifications', 'messages', 'essays']);
+export const COUNSELOR_SELF_HEADED = new Set(['dashboard', 'students', 'assistants', 'students_joined', 'review', 'bookings', 'notifications', 'messages', 'essays']);
 
 export const counselorPageLabel = (page) => NAV[page]?.label;
 
@@ -89,15 +89,9 @@ function LanguageMenu({ language, changeLanguage }) {
   </div>;
 }
 
-function ThemeButton({ theme, toggleTheme, className = 'cx-topbtn cx-topicon' }) {
-  const dark = theme === 'dark';
-  const label = dark ? t('Switch to light mode') : t('Switch to dark mode');
-  return <button type="button" className={className} aria-label={label} title={label} onClick={toggleTheme}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button>;
-}
-
-// On the phone the menu also carries language and theme, which the top bar
+// On the phone the menu also carries language, which the top bar
 // has no room for.
-function AccountMenu({ user, variant, theme, toggleTheme, language, changeLanguage, logout, openSupport, openAssistant, openAccountSettings, supportBadge, setAccountActionsHost, rail }) {
+function AccountMenu({ user, variant, theme, language, changeLanguage, logout, openSupport, openAssistant, openAccountSettings, supportBadge, setAccountActionsHost, rail }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const photo = useAccountPhoto(user);
@@ -106,7 +100,6 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
   const attachActions = useCallback((element) => {
     setAccountActionsHost(element ? { element, close: () => setOpen(false) } : null);
   }, [setAccountActionsHost]);
-  const dark = theme === 'dark';
   const name = fullName(user);
   const face = photo ? <img src={photo} alt="" /> : initials(name);
   const phone = variant === 'avatar';
@@ -114,7 +107,7 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
     ? <button type="button" className="cx-avatar self cx-avatar-button" aria-haspopup="menu" aria-expanded={open} aria-label={t('Account menu')} onClick={() => setOpen(!open)}>{face}</button>
     : <button type="button" className="cx-account-trigger" aria-haspopup="menu" aria-expanded={open} aria-label={t('Account menu')} title={rail ? name : undefined} onClick={() => setOpen(!open)}>
       <span className="cx-avatar self" aria-hidden="true">{face}</span>
-      <span className="cx-account-copy"><b>{name}</b><small>{user.position || t('School counselor')}</small></span>
+      <span className="cx-account-copy"><b>{name}</b><small>{user.position || t(user.role === 'assistant' ? 'Counselor assistant' : 'School counselor')}</small></span>
       <ChevronDown size={16} className="cx-account-chevron" aria-hidden="true" />
     </button>;
   return <div className={`cx-account cx-account-${variant}`} ref={ref}>
@@ -124,7 +117,6 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
         <span>{t('Language')}</span>
         <div className="cx-segmented">{LANGUAGE_OPTIONS.map((option) => <button type="button" key={option.value} className={language === option.value ? 'active' : ''} aria-pressed={language === option.value} onClick={() => changeLanguage(option.value)}>{option.short}</button>)}</div>
       </div>}
-      {phone && <button type="button" role="menuitem" aria-pressed={dark} onClick={toggleTheme}>{dark ? <Sun size={17} /> : <Moon size={17} />}{dark ? t('Light mode') : t('Dark mode')}</button>}
       <button type="button" role="menuitem" onClick={() => { setOpen(false); openAccountSettings(); }}><Settings size={17} />{t('Account settings')}</button>
       {openAssistant && <button type="button" role="menuitem" onClick={() => { setOpen(false); openAssistant(); }}><span className="cx-bird" aria-hidden="true" />{t('Naseeb AI assistant')}</button>}
       {openSupport && <button type="button" role="menuitem" onClick={() => { setOpen(false); openSupport(); }}><LifeBuoy size={17} />{t('Support')}{supportBadge > 0 && <i className="cx-count">{formatNumberLocale(supportBadge)}</i>}</button>}
@@ -134,7 +126,7 @@ function AccountMenu({ user, variant, theme, toggleTheme, language, changeLangua
   </div>;
 }
 
-export function CounselorLayout({ user, data, stats, bell, page, title, setPage, setQuery, theme, toggleTheme, language, changeLanguage, logout, openNotifications, openSearch, openAssistant, openSupport, supportBadge, children }) {
+export function CounselorLayout({ user, data, stats, bell, page, title, setPage, setQuery, theme, language, changeLanguage, logout, openNotifications, openSearch, openAssistant, openSupport, supportBadge, children }) {
   const [drawer, setDrawer] = useState(false);
   const [rail, setRail] = useState(readRail);
   const [accountActionsHost, setAccountActionsHost] = useState(null);
@@ -151,9 +143,14 @@ export function CounselorLayout({ user, data, stats, bell, page, title, setPage,
     return !current;
   });
   const go = (next) => { setPage(next); setQuery(''); setDrawer(false); };
+  const navigation = navigationFor(user).filter((next) => NAV[next]);
+  const tabs = TAB_PAGES;
   // The full list always opens on the newest notices, never a cached page.
-  const openNotificationsPage = () => { invalidatePagedLists(['notifications']); go('notifications'); };
-  const account = { user, theme, toggleTheme, language, changeLanguage, logout, rail, openAssistant: canUseAssistant(user) ? openAssistant : null, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), openAccountSettings: () => go('account_settings'), supportBadge, setAccountActionsHost };
+  const openNotificationsPage = () => {
+    if (!canOpenPage('notifications', user)) { openNotifications(); return; }
+    invalidatePagedLists(['notifications']); go('notifications');
+  };
+  const account = { user, theme, language, changeLanguage, logout, rail, openAssistant: canUseAssistant(user) ? openAssistant : null, openSupport: openSupport && (() => { setDrawer(false); openSupport(); }), openAccountSettings: () => go('account_settings'), supportBadge, setAccountActionsHost };
   const item = (next, className = 'cx-nav-item', badges = true) => {
     const { label, icon: Icon, badge } = NAV[next];
     const active = page === next;
@@ -178,7 +175,7 @@ export function CounselorLayout({ user, data, stats, bell, page, title, setPage,
           <button type="button" className="cx-side-close" onClick={() => setDrawer(false)} aria-label={t('Close navigation')}><X size={18} /></button>
         </div>
         <button type="button" className={`cx-nav-item cx-notifications${onNotifications ? ' active' : ''}`} aria-current={onNotifications ? 'page' : undefined} title={rail ? t('Notifications') : undefined} onClick={openNotificationsPage}><Bell size={18} aria-hidden="true" /><span>{t('Notifications')}</span><NavCount value={bellCount} /></button>
-        <nav className="cx-nav" aria-label={t('Main navigation')}>{COUNSELOR_NAV.map((next) => item(next))}</nav>
+        <nav className="cx-nav" aria-label={t('Main navigation')}>{navigation.map((next) => item(next))}</nav>
         <AccountMenu {...account} variant="card" />
       </div>
     </aside>
@@ -190,14 +187,13 @@ export function CounselorLayout({ user, data, stats, bell, page, title, setPage,
           <Search size={17} aria-hidden="true" /><span>{t('Search students and work…')}</span><kbd aria-hidden="true">{SEARCH_SHORTCUT}</kbd>
         </button>
         <LanguageMenu language={language} changeLanguage={changeLanguage} />
-        <ThemeButton theme={theme} toggleTheme={toggleTheme} />
         <button type="button" className="cx-topbtn cx-topicon cx-bell" onClick={openNotifications} aria-label={bellLabel} title={bellLabel}><Bell size={18} />{bellCount > 0 && <i className="cx-bell-dot" aria-hidden="true" />}</button>
         <AccountMenu {...account} variant="avatar" />
       </header>
       {children}
     </div>
     <nav className="cx-tabbar" aria-label={t('Quick navigation')}>
-      {TAB_PAGES.map((next) => item(next, 'cx-tab', false))}
+      {tabs.map((next) => item(next, 'cx-tab', false))}
       <button type="button" className={`cx-tab${drawer ? ' active' : ''}`} aria-expanded={drawer} onClick={() => setDrawer(!drawer)}><Ellipsis size={18} aria-hidden="true" /><span>{t('More')}</span></button>
     </nav>
     {drawer && <button type="button" className="cx-drawer-backdrop" aria-label={t('Close navigation')} onClick={() => setDrawer(false)} />}

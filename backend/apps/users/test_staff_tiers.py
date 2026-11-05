@@ -84,6 +84,46 @@ class StaffTierTests(APITestCase):
         reset = self.client.post(f'/api/users/accounts/{self.student.id}/temporary-credential/', {}, format='json')
         self.assertEqual(reset.status_code, status.HTTP_200_OK)
 
+    def test_only_a_superadmin_resets_another_staff_login(self):
+        lost = staff('lost-password', User.AdminTier.SUPPORT)
+        version = lost.password_version
+        url = f'/api/users/accounts/{lost.id}/temporary-credential/'
+        for actor in (self.support, self.ops):
+            self.login(actor)
+            denied = self.client.post(url, {}, format='json')
+            self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+            self.assertEqual(denied.data['code'], 'staff_tier_forbidden')
+        lost.refresh_from_db()
+        self.assertEqual((lost.password_version, lost.must_change_password), (version, False))
+
+        self.login(self.superadmin)
+        issued = self.client.post(url, {}, format='json')
+        self.assertEqual(issued.status_code, status.HTTP_200_OK)
+        lost.refresh_from_db()
+        self.assertTrue(lost.check_password(issued.data['temporary_password']))
+        self.assertEqual((lost.password_version, lost.must_change_password), (version + 1, True))
+        self.assertTrue(ProductAuditEvent.objects.filter(action='credential.issued', actor=self.superadmin).exists())
+
+    def test_staff_cannot_issue_themselves_a_temporary_password(self):
+        # Otherwise a stolen session could replace the password without knowing it.
+        for actor in (self.support, self.superadmin):
+            self.login(actor)
+            response = self.client.post(f'/api/users/accounts/{actor.id}/temporary-credential/', {}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+            self.assertEqual(response.data['code'], 'credential_forbidden')
+            actor.refresh_from_db()
+            self.assertFalse(actor.must_change_password)
+
+    def test_other_roles_still_have_no_temporary_credential(self):
+        teacher = User.objects.create_user(
+            username='tier-teacher', email='tier-teacher@example.com', password='StrongPass123!',
+            role=User.Role.TEACHER, school=self.school,
+        )
+        self.login(self.superadmin)
+        response = self.client.post(f'/api/users/accounts/{teacher.id}/temporary-credential/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['code'], 'credential_role_unsupported')
+
     def test_ops_manages_schools_and_counselors(self):
         self.login(self.ops)
         created = self.client.post('/api/schools/', {'name': 'Ops School', 'code': 'ops-school'}, format='json')

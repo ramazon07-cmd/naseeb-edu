@@ -156,6 +156,14 @@ def fit_context(profile):
     }
 
 
+def country_match(university, countries):
+    """A target country, or the 'Europe' region (QS tags each ranked university with one)."""
+    if country_key(university.country) in countries:
+        return True
+    # shortcut: only QS-ranked universities carry a region; unranked European ones do not match 'Europe'.
+    return 'europe' in countries and (university.qs_data or {}).get('region') == 'Europe'
+
+
 def item(code, text, **params):
     """One reason or gap: a code and params the frontend translates, and the English text."""
     return {'code': code, 'params': params, 'text': text}
@@ -241,7 +249,7 @@ def score_university(university, ctx):
             academic += 3
             gaps.append(item('english_check', 'Verify the English test requirement on the official program page', test=test, score=score))
 
-    if country_key(university.country) in ctx['countries']:
+    if country_match(university, ctx['countries']):
         preferences = 12
         reasons.append(item('country_match', f'{university.country} is one of your target countries', country=university.country))
     else:

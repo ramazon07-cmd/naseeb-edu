@@ -1,6 +1,7 @@
 """Admissions API views — students."""
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from datetime import timedelta
 from functools import reduce
@@ -654,8 +655,9 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         """Deactivate, never delete: the student's records are kept."""
         from ..tenancy import set_student_active
 
-        if not request.user.is_product_admin:
-            return Response({'detail': 'Only a product admin can deactivate a student.'}, status=403)
+        # The school removes its own students (get_object is scoped to its school); counselors cannot.
+        if not (request.user.is_product_admin or request.user.is_organization):
+            return Response({'detail': 'Only the school or a product admin can deactivate a student.'}, status=403)
         set_student_active(self.get_object(), False, request.user)
         return Response(status=204)
 
@@ -725,6 +727,22 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         email = str(request.data.get('email') or '').strip().lower()
         if not full_name:
             return Response({'name': ['This field is required.']}, status=400)
+        phone = str(request.data.get('phone') or '').strip()
+        # The school needs a way to reach every student it adds.
+        errors = {}
+        if not email:
+            errors['email'] = ['This field is required.']
+        else:
+            try:
+                validate_email(email)
+            except DjangoValidationError:
+                errors['email'] = ['Enter a valid email address.']
+        if not phone:
+            errors['phone'] = ['This field is required.']
+        elif len(phone) > 32:
+            errors['phone'] = ['Ensure this field has no more than 32 characters.']
+        if errors:
+            return Response(errors, status=400)
         # An address that is already registered must not produce a
         # different response: create_student_account() attaches a
         # placeholder instead, and the response never echoes the email.
@@ -748,7 +766,9 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
                 'target_countries': [f'Use {target_countries_max_length} characters or fewer.'],
             }, status=400)
 
-        if request.user.is_organization or request.user.role == User.Role.COUNSELOR:
+        if request.user.is_assistant and not request.user.supervising_counselor_id:
+            return Response({'detail': 'Your assistant account is not connected to a counselor.'}, status=400)
+        if request.user.is_organization or request.user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT}:
             # Staff add students to their own school, and only while it is active.
             school = request.user.school
             if not school or not school.is_active:
@@ -771,7 +791,7 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
                 password=password,
                 created_by=request.user,
                 email=email,
-                phone=str(request.data.get('phone') or ''),
+                phone=phone,
                 request=request,
             )
         except entitlements.EntitlementError as exc:

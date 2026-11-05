@@ -121,10 +121,11 @@ function DocumentHistory({ entries }) {
   })}</ul></section>;
 }
 
-export function DocumentDecision({ approvable, onDecide, notify }) {
+export function DocumentDecision({ approvable, onDecide, notify, canApprove = true }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   async function decide(action) {
+    if (action === 'approve' && !canApprove) return;
     const text = note.trim();
     if (action === 'sendBack' && !text) {
       notify(t("Add a note explaining what needs to change."), 'error');
@@ -138,7 +139,7 @@ export function DocumentDecision({ approvable, onDecide, notify }) {
       setSaving(false);
     }
   }
-  return <section className="document-decision"><label className="detail-label" htmlFor="document-decision-note">{t("Note to the student (optional for approve, required to send back)")}</label><textarea id="document-decision-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} />{!approvable && <p role="status"><b>{t("No file attached yet")}</b> {t("There is nothing to approve until the student adds it. You can send it back with a note.")}</p>}<div className="detail-actions"><button type="button" className="button quiet" disabled={saving} onClick={() => decide('sendBack')}>{t("Send back with note")}</button><button type="button" className="button primary" disabled={saving || !approvable} aria-busy={saving} onClick={() => decide('approve')}>{t("Approve")}</button></div></section>;
+  return <section className="document-decision"><label className="detail-label" htmlFor="document-decision-note">{canApprove ? t("Note to the student (optional for approve, required to send back)") : t("Add a note explaining what needs to change.")}</label><textarea id="document-decision-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} />{canApprove && !approvable && <p role="status"><b>{t("No file attached yet")}</b> {t("There is nothing to approve until the student adds it. You can send it back with a note.")}</p>}<div className="detail-actions"><button type="button" className="button quiet" disabled={saving} onClick={() => decide('sendBack')}>{t("Send back with note")}</button>{canApprove && <button type="button" className="button primary" disabled={saving || !approvable} aria-busy={saving} onClick={() => decide('approve')}>{t("Approve")}</button>}</div></section>;
 }
 
 export function visibilityItemTitle(item) {

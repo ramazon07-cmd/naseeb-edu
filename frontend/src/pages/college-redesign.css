@@ -852,25 +852,25 @@
   height: 100%;
 }
 
-/* The skyline is drawn in the light theme's sand and gold; dark mode
-   re-inks it with the dark hero's own colours. */
-:root[data-theme='dark'] .college-page .college-skyline [stroke='#f0e3bf'] {
+/* The skyline is drawn in sand and gold; both themes re-ink it with the
+   hero's own colours. */
+.college-page .college-skyline [stroke='#f0e3bf'] {
   stroke: var(--student-hero-eyebrow);
 }
 
-:root[data-theme='dark'] .college-page .college-skyline [fill='#f0e3bf'] {
+.college-page .college-skyline [fill='#f0e3bf'] {
   fill: var(--student-hero-eyebrow);
 }
 
-:root[data-theme='dark'] .college-page .college-skyline [stroke='#c7ae76'] {
-  stroke: var(--accent);
+.college-page .college-skyline [stroke='#c7ae76'] {
+  stroke: var(--student-hero-ring-progress);
 }
 
-:root[data-theme='dark'] .college-page .college-skyline [fill='#c7ae76'] {
-  fill: var(--accent);
+.college-page .college-skyline [fill='#c7ae76'] {
+  fill: var(--student-hero-ring-progress);
 }
 
-:root[data-theme='dark'] .college-page .college-skyline [fill='#fff7df'] {
+.college-page .college-skyline [fill='#fff7df'] {
   fill: var(--student-hero-text-token);
 }
 
