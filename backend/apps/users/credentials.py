@@ -78,6 +78,9 @@ def mark_temporary_credential_used(*, user, request=None):
         return None, 'credential_missing'
     if credential.status == TemporaryCredential.Status.USED:
         return credential, 'credential_used'
+    # Marked on the first late attempt; every later attempt must still say expired.
+    if credential.status == TemporaryCredential.Status.EXPIRED:
+        return credential, 'credential_expired'
     if credential.status != TemporaryCredential.Status.ISSUED:
         return credential, 'credential_missing'
     if credential.expires_at <= timezone.now():
