@@ -262,6 +262,15 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.credential.refresh_from_db()
         self.assertEqual(self.credential.status, TemporaryCredential.Status.EXPIRED)
 
+    def test_expired_temporary_password_still_says_expired_on_the_next_attempt(self):
+        self.credential.expires_at = timezone.now()
+        self.credential.save(update_fields=['expires_at'])
+        self.login()
+        response = self.login(language='en')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data['code'], 'credential_expired')
+        self.assertIn('expired', response.data['detail'])
+
     def test_scoped_reissue_revokes_previous_credential_and_sessions(self):
         first_login = self.login()
         self.client.force_authenticate(self.counselor)
