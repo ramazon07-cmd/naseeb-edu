@@ -325,6 +325,11 @@ class AssistantScopeTests(AssistantBase):
         self.assertEqual(self.client.get(f'/api/students/{added.pk}/').status_code, 200)
         self.client.force_authenticate(self.counselor)
         self.assertEqual(self.client.get(f'/api/students/{added.pk}/').status_code, 200)
+        self.assertIn(added.pk, [row['id'] for row in self.client.get('/api/students/').data['results']])
+        self.assertEqual(self.client.get('/api/students/summary/').data['counts']['all'], 3)
+        self.client.force_authenticate(self.colleague)
+        self.assertEqual(self.client.get(f'/api/students/{added.pk}/').status_code, 404)
+        self.assertNotIn(added.pk, [row['id'] for row in self.client.get('/api/students/').data['results']])
 
     def test_assistant_without_a_counselor_cannot_add_students(self):
         User.objects.filter(pk=self.assistant.pk).update(supervising_counselor=None)
