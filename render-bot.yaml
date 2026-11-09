@@ -1,0 +1,18 @@
+# Render Blueprint for the counselor Telegram bot worker only.
+# Setup steps are in docs/telegram-bot.md.
+services:
+  - type: worker
+    name: naseeb-telegram-bot
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: pip install -r bot/requirements.txt
+    startCommand: python -m bot.main
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_SERVICE_KEY
+        sync: false
+      - key: BACKEND_URL
+        value: https://api.naseebedu.com
