@@ -336,3 +336,10 @@ async def test_old_show_more_buttons_from_before_the_redesign_just_expire(h):
     h.api.linked = True
     await h.tap('more:deadbeef')
     assert 'expired' in h.session.of('AnswerCallbackQuery')[-1][1]['text'].lower() or 'Muddati' in str(h.session.calls[-1])
+
+
+def test_items_from_an_older_backend_without_ids_or_last_seen_still_render():
+    old = {'name': 'Ali', 'grade': '9', 'essays': {'total': 1, 'edited_today': 0}}
+    text, markup = list_message(digest([old]), 'en')
+    assert 'Ali' in text and 'never opened' in text
+    assert not any(b.callback_data.startswith('d:') for row in markup.inline_keyboard for b in row)

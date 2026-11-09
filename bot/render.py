@@ -173,7 +173,8 @@ def render_list(data, lang, page=0, sort=SORT_ATTENTION, flt=FILTER_ALL, now=Non
     for offset, item in enumerate(chunk):
         number = page * PAGE_SIZE + offset + 1
         lines.append(_row(number, item, lang, today))
-        numbered.append((number, item['id']))
+        if item.get('id') is not None:
+            numbered.append((number, item['id']))
     return '\n'.join(lines), page, pages, numbered
 
 

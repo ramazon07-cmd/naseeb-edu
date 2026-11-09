@@ -306,7 +306,7 @@ async def student_detail(callback: CallbackQuery, bot, api, cache):
     lang = link['language']
     student_id, page, sort, flt = DETAIL_BUTTON.match(callback.data).groups()
     data = await _load_digest(api, cache, chat_id)
-    item = next((student for student in data['students'] if student['id'] == int(student_id)), None)
+    item = next((student for student in data['students'] if student.get('id') == int(student_id)), None)
     if item is None:
         await callback.answer(t(lang, 'student_gone'), show_alert=True)
         return
