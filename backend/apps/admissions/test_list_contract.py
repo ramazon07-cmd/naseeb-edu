@@ -327,8 +327,8 @@ class ListQueryCountTests(ListContractMixin, APITestCase):
             for user in (self.admin, self.counselor, self.organization):
                 with self.subTest(url=url, role=user.role):
                     queries, _ = self.assert_constant(user, url, grow)
-                    # The student list also prefetches profile section reviews in one query.
-                    self.assertLessEqual(queries, 9 if url.startswith('/api/students/') else 8)
+                    # The student list also prefetches profile section reviews, and flags not-started students, in one query each.
+                    self.assertLessEqual(queries, 10 if url.startswith('/api/students/') else 8)
 
 
 class LargeRosterFirstPageTests(ListContractMixin, APITestCase):

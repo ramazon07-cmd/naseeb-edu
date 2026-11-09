@@ -345,6 +345,9 @@ def not_started_condition():
         & Q(~Exists(Essay.objects.filter(student=OuterRef('pk'))))
         & Q(~Exists(Activity.objects.filter(student=OuterRef('pk'))))
         & Q(~Exists(Document.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(Achievement.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(Application.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(RecommendationLetter.objects.filter(student=OuterRef('pk'))))
     )
 
 
@@ -367,7 +370,7 @@ def progress_bucket(completion, expected, late, not_started=False):
     * ``not_started``: the student has never been seen in the app (no screen
       time, no recorded sign-in), never signed in with a temporary password,
       and has no work of any kind (tasks, roadmap missions, essays,
-      activities, documents).
+      activities, documents, honors, applications, recommendation letters).
 
     Needs attention: 3+ late items, or completion 25+ points under expected.
     Behind: any late item, or completion under expected.

@@ -7,7 +7,7 @@ from django.utils import timezone
 from apps.users.models import TemporaryCredential, User
 
 from ..counselor_summary import not_started_ids, progress_bucket
-from ..models import Activity, Document, Essay, RoadmapMission, ScreenTimeDaily, StudentProfile, Task
+from ..models import Achievement, Activity, Document, Essay, RoadmapMission, ScreenTimeDaily, StudentProfile, Task
 from .base import RoleIsolationBase
 from .test_counselor_home import HOME_URL
 
@@ -68,6 +68,7 @@ class NotStartedTests(RoleIsolationBase):
             'Essay': lambda p: Essay.objects.create(student=p, title='E'),
             'Activity': lambda p: Activity.objects.create(student=p, name='A', activity_type='club'),
             'Doc': lambda p: Document.objects.create(student=p, title='D', status=Document.Status.UPLOADED),
+            'Honor': lambda p: Achievement.objects.create(student=p, title='Olympiad'),
         }
         for first, make in work.items():
             make(self.add_student(first))
