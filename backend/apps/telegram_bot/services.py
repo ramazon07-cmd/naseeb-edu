@@ -40,7 +40,8 @@ class Refused(Exception):
 
 
 def fingerprint(user):
-    return hmac.new(settings.SECRET_KEY.encode(), user.password.encode(), hashlib.sha256).hexdigest()
+    # password_version, not the hash: a hasher upgrade on a website login must not kill the link.
+    return hmac.new(settings.SECRET_KEY.encode(), str(user.password_version).encode(), hashlib.sha256).hexdigest()
 
 
 def _account_error(user):
@@ -93,14 +94,17 @@ def _web_lockout_keys(chat_id, account):
 
 
 def _resolve_login(login_value):
-    """(username to authenticate, canonical account key); an email shared by several users resolves to nothing."""
+    """(username to authenticate, canonical account key); an email shared by several users resolves to nothing,
+    and an unknown email is tried as a username, like the website does."""
     if '@' not in login_value:
         return login_value, login_value.lower()
     matches = list(User.objects.filter(email__iexact=login_value)[:2])
     if len(matches) == 1:
         username = matches[0].get_username()
         return username, username.lower()
-    return None, login_value.lower()
+    if matches:
+        return None, login_value.lower()
+    return login_value, login_value.lower()
 
 
 def login(chat_id, login_value, password):
@@ -242,7 +246,7 @@ def due(now=None, limit=DUE_BATCH):
     slots = _slots(tashkent_now(now))
     when = Q()
     for slot_time, slot_date in slots.items():
-        when |= Q(notify_time=slot_time) & ~Q(last_sent_date=slot_date)
+        when |= Q(notify_time=slot_time) & (Q(last_sent_date__isnull=True) | Q(last_sent_date__lt=slot_date))
     lease_start = timezone.now()
     with transaction.atomic():
         rows = list(

@@ -181,9 +181,9 @@ STRINGS = {
     },
     'streak_none': {'uz': 'Seriya yo\'q', 'ru': 'Серии нет', 'en': 'No streak'},
     'streak_not_shared': {
-        'uz': 'Seriya: insho ulashilmagan',
-        'ru': 'Серия: эссе не передано',
-        'en': 'Streak: no essay shared',
+        'uz': 'Seriya: barcha insholar ulashilganda ko\'rsatiladi',
+        'ru': 'Серия: видна, когда переданы все эссе',
+        'en': 'Streak: shown once all essays are shared',
     },
     'application_line': {
         'uz': 'Ariza: {percent}%',

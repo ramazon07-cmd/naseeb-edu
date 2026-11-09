@@ -27,8 +27,15 @@ class LinkValidityTests(BotTestCase):
         chat = self.link(self.c1)
         self.assertEqual(self.post('students', {'chat_id': chat}).status_code, 200)
         self.c1.set_password('AnotherPass456!')
+        self.c1.password_version += 1
         self.c1.save()
         self.assert_link_dead(chat)
+
+    def test_a_hasher_upgrade_on_a_website_login_keeps_the_link(self):
+        chat = self.link(self.c1)
+        self.c1.set_password(PASSWORD)
+        self.c1.save()
+        self.assertEqual(self.post('students', {'chat_id': chat}).status_code, 200)
 
     def test_a_forced_password_change_kills_the_link(self):
         chat = self.link(self.c1)
@@ -141,6 +148,17 @@ class SettingsTests(BotTestCase):
         self.assertEqual(str(link.last_sent_date), '2026-11-08')
         self.assertEqual(services.due(now), [])
         self.assertEqual([i['chat_id'] for i in services.due(datetime(2026, 11, 9, 23, 59, tzinfo=TASHKENT))], [self.chat])
+
+    def test_a_yesterday_slot_is_not_due_when_the_update_already_went_out_today(self):
+        from apps.telegram_bot import services
+        from apps.telegram_bot.digest import TASHKENT
+
+        now = datetime(2026, 11, 9, 0, 2, tzinfo=TASHKENT)
+        link = TelegramLink.objects.get()
+        link.last_sent_date = now.date()
+        link.save(update_fields=['last_sent_date'])
+        services.update_settings(link, notify_time=datetime(2026, 1, 1, 23, 58).time(), now=now)
+        self.assertEqual(services.due(now), [])
 
     def test_a_null_notify_time_clears_it_and_nothing_is_due(self):
         from apps.telegram_bot import services

@@ -22,6 +22,7 @@ router = Router()
 router.message.filter(F.chat.type == 'private')
 router.callback_query.filter(F.message.chat.type == 'private')
 
+COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|settings|logout)(@\w+)?(\s|$)')
 TIME_PATTERN = re.compile(r'^\s*(\d{1,2})[:.](\d{2})\s*$')
 
 
@@ -142,7 +143,7 @@ async def got_username(message: Message, state: FSMContext, bot):
     await _edit(bot, message.chat.id, data.get('prompt_id'), t(lang, 'ask_password'))
 
 
-@router.message(Login.password)
+@router.message(Login.password, ~F.text.regexp(COMMAND_PATTERN))
 async def got_password(message: Message, state: FSMContext, bot, api):
     # Nothing else may run before the password message is gone.
     password = message.text

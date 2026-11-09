@@ -145,6 +145,13 @@ class LoginTests(BotTestCase):
         self.assertEqual(self.login('counselor1', PASSWORD, chat=4000).status_code, 429)
         self.assertEqual(self.login('Counselor1@Example.com', PASSWORD, chat=4000).status_code, 429)
 
+    def test_a_username_containing_an_at_sign_still_logs_in(self):
+        User.objects.filter(pk=self.c2.pk).update(username='odd@name', email='other@example.com')
+        user = User.objects.get(pk=self.c2.pk)
+        user.set_password(PASSWORD)
+        user.save()
+        self.assertEqual(self.login('odd@name', PASSWORD, chat=8000).status_code, 200)
+
     def test_an_email_shared_by_two_accounts_is_refused(self):
         User.objects.filter(pk=self.c2.pk).update(email=self.c1.email.upper())
         response = self.login(self.c1.email)
@@ -202,6 +209,7 @@ class LoginTests(BotTestCase):
     def test_password_change_between_login_and_confirm_voids_the_token(self):
         token = self.login('counselor1').json()['pending_token']
         self.c1.set_password('AnotherPass456!')
+        self.c1.password_version += 1
         self.c1.save()
         self.assertEqual(self.post('confirm', {'chat_id': self.chat, 'pending_token': token}).status_code, 410)
 

@@ -206,3 +206,11 @@ async def test_backend_down_on_confirm_gives_the_card_and_buttons_back(h):
     h.api.errors.clear()
     await h.tap('login:confirm')
     assert len(h.api.names('confirm')) == 2
+
+
+async def test_a_command_while_waiting_for_the_password_is_not_sent_as_the_password(h):
+    await start_flow(h)
+    await h.say('dilnoza')
+    await h.say('/help')
+    assert not h.api.names('login')
+    assert '/logout' in h.session.texts()[-1]

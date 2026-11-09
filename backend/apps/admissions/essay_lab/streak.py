@@ -18,6 +18,7 @@ with CASE expressions, valid on PostgreSQL and SQLite.
 import logging
 import math
 import re
+import time
 from datetime import date, timedelta
 
 from django.core.cache import cache
@@ -35,18 +36,20 @@ GOAL_MINUTES = 10
 GOAL_SECONDS = GOAL_MINUTES * 60
 MIN_WORDS_WITH_MINUTES = 25
 # What a save may add: seconds since the tab's previous save times TYPING_WORDS_PER_SECOND
-# (60 words a minute), kept between the two limits. This is a rate limit, not a paste
-# detector: the daily 100 words need at least ~100 s of wall-clock time however they arrive.
-# The default applies when there is no earlier save to measure from.
-TYPING_WORDS_PER_SECOND = 1
-MIN_SAVE_CREDIT = 20
+# (90 words a minute), at most MAX_SAVE_CREDIT, with no minimum, so back-to-back saves earn
+# nothing extra. This is a rate limit, not a paste detector: the daily 100 words need at
+# least ~67 s of wall-clock time however they arrive. The default applies when there is no
+# earlier save to measure from.
+TYPING_WORDS_PER_SECOND = 1.5
 MAX_SAVE_CREDIT = 60
 DEFAULT_SAVE_CREDIT = 30
 SECONDS_REPORT_SLACK = 10
 SECONDS_FIRST_REPORT = 30
 SECONDS_LOCK_TTL = 5
+SECONDS_LOCK_TRIES = 4
+SECONDS_LOCK_WAIT = 0.02
 SECONDS_LAST_REPORT_TTL = 3600
-# A tracker batch dated up to this many days back is credited to its own date.
+# record_essay_seconds credits a batch dated up to this many days back to its own date.
 SECONDS_BACKDATE_DAYS = 7
 SCREEN_TIME_PAGE = 'essay_lab'
 
@@ -61,7 +64,7 @@ def save_credit_cap(previous_save_at, now):
     idle = (now - previous_save_at).total_seconds()
     if idle < 0:
         return DEFAULT_SAVE_CREDIT
-    return max(MIN_SAVE_CREDIT, min(MAX_SAVE_CREDIT, math.ceil(idle * TYPING_WORDS_PER_SECOND)))
+    return min(MAX_SAVE_CREDIT, math.ceil(idle * TYPING_WORDS_PER_SECOND))
 
 
 def goal_met(words, seconds):
@@ -134,12 +137,21 @@ def own_words_delta(stored_doc, ops):
         return 0
 
 
+def _take_lock(lock_key):
+    # The lock is held for two cache calls, so a short wait makes a lost race (second tab) rare.
+    for attempt in range(SECONDS_LOCK_TRIES):
+        if cache.add(lock_key, 1, SECONDS_LOCK_TTL):
+            return True
+        time.sleep(SECONDS_LOCK_WAIT * (attempt + 1))
+    return False
+
+
 def clamp_essay_seconds(user, entries, now):
     """Credit at most the wall-clock time since this user's previous Essay Lab report.
 
     The tracker reports every 30 s, so honest clients never exceed the elapsed time; one
     inflated batch cannot add more than that. Reads of the last report are serialized by a
-    short cache lock: a request that loses the race (another tab, another worker) is credited
+    short cache lock, retried for a moment: a request that still loses the race is credited
     nothing, and so is one that cannot reach the cache at all. With no recent report, credit
     a first half minute. Whatever date the client names, the seconds belong to the server's
     today, so past days cannot be topped up afterwards. Other pages pass through untouched.
@@ -152,7 +164,7 @@ def clamp_essay_seconds(user, entries, now):
     lock_key = f'essay-seconds-lock:{user.pk}'
     allowed = 0
     try:
-        if cache.add(lock_key, 1, SECONDS_LOCK_TTL):
+        if _take_lock(lock_key):
             try:
                 last = cache.get(cache_key)
                 cache.set(cache_key, now.timestamp(), SECONDS_LAST_REPORT_TTL)
@@ -174,10 +186,10 @@ def clamp_essay_seconds(user, entries, now):
 def record_essay_seconds(user, entries, today):
     """Add a screen-time batch's `essay_lab` seconds to the student's days, in one upsert.
 
-    `entries` is {(client_date, page): seconds}. Days are the server's: a client date
-    in the future (a clock that runs ahead) counts as today, and the tracker already
-    refuses dates older than SECONDS_BACKDATE_DAYS. Does nothing when the batch has no
-    Essay Lab entry. Never raises: the screen-time request must not fail because of it.
+    `entries` is {(date, page): seconds}, credited to that date (a future date counts as
+    today; dates older than SECONDS_BACKDATE_DAYS are dropped). The screen-time request
+    passes it clamp_essay_seconds' output, which already dates everything to the server's today.
+    Does nothing when the batch has no Essay Lab entry. Never raises: the request must not fail because of it.
     """
     by_day = {}
     for (client_date, page), seconds in entries.items():

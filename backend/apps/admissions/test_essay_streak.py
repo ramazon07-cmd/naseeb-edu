@@ -115,6 +115,12 @@ class RecordingTests(StatementCountMixin, StreakTestCase):
         self.assertLess(row.words_peak, 100)
         self.assertFalse(row.goal_met)
 
+    def test_back_to_back_saves_do_not_add_up_to_the_goal(self):
+        for count in (20, 40, 60, 80, 100):
+            self.write(count, moment=NOON)
+        self.assertLess(self.day().words_peak, 100)
+        self.assertFalse(self.day().goal_met)
+
     def test_a_huge_delete_is_not_capped(self):
         self.write(250)
         self.write(1000)

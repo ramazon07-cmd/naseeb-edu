@@ -152,4 +152,4 @@ def test_a_long_student_list_is_split_into_pages_under_the_telegram_limit():
 def test_a_student_without_a_shared_essay_says_so_instead_of_unavailable():
     item = student('Ali', streak={'days': None, 'shared': False})
     page = render_digest_pages(digest([item]), 'en')[0]
-    assert 'no essay shared' in page and 'not available' not in page
+    assert 'once all essays are shared' in page and 'not available' not in page

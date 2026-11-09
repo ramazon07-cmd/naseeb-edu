@@ -74,6 +74,12 @@ class DigestContentTests(BotTestCase):
         self.assertEqual(item['streak'], {'days': None, 'shared': False})
         self.assertNotIn('words_today', item['essays'])
 
+    def test_a_private_essay_hides_the_streak_even_when_another_is_shared(self):
+        self.share_essay(self.s1)
+        Essay.objects.create(student=self.s1, title='Private', shared_with_counselor=False)
+        item = self.by_name(self.digest(), 'Stu1 Tester')
+        self.assertEqual(item['streak'], {'days': None, 'shared': False})
+
     def test_streak_numbers_flow_through_for_shared_students(self):
         self.share_essay(self.s1)
         fake = ActivityResult({self.s1.user_id: EssayActivity(streak_days=6)})
