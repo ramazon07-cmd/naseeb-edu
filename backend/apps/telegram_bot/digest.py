@@ -16,7 +16,7 @@ from apps.admissions.onboarding import PROFILE_READINESS_ITEMS, profile_readines
 from apps.admissions.progress import attach_progress_stats
 from apps.admissions.scoping import active_visible_students, scope_essays
 
-from .activity import essay_activity_for
+from .activity import ActivityResult, essay_activity_for
 
 TASHKENT = ZoneInfo('Asia/Tashkent')
 MAX_STUDENTS = 300
@@ -85,8 +85,9 @@ def build_digest(user, prefs, now=None):
     want_essays = prefs.get('essays', True)
     want_streak = prefs.get('streak', True)
     want_application = prefs.get('application', True)
-    essays = _essay_counts(user, ids, day_start) if ids and want_essays else {}
-    activity = essay_activity_for([student.user_id for student in students], today)
+    essays = _essay_counts(user, ids, day_start) if ids and (want_essays or want_streak) else {}
+    shared = {student.user_id for student in students if essays.get(student.pk, (0, 0))[0]}
+    activity = essay_activity_for(sorted(shared), today) if shared else ActivityResult(available=True)
     items = []
     for student in students:
         item = {'name': _name(student), 'grade': student.grade}
@@ -95,7 +96,10 @@ def build_digest(user, prefs, now=None):
             words = activity.for_user(student.user_id).words_today
             item['essays'] = {'total': total, 'edited_today': edited, 'words_today': words}
         if want_streak:
-            item['streak'] = {'days': activity.for_user(student.user_id).streak_days}
+            item['streak'] = {
+                'days': activity.for_user(student.user_id).streak_days,
+                'shared': student.user_id in shared,
+            }
         if want_application:
             item['application'] = _application(student)
         items.append(item)

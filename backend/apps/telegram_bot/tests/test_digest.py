@@ -59,19 +59,39 @@ class DigestContentTests(BotTestCase):
         item = self.by_name(self.digest(), 'Stu1 Tester')
         self.assertEqual(item['essays'], {'total': 2, 'edited_today': 1, 'words_today': 0})
 
-    def test_streak_without_writing_days_is_zero(self):
+    def share_essay(self, student):
+        Essay.objects.create(student=student, title='Shared', shared_with_counselor=True)
+
+    def test_streak_without_writing_days_is_zero_once_an_essay_is_shared(self):
+        self.share_essay(self.s1)
         body = self.digest()
         self.assertTrue(body['streak_available'])
-        self.assertEqual(self.by_name(body, 'Stu1 Tester')['streak'], {'days': 0})
+        self.assertEqual(self.by_name(body, 'Stu1 Tester')['streak'], {'days': 0, 'shared': True})
 
-    def test_streak_numbers_flow_through_once_the_adapter_provides_them(self):
+    def test_streak_and_words_are_hidden_for_students_without_a_shared_essay(self):
+        today = timezone.localdate()
+        EssayWritingDay.objects.create(user=self.s1.user, date=today, words_net=140, words_peak=140, goal_met=True)
+        Essay.objects.create(student=self.s1, title='Private', shared_with_counselor=False)
+        item = self.by_name(self.digest(), 'Stu1 Tester')
+        self.assertEqual(item['streak'], {'days': None, 'shared': False})
+        self.assertIsNone(item['essays']['words_today'])
+
+    def test_streak_numbers_flow_through_for_shared_students(self):
+        self.share_essay(self.s1)
         fake = ActivityResult(True, {self.s1.user_id: EssayActivity(words_today=250, streak_days=6)})
-        with mock.patch.object(digest, 'essay_activity_for', return_value=fake):
+        with mock.patch.object(digest, 'essay_activity_for', return_value=fake) as patched:
             body = self.digest()
         item = self.by_name(body, 'Stu1 Tester')
-        self.assertTrue(body['streak_available'])
-        self.assertEqual(item['streak'], {'days': 6})
+        self.assertEqual(patched.call_args.args[0], [self.s1.user_id])
+        self.assertEqual(item['streak'], {'days': 6, 'shared': True})
         self.assertEqual(item['essays']['words_today'], 250)
+        self.assertIsNone(self.by_name(body, 'Stu2 Tester')['essays']['words_today'])
+
+    def test_activity_is_not_queried_when_essays_and_streak_are_off(self):
+        self.share_essay(self.s1)
+        with mock.patch.object(digest, 'essay_activity_for') as patched:
+            digest.build_digest(self.c1, {'essays': False, 'streak': False, 'application': True})
+        patched.assert_not_called()
 
     def test_application_section_counts_and_percent(self):
         Activity.objects.create(student=self.s1, name='Debate club', activity_type='club')
