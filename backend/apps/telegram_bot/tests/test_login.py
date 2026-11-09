@@ -68,6 +68,12 @@ class LoginTests(BotTestCase):
         pending = PendingLogin.objects.get()
         self.assertNotIn(PASSWORD, f'{pending.token_hash}{pending.auth_fingerprint}')
 
+    def test_chat_id_beyond_bigint_is_a_400_not_a_500(self):
+        huge = 2 ** 70
+        self.assertEqual(self.post('login', {'chat_id': huge, 'username': 'x', 'password': 'y'}).status_code, 400)
+        self.assertEqual(self.post('students', {'chat_id': huge}).status_code, 400)
+        self.assertEqual(self.call('get', 'settings', {'chat_id': huge}).status_code, 400)
+
     def test_wrong_password_and_unknown_user_look_the_same(self):
         wrong = self.login('counselor1', 'bad-password-1')
         unknown = self.login('nobody-here', 'bad-password-1')

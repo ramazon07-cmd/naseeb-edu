@@ -12,9 +12,12 @@ def _bad_request():
     return Response({'detail': 'invalid_request'}, status=400)
 
 
+BIGINT = 2 ** 63
+
+
 def _chat_id(data):
     value = data.get('chat_id')
-    if isinstance(value, bool) or not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, int) or not -BIGINT <= value < BIGINT:
         raise services.Refused('invalid_request', 400)
     return value
 
@@ -44,9 +47,12 @@ class BotView(APIView):
         data = self.get_data(request)
         if request.method == 'GET':
             try:
-                return int(data.get('chat_id', ''))
+                value = int(data.get('chat_id', ''))
             except (TypeError, ValueError):
                 raise services.Refused('invalid_request', 400)
+            if not -BIGINT <= value < BIGINT:
+                raise services.Refused('invalid_request', 400)
+            return value
         return _chat_id(data)
 
     def handle_exception(self, exc):
