@@ -11,5 +11,6 @@ router.register('folders', EssayFolderViewSet, basename='essay-lab-folders')
 router.register('review/essays', ReviewEssayViewSet, basename='essay-lab-review')
 
 urlpatterns = [
+    path('streak/', EssayLabEssayViewSet.as_view({'get': 'streak'}), name='essay-lab-streak'),
     path('', include(router.urls)),
 ]

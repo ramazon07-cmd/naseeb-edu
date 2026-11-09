@@ -442,7 +442,7 @@ class MergeAutosaveTests(StatementCounter, CollabTestCase):
         stored = ensure_bids(self.stored())
         new_block = para('p2', 'I learned patience slowly.')
         result = {'type': 'doc', 'content': [stored['content'][0], new_block, stored['content'][2]]}
-        with self.assertStatements(9, at_most=True):
+        with self.assertStatements(9):
             response = self.autosave_v2([{'set': 'p2', 'base': block_hash(stored['content'][1]), 'block': new_block}], 0,
                                         'v2-a', doc_hash(result))
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
