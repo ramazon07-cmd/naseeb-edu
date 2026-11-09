@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.db import connection
+from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
@@ -307,14 +308,13 @@ class StreakRuleTests(StreakTestCase):
         data = self.get().data
         self.assertEqual((data['progress']['minutes'], data['progress']['goal_met']), (0, False))
 
-    def test_time_counts_on_its_own_day_and_a_future_date_counts_as_today(self):
+    def test_time_counts_on_its_own_day(self):
         self.make_days(d2=(30, 0), d3=(30, 0))
         self.add_time(date(2026, 11, 6), 900)
         self.add_time(date(2026, 11, 5), 900)
-        self.add_time(date(2026, 11, 9), 900)
         data = self.get().data
         self.assertEqual(data['current'], 0)
-        self.assertEqual(data['days'], {'2026-11-08': 'ember', '2026-11-06': 'fire', '2026-11-05': 'fire'})
+        self.assertEqual(data['days'], {'2026-11-06': 'fire', '2026-11-05': 'fire'})
 
     def test_a_day_met_by_time_stays_fire_after_its_time_is_no_longer_read(self):
         self.make_days(d1=(30, 700), d2=(150, 0))
@@ -430,6 +430,13 @@ class OwnWordsDeltaTests(StreakTestCase):
                                          [{'del': 'a', 'base': 'x'}]), 0)
 
 
+class SaveCreditCapTests(TestCase):
+    def test_a_save_stamped_before_the_previous_one_earns_nothing(self):
+        from apps.admissions.essay_lab.streak import save_credit_cap
+        now = datetime(2026, 11, 8, 7, 0, tzinfo=dt_timezone.utc)
+        self.assertEqual(save_credit_cap(now + timedelta(milliseconds=10), now), 0)
+
+
 class ClampEssaySecondsTests(StreakTestCase):
     """Screen time is a token bucket: 40 s to start, +1.1 s per second, at most 120 s."""
 
@@ -438,8 +445,21 @@ class ClampEssaySecondsTests(StreakTestCase):
         from django.core.cache import cache
         cache.clear()
 
-    def clamp(self, seconds, moment, page='essay_lab'):
+    def saved_words_at(self, moment):
+        from django.core.cache import cache
+        cache.set(f'essay-words-last:{self.student_user.pk}', moment.timestamp(), 3600)
+
+    def clamp(self, seconds, moment, page='essay_lab', writing=True):
+        if writing:
+            self.saved_words_at(moment - timedelta(seconds=5))
         return clamp_essay_seconds(self.student_user, {(date(2026, 11, 8), page): seconds}, moment)
+
+    def test_time_without_a_recent_save_of_new_words_earns_nothing(self):
+        self.assertEqual(self.clamp(300, NOON, writing=False), {})
+        self.saved_words_at(NOON - timedelta(seconds=601))
+        self.assertEqual(self.clamp(30, NOON, writing=False), {})
+        self.saved_words_at(NOON - timedelta(seconds=599))
+        self.assertEqual(self.clamp(30, NOON, writing=False), {(date(2026, 11, 8), 'essay_lab'): 30})
 
     def test_one_inflated_batch_cannot_meet_the_time_goal(self):
         self.write(30)
@@ -486,6 +506,7 @@ class ClampEssaySecondsTests(StreakTestCase):
 
     def test_seconds_dated_in_the_past_are_credited_to_today(self):
         past = date(2026, 11, 5)
+        self.saved_words_at(NOON - timedelta(seconds=5))
         clamped = clamp_essay_seconds(self.student_user, {(past, 'essay_lab'): 30}, NOON)
         self.assertEqual(clamped, {(date(2026, 11, 8), 'essay_lab'): 30})
         record_essay_seconds(self.student_user, clamped, date(2026, 11, 8))

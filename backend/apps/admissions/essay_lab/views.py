@@ -719,6 +719,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             'goal': inline_serializer(name='EssayWritingGoal', fields={
                 'words': serializers.IntegerField(),
                 'minutes': serializers.IntegerField(),
+                'min_words': serializers.IntegerField(),
             }),
             'month': serializers.CharField(),
             'days': serializers.DictField(child=serializers.ChoiceField(choices=['fire', 'ember'])),

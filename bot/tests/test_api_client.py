@@ -25,6 +25,10 @@ async def backend():
             return web.json_response({'detail': 'Unauthorized.'}, status=401)
         if name == 'digest':
             return web.Response(text='oops', status=502)
+        if name == 'confirm':
+            return web.Response(text='<html>captive portal</html>', content_type='text/html')
+        if name == 'logout':
+            return web.json_response(['nope'], status=400)
         if name == 'due':
             return web.json_response({'chats': [{'chat_id': 5}]})
         if name == 'settings':
@@ -111,3 +115,16 @@ async def test_a_due_answer_without_a_chats_list_is_unavailable_not_a_crash(back
     api._call = empty
     with pytest.raises(ApiUnavailable):
         await api.due()
+
+
+async def test_a_non_json_success_body_is_unavailable(backend):
+    api, _ = backend
+    with pytest.raises(ApiUnavailable):
+        await api.confirm(1, 'token', 'en')
+
+
+async def test_a_non_object_error_body_is_an_api_error_not_a_crash(backend):
+    api, _ = backend
+    with pytest.raises(ApiError) as caught:
+        await api.logout(1)
+    assert (caught.value.status, caught.value.code) == (400, '')

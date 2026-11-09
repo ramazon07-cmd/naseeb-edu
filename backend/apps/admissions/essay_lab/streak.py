@@ -53,8 +53,8 @@ SECONDS_LOCK_TTL = 5
 SECONDS_LOCK_TRIES = 3
 SECONDS_LOCK_WAIT = 0.005
 SECONDS_LAST_REPORT_TTL = 3600
-# record_essay_seconds credits a batch dated up to this many days back to its own date.
-SECONDS_BACKDATE_DAYS = 7
+# Screen time only counts as writing time when the student saved new words this recently.
+SECONDS_WRITING_WINDOW = 600
 SCREEN_TIME_PAGE = 'essay_lab'
 # The card counts the current and best streak over this much history, so a read stays small.
 STREAK_HISTORY_DAYS = 800
@@ -69,7 +69,7 @@ def save_credit_cap(previous_save_at, now):
         return DEFAULT_SAVE_CREDIT
     idle = (now - previous_save_at).total_seconds()
     if idle < 0:
-        return DEFAULT_SAVE_CREDIT
+        return 0
     return min(MAX_SAVE_CREDIT, math.ceil(idle * TYPING_WORDS_PER_SECOND))
 
 
@@ -184,6 +184,14 @@ def _swap_last_report(user, kind, now):
         return False, None
 
 
+def _wrote_recently(user, now):
+    try:
+        last = cache.get(f'essay-words-last:{user.pk}')
+    except Exception:
+        return False
+    return last is not None and 0 <= now.timestamp() - last <= SECONDS_WRITING_WINDOW
+
+
 def _spend_seconds(user, claimed, now):
     """Take up to `claimed` seconds from this user's Essay Lab time bucket; returns what was granted.
 
@@ -215,7 +223,8 @@ def _spend_seconds(user, claimed, now):
 def clamp_essay_seconds(user, entries, now):
     """Limit a screen-time batch's Essay Lab seconds to what the wall clock allows.
 
-    A token bucket per student: it refills at 1.1 s per second, holds at most two minutes and
+    Only time near a save that added words counts (SECONDS_WRITING_WINDOW), so browsing the
+    Library or reading feedback earns nothing. A token bucket per student: it refills at 1.1 s per second, holds at most two minutes and
     starts with 40 s (a first report plus some slack for timer jitter), so one inflated batch
     or a burst of requests cannot add more than the time that really passed. A request that
     loses the cache lock race is credited nothing, and so is one that cannot reach the cache.
@@ -230,7 +239,7 @@ def clamp_essay_seconds(user, entries, now):
     today = local.date()
     yesterday = today - timedelta(days=1)
     claimed = sum(essay.values())
-    allowed = _spend_seconds(user, claimed, now)
+    allowed = _spend_seconds(user, claimed, now) if _wrote_recently(user, now) else 0
     just_after_midnight = local.hour == 0 and local.minute < SECONDS_MIDNIGHT_MINUTES
     early = sum(seconds for (day, _), seconds in essay.items() if day == yesterday) if just_after_midnight else 0
     clamped = {key: seconds for key, seconds in entries.items() if key[1] != SCREEN_TIME_PAGE}
@@ -246,17 +255,13 @@ def clamp_essay_seconds(user, entries, now):
 def record_essay_seconds(user, entries, today):
     """Add a screen-time batch's `essay_lab` seconds to the student's days, in one upsert.
 
-    `entries` is {(date, page): seconds}, credited to that date (a future date counts as
-    today; dates older than SECONDS_BACKDATE_DAYS are dropped). The screen-time request
-    passes it clamp_essay_seconds' output, which already dates everything to the server's today.
-    Does nothing when the batch has no Essay Lab entry. Never raises: the request must not fail because of it.
+    `entries` is {(date, page): seconds}, credited to that date. The screen-time request
+    passes it clamp_essay_seconds' output, which already dates everything to the server's
+    today (or yesterday just after midnight). Does nothing when the batch has no Essay Lab entry. Never raises: the request must not fail because of it.
     """
     by_day = {}
-    for (client_date, page), seconds in entries.items():
+    for (day, page), seconds in entries.items():
         if page != SCREEN_TIME_PAGE:
-            continue
-        day = min(client_date, today)
-        if day < today - timedelta(days=SECONDS_BACKDATE_DAYS):
             continue
         by_day[day] = by_day.get(day, 0) + seconds
     if not by_day:

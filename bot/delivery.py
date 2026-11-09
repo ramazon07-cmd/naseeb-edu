@@ -41,11 +41,10 @@ async def send_next_page(bot, chat_id, lang, pages_store, token):
     if not rest:
         return False
     page, rest = rest[0], rest[1:]
-    markup = None
+    markup = keyboards.show_more(lang, len(rest), token) if rest else None
+    await bot.send_message(chat_id, page, reply_markup=markup)
     if rest:
         pages_store.set(key, rest, PAGES_TTL)
-        markup = keyboards.show_more(lang, len(rest), token)
     else:
         pages_store.drop(key)
-    await bot.send_message(chat_id, page, reply_markup=markup)
     return True

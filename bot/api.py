@@ -34,13 +34,17 @@ class ApiClient:
                 try:
                     body = await response.json(content_type=None)
                 except ValueError:
-                    body = {}
+                    body = None
                 status = response.status
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             # Only the exception type: the request body of a login holds a password.
             raise ApiUnavailable(type(exc).__name__) from None
         if status >= 500:
             raise ApiUnavailable(str(status))
+        if not isinstance(body, dict):
+            if status < 400:
+                raise ApiUnavailable('bad_body')
+            body = {}
         if status >= 400:
             if status == 401 and not (body or {}).get('code'):
                 log.error('backend rejected the service key (check BOT_SERVICE_KEY)')

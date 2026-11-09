@@ -1,3 +1,4 @@
+import pytest
 from bot.delivery import send_digest, send_next_page
 from bot.i18n import LANGUAGES, STRINGS
 from bot.render import TELEGRAM_LIMIT, render_digest_pages, render_students
@@ -153,3 +154,24 @@ def test_a_student_without_a_shared_essay_says_so_instead_of_unavailable():
     item = student('Ali', streak={'days': None, 'shared': False})
     page = render_digest_pages(digest([item]), 'en')[0]
     assert 'once all essays are shared' in page and 'not available' not in page
+
+
+async def test_a_failed_send_keeps_the_page_for_a_retry():
+    harness = Harness()
+    try:
+        pages = TtlCache(1800)
+        await send_digest(harness.bot, 1, digest([student(f'Student {i} ' + 'X' * 40) for i in range(120)]), 'en', pages)
+        token = harness.session.of('SendMessage')[0][1]['reply_markup']['inline_keyboard'][0][0]['callback_data'].split(':')[1]
+        before = pages.get(('pages', 1, token))
+
+        async def boom(*args, **kwargs):
+            raise RuntimeError('network')
+
+        real, harness.bot.send_message = harness.bot.send_message, boom
+        with pytest.raises(RuntimeError):
+            await send_next_page(harness.bot, 1, 'en', pages, token)
+        assert pages.get(('pages', 1, token)) == before
+        harness.bot.send_message = real
+        assert await send_next_page(harness.bot, 1, 'en', pages, token)
+    finally:
+        harness.close()
