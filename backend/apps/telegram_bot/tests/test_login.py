@@ -140,6 +140,21 @@ class LoginTests(BotTestCase):
         self.assertEqual(response.json()['code'], 'invalid_credentials')
         self.assertEqual(self.login('counselor1').status_code, 200)
 
+    def test_bot_failures_use_the_website_counters_without_locking_web_addresses(self):
+        from apps.users.security import login_locked
+        from apps.users.cache_safety import cache_get
+        from apps.users.security import _key
+        for chat in range(3):
+            self.login('counselor1', 'bad-password-1', chat=4000 + chat)
+        self.assertEqual(cache_get(_key('user-ip', 'counselor1|telegram')), 3)
+        self.assertFalse(login_locked(('user-ip', 'counselor1|203.0.113.7')))
+
+    def test_website_threshold_blocks_bot_logins_even_with_fresh_bot_counters(self):
+        from apps.users.security import register_login_failure
+        for _ in range(10):
+            register_login_failure(('user-ip', 'counselor1|telegram'))
+        self.assertEqual(self.login('counselor1', PASSWORD, chat=5000).status_code, 429)
+
     def test_lockout_message_is_the_same_for_unknown_users(self):
         for _ in range(5):
             self.login('ghost', 'bad-password-1')

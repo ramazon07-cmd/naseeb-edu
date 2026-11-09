@@ -11,7 +11,9 @@ from django.utils import timezone
 
 from apps.admissions.scoping import is_locked_out_by_school
 from apps.users.cache_safety import cache_delete_many, cache_get, count_hit
-from apps.users.security import note_account_failure
+from apps.users.security import (
+    login_locked, note_account_failure, register_login_failure, reset_login_failures,
+)
 from apps.users.throttles import hashed
 
 from . import conf
@@ -61,6 +63,12 @@ def _locked(keys):
     return any((cache_get(key) or 0) >= conf.LOGIN_MAX_ATTEMPTS for key in keys)
 
 
+def _web_lockout_keys(chat_id, account):
+    # Same counters and thresholds as the website login. The bot has no client IP, so a
+    # per-chat and a bot-wide pseudo address stand in; web addresses are never locked by the bot.
+    return (('user-ip', f'{account}|telegram:{chat_id}'), ('user-ip', f'{account}|telegram'))
+
+
 def _resolve_login(login_value):
     """(username to authenticate, canonical account key); an email shared by several users resolves to nothing."""
     if '@' not in login_value:
@@ -76,15 +84,18 @@ def login(chat_id, login_value, password):
     login_value = login_value.strip()
     username, account = _resolve_login(login_value)
     keys = _attempt_keys(chat_id, account)
-    if _locked(keys):
+    web_keys = _web_lockout_keys(chat_id, account)
+    if _locked(keys) or login_locked(*web_keys):
         raise Refused('locked', 429, retry_after=conf.LOGIN_WINDOW_SECONDS)
     user = authenticate(username=username, password=password) if username else None
     if user is None:
         for key in keys:
             count_hit(key, conf.LOGIN_WINDOW_SECONDS)
+        register_login_failure(*web_keys)
         note_account_failure(account)
         raise Refused('invalid_credentials', 401)
     cache_delete_many(keys)
+    reset_login_failures(*web_keys)
     user = User.objects.select_related('school', 'supervising_counselor').get(pk=user.pk)
     error = _account_error(user)
     if error:
