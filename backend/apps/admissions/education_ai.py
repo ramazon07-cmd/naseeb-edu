@@ -11,6 +11,8 @@ from django.conf import settings
 from core.ai_policy import outbound_ai_allowed
 from apps.users.cache_safety import cache_get, cache_set
 
+from . import ai_usage
+
 
 logger = logging.getLogger('naseeb.education_ai')
 MAX_TEXT_LENGTH = 500
@@ -121,6 +123,7 @@ student's options. Keep the language clear, encouraging, and concise."""
     )
     with urllib.request.urlopen(request, timeout=settings.AI_RECOMMENDATION_TIMEOUT_SECONDS) as response:
         payload = json.loads(response.read().decode('utf-8'))
+    ai_usage.capture(payload, body)
     content = payload['choices'][0]['message']['content']
     content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE)
     result = json.loads(content)
@@ -132,6 +135,7 @@ student's options. Keep the language clear, encouraging, and concise."""
 def generate_education_guidance(profile, major_candidates, subject_strengths):
     fallback = _fallback_guidance(major_candidates, subject_strengths)
     if not recommendation_ai_available():
+        ai_usage.record('education_match', profile.user, provider='groq', status=ai_usage.LOCAL_FALLBACK)
         return fallback
     context = {
         'assessment_scores': latest_assessment_scores(profile),
@@ -149,12 +153,15 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
     cached = cache_get(cache_key)
     if cached:
         return cached
+    ai_usage.begin()
     try:
         result = _validate_result(_request_groq(context), major_candidates, subject_strengths)
         if not result['major_guidance']:
             raise ValueError('AI response did not contain an allowed major.')
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
         logger.warning('education_ai_provider_failure student_id=%s', profile.pk)
+        ai_usage.record('education_match', profile.user, provider='groq', status=ai_usage.FAILED)
         return fallback
+    ai_usage.record('education_match', profile.user, provider='groq', status=ai_usage.OK)
     cache_set(cache_key, result, timeout=24 * 60 * 60)
     return result

@@ -2303,3 +2303,43 @@ class AssistantInvite(TimeStampedModel):
 
     def __str__(self):
         return f'{self.email} · {self.school} · {self.status}'
+
+
+class AiUsageLog(models.Model):
+    """One paid (or refused) AI call: counts only, never a prompt, essay text or reply."""
+
+    class Status(models.TextChoices):
+        OK = 'ok', 'ok'
+        PROVIDER_ERROR = 'provider_error', 'provider_error'
+        INVALID_OUTPUT = 'invalid_output', 'invalid_output'
+        BUDGET_REFUSED = 'budget_refused', 'budget_refused'
+        LOCAL_FALLBACK = 'local_fallback', 'local_fallback'
+
+    created_at = models.DateTimeField(default=timezone.now)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    school = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    role = models.CharField(max_length=30, blank=True)
+    feature = models.CharField(max_length=40)
+    provider = models.CharField(max_length=20, blank=True)
+    model = models.CharField(max_length=120, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    cached_input_tokens = models.PositiveIntegerField(default=0)
+    reasoning_tokens = models.PositiveIntegerField(default=0)
+    total_tokens = models.PositiveIntegerField(default=0)
+    usage_estimated = models.BooleanField(default=False)
+    latency_ms = models.PositiveIntegerField(default=0)
+    language = models.CharField(max_length=10, blank=True)
+    fallback_used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['created_at'], name='ai_usage_time_idx'),
+            models.Index(fields=['feature', 'created_at'], name='ai_usage_feature_time_idx'),
+            models.Index(fields=['school', 'created_at'], name='ai_usage_school_time_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.feature} {self.status} {self.total_tokens} tokens'

@@ -17,6 +17,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 
+from . import ai_usage
 from .assistant import redact_pii
 
 logger = logging.getLogger('naseeb.rec_letter_ai')
@@ -283,6 +284,7 @@ def _request_gateway(system, user):
     )
     with urllib.request.urlopen(request, timeout=settings.AI_ASSISTANT_TIMEOUT_SECONDS) as response:
         payload = json.loads(response.read().decode('utf-8'))
+    ai_usage.capture(payload, body)
     content = payload['choices'][0]['message']['content']
     content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE)
     return json.loads(content)
