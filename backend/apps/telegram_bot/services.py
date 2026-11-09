@@ -12,8 +12,10 @@ from django.utils import timezone
 from apps.admissions.scoping import is_locked_out_by_school
 from apps.users.cache_safety import cache_delete_many, cache_get, count_hit
 from apps.users.security import (
-    login_locked, note_account_failure, register_login_failure, reset_login_failures,
+    is_known_login_device, login_locked, note_account_failure, register_login_failure, remember_login_device,
+    reset_login_failures,
 )
+from apps.users.throttles import hashed
 
 from . import conf
 from .digest import tashkent_now
@@ -65,6 +67,25 @@ def _locked(keys):
     return any((cache_get(key) or 0) >= conf.LOGIN_MAX_ATTEMPTS for key in keys)
 
 
+def _account_ceiling_hit(chat_id, account):
+    """Guessing spread over many chats is slowed for chats that never signed in to this account.
+
+    Chats that already did skip it (like known devices on the website), so an attacker can
+    slow new chats down but never keep the owner out.
+    """
+    if is_known_login_device(account, _device(chat_id)):
+        return False
+    return (cache_get(_ceiling_key(account)) or 0) >= conf.ACCOUNT_CEILING
+
+
+def _ceiling_key(account):
+    return f'tgbot-login:account:{hashed(account)}'
+
+
+def _device(chat_id):
+    return f'telegram:{chat_id}'
+
+
 def _web_lockout_keys(chat_id, account):
     # Same counter and threshold as the website login, with the chat standing in for the client IP,
     # so real web addresses are never locked by the bot.
@@ -87,12 +108,13 @@ def login(chat_id, login_value, password):
     username, account = _resolve_login(login_value)
     keys = _attempt_keys(chat_id)
     web_keys = _web_lockout_keys(chat_id, account)
-    if _locked(keys) or login_locked(*web_keys):
+    if _locked(keys) or login_locked(*web_keys) or _account_ceiling_hit(chat_id, account):
         raise Refused('locked', 429, retry_after=conf.LOGIN_WINDOW_SECONDS)
     user = authenticate(username=username, password=password) if username else None
     if user is None:
         for key in keys:
             count_hit(key, conf.LOGIN_WINDOW_SECONDS)
+        count_hit(_ceiling_key(account), conf.LOGIN_WINDOW_SECONDS)
         register_login_failure(*web_keys)
         note_account_failure(account)
         raise Refused('invalid_credentials', 401)
@@ -102,6 +124,7 @@ def login(chat_id, login_value, password):
     error = _account_error(user)
     if error:
         raise Refused(error)
+    remember_login_device((login_value, user.get_username(), user.email), _device(chat_id))
     token = secrets.token_urlsafe(32)
     PendingLogin.objects.update_or_create(chat_id=chat_id, defaults={
         'user': user,
@@ -171,8 +194,13 @@ def settings_payload(link):
     }
 
 
-def _minute_of_day(value):
-    return value.hour * 60 + value.minute
+def _slots(now):
+    """{notify time: its date} for the current minute and the grace window before it."""
+    slots = {}
+    for k in range(conf.DUE_GRACE_MINUTES + 1):
+        slot = now - timedelta(minutes=k)
+        slots.setdefault(slot.time().replace(second=0, microsecond=0), slot.date())
+    return slots
 
 
 def update_settings(link, *, language=None, notify_time=None, clear_notify_time=False, prefs=None, enabled=None,
@@ -188,10 +216,15 @@ def update_settings(link, *, language=None, notify_time=None, clear_notify_time=
         link.notify_time = notify_time
         fields.append('notify_time')
         now = tashkent_now(now)
-        late = _minute_of_day(now) - _minute_of_day(notify_time)
-        if late > conf.DUE_GRACE_MINUTES:
-            # Past the grace window a passed time starts tomorrow; inside it, due() still sends today.
-            link.last_sent_date = now.date()
+        slot_date = _slots(now).get(notify_time)
+        if slot_date is None and notify_time <= now.time().replace(second=0, microsecond=0):
+            # Past the grace window a passed time starts tomorrow, not with an instant send.
+            slot_date = now.date()
+        elif slot_date == now.date():
+            # Inside today's grace window due() still sends it today.
+            slot_date = None
+        if slot_date is not None and (link.last_sent_date is None or link.last_sent_date < slot_date):
+            link.last_sent_date = slot_date
             fields.append('last_sent_date')
     if prefs is not None:
         link.prefs = {**DEFAULT_PREFS, **link.prefs, **prefs}
@@ -206,12 +239,7 @@ def update_settings(link, *, language=None, notify_time=None, clear_notify_time=
 
 def due(now=None, limit=DUE_BATCH):
     """Chats whose update is due; each is leased so another instance skips it."""
-    now = tashkent_now(now)
-    grace = conf.DUE_GRACE_MINUTES
-    slots = {}
-    for k in range(grace + 1):
-        slot = now - timedelta(minutes=k)
-        slots.setdefault(slot.time().replace(second=0, microsecond=0), slot.date())
+    slots = _slots(tashkent_now(now))
     when = Q()
     for slot_time, slot_date in slots.items():
         when |= Q(notify_time=slot_time) & ~Q(last_sent_date=slot_date)

@@ -457,6 +457,8 @@ export const ESSAY_LAB_TRANSLATIONS = {
   // Writing streak
   'Writing streak': ['Yozish seriyasi', 'Серия письма'],
   'day streak': ['kunlik seriya', 'день подряд|дня подряд|дней подряд'],
+  'Best: 1 day': ['Eng yaxshi: 1 kun', 'Рекорд: 1 день'],
+  '1 word today': ['Bugun 1 so‘z', 'Сегодня 1 слово'],
   'Best: {count} days': ['Eng yaxshi: {count} kun', 'Рекорд: {count} день|Рекорд: {count} дня|Рекорд: {count} дней'],
   'Done today': ['Bugun bajarildi', 'Сегодня выполнено'],
   'Not yet': ['Hali yo‘q', 'Пока нет'],

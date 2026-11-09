@@ -3,8 +3,11 @@ from datetime import date
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from apps.admissions.essay_lab.streak import MAX_SAVE_CREDIT as MAX_WORDS_PER_SAVE, goal_met
+from apps.admissions.essay_lab.streak import goal_met
 from apps.admissions.models import EssayCheckpoint, EssayWritingDay
+
+# Samples are at least 10 minutes apart, so the live per-save cap (a typing rate) does not apply.
+MAX_WORDS_PER_SAVE = 120
 
 
 def reconstruct_days(user_id, checkpoints):

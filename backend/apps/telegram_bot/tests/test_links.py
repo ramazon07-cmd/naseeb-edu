@@ -131,6 +131,17 @@ class SettingsTests(BotTestCase):
         self.assertIsNone(link.last_sent_date)
         self.assertEqual([item['chat_id'] for item in services.due(now)], [self.chat])
 
+    def test_a_time_just_before_midnight_set_just_after_it_does_not_send_twice(self):
+        from apps.telegram_bot import services
+        from apps.telegram_bot.digest import TASHKENT
+
+        now = datetime(2026, 11, 9, 0, 2, tzinfo=TASHKENT)
+        link = TelegramLink.objects.get()
+        services.update_settings(link, notify_time=datetime(2026, 1, 1, 23, 59).time(), now=now)
+        self.assertEqual(str(link.last_sent_date), '2026-11-08')
+        self.assertEqual(services.due(now), [])
+        self.assertEqual([i['chat_id'] for i in services.due(datetime(2026, 11, 9, 23, 59, tzinfo=TASHKENT))], [self.chat])
+
     def test_a_null_notify_time_clears_it_and_nothing_is_due(self):
         from apps.telegram_bot import services
         from apps.telegram_bot.digest import TASHKENT

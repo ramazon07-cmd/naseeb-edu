@@ -126,6 +126,18 @@ class LoginTests(BotTestCase):
             self.login(f'ghost{i}', 'bad-password-1')
         self.assertEqual(self.login('counselor1', PASSWORD).status_code, 429)
 
+    @override_settings()
+    def test_many_chats_guessing_one_account_hit_the_ceiling_but_a_known_chat_does_not(self):
+        from apps.telegram_bot import conf
+        known = self.login('counselor1', PASSWORD, chat=6000)
+        self.assertEqual(known.status_code, 200)
+        for chat in range(conf.ACCOUNT_CEILING):
+            self.login('counselor1', 'bad-password-1', chat=7000 + chat)
+        stranger = self.login('counselor1', PASSWORD, chat=9999)
+        self.assertEqual(stranger.status_code, 429)
+        self.assertEqual(stranger.json()['code'], 'locked')
+        self.assertEqual(self.login('counselor1', PASSWORD, chat=6000).status_code, 200)
+
     def test_username_and_email_in_one_chat_share_the_chat_counter(self):
         for i in range(5):
             who = 'counselor1' if i % 2 else 'counselor1@example.com'

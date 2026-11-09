@@ -35,11 +35,12 @@ GOAL_MINUTES = 10
 GOAL_SECONDS = GOAL_MINUTES * 60
 MIN_WORDS_WITH_MINUTES = 25
 # What a save may add: seconds since the tab's previous save times TYPING_WORDS_PER_SECOND
-# (90 words a minute, above fast typing), kept between the two limits, so one pasted block
-# cannot meet the 100-word goal. The default applies when there is no earlier save to measure from.
-TYPING_WORDS_PER_SECOND = 1.5
+# (60 words a minute), kept between the two limits. This is a rate limit, not a paste
+# detector: the daily 100 words need at least ~100 s of wall-clock time however they arrive.
+# The default applies when there is no earlier save to measure from.
+TYPING_WORDS_PER_SECOND = 1
 MIN_SAVE_CREDIT = 20
-MAX_SAVE_CREDIT = 120
+MAX_SAVE_CREDIT = 60
 DEFAULT_SAVE_CREDIT = 30
 SECONDS_REPORT_SLACK = 10
 SECONDS_FIRST_REPORT = 30
@@ -116,17 +117,21 @@ def own_words_delta(stored_doc, ops):
     Used when the save was merged into a newer version: the document-wide count then also
     holds words other people added since, which are not the student's writing.
     """
-    stored = {block_id(block): block for block in stored_doc.get('content') or []}
-    delta = 0
-    for op in ops:
-        if 'ins' in op:
-            delta += _block_words(op['ins'])
-        elif 'del' in op:
-            if op['del'] in stored:
-                delta -= _block_words(stored[op['del']])
-        elif op['set'] in stored:
-            delta += _block_words(op['block']) - _block_words(stored[op['set']])
-    return delta
+    try:
+        stored = {block_id(block): block for block in stored_doc.get('content') or []}
+        delta = 0
+        for op in ops:
+            if 'ins' in op:
+                delta += _block_words(op['ins'])
+            elif 'del' in op:
+                if op['del'] in stored:
+                    delta -= _block_words(stored[op['del']])
+            elif op['set'] in stored:
+                delta += _block_words(op['block']) - _block_words(stored[op['set']])
+        return delta
+    except Exception:
+        logger.exception('Could not measure the words a merged save added')
+        return 0
 
 
 def clamp_essay_seconds(user, entries, now):
@@ -136,11 +141,13 @@ def clamp_essay_seconds(user, entries, now):
     inflated batch cannot add more than that. Reads of the last report are serialized by a
     short cache lock: a request that loses the race (another tab, another worker) is credited
     nothing, and so is one that cannot reach the cache at all. With no recent report, credit
-    a first half minute. Other pages pass through untouched.
+    a first half minute. Whatever date the client names, the seconds belong to the server's
+    today, so past days cannot be topped up afterwards. Other pages pass through untouched.
     """
     essay = {key: seconds for key, seconds in entries.items() if key[1] == SCREEN_TIME_PAGE}
     if not essay:
         return entries
+    today = timezone.localdate(now)
     cache_key = f'essay-seconds-last:{user.pk}'
     lock_key = f'essay-seconds-lock:{user.pk}'
     allowed = 0
@@ -158,11 +165,9 @@ def clamp_essay_seconds(user, entries, now):
     except Exception:
         logger.warning('Essay Lab seconds are not credited: the cache is unavailable')
     clamped = {key: seconds for key, seconds in entries.items() if key[1] != SCREEN_TIME_PAGE}
-    for key in sorted(essay, reverse=True):
-        credit = min(essay[key], allowed)
-        allowed -= credit
-        if credit:
-            clamped[key] = credit
+    credit = min(sum(essay.values()), allowed)
+    if credit:
+        clamped[(today, SCREEN_TIME_PAGE)] = credit
     return clamped
 
 

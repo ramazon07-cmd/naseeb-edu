@@ -102,16 +102,17 @@ function StreakPanel({ signal }) {
     }
   }, [])
 
+  const viewed = useRef('')
+  viewed.current = data?.month || ''
+
   // The library list reloads after the student writes; a newer edit time means
-  // a save has landed, so the streak is read again (from the server's current month).
+  // a save has landed, so the streak is read again for the month being viewed.
   useEffect(() => {
     if (signal === null) return undefined
-    load(undefined)
+    load(viewed.current || undefined)
     return () => { latest.current += 1 }
   }, [signal, load])
 
-  const viewed = useRef('')
-  viewed.current = data?.month || ''
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible' && hasData.current) load(viewed.current) }
     document.addEventListener('visibilitychange', onVisible)
@@ -128,7 +129,7 @@ function StreakPanel({ signal }) {
 
   const { current, best, progress, goal, today, month, days } = data
   const lit = Boolean(progress.goal_met)
-  const wordsToday = tp('{count} words today', progress.words, { count: progress.words })
+  const wordsToday = progress.words === 1 ? t('1 word today') : tp('{count} words today', progress.words, { count: progress.words })
   const goalText = t('Goal: {words} words, or {minutes} min of writing', { words: goal.words, minutes: goal.minutes })
   const { year, month: monthNumber } = splitMonth(month)
   return <section className="el-streak" aria-label={t('Writing streak')}>
@@ -137,7 +138,7 @@ function StreakPanel({ signal }) {
       <Flame lit={lit} />
       <div>
         <div className="el-streak-count">{current}<small>{tp('day streak', current)}</small></div>
-        <div className="el-streak-sub">{tp('Best: {count} days', best, { count: best })}</div>
+        <div className="el-streak-sub">{best === 1 ? t('Best: 1 day') : tp('Best: {count} days', best, { count: best })}</div>
       </div>
       <span className={`el-badge ${lit ? 'is-good' : 'is-warn'}`}>{lit ? t('Done today') : t('Not yet')}</span>
     </div>

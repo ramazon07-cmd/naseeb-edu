@@ -190,3 +190,19 @@ async def test_the_time_picker_still_appears_when_the_student_list_cannot_be_loa
     assert 'open it later with /students' in linked
     last = h.session.of('SendMessage')[-1][1]
     assert 'What time each day' in last['text']
+
+
+async def test_backend_down_on_confirm_gives_the_card_and_buttons_back(h):
+    await start_flow(h)
+    await h.say('dilnoza')
+    await h.say(SECRET_PASSWORD)
+    h.api.errors['confirm'] = ApiUnavailable('timeout')
+    await h.tap('login:confirm')
+    restored = h.session.of('EditMessageText')[-1]
+    assert 'Dilnoza Karimova' in restored[1]['text']
+    buttons = [b['callback_data'] for row in restored[1]['reply_markup']['inline_keyboard'] for b in row]
+    assert 'login:confirm' in buttons and 'login:cancel' in buttons
+    assert 'temporarily unavailable' in h.session.texts()[-1]
+    h.api.errors.clear()
+    await h.tap('login:confirm')
+    assert len(h.api.names('confirm')) == 2

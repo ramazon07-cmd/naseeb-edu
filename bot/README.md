@@ -5,7 +5,7 @@ aiogram 3 long-polling bot for counselors and counselor assistants. It has no da
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -r bot/requirements.txt
-cp bot/.env.example bot/.env      # BOT_TOKEN, BACKEND_URL, BOT_SERVICE_KEY
+cp bot/env.sample bot/.env      # BOT_TOKEN, BACKEND_URL, BOT_SERVICE_KEY
 python -m bot.main                # from the repo root; --run-for 10 exits cleanly after 10 s
 ```
 

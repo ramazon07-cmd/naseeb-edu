@@ -120,8 +120,8 @@ class RecordingTests(StatementCountMixin, StreakTestCase):
         self.write(1000)
         self.write(0)
         self.assertEqual(self.day().words_net, 0)
-        self.write(100)
-        self.assertEqual(self.day().words_net, 100)
+        self.write(40)
+        self.assertEqual(self.day().words_net, 40)
 
     def test_small_saves_add_up_beyond_the_cap(self):
         for total in (200, 400, 600):
@@ -393,6 +393,13 @@ class StreakEndpointTests(StreakTestCase):
             self.assertIn('/api/essay-lab/streak/', response.content.decode())
 
 
+class OwnWordsDeltaTests(StreakTestCase):
+    def test_a_stored_block_that_cannot_be_measured_credits_nothing_and_does_not_raise(self):
+        from .essay_lab.streak import own_words_delta
+        self.assertEqual(own_words_delta({'content': [{'attrs': {'bid': 'a'}, 'type': 'paragraph', 'content': 5}]},
+                                         [{'del': 'a', 'base': 'x'}]), 0)
+
+
 class ClampEssaySecondsTests(StreakTestCase):
     """A report may credit at most the wall-clock time since the previous one (plus slack)."""
 
@@ -421,6 +428,13 @@ class ClampEssaySecondsTests(StreakTestCase):
         self.clamp(30, NOON)
         burst = self.clamp(600, NOON + timedelta(seconds=30))
         self.assertEqual(burst, {(date(2026, 11, 8), 'essay_lab'): 40})
+
+    def test_seconds_dated_in_the_past_are_credited_to_today(self):
+        past = date(2026, 11, 5)
+        clamped = clamp_essay_seconds(self.student_user, {(past, 'essay_lab'): 30}, NOON)
+        self.assertEqual(clamped, {(date(2026, 11, 8), 'essay_lab'): 30})
+        record_essay_seconds(self.student_user, clamped, date(2026, 11, 8))
+        self.assertFalse(EssayWritingDay.objects.filter(user=self.student_user, date=past).exists())
 
     def test_a_request_that_loses_the_lock_race_is_credited_nothing(self):
         from django.core.cache import cache

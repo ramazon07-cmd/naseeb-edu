@@ -5,7 +5,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
-from .essay_lab.streak import MAX_SAVE_CREDIT as MAX_WORDS_PER_SAVE
+from .management.commands.backfill_essay_writing_days import MAX_WORDS_PER_SAVE
 from .management.commands.backfill_essay_writing_days import reconstruct_days
 from .models import Essay, EssayCheckpoint, EssayTab, EssayWritingDay
 from .test_essay_lab import EssayLabFixtureMixin

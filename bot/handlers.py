@@ -165,6 +165,7 @@ async def got_password(message: Message, state: FSMContext, bot, api):
     await state.update_data(pending=card['pending_token'], username=None)
     await state.set_state(Login.confirm)
     text = t(lang, 'card', name=escape(card['full_name']), contacts=contacts(card['email'], card['phone']))
+    await state.update_data(card_text=text)
     await _edit(bot, chat_id, prompt_id, text, keyboards.confirm_card(lang))
 
 
@@ -205,6 +206,11 @@ async def login_confirm(callback: CallbackQuery, state: FSMContext, bot, api, ca
         await state.clear()
         await callback.message.edit_text(t(lang, 'pending_expired'))
         return
+    except ApiUnavailable:
+        # The token is still good for 10 minutes: give the card and its buttons back.
+        if data.get('card_text'):
+            await _edit(bot, chat_id, callback.message.message_id, data['card_text'], keyboards.confirm_card(lang))
+        raise
     await state.clear()
     cache.drop_chat(chat_id)
     cache.set(('settings', chat_id), link)

@@ -9,7 +9,7 @@
 - The password is sent once, in the `login` call, and is checked with Django's `authenticate` (the website's backend). It is never stored or logged. The bot deletes the username and password messages before doing anything else.
 - All scoping happens in the backend: students come from `active_visible_students(user)` (built on `visible_students`), the same scope the website uses. A counselor sees all of their own students, including those given to an assistant; an assistant sees only the students assigned to them; nobody sees another counselor's students. The bot never filters or joins student data.
 - A link (one Telegram chat <-> one account) is valid only while the account is active, still a counselor or assistant, its school is active, an assistant still has an active counselor, and the password hash is unchanged. Otherwise the link is deleted on the next call. A new login replaces the chat's old link, and linking an account to a second chat replaces its first chat (newest wins).
-- Login attempts are limited per chat and per username (5 failures in 15 minutes, then `locked`); an unknown user and a wrong password give the same answer.
+- Login attempts are limited per chat (5 failures in 15 minutes, then `locked`), never per username alone, so nobody can lock an owner out of the bot. Failures also count in the website's lockout counter with the chat standing in for the IP, and an account-wide ceiling (`BOT_LOGIN_ACCOUNT_CEILING`, default 30 per window) slows chats that never signed in to that account, like known devices on the website. An unknown user and a wrong password give the same answer.
 
 ## Endpoints (all `POST` with JSON unless noted; all need the service key)
 
@@ -39,7 +39,7 @@ Per student: essays (count of essays the student shared with the counselor, how 
 | `BOT_SERVICE_KEY` | backend env group **and** the bot worker | shared secret, at least 32 random characters, identical in both |
 | `BOT_TOKEN` | bot worker only | from BotFather |
 | `BACKEND_URL` | bot worker only | `https://api.naseebedu.com` |
-| `BOT_LOGIN_MAX_ATTEMPTS`, `BOT_LOGIN_WINDOW_SECONDS`, `BOT_DUE_GRACE_MINUTES` | backend, optional | defaults 5, 900, 5 |
+| `BOT_LOGIN_MAX_ATTEMPTS`, `BOT_LOGIN_WINDOW_SECONDS`, `BOT_DUE_GRACE_MINUTES`, `BOT_LOGIN_ACCOUNT_CEILING` | backend, optional | defaults 5, 900, 5, 30 |
 
 Login lockouts need the shared cache (Redis) to be correct across backend instances, like the website's own lockouts.
 
@@ -57,7 +57,7 @@ Run a single worker instance. A second one is safe (the backend leases each due 
 
 ```bash
 cd backend && BOT_SERVICE_KEY=dev-key python manage.py runserver 127.0.0.1:8000
-cd bot && cp .env.example .env   # fill BOT_TOKEN, BACKEND_URL=http://127.0.0.1:8000, BOT_SERVICE_KEY=dev-key
+cd bot && cp env.sample .env   # fill BOT_TOKEN, BACKEND_URL=http://127.0.0.1:8000, BOT_SERVICE_KEY=dev-key
 python -m bot.main
 ```
 
