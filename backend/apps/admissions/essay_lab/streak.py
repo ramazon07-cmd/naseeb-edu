@@ -26,6 +26,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from ..models import EssayWritingDay
+from .doc import block_id, doc_stats
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,8 @@ MIN_SAVE_CREDIT = 20
 MAX_SAVE_CREDIT = 120
 DEFAULT_SAVE_CREDIT = 30
 SECONDS_REPORT_SLACK = 10
-SECONDS_FIRST_REPORT = 60
+SECONDS_FIRST_REPORT = 30
+SECONDS_LOCK_TTL = 5
 SECONDS_LAST_REPORT_TTL = 3600
 # A tracker batch dated up to this many days back is credited to its own date.
 SECONDS_BACKDATE_DAYS = 7
@@ -104,26 +106,57 @@ def record_words(user, words_before, words_after, now, previous_save_at=None):
         logger.exception('Could not record the writing day for user %s', user.pk)
 
 
+def _block_words(block):
+    return doc_stats({'type': 'doc', 'content': [block]}).word_count
+
+
+def own_words_delta(stored_doc, ops):
+    """Net words the student's own ops v2 add, measured against the blocks they touch.
+
+    Used when the save was merged into a newer version: the document-wide count then also
+    holds words other people added since, which are not the student's writing.
+    """
+    stored = {block_id(block): block for block in stored_doc.get('content') or []}
+    delta = 0
+    for op in ops:
+        if 'ins' in op:
+            delta += _block_words(op['ins'])
+        elif 'del' in op:
+            if op['del'] in stored:
+                delta -= _block_words(stored[op['del']])
+        elif op['set'] in stored:
+            delta += _block_words(op['block']) - _block_words(stored[op['set']])
+    return delta
+
+
 def clamp_essay_seconds(user, entries, now):
     """Credit at most the wall-clock time since this user's previous Essay Lab report.
 
     The tracker reports every 30 s, so honest clients never exceed the elapsed time; one
-    inflated batch cannot add more than that. With no recent report, credit a first minute.
-    Other pages pass through untouched.
+    inflated batch cannot add more than that. Reads of the last report are serialized by a
+    short cache lock: a request that loses the race (another tab, another worker) is credited
+    nothing, and so is one that cannot reach the cache at all. With no recent report, credit
+    a first half minute. Other pages pass through untouched.
     """
     essay = {key: seconds for key, seconds in entries.items() if key[1] == SCREEN_TIME_PAGE}
     if not essay:
         return entries
     cache_key = f'essay-seconds-last:{user.pk}'
+    lock_key = f'essay-seconds-lock:{user.pk}'
+    allowed = 0
     try:
-        last = cache.get(cache_key)
-        cache.set(cache_key, now.timestamp(), SECONDS_LAST_REPORT_TTL)
+        if cache.add(lock_key, 1, SECONDS_LOCK_TTL):
+            try:
+                last = cache.get(cache_key)
+                cache.set(cache_key, now.timestamp(), SECONDS_LAST_REPORT_TTL)
+            finally:
+                cache.delete(lock_key)
+            if last is None:
+                allowed = SECONDS_FIRST_REPORT
+            else:
+                allowed = max(0, int(now.timestamp() - last)) + SECONDS_REPORT_SLACK
     except Exception:
-        last = None
-    if last is None:
-        allowed = SECONDS_FIRST_REPORT
-    else:
-        allowed = max(0, int(now.timestamp() - last)) + SECONDS_REPORT_SLACK
+        logger.warning('Essay Lab seconds are not credited: the cache is unavailable')
     clamped = {key: seconds for key, seconds in entries.items() if key[1] != SCREEN_TIME_PAGE}
     for key in sorted(essay, reverse=True):
         credit = min(essay[key], allowed)

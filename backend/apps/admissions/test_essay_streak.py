@@ -409,7 +409,7 @@ class ClampEssaySecondsTests(StreakTestCase):
         clamped = self.clamp(600, NOON)
         record_essay_seconds(self.student_user, clamped, date(2026, 11, 8))
         row = self.day()
-        self.assertEqual(row.active_seconds, 60)
+        self.assertEqual(row.active_seconds, 30)
         self.assertFalse(row.goal_met)
 
     def test_honest_thirty_second_reports_are_credited_in_full(self):
@@ -421,6 +421,20 @@ class ClampEssaySecondsTests(StreakTestCase):
         self.clamp(30, NOON)
         burst = self.clamp(600, NOON + timedelta(seconds=30))
         self.assertEqual(burst, {(date(2026, 11, 8), 'essay_lab'): 40})
+
+    def test_a_request_that_loses_the_lock_race_is_credited_nothing(self):
+        from django.core.cache import cache
+        cache.add(f'essay-seconds-lock:{self.student_user.pk}', 1, 5)
+        self.assertEqual(self.clamp(30, NOON), {})
+
+    def test_an_unreachable_cache_credits_nothing(self):
+        from unittest import mock
+        with mock.patch('apps.admissions.essay_lab.streak.cache.add', side_effect=RuntimeError('down')):
+            self.assertEqual(self.clamp(600, NOON), {})
+
+    def test_the_lock_is_released_after_each_report(self):
+        self.clamp(30, NOON)
+        self.assertEqual(self.clamp(30, NOON + timedelta(seconds=30)), {(date(2026, 11, 8), 'essay_lab'): 30})
 
     def test_other_pages_are_untouched(self):
         self.assertEqual(self.clamp(600, NOON, page='dashboard'), {(date(2026, 11, 8), 'dashboard'): 600})

@@ -62,7 +62,7 @@ from .tabs import (
     FIRST_TAB_TITLE, MAX_TAB_TITLE, MAX_TABS, ensure_first_tab, refresh_essay_text, shift_after, tab_from_text,
     tree_order,
 )
-from .streak import build_streak, parse_month, record_words
+from .streak import build_streak, own_words_delta, parse_month, record_words
 from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, spend_coach_budget
 from .writes import CHECKPOINT_CAP, TEXT_FIELDS, make_checkpoint, set_text  # noqa: F401 (CHECKPOINT_CAP: tests)
 
@@ -685,7 +685,8 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             else:
                 essay.last_edited_at = now
                 essay.save(update_fields=['last_edited_at', 'updated_at'])
-            record_words(request.user, words_before, stats.word_count, now, previous_save_at)
+            words_after = words_before + own_words_delta(stored, values['ops_v2']) if merged else stats.word_count
+            record_words(request.user, words_before, words_after, now, previous_save_at)
 
             due = latest is None or (latest['created_at'] <= now - AUTO_CHECKPOINT_INTERVAL and not latest['same_text'])
             if due and stats.content.strip():
