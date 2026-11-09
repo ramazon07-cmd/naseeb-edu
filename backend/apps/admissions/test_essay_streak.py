@@ -66,19 +66,19 @@ class StreakTestCase(EssayLabTestCase):
 
 class RecordingTests(StatementCountMixin, StreakTestCase):
     def test_growth_is_recorded(self):
-        self.write(40)
-        self.write(70)
+        self.write(20)
+        self.write(35)
         row = self.day()
-        self.assertEqual((row.words_net, row.words_peak), (70, 70))
+        self.assertEqual((row.words_net, row.words_peak), (35, 35))
 
     def test_deleting_lowers_the_net_but_not_the_peak(self):
-        self.write(50)
-        self.write(30)
+        self.write(25)
+        self.write(15)
         row = self.day()
-        self.assertEqual((row.words_net, row.words_peak), (30, 50))
-        self.write(10)
+        self.assertEqual((row.words_net, row.words_peak), (15, 25))
+        self.write(5)
         row = self.day()
-        self.assertEqual((row.words_net, row.words_peak), (10, 50))
+        self.assertEqual((row.words_net, row.words_peak), (5, 25))
 
     def test_type_and_delete_cycles_do_not_accumulate(self):
         for _ in range(6):
@@ -107,6 +107,13 @@ class RecordingTests(StatementCountMixin, StreakTestCase):
     def test_one_save_is_capped(self):
         self.write(2000)
         self.assertEqual(self.day().words_peak, DEFAULT_SAVE_CREDIT)
+
+    def test_a_pasted_block_after_a_short_pause_does_not_meet_the_goal(self):
+        self.write(5, moment=NOON)
+        self.write(155, moment=NOON + timedelta(seconds=30))
+        row = self.day()
+        self.assertLess(row.words_peak, 100)
+        self.assertFalse(row.goal_met)
 
     def test_a_huge_delete_is_not_capped(self):
         self.write(250)
@@ -161,12 +168,12 @@ class RecordingTests(StatementCountMixin, StreakTestCase):
     def test_interleaved_saves_from_two_essays_lose_nothing(self):
         other = self.make_essay(content='')
         user = self.student_user
-        record_words(user, 0, 30, NOON)
-        record_words(user, 0, 40, NOON)
-        record_words(user, 30, 20, NOON)
-        record_words(user, 40, 90, NOON)
+        record_words(user, 0, 20, NOON)
+        record_words(user, 0, 25, NOON)
+        record_words(user, 20, 10, NOON)
+        record_words(user, 25, 50, NOON)
         row = self.day()
-        self.assertEqual((row.words_net, row.words_peak), (110, 110))
+        self.assertEqual((row.words_net, row.words_peak), (60, 60))
         self.assertEqual(other.pk != self.essay.pk, True)
 
     def test_a_word_change_is_exactly_one_query_and_no_change_is_none(self):
@@ -180,9 +187,9 @@ class RecordingTests(StatementCountMixin, StreakTestCase):
 
     def test_each_user_has_their_own_day(self):
         record_words(self.student_user, 0, 10, NOON)
-        record_words(self.other_user, 0, 50, NOON)
+        record_words(self.other_user, 0, 25, NOON)
         self.assertEqual(self.day().words_peak, 10)
-        self.assertEqual(EssayWritingDay.objects.get(user=self.other_user).words_peak, 50)
+        self.assertEqual(EssayWritingDay.objects.get(user=self.other_user).words_peak, 25)
 
 
 class TashkentDayTests(StreakTestCase):

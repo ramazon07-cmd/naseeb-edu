@@ -34,12 +34,12 @@ GOAL_MINUTES = 10
 GOAL_SECONDS = GOAL_MINUTES * 60
 MIN_WORDS_WITH_MINUTES = 25
 # What a save may add: seconds since the tab's previous save times TYPING_WORDS_PER_SECOND
-# (240 words a minute, faster than anyone types), kept between the two limits. The
-# default applies when there is no earlier save to measure from.
-TYPING_WORDS_PER_SECOND = 4
+# (90 words a minute, above fast typing), kept between the two limits, so one pasted block
+# cannot meet the 100-word goal. The default applies when there is no earlier save to measure from.
+TYPING_WORDS_PER_SECOND = 1.5
 MIN_SAVE_CREDIT = 20
 MAX_SAVE_CREDIT = 120
-DEFAULT_SAVE_CREDIT = 60
+DEFAULT_SAVE_CREDIT = 30
 SECONDS_REPORT_SLACK = 10
 SECONDS_FIRST_REPORT = 60
 SECONDS_LAST_REPORT_TTL = 3600
