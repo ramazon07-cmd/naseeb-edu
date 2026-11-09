@@ -130,6 +130,8 @@ class AdminAiUsageView(APIView):
         except (TypeError, ValueError):
             days = 30
         only_feature = request.query_params.get('feature') or None
+        if only_feature is not None and only_feature not in ai_usage.FEATURES:
+            return Response({'detail': 'Unknown feature.', 'features': list(ai_usage.FEATURES)}, status=400)
         tokens_key = f'admin-ai-tokens:{days}:{only_feature or "all"}'
         tokens = cache_get(tokens_key)
         if tokens is None:

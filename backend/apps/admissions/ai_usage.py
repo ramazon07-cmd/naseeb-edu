@@ -9,6 +9,7 @@ then calls ``record`` once. Synchronous calls share a per-thread sink; the
 streaming assistant passes its own sink because its reply is read later.
 """
 import logging
+import re
 import threading
 import time
 from collections import defaultdict
@@ -25,6 +26,8 @@ PROVIDER_ERROR = AiUsageLog.Status.PROVIDER_ERROR
 BUDGET_REFUSED = AiUsageLog.Status.BUDGET_REFUSED
 FAILED = 'failed'
 PERCENTILES = (50, 90)
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'education_match')
+_SNAPSHOT_SUFFIX = re.compile(r'-(?:\d{4}-\d{2}-\d{2}|\d{8}|\d{4})$')
 _local = threading.local()
 
 
@@ -70,8 +73,9 @@ def capture(payload, body=None, sink=None):
         usage = _usage_of(payload)
         if usage:
             sink['usage'] = usage
-        sink['answered'] = True
         choices = payload.get('choices')
+        if usage or (isinstance(choices, list) and choices):
+            sink['answered'] = True
         if isinstance(choices, list) and choices and isinstance(choices[0], dict):
             message = choices[0].get('message')
             content = message.get('content') if isinstance(message, dict) else None
@@ -109,7 +113,9 @@ def _tokens(sink, output_chars):
 
 
 def _same_model(used, requested):
-    return used.split('/')[-1] == requested.split('/')[-1]
+    def base(name):
+        return _SNAPSHOT_SUFFIX.sub('', name.split('/')[-1])
+    return base(used) == base(requested)
 
 
 def record(feature, user, *, provider, status, sink=None, output_chars=0):
@@ -192,9 +198,10 @@ def summary(since, feature=None):
         'reasoning_tokens', 'total_tokens', 'status', 'fallback_used', 'usage_estimated',
     ).iterator(chunk_size=2000)
     for name, school_id, created_at, *rest in rows:
-        by_feature[name].append(tuple(rest))
-        by_school[(name, school_id)].append(tuple(rest))
-        by_day[(name, timezone.localtime(created_at).date().isoformat())].append(tuple(rest))
+        rest = tuple(rest)
+        by_feature[name].append(rest)
+        by_school[(name, school_id)].append(rest)
+        by_day[(name, timezone.localtime(created_at).date().isoformat())].append(rest)
     return {
         'since': since,
         'features': {name: _summarize(rows) for name, rows in sorted(by_feature.items())},

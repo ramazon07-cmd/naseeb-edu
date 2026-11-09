@@ -73,6 +73,18 @@ class RecordTests(TestCase):
         row = AiUsageLog.objects.get()
         self.assertEqual((row.model, row.fallback_used), ('openai/gpt-5.4-nano', True))
 
+    def test_dated_snapshot_of_the_requested_model_is_not_a_fallback(self):
+        self.answered(model='openai/gpt-5.4-mini-2026-03-01', usage={'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2})
+        ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.OK)
+        self.assertFalse(AiUsageLog.objects.get().fallback_used)
+
+    def test_error_body_without_choices_or_usage_is_not_an_answer(self):
+        ai_usage.begin()
+        ai_usage.capture({'error': {'message': 'overloaded'}}, {'model': 'm', 'messages': []})
+        ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.FAILED)
+        row = AiUsageLog.objects.get()
+        self.assertEqual((row.status, row.total_tokens), ('provider_error', 0))
+
     def test_record_never_raises(self):
         with mock.patch.object(AiUsageLog.objects, 'create', side_effect=RuntimeError('db down')), \
                 self.assertLogs('naseeb.ai_usage', level='ERROR'):
@@ -136,6 +148,10 @@ class AdminEndpointTests(APITestCase):
         self.client.force_authenticate(self.support)
         data = self.client.get('/api/admin/ai-usage/?feature=assistant').data
         self.assertEqual(list(data['tokens']['features']), ['assistant'])
+
+    def test_unknown_feature_is_rejected_before_it_reaches_the_cache(self):
+        self.client.force_authenticate(self.support)
+        self.assertEqual(self.client.get('/api/admin/ai-usage/?feature=nope').status_code, 400)
 
     def test_repeat_views_reuse_the_aggregates_for_a_minute(self):
         self.client.force_authenticate(self.support)

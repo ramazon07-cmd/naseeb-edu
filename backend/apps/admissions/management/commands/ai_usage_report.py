@@ -17,7 +17,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--days', type=int, default=30)
-        parser.add_argument('--feature', choices=('assistant', 'essay_coach', 'recommendation_letter', 'education_match'))
+        parser.add_argument('--feature', choices=ai_usage.FEATURES)
         parser.add_argument('--by', choices=('feature', 'school', 'day'), default='feature')
         parser.add_argument('--csv', dest='csv_path')
         parser.add_argument('--price-input', type=Decimal, help='USD per 1M input tokens')

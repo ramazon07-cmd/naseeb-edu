@@ -2336,6 +2336,7 @@ class AiUsageLog(models.Model):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [
+            models.Index(fields=['created_at'], name='ai_usage_time_idx'),
             models.Index(fields=['feature', 'created_at'], name='ai_usage_feature_time_idx'),
             models.Index(fields=['school', 'created_at'], name='ai_usage_school_time_idx'),
         ]
