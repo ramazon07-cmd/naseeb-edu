@@ -44,6 +44,15 @@ class BackfillTests(EssayLabFixtureMixin, TestCase):
         self.run_command('--apply')
         self.assertEqual(self.days(), {date(2026, 10, 5): (150, 150), date(2026, 10, 6): (10, 10)})
 
+    def test_backfilled_days_carry_goal_met(self):
+        self.sample(at(5), 0)
+        self.sample(at(5, 9), 150)
+        self.sample(at(6), 0)
+        self.sample(at(6, 9), 40)
+        self.run_command('--apply')
+        met = {row.date: row.goal_met for row in EssayWritingDay.objects.filter(user=self.student_user)}
+        self.assertEqual(met, {date(2026, 10, 5): True, date(2026, 10, 6): False})
+
     def test_dry_run_is_the_default_and_writes_nothing(self):
         self.sample(at(5), 10)
         self.sample(at(5, 9), 140)

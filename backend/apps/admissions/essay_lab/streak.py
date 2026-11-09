@@ -20,6 +20,7 @@ import math
 import re
 from datetime import date, timedelta
 
+from django.core.cache import cache
 from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -39,6 +40,9 @@ TYPING_WORDS_PER_SECOND = 4
 MIN_SAVE_CREDIT = 20
 MAX_SAVE_CREDIT = 120
 DEFAULT_SAVE_CREDIT = 60
+SECONDS_REPORT_SLACK = 10
+SECONDS_FIRST_REPORT = 60
+SECONDS_LAST_REPORT_TTL = 3600
 # A tracker batch dated up to this many days back is credited to its own date.
 SECONDS_BACKDATE_DAYS = 7
 SCREEN_TIME_PAGE = 'essay_lab'
@@ -98,6 +102,35 @@ def record_words(user, words_before, words_after, now, previous_save_at=None):
             )
     except Exception:
         logger.exception('Could not record the writing day for user %s', user.pk)
+
+
+def clamp_essay_seconds(user, entries, now):
+    """Credit at most the wall-clock time since this user's previous Essay Lab report.
+
+    The tracker reports every 30 s, so honest clients never exceed the elapsed time; one
+    inflated batch cannot add more than that. With no recent report, credit a first minute.
+    Other pages pass through untouched.
+    """
+    essay = {key: seconds for key, seconds in entries.items() if key[1] == SCREEN_TIME_PAGE}
+    if not essay:
+        return entries
+    cache_key = f'essay-seconds-last:{user.pk}'
+    try:
+        last = cache.get(cache_key)
+        cache.set(cache_key, now.timestamp(), SECONDS_LAST_REPORT_TTL)
+    except Exception:
+        last = None
+    if last is None:
+        allowed = SECONDS_FIRST_REPORT
+    else:
+        allowed = max(0, int(now.timestamp() - last)) + SECONDS_REPORT_SLACK
+    clamped = {key: seconds for key, seconds in entries.items() if key[1] != SCREEN_TIME_PAGE}
+    for key in sorted(essay, reverse=True):
+        credit = min(essay[key], allowed)
+        allowed -= credit
+        if credit:
+            clamped[key] = credit
+    return clamped
 
 
 def record_essay_seconds(user, entries, today):

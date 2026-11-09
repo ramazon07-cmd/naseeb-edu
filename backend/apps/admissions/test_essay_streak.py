@@ -9,7 +9,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
-from .essay_lab.streak import DEFAULT_SAVE_CREDIT, MAX_SAVE_CREDIT as MAX_WORDS_PER_SAVE, goal_met, record_essay_seconds, record_words, streak_numbers
+from .essay_lab.streak import DEFAULT_SAVE_CREDIT, MAX_SAVE_CREDIT as MAX_WORDS_PER_SAVE, clamp_essay_seconds, goal_met, record_essay_seconds, record_words, streak_numbers
 from .models import EssayCheckpoint, EssayTab, EssayWritingDay, ScreenTimeDaily
 from .test_essay_lab import BASE, EssayLabTestCase, StatementCountMixin, make_doc
 
@@ -384,3 +384,36 @@ class StreakEndpointTests(StreakTestCase):
         response = self.client.get('/api/schema/')
         if response.status_code == status.HTTP_200_OK:
             self.assertIn('/api/essay-lab/streak/', response.content.decode())
+
+
+class ClampEssaySecondsTests(StreakTestCase):
+    """A report may credit at most the wall-clock time since the previous one (plus slack)."""
+
+    def setUp(self):
+        super().setUp()
+        from django.core.cache import cache
+        cache.clear()
+
+    def clamp(self, seconds, moment, page='essay_lab'):
+        return clamp_essay_seconds(self.student_user, {(date(2026, 11, 8), page): seconds}, moment)
+
+    def test_one_inflated_batch_cannot_meet_the_time_goal(self):
+        self.write(30)
+        clamped = self.clamp(600, NOON)
+        record_essay_seconds(self.student_user, clamped, date(2026, 11, 8))
+        row = self.day()
+        self.assertEqual(row.active_seconds, 60)
+        self.assertFalse(row.goal_met)
+
+    def test_honest_thirty_second_reports_are_credited_in_full(self):
+        self.clamp(30, NOON)
+        later = NOON + timedelta(seconds=30)
+        self.assertEqual(self.clamp(30, later), {(date(2026, 11, 8), 'essay_lab'): 30})
+
+    def test_a_burst_right_after_a_report_is_trimmed(self):
+        self.clamp(30, NOON)
+        burst = self.clamp(600, NOON + timedelta(seconds=30))
+        self.assertEqual(burst, {(date(2026, 11, 8), 'essay_lab'): 40})
+
+    def test_other_pages_are_untouched(self):
+        self.assertEqual(self.clamp(600, NOON, page='dashboard'), {(date(2026, 11, 8), 'dashboard'): 600})

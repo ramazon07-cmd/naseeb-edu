@@ -3,7 +3,7 @@ from datetime import date
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from apps.admissions.essay_lab.streak import MAX_SAVE_CREDIT as MAX_WORDS_PER_SAVE
+from apps.admissions.essay_lab.streak import MAX_SAVE_CREDIT as MAX_WORDS_PER_SAVE, goal_met
 from apps.admissions.models import EssayCheckpoint, EssayWritingDay
 
 
@@ -79,7 +79,9 @@ class Command(BaseCommand):
                     if day in existing.get(user_id, ()):
                         skipped += 1
                         continue
-                    new_rows.append(EssayWritingDay(user_id=user_id, date=day, words_net=net, words_peak=peak))
+                    new_rows.append(EssayWritingDay(
+                        user_id=user_id, date=day, words_net=net, words_peak=peak, goal_met=goal_met(peak, 0),
+                    ))
             if apply and new_rows:
                 before = EssayWritingDay.objects.filter(user_id__in=chunk).count()
                 EssayWritingDay.objects.bulk_create(new_rows, ignore_conflicts=True)

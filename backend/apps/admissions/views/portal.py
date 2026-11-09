@@ -30,7 +30,7 @@ from ..serializers import (
     StudentMessageSerializer,
 )
 from ..serializers.portal import CHOOSE_AVAILABLE_TIME, MeetingAvailabilityRepeatSerializer, MeetingAvailabilitySerializer
-from ..essay_lab.streak import record_essay_seconds
+from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
 from ..listing import ListQueryMixin
 from ..meetings import MAX_REPEAT_SLOTS, clashes, free_slots, overlapping, upcoming_slots, weekly_starts, with_availability
 from ..params import int_param
@@ -691,7 +691,7 @@ class ScreenTimeViewSet(viewsets.ReadOnlyModelViewSet):
                 [value for row in rows for value in row],
             )
         if request.user.role == User.Role.STUDENT:
-            record_essay_seconds(request.user, entries, timezone.localdate())
+            record_essay_seconds(request.user, clamp_essay_seconds(request.user, entries, now), timezone.localdate())
         return Response({'tracked_seconds': sum(entries.values()), 'entries': len(entries), **extra})
 
     @action(detail=False, methods=['get'])
