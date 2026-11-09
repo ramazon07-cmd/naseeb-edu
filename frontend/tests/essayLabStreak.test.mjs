@@ -65,6 +65,10 @@ test('progress follows whichever goal is closer and stays within 0-100', () => {
   assert.equal(progressPercent({ words: 0, minutes: 0 }, goal), 0);
   assert.equal(progressPercent({ words: 40, minutes: 2 }, goal), 40);
   assert.equal(progressPercent({ words: 10, minutes: 5 }, goal), 50);
+  const served = { words: 100, minutes: 10, min_words: 25 };
+  assert.equal(progressPercent({ words: 10, minutes: 5 }, served), 40);
+  assert.equal(progressPercent({ words: 0, minutes: 10 }, served), 0);
+  assert.equal(progressPercent({ words: 25, minutes: 10 }, served), 100);
   assert.equal(progressPercent({ words: 142, minutes: 0 }, goal), 100);
   assert.equal(progressPercent({ words: -5, minutes: 0 }, goal), 0);
   assert.equal(progressPercent(null, goal), 0);

@@ -2,7 +2,8 @@
 
 Every student comes from ``active_visible_students(user)``, the scope the
 website's dashboard counts use, so the bot cannot show anyone the website would
-not. Essays are limited by ``scope_essays`` (only essays the student shared).
+not. Essays are limited by ``scope_essays`` (only essays the student shared); the streak is shown
+only for students without private essays.
 Query count is fixed: students, six progress queries, one essay aggregate.
 """
 from collections import OrderedDict
@@ -92,16 +93,13 @@ def build_digest(user, prefs, now=None):
     want_essays = prefs.get('essays', True)
     want_streak = prefs.get('streak', True)
     want_application = prefs.get('application', True)
-    essays = _essay_counts(user, ids, day_start) if ids and (want_essays or want_streak) else {}
+    essays = _essay_counts(user, ids, day_start) if ids and want_essays else {}
     private = set(
         Essay.objects.filter(student_id__in=ids, trashed_at__isnull=True, shared_with_counselor=False)
         .order_by().values_list('student_id', flat=True).distinct()
     ) if ids and want_streak else set()
-    shared = {
-        student.user_id for student in students
-        if essays.get(student.pk, (0, 0))[0] and student.pk not in private
-    }
-    activity = essay_activity_for(sorted(shared), today) if shared else ActivityResult()
+    visible = {student.user_id for student in students if student.pk not in private} if want_streak else set()
+    activity = essay_activity_for(sorted(visible), today) if visible else ActivityResult()
     items = []
     for student in students:
         item = {'name': _name(student), 'grade': student.grade}
@@ -111,7 +109,7 @@ def build_digest(user, prefs, now=None):
         if want_streak:
             item['streak'] = {
                 'days': activity.for_user(student.user_id).streak_days,
-                'shared': student.user_id in shared,
+                'shared': student.user_id in visible,
             }
         if want_application:
             item['application'] = _application(student)

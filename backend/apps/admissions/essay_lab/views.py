@@ -685,12 +685,13 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             else:
                 essay.last_edited_at = now
                 essay.save(update_fields=['last_edited_at', 'updated_at'])
-            words_after = words_before + own_words_delta(stored, values['ops_v2']) if merged else stats.word_count
-            record_words(request.user, words_before, words_after, now, previous_save_at)
 
             due = latest is None or (latest['created_at'] <= now - AUTO_CHECKPOINT_INTERVAL and not latest['same_text'])
             if due and stats.content.strip():
                 _make_checkpoint(essay, tab, EssayCheckpoint.Reason.AUTO, author=request.user)
+        # After the row locks are released: the streak is best-effort and must not lengthen them.
+        words_after = words_before + own_words_delta(stored, values['ops_v2']) if merged else stats.word_count
+        record_words(request.user, words_before, words_after, now, previous_save_at)
         # The client bases its next delta on this save only when this hash matches its own.
         data = {
             'tab': tab.pk, 'save_seq': tab.save_seq, 'saved_at': _saved_at(tab), 'word_count': stats.word_count,

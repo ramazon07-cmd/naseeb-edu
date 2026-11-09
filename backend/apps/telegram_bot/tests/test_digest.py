@@ -74,6 +74,16 @@ class DigestContentTests(BotTestCase):
         self.assertEqual(item['streak'], {'days': None, 'shared': False})
         self.assertNotIn('words_today', item['essays'])
 
+    def test_a_student_without_essays_has_a_zero_streak_not_a_hidden_one(self):
+        item = self.by_name(self.digest(), 'Stu1 Tester')
+        self.assertEqual(item['streak'], {'days': 0, 'shared': True})
+
+    def test_the_streak_is_not_queried_when_it_is_off(self):
+        self.share_essay(self.s1)
+        with mock.patch.object(digest, 'essay_activity_for') as patched:
+            digest.build_digest(self.c1, {'essays': True, 'streak': False, 'application': True})
+        patched.assert_not_called()
+
     def test_a_private_essay_hides_the_streak_even_when_another_is_shared(self):
         self.share_essay(self.s1)
         Essay.objects.create(student=self.s1, title='Private', shared_with_counselor=False)
@@ -86,7 +96,7 @@ class DigestContentTests(BotTestCase):
         with mock.patch.object(digest, 'essay_activity_for', return_value=fake) as patched:
             body = self.digest()
         item = self.by_name(body, 'Stu1 Tester')
-        self.assertEqual(patched.call_args.args[0], [self.s1.user_id])
+        self.assertIn(self.s1.user_id, patched.call_args.args[0])
         self.assertEqual(item['streak'], {'days': 6, 'shared': True})
         self.assertNotIn('words_today', item['essays'])
 

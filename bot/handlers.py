@@ -132,7 +132,7 @@ async def pick_language(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(t(lang, 'welcome'))
 
 
-@router.message(Login.username, F.text)
+@router.message(Login.username, F.text, ~F.text.regexp(COMMAND_PATTERN))
 async def got_username(message: Message, state: FSMContext, bot):
     username = message.text.strip()
     await _delete(message)

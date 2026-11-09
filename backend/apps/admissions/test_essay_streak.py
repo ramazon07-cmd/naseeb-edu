@@ -33,6 +33,8 @@ def clock(moment):
 class StreakTestCase(EssayLabTestCase):
     def setUp(self):
         super().setUp()
+        from django.core.cache import cache
+        cache.clear()
         self.essay = self.make_essay(content='')
         self.counter = 0
 
@@ -115,6 +117,13 @@ class RecordingTests(StatementCountMixin, StreakTestCase):
         self.assertLess(row.words_peak, 100)
         self.assertFalse(row.goal_met)
 
+    def test_many_tabs_and_essays_share_one_credit_clock(self):
+        essays = [self.make_essay(content='') for _ in range(5)]
+        for index, essay in enumerate(essays):
+            self.write(100, moment=NOON + timedelta(seconds=index), essay=essay)
+        self.assertLess(self.day().words_peak, 100)
+        self.assertFalse(self.day().goal_met)
+
     def test_back_to_back_saves_do_not_add_up_to_the_goal(self):
         for count in (20, 40, 60, 80, 100):
             self.write(count, moment=NOON)
@@ -175,9 +184,9 @@ class RecordingTests(StatementCountMixin, StreakTestCase):
         other = self.make_essay(content='')
         user = self.student_user
         record_words(user, 0, 20, NOON)
-        record_words(user, 0, 25, NOON)
-        record_words(user, 20, 10, NOON)
-        record_words(user, 25, 50, NOON)
+        record_words(user, 0, 25, NOON + timedelta(seconds=60))
+        record_words(user, 20, 10, NOON + timedelta(seconds=61))
+        record_words(user, 25, 50, NOON + timedelta(seconds=120))
         row = self.day()
         self.assertEqual((row.words_net, row.words_peak), (60, 60))
         self.assertEqual(other.pk != self.essay.pk, True)
@@ -314,7 +323,7 @@ class StreakRuleTests(StreakTestCase):
         self.make_days(d0=(142, 725))
         data = self.get().data
         self.assertEqual(data['progress'], {'words': 142, 'minutes': 12, 'goal_met': True})
-        self.assertEqual(data['goal'], {'words': 100, 'minutes': 10})
+        self.assertEqual(data['goal'], {'words': 100, 'minutes': 10, 'min_words': 25})
 
 
 class StreakEndpointTests(StreakTestCase):
@@ -407,7 +416,7 @@ class OwnWordsDeltaTests(StreakTestCase):
 
 
 class ClampEssaySecondsTests(StreakTestCase):
-    """A report may credit at most the wall-clock time since the previous one (plus slack)."""
+    """A report may credit at most the wall-clock time since the previous one (plus 10%)."""
 
     def setUp(self):
         super().setUp()
@@ -433,7 +442,27 @@ class ClampEssaySecondsTests(StreakTestCase):
     def test_a_burst_right_after_a_report_is_trimmed(self):
         self.clamp(30, NOON)
         burst = self.clamp(600, NOON + timedelta(seconds=30))
-        self.assertEqual(burst, {(date(2026, 11, 8), 'essay_lab'): 40})
+        self.assertEqual(burst, {(date(2026, 11, 8), 'essay_lab'): 33})
+
+    def test_a_burst_of_requests_cannot_outrun_the_clock(self):
+        total = 0
+        for second in range(21):
+            credited = self.clamp(600, NOON + timedelta(seconds=second))
+            total += sum(credited.values())
+        self.assertLessEqual(total, 30 + int(20 * 1.1))
+
+    def test_a_batch_flushed_just_after_midnight_keeps_yesterday(self):
+        before_midnight = datetime(2026, 11, 8, 19, 8, tzinfo=dt_timezone.utc)
+        after = datetime(2026, 11, 8, 19, 10, tzinfo=dt_timezone.utc)
+        self.clamp(30, before_midnight)
+        clamped = clamp_essay_seconds(self.student_user, {(date(2026, 11, 8), 'essay_lab'): 100}, after)
+        self.assertEqual(clamped, {(date(2026, 11, 8), 'essay_lab'): 100})
+
+    def test_yesterday_dated_seconds_later_in_the_day_count_for_today(self):
+        self.clamp(30, NOON)
+        clamped = clamp_essay_seconds(self.student_user, {(date(2026, 11, 7), 'essay_lab'): 30},
+                                      NOON + timedelta(seconds=30))
+        self.assertEqual(clamped, {(date(2026, 11, 8), 'essay_lab'): 30})
 
     def test_seconds_dated_in_the_past_are_credited_to_today(self):
         past = date(2026, 11, 5)

@@ -51,7 +51,9 @@ export function buildMonth(monthKey, days, todayKey) {
 
 export function progressPercent(progress, goal) {
   const words = goal?.words ? (progress?.words || 0) / goal.words : 0
-  const minutes = goal?.minutes ? (progress?.minutes || 0) / goal.minutes : 0
+  let minutes = goal?.minutes ? (progress?.minutes || 0) / goal.minutes : 0
+  // The time goal only counts with a few words written, so the bar cannot fill on minutes alone.
+  if (goal?.min_words) minutes = Math.min(minutes, Math.max(0, progress?.words || 0) / goal.min_words)
   return Math.max(0, Math.min(100, Math.round(Math.max(words, minutes) * 100)))
 }
 

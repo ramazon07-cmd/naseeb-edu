@@ -19,7 +19,7 @@ import logging
 import math
 import re
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from django.core.cache import cache
 from django.db import connection, transaction
@@ -35,15 +35,18 @@ GOAL_WORDS = 100
 GOAL_MINUTES = 10
 GOAL_SECONDS = GOAL_MINUTES * 60
 MIN_WORDS_WITH_MINUTES = 25
-# What a save may add: seconds since the tab's previous save times TYPING_WORDS_PER_SECOND
-# (90 words a minute), at most MAX_SAVE_CREDIT, with no minimum, so back-to-back saves earn
-# nothing extra. This is a rate limit, not a paste detector: the daily 100 words need at
-# least ~67 s of wall-clock time however they arrive. The default applies when there is no
-# earlier save to measure from.
+# What a save may add: seconds since the student's previous credited save (any tab or essay)
+# times TYPING_WORDS_PER_SECOND (90 words a minute), at most MAX_SAVE_CREDIT, with no minimum,
+# so back-to-back saves earn nothing extra. This is a rate limit, not a paste detector: the
+# daily 100 words need at least ~67 s of wall-clock time however they arrive. The default
+# applies when there is no earlier save to measure from, or the cache is unreachable and the
+# tab has none.
 TYPING_WORDS_PER_SECOND = 1.5
 MAX_SAVE_CREDIT = 60
 DEFAULT_SAVE_CREDIT = 30
-SECONDS_REPORT_SLACK = 10
+SECONDS_REPORT_FACTOR = 1.1
+# A report dated yesterday keeps that date when it arrives within this many minutes after midnight.
+SECONDS_MIDNIGHT_MINUTES = 30
 SECONDS_FIRST_REPORT = 30
 SECONDS_LOCK_TTL = 5
 SECONDS_LOCK_TRIES = 4
@@ -80,7 +83,12 @@ def record_words(user, words_before, words_after, now, previous_save_at=None):
     delta = words_after - words_before
     if not delta:
         return
-    delta = min(delta, save_credit_cap(previous_save_at, now))
+    if delta > 0:
+        reachable, last = _swap_last_report(user, 'words', now)
+        if reachable and last is not None:
+            last = datetime.fromtimestamp(last, now.tzinfo)
+            previous_save_at = last if previous_save_at is None else max(previous_save_at, last)
+        delta = min(delta, save_credit_cap(previous_save_at, now))
     try:
         table = connection.ops.quote_name(EssayWritingDay._meta.db_table)
         net = f'(CASE WHEN {table}.words_net + %s < 0 THEN 0 ELSE {table}.words_net + %s END)'
@@ -146,40 +154,61 @@ def _take_lock(lock_key):
     return False
 
 
+def _swap_last_report(user, kind, now):
+    """(reachable, previous timestamp or None): reads this user's last `kind` report time and replaces it with now.
+
+    Serialized by a short cache lock. Not reachable means the lock was never obtained or the
+    cache failed; callers then credit as little as they safely can.
+    """
+    cache_key = f'essay-{kind}-last:{user.pk}'
+    lock_key = f'essay-{kind}-lock:{user.pk}'
+    try:
+        if not _take_lock(lock_key):
+            return False, None
+        try:
+            last = cache.get(cache_key)
+            cache.set(cache_key, now.timestamp(), SECONDS_LAST_REPORT_TTL)
+        finally:
+            cache.delete(lock_key)
+        return True, last
+    except Exception:
+        logger.warning('Essay Lab %s credit cannot reach the cache', kind)
+        return False, None
+
+
 def clamp_essay_seconds(user, entries, now):
-    """Credit at most the wall-clock time since this user's previous Essay Lab report.
+    """Credit at most the wall-clock time since this user's previous Essay Lab report (plus 10%).
 
     The tracker reports every 30 s, so honest clients never exceed the elapsed time; one
-    inflated batch cannot add more than that. Reads of the last report are serialized by a
-    short cache lock, retried for a moment: a request that still loses the race is credited
-    nothing, and so is one that cannot reach the cache at all. With no recent report, credit
-    a first half minute. Whatever date the client names, the seconds belong to the server's
-    today, so past days cannot be topped up afterwards. Other pages pass through untouched.
+    inflated batch, or a burst of requests, cannot add more than the time that really passed.
+    A request that loses the cache lock race is credited nothing, and so is one that cannot
+    reach the cache at all. With no recent report, credit a first half minute. The seconds
+    belong to the server's today; only a batch dated yesterday that arrives in the first
+    minutes after midnight keeps yesterday (time spent before the day changed). Other pages
+    pass through untouched.
     """
     essay = {key: seconds for key, seconds in entries.items() if key[1] == SCREEN_TIME_PAGE}
     if not essay:
         return entries
-    today = timezone.localdate(now)
-    cache_key = f'essay-seconds-last:{user.pk}'
-    lock_key = f'essay-seconds-lock:{user.pk}'
-    allowed = 0
-    try:
-        if _take_lock(lock_key):
-            try:
-                last = cache.get(cache_key)
-                cache.set(cache_key, now.timestamp(), SECONDS_LAST_REPORT_TTL)
-            finally:
-                cache.delete(lock_key)
-            if last is None:
-                allowed = SECONDS_FIRST_REPORT
-            else:
-                allowed = max(0, int(now.timestamp() - last)) + SECONDS_REPORT_SLACK
-    except Exception:
-        logger.warning('Essay Lab seconds are not credited: the cache is unavailable')
+    local = timezone.localtime(now)
+    today = local.date()
+    reachable, last = _swap_last_report(user, 'seconds', now)
+    if not reachable:
+        allowed = 0
+    elif last is None:
+        allowed = SECONDS_FIRST_REPORT
+    else:
+        allowed = max(0, int((now.timestamp() - last) * SECONDS_REPORT_FACTOR))
+    yesterday = today - timedelta(days=1)
+    just_after_midnight = local.hour == 0 and local.minute < SECONDS_MIDNIGHT_MINUTES
+    early = sum(seconds for (day, _), seconds in essay.items() if day == yesterday) if just_after_midnight else 0
     clamped = {key: seconds for key, seconds in entries.items() if key[1] != SCREEN_TIME_PAGE}
-    credit = min(sum(essay.values()), allowed)
-    if credit:
-        clamped[(today, SCREEN_TIME_PAGE)] = credit
+    credit_early = min(early, allowed)
+    credit_today = min(sum(essay.values()) - early, allowed - credit_early)
+    if credit_early:
+        clamped[(yesterday, SCREEN_TIME_PAGE)] = credit_early
+    if credit_today:
+        clamped[(today, SCREEN_TIME_PAGE)] = credit_today
     return clamped
 
 
@@ -284,7 +313,7 @@ def build_streak(user, first_of_month):
             'minutes': seconds_today // 60,
             'goal_met': today in fire_days,
         },
-        'goal': {'words': GOAL_WORDS, 'minutes': GOAL_MINUTES},
+        'goal': {'words': GOAL_WORDS, 'minutes': GOAL_MINUTES, 'min_words': MIN_WORDS_WITH_MINUTES},
         'month': first_of_month.strftime('%Y-%m'),
         'days': month_days,
     }
