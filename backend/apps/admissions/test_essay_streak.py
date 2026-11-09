@@ -124,6 +124,11 @@ class RecordingTests(StatementCountMixin, StreakTestCase):
         self.assertLess(self.day().words_peak, 100)
         self.assertFalse(self.day().goal_met)
 
+    def test_an_unreachable_cache_credits_no_words_without_a_tab_history(self):
+        with mock.patch('apps.admissions.essay_lab.streak.cache.add', side_effect=RuntimeError('down')):
+            record_words(self.student_user, 0, 50, NOON)
+        self.assertFalse(EssayWritingDay.objects.exists())
+
     def test_back_to_back_saves_do_not_add_up_to_the_goal(self):
         for count in (20, 40, 60, 80, 100):
             self.write(count, moment=NOON)
@@ -409,6 +414,16 @@ class StreakEndpointTests(StreakTestCase):
 
 
 class OwnWordsDeltaTests(StreakTestCase):
+    def test_ops_on_a_block_inserted_in_the_same_batch_are_measured_in_order(self):
+        from .essay_lab.streak import own_words_delta
+        block = lambda bid, text: {'type': 'paragraph', 'attrs': {'bid': bid}, 'content': [{'type': 'text', 'text': text}]}
+        stored = {'content': [block('a', 'one two')]}
+        ops = [{'ins': block('b', 'three four five'), 'after': 'a'},
+               {'set': 'b', 'base': 'x', 'block': block('b', 'three four five six seven')},
+               {'del': 'a', 'base': 'x'}]
+        self.assertEqual(own_words_delta(stored, ops), 3 + 2 - 2)
+        self.assertEqual(own_words_delta(stored, ops + [{'del': 'b', 'base': 'x'}]), -2)
+
     def test_a_stored_block_that_cannot_be_measured_credits_nothing_and_does_not_raise(self):
         from .essay_lab.streak import own_words_delta
         self.assertEqual(own_words_delta({'content': [{'attrs': {'bid': 'a'}, 'type': 'paragraph', 'content': 5}]},
@@ -416,7 +431,7 @@ class OwnWordsDeltaTests(StreakTestCase):
 
 
 class ClampEssaySecondsTests(StreakTestCase):
-    """A report may credit at most the wall-clock time since the previous one (plus 10%)."""
+    """Screen time is a token bucket: 40 s to start, +1.1 s per second, at most 120 s."""
 
     def setUp(self):
         super().setUp()
@@ -431,7 +446,7 @@ class ClampEssaySecondsTests(StreakTestCase):
         clamped = self.clamp(600, NOON)
         record_essay_seconds(self.student_user, clamped, date(2026, 11, 8))
         row = self.day()
-        self.assertEqual(row.active_seconds, 30)
+        self.assertEqual(row.active_seconds, 40)
         self.assertFalse(row.goal_met)
 
     def test_honest_thirty_second_reports_are_credited_in_full(self):
@@ -442,14 +457,19 @@ class ClampEssaySecondsTests(StreakTestCase):
     def test_a_burst_right_after_a_report_is_trimmed(self):
         self.clamp(30, NOON)
         burst = self.clamp(600, NOON + timedelta(seconds=30))
-        self.assertEqual(burst, {(date(2026, 11, 8), 'essay_lab'): 33})
+        self.assertEqual(burst, {(date(2026, 11, 8), 'essay_lab'): 43})
+
+    def test_timer_jitter_does_not_lose_time(self):
+        self.clamp(30, NOON)
+        self.assertEqual(self.clamp(30, NOON + timedelta(seconds=24)), {(date(2026, 11, 8), 'essay_lab'): 30})
+        self.assertEqual(self.clamp(30, NOON + timedelta(seconds=60)), {(date(2026, 11, 8), 'essay_lab'): 30})
 
     def test_a_burst_of_requests_cannot_outrun_the_clock(self):
         total = 0
         for second in range(21):
             credited = self.clamp(600, NOON + timedelta(seconds=second))
             total += sum(credited.values())
-        self.assertLessEqual(total, 30 + int(20 * 1.1))
+        self.assertLessEqual(total, 40 + int(20 * 1.1))
 
     def test_a_batch_flushed_just_after_midnight_keeps_yesterday(self):
         before_midnight = datetime(2026, 11, 8, 19, 8, tzinfo=dt_timezone.utc)

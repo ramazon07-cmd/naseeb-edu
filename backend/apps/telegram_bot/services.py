@@ -71,8 +71,10 @@ def _locked(keys):
 def _account_ceiling_hit(chat_id, account):
     """Guessing spread over many chats is slowed for chats that never signed in to this account.
 
-    Chats that already did skip it (like known devices on the website), so an attacker can
-    slow new chats down but never keep the owner out.
+    Chats that already did skip it (like known devices on the website), so an existing owner
+    is never kept out. A counselor linking for the first time can be delayed until the window
+    ends while someone is guessing at the account: the same tradeoff as the website's
+    new-device ceiling, kept so the bot cannot be used as an unbounded password oracle.
     """
     if is_known_login_device(account, _device(chat_id)):
         return False
@@ -130,6 +132,7 @@ def login(chat_id, login_value, password):
         raise Refused(error)
     remember_login_device((login_value, user.get_username(), user.email), _device(chat_id))
     token = secrets.token_urlsafe(32)
+    PendingLogin.objects.filter(expires_at__lt=timezone.now()).delete()
     PendingLogin.objects.update_or_create(chat_id=chat_id, defaults={
         'user': user,
         'token_hash': hashlib.sha256(token.encode()).hexdigest(),

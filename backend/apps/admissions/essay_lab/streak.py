@@ -47,14 +47,17 @@ DEFAULT_SAVE_CREDIT = 30
 SECONDS_REPORT_FACTOR = 1.1
 # A report dated yesterday keeps that date when it arrives within this many minutes after midnight.
 SECONDS_MIDNIGHT_MINUTES = 30
-SECONDS_FIRST_REPORT = 30
+SECONDS_BUCKET_START = 40
+SECONDS_BUCKET_MAX = 120
 SECONDS_LOCK_TTL = 5
-SECONDS_LOCK_TRIES = 4
-SECONDS_LOCK_WAIT = 0.02
+SECONDS_LOCK_TRIES = 3
+SECONDS_LOCK_WAIT = 0.005
 SECONDS_LAST_REPORT_TTL = 3600
 # record_essay_seconds credits a batch dated up to this many days back to its own date.
 SECONDS_BACKDATE_DAYS = 7
 SCREEN_TIME_PAGE = 'essay_lab'
+# The card counts the current and best streak over this much history, so a read stays small.
+STREAK_HISTORY_DAYS = 800
 
 FIRE = 'fire'
 EMBER = 'ember'
@@ -88,6 +91,8 @@ def record_words(user, words_before, words_after, now, previous_save_at=None):
         if reachable and last is not None:
             last = datetime.fromtimestamp(last, now.tzinfo)
             previous_save_at = last if previous_save_at is None else max(previous_save_at, last)
+        elif not reachable and previous_save_at is None:
+            return
         delta = min(delta, save_credit_cap(previous_save_at, now))
     try:
         table = connection.ops.quote_name(EssayWritingDay._meta.db_table)
@@ -129,16 +134,19 @@ def own_words_delta(stored_doc, ops):
     holds words other people added since, which are not the student's writing.
     """
     try:
-        stored = {block_id(block): block for block in stored_doc.get('content') or []}
+        words = {block_id(block): _block_words(block) for block in stored_doc.get('content') or []}
         delta = 0
         for op in ops:
             if 'ins' in op:
-                delta += _block_words(op['ins'])
+                bid, count = block_id(op['ins']), _block_words(op['ins'])
+                delta += count
+                words[bid] = count
             elif 'del' in op:
-                if op['del'] in stored:
-                    delta -= _block_words(stored[op['del']])
-            elif op['set'] in stored:
-                delta += _block_words(op['block']) - _block_words(stored[op['set']])
+                delta -= words.pop(op['del'], 0)
+            elif op['set'] in words:
+                count = _block_words(op['block'])
+                delta += count - words[op['set']]
+                words[op['set']] = count
         return delta
     except Exception:
         logger.exception('Could not measure the words a merged save added')
@@ -176,35 +184,58 @@ def _swap_last_report(user, kind, now):
         return False, None
 
 
-def clamp_essay_seconds(user, entries, now):
-    """Credit at most the wall-clock time since this user's previous Essay Lab report (plus 10%).
+def _spend_seconds(user, claimed, now):
+    """Take up to `claimed` seconds from this user's Essay Lab time bucket; returns what was granted.
 
-    The tracker reports every 30 s, so honest clients never exceed the elapsed time; one
-    inflated batch, or a burst of requests, cannot add more than the time that really passed.
-    A request that loses the cache lock race is credited nothing, and so is one that cannot
-    reach the cache at all. With no recent report, credit a first half minute. The seconds
-    belong to the server's today; only a batch dated yesterday that arrives in the first
-    minutes after midnight keeps yesterday (time spent before the day changed). Other pages
-    pass through untouched.
+    The bucket refills at 1.1 s per second up to SECONDS_BUCKET_MAX and starts with
+    SECONDS_BUCKET_START. Serialized by a short cache lock; a lost race or an unreachable
+    cache grants nothing.
+    """
+    cache_key = f'essay-seconds-bucket:{user.pk}'
+    lock_key = f'essay-seconds-lock:{user.pk}'
+    try:
+        if not _take_lock(lock_key):
+            return 0
+        try:
+            state = cache.get(cache_key)
+            if state is None:
+                balance = SECONDS_BUCKET_START
+            else:
+                balance = min(SECONDS_BUCKET_MAX, state[0] + max(0, now.timestamp() - state[1]) * SECONDS_REPORT_FACTOR)
+            credit = min(claimed, int(balance))
+            cache.set(cache_key, (balance - credit, now.timestamp()), SECONDS_LAST_REPORT_TTL)
+        finally:
+            cache.delete(lock_key)
+        return credit
+    except Exception:
+        logger.warning('Essay Lab seconds are not credited: the cache is unavailable')
+        return 0
+
+
+def clamp_essay_seconds(user, entries, now):
+    """Limit a screen-time batch's Essay Lab seconds to what the wall clock allows.
+
+    A token bucket per student: it refills at 1.1 s per second, holds at most two minutes and
+    starts with 40 s (a first report plus some slack for timer jitter), so one inflated batch
+    or a burst of requests cannot add more than the time that really passed. A request that
+    loses the cache lock race is credited nothing, and so is one that cannot reach the cache.
+    The seconds belong to the server's today; only a batch dated yesterday that arrives in the
+    first minutes after midnight keeps yesterday (time spent before the day changed). Other
+    pages pass through untouched.
     """
     essay = {key: seconds for key, seconds in entries.items() if key[1] == SCREEN_TIME_PAGE}
     if not essay:
         return entries
     local = timezone.localtime(now)
     today = local.date()
-    reachable, last = _swap_last_report(user, 'seconds', now)
-    if not reachable:
-        allowed = 0
-    elif last is None:
-        allowed = SECONDS_FIRST_REPORT
-    else:
-        allowed = max(0, int((now.timestamp() - last) * SECONDS_REPORT_FACTOR))
     yesterday = today - timedelta(days=1)
+    claimed = sum(essay.values())
+    allowed = _spend_seconds(user, claimed, now)
     just_after_midnight = local.hour == 0 and local.minute < SECONDS_MIDNIGHT_MINUTES
     early = sum(seconds for (day, _), seconds in essay.items() if day == yesterday) if just_after_midnight else 0
     clamped = {key: seconds for key, seconds in entries.items() if key[1] != SCREEN_TIME_PAGE}
     credit_early = min(early, allowed)
-    credit_today = min(sum(essay.values()) - early, allowed - credit_early)
+    credit_today = allowed - credit_early
     if credit_early:
         clamped[(yesterday, SCREEN_TIME_PAGE)] = credit_early
     if credit_today:
@@ -260,16 +291,22 @@ def parse_month(value, today):
     return first if first <= today.replace(day=1) else None
 
 
-def streak_numbers(fire_days, today):
-    """(current, best) from the set of fire dates.
-
-    Today without a fire day yet does not break the streak: counting starts at yesterday.
-    """
+def current_streak(fire_days, today):
+    """Length of the run of fire dates ending today (or yesterday while today has none yet)."""
     cursor = today if today in fire_days else today - timedelta(days=1)
     current = 0
     while cursor in fire_days:
         current += 1
         cursor -= timedelta(days=1)
+    return current
+
+
+def streak_numbers(fire_days, today):
+    """(current, best) from the set of fire dates.
+
+    Today without a fire day yet does not break the streak: counting starts at yesterday.
+    """
+    current = current_streak(fire_days, today)
     best = run = 0
     previous = None
     for day in sorted(fire_days):
@@ -291,7 +328,9 @@ def build_streak(user, first_of_month):
         Q(date__gte=first_of_month, date__lt=next_month) | Q(date=today)
     ).values_list('date', 'words_peak', 'active_seconds', 'goal_met')
     fire_days = set(
-        EssayWritingDay.objects.filter(user=user, goal_met=True).order_by('date').values_list('date', flat=True)
+        EssayWritingDay.objects.filter(
+            user=user, goal_met=True, date__gte=today - timedelta(days=STREAK_HISTORY_DAYS),
+        ).order_by('date').values_list('date', flat=True)
     )
     month_days = {}
     words_today = seconds_today = 0

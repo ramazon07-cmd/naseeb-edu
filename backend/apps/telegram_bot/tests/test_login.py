@@ -145,6 +145,12 @@ class LoginTests(BotTestCase):
         self.assertEqual(self.login('counselor1', PASSWORD, chat=4000).status_code, 429)
         self.assertEqual(self.login('Counselor1@Example.com', PASSWORD, chat=4000).status_code, 429)
 
+    def test_expired_pending_logins_are_purged_on_the_next_login(self):
+        self.login('counselor1', chat=8100)
+        PendingLogin.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
+        self.login('counselor2', chat=8101)
+        self.assertEqual(list(PendingLogin.objects.values_list('chat_id', flat=True)), [8101])
+
     def test_a_username_containing_an_at_sign_still_logs_in(self):
         User.objects.filter(pk=self.c2.pk).update(username='odd@name', email='other@example.com')
         user = User.objects.get(pk=self.c2.pk)

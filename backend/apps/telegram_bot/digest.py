@@ -3,7 +3,7 @@
 Every student comes from ``active_visible_students(user)``, the scope the
 website's dashboard counts use, so the bot cannot show anyone the website would
 not. Essays are limited by ``scope_essays`` (only essays the student shared); the streak is shown
-only for students without private essays.
+only for students without private essays (trashed ones included: their writing days remain).
 Query count is fixed: students, six progress queries, one essay aggregate.
 """
 from collections import OrderedDict
@@ -17,7 +17,7 @@ from apps.admissions.onboarding import PROFILE_READINESS_ITEMS, profile_readines
 from apps.admissions.progress import attach_progress_stats
 from apps.admissions.scoping import active_visible_students, scope_essays
 
-from .activity import ActivityResult, essay_activity_for
+from .activity import essay_activity_for
 
 TASHKENT = ZoneInfo('Asia/Tashkent')
 MAX_STUDENTS = 300
@@ -95,11 +95,11 @@ def build_digest(user, prefs, now=None):
     want_application = prefs.get('application', True)
     essays = _essay_counts(user, ids, day_start) if ids and want_essays else {}
     private = set(
-        Essay.objects.filter(student_id__in=ids, trashed_at__isnull=True, shared_with_counselor=False)
+        Essay.objects.filter(student_id__in=ids, shared_with_counselor=False)
         .order_by().values_list('student_id', flat=True).distinct()
     ) if ids and want_streak else set()
     visible = {student.user_id for student in students if student.pk not in private} if want_streak else set()
-    activity = essay_activity_for(sorted(visible), today) if visible else ActivityResult()
+    streaks = essay_activity_for(sorted(visible), today) if visible else {}
     items = []
     for student in students:
         item = {'name': _name(student), 'grade': student.grade}
@@ -108,7 +108,7 @@ def build_digest(user, prefs, now=None):
             item['essays'] = {'total': total, 'edited_today': edited}
         if want_streak:
             item['streak'] = {
-                'days': activity.for_user(student.user_id).streak_days,
+                'days': streaks.get(student.user_id),
                 'shared': student.user_id in visible,
             }
         if want_application:

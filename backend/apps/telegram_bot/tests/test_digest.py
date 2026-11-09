@@ -10,7 +10,6 @@ from apps.admissions.models import (
     Achievement, Activity, Application, Document, Essay, EssayWritingDay, School, University,
 )
 from apps.telegram_bot import activity, digest
-from apps.telegram_bot.activity import ActivityResult, EssayActivity
 
 from .base import BotTestCase, make_student
 
@@ -25,14 +24,7 @@ class ActivityAdapterTests(TestCase):
                                            words_net=120, words_peak=120 + offset, goal_met=met)
         EssayWritingDay.objects.create(user=b.user, date=today, words_net=30, words_peak=30, goal_met=False)
         result = activity.essay_activity_for([a.user_id, b.user_id, 999999], today)
-        self.assertEqual(result.for_user(a.user_id), EssayActivity(streak_days=3))
-        self.assertEqual(result.for_user(b.user_id), EssayActivity(streak_days=0))
-        self.assertEqual(result.for_user(999999), EssayActivity(streak_days=0))
-
-    def test_result_exposes_per_user_numbers(self):
-        result = ActivityResult({7: EssayActivity(streak_days=4)})
-        self.assertEqual(result.for_user(7).streak_days, 4)
-        self.assertEqual(result.for_user(8), EssayActivity())
+        self.assertEqual(result, {a.user_id: 3, b.user_id: 0, 999999: 0})
 
 
 class DigestContentTests(BotTestCase):
@@ -84,6 +76,12 @@ class DigestContentTests(BotTestCase):
             digest.build_digest(self.c1, {'essays': True, 'streak': False, 'application': True})
         patched.assert_not_called()
 
+    def test_a_trashed_private_essay_still_hides_the_streak(self):
+        self.share_essay(self.s1)
+        Essay.objects.create(student=self.s1, title='Gone', shared_with_counselor=False, trashed_at=timezone.now())
+        item = self.by_name(self.digest(), 'Stu1 Tester')
+        self.assertEqual(item['streak'], {'days': None, 'shared': False})
+
     def test_a_private_essay_hides_the_streak_even_when_another_is_shared(self):
         self.share_essay(self.s1)
         Essay.objects.create(student=self.s1, title='Private', shared_with_counselor=False)
@@ -92,7 +90,7 @@ class DigestContentTests(BotTestCase):
 
     def test_streak_numbers_flow_through_for_shared_students(self):
         self.share_essay(self.s1)
-        fake = ActivityResult({self.s1.user_id: EssayActivity(streak_days=6)})
+        fake = {self.s1.user_id: 6}
         with mock.patch.object(digest, 'essay_activity_for', return_value=fake) as patched:
             body = self.digest()
         item = self.by_name(body, 'Stu1 Tester')
