@@ -39,3 +39,20 @@ services:
     startCommand: cd backend && python manage.py generate_notifications
     envVars:
       - fromGroup: naseeb-backend
+
+  # Counselor Telegram bot (long polling, no inbound port). It has no database
+  # and no passwords: it talks to the backend with BOT_SERVICE_KEY.
+  # Setup steps are in docs/telegram-bot.md.
+  - type: worker
+    name: naseeb-telegram-bot
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r bot/requirements.txt
+    startCommand: python -m bot.main
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_SERVICE_KEY
+        sync: false
+      - key: BACKEND_URL
+        value: https://api.naseebedu.com

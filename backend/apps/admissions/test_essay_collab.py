@@ -442,7 +442,7 @@ class MergeAutosaveTests(StatementCounter, CollabTestCase):
         stored = ensure_bids(self.stored())
         new_block = para('p2', 'I learned patience slowly.')
         result = {'type': 'doc', 'content': [stored['content'][0], new_block, stored['content'][2]]}
-        with self.assertStatements(9, at_most=True):
+        with self.assertStatements(9):
             response = self.autosave_v2([{'set': 'p2', 'base': block_hash(stored['content'][1]), 'block': new_block}], 0,
                                         'v2-a', doc_hash(result))
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
@@ -464,6 +464,22 @@ class MergeAutosaveTests(StatementCounter, CollabTestCase):
         self.assertIsNone(self.tab.last_editor_id)
         self.assertTrue(EssayTabEdit.objects.filter(kind='edit', author=self.student_user).exists(),
                         'the student starting to edit after the counselor is in the edit log')
+
+    def test_words_another_person_merged_in_are_not_credited_to_the_student(self):
+        from .models import EssayWritingDay
+        counselor_text = ' '.join(['counselor'] * 200)
+        doc = self.stored()
+        doc['content'][2] = para('p3', counselor_text)
+        self.tab.doc = doc
+        self.tab.save_seq = 1
+        self.tab.save(update_fields=['doc', 'save_seq'])
+        old = BASE_DOC['content'][0]
+        new_block = para('p1', 'My grandmother never wasted bread. Plus five more words here')
+        response = self.autosave_v2([{'set': 'p1', 'base': block_hash(old), 'block': new_block}], 0, 'credit-1')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(response.data['merged'])
+        row = EssayWritingDay.objects.get(user=self.student_user)
+        self.assertEqual(row.words_peak, 5)
 
     def test_the_same_paragraph_is_a_block_conflict_and_nothing_is_saved(self):
         self.comment(bid='p2')

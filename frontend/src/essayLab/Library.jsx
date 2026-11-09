@@ -10,6 +10,8 @@ import { essayLabApi, essayTypeName } from './essayLabApi.js'
 import { STATUS_LABELS, relativeTime } from './format.js'
 import { SCORE_KEYS, scoreBand } from './coachModel.js'
 import { SharedBadge, useEssaySharing } from './ShareControl.jsx'
+import StreakCard from './StreakCard.jsx'
+import { latestEdit } from './streakModel.js'
 
 const LAYOUT_KEY = 'naseeb-essay-lab-layout'
 const STATUS_FILTERS = [
@@ -241,6 +243,7 @@ export default function Library({ user, essays, folders, loading, error, setEssa
           <Trash2 size={17} aria-hidden="true" />{t('Trash')}
         </button>
       </div>
+      <StreakCard user={user} signal={loading ? null : latestEdit(essays)} />
       <div className="el-autosave-note"><Cloud size={16} aria-hidden="true" /><span>{t('Everything is saved automatically')}</span></div>
     </aside>
 

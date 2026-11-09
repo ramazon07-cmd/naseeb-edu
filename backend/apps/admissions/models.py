@@ -1153,6 +1153,29 @@ class ScreenTimeDaily(models.Model):
         return f'{self.user} — {self.date} — {self.page}'
 
 
+class EssayWritingDay(models.Model):
+    """What a student wrote in the Essay Lab on one Tashkent calendar day (feeds the writing streak)."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='essay_writing_days')
+    date = models.DateField()
+    # The day's running net of new text (never below 0) and the highest it reached.
+    words_net = models.PositiveIntegerField(default=0)
+    words_peak = models.PositiveIntegerField(default=0)
+    # Essay Lab screen-time seconds, dated by the server's Tashkent calendar (added when the tracker reports).
+    active_seconds = models.PositiveIntegerField(default=0)
+    # Kept up to date by the writes that change words or seconds, so reading the streak never recomputes it.
+    goal_met = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-date']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'date'], name='unique_essay_writing_user_day'),
+        ]
+
+    def __str__(self):
+        return f'{self.user} - {self.date} - {self.words_peak} words'
+
+
 class StoreItem(TimeStampedModel):
     catalog_key = models.SlugField(max_length=100, unique=True, null=True, blank=True)
     provider_name = models.CharField(max_length=160, blank=True)

@@ -14,6 +14,7 @@ from django.db import transaction
 from django.db.models import BooleanField, Count, ExpressionWrapper, Max, Q, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import exceptions, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -61,6 +62,7 @@ from .tabs import (
     FIRST_TAB_TITLE, MAX_TAB_TITLE, MAX_TABS, ensure_first_tab, refresh_essay_text, shift_after, tab_from_text,
     tree_order,
 )
+from .streak import build_streak, own_words_delta, parse_month, record_words
 from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, spend_coach_budget
 from .writes import CHECKPOINT_CAP, TEXT_FIELDS, make_checkpoint, set_text  # noqa: F401 (CHECKPOINT_CAP: tests)
 
@@ -661,6 +663,8 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             )
             now = timezone.now()
             text_changed = stats.content != tab.content
+            words_before = tab.word_count
+            previous_save_at = tab.last_edited_at if tab.last_editor_id is None else None
             _set_text(tab, doc, stats)
             tab.save_seq += 1
             tab.last_client_save_id = values['client_save_id']
@@ -685,6 +689,9 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             due = latest is None or (latest['created_at'] <= now - AUTO_CHECKPOINT_INTERVAL and not latest['same_text'])
             if due and stats.content.strip():
                 _make_checkpoint(essay, tab, EssayCheckpoint.Reason.AUTO, author=request.user)
+        # After the row locks are released: the streak is best-effort and must not lengthen them.
+        words_after = words_before + own_words_delta(stored, values['ops_v2']) if merged else stats.word_count
+        record_words(request.user, words_before, words_after, now, previous_save_at)
         # The client bases its next delta on this save only when this hash matches its own.
         data = {
             'tab': tab.pk, 'save_seq': tab.save_seq, 'saved_at': _saved_at(tab), 'word_count': stats.word_count,
@@ -695,6 +702,36 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             # Other people's changes are in it: the client takes this doc as its new base.
             data.update(merged=True, doc=doc)
         return Response(data)
+
+    # ------------------------------------------------------------------ streak
+
+    @extend_schema(
+        parameters=[OpenApiParameter('month', str, description='YYYY-MM, not after the current month (default: current).')],
+        responses=inline_serializer(name='EssayWritingStreak', fields={
+            'today': serializers.DateField(),
+            'current': serializers.IntegerField(),
+            'best': serializers.IntegerField(),
+            'progress': inline_serializer(name='EssayWritingProgress', fields={
+                'words': serializers.IntegerField(),
+                'minutes': serializers.IntegerField(),
+                'goal_met': serializers.BooleanField(),
+            }),
+            'goal': inline_serializer(name='EssayWritingGoal', fields={
+                'words': serializers.IntegerField(),
+                'minutes': serializers.IntegerField(),
+                'min_words': serializers.IntegerField(),
+            }),
+            'month': serializers.CharField(),
+            'days': serializers.DictField(child=serializers.ChoiceField(choices=['fire', 'ember'])),
+        }),
+    )
+    def streak(self, request):
+        today = timezone.localdate()
+        raw = request.query_params.get('month')
+        first = today.replace(day=1) if raw is None else parse_month(raw, today)
+        if first is None:
+            raise EssayLabError('month must be YYYY-MM and not after the current month.', 'invalid_month')
+        return Response(build_streak(request.user, first))
 
     # -------------------------------------------------------------- checkpoints
 

@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/auth/token/refresh/', SafeTokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/logout/', LogoutView.as_view(), name='auth_logout'),
     path('api/users/', include('apps.users.urls')),
+    path('api/bot/', include('apps.telegram_bot.urls')),
     path('api/', include('apps.admissions.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

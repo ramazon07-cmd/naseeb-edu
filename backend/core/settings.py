@@ -166,6 +166,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'apps.users',
     'apps.admissions',
+    'apps.telegram_bot',
 ]
 
 MIDDLEWARE = [
@@ -430,6 +431,9 @@ REST_FRAMEWORK = {
     # unset, or a client-chosen X-Forwarded-For becomes the throttle identity.
     'NUM_PROXIES': config('NUM_PROXIES', default=1 if IS_PRODUCTION else 0, cast=int),
 }
+
+# Telegram counselor bot (apps/telegram_bot). Empty key = every bot endpoint answers 401.
+BOT_SERVICE_KEY = config('BOT_SERVICE_KEY', default='')
 
 # Per-account login lockout shared by /api/auth/token/ and /admin/login/.
 LOGIN_LOCKOUT_THRESHOLD = config('LOGIN_LOCKOUT_THRESHOLD', default=10, cast=int)
