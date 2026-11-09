@@ -1285,16 +1285,17 @@ class EssayLabQueryBudgetTests(StatementCountMixin, EssayLabTestCase):
         # A normal save: lock the essay, lock the tab, checkpoint probe, update the tab,
         # read the tabs' text, update the essay's derived text. The same for any number of tabs.
         # The first save also writes an automatic checkpoint and prunes: two more.
-        with self.assertNumQueries(8):
+        # A save that changes the word count adds one more: the writing-streak upsert.
+        with self.assertNumQueries(9):
             response = self.client.put(url, {'doc': make_doc('One'), 'base_seq': 0, 'client_save_id': 'a',
                                              'tab': tab.pk}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(7):
             self.client.put(url, {'doc': make_doc('One two'), 'base_seq': 1, 'client_save_id': 'b', 'tab': tab.pk},
                             format='json')
         for index in range(20):
             EssayTab.objects.create(essay=essay, title=f'More {index}', position=index + 1, content='Other text.')
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(7):
             response = self.client.put(url, {'doc': make_doc('One two 3'), 'base_seq': 2, 'client_save_id': 'b2',
                                              'tab': tab.pk}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
@@ -1318,12 +1319,26 @@ class EssayLabQueryBudgetTests(StatementCountMixin, EssayLabTestCase):
                                   'tab': tab.pk}, format='json')
         self.assertEqual(EssayCheckpoint.objects.filter(essay=essay).count(), CHECKPOINT_CAP)
 
+    def test_a_save_that_keeps_the_word_count_adds_no_query(self):
+        essay = self.make_essay(content='One two three')
+        tab = self.tab_of(essay)
+        url = f'{BASE}/essays/{essay.pk}/autosave/'
+        with self.assertNumQueries(8):
+            self.client.put(url, {'doc': make_doc('One two 3'), 'base_seq': 0, 'client_save_id': 'a', 'tab': tab.pk},
+                            format='json')
+        with self.assertNumQueries(6):
+            self.client.put(url, {'doc': make_doc('Four five 6'), 'base_seq': 1, 'client_save_id': 'b', 'tab': tab.pk},
+                            format='json')
+        with self.assertNumQueries(7):
+            self.client.put(url, {'doc': make_doc('Four five 6 7'), 'base_seq': 2, 'client_save_id': 'c',
+                                  'tab': tab.pk}, format='json')
+
     def test_delta_autosave_budget(self):
         essay = self.make_essay()
         self.client.put(f'{BASE}/essays/{essay.pk}/autosave/',
                         {'doc': make_doc('One'), 'base_seq': 0, 'client_save_id': 'a'}, format='json')
         # Same as a full save (the tab lock now reads the doc).
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(7):
             response = self.client.put(f'{BASE}/essays/{essay.pk}/autosave/', {
                 'ops': [{'at': 1, 'delete': 0, 'insert': [paragraph('Two')]}],
                 'doc_hash': doc_hash(make_doc('One', 'Two')), 'base_seq': 1, 'client_save_id': 'b',

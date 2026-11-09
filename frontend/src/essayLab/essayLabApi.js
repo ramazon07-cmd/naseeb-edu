@@ -36,6 +36,8 @@ export const essayLabApi = {
   deleteTab: (id, tabId) => request(`${BASE}/essays/${id}/tabs/${tabId}/`, { method: 'DELETE' }),
   duplicateTab: (id, tabId) => request(`${BASE}/essays/${id}/tabs/${tabId}/duplicate/`, { method: 'POST' }),
   orderTabs: (id, parent, ids) => request(`${BASE}/essays/${id}/tabs/order/`, json('PUT', { parent: parent ?? null, ids })),
+  // month: 'YYYY-MM' (default: the server's current month).
+  streak: (month) => request(`${BASE}/streak/${query({ month })}`),
   trashEssay: (id) => request(`${BASE}/essays/${id}/trash/`, { method: 'POST' }),
   restoreEssay: (id) => request(`${BASE}/essays/${id}/restore/`, { method: 'POST' }),
   deleteEssay: (id) => request(`${BASE}/essays/${id}/`, { method: 'DELETE' }),
