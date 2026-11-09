@@ -14,7 +14,7 @@ from apps.users.entitlements import feature_enabled
 from apps.users.models import User
 from apps.users.throttles import WindowRateThrottle
 from core.exceptions import CodedError
-from .. import ai_budget, rec_letter_ai
+from .. import ai_budget, ai_usage, rec_letter_ai
 from ..models import (
     Achievement,
     Activity,
@@ -492,18 +492,22 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
         # which runs after the connection is released: load it now.
         student = get_object_or_404(scope_students(StudentProfile.objects.select_related('user', 'school'), request.user), pk=data['student'])
         facts = rec_letter_ai.profile_facts(student)
-        if (
-            rec_letter_ai.gateway_configured()
-            and feature_enabled(request.user, 'ai_assistant')
-            and ai_budget.consume('recommendation_letter', request.user)
-        ):
+        ai_available = rec_letter_ai.gateway_configured() and feature_enabled(request.user, 'ai_assistant')
+        if ai_available and ai_budget.consume('recommendation_letter', request.user):
             release_db_connection()  # don't hold a pooled connection during the AI call
             language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
+            ai_usage.begin()
             try:
                 suggestions = rec_letter_ai.ai_suggestions(student, facts, data['draft'], letter=data, language=language)
+                ai_usage.record('recommendation_letter', request.user, provider='gateway', status=ai_usage.OK)
                 return Response({'source': 'ai', 'suggestions': suggestions + rec_letter_ai.missing_facts(facts, data['draft'])})
             except rec_letter_ai.SuggestionsUnavailable:
-                pass
+                ai_usage.record('recommendation_letter', request.user, provider='gateway', status=ai_usage.FAILED)
+        else:
+            ai_usage.record(
+                'recommendation_letter', request.user, provider='gateway',
+                status=ai_usage.BUDGET_REFUSED if ai_available else ai_usage.LOCAL_FALLBACK,
+            )
         return Response({'source': 'profile', 'suggestions': rec_letter_ai.local_suggestions(facts, data['draft'])})
 
     @action(detail=True, methods=['post'], url_path='student-review')

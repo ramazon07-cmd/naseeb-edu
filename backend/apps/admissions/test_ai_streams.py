@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.admissions import assistant, streaming
+from apps.admissions.models import AiUsageLog
 from apps.users.models import User
 
 CHAT = '/api/assistant/chat/'
@@ -164,6 +165,58 @@ class AssistantStreamDeadlineTests(APITestCase):
         with mock.patch('urllib.request.urlopen', return_value=gateway):
             response = self.client.post(CHAT, BODY, format='json')
             self.assertEqual(b''.join(response.streaming_content).decode(), 'Hello there')
+
+    def stream_lines(self, *events):
+        lines = [b'data: ' + json.dumps(event).encode() + b'\n' for event in events] + [b'data: [DONE]\n']
+        gateway = mock.MagicMock()
+        gateway.__enter__.return_value = gateway
+        gateway.readline = io.BytesIO(b''.join(lines)).readline
+        return gateway
+
+    def test_stream_asks_for_usage_and_logs_the_final_chunk(self):
+        gateway = self.stream_lines(
+            {'choices': [{'delta': {'content': 'Hello '}}], 'model': 'openai/gpt-5.4-mini'},
+            {'choices': [{'delta': {'content': 'there'}}]},
+            {'choices': [], 'usage': {'prompt_tokens': 700, 'completion_tokens': 40, 'total_tokens': 740,
+                                      'prompt_tokens_details': {'cached_tokens': 256}}},
+        )
+        with mock.patch('urllib.request.urlopen', return_value=gateway) as urlopen:
+            response = self.client.post(CHAT, BODY, format='json')
+            self.assertEqual(b''.join(response.streaming_content).decode(), 'Hello there')
+        sent = json.loads(urlopen.call_args.args[0].data)
+        self.assertEqual(sent['stream_options'], {'include_usage': True})
+        row = AiUsageLog.objects.get(feature='assistant')
+        self.assertEqual((row.status, row.model, row.input_tokens, row.output_tokens, row.cached_input_tokens,
+                          row.total_tokens, row.usage_estimated, row.user_id), ('ok', 'openai/gpt-5.4-mini', 700, 40, 256, 740, False, self.user.pk))
+
+    def test_stream_without_usage_is_estimated_from_characters(self):
+        gateway = self.stream_lines({'choices': [{'delta': {'content': 'Hello there friends'}}]})
+        with mock.patch('urllib.request.urlopen', return_value=gateway):
+            response = self.client.post(CHAT, BODY, format='json')
+            b''.join(response.streaming_content)
+        row = AiUsageLog.objects.get(feature='assistant')
+        self.assertTrue(row.usage_estimated)
+        self.assertEqual(row.output_tokens, len('Hello there friends') // 4)
+        self.assertGreater(row.input_tokens, 0)
+
+    def test_provider_failure_is_logged_as_a_provider_error(self):
+        def failing(*args):
+            raise OSError('down')
+            yield  # pragma: no cover
+
+        with mock.patch.object(assistant, '_gateway_stream', side_effect=failing), \
+                self.assertLogs('naseeb.assistant', level='WARNING'):
+            response = self.client.post(CHAT, BODY, format='json')
+            b''.join(response.streaming_content)
+        row = AiUsageLog.objects.get(feature='assistant')
+        self.assertEqual((row.status, row.total_tokens), ('provider_error', 0))
+
+    @override_settings(AI_GATEWAY_API_KEY='')
+    def test_local_reply_is_logged_without_tokens(self):
+        response = self.client.post(CHAT, BODY, format='json')
+        b''.join(response.streaming_content)
+        row = AiUsageLog.objects.get(feature='assistant')
+        self.assertEqual((row.status, row.total_tokens, row.provider), ('local_fallback', 0, ''))
 
 
 @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')

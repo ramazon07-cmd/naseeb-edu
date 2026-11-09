@@ -23,7 +23,7 @@ from core.ai_policy import outbound_ai_allowed
 
 from apps.users.entitlements import ASSISTANT_ROLES, require_feature
 from apps.users.models import User
-from . import ai_budget
+from . import ai_budget, ai_usage
 from .streaming import GuardedStream, acquire_stream_slot, release_db_connection
 from .models import Application, RoadmapMission, StudentProfile, Task
 from .progress import summarize_progress
@@ -249,6 +249,7 @@ def _gateway_stream(messages, system_prompt):
         'model': settings.AI_ASSISTANT_MODEL,
         'messages': [{'role': 'system', 'content': system_prompt}, *messages],
         'stream': True,
+        'stream_options': {'include_usage': True},
         'max_completion_tokens': settings.AI_ASSISTANT_MAX_OUTPUT_TOKENS,
     }
     if gateway_options:
@@ -269,6 +270,9 @@ def _gateway_stream(messages, system_prompt):
     # the whole reply, so a provider trickling bytes cannot hold the thread forever.
     deadline = time.monotonic() + settings.AI_STREAM_MAX_SECONDS
     read_timeout = min(settings.AI_ASSISTANT_TIMEOUT_SECONDS, settings.AI_STREAM_MAX_SECONDS)
+    # Taken at the first read, which happens in the request thread right after _stream calls
+    # ai_usage.begin(); later reads may come from another thread.
+    sink = ai_usage.current_sink()
     with urllib.request.urlopen(request, timeout=read_timeout) as response:
         sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
         while True:
@@ -288,6 +292,8 @@ def _gateway_stream(messages, system_prompt):
                 break
             try:
                 event = json.loads(payload)
+                if sink is not None:
+                    ai_usage.capture(event, None if 'requested_model' in sink else body, sink)
                 content = event.get('choices', [{}])[0].get('delta', {}).get('content', '')
             except (ValueError, TypeError, IndexError, AttributeError):
                 continue
@@ -349,6 +355,7 @@ class AssistantChatView(APIView):
         blocked = _blocked_reply(messages[-1]['content'])
         request_started = time.monotonic()
 
+        usage_sink = ai_usage.begin()
         use_gateway = bool(not blocked and settings.AI_GATEWAY_API_KEY)
         if use_gateway and not consume_provider_budget(user):
             use_gateway = False
@@ -420,6 +427,15 @@ class AssistantChatView(APIView):
                     remember_assistant_turn(user.id, ''.join(parts))
                     mode = 'local-fallback'
             finally:
+                ai_usage.record(
+                    'assistant', user, provider='gateway', sink=usage_sink, output_chars=response_chars,
+                    status=(
+                        ai_usage.OK if mode == 'gateway'
+                        else ai_usage.BUDGET_REFUSED if mode == 'budget-exhausted'
+                        else ai_usage.PROVIDER_ERROR if use_gateway
+                        else ai_usage.LOCAL_FALLBACK
+                    ),
+                )
                 logger.info(
                     'assistant_request user_id=%s role=%s mode=%s messages=%s response_chars=%s duration_ms=%s date=%s',
                     user.id,

@@ -1,4 +1,5 @@
 """Role isolation: university catalog, college research and education-match AI."""
+import json
 from datetime import date
 from unittest import mock
 from django.test import override_settings
@@ -6,6 +7,7 @@ from rest_framework import status
 from apps.users.models import User
 from ..education_ai import latest_assessment_scores
 from ..models import (
+    AiUsageLog,
     ChallengeAttempt,
     OpportunityProgram,
     SavedOpportunityProgram,
@@ -263,3 +265,35 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(OUTBOUND_AI_ENABLED=True, GROQ_API_KEY='test-key')
+    def test_education_ai_logs_usage_and_cached_repeats_cost_nothing(self):
+        answer = {'summary': 'Good fit.', 'questions_to_consider': ['What do you enjoy?'], 'major_guidance': [
+            {'major': 'Computer Science', 'why_fit': 'Logic.', 'subjects_to_focus': ['Mathematics'], 'explore_next': 'Try a project.'}]}
+        body = json.dumps({'choices': [{'message': {'content': json.dumps(answer)}}], 'model': 'openai/gpt-oss-20b', 'usage': {'prompt_tokens': 900, 'completion_tokens': 200, 'total_tokens': 1100}}).encode()
+        reply = mock.MagicMock()
+        reply.read.return_value = body
+        reply.__enter__.return_value = reply
+        self.client.force_authenticate(self.student_a_user)
+        payload = {'major_candidates': ['Computer Science'], 'subject_strengths': ['Mathematics']}
+        with mock.patch('urllib.request.urlopen', return_value=reply) as urlopen:
+            first = self.client.post('/api/education-matches/ai/', payload, format='json')
+            self.client.post('/api/education-matches/ai/', payload, format='json')
+        self.assertEqual(first.data['mode'], 'groq')
+        self.assertEqual(urlopen.call_count, 1)
+        row = AiUsageLog.objects.get(feature='education_match')
+        self.assertEqual((row.status, row.provider, row.model, row.input_tokens, row.output_tokens),
+                         ('ok', 'groq', 'openai/gpt-oss-20b', 900, 200))
+
+    @override_settings(OUTBOUND_AI_ENABLED=True, GROQ_API_KEY='test-key')
+    def test_education_ai_provider_error_is_logged(self):
+        self.client.force_authenticate(self.student_a_user)
+        with mock.patch('urllib.request.urlopen', side_effect=OSError('down')):
+            response = self.client.post('/api/education-matches/ai/', {'major_candidates': ['Computer Science']}, format='json')
+        self.assertEqual(response.data['mode'], 'deterministic')
+        self.assertEqual(AiUsageLog.objects.get(feature='education_match').status, 'provider_error')
+
+    def test_education_without_ai_is_logged_as_local(self):
+        self.client.force_authenticate(self.student_a_user)
+        self.client.post('/api/education-matches/ai/', {'major_candidates': ['Computer Science']}, format='json')
+        self.assertEqual(AiUsageLog.objects.get(feature='education_match').status, 'local_fallback')

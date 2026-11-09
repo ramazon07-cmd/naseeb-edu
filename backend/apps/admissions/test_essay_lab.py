@@ -21,6 +21,7 @@ from .essay_lab.doc import (
 from .essay_lab.tabs import tab_from_text
 from .essay_lab.views import CHECKPOINT_CAP, DEPTH_CHECK_KEEP
 from .models import (
+    AiUsageLog,
     Application,
     Essay,
     EssayCheckpoint,
@@ -1101,6 +1102,48 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(EssayDepthCheck.objects.filter(essay=self.essay).count(), DEPTH_CHECK_KEEP)
         self.assertTrue(EssayDepthCheck.objects.filter(pk=response.data['id']).exists())
+
+    def usage_response(self, content, model='openai/gpt-5.4-mini'):
+        body = json.dumps({'choices': [{'message': {'content': content}}], 'model': model, 'usage': {'prompt_tokens': 1200, 'completion_tokens': 300, 'total_tokens': 1500, 'prompt_tokens_details': {'cached_tokens': 400}, 'completion_tokens_details': {'reasoning_tokens': 50}}}).encode('utf-8')
+        response = mock.MagicMock()
+        response.read.return_value = body
+        response.__enter__.return_value = response
+        return response
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_ai_check_logs_the_providers_token_usage_and_no_content(self):
+        with mock.patch('urllib.request.urlopen', return_value=self.usage_response(json.dumps(self.ai_payload()))):
+            self.assertEqual(self.check().status_code, status.HTTP_200_OK)
+        row = AiUsageLog.objects.get(feature='essay_coach')
+        self.assertEqual((row.status, row.provider, row.model, row.user_id, row.school_id, row.role),
+                         ('ok', 'gateway', 'openai/gpt-5.4-mini', self.student_user.pk, self.school.pk, 'student'))
+        self.assertEqual((row.input_tokens, row.output_tokens, row.cached_input_tokens, row.reasoning_tokens,
+                          row.total_tokens, row.usage_estimated, row.fallback_used), (1200, 300, 400, 50, 1500, False, False))
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_ai_check_logs_gateway_fallback_and_unusable_output(self):
+        with mock.patch('urllib.request.urlopen', return_value=self.usage_response('not json', 'openai/gpt-5.4-nano')):
+            self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        row = AiUsageLog.objects.get(feature='essay_coach')
+        self.assertEqual((row.status, row.model, row.fallback_used, row.input_tokens), ('invalid_output', 'openai/gpt-5.4-nano', True, 1200))
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_ai_check_logs_a_provider_error_without_tokens(self):
+        with mock.patch('urllib.request.urlopen', side_effect=OSError('down')):
+            self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        row = AiUsageLog.objects.get(feature='essay_coach')
+        self.assertEqual((row.status, row.total_tokens, row.model), ('provider_error', 0, ''))
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_DAILY_BUDGET=0)
+    def test_budget_refusal_is_logged_without_tokens(self):
+        self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(AiUsageLog.objects.get(feature='essay_coach').status, 'budget_refused')
+
+    @override_settings(AI_GATEWAY_API_KEY='')
+    def test_local_check_is_logged_without_tokens(self):
+        self.assertEqual(self.check().status_code, status.HTTP_200_OK)
+        row = AiUsageLog.objects.get(feature='essay_coach')
+        self.assertEqual((row.status, row.total_tokens, row.provider), ('local_fallback', 0, ''))
 
 
 class EssayLabSearchTests(EssayLabTestCase):

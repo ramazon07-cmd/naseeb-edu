@@ -7,7 +7,7 @@ from unittest import mock
 from django.test import override_settings
 from rest_framework.test import APITestCase
 
-from apps.admissions.models import Activity, Honor, RecommendationLetter, Research
+from apps.admissions.models import AiUsageLog, Activity, Honor, RecommendationLetter, Research
 from apps.admissions.test_audit_base import AuditBaseMixin
 
 LETTER_TEXT = 'I have known her for three years as her counselor.'
@@ -325,6 +325,41 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         with mock.patch('apps.users.throttles.time', clock):
             self.assertEqual(self.suggest().status_code, 200)
             self.assertEqual(self.suggest().status_code, 429)
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_ai_suggestions_log_token_usage(self):
+        answer = {'suggestions': [{'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'fact': 'D'}]}
+        body = json.dumps({'choices': [{'message': {'content': json.dumps(answer)}}], 'model': 'openai/gpt-5.4-mini', 'usage': {'prompt_tokens': 900, 'completion_tokens': 200, 'total_tokens': 1100}}).encode()
+        reply = mock.MagicMock()
+        reply.read.return_value = body
+        reply.__enter__.return_value = reply
+        with mock.patch('urllib.request.urlopen', return_value=reply):
+            self.assertEqual(self.suggest(draft='').data['source'], 'ai')
+        row = AiUsageLog.objects.get(feature='recommendation_letter')
+        self.assertEqual((row.status, row.input_tokens, row.output_tokens, row.total_tokens, row.role, row.school_id),
+                         ('ok', 900, 200, 1100, 'counselor', self.counselor.school_id))
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_unusable_ai_answer_is_logged_and_falls_back(self):
+        answer = {'suggestions': [{'kind': 'essay', 'text': 'Not a kind we show.'}]}
+        body = json.dumps({'choices': [{'message': {'content': json.dumps(answer)}}], 'usage': {'prompt_tokens': 900, 'completion_tokens': 200, 'total_tokens': 1100}}).encode()
+        reply = mock.MagicMock()
+        reply.read.return_value = body
+        reply.__enter__.return_value = reply
+        with mock.patch('urllib.request.urlopen', return_value=reply):
+            self.assertEqual(self.suggest(draft='').data['source'], 'profile')
+        row = AiUsageLog.objects.get(feature='recommendation_letter')
+        self.assertEqual((row.status, row.input_tokens), ('invalid_output', 900))
+
+    def test_profile_answer_without_ai_is_logged_with_no_tokens(self):
+        self.assertEqual(self.suggest(draft='').data['source'], 'profile')
+        row = AiUsageLog.objects.get(feature='recommendation_letter')
+        self.assertEqual((row.status, row.total_tokens), ('local_fallback', 0))
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key', REC_LETTER_AI_DAILY_BUDGET=0)
+    def test_budget_refusal_is_logged(self):
+        self.assertEqual(self.suggest(draft='').data['source'], 'profile')
+        self.assertEqual(AiUsageLog.objects.get(feature='recommendation_letter').status, 'budget_refused')
 
 
 class StudentLetterReviewTests(LetterFixture, APITestCase):

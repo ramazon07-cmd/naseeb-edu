@@ -15,6 +15,7 @@ import urllib.request
 from django.conf import settings
 from core.ai_policy import outbound_ai_allowed
 
+from .. import ai_usage
 from ..assistant import redact_pii
 
 logger = logging.getLogger('naseeb.essay_coach')
@@ -184,6 +185,7 @@ def _request_gateway(essay, content):
     )
     with urllib.request.urlopen(request, timeout=settings.ESSAY_COACH_TIMEOUT_SECONDS) as response:
         payload = json.loads(response.read().decode('utf-8'))
+    ai_usage.capture(payload, body)
     content_text = payload['choices'][0]['message']['content']
     content_text = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content_text).strip(), flags=re.IGNORECASE)
     return json.loads(content_text)
