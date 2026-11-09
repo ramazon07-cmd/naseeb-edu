@@ -18,11 +18,13 @@ export function studentReasons(student, now = new Date()) {
   if (student.to_review_total > 0) reasons.push({ key: 'to_review', tone: 'warning', countPattern: '{n} to review|{n} to review', count: student.to_review_total });
   const quietDays = daysSince(student.user_detail?.last_login, now);
   if (quietDays !== null && quietDays >= QUIET_DAYS) reasons.push({ key: 'quiet', tone: 'muted', quietDays });
+  if (student.not_started && !reasons.length) reasons.push({ key: 'not_started', tone: 'muted', expired: student.user_detail?.credential_status === 'expired' });
   return reasons;
 }
 
 export const needsAttention = (reasons) => reasons.some((reason) => reason.tone === 'danger');
 export const isQuiet = (reasons) => reasons.some((reason) => reason.key === 'quiet');
+export const isNotStarted = (reasons) => reasons.some((reason) => reason.key === 'not_started');
 export const isOnTrack = (reasons) => reasons.length === 0;
 
 // Most urgent first: how many things are late or missing, then work to review, then a quiet spell.

@@ -42,6 +42,7 @@ export function CxTag({ tone = 'quiet', small = false, children }) {
 
 // A reason a student needs the counselor, in words (lib/studentReasons.js keeps it translation-free).
 export function reasonText(reason) {
+  if (reason.key === 'not_started') return reason.expired ? t('Password expired') : t('Not started yet');
   if (reason.key === 'quiet') return tp('Quiet for {n} day|Quiet for {n} days', reason.quietDays, { n: reason.quietDays });
   if (reason.key === 'missing_document') return reason.title ? t('{title} missing', { title: reason.title }) : tp('{n} document missing|{n} documents missing', reason.count, { n: reason.count });
   return tp(reason.countPattern, reason.count, { n: reason.count });

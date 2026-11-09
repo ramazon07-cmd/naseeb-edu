@@ -341,7 +341,7 @@ class ProgressTests(HomeBase):
 
         progress = self.home()['progress']
         self.assertEqual(progress['total'], 3)
-        self.assertEqual(progress['buckets'], {'on_track': 1, 'behind': 1, 'needs_attention': 1})
+        self.assertEqual(progress['buckets'], {'on_track': 1, 'behind': 1, 'needs_attention': 1, 'not_started': 0})
         self.assertEqual(
             [(row['name'], row['completion'], row['expected'], row['late'], row['bucket']) for row in progress['students']],
             [('Ramazon Ergashev', 25, 100, 3, 'needs_attention'), ('Abbos', 50, 0, 0, 'on_track'), ('Akbar', 75, 0, 1, 'behind')],

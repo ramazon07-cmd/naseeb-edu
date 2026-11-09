@@ -47,6 +47,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     missions_overdue = serializers.SerializerMethodField()
     to_review_total = serializers.SerializerMethodField()
     documents_missing = serializers.SerializerMethodField()
+    not_started = serializers.SerializerMethodField()
     missing_document_title = serializers.SerializerMethodField()
     next_deadline = serializers.SerializerMethodField()
     eligible_level = serializers.IntegerField(read_only=True)
@@ -99,6 +100,13 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
     def get_profile_readiness(self, obj) -> dict:
         return profile_readiness(obj)
+
+    def get_not_started(self, obj) -> bool:
+        value = getattr(obj, '_not_started', None)
+        if value is None:
+            from ..counselor_summary import not_started_ids
+            value = obj.pk in not_started_ids([obj.pk])
+        return value
 
     def get_section_reviews(self, obj) -> dict:
         return reviews_payload(obj)
