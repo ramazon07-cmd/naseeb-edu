@@ -30,7 +30,7 @@ Errors carry `code`; an unlinked or invalidated chat gets `404 not_linked`.
 
 ## What the update contains
 
-Per student: essays (count of essays the student shared with the counselor, how many were edited today), writing streak, and the application (profile readiness percent from `onboarding.profile_readiness`, filled / not filled for personal, academics, tests, goal, extracurriculars and honors, plus counts of activities, honors, documents, applications and recommendation letters). Words typed today and the streak length come from `apps/telegram_bot/activity.py: essay_activity_for(user_ids, today)`, which reads `EssayWritingDay` (two queries for all students) and counts the streak with the same `streak_numbers` the Essay Lab card uses.
+Per student: essays (count of essays the student shared with the counselor, how many were edited today), writing streak, and the application (profile readiness percent from `onboarding.profile_readiness`, filled / not filled for personal, academics, tests, goal, extracurriculars and honors, plus counts of activities, honors, documents, applications and recommendation letters). The streak length comes from `apps/telegram_bot/activity.py: essay_activity_for(user_ids, today)`, which reads `EssayWritingDay` (one query for all students) and counts it with the same `streak_numbers` the Essay Lab card uses; it is shown only for students with at least one shared essay. Words typed per day are not sent, because `EssayWritingDay` cannot tell shared essays from private ones.
 
 ## Environment
 

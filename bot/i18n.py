@@ -137,7 +137,7 @@ STRINGS = {
         'ru': 'Что включать в сводку? Включайте и выключайте кнопками.',
         'en': 'What should the update include? Toggle with the buttons.',
     },
-    'part_essays': {'uz': 'Insholar va bugungi so\'zlar', 'ru': 'Эссе и слова за сегодня', 'en': 'Essays and words today'},
+    'part_essays': {'uz': 'Insholar', 'ru': 'Эссе', 'en': 'Essays'},
     'part_streak': {'uz': 'Yozish seriyasi', 'ru': 'Серия письма', 'en': 'Writing streak'},
     'part_application': {'uz': "To'liq ariza", 'ru': 'Вся заявка', 'en': 'Full application'},
     'button_time': {'uz': 'Vaqt: {time}', 'ru': 'Время: {time}', 'en': 'Time: {time}'},
@@ -173,11 +173,6 @@ STRINGS = {
         'uz': 'Insholar: {total}, bugun tahrirlangan: {edited}',
         'ru': 'Эссе: {total}, изменено сегодня: {edited}',
         'en': 'Essays: {total}, edited today: {edited}',
-    },
-    'words_today': {
-        'uz': ', bugun yozilgan so\'zlar: {words}',
-        'ru': ', слов сегодня: {words}',
-        'en': ', words typed today: {words}',
     },
     'streak_days': {
         'uz': 'Seriya: {days} kun',

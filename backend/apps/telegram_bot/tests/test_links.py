@@ -4,7 +4,7 @@ from apps.admissions.models import School
 from apps.telegram_bot.models import TelegramLink
 from apps.users.models import User
 
-from .base import BotTestCase
+from .base import PASSWORD, BotTestCase
 
 
 class LinkValidityTests(BotTestCase):
@@ -29,6 +29,18 @@ class LinkValidityTests(BotTestCase):
         self.c1.set_password('AnotherPass456!')
         self.c1.save()
         self.assert_link_dead(chat)
+
+    def test_a_forced_password_change_kills_the_link(self):
+        chat = self.link(self.c1)
+        User.objects.filter(pk=self.c1.pk).update(must_change_password=True)
+        self.assert_link_dead(chat)
+
+    def test_confirm_is_refused_once_a_password_change_is_forced(self):
+        login = self.post('login', {'chat_id': self.chat, 'username': 'counselor1', 'password': PASSWORD})
+        User.objects.filter(pk=self.c1.pk).update(must_change_password=True)
+        response = self.post('confirm', {'chat_id': self.chat, 'pending_token': login.json()['pending_token']})
+        self.assertEqual(response.status_code, 410)
+        self.assertFalse(TelegramLink.objects.exists())
 
     def test_role_change(self):
         for role in (User.Role.TEACHER, User.Role.ORGANIZATION, User.Role.ADMIN):
@@ -108,6 +120,30 @@ class SettingsTests(BotTestCase):
         link.last_sent_date = None
         services.update_settings(link, notify_time=datetime(2026, 1, 1, 18, 0).time(), now=now)
         self.assertIsNone(link.last_sent_date)
+
+    def test_a_time_that_just_passed_still_sends_today_inside_the_grace_window(self):
+        from apps.telegram_bot import services
+        from apps.telegram_bot.digest import TASHKENT
+
+        now = datetime(2026, 11, 8, 12, 0, tzinfo=TASHKENT)
+        link = TelegramLink.objects.get()
+        services.update_settings(link, notify_time=datetime(2026, 1, 1, 11, 58).time(), now=now)
+        self.assertIsNone(link.last_sent_date)
+        self.assertEqual([item['chat_id'] for item in services.due(now)], [self.chat])
+
+    def test_a_null_notify_time_clears_it_and_nothing_is_due(self):
+        from apps.telegram_bot import services
+        from apps.telegram_bot.digest import TASHKENT
+
+        self.put(notify_time='12:00')
+        body = self.put(notify_time=None).json()
+        self.assertIsNone(body['notify_time'])
+        self.assertIsNone(TelegramLink.objects.get().notify_time)
+        self.assertEqual(services.due(datetime(2026, 11, 8, 12, 0, tzinfo=TASHKENT)), [])
+
+    def test_an_omitted_notify_time_is_left_alone(self):
+        self.put(notify_time='12:00')
+        self.assertEqual(self.put(language='en').json()['notify_time'], '12:00')
 
     def test_a_non_string_language_is_a_400(self):
         for value in (['uz'], {}, 5, True):

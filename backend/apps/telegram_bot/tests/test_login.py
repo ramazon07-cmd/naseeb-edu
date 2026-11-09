@@ -116,22 +116,22 @@ class LoginTests(BotTestCase):
         self.assertEqual(locked.json()['code'], 'locked')
         self.assertFalse(PendingLogin.objects.exists())
 
-    def test_lockout_per_username_across_chats(self):
-        for chat in range(5):
-            self.login('counselor1', 'bad-password-1', chat=2000 + chat)
-        self.assertEqual(self.login('counselor1', PASSWORD, chat=3000).status_code, 429)
+    def test_another_chat_cannot_lock_the_owner_out(self):
+        for chat in range(20):
+            self.login('counselor1', 'bad-password-1', chat=2000 + (chat % 2))
+        self.assertEqual(self.login('counselor1', PASSWORD, chat=3000).status_code, 200)
 
     def test_lockout_per_chat_across_usernames_and_unknown_users_count_too(self):
         for i in range(5):
             self.login(f'ghost{i}', 'bad-password-1')
         self.assertEqual(self.login('counselor1', PASSWORD).status_code, 429)
 
-    def test_username_and_email_share_one_lockout_counter(self):
+    def test_username_and_email_in_one_chat_share_the_chat_counter(self):
         for i in range(5):
             who = 'counselor1' if i % 2 else 'counselor1@example.com'
-            self.assertEqual(self.login(who, 'bad-password-1', chat=4000 + i).status_code, 401)
-        self.assertEqual(self.login('counselor1', PASSWORD, chat=4100).status_code, 429)
-        self.assertEqual(self.login('Counselor1@Example.com', PASSWORD, chat=4101).status_code, 429)
+            self.assertEqual(self.login(who, 'bad-password-1', chat=4000).status_code, 401)
+        self.assertEqual(self.login('counselor1', PASSWORD, chat=4000).status_code, 429)
+        self.assertEqual(self.login('Counselor1@Example.com', PASSWORD, chat=4000).status_code, 429)
 
     def test_an_email_shared_by_two_accounts_is_refused(self):
         User.objects.filter(pk=self.c2.pk).update(email=self.c1.email.upper())
@@ -140,19 +140,19 @@ class LoginTests(BotTestCase):
         self.assertEqual(response.json()['code'], 'invalid_credentials')
         self.assertEqual(self.login('counselor1').status_code, 200)
 
-    def test_bot_failures_use_the_website_counters_without_locking_web_addresses(self):
-        from apps.users.security import login_locked
+    def test_bot_failures_use_the_website_counter_without_locking_web_addresses(self):
         from apps.users.cache_safety import cache_get
-        from apps.users.security import _key
-        for chat in range(3):
-            self.login('counselor1', 'bad-password-1', chat=4000 + chat)
-        self.assertEqual(cache_get(_key('user-ip', 'counselor1|telegram')), 3)
+        from apps.users.security import _key, login_locked
+        for _ in range(3):
+            self.login('counselor1', 'bad-password-1', chat=4000)
+        self.assertEqual(cache_get(_key('user-ip', 'counselor1|telegram:4000')), 3)
+        self.assertIsNone(cache_get(_key('user-ip', 'counselor1|telegram')))
         self.assertFalse(login_locked(('user-ip', 'counselor1|203.0.113.7')))
 
-    def test_website_threshold_blocks_bot_logins_even_with_fresh_bot_counters(self):
+    def test_website_threshold_blocks_the_same_chat_even_with_a_fresh_bot_counter(self):
         from apps.users.security import register_login_failure
         for _ in range(10):
-            register_login_failure(('user-ip', 'counselor1|telegram'))
+            register_login_failure(('user-ip', 'counselor1|telegram:5000'))
         self.assertEqual(self.login('counselor1', PASSWORD, chat=5000).status_code, 429)
 
     def test_lockout_message_is_the_same_for_unknown_users(self):

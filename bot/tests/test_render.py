@@ -9,7 +9,7 @@ from .helpers import Harness
 def student(name, **extra):
     base = {
         'name': name, 'grade': '10',
-        'essays': {'total': 3, 'edited_today': 1, 'words_today': None},
+        'essays': {'total': 3, 'edited_today': 1},
         'streak': {'days': 0},
         'application': {
             'percent': 58, 'sections': {'personal': True, 'academics': False, 'tests': True, 'goal': False,
@@ -36,11 +36,11 @@ def test_one_scannable_block_per_student():
     assert 'documents 2/5' in page
 
 
-def test_streak_days_and_words_are_shown_when_available():
-    item = student('Ali Valiyev', streak={'days': 6}, essays={'total': 1, 'edited_today': 1, 'words_today': 250})
+def test_streak_days_are_shown_and_words_are_not():
+    item = student('Ali Valiyev', streak={'days': 6}, essays={'total': 1, 'edited_today': 1})
     page = render_digest_pages(digest([item]), 'en')[0]
     assert '\U0001F525 Streak: 6 days' in page
-    assert 'words typed today: 250' in page
+    assert 'words' not in page
 
 
 def test_zero_streak_and_disabled_parts():

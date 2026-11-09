@@ -14,7 +14,6 @@ from apps.users.cache_safety import cache_delete_many, cache_get, count_hit
 from apps.users.security import (
     login_locked, note_account_failure, register_login_failure, reset_login_failures,
 )
-from apps.users.throttles import hashed
 
 from . import conf
 from .digest import tashkent_now
@@ -52,11 +51,14 @@ def _account_error(user):
         boss = user.supervising_counselor
         if boss is None or not boss.is_active or boss.role != User.Role.COUNSELOR:
             return 'account_unavailable'
+    if user.must_change_password:
+        return 'password_change_required'
     return None
 
 
-def _attempt_keys(chat_id, account):
-    return f'tgbot-login:chat:{chat_id}', f'tgbot-login:user:{hashed(account)}'
+def _attempt_keys(chat_id):
+    # Per chat only: an account-wide bot counter would let any Telegram user lock the owner out.
+    return (f'tgbot-login:chat:{chat_id}',)
 
 
 def _locked(keys):
@@ -64,9 +66,9 @@ def _locked(keys):
 
 
 def _web_lockout_keys(chat_id, account):
-    # Same counters and thresholds as the website login. The bot has no client IP, so a
-    # per-chat and a bot-wide pseudo address stand in; web addresses are never locked by the bot.
-    return (('user-ip', f'{account}|telegram:{chat_id}'), ('user-ip', f'{account}|telegram'))
+    # Same counter and threshold as the website login, with the chat standing in for the client IP,
+    # so real web addresses are never locked by the bot.
+    return (('user-ip', f'{account}|telegram:{chat_id}'),)
 
 
 def _resolve_login(login_value):
@@ -83,7 +85,7 @@ def _resolve_login(login_value):
 def login(chat_id, login_value, password):
     login_value = login_value.strip()
     username, account = _resolve_login(login_value)
-    keys = _attempt_keys(chat_id, account)
+    keys = _attempt_keys(chat_id)
     web_keys = _web_lockout_keys(chat_id, account)
     if _locked(keys) or login_locked(*web_keys):
         raise Refused('locked', 429, retry_after=conf.LOGIN_WINDOW_SECONDS)
@@ -100,8 +102,6 @@ def login(chat_id, login_value, password):
     error = _account_error(user)
     if error:
         raise Refused(error)
-    if user.must_change_password:
-        raise Refused('password_change_required')
     token = secrets.token_urlsafe(32)
     PendingLogin.objects.update_or_create(chat_id=chat_id, defaults={
         'user': user,
@@ -171,17 +171,26 @@ def settings_payload(link):
     }
 
 
-def update_settings(link, *, language=None, notify_time=None, prefs=None, enabled=None, now=None):
+def _minute_of_day(value):
+    return value.hour * 60 + value.minute
+
+
+def update_settings(link, *, language=None, notify_time=None, clear_notify_time=False, prefs=None, enabled=None,
+                    now=None):
     fields = []
     if language is not None:
         link.language = language
         fields.append('language')
-    if notify_time is not None:
+    if clear_notify_time:
+        link.notify_time = None
+        fields.append('notify_time')
+    elif notify_time is not None:
         link.notify_time = notify_time
         fields.append('notify_time')
         now = tashkent_now(now)
-        if notify_time <= now.time().replace(second=0, microsecond=0):
-            # A time that already passed today starts tomorrow, not with an instant send.
+        late = _minute_of_day(now) - _minute_of_day(notify_time)
+        if late > conf.DUE_GRACE_MINUTES:
+            # Past the grace window a passed time starts tomorrow; inside it, due() still sends today.
             link.last_sent_date = now.date()
             fields.append('last_sent_date')
     if prefs is not None:

@@ -43,7 +43,7 @@ async def test_picking_a_time_button_saves_time_and_enables(h):
 async def test_skip_time_pauses_the_daily_update(h):
     h.api.linked = True
     await h.tap('time:off')
-    assert h.api.names('update_settings') == [{'chat_id': 1, 'enabled': False}]
+    assert h.api.names('update_settings') == [{'chat_id': 1, 'notify_time': None, 'enabled': True}]
 
 
 async def test_custom_time_accepts_hh_mm_and_rejects_nonsense(h):
@@ -151,3 +151,39 @@ async def test_blocking_the_bot_unlinks_the_chat(h):
     )
     await h.dp.feed_update(h.bot, Update(update_id=9, my_chat_member=event))
     assert h.api.names('unlink') == [{'chat_id': 1}]
+
+
+async def test_a_wiped_link_tells_the_user_to_log_in_again(h):
+    h.api.linked = True
+    await h.say('/settings')
+    h.api.errors['update_settings'] = ApiError(404, 'not_linked')
+    await h.tap('part:streak')
+    assert h.session.texts()[-1] == 'Please log in first: /start'
+    assert h.cache.get(('settings', 1)) is None
+
+
+async def test_other_backend_refusals_get_a_generic_message(h):
+    h.api.linked = True
+    h.api.errors['students'] = ApiError(400, 'invalid_request')
+    await h.say('/students')
+    assert h.session.texts()[-1] == 'Something went wrong. Please try again.'
+
+
+async def test_now_failing_on_the_edit_removes_the_placeholder_and_sends_the_update(h):
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import EditMessageText
+    h.api.linked = True
+    h.session.failures['EditMessageText'] = [TelegramBadRequest(EditMessageText(text='x'), 'message to edit not found')]
+    await h.say('/now')
+    assert len(h.session.of('DeleteMessage')) == 1
+    assert h.session.of('SendMessage')[-1][1]['text'] == 'No students yet.'
+
+
+async def test_now_with_an_unmodified_edit_does_not_send_a_duplicate(h):
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import EditMessageText
+    h.api.linked = True
+    h.session.failures['EditMessageText'] = [TelegramBadRequest(EditMessageText(text='x'), 'message is not modified')]
+    await h.say('/now')
+    assert not h.session.of('DeleteMessage')
+    assert len(h.session.of('SendMessage')) == 1

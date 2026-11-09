@@ -56,10 +56,7 @@ def render_student(item, lang):
     lines = [t(lang, 'digest_student', name=escape(item['name']), grade=escape(grade_label(lang, item['grade'])))]
     essays = item.get('essays')
     if essays:
-        line = t(lang, 'essays_line', total=essays['total'], edited=essays['edited_today'])
-        if essays['words_today'] is not None:
-            line += t(lang, 'words_today', words=essays['words_today'])
-        lines.append('\U0001F4DD ' + line)
+        lines.append('\U0001F4DD ' + t(lang, 'essays_line', total=essays['total'], edited=essays['edited_today']))
     streak = item.get('streak')
     if streak:
         if not streak.get('shared', True):

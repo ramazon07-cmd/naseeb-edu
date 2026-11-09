@@ -323,7 +323,7 @@ async def pick_time(callback: CallbackQuery, state: FSMContext, bot, api, cache)
         await callback.message.edit_text(t(lang, 'ask_custom_time'))
         return
     if value == 'off':
-        link = await _change(api, cache, chat_id, enabled=False)
+        link = await _change(api, cache, chat_id, notify_time=None, enabled=True)
     elif TIME_PATTERN.match(value):
         link = await _change(api, cache, chat_id, notify_time=value, enabled=True)
     else:
@@ -430,4 +430,26 @@ async def backend_down(event: ErrorEvent, bot, cache, state: FSMContext):
         with suppress(TelegramAPIError):
             await bot.send_message(message.chat.id, t(lang, 'unavailable'))
     log.warning('backend unavailable: %s', event.exception)
+    return True
+
+
+@router.errors(ExceptionTypeFilter(ApiError))
+async def backend_refused(event: ErrorEvent, bot, cache, pages, state: FSMContext):
+    update = event.update
+    message = update.message or (update.callback_query.message if update.callback_query else None)
+    if update.callback_query:
+        with suppress(TelegramAPIError):
+            await update.callback_query.answer()
+    if message:
+        chat_id = message.chat.id
+        lang = await language_of(state, cache, chat_id)
+        if event.exception.code == 'not_linked':
+            cache.drop_chat(chat_id)
+            pages.drop_chat(chat_id)
+            text = t(lang, 'not_linked')
+        else:
+            text = t(lang, 'error')
+        with suppress(TelegramAPIError):
+            await bot.send_message(chat_id, text)
+    log.warning('backend refused: %s', event.exception)
     return True

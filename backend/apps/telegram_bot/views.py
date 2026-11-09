@@ -95,6 +95,7 @@ class SettingsView(BotView):
         if language is not None and not (isinstance(language, str) and language in services.LANGUAGES):
             raise services.Refused('invalid_request', 400)
         notify_time = None
+        clear_notify_time = 'notify_time' in data and data['notify_time'] is None
         if data.get('notify_time') is not None:
             try:
                 notify_time = dt.datetime.strptime(str(data['notify_time']), '%H:%M').time()
@@ -109,7 +110,10 @@ class SettingsView(BotView):
         enabled = data.get('enabled')
         if enabled is not None and not isinstance(enabled, bool):
             raise services.Refused('invalid_request', 400)
-        services.update_settings(link, language=language, notify_time=notify_time, prefs=prefs, enabled=enabled)
+        services.update_settings(
+            link, language=language, notify_time=notify_time, clear_notify_time=clear_notify_time, prefs=prefs,
+            enabled=enabled,
+        )
         return Response(services.settings_payload(link))
 
 

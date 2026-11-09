@@ -100,8 +100,7 @@ def build_digest(user, prefs, now=None):
         item = {'name': _name(student), 'grade': student.grade}
         if want_essays:
             total, edited = essays.get(student.pk, (0, 0))
-            words = activity.for_user(student.user_id).words_today
-            item['essays'] = {'total': total, 'edited_today': edited, 'words_today': words}
+            item['essays'] = {'total': total, 'edited_today': edited}
         if want_streak:
             item['streak'] = {
                 'days': activity.for_user(student.user_id).streak_days,

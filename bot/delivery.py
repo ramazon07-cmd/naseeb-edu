@@ -1,7 +1,7 @@
 import secrets
 from contextlib import suppress
 
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 
 from . import keyboards
 from .render import render_digest_pages
@@ -23,9 +23,14 @@ async def send_digest(bot, chat_id, data, lang, pages_store, *, edit_message_id=
         pages_store.set(('pages', chat_id, token), rest, PAGES_TTL)
         markup = keyboards.show_more(lang, len(rest), token)
     if edit_message_id is not None:
-        with suppress(TelegramBadRequest):
+        try:
             await bot.edit_message_text(first, chat_id=chat_id, message_id=edit_message_id, reply_markup=markup)
             return
+        except TelegramBadRequest as exc:
+            if 'not modified' in str(exc):
+                return
+            with suppress(TelegramAPIError):
+                await bot.delete_message(chat_id, edit_message_id)
     await bot.send_message(chat_id, first, reply_markup=markup)
 
 

@@ -23,7 +23,7 @@ def deps(h, sleeps=None):
 
 def students_digest():
     return {'date': '2026-11-08', 'total_students': 1, 'omitted': 0, 'students': [
-        {'name': 'Ali', 'grade': '9', 'essays': {'total': 1, 'edited_today': 0, 'words_today': None}},
+        {'name': 'Ali', 'grade': '9', 'essays': {'total': 1, 'edited_today': 0}},
     ]}
 
 

@@ -16,7 +16,7 @@ from .base import BotTestCase, make_student
 
 
 class ActivityAdapterTests(TestCase):
-    def test_reads_words_and_streak_from_writing_days(self):
+    def test_reads_the_streak_from_writing_days(self):
         a = make_student('act_a', School.objects.create(name='Act School'))
         b = make_student('act_b', a.school)
         today = datetime(2026, 11, 8).date()
@@ -25,12 +25,12 @@ class ActivityAdapterTests(TestCase):
                                            words_net=120, words_peak=120 + offset, goal_met=met)
         EssayWritingDay.objects.create(user=b.user, date=today, words_net=30, words_peak=30, goal_met=False)
         result = activity.essay_activity_for([a.user_id, b.user_id, 999999], today)
-        self.assertEqual(result.for_user(a.user_id), EssayActivity(words_today=120, streak_days=3))
-        self.assertEqual(result.for_user(b.user_id), EssayActivity(words_today=30, streak_days=0))
-        self.assertEqual(result.for_user(999999), EssayActivity(words_today=0, streak_days=0))
+        self.assertEqual(result.for_user(a.user_id), EssayActivity(streak_days=3))
+        self.assertEqual(result.for_user(b.user_id), EssayActivity(streak_days=0))
+        self.assertEqual(result.for_user(999999), EssayActivity(streak_days=0))
 
     def test_result_exposes_per_user_numbers(self):
-        result = ActivityResult({7: EssayActivity(words_today=120, streak_days=4)})
+        result = ActivityResult({7: EssayActivity(streak_days=4)})
         self.assertEqual(result.for_user(7).streak_days, 4)
         self.assertEqual(result.for_user(8), EssayActivity())
 
@@ -56,7 +56,7 @@ class DigestContentTests(BotTestCase):
         Essay.objects.create(student=self.s1, title='Private', shared_with_counselor=False, last_edited_at=now)
         Essay.objects.create(student=self.s1, title='Trashed', shared_with_counselor=True, trashed_at=now)
         item = self.by_name(self.digest(), 'Stu1 Tester')
-        self.assertEqual(item['essays'], {'total': 2, 'edited_today': 1, 'words_today': 0})
+        self.assertEqual(item['essays'], {'total': 2, 'edited_today': 1})
 
     def share_essay(self, student):
         Essay.objects.create(student=student, title='Shared', shared_with_counselor=True)
@@ -66,24 +66,23 @@ class DigestContentTests(BotTestCase):
         body = self.digest()
         self.assertEqual(self.by_name(body, 'Stu1 Tester')['streak'], {'days': 0, 'shared': True})
 
-    def test_streak_and_words_are_hidden_for_students_without_a_shared_essay(self):
+    def test_streak_is_hidden_and_words_never_sent_for_students_without_a_shared_essay(self):
         today = timezone.localdate()
         EssayWritingDay.objects.create(user=self.s1.user, date=today, words_net=140, words_peak=140, goal_met=True)
         Essay.objects.create(student=self.s1, title='Private', shared_with_counselor=False)
         item = self.by_name(self.digest(), 'Stu1 Tester')
         self.assertEqual(item['streak'], {'days': None, 'shared': False})
-        self.assertIsNone(item['essays']['words_today'])
+        self.assertNotIn('words_today', item['essays'])
 
     def test_streak_numbers_flow_through_for_shared_students(self):
         self.share_essay(self.s1)
-        fake = ActivityResult({self.s1.user_id: EssayActivity(words_today=250, streak_days=6)})
+        fake = ActivityResult({self.s1.user_id: EssayActivity(streak_days=6)})
         with mock.patch.object(digest, 'essay_activity_for', return_value=fake) as patched:
             body = self.digest()
         item = self.by_name(body, 'Stu1 Tester')
         self.assertEqual(patched.call_args.args[0], [self.s1.user_id])
         self.assertEqual(item['streak'], {'days': 6, 'shared': True})
-        self.assertEqual(item['essays']['words_today'], 250)
-        self.assertIsNone(self.by_name(body, 'Stu2 Tester')['essays']['words_today'])
+        self.assertNotIn('words_today', item['essays'])
 
     def test_activity_is_not_queried_when_essays_and_streak_are_off(self):
         self.share_essay(self.s1)
