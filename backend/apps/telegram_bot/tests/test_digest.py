@@ -6,7 +6,9 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.admissions.models import Achievement, Activity, Application, Document, Essay, University
+from apps.admissions.models import (
+    Achievement, Activity, Application, Document, Essay, EssayWritingDay, School, University,
+)
 from apps.telegram_bot import activity, digest
 from apps.telegram_bot.activity import ActivityResult, EssayActivity
 
@@ -14,11 +16,19 @@ from .base import BotTestCase, make_student
 
 
 class ActivityAdapterTests(TestCase):
-    def test_streak_data_is_not_available_yet(self):
-        result = activity.essay_activity_for([1, 2], datetime(2026, 11, 8).date())
-        self.assertIsInstance(result, ActivityResult)
-        self.assertFalse(result.available)
-        self.assertEqual(result.for_user(1), EssayActivity(words_today=None, streak_days=None))
+    def test_reads_words_and_streak_from_writing_days(self):
+        a = make_student('act_a', School.objects.create(name='Act School'))
+        b = make_student('act_b', a.school)
+        today = datetime(2026, 11, 8).date()
+        for offset, met in ((0, True), (1, True), (2, True), (4, True)):
+            EssayWritingDay.objects.create(user=a.user, date=today - timedelta(days=offset),
+                                           words_net=120, words_peak=120 + offset, goal_met=met)
+        EssayWritingDay.objects.create(user=b.user, date=today, words_net=30, words_peak=30, goal_met=False)
+        result = activity.essay_activity_for([a.user_id, b.user_id, 999999], today)
+        self.assertTrue(result.available)
+        self.assertEqual(result.for_user(a.user_id), EssayActivity(words_today=120, streak_days=3))
+        self.assertEqual(result.for_user(b.user_id), EssayActivity(words_today=30, streak_days=0))
+        self.assertEqual(result.for_user(999999), EssayActivity(words_today=0, streak_days=0))
 
     def test_result_exposes_per_user_numbers_once_available(self):
         result = ActivityResult(True, {7: EssayActivity(words_today=120, streak_days=4)})
@@ -47,12 +57,12 @@ class DigestContentTests(BotTestCase):
         Essay.objects.create(student=self.s1, title='Private', shared_with_counselor=False, last_edited_at=now)
         Essay.objects.create(student=self.s1, title='Trashed', shared_with_counselor=True, trashed_at=now)
         item = self.by_name(self.digest(), 'Stu1 Tester')
-        self.assertEqual(item['essays'], {'total': 2, 'edited_today': 1, 'words_today': None})
+        self.assertEqual(item['essays'], {'total': 2, 'edited_today': 1, 'words_today': 0})
 
-    def test_streak_is_reported_unavailable_not_as_zero(self):
+    def test_streak_without_writing_days_is_zero(self):
         body = self.digest()
-        self.assertFalse(body['streak_available'])
-        self.assertEqual(self.by_name(body, 'Stu1 Tester')['streak'], {'days': None})
+        self.assertTrue(body['streak_available'])
+        self.assertEqual(self.by_name(body, 'Stu1 Tester')['streak'], {'days': 0})
 
     def test_streak_numbers_flow_through_once_the_adapter_provides_them(self):
         fake = ActivityResult(True, {self.s1.user_id: EssayActivity(words_today=250, streak_days=6)})
@@ -62,7 +72,6 @@ class DigestContentTests(BotTestCase):
         self.assertTrue(body['streak_available'])
         self.assertEqual(item['streak'], {'days': 6})
         self.assertEqual(item['essays']['words_today'], 250)
-        self.assertIsNone(self.by_name(body, 'Stu2 Tester')['essays']['words_today'])
 
     def test_application_section_counts_and_percent(self):
         Activity.objects.create(student=self.s1, name='Debate club', activity_type='club')

@@ -30,7 +30,7 @@ Errors carry `code`; an unlinked or invalidated chat gets `404 not_linked`.
 
 ## What the update contains
 
-Per student: essays (count of essays the student shared with the counselor, how many were edited today), writing streak, and the application (profile readiness percent from `onboarding.profile_readiness`, filled / not filled for personal, academics, tests, goal, extracurriculars and honors, plus counts of activities, honors, documents, applications and recommendation letters). Words typed today and the streak length come from `apps/telegram_bot/activity.py: essay_activity_for(user_ids, today)`. It currently reports `available=False`, so the update says "Streak: not available yet"; wire it to the streak data when that feature is merged. Nothing else changes.
+Per student: essays (count of essays the student shared with the counselor, how many were edited today), writing streak, and the application (profile readiness percent from `onboarding.profile_readiness`, filled / not filled for personal, academics, tests, goal, extracurriculars and honors, plus counts of activities, honors, documents, applications and recommendation letters). Words typed today and the streak length come from `apps/telegram_bot/activity.py: essay_activity_for(user_ids, today)`, which reads `EssayWritingDay` (two queries for all students) and counts the streak with the same `streak_numbers` the Essay Lab card uses.
 
 ## Environment
 
