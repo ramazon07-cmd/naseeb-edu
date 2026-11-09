@@ -1,6 +1,9 @@
 // Counselor Students list and quick look (pages/CounselorStudents.jsx, components/StudentQuickPanel.jsx):
 // English key -> [Uzbek (Latin), Russian]. Russian plural keys hold "one|few|many" forms.
 export const COUNSELOR_STUDENTS_TRANSLATIONS = {
+  'Not started yet': ['Hali boshlamagan', 'Ещё не начал'],
+  'Password expired': ['Parol muddati tugagan', 'Срок пароля истёк'],
+  'Has not signed in or been given work yet': ['Hali kirmagan yoki unga ish berilmagan', 'Ещё не входил и не получал заданий'],
   'Select all on this page': ['Shu sahifadagilarning hammasini tanlash', 'Выбрать всех на этой странице'],
   '{n} student selected|{n} students selected': ['{n} ta o‘quvchi tanlandi', 'Выбран {n} ученик|Выбрано {n} ученика|Выбрано {n} учеников'],
   'Select all {n} students': ['Barcha {n} ta o‘quvchini tanlash', 'Выбрать всех {n} учеников'],

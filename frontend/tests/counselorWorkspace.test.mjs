@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const { setLanguage } = await import('../src/i18n.js');
 const { counselorCounts, liveReloadKeys, reviewCounts, statsBadges, unreadConversations, unreadMessages } = await import('../src/lib/counselorCounts.js');
-const { studentReasons, needsAttention, isOnTrack, isQuiet, urgency } = await import('../src/lib/studentReasons.js');
+const { studentReasons, needsAttention, isOnTrack, isQuiet, isNotStarted, urgency } = await import('../src/lib/studentReasons.js');
 const { mergeReviewQueue, REVIEW_SOURCES } = await import('../src/lib/reviewQueue.js');
 const { meetingsThisWeek } = await import('../src/lib/meetings.js');
 const { activityText } = await import('../src/lib/activityText.js');
@@ -85,6 +85,17 @@ test('"need you" means late or missing, not merely waiting for review', () => {
   assert.ok(isOnTrack(studentReasons({}, now)));
   // Roadmap missions are not shown on the counselor side, so late ones are no reason.
   assert.ok(isOnTrack(studentReasons({ missions_overdue: 2 }, now)));
+});
+
+test('a student who has not started is neither on track nor urgent', () => {
+  const fresh = studentReasons({ not_started: true, user_detail: { credential_status: 'issued' } }, now);
+  assert.ok(isNotStarted(fresh) && !isOnTrack(fresh) && !needsAttention(fresh));
+  assert.equal(urgency(fresh), 0);
+  assert.equal(fresh[0].expired, false);
+  assert.equal(studentReasons({ not_started: true, user_detail: { credential_status: 'expired' } }, now)[0].expired, true);
+  // Any other reason wins; a started student is on track again.
+  assert.ok(!isNotStarted(studentReasons({ not_started: true, tasks_overdue: 1 }, now)));
+  assert.ok(isOnTrack(studentReasons({ not_started: false }, now)));
 });
 
 test('a single missing document is named, several are counted', () => {
