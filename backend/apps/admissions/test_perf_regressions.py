@@ -188,7 +188,7 @@ class ScreenTimeTrackCostTests(AuditBaseMixin, APITestCase):
         self.client.force_authenticate(self.student_user)
         entries = [
             {'date': today.isoformat(), 'page': 'roadmap', 'seconds': 30},
-            {'date': today.isoformat(), 'page': 'essay_lab', 'seconds': 45},
+            {'date': today.isoformat(), 'page': 'documents', 'seconds': 45},
             {'date': yesterday.isoformat(), 'page': 'roadmap', 'seconds': 10},
         ]
         with self.assertNumQueries(1):
@@ -200,7 +200,7 @@ class ScreenTimeTrackCostTests(AuditBaseMixin, APITestCase):
         }
         self.assertEqual(rows, {
             (today, 'roadmap'): (130, 4),
-            (today, 'essay_lab'): (45, 1),
+            (today, 'documents'): (45, 1),
             (yesterday, 'roadmap'): (10, 1),
         })
 
