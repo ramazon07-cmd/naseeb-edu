@@ -53,8 +53,7 @@ async def run(config, run_for=None):
     bot = Bot(config.token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     api = ApiClient(config.backend_url, config.service_key, http)
     cache = TtlCache(config.cache_seconds)
-    pages = TtlCache(1800)
-    dp = Dispatcher(storage=MemoryStorage(), api=api, cache=cache, pages=pages)
+    dp = Dispatcher(storage=MemoryStorage(), api=api, cache=cache)
     dp.include_router(router)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -67,7 +66,7 @@ async def run(config, run_for=None):
         me = await bot.get_me()
         log.info('authenticated with Telegram as @%s', me.username)
         scheduler = asyncio.create_task(run_scheduler(
-            stop, bot=bot, api=api, cache=cache, pages=pages, limiter=RateLimiter(),
+            stop, bot=bot, api=api, cache=cache, limiter=RateLimiter(),
         ))
         polling = asyncio.create_task(dp.start_polling(
             bot, allowed_updates=ALLOWED_UPDATES, handle_signals=False, close_bot_session=False,

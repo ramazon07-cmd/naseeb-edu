@@ -48,5 +48,34 @@ def settings_panel(lang, prefs, notify_time):
     return _markup(rows)
 
 
-def show_more(lang, left, token):
-    return _markup([[_button(t(lang, 'show_more', left=left), f'more:{token}')]])
+def list_markup(lang, numbered, page, pages, sort, flt):
+    """Student number buttons, prev/next, and the sort and filter toggles.
+
+    Every callback carries the whole view (page, sort, filter), so a tap re-renders from fresh data and
+    nothing has to be remembered between messages.
+    """
+    view = f'{page}:{sort}:{flt}'
+    rows = [
+        [_button(str(number), f'd:{student_id}:{view}') for number, student_id in numbered[i:i + 4]]
+        for i in range(0, len(numbered), 4)
+    ]
+    nav = []
+    if page > 0:
+        nav.append(_button('⬅', f'l:{page - 1}:{sort}:{flt}'))
+    if pages > 1:
+        nav.append(_button(f'{page + 1}/{pages}', 'noop'))
+    if page < pages - 1:
+        nav.append(_button('➡', f'l:{page + 1}:{sort}:{flt}'))
+    if nav:
+        rows.append(nav)
+    other_sort = 'z' if sort == 'a' else 'a'
+    other_filter = 'i' if flt == 'a' else 'a'
+    rows.append([
+        _button(t(lang, 'btn_sort_attention' if sort == 'z' else 'btn_sort_az'), f'l:0:{other_sort}:{flt}'),
+        _button(t(lang, 'btn_filter_all' if flt == 'i' else 'btn_filter_inactive'), f'l:0:{sort}:{other_filter}'),
+    ])
+    return _markup(rows)
+
+
+def back_to_list(lang, page, sort, flt):
+    return _markup([[_button(t(lang, 'btn_back'), f'l:{page}:{sort}:{flt}')]])

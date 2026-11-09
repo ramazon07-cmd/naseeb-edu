@@ -104,20 +104,28 @@ async def test_logout_clears_the_chat_cache(h):
     h.api.linked = True
     await h.say('/students')
     await h.say('/logout')
-    assert h.cache.get(('settings', 1)) is None and h.cache.get(('students', 1)) is None
+    assert h.cache.get(('settings', 1)) is None and h.cache.get(('digest', 1)) is None
 
 
-async def test_students_command_groups_and_caches_briefly(h):
+async def test_students_command_lists_a_to_z_and_caches_briefly(h):
     h.api.linked = True
+    h.api.digest_data = {
+        'date': '2026-11-08', 'total_students': 2, 'omitted': 0,
+        'students': [
+            {'id': 2, 'name': 'Sara Nazarova', 'grade': '10', 'last_seen_at': None, 'last_seen_expired': False},
+            {'id': 1, 'name': 'Ali Valiyev', 'grade': '9', 'last_seen_at': None, 'last_seen_expired': False},
+        ],
+    }
     await h.say('/students')
     await h.say('/students')
-    assert len(h.api.names('students')) == 1
-    assert 'Grade 9: 1' in h.session.texts()[-1]
+    assert len(h.api.names('digest')) == 1
+    text = h.session.texts()[-1]
+    assert text.index('Ali Valiyev') < text.index('Sara Nazarova')
+    assert 'A-Z' in text
 
 
 async def test_no_students_is_one_short_friendly_message(h):
     h.api.linked = True
-    h.api.students_data = {'total': 0, 'groups': []}
     h.api.digest_data = {**h.api.digest_data, 'total_students': 0}
     await h.say('/students')
     assert h.session.texts()[-1] == 'No students yet.'
@@ -136,7 +144,7 @@ async def test_now_shows_typing_then_edits_one_message(h):
 
 async def test_backend_outage_gives_a_friendly_message(h):
     h.api.linked = True
-    h.api.errors['students'] = ApiUnavailable('timeout')
+    h.api.errors['digest'] = ApiUnavailable('timeout')
     await h.say('/students')
     assert 'temporarily unavailable' in h.session.texts()[-1]
 
@@ -164,7 +172,7 @@ async def test_a_wiped_link_tells_the_user_to_log_in_again(h):
 
 async def test_other_backend_refusals_get_a_generic_message(h):
     h.api.linked = True
-    h.api.errors['students'] = ApiError(400, 'invalid_request')
+    h.api.errors['digest'] = ApiError(400, 'invalid_request')
     await h.say('/students')
     assert h.session.texts()[-1] == 'Something went wrong. Please try again.'
 

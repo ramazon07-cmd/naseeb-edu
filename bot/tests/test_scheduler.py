@@ -18,12 +18,13 @@ class Sleeps:
 
 def deps(h, sleeps=None):
     sleeps = sleeps or Sleeps()
-    return dict(bot=h.bot, api=h.api, cache=h.cache, pages=h.pages, limiter=RateLimiter(sleep=sleeps), sleep=sleeps)
+    return dict(bot=h.bot, api=h.api, cache=h.cache, limiter=RateLimiter(sleep=sleeps), sleep=sleeps)
 
 
 def students_digest():
     return {'date': '2026-11-08', 'total_students': 1, 'omitted': 0, 'students': [
-        {'name': 'Ali', 'grade': '9', 'essays': {'total': 1, 'edited_today': 0}},
+        {'id': 1, 'name': 'Ali', 'grade': '9', 'last_seen_at': None, 'last_seen_expired': False,
+         'essays': {'total': 1, 'edited_today': 0}},
     ]}
 
 

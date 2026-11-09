@@ -81,12 +81,11 @@ async def test_confirmation_card_shows_name_and_contacts_with_buttons(h):
     assert not h.api.names('confirm')
 
 
-async def test_confirm_links_shows_students_by_grade_then_asks_for_the_time(h):
+async def test_confirm_links_shows_the_student_count_then_asks_for_the_time(h):
     await h.log_in()
     assert h.api.names('confirm') == [{'chat_id': 1, 'pending_token': 'pending-token-1', 'language': 'en'}]
     linked = h.session.of('EditMessageText')[-1][1]['text']
-    assert 'Students: 2' in linked
-    assert 'Grade 9: 1' in linked and 'Ali Valiyev' in linked and 'Grade 10: 1' in linked
+    assert 'You have 2 students' in linked
     last = h.session.of('SendMessage')[-1][1]
     assert 'What time each day' in last['text']
     times = [b['text'] for row in last['reply_markup']['inline_keyboard'] for b in row]
@@ -171,25 +170,22 @@ async def test_start_when_already_linked_escapes_the_name(h):
     assert 'A&lt;b&gt;&amp;Co' in h.session.texts()[-1]
 
 
-async def test_confirm_with_hundreds_of_students_still_asks_for_the_time(h):
-    names = [f'Student Number {i} ' + 'Z' * 40 for i in range(300)]
-    h.api.students_data = {'total': 300, 'groups': [{'grade': '10', 'count': 300, 'students': names}]}
+async def test_confirm_shows_the_student_count_and_asks_for_the_time(h):
+    h.api.students_data = {'total': 300, 'groups': []}
     await h.log_in()
-    texts = h.session.texts()
-    assert all(len(text) <= 4096 for text in texts)
+    linked = h.session.of('EditMessageText')[-1][1]['text']
+    assert 'Account linked' in linked and 'You have 300 students' in linked
     assert 'What time each day' in h.session.of('SendMessage')[-1][1]['text']
-    assert sum(text.count('Student Number') for text in texts) == 300
 
 
-async def test_the_time_picker_still_appears_when_the_student_list_cannot_be_loaded(h):
+async def test_the_time_picker_still_appears_when_the_student_count_cannot_be_loaded(h):
     from bot.api import ApiUnavailable
 
     h.api.errors['students'] = ApiUnavailable('502')
     await h.log_in()
     linked = h.session.of('EditMessageText')[-1][1]['text']
-    assert 'open it later with /students' in linked
-    last = h.session.of('SendMessage')[-1][1]
-    assert 'What time each day' in last['text']
+    assert 'Account linked' in linked and 'students' not in linked
+    assert 'What time each day' in h.session.of('SendMessage')[-1][1]['text']
 
 
 async def test_backend_down_on_confirm_gives_the_card_and_buttons_back(h):

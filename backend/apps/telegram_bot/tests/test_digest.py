@@ -7,9 +7,10 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from apps.admissions.models import (
-    Achievement, Activity, Application, Document, Essay, EssayWritingDay, School, University,
+    Achievement, Activity, Application, Document, Essay, EssayWritingDay, School, ScreenTimeDaily, University,
 )
 from apps.telegram_bot import activity, digest
+from apps.telegram_bot.models import TelegramLink
 
 from .base import BotTestCase, make_student
 
@@ -52,6 +53,36 @@ class DigestContentTests(BotTestCase):
 
     def share_essay(self, student):
         Essay.objects.create(student=student, title='Shared', shared_with_counselor=True)
+
+    def stamp(self, student, page, when):
+        row = ScreenTimeDaily.objects.create(user=student.user, date=when.date(), page=page, active_seconds=60)
+        ScreenTimeDaily.objects.filter(pk=row.pk).update(last_seen_at=when)
+
+    def test_last_seen_is_the_newest_screen_time_write_of_each_student(self):
+        now = timezone.now()
+        self.stamp(self.s1, 'dashboard', now - timedelta(days=5))
+        self.stamp(self.s1, 'essay_lab', now - timedelta(days=2))
+        body = self.digest()
+        seen = datetime.fromisoformat(self.by_name(body, 'Stu1 Tester')['last_seen_at'])
+        self.assertAlmostEqual(seen.timestamp(), (now - timedelta(days=2)).timestamp(), delta=1)
+        item = self.by_name(body, 'Stu2 Tester')
+        self.assertIsNone(item['last_seen_at'])
+        self.assertFalse(item['last_seen_expired'])
+        self.assertEqual(body['retention_days'], 365)
+        self.assertIn('id', item)
+
+    def test_a_student_older_than_the_retention_window_without_rows_is_expired_not_never(self):
+        type(self.s2.user).objects.filter(pk=self.s2.user_id).update(date_joined=timezone.now() - timedelta(days=400))
+        item = self.by_name(self.digest(), 'Stu2 Tester')
+        self.assertIsNone(item['last_seen_at'])
+        self.assertTrue(item['last_seen_expired'])
+
+    def test_last_seen_does_not_depend_on_the_enabled_parts(self):
+        self.stamp(self.s1, 'dashboard', timezone.now())
+        TelegramLink.objects.filter(chat_id=self.chat).update(prefs={'essays': False, 'streak': False, 'application': False})
+        item = self.by_name(self.digest(), 'Stu1 Tester')
+        self.assertIsNotNone(item['last_seen_at'])
+        self.assertNotIn('essays', item)
 
     def test_streak_without_writing_days_is_zero_once_an_essay_is_shared(self):
         self.share_essay(self.s1)

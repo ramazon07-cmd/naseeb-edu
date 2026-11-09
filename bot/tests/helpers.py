@@ -146,8 +146,7 @@ class Harness:
         self.bot = Bot(TOKEN, session=self.session)
         self.api = FakeApi(self.events)
         self.cache = TtlCache(5)
-        self.pages = TtlCache(1800)
-        self.dp = Dispatcher(storage=MemoryStorage(), api=self.api, cache=self.cache, pages=self.pages)
+        self.dp = Dispatcher(storage=MemoryStorage(), api=self.api, cache=self.cache)
         self.dp.include_router(router)
         self._update_id = 0
         self._message_id = 0
