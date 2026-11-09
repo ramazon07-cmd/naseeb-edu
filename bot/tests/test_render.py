@@ -69,7 +69,7 @@ def test_long_lists_split_into_pages_under_the_telegram_limit():
 
 def test_empty_digest_is_the_friendly_line():
     assert render_digest_pages(digest([]), 'en') == ['No students yet.']
-    assert render_students({'total': 0, 'groups': []}, 'uz') == "Hozircha o'quvchilar yo'q."
+    assert render_students({'total': 0, 'groups': []}, 'uz') == ["Hozircha o'quvchilar yo'q."]
 
 
 def test_every_string_exists_in_all_languages_with_the_same_placeholders():
@@ -113,3 +113,18 @@ async def test_show_more_button_in_the_chat(h):
     h.pages.drop_chat(1)
     await h.tap('more')
     assert 'expired' in h.session.texts()[-1]
+
+
+def test_a_long_student_list_is_split_into_pages_under_the_telegram_limit():
+    names = [f'Student Number {i} ' + 'Y' * 40 for i in range(300)]
+    data = {'total': 300, 'groups': [{'grade': '10', 'count': 300, 'students': names}]}
+    pages = render_students(data, 'en')
+    assert len(pages) > 1
+    assert all(len(page) <= TELEGRAM_LIMIT for page in pages)
+    assert sum(page.count('Student Number') for page in pages) == 300
+
+
+def test_a_student_without_a_shared_essay_says_so_instead_of_unavailable():
+    item = student('Ali', streak={'days': None, 'shared': False})
+    page = render_digest_pages(digest([item], True), 'en')[0]
+    assert 'no essay shared' in page and 'not available' not in page

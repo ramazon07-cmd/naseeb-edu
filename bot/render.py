@@ -26,14 +26,23 @@ def contacts(email, phone):
 
 
 def render_students(data, lang):
+    """Pages of whole lines, each under Telegram's 4096 characters (a counselor can have hundreds of students)."""
     if not data['total']:
-        return t(lang, 'no_students')
+        return [t(lang, 'no_students')]
     lines = [t(lang, 'students_title', total=data['total'])]
     for group in data['groups']:
         lines.append('')
         lines.append(f"<b>{escape(t(lang, 'group_line', grade=grade_label(lang, group['grade']), count=group['count']))}</b>")
-        lines.extend(escape(name) for name in group['students'])
-    return '\n'.join(lines)
+        lines.extend(escape(name)[:PAGE_LIMIT] for name in group['students'])
+    pages, current = [], ''
+    for line in lines:
+        if current and len(current) + len(line) + 1 > PAGE_LIMIT:
+            pages.append(current)
+            current = line
+        else:
+            current = f'{current}\n{line}' if current else line
+    pages.append(current)
+    return pages
 
 
 def _day(lang, iso):
@@ -51,7 +60,9 @@ def render_student(item, lang, streak_available):
         lines.append('\U0001F4DD ' + line)
     streak = item.get('streak')
     if streak:
-        if streak['days'] is None or not streak_available:
+        if not streak.get('shared', True):
+            lines.append('\U0001F525 ' + t(lang, 'streak_not_shared'))
+        elif streak['days'] is None or not streak_available:
             lines.append('\U0001F525 ' + t(lang, 'streak_unavailable'))
         elif streak['days'] > 0:
             lines.append('\U0001F525 ' + t(lang, 'streak_days', days=streak['days']))

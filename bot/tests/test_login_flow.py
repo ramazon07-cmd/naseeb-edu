@@ -162,3 +162,20 @@ async def test_start_when_already_linked_offers_other_account(h):
     h.api.linked = True
     await h.say('/start')
     assert "You're logged in as Dilnoza Karimova" in h.session.texts()[-1]
+
+
+async def test_start_when_already_linked_escapes_the_name(h):
+    h.api.linked = True
+    h.api.link['full_name'] = 'A<b>&Co'
+    await h.say('/start')
+    assert 'A&lt;b&gt;&amp;Co' in h.session.texts()[-1]
+
+
+async def test_confirm_with_hundreds_of_students_still_asks_for_the_time(h):
+    names = [f'Student Number {i} ' + 'Z' * 40 for i in range(300)]
+    h.api.students_data = {'total': 300, 'groups': [{'grade': '10', 'count': 300, 'students': names}]}
+    await h.log_in()
+    texts = h.session.texts()
+    assert all(len(text) <= 4096 for text in texts)
+    assert 'What time each day' in h.session.of('SendMessage')[-1][1]['text']
+    assert sum(text.count('Student Number') for text in texts) == 300

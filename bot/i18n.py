@@ -180,6 +180,11 @@ STRINGS = {
         'ru': 'Серия: пока недоступна',
         'en': 'Streak: not available yet',
     },
+    'streak_not_shared': {
+        'uz': 'Seriya: insho ulashilmagan',
+        'ru': 'Серия: эссе не передано',
+        'en': 'Streak: no essay shared',
+    },
     'application_line': {
         'uz': 'Ariza: {percent}%',
         'ru': 'Заявка: {percent}%',

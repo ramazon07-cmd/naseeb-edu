@@ -104,7 +104,7 @@ async def start(message: Message, state: FSMContext, api, cache):
     if link:
         lang = link['language']
         await message.answer(
-            t(lang, 'already_linked', name=link['full_name']), reply_markup=keyboards.already_linked(lang),
+            t(lang, 'already_linked', name=_esc(link['full_name'])), reply_markup=keyboards.already_linked(lang),
         )
         return
     await state.set_state(Login.language)
@@ -214,9 +214,10 @@ async def login_confirm(callback: CallbackQuery, state: FSMContext, bot, api, ca
     cache.drop_chat(chat_id)
     cache.set(('settings', chat_id), link)
     students = await api.students(chat_id)
-    await callback.message.edit_text(
-        t(lang, 'linked', name=_esc(link['full_name'])) + '\n\n' + render_students(students, lang),
-    )
+    first, *rest = render_students(students, lang)
+    await callback.message.edit_text(t(lang, 'linked', name=_esc(link['full_name'])) + '\n\n' + first)
+    for page in rest:
+        await bot.send_message(chat_id, page)
     await bot.send_message(chat_id, t(lang, 'setup_time'), reply_markup=keyboards.time_picker(lang))
 
 
@@ -245,7 +246,8 @@ async def students_command(message: Message, state: FSMContext, bot, api, cache)
     if data is None:
         data = await api.students(message.chat.id)
         cache.set(key, data)
-    await message.answer(render_students(data, link['language']))
+    for page in render_students(data, link['language']):
+        await message.answer(page)
 
 
 @router.message(Command('now'))

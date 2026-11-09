@@ -43,9 +43,13 @@ async def _unlink(api, cache, pages, chat_id):
     pages.drop_chat(chat_id)
 
 
+_DELIVERED = set()
+
+
 async def deliver(item, *, bot, api, cache, pages, limiter, sleep=asyncio.sleep):
     chat_id, lang = item['chat_id'], item['language']
-    sent = False
+    key = (chat_id, item['slot_date'])
+    sent = key in _DELIVERED
     for attempt in range(RETRIES + 1):
         try:
             if not sent:
@@ -53,7 +57,17 @@ async def deliver(item, *, bot, api, cache, pages, limiter, sleep=asyncio.sleep)
                 await limiter.wait()
                 await send_digest(bot, chat_id, data, lang, pages)
                 sent = True
-            await api.mark_sent(chat_id, item['slot_date'])
+                if len(_DELIVERED) > 10000:
+                    _DELIVERED.clear()
+                _DELIVERED.add(key)
+            try:
+                await api.mark_sent(chat_id, item['slot_date'])
+            except ApiError as exc:
+                if exc.code == 'not_linked':
+                    raise
+                log.warning('digest delivered but mark-sent was refused: backend answered %s', exc.status)
+                return 'sent'
+            _DELIVERED.discard(key)
             return 'sent'
         except ApiError as exc:
             if exc.code != 'not_linked':

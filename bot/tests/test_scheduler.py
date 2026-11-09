@@ -84,6 +84,31 @@ async def test_after_the_digest_went_out_only_mark_sent_is_retried(h):
     assert state['n'] == 2
 
 
+async def test_a_failed_mark_sent_never_sends_the_digest_twice(h):
+    h.api.due_items = [ITEM]
+    h.api.digest_data = students_digest()
+    h.api.errors['mark_sent'] = ApiUnavailable('timeout')
+    assert await run_tick(**deps(h)) == {1: 'sent'}
+    assert len(h.session.of('SendMessage')) == 1
+    # the backend hands the chat out again because last_sent_date never moved
+    h.api.due_items = [ITEM]
+    assert await run_tick(**deps(h)) == {1: 'sent'}
+    assert len(h.session.of('SendMessage')) == 1
+    h.api.errors.pop('mark_sent')
+    h.api.due_items = [ITEM]
+    assert await run_tick(**deps(h)) == {1: 'sent'}
+    assert len(h.session.of('SendMessage')) == 1
+    assert h.api.names('mark_sent')[-1] == {'chat_id': 1, 'slot_date': '2026-11-08'}
+
+
+async def test_a_refused_mark_sent_after_delivery_is_not_reported_as_failed(h):
+    h.api.due_items = [ITEM]
+    h.api.digest_data = students_digest()
+    h.api.errors['mark_sent'] = ApiError(400, 'bad_request')
+    assert await run_tick(**deps(h)) == {1: 'sent'}
+    assert len(h.session.of('SendMessage')) == 1
+
+
 async def test_backend_down_for_due_is_survived(h):
     h.api.errors['due'] = ApiUnavailable('timeout')
     assert await run_tick(**deps(h)) == {}
