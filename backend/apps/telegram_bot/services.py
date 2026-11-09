@@ -61,18 +61,24 @@ def _locked(keys):
     return any((cache_get(key) or 0) >= conf.LOGIN_MAX_ATTEMPTS for key in keys)
 
 
+def _resolve_login(login_value):
+    """(username to authenticate, canonical account key); an email shared by several users resolves to nothing."""
+    if '@' not in login_value:
+        return login_value, login_value.lower()
+    matches = list(User.objects.filter(email__iexact=login_value)[:2])
+    if len(matches) == 1:
+        username = matches[0].get_username()
+        return username, username.lower()
+    return None, login_value.lower()
+
+
 def login(chat_id, login_value, password):
     login_value = login_value.strip()
-    account = login_value.lower()
+    username, account = _resolve_login(login_value)
     keys = _attempt_keys(chat_id, account)
     if _locked(keys):
         raise Refused('locked', 429, retry_after=conf.LOGIN_WINDOW_SECONDS)
-    username = login_value
-    if '@' in login_value:
-        by_email = User.objects.filter(email__iexact=login_value).first()
-        if by_email:
-            username = by_email.get_username()
-    user = authenticate(username=username, password=password)
+    user = authenticate(username=username, password=password) if username else None
     if user is None:
         for key in keys:
             count_hit(key, conf.LOGIN_WINDOW_SECONDS)
@@ -166,6 +172,9 @@ def update_settings(link, *, language=None, notify_time=None, prefs=None, enable
         if notify_time <= now.time().replace(second=0, microsecond=0):
             # A time that already passed today starts tomorrow, not with an instant send.
             link.last_sent_date = now.date()
+            fields.append('last_sent_date')
+        elif link.last_sent_date == now.date():
+            link.last_sent_date = None
             fields.append('last_sent_date')
     if prefs is not None:
         link.prefs = {**DEFAULT_PREFS, **link.prefs, **prefs}

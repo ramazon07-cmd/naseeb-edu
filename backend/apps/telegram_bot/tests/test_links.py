@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from apps.admissions.models import School
 from apps.telegram_bot.models import TelegramLink
 from apps.users.models import User
@@ -96,7 +98,6 @@ class SettingsTests(BotTestCase):
             self.assertEqual(self.put(**data).status_code, 400, data)
 
     def test_setting_a_time_that_passed_today_does_not_send_instantly(self):
-        from datetime import datetime
         from apps.telegram_bot.digest import TASHKENT
 
         now = datetime(2026, 11, 8, 12, 0, tzinfo=TASHKENT)
@@ -107,6 +108,19 @@ class SettingsTests(BotTestCase):
         link.last_sent_date = None
         services.update_settings(link, notify_time=datetime(2026, 1, 1, 18, 0).time(), now=now)
         self.assertIsNone(link.last_sent_date)
+
+    def test_moving_the_time_later_after_todays_send_sends_again_today(self):
+        from apps.telegram_bot import services
+        from apps.telegram_bot.digest import TASHKENT
+
+        now = datetime(2026, 11, 8, 10, 0, tzinfo=TASHKENT)
+        link = TelegramLink.objects.get()
+        link.last_sent_date = now.date()
+        services.update_settings(link, notify_time=datetime(2026, 1, 1, 18, 0).time(), now=now)
+        self.assertIsNone(link.last_sent_date)
+        link.last_sent_date = now.date() - timedelta(days=1)
+        services.update_settings(link, notify_time=datetime(2026, 1, 1, 19, 0).time(), now=now)
+        self.assertEqual(link.last_sent_date, now.date() - timedelta(days=1))
 
     def test_digest_only_has_the_enabled_parts(self):
         self.put(prefs={'essays': False, 'streak': False, 'application': True})

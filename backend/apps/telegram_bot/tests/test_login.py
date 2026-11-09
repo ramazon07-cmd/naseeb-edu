@@ -126,6 +126,20 @@ class LoginTests(BotTestCase):
             self.login(f'ghost{i}', 'bad-password-1')
         self.assertEqual(self.login('counselor1', PASSWORD).status_code, 429)
 
+    def test_username_and_email_share_one_lockout_counter(self):
+        for i in range(5):
+            who = 'counselor1' if i % 2 else 'counselor1@example.com'
+            self.assertEqual(self.login(who, 'bad-password-1', chat=4000 + i).status_code, 401)
+        self.assertEqual(self.login('counselor1', PASSWORD, chat=4100).status_code, 429)
+        self.assertEqual(self.login('Counselor1@Example.com', PASSWORD, chat=4101).status_code, 429)
+
+    def test_an_email_shared_by_two_accounts_is_refused(self):
+        User.objects.filter(pk=self.c2.pk).update(email=self.c1.email.upper())
+        response = self.login(self.c1.email)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()['code'], 'invalid_credentials')
+        self.assertEqual(self.login('counselor1').status_code, 200)
+
     def test_lockout_message_is_the_same_for_unknown_users(self):
         for _ in range(5):
             self.login('ghost', 'bad-password-1')
