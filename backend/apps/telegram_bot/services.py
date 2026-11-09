@@ -133,7 +133,7 @@ def confirm(chat_id, token, language):
             # One chat <-> one account: the newest login replaces any earlier link either way.
             TelegramLink.objects.filter(Q(chat_id=chat_id) | Q(user=user)).delete()
             link = TelegramLink.objects.create(
-                user=user, chat_id=chat_id, language=language if language in LANGUAGES else 'uz',
+                user=user, chat_id=chat_id, language=language if isinstance(language, str) and language in LANGUAGES else 'uz',
                 prefs=dict(DEFAULT_PREFS), auth_fingerprint=pending.auth_fingerprint,
             )
             pending.delete()
@@ -183,9 +183,6 @@ def update_settings(link, *, language=None, notify_time=None, prefs=None, enable
         if notify_time <= now.time().replace(second=0, microsecond=0):
             # A time that already passed today starts tomorrow, not with an instant send.
             link.last_sent_date = now.date()
-            fields.append('last_sent_date')
-        elif link.last_sent_date == now.date():
-            link.last_sent_date = None
             fields.append('last_sent_date')
     if prefs is not None:
         link.prefs = {**DEFAULT_PREFS, **link.prefs, **prefs}

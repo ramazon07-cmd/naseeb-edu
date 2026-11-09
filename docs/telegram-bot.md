@@ -17,7 +17,7 @@
 |---|---|
 | `login/` | `chat_id, username, password` -> `pending_token, full_name, email, phone, role`, or `401 invalid_credentials`, `403 role_not_allowed / password_change_required / account_unavailable`, `429 locked` |
 | `confirm/` | `chat_id, pending_token, language` -> creates the link (token lives 10 minutes, single use) |
-| `students/` | students grouped by `StudentProfile.grade` |
+| `students/` | students grouped by `StudentProfile.grade`; at most 300 are listed, `total` is the true count and `omitted` how many were left out |
 | `digest/` | the update for the chat's enabled parts |
 | `settings/` | `GET ?chat_id=` and `PUT` (`language`, `notify_time` as `HH:MM` Tashkent, `prefs`, `enabled`) |
 | `due/` | chats whose update is due now; each is leased for 2 minutes |
@@ -26,7 +26,7 @@
 
 Errors carry `code`; an unlinked or invalidated chat gets `404 not_linked`.
 
-`due/` returns a chat when its `notify_time` equals the current Asia/Tashkent minute or one of the previous `BOT_DUE_GRACE_MINUTES` (default 5, so a bot restart does not lose the update) and it was not sent for that day yet. Setting a time that has already passed today starts tomorrow.
+`due/` returns a chat when its `notify_time` equals the current Asia/Tashkent minute or one of the previous `BOT_DUE_GRACE_MINUTES` (default 5, so a bot restart does not lose the update) and it was not sent for that day yet. Setting a time that has already passed today starts tomorrow, and so does changing the time on a day whose update was already sent: an update goes out at most once a day.
 
 ## What the update contains
 

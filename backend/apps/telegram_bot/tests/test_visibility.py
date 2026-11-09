@@ -49,7 +49,7 @@ class VisibilityMatrixTests(BotTestCase):
         for path in ('students', 'digest'):
             response = self.post(path, {'chat_id': self.chats['counselor-empty']})
             self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.post('students', {'chat_id': self.chats['counselor-empty']}).json(), {'total': 0, 'groups': []})
+        self.assertEqual(self.post('students', {'chat_id': self.chats['counselor-empty']}).json(), {'total': 0, 'omitted': 0, 'groups': []})
         digest = self.post('digest', {'chat_id': self.chats['counselor-empty']}).json()
         self.assertEqual((digest['total_students'], digest['students']), (0, []))
 

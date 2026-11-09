@@ -33,21 +33,28 @@ def _students(user):
     return queryset.order_by('user__first_name', 'user__last_name', 'id')[:MAX_STUDENTS]
 
 
+def _total(user, shown):
+    # The cap only matters when it was reached, so the usual case costs no extra query.
+    return active_visible_students(user).count() if shown >= MAX_STUDENTS else shown
+
+
 def _name(student):
     return student.user.get_full_name().strip() or student.user.username
 
 
 def grouped_students(user):
     """Students by class/grade: ``StudentProfile.grade`` ('' when the student has not picked one)."""
-    rows = active_visible_students(user).order_by('user__first_name', 'user__last_name', 'id').values_list(
+    rows = list(active_visible_students(user).order_by('user__first_name', 'user__last_name', 'id').values_list(
         'grade', 'user__first_name', 'user__last_name', 'user__username',
-    )[:MAX_STUDENTS]
+    )[:MAX_STUDENTS])
     groups = OrderedDict()
     for grade, first, last, username in rows:
         groups.setdefault(grade, []).append(f'{first} {last}'.strip() or username)
     ordered = sorted(groups, key=lambda g: (GRADE_ORDER.index(g) if g in GRADE_ORDER else len(GRADE_ORDER), g))
+    total = _total(user, len(rows))
     return {
-        'total': sum(len(groups[g]) for g in ordered),
+        'total': total,
+        'omitted': total - len(rows),
         'groups': [{'grade': g, 'count': len(groups[g]), 'students': groups[g]} for g in ordered],
     }
 
@@ -87,7 +94,7 @@ def build_digest(user, prefs, now=None):
     want_application = prefs.get('application', True)
     essays = _essay_counts(user, ids, day_start) if ids and (want_essays or want_streak) else {}
     shared = {student.user_id for student in students if essays.get(student.pk, (0, 0))[0]}
-    activity = essay_activity_for(sorted(shared), today) if shared else ActivityResult(available=True)
+    activity = essay_activity_for(sorted(shared), today) if shared else ActivityResult()
     items = []
     for student in students:
         item = {'name': _name(student), 'grade': student.grade}
@@ -103,10 +110,11 @@ def build_digest(user, prefs, now=None):
         if want_application:
             item['application'] = _application(student)
         items.append(item)
+    total = _total(user, len(items))
     return {
         'date': today.isoformat(),
-        'total_students': len(items),
-        'streak_available': activity.available,
+        'total_students': total,
+        'omitted': total - len(items),
         'students': items,
     }
 

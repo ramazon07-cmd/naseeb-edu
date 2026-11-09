@@ -65,7 +65,10 @@ class LoginView(BotView):
 class ConfirmView(BotView):
     def post(self, request):
         data = self.get_data(request)
-        link = services.confirm(_chat_id(data), _text(data, 'pending_token', 100), data.get('language'))
+        language = data.get('language')
+        if language is not None and not isinstance(language, str):
+            raise services.Refused('invalid_request', 400)
+        link = services.confirm(_chat_id(data), _text(data, 'pending_token', 100), language)
         return Response(services.settings_payload(link))
 
 
@@ -89,7 +92,7 @@ class SettingsView(BotView):
         data = self.get_data(request)
         link = services.resolve_link(_chat_id(data))
         language = data.get('language')
-        if language is not None and language not in services.LANGUAGES:
+        if language is not None and not (isinstance(language, str) and language in services.LANGUAGES):
             raise services.Refused('invalid_request', 400)
         notify_time = None
         if data.get('notify_time') is not None:

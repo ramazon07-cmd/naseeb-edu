@@ -109,7 +109,12 @@ class SettingsTests(BotTestCase):
         services.update_settings(link, notify_time=datetime(2026, 1, 1, 18, 0).time(), now=now)
         self.assertIsNone(link.last_sent_date)
 
-    def test_moving_the_time_later_after_todays_send_sends_again_today(self):
+    def test_a_non_string_language_is_a_400(self):
+        for value in (['uz'], {}, 5, True):
+            self.assertEqual(self.put(language=value).status_code, 400, value)
+        self.assertEqual(self.post('confirm', {'chat_id': self.chat, 'pending_token': 'x', 'language': ['uz']}).status_code, 400)
+
+    def test_moving_the_time_later_after_todays_send_applies_from_tomorrow(self):
         from apps.telegram_bot import services
         from apps.telegram_bot.digest import TASHKENT
 
@@ -117,7 +122,7 @@ class SettingsTests(BotTestCase):
         link = TelegramLink.objects.get()
         link.last_sent_date = now.date()
         services.update_settings(link, notify_time=datetime(2026, 1, 1, 18, 0).time(), now=now)
-        self.assertIsNone(link.last_sent_date)
+        self.assertEqual(link.last_sent_date, now.date())
         link.last_sent_date = now.date() - timedelta(days=1)
         services.update_settings(link, notify_time=datetime(2026, 1, 1, 19, 0).time(), now=now)
         self.assertEqual(link.last_sent_date, now.date() - timedelta(days=1))

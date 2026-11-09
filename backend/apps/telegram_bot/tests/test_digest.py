@@ -25,13 +25,12 @@ class ActivityAdapterTests(TestCase):
                                            words_net=120, words_peak=120 + offset, goal_met=met)
         EssayWritingDay.objects.create(user=b.user, date=today, words_net=30, words_peak=30, goal_met=False)
         result = activity.essay_activity_for([a.user_id, b.user_id, 999999], today)
-        self.assertTrue(result.available)
         self.assertEqual(result.for_user(a.user_id), EssayActivity(words_today=120, streak_days=3))
         self.assertEqual(result.for_user(b.user_id), EssayActivity(words_today=30, streak_days=0))
         self.assertEqual(result.for_user(999999), EssayActivity(words_today=0, streak_days=0))
 
-    def test_result_exposes_per_user_numbers_once_available(self):
-        result = ActivityResult(True, {7: EssayActivity(words_today=120, streak_days=4)})
+    def test_result_exposes_per_user_numbers(self):
+        result = ActivityResult({7: EssayActivity(words_today=120, streak_days=4)})
         self.assertEqual(result.for_user(7).streak_days, 4)
         self.assertEqual(result.for_user(8), EssayActivity())
 
@@ -65,7 +64,6 @@ class DigestContentTests(BotTestCase):
     def test_streak_without_writing_days_is_zero_once_an_essay_is_shared(self):
         self.share_essay(self.s1)
         body = self.digest()
-        self.assertTrue(body['streak_available'])
         self.assertEqual(self.by_name(body, 'Stu1 Tester')['streak'], {'days': 0, 'shared': True})
 
     def test_streak_and_words_are_hidden_for_students_without_a_shared_essay(self):
@@ -78,7 +76,7 @@ class DigestContentTests(BotTestCase):
 
     def test_streak_numbers_flow_through_for_shared_students(self):
         self.share_essay(self.s1)
-        fake = ActivityResult(True, {self.s1.user_id: EssayActivity(words_today=250, streak_days=6)})
+        fake = ActivityResult({self.s1.user_id: EssayActivity(words_today=250, streak_days=6)})
         with mock.patch.object(digest, 'essay_activity_for', return_value=fake) as patched:
             body = self.digest()
         item = self.by_name(body, 'Stu1 Tester')
@@ -149,11 +147,38 @@ class DigestQueryBoundTests(BotTestCase):
         self.assertEqual(response.json()['total_students'], 2 + self.added)
         return len(queries)
 
+    def test_activity_is_read_with_one_query(self):
+        a = make_student('one_q', School.objects.create(name='One Q School'))
+        today = datetime(2026, 11, 8).date()
+        EssayWritingDay.objects.create(user=a.user, date=today, words_net=120, words_peak=120, goal_met=True)
+        with CaptureQueriesContext(connection) as queries:
+            activity.essay_activity_for([a.user_id], today)
+        self.assertEqual(len(queries), 1)
+
     def test_query_count_does_not_grow_with_students(self):
         small = self.count_for(1)
         large = self.count_for(30)
         self.assertEqual(small, large)
         self.assertLessEqual(large, 16)
+
+    def test_a_capped_response_reports_the_true_total_and_the_omitted_count(self):
+        for i in range(4):
+            make_student(f'capped{i}', self.school_a, self.c1)
+        chat = self.link(self.c1)
+        with mock.patch.object(digest, 'MAX_STUDENTS', 3):
+            body = self.post('digest', {'chat_id': chat}).json()
+            listing = self.post('students', {'chat_id': chat}).json()
+        total = body['total_students']
+        self.assertGreater(total, 3)
+        self.assertEqual(len(body['students']), 3)
+        self.assertEqual(body['omitted'], total - 3)
+        self.assertEqual(listing['total'], total)
+        self.assertEqual(listing['omitted'], total - 3)
+        self.assertEqual(sum(group['count'] for group in listing['groups']), 3)
+
+    def test_an_uncapped_response_omits_nobody(self):
+        chat = self.link(self.c1)
+        self.assertEqual(self.post('digest', {'chat_id': chat}).json()['omitted'], 0)
 
     def test_student_list_is_one_student_query(self):
         for i in range(20):
