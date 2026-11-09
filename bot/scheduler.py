@@ -36,17 +36,16 @@ class RateLimiter:
             await self._sleep(delay)
 
 
-async def _unlink(api, cache, pages, chat_id):
+async def _unlink(api, cache, chat_id):
     with suppress(ApiError, ApiUnavailable):
         await api.unlink(chat_id)
     cache.drop_chat(chat_id)
-    pages.drop_chat(chat_id)
 
 
 _DELIVERED = set()
 
 
-async def deliver(item, *, bot, api, cache, pages, limiter, sleep=asyncio.sleep):
+async def deliver(item, *, bot, api, cache, limiter, sleep=asyncio.sleep):
     chat_id, lang = item['chat_id'], item['language']
     key = (chat_id, item['slot_date'])
     sent = key in _DELIVERED
@@ -55,7 +54,7 @@ async def deliver(item, *, bot, api, cache, pages, limiter, sleep=asyncio.sleep)
             if not sent:
                 data = await api.digest(chat_id)
                 await limiter.wait()
-                await send_digest(bot, chat_id, data, lang, pages)
+                await send_digest(bot, chat_id, data, lang)
                 sent = True
                 if len(_DELIVERED) > 10000:
                     _DELIVERED.clear()
@@ -74,13 +73,13 @@ async def deliver(item, *, bot, api, cache, pages, limiter, sleep=asyncio.sleep)
                 log.warning('digest for a chat failed: backend answered %s', exc.status)
             return 'unlinked' if exc.code == 'not_linked' else 'failed'
         except TelegramForbiddenError:
-            await _unlink(api, cache, pages, chat_id)
+            await _unlink(api, cache, chat_id)
             return 'blocked'
         except TelegramRetryAfter as exc:
             await sleep(exc.retry_after)
         except TelegramBadRequest as exc:
             if 'chat not found' in str(exc).lower():
-                await _unlink(api, cache, pages, chat_id)
+                await _unlink(api, cache, chat_id)
                 return 'blocked'
             log.warning('telegram refused a digest: %s', type(exc).__name__)
             return 'failed'
@@ -90,7 +89,7 @@ async def deliver(item, *, bot, api, cache, pages, limiter, sleep=asyncio.sleep)
     return 'sent' if sent else 'failed'
 
 
-async def run_tick(*, bot, api, cache, pages, limiter, sleep=asyncio.sleep, concurrency=CONCURRENCY):
+async def run_tick(*, bot, api, cache, limiter, sleep=asyncio.sleep, concurrency=CONCURRENCY):
     try:
         items = await api.due()
     except (ApiError, ApiUnavailable) as exc:
@@ -106,7 +105,7 @@ async def run_tick(*, bot, api, cache, pages, limiter, sleep=asyncio.sleep, conc
         async with gate:
             try:
                 results[item['chat_id']] = await deliver(
-                    item, bot=bot, api=api, cache=cache, pages=pages, limiter=limiter, sleep=sleep,
+                    item, bot=bot, api=api, cache=cache, limiter=limiter, sleep=sleep,
                 )
             except Exception:
                 log.exception('unexpected error while sending a digest')

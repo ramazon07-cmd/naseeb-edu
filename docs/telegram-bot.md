@@ -28,9 +28,20 @@ Errors carry `code`; an unlinked or invalidated chat gets `404 not_linked`.
 
 `due/` returns a chat when its `notify_time` equals the current Asia/Tashkent minute or one of the previous `BOT_DUE_GRACE_MINUTES` (default 5, so a bot restart does not lose the update) and it was not sent for that day yet. Setting a time that has already passed today starts tomorrow, and so does changing the time on a day whose update was already sent: an update goes out at most once a day.
 
-## What the update contains
+## What the update looks like
 
-Per student: essays (count of essays the student shared with the counselor, how many were edited today), writing streak, and the application (profile readiness percent from `onboarding.profile_readiness`, filled / not filled for personal, academics, tests, goal, extracurriculars and honors, plus counts of activities, honors, documents, applications and recommendation letters). The streak length comes from `apps/telegram_bot/activity.py: essay_activity_for(user_ids, today)`, which reads `EssayWritingDay` (one query for all students) and counts it with the same `streak_numbers` the Essay Lab card uses; it is shown only for students without private essays, trashed ones included (the daily record cannot tell shared writing from private), a student with no essays shows no streak, and it counts at most the last 400 days. Words typed per day are not sent, because `EssayWritingDay` cannot tell shared essays from private ones.
+Built for counselors with 50+ students: one summary and a paged list, never a wall of text.
+
+- **Summary** (top of the message): date and student count; how many students were last seen today / in the last 6 days / 7+ days ago / never; essays edited today, students with a streak and the average application readiness (the last three follow the essays / streak / application toggles in `/settings`).
+- **List**, 8 students per page, two lines each: name and grade, then last seen (`today`, `yesterday`, `3 days ago`, `never opened`), a readiness bar (`▰▰▱▱▱ 40%`), essays edited today and streak days when above zero.
+- **Buttons under the list**: the student numbers on the page (tap one for the card), `⬅ / page / ➡`, and two toggles: `A-Z` / `Needs attention` sorting and the `Inactive 7+ days` filter. *Needs attention* (default for `/now` and the scheduled update) lists students who never opened the app first, then the longest away, ties by lowest readiness. `/students` opens the same list sorted A-Z.
+- **Student card**: last seen with time or date, grade, essays (shared count, edited today), streak, application readiness with the six checklist items, counts of activities, honors, documents, applications and letters, and a *Back to list* button that returns to the same page, sort and filter.
+
+Paging is stateless: every button's callback data carries the view (`l:<page>:<sort>:<filter>` or `d:<student id>:<page>:<sort>:<filter>`, under 64 bytes) and a tap re-reads the data from the backend (the bot keeps a reply for 5 seconds so a double tap costs one call). Nothing expires after 30 minutes any more, and the list survives a bot restart. A tap for a student who left the list answers "no longer in your list".
+
+The backend digest adds to each student `id`, `last_seen_at` (newest screen-time write, UTC, one query for all students) and `last_seen_expired`. Screen-time rows are deleted after `SCREEN_TIME_RETENTION_DAYS` (365), so a student with no row who joined before that window shows `no recent activity` instead of `never opened`; both count as inactive. Last-seen dates are shown in Asia/Tashkent time.
+
+Per student the essays count only essays the student shared with the counselor. The streak length comes from `apps/telegram_bot/activity.py: essay_activity_for(user_ids, today)`, which reads `EssayWritingDay` (one query for all students) and counts it with the same `streak_numbers` the Essay Lab card uses; it is shown only for students without private essays, trashed ones included (the daily record cannot tell shared writing from private), a student with no essays shows no streak, and it counts at most the last 400 days. Words typed per day are not sent, because `EssayWritingDay` cannot tell shared essays from private ones. At most 300 students are sent; the summary line says how many more were not shown.
 
 ## Environment
 

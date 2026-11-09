@@ -13,9 +13,9 @@ from aiogram.types import CallbackQuery, ChatMemberUpdated, ErrorEvent, Message
 
 from . import keyboards
 from .api import ApiError, ApiUnavailable
-from .delivery import send_digest, send_next_page
+from .delivery import list_message, send_digest
 from .i18n import DEFAULT, LANGUAGES, t
-from .render import contacts, render_students
+from .render import SORT_AZ, contacts, render_detail
 
 log = logging.getLogger('bot.handlers')
 router = Router()
@@ -24,6 +24,8 @@ router.callback_query.filter(F.message.chat.type == 'private')
 
 COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|settings|logout)(@\w+)?(\s|$)')
 TIME_PATTERN = re.compile(r'^\s*(\d{1,2})[:.](\d{2})\s*$')
+LIST_BUTTON = re.compile(r'^l:(\d{1,4}):([az]):([ai])$')
+DETAIL_BUTTON = re.compile(r'^d:(\d{1,12}):(\d{1,4}):([az]):([ai])$')
 
 
 class Login(StatesGroup):
@@ -217,12 +219,10 @@ async def login_confirm(callback: CallbackQuery, state: FSMContext, bot, api, ca
     cache.set(('settings', chat_id), link)
     linked = t(lang, 'linked', name=escape(link['full_name']))
     try:
-        first, *rest = render_students(await api.students(chat_id), lang)
+        linked += '\n\n' + t(lang, 'students_count', total=(await api.students(chat_id))['total'])
     except (ApiError, ApiUnavailable):
-        first, rest = t(lang, 'students_later'), []
-    await callback.message.edit_text(linked + '\n\n' + first)
-    for page in rest:
-        await bot.send_message(chat_id, page)
+        pass
+    await callback.message.edit_text(linked)
     await bot.send_message(chat_id, t(lang, 'setup_time'), reply_markup=keyboards.time_picker(lang))
 
 
@@ -240,53 +240,81 @@ async def _require_link(message, api, cache, state):
     return link
 
 
+async def _load_digest(api, cache, chat_id):
+    key = ('digest', chat_id)
+    data = cache.get(key)
+    if data is None:
+        data = await api.digest(chat_id)
+        cache.set(key, data)
+    return data
+
+
 @router.message(Command('students'))
 async def students_command(message: Message, state: FSMContext, bot, api, cache):
     link = await _require_link(message, api, cache, state)
     if link is None:
         return
-    await bot.send_chat_action(message.chat.id, 'typing')
-    key = ('students', message.chat.id)
-    data = cache.get(key)
-    if data is None:
-        data = await api.students(message.chat.id)
-        cache.set(key, data)
-    for page in render_students(data, link['language']):
-        await message.answer(page)
+    chat_id, lang = message.chat.id, link['language']
+    await bot.send_chat_action(chat_id, 'typing')
+    await send_digest(bot, chat_id, await _load_digest(api, cache, chat_id), lang, sort=SORT_AZ)
 
 
 @router.message(Command('now'))
-async def now_command(message: Message, state: FSMContext, bot, api, cache, pages):
+async def now_command(message: Message, state: FSMContext, bot, api, cache):
     link = await _require_link(message, api, cache, state)
     if link is None:
         return
     chat_id, lang = message.chat.id, link['language']
     await bot.send_chat_action(chat_id, 'typing')
     placeholder = await message.answer(t(lang, 'preparing'))
-    key = ('digest', chat_id)
-    data = cache.get(key)
-    if data is None:
-        try:
-            data = await api.digest(chat_id)
-        except ApiError as exc:
-            if exc.code == 'not_linked':
-                await _edit(bot, chat_id, placeholder.message_id, t(lang, 'not_linked'))
-                return
-            raise
-        cache.set(key, data)
-    await send_digest(bot, chat_id, data, lang, pages, edit_message_id=placeholder.message_id)
+    try:
+        data = await _load_digest(api, cache, chat_id)
+    except ApiError as exc:
+        if exc.code == 'not_linked':
+            await _edit(bot, chat_id, placeholder.message_id, t(lang, 'not_linked'))
+            return
+        raise
+    await send_digest(bot, chat_id, data, lang, edit_message_id=placeholder.message_id)
 
 
-@router.callback_query(F.data.startswith('more:'))
-async def show_more(callback: CallbackQuery, bot, api, cache, pages):
+@router.callback_query(F.data == 'noop')
+async def noop(callback: CallbackQuery):
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(LIST_BUTTON))
+async def list_page(callback: CallbackQuery, bot, api, cache):
     await callback.answer()
     chat_id = callback.message.chat.id
     link = await get_link(api, cache, chat_id)
-    lang = link['language'] if link else DEFAULT
-    with suppress(TelegramBadRequest):
-        await callback.message.edit_reply_markup(reply_markup=None)
-    if not await send_next_page(bot, chat_id, lang, pages, callback.data.split(':', 1)[1]):
-        await bot.send_message(chat_id, t(lang, 'expired'))
+    if link is None:
+        await bot.send_message(chat_id, t(DEFAULT, 'not_linked'))
+        return
+    page, sort, flt = LIST_BUTTON.match(callback.data).groups()
+    text, markup = list_message(await _load_digest(api, cache, chat_id), link['language'], int(page), sort, flt)
+    await _edit(bot, chat_id, callback.message.message_id, text, markup)
+
+
+@router.callback_query(F.data.regexp(DETAIL_BUTTON))
+async def student_detail(callback: CallbackQuery, bot, api, cache):
+    chat_id = callback.message.chat.id
+    link = await get_link(api, cache, chat_id)
+    if link is None:
+        await callback.answer()
+        await bot.send_message(chat_id, t(DEFAULT, 'not_linked'))
+        return
+    lang = link['language']
+    student_id, page, sort, flt = DETAIL_BUTTON.match(callback.data).groups()
+    data = await _load_digest(api, cache, chat_id)
+    item = next((student for student in data['students'] if student.get('id') == int(student_id)), None)
+    if item is None:
+        await callback.answer(t(lang, 'student_gone'), show_alert=True)
+        return
+    await callback.answer()
+    await _edit(
+        bot, chat_id, callback.message.message_id, render_detail(item, lang),
+        keyboards.back_to_list(lang, int(page), sort, flt),
+    )
 
 
 @router.message(Command('settings'))
@@ -384,7 +412,7 @@ async def settings_done(callback: CallbackQuery, api, cache):
 
 
 @router.message(Command('logout'))
-async def logout(message: Message, state: FSMContext, api, cache, pages):
+async def logout(message: Message, state: FSMContext, api, cache):
     chat_id = message.chat.id
     lang = await language_of(state, cache, chat_id)
     link = cache.get(('settings', chat_id))
@@ -396,17 +424,15 @@ async def logout(message: Message, state: FSMContext, api, cache, pages):
     await api.logout(chat_id)
     await state.clear()
     cache.drop_chat(chat_id)
-    pages.drop_chat(chat_id)
     await message.answer(t(lang, 'logged_out'))
 
 
 @router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=KICKED))
-async def blocked(event: ChatMemberUpdated, api, cache, pages):
+async def blocked(event: ChatMemberUpdated, api, cache):
     chat_id = event.chat.id
     with suppress(ApiError, ApiUnavailable):
         await api.unlink(chat_id)
     cache.drop_chat(chat_id)
-    pages.drop_chat(chat_id)
 
 
 @router.message(F.text)
@@ -441,7 +467,7 @@ async def backend_down(event: ErrorEvent, bot, cache, state: FSMContext):
 
 
 @router.errors(ExceptionTypeFilter(ApiError))
-async def backend_refused(event: ErrorEvent, bot, cache, pages, state: FSMContext):
+async def backend_refused(event: ErrorEvent, bot, cache, state: FSMContext):
     update = event.update
     message = update.message or (update.callback_query.message if update.callback_query else None)
     if update.callback_query:
@@ -452,7 +478,6 @@ async def backend_refused(event: ErrorEvent, bot, cache, pages, state: FSMContex
         lang = await language_of(state, cache, chat_id)
         if event.exception.code == 'not_linked':
             cache.drop_chat(chat_id)
-            pages.drop_chat(chat_id)
             text = t(lang, 'not_linked')
         else:
             text = t(lang, 'error')

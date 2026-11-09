@@ -4,15 +4,20 @@ Every student comes from ``active_visible_students(user)``, the scope the
 website's dashboard counts use, so the bot cannot show anyone the website would
 not. Essays are limited by ``scope_essays`` (only essays the student shared); the streak is shown
 only for students without private essays (trashed ones included: their writing days remain).
-Query count is fixed: students, six progress queries, one essay aggregate.
+Query count is fixed: students, six progress queries, one essay aggregate, one last-seen aggregate.
+
+``last_seen_at`` is the newest screen-time write of the student (UTC). Screen-time rows are deleted after
+``SCREEN_TIME_RETENTION_DAYS``, so a student with no row who joined before that window is marked
+``last_seen_expired`` (no recent activity on record) instead of "never opened the app".
 """
 from collections import OrderedDict
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from django.db.models import Count, Q
+from django.conf import settings
+from django.db.models import Count, Max, Q
 
-from apps.admissions.models import Essay, StudentProfile
+from apps.admissions.models import Essay, ScreenTimeDaily, StudentProfile
 from apps.admissions.onboarding import PROFILE_READINESS_ITEMS, profile_readiness
 from apps.admissions.progress import attach_progress_stats
 from apps.admissions.scoping import active_visible_students, scope_essays
@@ -69,6 +74,14 @@ def _essay_counts(user, student_ids, day_start):
     return {row['student_id']: (row['total'], row['edited']) for row in rows}
 
 
+def _last_seen(user_ids):
+    rows = (
+        ScreenTimeDaily.objects.filter(user_id__in=user_ids).order_by()
+        .values('user_id').annotate(last=Max('last_seen_at'))
+    )
+    return {row['user_id']: row['last'] for row in rows}
+
+
 def _application(student):
     readiness = profile_readiness(student)
     missing = {item['section'] for item in readiness['missing']}
@@ -99,10 +112,19 @@ def build_digest(user, prefs, now=None):
         .order_by().values_list('student_id', flat=True).distinct()
     ) if ids and want_streak else set()
     visible = {student.user_id for student in students if student.pk not in private} if want_streak else set()
+    last_seen = _last_seen([student.user_id for student in students]) if students else {}
+    retention_start = now - timedelta(days=settings.SCREEN_TIME_RETENTION_DAYS)
     streaks = essay_activity_for(sorted(visible), today) if visible else {}
     items = []
     for student in students:
-        item = {'name': _name(student), 'grade': student.grade}
+        seen = last_seen.get(student.user_id)
+        item = {
+            'id': student.pk,
+            'name': _name(student),
+            'grade': student.grade,
+            'last_seen_at': seen.isoformat() if seen else None,
+            'last_seen_expired': seen is None and student.user.date_joined < retention_start,
+        }
         if want_essays:
             total, edited = essays.get(student.pk, (0, 0))
             item['essays'] = {'total': total, 'edited_today': edited}
@@ -119,6 +141,7 @@ def build_digest(user, prefs, now=None):
         'date': today.isoformat(),
         'total_students': total,
         'omitted': total - len(items),
+        'retention_days': settings.SCREEN_TIME_RETENTION_DAYS,
         'students': items,
     }
 
