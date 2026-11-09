@@ -272,6 +272,43 @@
   accent-color: var(--cx-dark);
 }
 
+/* -- select all ----------------------------------------------------------- */
+.cs-selectbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--cx-field-line);
+  border-radius: 10px;
+  background: var(--cx-card, transparent);
+}
+
+.cs-selectall {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cs-selectall input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--cx-dark);
+}
+
+.cs-selectall input:focus-visible {
+  outline: 2px solid var(--cx-dark);
+  outline-offset: 2px;
+}
+
+.cs-selectcount {
+  color: var(--cx-muted);
+}
+
 /* -- cards ---------------------------------------------------------------- */
 .cs-cards {
   display: grid;

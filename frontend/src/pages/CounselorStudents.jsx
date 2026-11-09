@@ -26,6 +26,7 @@ import { mergeReviewQueue } from '../lib/reviewQueue';
 import { documentStatus, hasSubmission } from '../lib/reviewSubmission';
 import { failedPage, pageAfterLoad, pageCount } from '../lib/studentListPage';
 import { studentReasons } from '../lib/studentReasons';
+import { BULK_TASK_LIMIT, SELECT_PAGE_SIZE, canSelectAllMatching, collectMatchingIds, pageSelectionState, togglePageSelection } from '../lib/studentSelection';
 import { BookingForm, MeetingNoteForm } from './BookingsPage';
 import { ReviewWorkspace } from './ReviewPage';
 import './counselor-students.css';
@@ -110,18 +111,42 @@ function filterParams(state) {
   return params;
 }
 
+// The list's filters and sort as a query, for any page.
+function listQuery(state, page, pageSize) {
+  const params = filterParams(state);
+  params.set('page', String(page));
+  params.set('page_size', String(pageSize));
+  params.set('ordering', state.ordering);
+  if (state.status !== 'all') params.set('status', state.status);
+  return `?${params}`;
+}
+
+// The "select all" box and count above the list, in both views.
+function SelectionBar({ pageIds, total, selected, onTogglePage, onSelectAll, onClear, busy }) {
+  const box = useRef(null);
+  const state = pageSelectionState(pageIds, selected);
+  useEffect(() => { if (box.current) box.current.indeterminate = state === 'some'; }, [state]);
+  const offerAll = canSelectAllMatching({ total, pageIds, selected });
+  const tooMany = total > BULK_TASK_LIMIT;
+  return <div className="cs-selectbar">
+    <label className="cs-selectall">
+      <input ref={box} type="checkbox" checked={state === 'all'} onChange={onTogglePage} disabled={!pageIds.length} />
+      <span>{t("Select all on this page")}</span>
+    </label>
+    <span className="cs-selectcount" role="status" aria-live="polite">{tp('{n} student selected|{n} students selected', selected.size, { n: selected.size })}</span>
+    {offerAll && <button type="button" className="cx-btn" onClick={onSelectAll} disabled={busy} aria-busy={busy}>{busy ? t("Selecting…") : t('Select all {n} students', { n: total })}</button>}
+    {state === 'all' && tooMany && <span className="cx-faint">{t('You can assign a task to {n} students at a time.', { n: BULK_TASK_LIMIT })}</span>}
+    {selected.size > 0 && <button type="button" className="cx-btn" onClick={onClear}>{t("Clear selection")}</button>}
+  </div>;
+}
+
 // One page of students and the pill counts (GET /api/students/summary/).
 function useStudentPage(state, version) {
   const [page, setPage] = useState({ key: '', items: [], count: 0, loading: true, error: '', status: 0 });
   const [summary, setSummary] = useState(null);
   const filters = filterParams(state);
   const summaryKey = `?${filters}`;
-  const params = new URLSearchParams(filters);
-  params.set('page', String(state.page));
-  params.set('page_size', String(PAGE_SIZE));
-  params.set('ordering', state.ordering);
-  if (state.status !== 'all') params.set('status', state.status);
-  const pageKey = `?${params}`;
+  const pageKey = listQuery(state, state.page, PAGE_SIZE);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -167,6 +192,8 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
   const [version, setVersion] = useState(0);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectRun = useRef(0);
   const [assigning, setAssigning] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -227,8 +254,42 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
   }
 
   function stopSelecting() {
+    selectRun.current += 1;
+    setSelectingAll(false);
     setSelecting(false);
     setSelected(new Set());
+  }
+
+  function clearSelected() {
+    selectRun.current += 1;
+    setSelectingAll(false);
+    setSelected(new Set());
+  }
+
+  // Selected students must stay among those the filters show, so a new filter starts a new selection.
+  const filterKey = `${state.status}|${state.grade}|${state.country}|${state.search}`;
+  const firstFilter = useRef(true);
+  useEffect(() => {
+    if (firstFilter.current) { firstFilter.current = false; return; }
+    selectRun.current += 1;
+    setSelectingAll(false);
+    setSelected(new Set());
+  }, [filterKey]);
+
+  async function selectAllMatching() {
+    const run = (selectRun.current += 1);
+    setSelectingAll(true);
+    try {
+      const everyone = await collectMatchingIds(
+        (page) => api.page('students', listQuery(state, page, SELECT_PAGE_SIZE)),
+        { total: list.count, aborted: () => run !== selectRun.current },
+      );
+      if (everyone) setSelected(new Set(everyone));
+    } catch (failure) {
+      if (run === selectRun.current) notify(failure.message, 'error');
+    } finally {
+      if (run === selectRun.current) setSelectingAll(false);
+    }
   }
 
   function refresh() {
@@ -294,6 +355,8 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
     </div>
 
     {list.error && !moving && <div className="alert error" role="alert">{list.error} <button type="button" className="cx-btn" onClick={() => setVersion((value) => value + 1)}>{t("Retry")}</button></div>}
+    {selecting && rows.length > 0 && <SelectionBar pageIds={rows.map(({ student }) => student.id)} total={list.count} selected={selected} busy={selectingAll}
+      onTogglePage={() => setSelected((current) => togglePageSelection(current, rows.map(({ student }) => student.id)))} onSelectAll={selectAllMatching} onClear={clearSelected} />}
     <div className="cs-results" aria-busy={list.loading}>
       {(list.loading || moving) && !list.items.length ? <PageSkeleton /> : rows.length
         ? (view === 'cards' ? <StudentCards {...shown} /> : <StudentTable {...shown} />)
