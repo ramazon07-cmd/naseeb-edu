@@ -96,6 +96,9 @@ async def run_tick(*, bot, api, cache, pages, limiter, sleep=asyncio.sleep, conc
     except (ApiError, ApiUnavailable) as exc:
         log.warning('could not ask the backend which updates are due: %s', type(exc).__name__)
         return {}
+    except Exception:
+        log.exception('unexpected error while asking the backend which updates are due')
+        return {}
     gate = asyncio.Semaphore(concurrency)
     results = {}
 
@@ -121,6 +124,9 @@ def seconds_to_next_minute(now=None):
 async def run_scheduler(stop, **deps):
     """Tick once at startup (the backend's grace window covers a restart), then at every minute start."""
     while not stop.is_set():
-        await run_tick(**deps)
+        try:
+            await run_tick(**deps)
+        except Exception:
+            log.exception('scheduler tick failed; trying again next minute')
         with suppress(asyncio.TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=seconds_to_next_minute())

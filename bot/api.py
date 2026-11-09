@@ -69,7 +69,11 @@ class ApiClient:
         return await self._call('PUT', 'settings', json={'chat_id': chat_id, **changes})
 
     async def due(self):
-        return (await self._call('POST', 'due', json={}))['chats']
+        body = await self._call('POST', 'due', json={})
+        chats = body.get('chats') if isinstance(body, dict) else None
+        if not isinstance(chats, list):
+            raise ApiUnavailable('due answer has no chats list')
+        return chats
 
     async def mark_sent(self, chat_id, slot_date):
         return await self._call('POST', 'mark-sent', json={'chat_id': chat_id, 'slot_date': slot_date})

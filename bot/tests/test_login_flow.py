@@ -179,3 +179,14 @@ async def test_confirm_with_hundreds_of_students_still_asks_for_the_time(h):
     assert all(len(text) <= 4096 for text in texts)
     assert 'What time each day' in h.session.of('SendMessage')[-1][1]['text']
     assert sum(text.count('Student Number') for text in texts) == 300
+
+
+async def test_the_time_picker_still_appears_when_the_student_list_cannot_be_loaded(h):
+    from bot.api import ApiUnavailable
+
+    h.api.errors['students'] = ApiUnavailable('502')
+    await h.log_in()
+    linked = h.session.of('EditMessageText')[-1][1]['text']
+    assert 'open it later with /students' in linked
+    last = h.session.of('SendMessage')[-1][1]
+    assert 'What time each day' in last['text']

@@ -77,7 +77,7 @@ class FakeApi:
             {'grade': '9', 'count': 1, 'students': ['Ali Valiyev']},
             {'grade': '10', 'count': 1, 'students': ['Sara Nazarova']},
         ]}
-        self.digest_data = {'date': '2026-11-08', 'total_students': 0, 'streak_available': False, 'students': []}
+        self.digest_data = {'date': '2026-11-08', 'total_students': 0, 'omitted': 0, 'students': []}
         self.errors = {}
         self.due_items = []
 

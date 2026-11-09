@@ -1,6 +1,7 @@
 import logging
 import re
 from contextlib import suppress
+from html import escape
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
@@ -63,7 +64,7 @@ async def get_link(api, cache, chat_id, *, fresh=False):
     return link
 
 
-async def language_of(state, api, cache, chat_id):
+async def language_of(state, cache, chat_id):
     data = await state.get_data()
     if data.get('lang'):
         return data['lang']
@@ -104,7 +105,7 @@ async def start(message: Message, state: FSMContext, api, cache):
     if link:
         lang = link['language']
         await message.answer(
-            t(lang, 'already_linked', name=_esc(link['full_name'])), reply_markup=keyboards.already_linked(lang),
+            t(lang, 'already_linked', name=escape(link['full_name'])), reply_markup=keyboards.already_linked(lang),
         )
         return
     await state.set_state(Login.language)
@@ -163,14 +164,8 @@ async def got_password(message: Message, state: FSMContext, bot, api):
         del password
     await state.update_data(pending=card['pending_token'], username=None)
     await state.set_state(Login.confirm)
-    text = t(lang, 'card', name=_esc(card['full_name']), contacts=contacts(card['email'], card['phone']))
+    text = t(lang, 'card', name=escape(card['full_name']), contacts=contacts(card['email'], card['phone']))
     await _edit(bot, chat_id, prompt_id, text, keyboards.confirm_card(lang))
-
-
-def _esc(value):
-    from html import escape
-
-    return escape(value)
 
 
 async def _login_refused(bot, state, chat_id, prompt_id, lang, exc):
@@ -213,9 +208,12 @@ async def login_confirm(callback: CallbackQuery, state: FSMContext, bot, api, ca
     await state.clear()
     cache.drop_chat(chat_id)
     cache.set(('settings', chat_id), link)
-    students = await api.students(chat_id)
-    first, *rest = render_students(students, lang)
-    await callback.message.edit_text(t(lang, 'linked', name=_esc(link['full_name'])) + '\n\n' + first)
+    linked = t(lang, 'linked', name=escape(link['full_name']))
+    try:
+        first, *rest = render_students(await api.students(chat_id), lang)
+    except (ApiError, ApiUnavailable):
+        first, rest = t(lang, 'students_later'), []
+    await callback.message.edit_text(linked + '\n\n' + first)
     for page in rest:
         await bot.send_message(chat_id, page)
     await bot.send_message(chat_id, t(lang, 'setup_time'), reply_markup=keyboards.time_picker(lang))
@@ -223,14 +221,14 @@ async def login_confirm(callback: CallbackQuery, state: FSMContext, bot, api, ca
 
 @router.message(Command('help'))
 async def help_command(message: Message, state: FSMContext, api, cache):
-    lang = await language_of(state, api, cache, message.chat.id)
+    lang = await language_of(state, cache, message.chat.id)
     await message.answer(t(lang, 'help'))
 
 
 async def _require_link(message, api, cache, state):
     link = await get_link(api, cache, message.chat.id)
     if link is None:
-        lang = await language_of(state, api, cache, message.chat.id)
+        lang = await language_of(state, cache, message.chat.id)
         await message.answer(t(lang, 'not_linked'))
     return link
 
@@ -272,7 +270,7 @@ async def now_command(message: Message, state: FSMContext, bot, api, cache, page
     await send_digest(bot, chat_id, data, lang, pages, edit_message_id=placeholder.message_id)
 
 
-@router.callback_query(F.data == 'more')
+@router.callback_query(F.data.startswith('more:'))
 async def show_more(callback: CallbackQuery, bot, api, cache, pages):
     await callback.answer()
     chat_id = callback.message.chat.id
@@ -280,7 +278,7 @@ async def show_more(callback: CallbackQuery, bot, api, cache, pages):
     lang = link['language'] if link else DEFAULT
     with suppress(TelegramBadRequest):
         await callback.message.edit_reply_markup(reply_markup=None)
-    if not await send_next_page(bot, chat_id, lang, pages):
+    if not await send_next_page(bot, chat_id, lang, pages, callback.data.split(':', 1)[1]):
         await bot.send_message(chat_id, t(lang, 'expired'))
 
 
@@ -381,7 +379,7 @@ async def settings_done(callback: CallbackQuery, api, cache):
 @router.message(Command('logout'))
 async def logout(message: Message, state: FSMContext, api, cache, pages):
     chat_id = message.chat.id
-    lang = await language_of(state, api, cache, chat_id)
+    lang = await language_of(state, cache, chat_id)
     link = cache.get(('settings', chat_id))
     if link is None:
         with suppress(ApiError):
@@ -408,7 +406,7 @@ async def blocked(event: ChatMemberUpdated, api, cache, pages):
 async def stray_text(message: Message, state: FSMContext, api, cache):
     # No step expects text here. After a restart a password may arrive this way, so it is not left in the chat.
     await _delete(message)
-    lang = await language_of(state, api, cache, message.chat.id)
+    lang = await language_of(state, cache, message.chat.id)
     await message.answer(t(lang, 'help'))
 
 

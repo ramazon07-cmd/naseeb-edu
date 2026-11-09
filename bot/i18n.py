@@ -94,6 +94,16 @@ STRINGS = {
     },
     'grade_gap': {'uz': 'Gap year', 'ru': 'Gap year', 'en': 'Gap year'},
     'grade_unknown': {'uz': 'Sinf tanlanmagan', 'ru': 'Класс не указан', 'en': 'No grade set'},
+    'students_later': {
+        'uz': "O'quvchilar ro'yxatini hozir yuklab bo'lmadi, /students orqali keyinroq oching.",
+        'ru': 'Список учеников сейчас не загрузился, откройте его позже через /students.',
+        'en': "The student list couldn't be loaded now; open it later with /students.",
+    },
+    'omitted_line': {
+        'uz': "...yana {omitted} ta o'quvchi ko'rsatilmadi",
+        'ru': '...ещё {omitted} учеников не показано',
+        'en': '...{omitted} more students not shown',
+    },
     'no_students': {
         'uz': "Hozircha o'quvchilar yo'q.",
         'ru': 'Пока нет учеников.',
@@ -175,11 +185,6 @@ STRINGS = {
         'en': 'Streak: {days} days',
     },
     'streak_none': {'uz': 'Seriya yo\'q', 'ru': 'Серии нет', 'en': 'No streak'},
-    'streak_unavailable': {
-        'uz': 'Seriya: hozircha mavjud emas',
-        'ru': 'Серия: пока недоступна',
-        'en': 'Streak: not available yet',
-    },
     'streak_not_shared': {
         'uz': 'Seriya: insho ulashilmagan',
         'ru': 'Серия: эссе не передано',

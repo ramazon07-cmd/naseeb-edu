@@ -48,5 +48,5 @@ def settings_panel(lang, prefs, notify_time):
     return _markup(rows)
 
 
-def show_more(lang, left):
-    return _markup([[_button(t(lang, 'show_more', left=left), 'more')]])
+def show_more(lang, left, token):
+    return _markup([[_button(t(lang, 'show_more', left=left), f'more:{token}')]])

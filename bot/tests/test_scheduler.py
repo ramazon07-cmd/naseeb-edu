@@ -22,7 +22,7 @@ def deps(h, sleeps=None):
 
 
 def students_digest():
-    return {'date': '2026-11-08', 'total_students': 1, 'streak_available': False, 'students': [
+    return {'date': '2026-11-08', 'total_students': 1, 'omitted': 0, 'students': [
         {'name': 'Ali', 'grade': '9', 'essays': {'total': 1, 'edited_today': 0, 'words_today': None}},
     ]}
 
@@ -178,3 +178,26 @@ async def test_scheduler_loop_ticks_at_start_and_stops_cleanly(h):
     stop.set()
     await asyncio.wait_for(task, 2)
     assert len(h.session.of('SendMessage')) == 1
+
+
+async def test_an_unexpected_error_asking_for_due_chats_is_survived(h):
+    h.api.errors['due'] = KeyError('chats')
+    assert await run_tick(**deps(h)) == {}
+
+
+async def test_the_scheduler_loop_keeps_running_after_a_tick_raises(h, monkeypatch):
+    import bot.scheduler as scheduler
+
+    stop = asyncio.Event()
+    ticks = []
+
+    async def broken_tick(**_):
+        ticks.append(1)
+        if len(ticks) == 2:
+            stop.set()
+        raise RuntimeError('boom')
+
+    monkeypatch.setattr(scheduler, 'run_tick', broken_tick)
+    monkeypatch.setattr(scheduler, 'seconds_to_next_minute', lambda now=None: 0)
+    await asyncio.wait_for(run_scheduler(stop, **deps(h)), timeout=2)
+    assert len(ticks) == 2

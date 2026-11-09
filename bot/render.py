@@ -34,6 +34,8 @@ def render_students(data, lang):
         lines.append('')
         lines.append(f"<b>{escape(t(lang, 'group_line', grade=grade_label(lang, group['grade']), count=group['count']))}</b>")
         lines.extend(escape(name)[:PAGE_LIMIT] for name in group['students'])
+    if data.get('omitted'):
+        lines.extend(['', t(lang, 'omitted_line', omitted=data['omitted'])])
     pages, current = [], ''
     for line in lines:
         if current and len(current) + len(line) + 1 > PAGE_LIMIT:
@@ -50,7 +52,7 @@ def _day(lang, iso):
     return f'{day.day} {MONTHS.get(lang, MONTHS["en"])[day.month - 1]}'
 
 
-def render_student(item, lang, streak_available):
+def render_student(item, lang):
     lines = [t(lang, 'digest_student', name=escape(item['name']), grade=escape(grade_label(lang, item['grade'])))]
     essays = item.get('essays')
     if essays:
@@ -62,8 +64,6 @@ def render_student(item, lang, streak_available):
     if streak:
         if not streak.get('shared', True):
             lines.append('\U0001F525 ' + t(lang, 'streak_not_shared'))
-        elif streak['days'] is None or not streak_available:
-            lines.append('\U0001F525 ' + t(lang, 'streak_unavailable'))
         elif streak['days'] > 0:
             lines.append('\U0001F525 ' + t(lang, 'streak_days', days=streak['days']))
         else:
@@ -92,11 +92,13 @@ def render_digest_pages(data, lang):
     header = t(lang, 'digest_title', date=_day(lang, data['date']), total=data['total_students'])
     pages, current = [], header
     for item in data['students']:
-        block = render_student(item, lang, data['streak_available'])[:PAGE_LIMIT]
+        block = render_student(item, lang)[:PAGE_LIMIT]
         if len(current) + len(block) + 2 > PAGE_LIMIT:
             pages.append(current)
             current = block
         else:
             current += '\n\n' + block
+    if data.get('omitted'):
+        current += '\n\n' + t(lang, 'omitted_line', omitted=data['omitted'])
     pages.append(current)
     return pages

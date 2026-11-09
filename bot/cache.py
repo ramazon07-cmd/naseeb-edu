@@ -27,6 +27,9 @@ class TtlCache:
                 self._items.clear()
         self._items[key] = (self._clock() + (self._seconds if seconds is None else seconds), value)
 
+    def drop(self, key):
+        self._items.pop(key, None)
+
     def drop_chat(self, chat_id):
         for key in [k for k in self._items if k[1] == chat_id]:
             del self._items[key]

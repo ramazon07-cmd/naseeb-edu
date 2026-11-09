@@ -10,7 +10,7 @@ def student(name, **extra):
     base = {
         'name': name, 'grade': '10',
         'essays': {'total': 3, 'edited_today': 1, 'words_today': None},
-        'streak': {'days': None},
+        'streak': {'days': 0},
         'application': {
             'percent': 58, 'sections': {'personal': True, 'academics': False, 'tests': True, 'goal': False,
                                         'activities': True, 'honors': False},
@@ -21,9 +21,8 @@ def student(name, **extra):
     return {**base, **extra}
 
 
-def digest(students, streak_available=False):
-    return {'date': '2026-11-08', 'total_students': len(students), 'streak_available': streak_available,
-            'students': students}
+def digest(students, omitted=0):
+    return {'date': '2026-11-08', 'total_students': len(students) + omitted, 'omitted': omitted, 'students': students}
 
 
 def test_one_scannable_block_per_student():
@@ -31,7 +30,7 @@ def test_one_scannable_block_per_student():
     assert 'Daily update' in page and '8 Nov' in page and '1 students' in page
     assert '<b>Ali Valiyev</b> - Grade 10' in page
     assert 'Essays: 3, edited today: 1' in page
-    assert 'Streak: not available yet' in page
+    assert 'No streak' in page
     assert 'Application: 58%' in page
     assert '✅ Personal' in page and '❌ Academics' in page
     assert 'documents 2/5' in page
@@ -39,14 +38,14 @@ def test_one_scannable_block_per_student():
 
 def test_streak_days_and_words_are_shown_when_available():
     item = student('Ali Valiyev', streak={'days': 6}, essays={'total': 1, 'edited_today': 1, 'words_today': 250})
-    page = render_digest_pages(digest([item], streak_available=True), 'en')[0]
+    page = render_digest_pages(digest([item]), 'en')[0]
     assert '\U0001F525 Streak: 6 days' in page
     assert 'words typed today: 250' in page
 
 
 def test_zero_streak_and_disabled_parts():
     item = student('Ali', streak={'days': 0})
-    assert 'No streak' in render_digest_pages(digest([item], True), 'en')[0]
+    assert 'No streak' in render_digest_pages(digest([item]), 'en')[0]
     bare = {'name': 'Ali', 'grade': ''}
     page = render_digest_pages(digest([bare]), 'en')[0]
     assert 'Essays' not in page and 'Streak' not in page and 'Application' not in page
@@ -90,13 +89,13 @@ async def test_show_more_sends_the_remaining_pages_one_by_one():
         pages = TtlCache(1800)
         await send_digest(harness.bot, 1, digest(students), 'en', pages)
         first = harness.session.of('SendMessage')[0][1]
-        assert first['reply_markup']['inline_keyboard'][0][0]['callback_data'] == 'more'
+        token = first['reply_markup']['inline_keyboard'][0][0]['callback_data'].split(':')[1]
         total = len(render_digest_pages(digest(students), 'en'))
         sent = 1
-        while await send_next_page(harness.bot, 1, 'en', pages):
+        while await send_next_page(harness.bot, 1, 'en', pages, token):
             sent += 1
         assert sent == total
-        assert not await send_next_page(harness.bot, 1, 'en', pages)
+        assert not await send_next_page(harness.bot, 1, 'en', pages, token)
         assert harness.session.of('SendMessage')[-1][1]['reply_markup'] is None
     finally:
         harness.close()
@@ -107,12 +106,38 @@ async def test_show_more_button_in_the_chat(h):
     h.api.digest_data = digest([student(f'Student Number {i} ' + 'X' * 40) for i in range(120)])
     await h.say('/now')
     assert h.session.of('EditMessageText')[-1][1]['reply_markup'] is not None
-    await h.tap('more')
+    first = h.session.of('EditMessageText')[-1][1]['reply_markup']['inline_keyboard'][0][0]['callback_data']
+    assert first.startswith('more:')
+    await h.tap(first)
     assert h.session.of('EditMessageReplyMarkup')
     assert 'Student Number' in h.session.texts()[-1]
     h.pages.drop_chat(1)
-    await h.tap('more')
+    await h.tap(first)
     assert 'expired' in h.session.texts()[-1]
+
+
+async def test_a_newer_digest_does_not_replace_an_older_digests_pages():
+    harness = Harness()
+    try:
+        old = digest([student(f'Old Student {i} ' + 'X' * 40) for i in range(120)])
+        new = digest([student(f'New Student {i} ' + 'X' * 40) for i in range(120)])
+        pages = TtlCache(1800)
+        await send_digest(harness.bot, 1, old, 'en', pages)
+        old_token = harness.session.of('SendMessage')[0][1]['reply_markup']['inline_keyboard'][0][0]['callback_data'].split(':')[1]
+        await send_digest(harness.bot, 1, new, 'en', pages)
+        assert await send_next_page(harness.bot, 1, 'en', pages, old_token)
+        assert 'Old Student' in harness.session.of('SendMessage')[-1][1]['text']
+        assert not await send_next_page(harness.bot, 1, 'en', pages, 'unknown')
+    finally:
+        harness.close()
+
+
+def test_omitted_students_are_announced_in_both_lists():
+    page = render_digest_pages(digest([student('Ali')], omitted=40), 'en')[-1]
+    assert '41 students' in page and '...40 more students not shown' in page
+    data = {'total': 340, 'omitted': 40, 'groups': [{'grade': '10', 'count': 300, 'students': ['Ali']}]}
+    assert '...40 more students not shown' in render_students(data, 'en')[-1]
+    assert 'not shown' not in render_digest_pages(digest([student('Ali')]), 'en')[-1]
 
 
 def test_a_long_student_list_is_split_into_pages_under_the_telegram_limit():
@@ -126,5 +151,5 @@ def test_a_long_student_list_is_split_into_pages_under_the_telegram_limit():
 
 def test_a_student_without_a_shared_essay_says_so_instead_of_unavailable():
     item = student('Ali', streak={'days': None, 'shared': False})
-    page = render_digest_pages(digest([item], True), 'en')[0]
+    page = render_digest_pages(digest([item]), 'en')[0]
     assert 'no essay shared' in page and 'not available' not in page

@@ -100,3 +100,14 @@ def test_log_lines_never_carry_the_token_or_the_key():
     record = logging.LogRecord('x', logging.ERROR, __file__, 1, message, None, None)
     line = formatter.format(record)
     assert 'AAAA' not in line and 'svc-key-xyz' not in line
+
+
+async def test_a_due_answer_without_a_chats_list_is_unavailable_not_a_crash(backend):
+    api, _ = backend
+
+    async def empty(*args, **kwargs):
+        return {}
+
+    api._call = empty
+    with pytest.raises(ApiUnavailable):
+        await api.due()

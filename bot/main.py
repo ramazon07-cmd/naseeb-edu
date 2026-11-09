@@ -3,6 +3,8 @@ import asyncio
 import logging
 import re
 import signal
+import sys
+from contextlib import suppress
 
 import aiohttp
 from aiogram import Bot, Dispatcher
@@ -60,6 +62,7 @@ async def run(config, run_for=None):
         loop.add_signal_handler(sig, stop.set)
     scheduler = None
     polling = None
+    failed = False
     try:
         me = await bot.get_me()
         log.info('authenticated with Telegram as @%s', me.username)
@@ -71,12 +74,20 @@ async def run(config, run_for=None):
         ))
         if run_for is not None:
             loop.call_later(run_for, stop.set)
-        await stop.wait()
+        stopped = asyncio.create_task(stop.wait())
+        done, _ = await asyncio.wait({stopped, scheduler, polling}, return_when=asyncio.FIRST_COMPLETED)
+        stopped.cancel()
+        for task in (scheduler, polling):
+            if task in done and not stop.is_set():
+                failed = True
+                error = None if task.cancelled() else task.exception()
+                log.error('a background task ended unexpectedly, exiting so the worker is restarted', exc_info=error)
         log.info('shutting down')
     finally:
         with_timeout = 10
         if polling is not None:
-            await dp.stop_polling()
+            with suppress(RuntimeError):
+                await dp.stop_polling()
             await asyncio.wait({polling}, timeout=with_timeout)
         if scheduler is not None:
             stop.set()
@@ -86,6 +97,7 @@ async def run(config, run_for=None):
                 task.cancel()
         await bot.session.close()
         await http.close()
+    return not failed
 
 
 def main():
@@ -94,7 +106,8 @@ def main():
     args = parser.parse_args()
     config = load_config()
     setup_logging(config)
-    asyncio.run(run(config, args.run_for))
+    if not asyncio.run(run(config, args.run_for)):
+        sys.exit(1)
 
 
 if __name__ == '__main__':
