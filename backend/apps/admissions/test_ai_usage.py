@@ -4,6 +4,7 @@ import tempfile
 from datetime import timedelta
 from unittest import mock
 
+from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
@@ -117,6 +118,8 @@ class SummaryTests(TestCase):
 
 class AdminEndpointTests(APITestCase):
     def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
         AiUsageLog.objects.create(feature='essay_coach', status='ok', input_tokens=100, output_tokens=20, total_tokens=120)
         self.support = User.objects.create_user(
             username='usage-admin', email='usage-admin@example.com', role=User.Role.ADMIN, admin_tier=User.AdminTier.SUPPORT,
@@ -133,6 +136,14 @@ class AdminEndpointTests(APITestCase):
         self.client.force_authenticate(self.support)
         data = self.client.get('/api/admin/ai-usage/?feature=assistant').data
         self.assertEqual(list(data['tokens']['features']), ['assistant'])
+
+    def test_repeat_views_reuse_the_aggregates_for_a_minute(self):
+        self.client.force_authenticate(self.support)
+        with mock.patch.object(ai_usage, 'summary', wraps=ai_usage.summary) as summary:
+            self.client.get('/api/admin/ai-usage/?days=7')
+            self.client.get('/api/admin/ai-usage/?days=7')
+            self.client.get('/api/admin/ai-usage/?days=8')
+        self.assertEqual(summary.call_count, 2)
 
     def test_bad_days_fall_back_and_are_capped(self):
         self.client.force_authenticate(self.support)

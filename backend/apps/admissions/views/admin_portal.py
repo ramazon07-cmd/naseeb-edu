@@ -111,6 +111,10 @@ class AdminSummaryView(APIView):
         return Response(summary)
 
 
+# Percentiles are computed in Python over the window's rows, so repeat views reuse the result.
+AI_TOKENS_CACHE_SECONDS = 60
+
+
 class AdminAiUsageView(APIView):
     """Paid AI calls today against their daily caps, plus token usage over ``?days=`` (default 30,
     optionally one ``?feature=``). Counters only: no student content."""
@@ -126,6 +130,14 @@ class AdminAiUsageView(APIView):
         except (TypeError, ValueError):
             days = 30
         only_feature = request.query_params.get('feature') or None
+        tokens_key = f'admin-ai-tokens:{days}:{only_feature or "all"}'
+        tokens = cache_get(tokens_key)
+        if tokens is None:
+            tokens = {
+                'window_days': days,
+                **ai_usage.summary(timezone.now() - timedelta(days=days), only_feature),
+            }
+            cache_set(tokens_key, tokens, AI_TOKENS_CACHE_SECONDS)
 
         names = dict(School.objects.filter(is_active=True).values_list('id', 'name'))
         report = ai_budget.usage_today(list(names))
@@ -137,7 +149,7 @@ class AdminAiUsageView(APIView):
             'cache_available': report is not None,
             'fallback_active': ai_budget.fallback_active(),
             'features': report,
-            'tokens': {'window_days': days, **ai_usage.summary(timezone.now() - timedelta(days=days), only_feature)},
+            'tokens': tokens,
         })
 
 
