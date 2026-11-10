@@ -1,4 +1,5 @@
 export const UI_TRANSLATIONS = {
+  'Student added from the Telegram bot': ['O‘quvchi Telegram bot orqali qo‘shildi', 'Ученик добавлен через Telegram-бот'],
   "This task is for your own planning.": ["Bu vazifa shaxsiy rejalashtirishingiz uchun.", "Эта задача для вашего личного планирования."],
   "Essay submitted successfully": ["Insho muvaffaqiyatli yuborildi", "Эссе успешно отправлено"],
   "Continue writing": ["Yozishni davom ettirish", "Продолжить писать"],
