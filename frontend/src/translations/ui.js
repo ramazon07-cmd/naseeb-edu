@@ -146,7 +146,7 @@ export const UI_TRANSLATIONS = {
   'Date': ['Sana', 'Дата'],
   'Connect your Google account': ['Google akkauntingizni ulang', 'Подключите аккаунт Google'],
   'Google account connected': ['Google akkaunti ulandi', 'Аккаунт Google подключён'],
-  'Meeting confirmations and reminders are sent by email. Connect the Google account whose inbox you read, and you can request and manage meetings.': ['Uchrashuv tasdig‘i va eslatmalar email orqali yuboriladi. Pochtasini o‘qiydigan Google akkauntingizni ulang — shundan so‘ng uchrashuv so‘rash va boshqarish mumkin bo‘ladi.', 'Подтверждения и напоминания о встречах приходят по электронной почте. Подключите аккаунт Google, почту которого вы читаете, и вы сможете запрашивать встречи и управлять ими.'],
+  'Connect the Google account whose inbox you read to request new meetings and get email confirmations and reminders. Your current meetings keep working.': ['Yangi uchrashuv so‘rash, tasdiq va eslatmalarni email orqali olish uchun pochtasini o‘qiydigan Google akkauntingizni ulang. Hozirgi uchrashuvlaringiz ishlashda davom etadi.', 'Подключите аккаунт Google, почту которого вы читаете, чтобы запрашивать новые встречи и получать подтверждения и напоминания по почте. Текущие встречи продолжают работать.'],
   'Google could not confirm your account. Try again.': ['Google akkauntingizni tasdiqlay olmadi. Qayta urinib ko‘ring.', 'Google не смог подтвердить ваш аккаунт. Попробуйте ещё раз.'],
   'Opening Google…': ['Google ochilmoqda…', 'Открываем Google…'],
   'Continue with Google': ['Google orqali davom etish', 'Продолжить с Google'],

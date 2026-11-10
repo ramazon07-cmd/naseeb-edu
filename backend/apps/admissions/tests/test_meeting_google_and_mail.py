@@ -73,6 +73,22 @@ class GoogleConnectTests(RoleIsolationBase):
         self.client.force_authenticate(self.student_a_user)
         self.assertEqual(self.client.post('/api/bookings/', payload, format='json').status_code, 201)
 
+    def test_existing_meetings_still_work_without_a_connected_account(self):
+        # Turning the feature on must not strand meetings that were booked before it.
+        start = (timezone.now() + timedelta(days=2)).replace(minute=0, second=0, microsecond=0)
+        pending = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
+                                         starts_at=start, duration_minutes=45)
+        confirmed = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Plan',
+                                           starts_at=start + timedelta(days=1), duration_minutes=45,
+                                           status=Booking.Status.APPROVED)
+        self.client.force_authenticate(self.counselor)
+        self.assertEqual(self.client.post(f'/api/bookings/{pending.id}/approve/').status_code, 200)
+        self.client.force_authenticate(self.student_a_user)
+        self.assertEqual(self.client.post(f'/api/bookings/{confirmed.id}/cancel/').status_code, 200)
+        pending.refresh_from_db()
+        confirmed.refresh_from_db()
+        self.assertEqual((pending.status, confirmed.status), (Booking.Status.APPROVED, Booking.Status.CANCELLED))
+
     @override_settings(GOOGLE_OAUTH_CLIENT_ID='')
     def test_without_google_credentials_meetings_work_as_before(self):
         self.client.force_authenticate(self.student_a_user)
@@ -137,3 +153,48 @@ class MeetingEmailTests(RoleIsolationBase):
         booking.save(update_fields=['starts_at'])
         call_command('send_meeting_reminders')
         self.assertEqual(len(mail.outbox), 4)
+
+    def test_a_mail_error_never_turns_a_saved_change_into_an_error(self):
+        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
+                                         starts_at=self.start, duration_minutes=45)
+        self.client.force_authenticate(self.counselor)
+        # BadHeaderError is a ValueError, not an SMTP error; any backend may raise its own.
+        with mock.patch('apps.admissions.meeting_mail.send_mail', side_effect=ValueError('bad header')):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(f'/api/bookings/{booking.id}/approve/')
+        self.assertEqual(response.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Status.APPROVED)
+
+    def test_a_line_break_in_a_name_still_sends_a_one_line_subject(self):
+        from ..meeting_mail import send_meeting_email
+        self.student_a_user.first_name, self.student_a_user.last_name = 'Ali\nBek', 'Valiyev'
+        self.student_a_user.save(update_fields=['first_name', 'last_name'])
+        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
+                                         starts_at=self.start, duration_minutes=45)
+        self.assertTrue(send_meeting_email(booking, self.counselor, 'requested', 'en'))
+        self.assertNotIn('\n', mail.outbox[-1].subject)
+        self.assertIn('Ali Bek Valiyev', mail.outbox[-1].subject)
+
+    def test_a_failed_reminder_is_tried_again_on_the_next_run(self):
+        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
+                                         starts_at=self.start, duration_minutes=45, status=Booking.Status.APPROVED)
+        with mock.patch('apps.admissions.meeting_mail.send_mail', side_effect=OSError('mail server down')):
+            call_command('send_meeting_reminders')
+        booking.refresh_from_db()
+        self.assertIsNone(booking.reminded_for)
+        call_command('send_meeting_reminders')
+        booking.refresh_from_db()
+        self.assertEqual(booking.reminded_for, booking.starts_at)
+        self.assertEqual(sorted(message.to[0] for message in mail.outbox), ['counselor@gmail.com', 'student@gmail.com'])
+
+    def test_a_meeting_nobody_can_be_emailed_about_is_not_retried_forever(self):
+        for user in (self.student_a_user, self.counselor):
+            user.google_email, user.email = '', f'{user.username}@students.naseeb.invalid'
+            user.save(update_fields=['google_email', 'email'])
+        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
+                                         starts_at=self.start, duration_minutes=45, status=Booking.Status.APPROVED)
+        call_command('send_meeting_reminders')
+        booking.refresh_from_db()
+        self.assertEqual(booking.reminded_for, booking.starts_at)
+        self.assertEqual(mail.outbox, [])

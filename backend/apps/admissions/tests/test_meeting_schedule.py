@@ -53,6 +53,15 @@ class MeetingScheduleTests(RoleIsolationBase):
         self.assertEqual(self.slots().count(), before)
         self.assertEqual(MeetingSchedule.objects.get().generated_until, timezone.localdate() + timedelta(days=SCHEDULE_DAYS))
 
+    def test_the_all_staff_overview_tops_up_too(self):
+        # Students mostly see the overview; a counselor nobody picks must not run out of times there.
+        self.client.force_authenticate(self.counselor)
+        self.save()
+        MeetingSchedule.objects.update(generated_until=timezone.localdate() + timedelta(days=SCHEDULE_DAYS - 10))
+        self.client.force_authenticate(self.student_a_user)
+        self.assertEqual(self.client.get('/api/bookings/availability/').status_code, 200)
+        self.assertEqual(MeetingSchedule.objects.get().generated_until, timezone.localdate() + timedelta(days=SCHEDULE_DAYS))
+
     def test_bad_hours_are_rejected(self):
         self.client.force_authenticate(self.counselor)
         for hours in ({'7': [['09:00', '10:00']]}, {'0': [['10:00', '09:00']]}, {'0': [['09:00', '11:00'], ['10:00', '12:00']]},

@@ -1,6 +1,5 @@
 """Meeting emails: one short message per event, sent to the address a person connected on Meetings."""
 import logging
-from smtplib import SMTPException
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -29,33 +28,46 @@ def meeting_address(user):
     return '' if user.email.endswith(f'@{settings.PLACEHOLDER_EMAIL_DOMAIN}') else user.email
 
 
+def deliverable_address(recipient):
+    """The address an email to `recipient` would really reach, or '' when none would be sent."""
+    address = recipient and meeting_address(recipient)
+    # The console backend delivers nothing; outside DEBUG it would only fill the logs with names.
+    if not address or (settings.EMAIL_BACKEND == CONSOLE_BACKEND and not settings.DEBUG):
+        return ''
+    return address
+
+
+def _one_line(value):
+    # Names land in the subject, where a line break makes Django refuse the whole message.
+    return ' '.join(str(value).split())
+
+
 def send_meeting_email(booking, recipient, event, language=None):
     """Email `recipient` about `booking`; True when it went out. A mail failure never fails the meeting."""
     # No per-user language is stored, so mail goes out in the product's default language (Uzbek).
     language = language or settings.LANGUAGE_CODE
-    address = recipient and meeting_address(recipient)
-    # The console backend delivers nothing; outside DEBUG it would only fill the logs with names.
-    if not address or (settings.EMAIL_BACKEND == CONSOLE_BACKEND and not settings.DEBUG):
+    address = deliverable_address(recipient)
+    if not address:
         return False
-    student = booking.student.user
-    other = booking.participant if recipient.pk == student.pk else student
-    values = {
-        'name': recipient.first_name or recipient.username,
-        'other': (other.get_full_name() or other.username) if other else '—',
-        'topic': booking.topic,
-        'time': timezone.localtime(booking.starts_at).strftime('%d.%m.%Y %H:%M'),
-        'minutes': booking.duration_minutes,
-        'link': f'{settings.FRONTEND_URL}/meetings',
-    }
     try:
+        student = booking.student.user
+        other = booking.participant if recipient.pk == student.pk else student
+        values = {
+            'name': _one_line(recipient.first_name or recipient.username),
+            'other': _one_line(other.get_full_name() or other.username) if other else '—',
+            'topic': booking.topic,
+            'time': timezone.localtime(booking.starts_at).strftime('%d.%m.%Y %H:%M'),
+            'minutes': booking.duration_minutes,
+            'link': f'{settings.FRONTEND_URL}/meetings',
+        }
         send_mail(
-            localized_message(f'meeting_email_{event}_subject', language=language).format(**values),
+            _one_line(localized_message(f'meeting_email_{event}_subject', language=language).format(**values)),
             localized_message(f'meeting_email_{event}', language=language).format(**values)
             + localized_message('meeting_email_details', language=language).format(**values),
             settings.DEFAULT_FROM_EMAIL,
             [address],
         )
-    except (SMTPException, OSError):
+    except Exception:  # noqa: BLE001 - any mail problem (SMTP, headers, backend) is logged, never raised
         logger.warning('Meeting email (%s) failed for booking %s', event, booking.pk, exc_info=True)
         return False
     return True
@@ -69,4 +81,5 @@ def email_after_commit(booking, recipient, title, request):
     event = EVENTS.get(title)
     if event and recipient and recipient.pk != request.user.pk:
         # shortcut: sent in the request after commit (waits up to EMAIL_TIMEOUT); move to a queue when mail volume grows.
-        transaction.on_commit(lambda: send_meeting_email(booking, recipient, event))
+        # robust: the change is already saved, so nothing about the email may turn the response into an error.
+        transaction.on_commit(lambda: send_meeting_email(booking, recipient, event), robust=True)

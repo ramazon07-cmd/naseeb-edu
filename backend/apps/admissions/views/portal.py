@@ -35,8 +35,8 @@ from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
 from ..listing import ListQueryMixin
 from ..meeting_mail import email_after_commit
 from ..meetings import (
-    MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, overlapping, top_up_schedule, upcoming_slots, weekly_starts,
-    with_availability,
+    MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, overlapping, top_up_schedule, top_up_schedules,
+    upcoming_slots, weekly_starts, with_availability,
 )
 from ..params import int_param
 from ..scoping import booking_participants_for, scope_students, visible_students
@@ -101,6 +101,8 @@ BOOKING_STAFF_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACH
 
 # Who must connect a Google account (a verified email for meeting emails) before changing meetings.
 GOOGLE_REQUIRED_ROLES = {User.Role.STUDENT, User.Role.COUNSELOR, User.Role.ASSISTANT}
+# The writes that start something new; every other meeting action works without Google.
+GOOGLE_REQUIRED_ACTIONS = {'create', 'availability', 'availability_repeat', 'availability_weekly'}
 
 
 class BookingPermission(permissions.BasePermission):
@@ -115,9 +117,11 @@ class BookingPermission(permissions.BasePermission):
             return False
         if user.is_superuser or user.role == User.Role.ADMIN:
             return True
-        # Reads stay open (the dashboard lists meetings); changing anything needs the connected account.
-        if (request.method not in permissions.SAFE_METHODS and user.role in GOOGLE_REQUIRED_ROLES
-                and not user.google_email and google_connect_enabled()):
+        # Starting something new (a request, published times) needs the connected account. Meetings that
+        # already exist can still be confirmed, declined, moved, cancelled and cleared without it, so
+        # turning the feature on never strands a booked meeting.
+        if (request.method not in permissions.SAFE_METHODS and view.action in GOOGLE_REQUIRED_ACTIONS
+                and user.role in GOOGLE_REQUIRED_ROLES and not user.google_email and google_connect_enabled()):
             raise PermissionDenied('Connect your Google account to use Meetings.')
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
             return view.action in self.STUDENT_ACTIONS
@@ -311,7 +315,9 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 top_up_schedule(participant_id)
                 slots = MeetingAvailability.objects.filter(participant_id=participant_id)
             else:
-                allowed_ids = participants.values_list('id', flat=True)[:CONTACT_LIST_LIMIT]
+                allowed_ids = list(participants.values_list('id', flat=True)[:CONTACT_LIST_LIMIT])
+                # Also here, not only when one person is picked: staff nobody picks would run out of times.
+                top_up_schedules(allowed_ids)
                 slots = MeetingAvailability.objects.filter(participant_id__in=allowed_ids)
                 overview = True
         else:

@@ -187,13 +187,23 @@ def fill_schedule(schedule, replace=False):
     schedule.save(update_fields=['generated_until', 'updated_at'])
 
 
-def top_up_schedule(participant_id):
-    """Extend a staff member's generated slots when they reach less than three weeks ahead."""
+def top_up_schedules(participant_ids):
+    """Extend the generated slots of these staff members where they reach less than three weeks ahead.
+
+    One query finds who is short (usually nobody); each of those is filled under their own lock.
+    """
     short = timezone.localdate() + timedelta(days=SCHEDULE_DAYS - 7)
-    if not MeetingSchedule.objects.filter(participant_id=participant_id, generated_until__lt=short).exists():
-        return
-    with transaction.atomic():
-        get_user_model().objects.select_for_update().get(pk=participant_id)
-        schedule = MeetingSchedule.objects.get(participant_id=participant_id)
-        if schedule.generated_until < short:
-            fill_schedule(schedule)
+    due = list(MeetingSchedule.objects.filter(
+        participant_id__in=list(participant_ids), generated_until__lt=short,
+    ).values_list('participant_id', flat=True))
+    for participant_id in due:
+        with transaction.atomic():
+            get_user_model().objects.select_for_update().get(pk=participant_id)
+            schedule = MeetingSchedule.objects.get(participant_id=participant_id)
+            if schedule.generated_until < short:
+                fill_schedule(schedule)
+
+
+def top_up_schedule(participant_id):
+    """Extend one staff member's generated slots when they reach less than three weeks ahead."""
+    top_up_schedules([participant_id])
