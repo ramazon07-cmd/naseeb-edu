@@ -338,6 +338,9 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         data['assistant_enabled'] = entitlements.assistant_available(request.user, subscription)
         from apps.admissions.invites import pending_join_info, self_join_enabled
 
+        # On: Meetings asks students and counselors to connect a Google account first.
+        from .google import google_connect_enabled
+        data['google_connect_enabled'] = google_connect_enabled()
         # Off: "Add student" offers only the account the counselor creates.
         data['student_self_join'] = self_join_enabled()
         # A student who joined by invite sees only the waiting screen until confirmed.

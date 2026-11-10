@@ -870,10 +870,23 @@ class MeetingAvailability(TimeStampedModel):
     participant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='meeting_availability')
     starts_at = models.DateTimeField()
     duration_minutes = models.PositiveSmallIntegerField(default=45)
+    # Generated from the staff member's weekly hours; replaced when those hours change.
+    from_schedule = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['starts_at', 'id']
         constraints = [models.UniqueConstraint(fields=['participant', 'starts_at'], name='unique_meeting_availability_start')]
+
+
+class MeetingSchedule(TimeStampedModel):
+    """A staff member's weekly hours; the dated MeetingAvailability slots students book are generated from it."""
+
+    participant = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='meeting_schedule')
+    duration_minutes = models.PositiveSmallIntegerField(default=45)
+    # {"0": [["09:00", "12:00"], ["14:00", "17:00"]]}: Monday = 0, ranges on the server's (Tashkent) clock.
+    hours = models.JSONField(default=dict, blank=True)
+    # Slots exist through this day; later days are added as time moves on (meetings.fill_schedule).
+    generated_until = models.DateField(null=True, blank=True)
 
 
 class Booking(TimeStampedModel):
@@ -903,6 +916,8 @@ class Booking(TimeStampedModel):
     duration_minutes = models.PositiveSmallIntegerField(default=45)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     notes = models.TextField(blank=True)
+    # The start time the reminder email was sent for; a moved meeting is reminded again.
+    reminded_for = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['starts_at']

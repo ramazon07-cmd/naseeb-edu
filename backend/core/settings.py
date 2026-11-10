@@ -133,6 +133,15 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=10, cast=int)
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Naseeb Edu <no-reply@naseebedu.com>')
+# "Connect Google" on Meetings: a verified email for meeting confirmations and reminders.
+# Empty client id = the feature is off and Meetings needs no Google account.
+GOOGLE_OAUTH_CLIENT_ID = config('GOOGLE_OAUTH_CLIENT_ID', default='')
+GOOGLE_OAUTH_CLIENT_SECRET = config('GOOGLE_OAUTH_CLIENT_SECRET', default='')
+# The callback exactly as registered in Google Cloud, e.g. https://api.naseebedu.com/api/users/google/callback/.
+# Empty: built from the request (fine locally; behind a proxy set it).
+GOOGLE_OAUTH_REDIRECT_URI = config('GOOGLE_OAUTH_REDIRECT_URI', default='')
+# A reminder email goes out once a confirmed meeting is this close (send_meeting_reminders, hourly cron).
+MEETING_REMINDER_HOURS = config('MEETING_REMINDER_HOURS', default=24, cast=int)
 
 environment_errors = validate_runtime_environment(
     app_env=APP_ENV,
@@ -412,6 +421,7 @@ REST_FRAMEWORK = {
         'refresh': config('AUTH_REFRESH_RATE', default='30/hour'),
         'refresh_ip': config('AUTH_REFRESH_IP_RATE', default='600/minute'),
         'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
+        'google_connect': config('GOOGLE_CONNECT_RATE', default='20/hour'),
         'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
         'remind': config('REMIND_RATE', default='60/hour'),
         'account_change': config('AUTH_ACCOUNT_CHANGE_RATE', default='10/hour'),

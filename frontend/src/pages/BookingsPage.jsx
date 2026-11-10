@@ -285,6 +285,75 @@ function editTitle(slot) {
 
 const slotEnd = (slot) => new Date(new Date(slot.starts_at).getTime() + slot.duration_minutes * 60000);
 
+const weekdayName = (index) => (uzbek() ? t(WEEKDAYS[index]) : formatDateLocale(new Date(2024, 0, 1 + index), { weekday: 'long' }));
+const DEFAULT_RANGE = ['09:00', '17:00'];
+// The range offered by "add hours": the hour after the day's last one, while the day has room.
+function nextRange(ranges) {
+  const last = ranges.at(-1)?.[1];
+  if (!last || last >= '23:00') return DEFAULT_RANGE;
+  return [last, `${String(Number(last.slice(0, 2)) + 1).padStart(2, '0')}${last.slice(2)}`];
+}
+const rangesOverlap = (ranges) => [...ranges].sort().some((range, index, sorted) => index > 0 && range[0] < sorted[index - 1][1]);
+
+// Weekly hours, the way Calendly asks for them: one row per weekday with its
+// from–to hours. The server turns them into the dated times students book.
+function WeeklyHours({ notify, onSaved }) {
+  const [hours, setHours] = useState(null);
+  const [duration, setDuration] = useState(45);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setError('');
+    api.weeklyAvailability().then((data) => {
+      if (!active) return;
+      setHours(data.hours || {});
+      setDuration(data.duration_minutes || 45);
+    }).catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [attempt]);
+  const setDay = (day, ranges) => setHours((current) => ({ ...current, [day]: ranges }));
+  const setTime = (day, index, side, value) => setDay(day, hours[day].map((range, at) => (at === index ? (side ? [range[0], value] : [value, range[1]]) : range)));
+  async function save(event) {
+    event.preventDefault();
+    const days = Object.values(hours);
+    if (days.some((ranges) => ranges.some(([from, to]) => !from || !to || to <= from))) { notify(t("Choose an end time after the start time."), 'error'); return; }
+    if (days.some(rangesOverlap)) { notify(t("Hours on the same day cannot overlap."), 'error'); return; }
+    setBusy(true);
+    try {
+      const saved = await api.saveWeeklyAvailability({ duration_minutes: duration, hours });
+      setHours(saved.hours || {});
+      notify(t("Weekly hours saved."));
+      onSaved();
+    } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
+  }
+  if (error) return <div className="availability-weekly"><InlineLoadError message={error} onRetry={() => setAttempt((value) => value + 1)} /></div>;
+  if (!hours) return <div className="availability-weekly"><p className="booking-cal-note">{t("Loading available times…")}</p></div>;
+  return <form className="availability-weekly" onSubmit={save}>
+    <p className="booking-cal-note">{t("Set the hours you can meet each week. Students pick a time inside them for the next 4 weeks. Times are in Tashkent time.")}</p>
+    <div className="availability-add-row">
+      <b>{t("Meeting length")}</b>
+      <fieldset className="availability-durations"><legend className="sr-only">{t("Meeting length")}</legend>{[30, 45, 60].map((value) => <label key={value}><input type="radio" name="weekly-duration" checked={duration === value} onChange={() => setDuration(value)} /><span>{value} {t("min")}</span></label>)}</fieldset>
+    </div>
+    <ul className="weekly-days">{WEEKDAYS.map((name, day) => {
+      const ranges = hours[day] || [];
+      const dayName = weekdayName(day);
+      return <li key={name}>
+        <label className="weekly-day"><input type="checkbox" checked={ranges.length > 0} onChange={(event) => setDay(day, event.target.checked ? [DEFAULT_RANGE] : [])} /> {dayName}</label>
+        <div className="weekly-ranges">{ranges.length ? ranges.map(([from, to], index) => <div key={index} className="weekly-range">
+          <label className="availability-time"><span className="sr-only">{t("{day}: from", { day: dayName })}</span><input type="time" required value={from} onChange={(event) => setTime(day, index, 0, event.target.value)} /></label>
+          <span aria-hidden="true">–</span>
+          <label className="availability-time"><span className="sr-only">{t("{day}: until", { day: dayName })}</span><input type="time" required value={to} onChange={(event) => setTime(day, index, 1, event.target.value)} /></label>
+          <button type="button" className="availability-remove" onClick={() => setDay(day, ranges.filter((_, at) => at !== index))} aria-label={t("Remove {day} {from}–{to}", { day: dayName, from, to })} title={t("Remove")}><X size={16} aria-hidden="true" /></button>
+        </div>) : <span className="weekly-off">{t("Unavailable")}</span>}</div>
+        <button type="button" className="availability-remove weekly-add" disabled={ranges.length >= 4} onClick={() => setDay(day, [...ranges, nextRange(ranges)])} aria-label={t("Add hours on {day}", { day: dayName })} title={t("Add hours")}><Plus size={16} aria-hidden="true" /></button>
+      </li>;
+    })}</ul>
+    <div className="availability-add-actions"><button type="submit" className="button primary" disabled={busy} aria-busy={busy}><Check size={16} aria-hidden="true" /> {busy ? t("Saving…") : t("Save weekly hours")}</button></div>
+  </form>;
+}
+
 // Staff publish the times students can book. Same calendar the student sees:
 // days with times are tinted; the chosen day lists its times and adds new ones.
 function AvailabilityManager({ onClose, notify }) {
@@ -297,10 +366,10 @@ function AvailabilityManager({ onClose, notify }) {
   // Optional: with an end time the range is cut into `duration` slots (09:00–12:00 → 09:00, 09:45, …).
   const [endTime, setEndTime] = useState('');
   const [duration, setDuration] = useState(45);
-  const [repeat, setRepeat] = useState(false);
-  const [repeatUntil, setRepeatUntil] = useState('');
-  const [repeatDays, setRepeatDays] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [tab, setTab] = useState('weekly');
+  // Bumped after the weekly hours are saved: the dated times were rebuilt.
+  const [slotsVersion, setSlotsVersion] = useState(0);
   // A day that already has times shows them, with the add form behind one button.
   const [adding, setAdding] = useState(false);
   const sortSlots = (items) => [...items].sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
@@ -313,38 +382,29 @@ function AvailabilityManager({ onClose, notify }) {
       if (next[0]) { setSelectedDay(meetingDay(next[0].starts_at)); setViewMonth(monthStart(inServerZone(next[0].starts_at))); }
     }).catch((err) => { if (active) notify(err.message, 'error'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [notify]);
+  }, [notify, slotsVersion]);
   const today = meetingDay();
   const slotDays = new Set(slots.map((slot) => meetingDay(slot.starts_at)));
   const daySlots = slots.filter((slot) => meetingDay(slot.starts_at) === selectedDay);
   const openCount = slots.filter((slot) => slot.available).length;
   const selectedWeekday = (new Date(`${selectedDay}T00:00`).getDay() + 6) % 7;
-  // The server repeats for at most 12 weeks counted from the first day.
-  const lastRepeatDay = dayKey(new Date(new Date(`${selectedDay}T00:00`).getTime() + 83 * 86400000));
   function pickDay(key) {
     setSelectedDay(key);
     setAdding(false);
     setEditing(null);
-    if (repeat) setRepeatDays([(new Date(`${key}T00:00`).getDay() + 6) % 7]);
-  }
-  function toggleRepeat(on) {
-    setRepeat(on);
-    setRepeatDays([selectedWeekday]);
-    if (on && !repeatUntil) setRepeatUntil(dayKey(new Date(new Date(`${selectedDay}T00:00`).getTime() + 27 * 86400000)));
   }
   async function add(event) {
     event.preventDefault();
     const startsAt = fromTashkent(`${selectedDay}T${time}`);
-    if (!time || (!repeat && startsAt <= new Date())) { notify(t("Choose a time in the future."), 'error'); return; }
-    if (repeat && (!repeatUntil || repeatUntil < selectedDay || repeatUntil > lastRepeatDay || !repeatDays.length)) { notify(t("Repeat for at most 12 weeks."), 'error'); return; }
+    if (!time || startsAt <= new Date()) { notify(t("Choose a time in the future."), 'error'); return; }
     if (endTime && endTime <= time) { notify(t("Choose an end time after the start time."), 'error'); return; }
     setBusy(true);
     try {
-      if (repeat || endTime) {
-        // One day's range goes through the same endpoint as a weekly one.
+      if (endTime) {
+        // One day's range, cut into slots by the endpoint that repeats a time over dates.
         const result = await api.repeatBookingAvailability({
-          weekdays: repeat ? repeatDays : [selectedWeekday], time, end_time: endTime || null, duration_minutes: duration,
-          start_date: selectedDay, end_date: repeat ? repeatUntil : selectedDay, timezone: SERVER_TIME_ZONE,
+          weekdays: [selectedWeekday], time, end_time: endTime, duration_minutes: duration,
+          start_date: selectedDay, end_date: selectedDay, timezone: SERVER_TIME_ZONE,
         });
         setSlots((current) => sortSlots([...current, ...(result.slots || [])]));
         notify(result.skipped
@@ -380,7 +440,8 @@ function AvailabilityManager({ onClose, notify }) {
   }
   const startEdit = (slot) => setEditing({ id: slot.id, date: meetingDay(slot.starts_at), time: localInputValue(slot.starts_at).slice(11), duration: slot.duration_minutes });
   return <Modal title={t("My available hours")} onClose={onClose} className="booking-scheduler-modal">
-    <div className="booking-cal availability-cal">
+    <div className="availability-tabs"><PortalTabs active={tab} onChange={setTab} items={[['weekly', 'Weekly hours'], ['dates', 'Specific dates']]} /></div>
+    {tab === 'weekly' ? <WeeklyHours notify={notify} onSaved={() => setSlotsVersion((value) => value + 1)} /> : <div className="booking-cal availability-cal">
       <aside className="booking-cal-side">
         <p className="booking-cal-note">{t("Add times students can choose when requesting a meeting. Times are in Tashkent time.")}</p>
         <MonthGrid month={viewMonth} onMonth={setViewMonth} canBack={viewMonth > monthStart(new Date())} canForward marked={slotDays} canPick={(key) => key >= today} selected={selectedDay} onPick={pickDay} label={t("Choose a date and time")} />
@@ -413,16 +474,11 @@ function AvailabilityManager({ onClose, notify }) {
             <label className="availability-time"><span className="sr-only">{t("Until (optional)")}</span><input type="time" min={time || undefined} value={endTime} onChange={(event) => setEndTime(event.target.value)} title={t("Until (optional)")} /></label>
             <fieldset className="availability-durations"><legend className="sr-only">{t("Duration")}</legend>{[30, 45, 60].map((value) => <label key={value}><input type="radio" name="availability-duration" checked={duration === value} onChange={() => setDuration(value)} /><span>{value} {t("min")}</span></label>)}</fieldset>
           </div>
-          <div className="availability-add-row">
-            <label><input type="checkbox" checked={repeat} onChange={(event) => toggleRepeat(event.target.checked)} /> {t("Repeat weekly until…")}</label>
-            {repeat && <label className="availability-time"><span className="sr-only">{t("Repeat until")}</span><input type="date" required min={selectedDay} max={lastRepeatDay} value={repeatUntil} onChange={(event) => setRepeatUntil(event.target.value)} /></label>}
-          </div>
-          {repeat && <fieldset className="availability-durations"><legend className="sr-only">{t("Repeat on")}</legend>{WEEKDAYS.map((name, index) => <label key={name}><input type="checkbox" checked={repeatDays.includes(index)} onChange={(event) => setRepeatDays((current) => (event.target.checked ? [...current, index] : current.filter((day) => day !== index)))} /><span>{uzbek() ? t(name).slice(0, 2) : formatDateLocale(new Date(2024, 0, 1 + index), { weekday: 'short' })}</span></label>)}</fieldset>}
           {/* An empty start time is caught by the input's `required`, so Save stays clickable and says why. */}
           <div className="availability-add-actions"><button type="submit" className="button primary" disabled={busy} aria-busy={busy}><Check size={16} aria-hidden="true" /> {t("Save")}</button></div>
         </form>}
       </section>
-    </div>
+    </div>}
   </Modal>;
 }
 
@@ -542,7 +598,35 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
   return <Modal title={t("Meeting notes")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{earlier.length > 0 && <section className="form-wide"><h3>{t("Notes from this day")}</h3><div className="record-list">{earlier.map((note) => <Record key={note.id} title={note.title} meta={joinParts(note.summary, note.next_steps && `${t("Next steps")}: ${note.next_steps}`)} />)}</div></section>}<Field label={t("Title")}><input name="title" required defaultValue={booking.topic} /></Field><Field label={t("Summary")}><textarea name="summary" required placeholder={t("What did you cover?")} /></Field><Field label={t("Next steps")}><textarea name="next_steps" placeholder={t("Optional")} /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save note")}</button></div></form></Modal>;
 }
 
+// Students and counselors connect a Google account once: its verified email
+// receives the meeting confirmations and reminders (the API refuses changes without it).
+const GOOGLE_ROLES = ['student', 'counselor', 'assistant'];
+const needsGoogle = (user) => Boolean(user.google_connect_enabled) && GOOGLE_ROLES.includes(user.role) && !user.google_email;
+
+function GoogleConnectGate({ user, notify }) {
+  const [busy, setBusy] = useState(false);
+  const failed = new URLSearchParams(window.location.search).get('google') === 'failed';
+  async function connect() {
+    setBusy(true);
+    try {
+      const { url } = await api.startGoogleConnect();
+      window.location.assign(url);
+    } catch (err) {
+      notify(err.message, 'error');
+      setBusy(false);
+    }
+  }
+  const body = <div className="google-gate">
+    <p>{t("Meeting confirmations and reminders are sent by email. Connect the Google account whose inbox you read, and you can request and manage meetings.")}</p>
+    {failed && <p className="google-gate-error" role="alert">{t("Google could not confirm your account. Try again.")}</p>}
+    <button type="button" className="button primary" disabled={busy} aria-busy={busy} onClick={connect}>{busy ? t("Opening Google…") : t("Continue with Google")}</button>
+  </div>;
+  if (usesCounselorLayout(user)) return <div className="cx-page cx-meetings"><CxHead title={t("Meetings")} /><CxCard title={t("Connect your Google account")}>{body}</CxCard></div>;
+  return <div className="section-stack student-portal"><Panel title={t("Connect your Google account")}>{body}</Panel></div>;
+}
+
 export function BookingsPage({ user, data, reload, notify }) {
+  if (needsGoogle(user)) return <GoogleConnectGate user={user} notify={notify} />;
   if (user.role === 'student') return <StudentBookingsPage data={data} reload={reload} notify={notify} />;
   if (usesCounselorLayout(user)) return <CounselorMeetingsPage data={data} reload={reload} notify={notify} />;
   return <StaffMeetingsPage data={data} reload={reload} notify={notify} />;

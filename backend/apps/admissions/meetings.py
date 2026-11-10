@@ -1,12 +1,14 @@
 """Meeting time rules shared by booking requests and staff availability."""
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import DateTimeField, DurationField, Exists, ExpressionWrapper, F, Func, OuterRef, Window
 from django.db.models.functions import RowNumber
 from django.utils import timezone
 
-from .models import Booking
+from .models import Booking, MeetingAvailability, MeetingSchedule
 
 MEETING_DURATIONS = (30, 45, 60)
 MAX_MEETING_MINUTES = max(MEETING_DURATIONS)
@@ -15,7 +17,10 @@ MAX_REPEAT_DAYS = 12 * 7
 # One request may add at most this many times (a 12-week range of full days would be thousands).
 MAX_REPEAT_SLOTS = 400
 # Each staff member's next slots; a busy colleague cannot crowd out the rest.
-SLOTS_PER_PARTICIPANT = 200
+# Covers four weeks of full weekdays from the weekly hours (about 10 slots a day).
+SLOTS_PER_PARTICIPANT = 400
+# Weekly hours are turned into dated slots this far ahead, topped up once less than a week short.
+SCHEDULE_DAYS = 28
 # A student's all-staff overview: the next few free times of each staff member, and a hard total.
 # The student's picker then loads the chosen person's full list.
 OVERVIEW_SLOTS_PER_PARTICIPANT = 20
@@ -127,3 +132,68 @@ def weekly_starts(weekdays, time, start_date, end_date, tz, until=None, step=Non
                     yield start
                     start += timedelta(minutes=step)
         day += timedelta(days=1)
+
+
+def add_free_slots(user, starts, duration, **fields):
+    """Create slots at the future `starts` that overlap none of `user`'s slots or open meetings.
+
+    The caller holds the per-staff lock (`select_for_update` on the user) inside a transaction.
+    """
+    now = timezone.now()
+    future = [start for start in starts if start > now]
+    if not future:
+        return []
+    # One read of the whole range (slots and open meetings), then checks in memory.
+    first = min(future)
+    span = math.ceil((max(future) - first).total_seconds() / 60) + duration
+    taken = (
+        overlapping(MeetingAvailability.objects.filter(participant=user), first, span)
+        + overlapping(Booking.objects.filter(participant=user, status__in=Booking.OPEN_STATUSES), first, span)
+    )
+    created = []
+    for start in future:
+        if not clashes(taken, start, duration):
+            slot = MeetingAvailability(participant=user, starts_at=start, duration_minutes=duration, **fields)
+            created.append(slot)
+            taken.append(slot)
+    return MeetingAvailability.objects.bulk_create(created)
+
+
+def fill_schedule(schedule, replace=False):
+    """Generate the weekly hours' slots through SCHEDULE_DAYS ahead; the caller holds the per-staff lock.
+
+    `replace` (the hours changed): unbooked generated slots are dropped and rebuilt from today.
+    Hand-added slots and any slot with an open meeting stay, and new slots never overlap them.
+    """
+    today = timezone.localdate()
+    until = today + timedelta(days=SCHEDULE_DAYS)
+    first_day = today if replace or not schedule.generated_until else schedule.generated_until + timedelta(days=1)
+    if replace:
+        MeetingAvailability.objects.filter(
+            participant=schedule.participant, from_schedule=True, starts_at__gt=timezone.now(),
+        ).exclude(bookings__status__in=Booking.OPEN_STATUSES).delete()
+    tz = timezone.get_default_timezone()
+    starts = [
+        start
+        for weekday, ranges in schedule.hours.items()
+        for begin, end in ranges
+        for start in weekly_starts(
+            {int(weekday)}, time.fromisoformat(begin), first_day, until, tz,
+            until=time.fromisoformat(end), step=schedule.duration_minutes,
+        )
+    ]
+    add_free_slots(schedule.participant, starts, schedule.duration_minutes, from_schedule=True)
+    schedule.generated_until = until
+    schedule.save(update_fields=['generated_until', 'updated_at'])
+
+
+def top_up_schedule(participant_id):
+    """Extend a staff member's generated slots when they reach less than three weeks ahead."""
+    short = timezone.localdate() + timedelta(days=SCHEDULE_DAYS - 7)
+    if not MeetingSchedule.objects.filter(participant_id=participant_id, generated_until__lt=short).exists():
+        return
+    with transaction.atomic():
+        get_user_model().objects.select_for_update().get(pk=participant_id)
+        schedule = MeetingSchedule.objects.get(participant_id=participant_id)
+        if schedule.generated_until < short:
+            fill_schedule(schedule)
