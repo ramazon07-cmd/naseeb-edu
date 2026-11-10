@@ -107,6 +107,16 @@ class MeetingEmailTests(RoleIsolationBase):
             self.client.post(f"/api/bookings/{booked.data['id']}/approve/")
         self.assertEqual(mail.outbox[-1].to, ['student@gmail.com'])
 
+    def test_whoever_cancels_is_not_emailed_and_mail_is_in_uzbek(self):
+        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
+                                         starts_at=self.start, duration_minutes=45, status=Booking.Status.APPROVED)
+        self.client.force_authenticate(self.student_a_user)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(f'/api/bookings/{booking.id}/cancel/', HTTP_ACCEPT_LANGUAGE='ru')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([message.to for message in mail.outbox], [['counselor@gmail.com']])
+        self.assertEqual(mail.outbox[0].subject, 'Uchrashuv bekor qilindi')
+
     def test_a_placeholder_address_gets_no_email(self):
         from ..meeting_mail import meeting_address
         self.student_a_user.google_email = ''

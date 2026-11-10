@@ -7,7 +7,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
-from apps.users.localization import localized_message, request_language
+from apps.users.localization import localized_message
 
 logger = logging.getLogger(__name__)
 CONSOLE_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -29,8 +29,10 @@ def meeting_address(user):
     return '' if user.email.endswith(f'@{settings.PLACEHOLDER_EMAIL_DOMAIN}') else user.email
 
 
-def send_meeting_email(booking, recipient, event, language='uz'):
+def send_meeting_email(booking, recipient, event, language=None):
     """Email `recipient` about `booking`; True when it went out. A mail failure never fails the meeting."""
+    # No per-user language is stored, so mail goes out in the product's default language (Uzbek).
+    language = language or settings.LANGUAGE_CODE
     address = recipient and meeting_address(recipient)
     # The console backend delivers nothing; outside DEBUG it would only fill the logs with names.
     if not address or (settings.EMAIL_BACKEND == CONSOLE_BACKEND and not settings.DEBUG):
@@ -60,9 +62,11 @@ def send_meeting_email(booking, recipient, event, language='uz'):
 
 
 def email_after_commit(booking, recipient, title, request):
-    """Queue the email matching an in-app notification `title`, sent once the change is committed."""
+    """Queue the email matching an in-app notification `title`, sent once the change is committed.
+
+    Only the other side is emailed: whoever made the change already knows.
+    """
     event = EVENTS.get(title)
-    if event and recipient:
-        language = request_language(request)
+    if event and recipient and recipient.pk != request.user.pk:
         # shortcut: sent in the request after commit (waits up to EMAIL_TIMEOUT); move to a queue when mail volume grows.
-        transaction.on_commit(lambda: send_meeting_email(booking, recipient, event, language))
+        transaction.on_commit(lambda: send_meeting_email(booking, recipient, event))
