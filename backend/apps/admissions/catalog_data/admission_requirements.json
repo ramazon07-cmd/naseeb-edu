@@ -1,0 +1,54 @@
+{
+  "about": "Entry requirements for students from Uzbekistan, each from the university's own page. Only values a source states; blank fields stay unknown. Load with: manage.py load_admission_requirements",
+  "universities": [
+    {
+      "name": "The London School of Economics and Political Science (LSE)",
+      "country": "United Kingdom",
+      "credential_route": "not_accepted",
+      "source": "https://www.lse.ac.uk/study-at-lse/international-students/uzbekistan",
+      "verified": "2026-11-11"
+    },
+    {
+      "name": "The University of Edinburgh",
+      "country": "United Kingdom",
+      "credential_route": "foundation",
+      "source": "https://www.ed.ac.uk/studying/international/country/asia/central-west-asia/uzbekistan",
+      "verified": "2026-11-11"
+    },
+    {
+      "name": "University of Leeds",
+      "country": "United Kingdom",
+      "credential_route": "foundation",
+      "source": "https://leeds.ac.uk/admissions-qualifications/21952/uzbekistan",
+      "verified": "2026-11-11"
+    },
+    {
+      "name": "Cardiff University",
+      "country": "United Kingdom",
+      "credential_route": "foundation",
+      "source": "https://www.cardiff.ac.uk/study/international/your-country/asia/uzbekistan/entry-requirements-uzbekistan",
+      "verified": "2026-11-11"
+    },
+    {
+      "name": "Khalifa University",
+      "country": "United Arab Emirates",
+      "ielts_min": "6.0",
+      "source": "https://ku-ae.smartcatalogiq.com/en/2025-2026/undergraduate-catalog/undergraduate-admissions-and-scholarships/undergraduate-admission-requirements",
+      "verified": "2026-11-11"
+    },
+    {
+      "name": "Charles University",
+      "country": "Czechia",
+      "entrance_exam": "Faculty entrance exam",
+      "source": "https://ec.cuni.cz/UKEN-191-version1-guide_for_international_applicants.pdf",
+      "verified": "2026-11-11"
+    },
+    {
+      "name": "Westminster International University in Tashkent",
+      "country": "Uzbekistan",
+      "entrance_exam": "WIUT mathematics test, GCSE Mathematics C or SAT Math 570",
+      "source": "https://wiut.uz/news/last-mathematics-entrance-exam-at-wiut",
+      "verified": "2026-11-11"
+    }
+  ]
+}

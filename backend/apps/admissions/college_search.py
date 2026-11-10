@@ -19,6 +19,7 @@ from rest_framework import serializers
 
 from apps.users.cache_safety import cache_get, cache_set
 
+from . import admission_chance
 from .catalog_cache import CACHE_SECONDS, VERSION_KEY
 from .countries import country_key, country_name, country_spellings
 from .listing import MAX_SEARCH_LENGTH, search_terms, term_query
@@ -40,7 +41,7 @@ AID_DETAILS = (
     'aid_application_notes', 'need_blind', 'css_profile_required', 'fafsa_required', 'meets_full_need',
 )
 AID_AMOUNTS = ('average_aid_usd', 'students_receiving_aid_percent')
-BANDS = ('reach', 'target', 'safety')
+BANDS = admission_chance.BANDS
 # A row without admission data has no band; the filter and the facets call it "unknown".
 UNKNOWN_BAND = 'unknown'
 BAND_CHOICES = (*BANDS, UNKNOWN_BAND)
@@ -59,11 +60,14 @@ EVIDENCE = ('achievements', 'honors', 'researches', 'projects', 'internships', '
 SCORING_FIELDS = (
     'id', 'country', 'market', 'ranking', 'sat_min', 'sat_max', 'act_min', 'act_max', 'popular_majors',
     'net_price_usd', 'intl_cost_usd', 'acceptance_rate', 'test_optional', *OFFERED_AID, *AID_DETAILS,
+    'intl_acceptance_rate', 'intl_need_policy', 'credential_route', 'ielts_min', 'entrance_exam',
 )
-TEST_POINTS = 25
-ENGLISH_POINTS = 8
-TOTAL_POINTS = 88  # Academic 48, preferences 22, aid 8 and profile evidence 10.
+# Fit says whether a university suits the student: country and major (22) and aid (8).
+# Admission chances are the band (admission_chance.py), not part of this score.
+FIT_POINTS = 30
 AID_POINTS = 8
+# "Best fit" order: realistic bands first, then the fit score, then the ranking.
+BAND_ORDER = {'target': 0, 'safety': 1, 'reach': 2, 'far_reach': 3, None: 4, 'not_eligible': 5}
 # How far below a range minimum still counts as "close".
 NEAR_MINIMUM = {'SAT': 80, 'ACT': 2}
 ENGLISH_TESTS = {'toefl': 'TOEFL', 'duolingo': 'Duolingo', 'pte': 'PTE', 'cambridge': 'Cambridge'}
@@ -180,27 +184,21 @@ def has_aid_data(university):
 
 
 def range_fit(test, score, low, high):
-    """``(points, is_reason, item, below_minimum)`` for one test score against a catalogue range."""
+    """``(is_reason, item)`` for one test score against a catalogue range."""
     high = high or low
     key = test.lower()
     if score >= high:
-        return 25, True, item(f'{key}_above_range', f'{test} {score} meets or exceeds the catalog range', score=score), False
+        return True, item(f'{key}_above_range', f'{test} {score} meets or exceeds the catalog range', score=score)
     if score >= low:
-        return 22, True, item(f'{key}_in_range', f'{test} {score} fits the {low}–{high} catalog range', score=score, min=low, max=high), False
+        return True, item(f'{key}_in_range', f'{test} {score} fits the {low}–{high} catalog range', score=score, min=low, max=high)
     if score >= low - NEAR_MINIMUM[test]:
-        return 12, False, item(f'{key}_near_minimum', f'{test} is {low - score} points below the catalog minimum', points=low - score, min=low), True
-    return 4, False, item(f'{key}_below_minimum', f'Raise {test} toward at least {low}', min=low), True
+        return False, item(f'{key}_near_minimum', f'{test} is {low - score} points below the catalog minimum', points=low - score, min=low)
+    return False, item(f'{key}_below_minimum', f'Raise {test} toward at least {low}', min=low)
 
 
-def score_university(university, ctx):
-    """One university's fit for a ready profile. ``university.programs`` must be the eligible ones
-    from the catalog's active programs."""
-    reasons = []
-    gaps = []
-    # Points of factors with no data (the catalogue's or the student's): they are left out, not guessed.
-    missing = 0
-
-    academic = round(min(15, (ctx['gpa'] / ctx['gpa_scale']) * 15))
+def academic_notes(university, ctx):
+    """Reasons and gaps about tests and English. They explain the band; they do not add to fit."""
+    reasons, gaps = [], []
     tests = []
     if ctx['sat'] is not None and university.sat_min:
         tests.append(range_fit('SAT', ctx['sat'], university.sat_min, university.sat_max))
@@ -209,45 +207,43 @@ def score_university(university, ctx):
     taken = [name for name, score in (('SAT', ctx['sat']), ('ACT', ctx['act'])) if score is not None]
     ranges = bool(university.sat_min or university.act_min)
     not_required = ctx['sat_status'] == StudentProfile.TestStatus.NOT_REQUIRED
-    below = False
     if tests:
-        points, is_reason, note, below = max(tests, key=lambda result: result[0])
-        academic += points
+        # The stronger result speaks for the student (a reason beats a gap).
+        is_reason, note = max(tests, key=lambda result: result[0])
         (reasons if is_reason else gaps).append(note)
     elif university.test_optional:
         reasons.append(item('tests_optional', 'SAT and ACT are optional at this university'))
-        if taken or not_required:
-            academic += 20
-        else:
-            missing += TEST_POINTS
     elif ranges and not taken and not_required:
-        academic += 4
         gaps.append(item('tests_required', 'This university expects an SAT or ACT score'))
     elif ranges and not taken:
-        missing += TEST_POINTS
         gaps.append(item('test_score_missing', 'Add an SAT or ACT score to compare with admitted students'))
     elif ranges:
-        missing += TEST_POINTS
         gaps.append(item('test_range_missing_for', f'The {taken[0]} range is not listed in the catalog', test=taken[0]))
     else:
-        missing += TEST_POINTS
         gaps.append(item('test_range_missing', 'SAT and ACT ranges are not listed in the catalog'))
 
     english = ctx['english']
     if english is None:
-        missing += ENGLISH_POINTS
         gaps.append(item('english_missing', 'Add an English test score (IELTS, TOEFL, Duolingo, PTE or Cambridge)'))
     else:
         test, score = english['test'], english['score']
         if english['ielts'] >= 7:
-            academic += 8
             reasons.append(item('english_strong', f'{test} {score:g} is a strong language score', test=test, score=score))
         elif english['ielts'] >= 6.5:
-            academic += 6
             reasons.append(item('english_suitable', f'{test} {score:g} is suitable for many programs', test=test, score=score))
         else:
-            academic += 3
             gaps.append(item('english_check', 'Verify the English test requirement on the official program page', test=test, score=score))
+    return reasons, gaps
+
+
+def score_university(university, ctx):
+    """One university for a ready profile: its fit score and its admission band.
+
+    ``university.programs`` must be the eligible ones from the catalog's active programs.
+    """
+    reasons, gaps = academic_notes(university, ctx)
+    # Aid points when the catalogue says nothing about aid: left out, not guessed.
+    missing = 0
 
     if country_match(university, ctx['countries']):
         preferences = 12
@@ -278,33 +274,21 @@ def score_university(university, ctx):
     else:
         financial += 8
 
-    earned = academic + preferences + financial + ctx['strength']
+    earned = preferences + financial
     # Score the known factors on the full scale, then take off half the missing weight:
-    # a row without admissions data never outscores the same row with data that fits.
-    total = min(100, round(earned * 100 / (TOTAL_POINTS - missing) * (1 - missing / (2 * TOTAL_POINTS))))
-    rate = float(university.acceptance_rate) if university.acceptance_rate is not None else None
-    if rate is None and not tests:
-        # No acceptance rate and no score compared with a range: nothing places the row.
-        band = None
-    elif (rate is not None and rate < 15) or below:
-        band = 'reach'
-    elif ranges and not university.test_optional and not taken:
-        # The university requires a test the student has not sent: no better than unknown.
-        band = None
-    elif rate is not None and rate >= 45:
-        band = 'safety'
-    else:
-        band = 'target'
+    # a row without aid data never outscores the same row with aid that fits.
+    total = min(100, round(earned * 100 / (FIT_POINTS - missing) * (1 - missing / (2 * FIT_POINTS))))
+    outcome = admission_chance.chance(university, ctx)
+    # Failed entry gates come first: they decide the band.
+    gaps = outcome['gates'] + outcome['notes'] + gaps
     return {
         'match_score': total,
         'match_label': 'Strong match' if total >= 80 else 'Good match' if total >= 65 else 'Developing match',
-        'admission_band': band,
-        'score_breakdown': {
-            'academic': academic,
-            'preferences': preferences,
-            'financial': financial,
-            'profile_strength': ctx['strength'],
-        },
+        'admission_band': outcome['band'],
+        'chance': {name: outcome[name] for name in (
+            'model', 'admit_rate', 'admit_rate_estimated', 'position', 'academic_position', 'version',
+        )},
+        'score_breakdown': {'preferences': preferences, 'financial': financial},
         'reasons': reasons[:5],
         'gaps': gaps[:4],
     }
@@ -313,7 +297,7 @@ def score_university(university, ctx):
 def fit_key(profile, ctx):
     """Cache key prefix for one student's answers on one catalogue version."""
     signature = hashlib.sha256(json.dumps(ctx, sort_keys=True).encode()).hexdigest()[:20]
-    return f'{profile.pk}:{cache_get(VERSION_KEY, 0)}:{signature}'
+    return f'{profile.pk}:{cache_get(VERSION_KEY, 0)}:{admission_chance.ALGORITHM_VERSION}:{signature}'
 
 
 def fit_scores(profile, ctx):
@@ -455,7 +439,9 @@ class CollegeSearchParams(serializers.Serializer):
         return self._subset(value, AID_FLAGS, 'Unknown financial aid filter.')
 
     def validate_bands(self, value):
-        return None if value is None else self._subset(value, BAND_CHOICES, 'Choose reach, target, safety or unknown.')
+        return None if value is None else self._subset(
+            value, BAND_CHOICES, 'Choose far_reach, reach, target, safety, not_eligible or unknown.',
+        )
 
     def validate_ids(self, value):
         try:
@@ -516,7 +502,11 @@ def fit_ranking(profile, ctx, params, queryset, scores):
     key = f'college-fit-ranked:{fit_key(profile, ctx)}:{hashlib.sha256(filters.encode()).hexdigest()[:20]}'
     ranked = cache_get(key)
     if ranked is None:
-        rows = sorted(queryset.values_list('pk', 'ranking'), key=lambda row: (-scores.get(row[0], (-1,))[0], row[1] or 999999))
+        def order(row):
+            score, band = scores.get(row[0], (-1, None))
+            return BAND_ORDER[band], -score, row[1] or 999999
+
+        rows = sorted(queryset.values_list('pk', 'ranking'), key=order)
         ranked = [pk for pk, _ in rows]
         cache_set(key, ranked, CACHE_SECONDS)
     return ranked
@@ -577,3 +567,35 @@ def college_search(profile, params):
     if params['facets']:
         data['facets'] = student_facets(profile, scores)
     return data
+
+
+# ---------------------------------------------------------------- outcome logging
+
+def record_chance_snapshot(application):
+    """Freeze what College Search says about ``application``'s university for its student.
+
+    Kept as it was when the university was added; with the decision (Application.status)
+    it shows how often each band was right. Skipped while the research profile is incomplete.
+    """
+    from .models import AdmissionChanceSnapshot
+
+    profile = application.student
+    ctx = fit_context(profile)
+    if ctx is None:
+        return None
+    university = University.objects.prefetch_related(eligible_programs()).get(pk=application.university_id)
+    fit = score_university(university, ctx)
+    chance = fit['chance']
+    return AdmissionChanceSnapshot.objects.create(
+        application=application,
+        algorithm_version=chance['version'],
+        band=fit['admission_band'] or '',
+        fit_score=fit['match_score'],
+        position=chance['position'],
+        academic_position=chance['academic_position'],
+        admit_rate=chance['admit_rate'],
+        admit_rate_estimated=chance['admit_rate_estimated'],
+        admission_model=chance['model'],
+        gates=[gap['code'] for gap in fit['gaps'] if gap['code'] in admission_chance.GATE_CODES],
+        inputs=ctx,
+    )

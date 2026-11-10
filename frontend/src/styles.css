@@ -13199,6 +13199,31 @@ a:focus-visible {
   --tier: var(--tier-safety);
 }
 
+/* A far reach is a hollow reach diamond: still worth one or two applications. */
+.tier-band.far_reach {
+  --tier: transparent;
+}
+
+.tier-band.far_reach::before {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--tier-reach);
+  border-radius: 1px;
+  transform: rotate(45deg);
+  box-sizing: border-box;
+}
+
+.tier-band.not_eligible {
+  --tier: transparent;
+}
+
+.tier-band.not_eligible::before {
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-sizing: border-box;
+  opacity: 0.6;
+}
+
 .tier-band.unknown {
   --tier: transparent;
 }

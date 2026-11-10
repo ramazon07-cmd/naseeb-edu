@@ -429,6 +429,18 @@ class University(TimeStampedModel):
         FOUR_YEAR = 'four_year', '4-year'
         TWO_YEAR = 'two_year', '2-year'
 
+    class CredentialRoute(models.TextChoices):
+        """What a student with only the Uzbek school certificate (attestat) needs first."""
+        DIRECT = 'direct', 'Accepted directly'
+        FOUNDATION = 'foundation', 'Foundation year first'
+        ONE_YEAR_UNIVERSITY = 'one_year_uni', 'One year of university first'
+        STUDIENKOLLEG = 'studienkolleg', 'Studienkolleg first'
+        NOT_ACCEPTED = 'not_accepted', 'Not accepted'
+
+    class IntlNeedPolicy(models.TextChoices):
+        NEED_BLIND = 'need_blind', 'Need-blind for international students'
+        NEED_AWARE = 'need_aware', 'Need-aware for international students'
+
     name = models.CharField(max_length=220)
     country = models.CharField(max_length=120)
     market = models.CharField(max_length=20, choices=Market.choices, blank=True, db_index=True)
@@ -472,6 +484,15 @@ class University(TimeStampedModel):
     scholarship_deadline = models.DateField(null=True, blank=True)
     catalog_source_url = models.URLField(blank=True)
     catalog_verified_at = models.DateField(null=True, blank=True)
+    # Admission requirements for students from Uzbekistan (admission_chance.py). Blank means
+    # unknown, never "no requirement"; each value comes from requirements_source_url.
+    intl_acceptance_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    intl_need_policy = models.CharField(max_length=20, choices=IntlNeedPolicy.choices, blank=True)
+    credential_route = models.CharField(max_length=20, choices=CredentialRoute.choices, blank=True)
+    ielts_min = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    entrance_exam = models.CharField(max_length=160, blank=True)
+    requirements_source_url = models.URLField(max_length=500, blank=True)
+    requirements_verified_at = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
     # Name, city and country spellings folded for search (search_text.py); kept by save().
     search_text = models.TextField(blank=True, default='', editable=False)
@@ -695,6 +716,30 @@ class ApplicationStatusHistory(models.Model):
 
     def __str__(self):
         return f'{self.application} — {self.status}'
+
+
+class AdmissionChanceSnapshot(models.Model):
+    """What College Search said about a university when the student added it.
+
+    Frozen at creation and never rescored: once decisions come in (Application.status),
+    these rows show how often each band was right, which is how the weights get tuned.
+    """
+    application = models.OneToOneField(Application, on_delete=models.CASCADE, related_name='chance_snapshot')
+    algorithm_version = models.CharField(max_length=40)
+    band = models.CharField(max_length=20, blank=True)
+    fit_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    position = models.FloatField(null=True, blank=True)
+    academic_position = models.FloatField(null=True, blank=True)
+    admit_rate = models.FloatField(null=True, blank=True)
+    admit_rate_estimated = models.BooleanField(default=False)
+    admission_model = models.CharField(max_length=40, blank=True)
+    gates = models.JSONField(default=list, blank=True)
+    # The profile answers the fit was computed from (college_search.fit_context).
+    inputs = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.application} — {self.band or "unknown"}'
 
 
 def task_priority_rank():

@@ -21,8 +21,9 @@ export function eligibleScholarship(item, student) {
   return !item.eligible_grades || String(item.eligible_grades).split(',').map((value) => value.trim()).includes(String(student.grade));
 }
 
-// Admission bands the filter offers; 'unknown' is a university with no band for the student.
-export const COLLEGE_BANDS = ['reach', 'target', 'safety', 'unknown'];
+// Admission bands the filter offers, hardest first (backend admission_chance.py);
+// 'unknown' is a university with no band for the student.
+export const COLLEGE_BANDS = ['far_reach', 'reach', 'target', 'safety', 'not_eligible', 'unknown'];
 
 const allBands = (bands) => COLLEGE_BANDS.every((band) => bands.includes(band));
 
@@ -30,8 +31,8 @@ export const bandLabel = (band) => band === 'unknown' ? t("Not enough data") : l
 
 export const DEFAULT_COLLEGE_FILTERS = { country: '', bands: COLLEGE_BANDS, price: 'all', aid: [], testOptional: false, satFit: false, publicOnly: false };
 
-// Admission band -> Application.tier. An unknown band has no tier: the student picks one.
-export const BAND_TIERS = { reach: 'dream', target: 'target', safety: 'safety' };
+// Admission band -> Application.tier. An unknown or not-eligible band has no tier: the student picks one.
+export const BAND_TIERS = { far_reach: 'dream', reach: 'dream', target: 'target', safety: 'safety' };
 
 export const COLLEGE_PRICE_CAPS = ['all', '25000', '40000'];
 
@@ -65,7 +66,8 @@ export function collegeSearchQuery({ query = '', filters = DEFAULT_COLLEGE_FILTE
   return params.toString();
 }
 
-export const SCORE_PARTS = [['academic', 48], ['preferences', 22], ['financial', 8], ['profile_strength', 10]];
+// Fit is country and major (preferences) and aid; admission chances are the band, not part of it.
+export const SCORE_PARTS = [['preferences', 22], ['financial', 8]];
 
 export const SAT_SCALE = [1000, 1600];
 

@@ -5,6 +5,7 @@ from unittest import mock
 from rest_framework.test import APITestCase
 
 from apps.admissions import college_search
+from apps.admissions.college_search import BAND_ORDER
 from apps.admissions.models import Honor, University, UniversityProgram
 from apps.admissions.test_audit_base import AuditBaseMixin
 
@@ -51,6 +52,11 @@ class CollegeSearchFixture(AuditBaseMixin):
         for field, value in values.items():
             setattr(self.student, field, value)
         self.student.save()
+
+    def assertFitOrder(self, rows):
+        """Best fit: realistic bands first, then the fit score."""
+        keys = [(BAND_ORDER[row['fit']['admission_band']], -row['fit']['match_score']) for row in rows]
+        self.assertEqual(keys, sorted(keys))
 
     def search(self, query=''):
         response = self.client.get(f'{URL}?{query}')
@@ -190,11 +196,12 @@ class FitTests(CollegeSearchFixture, APITestCase):
         self.assertTrue(all('fit' not in row for row in data['results']))
         self.assertEqual(data['results'][0]['name'], self.mit.name)
 
-    def test_each_row_carries_its_fit_and_fit_sort_ranks_by_score(self):
+    def test_each_row_carries_its_fit_and_fit_sort_ranks_by_band_then_score(self):
         self.ready_profile()
         rows = self.search('sort=fit')['results']
-        scores = [row['fit']['match_score'] for row in rows]
-        self.assertEqual(scores, sorted(scores, reverse=True))
+        self.assertFitOrder(rows)
+        self.assertEqual(rows[0]['fit']['admission_band'], 'safety')
+        self.assertEqual(rows[-1]['fit']['admission_band'], None)
         state = next(row for row in rows if row['id'] == self.state.id)
         self.assertIn(
             {'code': 'major_match', 'params': {'major': 'Computer Science'}, 'text': 'Computer Science matches an available field of study'},
@@ -204,7 +211,9 @@ class FitTests(CollegeSearchFixture, APITestCase):
 
     def test_bands_filter_on_the_students_fit(self):
         self.ready_profile()
-        self.assertEqual(self.names('bands=reach'), [self.mit.name])
+        # 4% overall: about 2% for students from abroad, a far reach whatever the scores.
+        self.assertEqual(self.names('bands=far_reach'), [self.mit.name])
+        self.assertEqual(self.names('bands=reach'), [])
         self.assertEqual(set(self.names('bands=safety')), {self.state.name, self.unranked.name})
         # Every box unticked shows nothing; no bands parameter shows everything.
         self.assertEqual(self.search('bands=')['count'], 0)
@@ -216,7 +225,7 @@ class FitTests(CollegeSearchFixture, APITestCase):
             self.search('sort=fit')
             first = scorer.call_count
             self.search('sort=fit&page_size=25')
-            self.search('bands=reach')
+            self.search('bands=far_reach')
         self.assertEqual(first, 5 + 5)  # the whole catalogue once, then the rows on the page
         self.assertEqual(scorer.call_count, first + 5 + 1)
         Honor.objects.create(student=self.student, title='New olympiad medal')
@@ -238,8 +247,7 @@ class FitTests(CollegeSearchFixture, APITestCase):
             self.assertEqual(len(set(rankings())), 2, 'another filter is ranked on its own')
         ids = [row['id'] for row in first['results'] + second['results']]
         self.assertEqual(len(ids), len(set(ids)))
-        scores = [row['fit']['match_score'] for row in first['results'] + second['results']]
-        self.assertEqual(scores, sorted(scores, reverse=True))
+        self.assertFitOrder(first['results'] + second['results'])
 
     def test_query_count_does_not_grow_with_the_page(self):
         University.objects.bulk_create(University(name=f'Filler {index:03}', country='Germany') for index in range(120))
@@ -258,7 +266,10 @@ class FacetAndIdsTests(CollegeSearchFixture, APITestCase):
         self.assertEqual(facets['aid'], {'offers_need_based_aid': 1, 'offers_merit_aid': 1, 'offers_international_aid': 1, 'meets_full_need': 1})
         self.assertEqual((facets['test_optional'], facets['public'], facets['sat_fit']), (2, 2, 2))
         self.assertEqual(facets['qs']['region'], {'Americas': 2, 'Europe': 1, 'Asia': 1})
-        self.assertEqual(facets['bands'], {'reach': 1, 'target': 0, 'safety': 2, 'unknown': 2})
+        # SAT 1300 is the median of Ohio State's range: target, not safety, with no activities recorded.
+        self.assertEqual(facets['bands'], {
+            'far_reach': 1, 'reach': 0, 'target': 1, 'safety': 1, 'not_eligible': 0, 'unknown': 2,
+        })
         self.assertNotIn('facets', self.search('page=1'))
 
     def test_ids_return_just_those_rows(self):

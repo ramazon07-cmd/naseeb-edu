@@ -18,7 +18,7 @@ export const LABELS = {
   direct: 'Direct', group: 'Group', public: 'Public', private: 'Private', urban: 'Urban', suburban: 'Suburban', rural: 'Rural',
   four_year: '4-year', two_year: '2-year', merit: 'Merit', need_based: 'Need-based', athletic: 'Athletic',
   full_ride: 'Full ride', full: 'Full funding', partial: 'Partial funding', fixed: 'Fixed amount',
-  onsite: 'On-site', online: 'Online', hybrid: 'Hybrid', reach: 'Reach',
+  onsite: 'On-site', online: 'Online', hybrid: 'Hybrid', reach: 'Reach', far_reach: 'Far reach', not_eligible: 'Not eligible',
   academic: 'Academic', preferences: 'Preferences', financial: 'Financial aid', profile_strength: 'Profile strength',
   harassment: 'Harassment or bullying', unsafe: 'Unsafe content', privacy: 'Privacy concern', misinformation: 'Misinformation',
   open: 'Open', closed: 'Closed', technical: 'Technical', account: 'Account', application: 'Application', billing: 'Billing', other: 'Other',
