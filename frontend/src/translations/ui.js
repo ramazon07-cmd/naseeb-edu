@@ -150,6 +150,7 @@ export const UI_TRANSLATIONS = {
   'Google could not confirm your account. Try again.': ['Google akkauntingizni tasdiqlay olmadi. Qayta urinib ko‘ring.', 'Google не смог подтвердить ваш аккаунт. Попробуйте ещё раз.'],
   'Opening Google…': ['Google ochilmoqda…', 'Открываем Google…'],
   'Continue with Google': ['Google orqali davom etish', 'Продолжить с Google'],
+  '{zone} (UTC+{hours})': ['{zone} (UTC+{hours})', '{zone} (UTC+{hours})'],
   'Weekly hours': ['Haftalik jadval', 'Часы по неделям'],
   'Time zone': ['Vaqt mintaqasi', 'Часовой пояс'],
   'Tashkent time': ['Toshkent vaqti', 'ташкентское время'],

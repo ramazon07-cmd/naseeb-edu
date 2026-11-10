@@ -801,7 +801,36 @@
 }
 
 /* Time zone choice: Tashkent (default) or China. */
-.meeting-zone { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; min-height: 36px; border: 1px solid var(--line, #dfe4ea); border-radius: 10px; background: var(--surface, #fff); color: inherit; font-size: 0.8125rem; }
-.meeting-zone select { border: 0; background: transparent; font: inherit; color: inherit; padding: 6px 0; cursor: pointer; }
-.meeting-zone select:focus-visible { outline: 2px solid var(--accent, #2f80ed); outline-offset: 2px; border-radius: 6px; }
-.weekly-equivalent { font-size: 0.75rem; color: var(--muted, #677487); white-space: nowrap; }
+.meeting-zone {
+  min-height: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.8125rem;
+}
+
+.meeting-zone select {
+  padding: 6px 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.meeting-zone select:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.weekly-equivalent {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}

@@ -54,7 +54,7 @@ function fromTashkentClock(value) {
 function ZonePicker({ value, onChange }) {
   return <label className="meeting-zone"><Globe size={15} aria-hidden="true" /><span className="sr-only">{t("Time zone")}</span>
     <select value={value} onChange={(event) => onChange(event.target.value)}>
-      {MEETING_ZONES.map((item) => <option key={item.id} value={item.id}>{t(item.label)} (UTC+{item.minutes / 60})</option>)}
+      {MEETING_ZONES.map((item) => <option key={item.id} value={item.id}>{t('{zone} (UTC+{hours})', { zone: t(item.label), hours: item.minutes / 60 })}</option>)}
     </select>
   </label>;
 }
