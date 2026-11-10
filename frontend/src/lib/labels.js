@@ -73,7 +73,8 @@ export const AUDIT_ACTIONS = {
   'student_invite.created': 'Student invite created', 'student_invite.revoked': 'Student invite revoked',
   'student.joined_by_invite': 'Student joined by invite', 'student.join_confirmed': 'Student join confirmed', 'student.join_rejected': 'Student join rejected',
   'assistant_invite.created': 'Assistant invited', 'assistant_invite.revoked': 'Assistant invitation revoked',
-  'assistant.joined_by_invite': 'Assistant joined by invite', 'assistant.students_set': 'Assistant students changed'
+  'assistant.joined_by_invite': 'Assistant joined by invite', 'assistant.students_set': 'Assistant students changed',
+  'account.google_connected': 'Google account connected'
 };
 
 // The audit filter picks a group: the API matches every action under the prefix.
