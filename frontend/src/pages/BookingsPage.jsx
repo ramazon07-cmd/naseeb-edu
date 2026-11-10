@@ -7,7 +7,7 @@ import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
 import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil } from 'lucide-react';
 import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, dayLabel as viewerDayLabel, joinParts, relativeDayText } from '../lib/format';
-import { SERVER_TIME_ZONE, inServerZone } from '../lib/serverTime';
+import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
 import { isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook } from '../lib/meetings';
@@ -15,18 +15,49 @@ import { StudentSearchInput } from '../components/StudentSearchInput';
 import './bookings-scheduler.css';
 import { InlineLoadError } from '../components/states';
 
-// Meetings are planned in Tashkent time wherever the viewer is: every time on
-// this page is shown and entered there (Uzbekistan has no daylight saving, so
-// it is always UTC+5). A viewer in another zone also sees their own clock.
-const TASHKENT_OFFSET = '+05:00';
-const clockText = (value) => viewerClockText(inServerZone(value));
-const dateTimeText = (value) => viewerDateTimeText(inServerZone(value));
-const dayLabel = (value) => viewerDayLabel(inServerZone(value));
-const viewerElsewhere = () => new Date().getTimezoneOffset() !== -300;
-// "27 Oct, 01:00 your time" when the viewer's clock differs from Tashkent, else nothing.
+// Meetings are shown and entered in one chosen zone: Tashkent by default, or
+// China for people there. Neither has daylight saving, so each is a fixed offset.
+// The choice is the viewer's own and is remembered in this browser. A viewer whose
+// clock is in yet another zone also sees their own time.
+export const MEETING_ZONES = [
+  { id: 'Asia/Tashkent', label: 'Tashkent time', offset: '+05:00', minutes: 300 },
+  { id: 'Asia/Shanghai', label: 'China time', offset: '+08:00', minutes: 480 },
+];
+const ZONE_KEY = 'naseeb.meetingZone';
+const zoneById = (id) => MEETING_ZONES.find((zone) => zone.id === id) || MEETING_ZONES[0];
+function storedZoneId() {
+  try { return zoneById(window.localStorage.getItem(ZONE_KEY)).id; } catch { return MEETING_ZONES[0].id; }
+}
+let zone = zoneById(storedZoneId());
+function setMeetingZone(id) {
+  zone = zoneById(id);
+  try { window.localStorage.setItem(ZONE_KEY, zone.id); } catch { /* private mode: kept for this visit */ }
+}
+const zoned = (value) => inServerZone(value, zone.id);
+const clockText = (value) => viewerClockText(zoned(value));
+const dateTimeText = (value) => viewerDateTimeText(zoned(value));
+const dayLabel = (value) => viewerDayLabel(zoned(value));
+const viewerElsewhere = () => -new Date().getTimezoneOffset() !== zone.minutes;
+// "27 Oct, 01:00 your time" when the viewer's clock differs from the chosen zone, else nothing.
 const viewerTimeHint = (value) => (viewerElsewhere() ? t('{time} your time', { time: viewerDateTimeText(value) }) : '');
-// A Tashkent wall-clock "YYYY-MM-DDTHH:MM" (a datetime-local value) as an instant.
-const fromTashkent = (local) => new Date(`${local}:00${TASHKENT_OFFSET}`);
+// A wall-clock "YYYY-MM-DDTHH:MM" in the chosen zone (a datetime-local value) as an instant.
+const fromZone = (local) => new Date(`${local}:00${zone.offset}`);
+// A Tashkent "HH:MM" (weekly hours are kept on Tashkent's clock) on the chosen zone's clock.
+function fromTashkentClock(value) {
+  const minutes = Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5)) + zone.minutes - 300;
+  const day = Math.floor(minutes / 1440);
+  const wrapped = ((minutes % 1440) + 1440) % 1440;
+  const text = `${String(Math.floor(wrapped / 60)).padStart(2, '0')}:${String(wrapped % 60).padStart(2, '0')}`;
+  return day > 0 ? `${text} (+1)` : text;
+}
+
+function ZonePicker({ value, onChange }) {
+  return <label className="meeting-zone"><Globe size={15} aria-hidden="true" /><span className="sr-only">{t("Time zone")}</span>
+    <select value={value} onChange={(event) => onChange(event.target.value)}>
+      {MEETING_ZONES.map((item) => <option key={item.id} value={item.id}>{t(item.label)} (UTC+{item.minutes / 60})</option>)}
+    </select>
+  </label>;
+}
 
 // Calendar key of a local Date (grid days, date arithmetic), as YYYY-MM-DD.
 function dayKey(value) {
@@ -35,8 +66,8 @@ function dayKey(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-// The Tashkent calendar day of a timestamp (or of now).
-const meetingDay = (value = new Date()) => dayKey(inServerZone(value));
+// The chosen zone's calendar day of a timestamp (or of now).
+const meetingDay = (value = new Date()) => dayKey(zoned(value));
 
 const byStart = (x, y) => new Date(x.starts_at) - new Date(y.starts_at);
 const NO_SLOTS = [];
@@ -60,13 +91,13 @@ const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 
 // "14:00 (Tashkent time)", plus "· 17:00 your time" for a viewer in another zone.
 const timeZoneName = () => joinParts(
-  t('{time} (Tashkent time)', { time: clockText(new Date()) }),
+  t('{time} ({zone})', { time: clockText(new Date()), zone: t(zone.label) }),
   viewerElsewhere() && t('{time} your time', { time: viewerClockText(new Date()) }),
 );
 
 function slotRange(slot) {
   const end = new Date(new Date(slot.starts_at).getTime() + slot.duration_minutes * 60000);
-  return joinParts(`${clockText(slot.starts_at)} – ${clockText(end)}, ${formatDateLocale(inServerZone(slot.starts_at), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`, viewerTimeHint(slot.starts_at));
+  return joinParts(`${clockText(slot.starts_at)} – ${clockText(end)}, ${formatDateLocale(zoned(slot.starts_at), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`, viewerTimeHint(slot.starts_at));
 }
 
 // "Sunday, 4 October". Uzbek gets the translated weekday (see WEEKDAYS).
@@ -212,7 +243,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
       await api.create('bookings', staff ? {
         student: Number(values.get('student')),
         topic: values.get('topic'),
-        starts_at: fromTashkent(values.get('starts_at')).toISOString(),
+        starts_at: fromZone(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
         notes: values.get('notes')
       } : {
@@ -345,6 +376,7 @@ function WeeklyHours({ notify, onSaved }) {
           <label className="availability-time"><span className="sr-only">{t("{day}: from", { day: dayName })}</span><input type="time" required value={from} onChange={(event) => setTime(day, index, 0, event.target.value)} /></label>
           <span aria-hidden="true">–</span>
           <label className="availability-time"><span className="sr-only">{t("{day}: until", { day: dayName })}</span><input type="time" required value={to} onChange={(event) => setTime(day, index, 1, event.target.value)} /></label>
+          {zone.minutes !== 300 && <span className="weekly-equivalent">= {fromTashkentClock(from)}–{fromTashkentClock(to)} {t(zone.label)}</span>}
           <button type="button" className="availability-remove" onClick={() => setDay(day, ranges.filter((_, at) => at !== index))} aria-label={t("Remove {day} {from}–{to}", { day: dayName, from, to })} title={t("Remove")}><X size={16} aria-hidden="true" /></button>
         </div>) : <span className="weekly-off">{t("Unavailable")}</span>}</div>
         <button type="button" className="availability-remove weekly-add" disabled={ranges.length >= 4} onClick={() => setDay(day, [...ranges, nextRange(ranges)])} aria-label={t("Add hours on {day}", { day: dayName })} title={t("Add hours")}><Plus size={16} aria-hidden="true" /></button>
@@ -379,7 +411,7 @@ function AvailabilityManager({ onClose, notify }) {
       if (!active) return;
       const next = sortSlots(items || []);
       setSlots(next);
-      if (next[0]) { setSelectedDay(meetingDay(next[0].starts_at)); setViewMonth(monthStart(inServerZone(next[0].starts_at))); }
+      if (next[0]) { setSelectedDay(meetingDay(next[0].starts_at)); setViewMonth(monthStart(zoned(next[0].starts_at))); }
     }).catch((err) => { if (active) notify(err.message, 'error'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [notify, slotsVersion]);
@@ -395,7 +427,7 @@ function AvailabilityManager({ onClose, notify }) {
   }
   async function add(event) {
     event.preventDefault();
-    const startsAt = fromTashkent(`${selectedDay}T${time}`);
+    const startsAt = fromZone(`${selectedDay}T${time}`);
     if (!time || startsAt <= new Date()) { notify(t("Choose a time in the future."), 'error'); return; }
     if (endTime && endTime <= time) { notify(t("Choose an end time after the start time."), 'error'); return; }
     setBusy(true);
@@ -404,7 +436,7 @@ function AvailabilityManager({ onClose, notify }) {
         // One day's range, cut into slots by the endpoint that repeats a time over dates.
         const result = await api.repeatBookingAvailability({
           weekdays: [selectedWeekday], time, end_time: endTime, duration_minutes: duration,
-          start_date: selectedDay, end_date: selectedDay, timezone: SERVER_TIME_ZONE,
+          start_date: selectedDay, end_date: selectedDay, timezone: zone.id,
         });
         setSlots((current) => sortSlots([...current, ...(result.slots || [])]));
         notify(result.skipped
@@ -427,7 +459,7 @@ function AvailabilityManager({ onClose, notify }) {
   }
   async function saveEdit(event) {
     event.preventDefault();
-    const startsAt = fromTashkent(`${editing.date}T${editing.time}`);
+    const startsAt = fromZone(`${editing.date}T${editing.time}`);
     if (!editing.date || !editing.time || startsAt <= new Date()) { notify(t("Choose a time in the future."), 'error'); return; }
     setBusy(true);
     try {
@@ -443,7 +475,7 @@ function AvailabilityManager({ onClose, notify }) {
     <div className="availability-tabs"><PortalTabs active={tab} onChange={setTab} items={[['weekly', 'Weekly hours'], ['dates', 'Specific dates']]} /></div>
     {tab === 'weekly' ? <WeeklyHours notify={notify} onSaved={() => setSlotsVersion((value) => value + 1)} /> : <div className="booking-cal availability-cal">
       <aside className="booking-cal-side">
-        <p className="booking-cal-note">{t("Add times students can choose when requesting a meeting. Times are in Tashkent time.")}</p>
+        <p className="booking-cal-note">{t("Add times students can choose when requesting a meeting.")} {t("Times are in {zone}.", { zone: t(zone.label) })}</p>
         <MonthGrid month={viewMonth} onMonth={setViewMonth} canBack={viewMonth > monthStart(new Date())} canForward marked={slotDays} canPick={(key) => key >= today} selected={selectedDay} onPick={pickDay} label={t("Choose a date and time")} />
         <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}{!loading && <> · {t("{n} available times", { n: openCount })}</>}</p>
       </aside>
@@ -482,9 +514,9 @@ function AvailabilityManager({ onClose, notify }) {
   </Modal>;
 }
 
-// `datetime-local` wants wall-clock time without a zone: Tashkent's, like the rest of the page.
+// `datetime-local` wants wall-clock time without a zone: the chosen zone's, like the rest of the page.
 function localInputValue(iso) {
-  const date = inServerZone(iso);
+  const date = zoned(iso);
   const pad = (value) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
@@ -534,7 +566,7 @@ export function RescheduleForm({ booking, staff = false, onClose, onSaved, notif
       await api.rescheduleBooking(booking.id, chosen ? {
         starts_at: chosen.starts_at, duration_minutes: chosen.duration_minutes, availability_slot: chosen.id,
       } : {
-        starts_at: fromTashkent(values.get('starts_at')).toISOString(),
+        starts_at: fromZone(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
       });
       notify(staff ? t("Meeting moved.") : t("New time sent for confirmation."));
@@ -631,17 +663,21 @@ function GoogleConnectBanner({ user, notify }) {
 }
 
 export function BookingsPage({ user, data, reload, notify }) {
+  const [zoneId, setZoneId] = useState(zone.id);
+  const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
+  const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
   const locked = needsGoogle(user);
   // A button that starts something new goes to Google first while the account is not connected.
   const guard = (start) => (locked ? () => connectGoogle(notify) : start);
   const banner = locked ? <GoogleConnectBanner user={user} notify={notify} /> : null;
-  const props = { data, reload, notify, guard, banner };
-  if (user.role === 'student') return <StudentBookingsPage {...props} />;
-  if (usesCounselorLayout(user)) return <CounselorMeetingsPage {...props} />;
-  return <StaffMeetingsPage {...props} />;
+  const props = { data, reload, notify, guard, banner, picker };
+  // key: a new zone redraws every time on the page.
+  if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
+  if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
+  return <StaffMeetingsPage key={zoneId} {...props} />;
 }
 
-function StudentBookingsPage({ data, reload, notify, guard, banner }) {
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker }) {
   const [tab, setTab] = useState('upcoming');
   const [open, setOpen] = useState(false);
   const [savingId, setSavingId] = useState(null);
@@ -663,7 +699,7 @@ function StudentBookingsPage({ data, reload, notify, guard, banner }) {
       setSavingId(null);
     }
   }
-  return <div className="section-stack student-portal">{banner}<div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} /><button className="button primary" onClick={guard(() => setOpen(true))}><Plus size={17} /> {t("Request meeting")}</button></div><p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p><div className="booking-grid">{items.map((item) => { const status = meetingBadgeStatus(meetingStatus(item, now, { student: true })); return <article className={`booking-card is-${status}`} key={item.id}><div className="booking-date"><strong>{inServerZone(item.starts_at).getDate()}</strong><span>{formatDateLocale(item.starts_at, { month: 'short' })}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p><small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{status}</Badge>{isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Reschedule")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button></div>}{!isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}><Trash2 size={14} /> {t("Delete")}</button></div>}</div></article>; })}{!items.length && <Empty text={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}</div>;
+  return <div className="section-stack student-portal">{banner}<div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} /><div className="booking-toolbar-actions">{picker}<button className="button primary" onClick={guard(() => setOpen(true))}><Plus size={17} /> {t("Request meeting")}</button></div></div><p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p><div className="booking-grid">{items.map((item) => { const status = meetingBadgeStatus(meetingStatus(item, now, { student: true })); return <article className={`booking-card is-${status}`} key={item.id}><div className="booking-date"><strong>{zoned(item.starts_at).getDate()}</strong><span>{formatDateLocale(item.starts_at, { month: 'short' })}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p><small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{status}</Badge>{isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Reschedule")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button></div>}{!isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}><Trash2 size={14} /> {t("Delete")}</button></div>}</div></article>; })}{!items.length && <Empty text={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}</div>;
 }
 
 const meetingTone = (status) => ({ confirmed: 'ok', pending: 'warn' }[status] || 'quiet');
@@ -686,7 +722,7 @@ async function deleteMeeting(item, { setSavingId, reload, notify, question = t("
   }
 }
 
-function CounselorMeetingsPage({ data, reload, notify, guard, banner }) {
+function CounselorMeetingsPage({ data, reload, notify, guard, banner, picker }) {
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const [addingNote, setAddingNote] = useState(null);
@@ -730,6 +766,7 @@ function CounselorMeetingsPage({ data, reload, notify, guard, banner }) {
 
   return <div className="cx-page cx-meetings">
     <CxHead title={t("Meetings")} subtitle={joinParts(t("Requests, today and this week"), timeZoneName())}>
+      {picker}
       <button type="button" className="cx-btn" onClick={guard(() => setAvailabilityOpen(true))}><Calendar size={15} aria-hidden="true" />{t("My available hours")}</button>
       <button type="button" className="cx-btn primary" onClick={guard(() => setBooking({}))}><Plus size={15} aria-hidden="true" />{t("Book with a student")}</button>
     </CxHead>
@@ -783,7 +820,7 @@ function CounselorMeetingsPage({ data, reload, notify, guard, banner }) {
 // "Requests, today and this week" (product vision S3.4): the SLA-facing view
 // of a counselor's meetings, oldest request first. See lib/meetings.js for
 // the pending/this-week/rebook rules.
-function StaffMeetingsPage({ data, reload, notify, guard, banner }) {
+function StaffMeetingsPage({ data, reload, notify, guard, banner, picker }) {
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const [addingNote, setAddingNote] = useState(null);
@@ -826,7 +863,7 @@ function StaffMeetingsPage({ data, reload, notify, guard, banner }) {
   }
 
   return <div className="section-stack meetings-staff">
-    {banner}<div className="portal-toolbar"><h2>{t("Meetings")}</h2><div className="booking-toolbar-actions"><button className="button secondary" onClick={guard(() => setAvailabilityOpen(true))}><Calendar size={17} /> {t("My available hours")}</button><button className="button primary" onClick={guard(() => setBooking({}))}><Plus size={17} /> {t("Book with a student")}</button></div></div>
+    {banner}<div className="portal-toolbar"><h2>{t("Meetings")}</h2><div className="booking-toolbar-actions">{picker}<button className="button secondary" onClick={guard(() => setAvailabilityOpen(true))}><Calendar size={17} /> {t("My available hours")}</button><button className="button primary" onClick={guard(() => setBooking({}))}><Plus size={17} /> {t("Book with a student")}</button></div></div>
     <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p>
     <div className="split-grid wide-left">
       <Panel title={tx`Requests waiting for you · ${pending.length}`}>
