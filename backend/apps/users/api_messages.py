@@ -920,6 +920,26 @@ EXACT = {
         'uz': 'Tugash vaqtini boshlanish vaqtidan keyin tanlang.',
         'ru': 'Выберите время окончания позже времени начала.',
     },
+    'Connect your Google account to use Meetings.': {
+        'uz': 'Uchrashuvlardan foydalanish uchun Google akkauntingizni ulang.',
+        'ru': 'Чтобы пользоваться встречами, подключите аккаунт Google.',
+    },
+    'Google sign-in is not set up yet.': {
+        'uz': 'Google orqali ulanish hali sozlanmagan.',
+        'ru': 'Подключение через Google ещё не настроено.',
+    },
+    'Send the hours of each weekday.': {
+        'uz': 'Har bir hafta kuni uchun soatlarni yuboring.',
+        'ru': 'Укажите часы для каждого дня недели.',
+    },
+    'Enter each time as HH:MM.': {
+        'uz': 'Har bir vaqtni SS:DD ko‘rinishida kiriting.',
+        'ru': 'Введите каждое время в формате ЧЧ:ММ.',
+    },
+    'Hours on the same day cannot overlap.': {
+        'uz': 'Bir kundagi soatlar ustma-ust tushmasligi kerak.',
+        'ru': 'Часы в один день не должны пересекаться.',
+    },
     'That adds too many times at once. Choose fewer days or a shorter range.': {
         'uz': 'Bir martada juda ko‘p vaqt qo‘shilyapti. Kamroq kun yoki qisqaroq oraliq tanlang.',
         'ru': 'Слишком много времени за один раз. Выберите меньше дней или короче промежуток.',

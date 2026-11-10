@@ -18,8 +18,8 @@ from core.db import advisory_lock
 
 logger = logging.getLogger('naseeb.jobs')
 DEFAULT_BATCH_SIZE = 5000
-# The cron jobs the operator health page expects to run daily (ScheduledJobCommand modules).
-SCHEDULED_JOBS = ('generate_notifications', 'purge_screen_time', 'flush_expired_tokens')
+# The cron jobs the operator health page expects to run at least daily (ScheduledJobCommand modules).
+SCHEDULED_JOBS = ('generate_notifications', 'purge_screen_time', 'flush_expired_tokens', 'send_meeting_reminders')
 JOB_LOCK_BASE = 0x6E61 << 32  # "na" in the high bits; the job's CRC32 below
 
 

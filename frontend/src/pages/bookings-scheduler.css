@@ -607,6 +607,103 @@
   outline-offset: 1px;
 }
 
+/* "Connect your Google account" before Meetings: one sentence, one button. */
+.google-gate {
+  max-width: 560px;
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+}
+
+.google-gate p {
+  margin: 0;
+}
+
+.google-gate-error {
+  color: var(--danger);
+}
+
+/* Weekly hours: one row per weekday — the day switch, its from–to hours, "add hours". */
+.modal > .availability-tabs {
+  padding: 14px 22px 0;
+}
+
+.availability-weekly {
+  padding: 18px 22px 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.weekly-days {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  list-style: none;
+}
+
+.weekly-days li {
+  min-height: 60px;
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.weekly-day {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.weekly-ranges {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.weekly-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekly-off {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.weekly-add {
+  margin-top: 4px;
+}
+
+.weekly-add:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+@media (max-width: 560px) {
+  .weekly-days li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .weekly-ranges {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .weekly-off {
+    min-height: 0;
+  }
+}
+
 /* Save sits under every option it saves, not beside the time fields. */
 .availability-add-actions {
   display: flex;
@@ -701,4 +798,39 @@
   .booking-cal-confirm {
     animation: none;
   }
+}
+
+/* Time zone choice: Tashkent (default) or China. */
+.meeting-zone {
+  min-height: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.8125rem;
+}
+
+.meeting-zone select {
+  padding: 6px 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.meeting-zone select:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.weekly-equivalent {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
 }

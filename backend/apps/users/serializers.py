@@ -40,11 +40,11 @@ class UserSerializer(serializers.ModelSerializer):
             'role', 'phone', 'position', 'avatar', 'school', 'school_name', 'school_workspace_type',
             'is_active', 'is_superuser', 'admin_tier', 'staff_tier', 'last_login',
             'must_change_password', 'password_changed_at', 'credential_status', 'credential_expires_at',
-            'supervising_counselor_name',
+            'supervising_counselor_name', 'google_email',
         )
         read_only_fields = (
             'id', 'full_name', 'must_change_password', 'password_changed_at', 'last_login',
-            'credential_status', 'credential_expires_at', 'is_superuser', 'staff_tier',
+            'credential_status', 'credential_expires_at', 'is_superuser', 'staff_tier', 'google_email',
         )
 
     staff_tier = serializers.CharField(read_only=True)

@@ -61,6 +61,9 @@ class User(AbstractUser):
     # The student dashboard arrangement ({order, hidden, rail}); null until
     # the student first saves one. Shape is checked by DashboardLayoutSerializer.
     dashboard_layout = models.JSONField(null=True, blank=True)
+    # The Google account connected on Meetings: its verified email receives meeting emails.
+    google_email = models.EmailField(blank=True)
+    google_sub = models.CharField(max_length=64, blank=True)
 
     objects = UserManager()
 

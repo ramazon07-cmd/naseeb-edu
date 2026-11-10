@@ -263,7 +263,7 @@ class MeetingAvailabilityTests(RoleIsolationBase):
         MeetingAvailability.objects.create(participant=self.counselor, starts_at=taken, duration_minutes=45)
         self.client.force_authenticate(self.counselor)
         # Another request added this time after the overlap read: only the unique start catches it.
-        with mock.patch('apps.admissions.views.portal.overlapping', return_value=[]):
+        with mock.patch('apps.admissions.meetings.overlapping', return_value=[]):
             response = self.client.post('/api/bookings/availability/repeat/', {
                 'weekdays': [start_day.weekday()], 'time': '10:00', 'duration_minutes': 45,
                 'start_date': start_day.isoformat(), 'end_date': start_day.isoformat(),

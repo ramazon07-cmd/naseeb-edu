@@ -53,6 +53,81 @@ MESSAGES = {
         'ru': 'Эта ссылка-приглашение больше не действует. Попросите у консультанта новую.',
         'en': 'This invitation link is no longer valid. Ask your counselor for a new one.',
     },
+    'meeting_email_requested_subject': {
+        'uz': 'Yangi uchrashuv so‘rovi: {other}',
+        'ru': 'Новый запрос на встречу: {other}',
+        'en': 'New meeting request from {other}',
+    },
+    'meeting_email_requested': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} siz bilan uchrashuv so‘radi. Naseeb Edu’da tasdiqlang yoki boshqa vaqtga ko‘chiring.',
+        'ru': 'Здравствуйте, {name}!\n\n{other} просит о встрече с вами. Подтвердите её или перенесите в Naseeb Edu.',
+        'en': 'Hello {name},\n\n{other} asked to meet with you. Confirm or move it on Naseeb Edu.',
+    },
+    'meeting_email_confirmed_subject': {
+        'uz': 'Uchrashuv tasdiqlandi: {time}',
+        'ru': 'Встреча подтверждена: {time}',
+        'en': 'Meeting confirmed: {time}',
+    },
+    'meeting_email_confirmed': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} bilan uchrashuvingiz tasdiqlandi.',
+        'ru': 'Здравствуйте, {name}!\n\nВаша встреча с {other} подтверждена.',
+        'en': 'Hello {name},\n\nYour meeting with {other} is confirmed.',
+    },
+    'meeting_email_declined_subject': {
+        'uz': 'Uchrashuv rad etildi',
+        'ru': 'Встреча отклонена',
+        'en': 'Meeting declined',
+    },
+    'meeting_email_declined': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} bilan uchrashuv so‘rovingiz rad etildi. Boshqa vaqtni tanlab, qayta so‘rashingiz mumkin.',
+        'ru': 'Здравствуйте, {name}!\n\nВаш запрос на встречу с {other} отклонён. Вы можете выбрать другое время и отправить запрос снова.',
+        'en': 'Hello {name},\n\nYour meeting request with {other} was declined. You can pick another time and ask again.',
+    },
+    'meeting_email_cancelled_subject': {
+        'uz': 'Uchrashuv bekor qilindi',
+        'ru': 'Встреча отменена',
+        'en': 'Meeting cancelled',
+    },
+    'meeting_email_cancelled': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} bilan uchrashuv bekor qilindi.',
+        'ru': 'Здравствуйте, {name}!\n\nВстреча с {other} отменена.',
+        'en': 'Hello {name},\n\nThe meeting with {other} was cancelled.',
+    },
+    'meeting_email_move_requested_subject': {
+        'uz': 'Uchrashuvni ko‘chirish so‘rovi',
+        'ru': 'Запрос на перенос встречи',
+        'en': 'Meeting reschedule requested',
+    },
+    'meeting_email_move_requested': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} bilan uchrashuv uchun yangi vaqt so‘raldi. U tasdiqlanishini kutmoqda.',
+        'ru': 'Здравствуйте, {name}!\n\nДля встречи с {other} запрошено новое время. Оно ожидает подтверждения.',
+        'en': 'Hello {name},\n\nA new time was requested for the meeting with {other}. It is waiting to be confirmed.',
+    },
+    'meeting_email_moved_subject': {
+        'uz': 'Uchrashuv boshqa vaqtga ko‘chirildi: {time}',
+        'ru': 'Встреча перенесена: {time}',
+        'en': 'Meeting moved: {time}',
+    },
+    'meeting_email_moved': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} bilan uchrashuv yangi vaqtga ko‘chirildi.',
+        'ru': 'Здравствуйте, {name}!\n\nВстреча с {other} перенесена на новое время.',
+        'en': 'Hello {name},\n\nThe meeting with {other} was moved to a new time.',
+    },
+    'meeting_email_reminder_subject': {
+        'uz': 'Eslatma: uchrashuv {time}',
+        'ru': 'Напоминание: встреча {time}',
+        'en': 'Reminder: meeting at {time}',
+    },
+    'meeting_email_reminder': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} bilan uchrashuvingiz yaqinlashmoqda.',
+        'ru': 'Здравствуйте, {name}!\n\nСкоро ваша встреча с {other}.',
+        'en': 'Hello {name},\n\nYour meeting with {other} is coming up.',
+    },
+    'meeting_email_details': {
+        'uz': '\n\nMavzu: {topic}\nVaqt: {time} (Toshkent vaqti), {minutes} daqiqa\nKim bilan: {other}\n\nUchrashuvlar: {link}\n\nNaseeb Edu',
+        'ru': '\n\nТема: {topic}\nВремя: {time} (по Ташкенту), {minutes} мин\nС кем: {other}\n\nВстречи: {link}\n\nNaseeb Edu',
+        'en': '\n\nTopic: {topic}\nTime: {time} (Tashkent time), {minutes} min\nWith: {other}\n\nMeetings: {link}\n\nNaseeb Edu',
+    },
     'assistant_invite_subject': {
         'uz': '{counselor} sizni Naseeb Edu’da assistent bo‘lishga taklif qildi',
         'ru': '{counselor} приглашает вас стать ассистентом в Naseeb Edu',

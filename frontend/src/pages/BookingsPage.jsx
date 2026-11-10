@@ -6,8 +6,8 @@ import { Field, PortalTabs } from '../components/forms';
 import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
 import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil } from 'lucide-react';
-import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, dayLabel as viewerDayLabel, joinParts, relativeDayText } from '../lib/format';
-import { SERVER_TIME_ZONE, inServerZone } from '../lib/serverTime';
+import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, joinParts, relativeDayText, shortDayText } from '../lib/format';
+import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
 import { isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook } from '../lib/meetings';
@@ -15,18 +15,58 @@ import { StudentSearchInput } from '../components/StudentSearchInput';
 import './bookings-scheduler.css';
 import { InlineLoadError } from '../components/states';
 
-// Meetings are planned in Tashkent time wherever the viewer is: every time on
-// this page is shown and entered there (Uzbekistan has no daylight saving, so
-// it is always UTC+5). A viewer in another zone also sees their own clock.
-const TASHKENT_OFFSET = '+05:00';
-const clockText = (value) => viewerClockText(inServerZone(value));
-const dateTimeText = (value) => viewerDateTimeText(inServerZone(value));
-const dayLabel = (value) => viewerDayLabel(inServerZone(value));
-const viewerElsewhere = () => new Date().getTimezoneOffset() !== -300;
-// "27 Oct, 01:00 your time" when the viewer's clock differs from Tashkent, else nothing.
+// Meetings are shown and entered in one chosen zone: Tashkent by default, or
+// China for people there. Neither has daylight saving, so each is a fixed offset.
+// The choice is the viewer's own and is remembered in this browser. A viewer whose
+// clock is in yet another zone also sees their own time.
+export const MEETING_ZONES = [
+  { id: 'Asia/Tashkent', label: 'Tashkent time', offset: '+05:00', minutes: 300 },
+  { id: 'Asia/Shanghai', label: 'China time', offset: '+08:00', minutes: 480 },
+];
+const ZONE_KEY = 'naseeb.meetingZone';
+const zoneById = (id) => MEETING_ZONES.find((zone) => zone.id === id) || MEETING_ZONES[0];
+function storedZoneId() {
+  try { return zoneById(window.localStorage.getItem(ZONE_KEY)).id; } catch { return MEETING_ZONES[0].id; }
+}
+let zone = zoneById(storedZoneId());
+function setMeetingZone(id) {
+  zone = zoneById(id);
+  try { window.localStorage.setItem(ZONE_KEY, zone.id); } catch { /* private mode: kept for this visit */ }
+}
+const zoned = (value) => inServerZone(value, zone.id);
+const clockText = (value) => viewerClockText(zoned(value));
+const dateTimeText = (value) => viewerDateTimeText(zoned(value));
+// "Today" / "Tomorrow" / "Fri 13 Nov", with both days counted in the chosen zone
+// (not the browser's), so the label is right near midnight wherever the viewer is.
+function dayLabel(value) {
+  if (!value) return '';
+  const midnight = (date) => { const day = new Date(date); day.setHours(0, 0, 0, 0); return day; };
+  const days = Math.round((midnight(zoned(value)) - midnight(zoned(new Date()))) / 86400000);
+  if (days === 0) return t('Today');
+  if (days === 1) return t('Tomorrow');
+  return shortDayText(zoned(value));
+}
+const viewerElsewhere = () => -new Date().getTimezoneOffset() !== zone.minutes;
+// "27 Oct, 01:00 your time" when the viewer's clock differs from the chosen zone, else nothing.
 const viewerTimeHint = (value) => (viewerElsewhere() ? t('{time} your time', { time: viewerDateTimeText(value) }) : '');
-// A Tashkent wall-clock "YYYY-MM-DDTHH:MM" (a datetime-local value) as an instant.
-const fromTashkent = (local) => new Date(`${local}:00${TASHKENT_OFFSET}`);
+// A wall-clock "YYYY-MM-DDTHH:MM" in the chosen zone (a datetime-local value) as an instant.
+const fromZone = (local) => new Date(`${local}:00${zone.offset}`);
+// A Tashkent "HH:MM" (weekly hours are kept on Tashkent's clock) on the chosen zone's clock.
+function fromTashkentClock(value) {
+  const minutes = Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5)) + zone.minutes - 300;
+  const day = Math.floor(minutes / 1440);
+  const wrapped = ((minutes % 1440) + 1440) % 1440;
+  const text = `${String(Math.floor(wrapped / 60)).padStart(2, '0')}:${String(wrapped % 60).padStart(2, '0')}`;
+  return day > 0 ? `${text} (+1)` : text;
+}
+
+function ZonePicker({ value, onChange }) {
+  return <label className="meeting-zone"><Globe size={15} aria-hidden="true" /><span className="sr-only">{t("Time zone")}</span>
+    <select value={value} onChange={(event) => onChange(event.target.value)}>
+      {MEETING_ZONES.map((item) => <option key={item.id} value={item.id}>{t('{zone} (UTC+{hours})', { zone: t(item.label), hours: item.minutes / 60 })}</option>)}
+    </select>
+  </label>;
+}
 
 // Calendar key of a local Date (grid days, date arithmetic), as YYYY-MM-DD.
 function dayKey(value) {
@@ -35,8 +75,8 @@ function dayKey(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-// The Tashkent calendar day of a timestamp (or of now).
-const meetingDay = (value = new Date()) => dayKey(inServerZone(value));
+// The chosen zone's calendar day of a timestamp (or of now).
+const meetingDay = (value = new Date()) => dayKey(zoned(value));
 
 const byStart = (x, y) => new Date(x.starts_at) - new Date(y.starts_at);
 const NO_SLOTS = [];
@@ -60,13 +100,13 @@ const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 
 // "14:00 (Tashkent time)", plus "· 17:00 your time" for a viewer in another zone.
 const timeZoneName = () => joinParts(
-  t('{time} (Tashkent time)', { time: clockText(new Date()) }),
+  t('{time} ({zone})', { time: clockText(new Date()), zone: t(zone.label) }),
   viewerElsewhere() && t('{time} your time', { time: viewerClockText(new Date()) }),
 );
 
 function slotRange(slot) {
   const end = new Date(new Date(slot.starts_at).getTime() + slot.duration_minutes * 60000);
-  return joinParts(`${clockText(slot.starts_at)} – ${clockText(end)}, ${formatDateLocale(inServerZone(slot.starts_at), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`, viewerTimeHint(slot.starts_at));
+  return joinParts(`${clockText(slot.starts_at)} – ${clockText(end)}, ${formatDateLocale(zoned(slot.starts_at), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`, viewerTimeHint(slot.starts_at));
 }
 
 // "Sunday, 4 October". Uzbek gets the translated weekday (see WEEKDAYS).
@@ -212,7 +252,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
       await api.create('bookings', staff ? {
         student: Number(values.get('student')),
         topic: values.get('topic'),
-        starts_at: fromTashkent(values.get('starts_at')).toISOString(),
+        starts_at: fromZone(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
         notes: values.get('notes')
       } : {
@@ -285,6 +325,76 @@ function editTitle(slot) {
 
 const slotEnd = (slot) => new Date(new Date(slot.starts_at).getTime() + slot.duration_minutes * 60000);
 
+const weekdayName = (index) => (uzbek() ? t(WEEKDAYS[index]) : formatDateLocale(new Date(2024, 0, 1 + index), { weekday: 'long' }));
+const DEFAULT_RANGE = ['09:00', '17:00'];
+// The range offered by "add hours": the hour after the day's last one, while the day has room.
+function nextRange(ranges) {
+  const last = ranges.at(-1)?.[1];
+  if (!last || last >= '23:00') return DEFAULT_RANGE;
+  return [last, `${String(Number(last.slice(0, 2)) + 1).padStart(2, '0')}${last.slice(2)}`];
+}
+const rangesOverlap = (ranges) => [...ranges].sort().some((range, index, sorted) => index > 0 && range[0] < sorted[index - 1][1]);
+
+// Weekly hours, the way Calendly asks for them: one row per weekday with its
+// from–to hours. The server turns them into the dated times students book.
+function WeeklyHours({ notify, onSaved }) {
+  const [hours, setHours] = useState(null);
+  const [duration, setDuration] = useState(45);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setError('');
+    api.weeklyAvailability().then((data) => {
+      if (!active) return;
+      setHours(data.hours || {});
+      setDuration(data.duration_minutes || 45);
+    }).catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [attempt]);
+  const setDay = (day, ranges) => setHours((current) => ({ ...current, [day]: ranges }));
+  const setTime = (day, index, side, value) => setDay(day, hours[day].map((range, at) => (at === index ? (side ? [range[0], value] : [value, range[1]]) : range)));
+  async function save(event) {
+    event.preventDefault();
+    const days = Object.values(hours);
+    if (days.some((ranges) => ranges.some(([from, to]) => !from || !to || to <= from))) { notify(t("Choose an end time after the start time."), 'error'); return; }
+    if (days.some(rangesOverlap)) { notify(t("Hours on the same day cannot overlap."), 'error'); return; }
+    setBusy(true);
+    try {
+      const saved = await api.saveWeeklyAvailability({ duration_minutes: duration, hours });
+      setHours(saved.hours || {});
+      notify(t("Weekly hours saved."));
+      onSaved();
+    } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
+  }
+  if (error) return <div className="availability-weekly"><InlineLoadError message={error} onRetry={() => setAttempt((value) => value + 1)} /></div>;
+  if (!hours) return <div className="availability-weekly"><p className="booking-cal-note">{t("Loading available times…")}</p></div>;
+  return <form className="availability-weekly" onSubmit={save}>
+    <p className="booking-cal-note">{t("Set the hours you can meet each week. Students pick a time inside them for the next 4 weeks. Times are in Tashkent time.")}</p>
+    <div className="availability-add-row">
+      <b>{t("Meeting length")}</b>
+      <fieldset className="availability-durations"><legend className="sr-only">{t("Meeting length")}</legend>{[30, 45, 60].map((value) => <label key={value}><input type="radio" name="weekly-duration" checked={duration === value} onChange={() => setDuration(value)} /><span>{value} {t("min")}</span></label>)}</fieldset>
+    </div>
+    <ul className="weekly-days">{WEEKDAYS.map((name, day) => {
+      const ranges = hours[day] || [];
+      const dayName = weekdayName(day);
+      return <li key={name}>
+        <label className="weekly-day"><input type="checkbox" checked={ranges.length > 0} onChange={(event) => setDay(day, event.target.checked ? [DEFAULT_RANGE] : [])} /> {dayName}</label>
+        <div className="weekly-ranges">{ranges.length ? ranges.map(([from, to], index) => <div key={index} className="weekly-range">
+          <label className="availability-time"><span className="sr-only">{t("{day}: from", { day: dayName })}</span><input type="time" required value={from} onChange={(event) => setTime(day, index, 0, event.target.value)} /></label>
+          <span aria-hidden="true">–</span>
+          <label className="availability-time"><span className="sr-only">{t("{day}: until", { day: dayName })}</span><input type="time" required value={to} onChange={(event) => setTime(day, index, 1, event.target.value)} /></label>
+          {zone.minutes !== 300 && <span className="weekly-equivalent">= {fromTashkentClock(from)}–{fromTashkentClock(to)} {t(zone.label)}</span>}
+          <button type="button" className="availability-remove" onClick={() => setDay(day, ranges.filter((_, at) => at !== index))} aria-label={t("Remove {day} {from}–{to}", { day: dayName, from, to })} title={t("Remove")}><X size={16} aria-hidden="true" /></button>
+        </div>) : <span className="weekly-off">{t("Unavailable")}</span>}</div>
+        <button type="button" className="availability-remove weekly-add" disabled={ranges.length >= 4} onClick={() => setDay(day, [...ranges, nextRange(ranges)])} aria-label={t("Add hours on {day}", { day: dayName })} title={t("Add hours")}><Plus size={16} aria-hidden="true" /></button>
+      </li>;
+    })}</ul>
+    <div className="availability-add-actions"><button type="submit" className="button primary" disabled={busy} aria-busy={busy}><Check size={16} aria-hidden="true" /> {busy ? t("Saving…") : t("Save weekly hours")}</button></div>
+  </form>;
+}
+
 // Staff publish the times students can book. Same calendar the student sees:
 // days with times are tinted; the chosen day lists its times and adds new ones.
 function AvailabilityManager({ onClose, notify }) {
@@ -297,10 +407,10 @@ function AvailabilityManager({ onClose, notify }) {
   // Optional: with an end time the range is cut into `duration` slots (09:00–12:00 → 09:00, 09:45, …).
   const [endTime, setEndTime] = useState('');
   const [duration, setDuration] = useState(45);
-  const [repeat, setRepeat] = useState(false);
-  const [repeatUntil, setRepeatUntil] = useState('');
-  const [repeatDays, setRepeatDays] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [tab, setTab] = useState('weekly');
+  // Bumped after the weekly hours are saved: the dated times were rebuilt.
+  const [slotsVersion, setSlotsVersion] = useState(0);
   // A day that already has times shows them, with the add form behind one button.
   const [adding, setAdding] = useState(false);
   const sortSlots = (items) => [...items].sort((x, y) => new Date(x.starts_at) - new Date(y.starts_at));
@@ -310,41 +420,32 @@ function AvailabilityManager({ onClose, notify }) {
       if (!active) return;
       const next = sortSlots(items || []);
       setSlots(next);
-      if (next[0]) { setSelectedDay(meetingDay(next[0].starts_at)); setViewMonth(monthStart(inServerZone(next[0].starts_at))); }
+      if (next[0]) { setSelectedDay(meetingDay(next[0].starts_at)); setViewMonth(monthStart(zoned(next[0].starts_at))); }
     }).catch((err) => { if (active) notify(err.message, 'error'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [notify]);
+  }, [notify, slotsVersion]);
   const today = meetingDay();
   const slotDays = new Set(slots.map((slot) => meetingDay(slot.starts_at)));
   const daySlots = slots.filter((slot) => meetingDay(slot.starts_at) === selectedDay);
   const openCount = slots.filter((slot) => slot.available).length;
   const selectedWeekday = (new Date(`${selectedDay}T00:00`).getDay() + 6) % 7;
-  // The server repeats for at most 12 weeks counted from the first day.
-  const lastRepeatDay = dayKey(new Date(new Date(`${selectedDay}T00:00`).getTime() + 83 * 86400000));
   function pickDay(key) {
     setSelectedDay(key);
     setAdding(false);
     setEditing(null);
-    if (repeat) setRepeatDays([(new Date(`${key}T00:00`).getDay() + 6) % 7]);
-  }
-  function toggleRepeat(on) {
-    setRepeat(on);
-    setRepeatDays([selectedWeekday]);
-    if (on && !repeatUntil) setRepeatUntil(dayKey(new Date(new Date(`${selectedDay}T00:00`).getTime() + 27 * 86400000)));
   }
   async function add(event) {
     event.preventDefault();
-    const startsAt = fromTashkent(`${selectedDay}T${time}`);
-    if (!time || (!repeat && startsAt <= new Date())) { notify(t("Choose a time in the future."), 'error'); return; }
-    if (repeat && (!repeatUntil || repeatUntil < selectedDay || repeatUntil > lastRepeatDay || !repeatDays.length)) { notify(t("Repeat for at most 12 weeks."), 'error'); return; }
+    const startsAt = fromZone(`${selectedDay}T${time}`);
+    if (!time || startsAt <= new Date()) { notify(t("Choose a time in the future."), 'error'); return; }
     if (endTime && endTime <= time) { notify(t("Choose an end time after the start time."), 'error'); return; }
     setBusy(true);
     try {
-      if (repeat || endTime) {
-        // One day's range goes through the same endpoint as a weekly one.
+      if (endTime) {
+        // One day's range, cut into slots by the endpoint that repeats a time over dates.
         const result = await api.repeatBookingAvailability({
-          weekdays: repeat ? repeatDays : [selectedWeekday], time, end_time: endTime || null, duration_minutes: duration,
-          start_date: selectedDay, end_date: repeat ? repeatUntil : selectedDay, timezone: SERVER_TIME_ZONE,
+          weekdays: [selectedWeekday], time, end_time: endTime, duration_minutes: duration,
+          start_date: selectedDay, end_date: selectedDay, timezone: zone.id,
         });
         setSlots((current) => sortSlots([...current, ...(result.slots || [])]));
         notify(result.skipped
@@ -367,7 +468,7 @@ function AvailabilityManager({ onClose, notify }) {
   }
   async function saveEdit(event) {
     event.preventDefault();
-    const startsAt = fromTashkent(`${editing.date}T${editing.time}`);
+    const startsAt = fromZone(`${editing.date}T${editing.time}`);
     if (!editing.date || !editing.time || startsAt <= new Date()) { notify(t("Choose a time in the future."), 'error'); return; }
     setBusy(true);
     try {
@@ -380,9 +481,10 @@ function AvailabilityManager({ onClose, notify }) {
   }
   const startEdit = (slot) => setEditing({ id: slot.id, date: meetingDay(slot.starts_at), time: localInputValue(slot.starts_at).slice(11), duration: slot.duration_minutes });
   return <Modal title={t("My available hours")} onClose={onClose} className="booking-scheduler-modal">
-    <div className="booking-cal availability-cal">
+    <div className="availability-tabs"><PortalTabs active={tab} onChange={setTab} items={[['weekly', 'Weekly hours'], ['dates', 'Specific dates']]} /></div>
+    {tab === 'weekly' ? <WeeklyHours notify={notify} onSaved={() => setSlotsVersion((value) => value + 1)} /> : <div className="booking-cal availability-cal">
       <aside className="booking-cal-side">
-        <p className="booking-cal-note">{t("Add times students can choose when requesting a meeting. Times are in Tashkent time.")}</p>
+        <p className="booking-cal-note">{t("Add times students can choose when requesting a meeting.")} {t("Times are in {zone}.", { zone: t(zone.label) })}</p>
         <MonthGrid month={viewMonth} onMonth={setViewMonth} canBack={viewMonth > monthStart(new Date())} canForward marked={slotDays} canPick={(key) => key >= today} selected={selectedDay} onPick={pickDay} label={t("Choose a date and time")} />
         <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}{!loading && <> · {t("{n} available times", { n: openCount })}</>}</p>
       </aside>
@@ -413,22 +515,17 @@ function AvailabilityManager({ onClose, notify }) {
             <label className="availability-time"><span className="sr-only">{t("Until (optional)")}</span><input type="time" min={time || undefined} value={endTime} onChange={(event) => setEndTime(event.target.value)} title={t("Until (optional)")} /></label>
             <fieldset className="availability-durations"><legend className="sr-only">{t("Duration")}</legend>{[30, 45, 60].map((value) => <label key={value}><input type="radio" name="availability-duration" checked={duration === value} onChange={() => setDuration(value)} /><span>{value} {t("min")}</span></label>)}</fieldset>
           </div>
-          <div className="availability-add-row">
-            <label><input type="checkbox" checked={repeat} onChange={(event) => toggleRepeat(event.target.checked)} /> {t("Repeat weekly until…")}</label>
-            {repeat && <label className="availability-time"><span className="sr-only">{t("Repeat until")}</span><input type="date" required min={selectedDay} max={lastRepeatDay} value={repeatUntil} onChange={(event) => setRepeatUntil(event.target.value)} /></label>}
-          </div>
-          {repeat && <fieldset className="availability-durations"><legend className="sr-only">{t("Repeat on")}</legend>{WEEKDAYS.map((name, index) => <label key={name}><input type="checkbox" checked={repeatDays.includes(index)} onChange={(event) => setRepeatDays((current) => (event.target.checked ? [...current, index] : current.filter((day) => day !== index)))} /><span>{uzbek() ? t(name).slice(0, 2) : formatDateLocale(new Date(2024, 0, 1 + index), { weekday: 'short' })}</span></label>)}</fieldset>}
           {/* An empty start time is caught by the input's `required`, so Save stays clickable and says why. */}
           <div className="availability-add-actions"><button type="submit" className="button primary" disabled={busy} aria-busy={busy}><Check size={16} aria-hidden="true" /> {t("Save")}</button></div>
         </form>}
       </section>
-    </div>
+    </div>}
   </Modal>;
 }
 
-// `datetime-local` wants wall-clock time without a zone: Tashkent's, like the rest of the page.
+// `datetime-local` wants wall-clock time without a zone: the chosen zone's, like the rest of the page.
 function localInputValue(iso) {
-  const date = inServerZone(iso);
+  const date = zoned(iso);
   const pad = (value) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
@@ -478,7 +575,7 @@ export function RescheduleForm({ booking, staff = false, onClose, onSaved, notif
       await api.rescheduleBooking(booking.id, chosen ? {
         starts_at: chosen.starts_at, duration_minutes: chosen.duration_minutes, availability_slot: chosen.id,
       } : {
-        starts_at: fromTashkent(values.get('starts_at')).toISOString(),
+        starts_at: fromZone(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
       });
       notify(staff ? t("Meeting moved.") : t("New time sent for confirmation."));
@@ -542,13 +639,54 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
   return <Modal title={t("Meeting notes")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{earlier.length > 0 && <section className="form-wide"><h3>{t("Notes from this day")}</h3><div className="record-list">{earlier.map((note) => <Record key={note.id} title={note.title} meta={joinParts(note.summary, note.next_steps && `${t("Next steps")}: ${note.next_steps}`)} />)}</div></section>}<Field label={t("Title")}><input name="title" required defaultValue={booking.topic} /></Field><Field label={t("Summary")}><textarea name="summary" required placeholder={t("What did you cover?")} /></Field><Field label={t("Next steps")}><textarea name="next_steps" placeholder={t("Optional")} /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save note")}</button></div></form></Modal>;
 }
 
-export function BookingsPage({ user, data, reload, notify }) {
-  if (user.role === 'student') return <StudentBookingsPage data={data} reload={reload} notify={notify} />;
-  if (usesCounselorLayout(user)) return <CounselorMeetingsPage data={data} reload={reload} notify={notify} />;
-  return <StaffMeetingsPage data={data} reload={reload} notify={notify} />;
+// Students and counselors connect a Google account once: its verified email
+// receives the meeting confirmations and reminders. Without it they still see and
+// manage the meetings they have; only new requests and published times need it (as the API does).
+const GOOGLE_ROLES = ['student', 'counselor', 'assistant'];
+const needsGoogle = (user) => Boolean(user.google_connect_enabled) && GOOGLE_ROLES.includes(user.role) && !user.google_email;
+
+async function connectGoogle(notify) {
+  try {
+    const { url } = await api.startGoogleConnect();
+    window.location.assign(url);
+  } catch (err) {
+    notify(err.message, 'error');
+  }
 }
 
-function StudentBookingsPage({ data, reload, notify }) {
+function GoogleConnectBanner({ user, notify }) {
+  const [busy, setBusy] = useState(false);
+  const failed = new URLSearchParams(window.location.search).get('google') === 'failed';
+  async function connect() {
+    setBusy(true);
+    await connectGoogle(notify);
+    setBusy(false);
+  }
+  const body = <div className="google-gate">
+    <p>{t("Connect the Google account whose inbox you read to request new meetings and get email confirmations and reminders. Your current meetings keep working.")}</p>
+    {failed && <p className="google-gate-error" role="alert">{t("Google could not confirm your account. Try again.")}</p>}
+    <button type="button" className="button primary" disabled={busy} aria-busy={busy} onClick={connect}>{busy ? t("Opening Google…") : t("Continue with Google")}</button>
+  </div>;
+  if (usesCounselorLayout(user)) return <CxCard title={t("Connect your Google account")}>{body}</CxCard>;
+  return <Panel title={t("Connect your Google account")}>{body}</Panel>;
+}
+
+export function BookingsPage({ user, data, reload, notify }) {
+  const [zoneId, setZoneId] = useState(zone.id);
+  const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
+  const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
+  const locked = needsGoogle(user);
+  // A button that starts something new goes to Google first while the account is not connected.
+  const guard = (start) => (locked ? () => connectGoogle(notify) : start);
+  const banner = locked ? <GoogleConnectBanner user={user} notify={notify} /> : null;
+  const props = { data, reload, notify, guard, banner, picker };
+  // key: a new zone redraws every time on the page.
+  if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
+  if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
+  return <StaffMeetingsPage key={zoneId} {...props} />;
+}
+
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker }) {
   const [tab, setTab] = useState('upcoming');
   const [open, setOpen] = useState(false);
   const [savingId, setSavingId] = useState(null);
@@ -570,7 +708,7 @@ function StudentBookingsPage({ data, reload, notify }) {
       setSavingId(null);
     }
   }
-  return <div className="section-stack student-portal"><div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} /><button className="button primary" onClick={() => setOpen(true)}><Plus size={17} /> {t("Request meeting")}</button></div><p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p><div className="booking-grid">{items.map((item) => { const status = meetingBadgeStatus(meetingStatus(item, now, { student: true })); return <article className={`booking-card is-${status}`} key={item.id}><div className="booking-date"><strong>{inServerZone(item.starts_at).getDate()}</strong><span>{formatDateLocale(item.starts_at, { month: 'short' })}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p><small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{status}</Badge>{isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Reschedule")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button></div>}{!isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}><Trash2 size={14} /> {t("Delete")}</button></div>}</div></article>; })}{!items.length && <Empty text={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}</div>;
+  return <div className="section-stack student-portal">{banner}<div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} /><div className="booking-toolbar-actions">{picker}<button className="button primary" onClick={guard(() => setOpen(true))}><Plus size={17} /> {t("Request meeting")}</button></div></div><p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p><div className="booking-grid">{items.map((item) => { const status = meetingBadgeStatus(meetingStatus(item, now, { student: true })); return <article className={`booking-card is-${status}`} key={item.id}><div className="booking-date"><strong>{zoned(item.starts_at).getDate()}</strong><span>{formatDateLocale(item.starts_at, { month: 'short' })}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p><small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{status}</Badge>{isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Reschedule")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button></div>}{!isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}><Trash2 size={14} /> {t("Delete")}</button></div>}</div></article>; })}{!items.length && <Empty text={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}</div>;
 }
 
 const meetingTone = (status) => ({ confirmed: 'ok', pending: 'warn' }[status] || 'quiet');
@@ -593,7 +731,7 @@ async function deleteMeeting(item, { setSavingId, reload, notify, question = t("
   }
 }
 
-function CounselorMeetingsPage({ data, reload, notify }) {
+function CounselorMeetingsPage({ data, reload, notify, guard, banner, picker }) {
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const [addingNote, setAddingNote] = useState(null);
@@ -626,7 +764,7 @@ function CounselorMeetingsPage({ data, reload, notify }) {
   function weekActions(item) {
     const status = meetingStatus(item, now, { student: false });
     if (status === 'pending') return <button type="button" className="cx-btn" onClick={() => scrollToPending(item.id)}>{t("Open")}</button>;
-    if (needsRebook(item, now)) return <button type="button" className="cx-btn" onClick={() => setBooking({ studentId: item.student, studentName: item.student_name, topic: item.topic })}>{t("Rebook")}</button>;
+    if (needsRebook(item, now)) return <button type="button" className="cx-btn" onClick={guard(() => setBooking({ studentId: item.student, studentName: item.student_name, topic: item.topic }))}>{t("Rebook")}</button>;
     return <>
       {status === 'approved' && !isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} onClick={() => transition(item, 'complete')}>{t("Mark completed")}</button>}
       {status === 'approved' && isOpenMeeting(item, now) && <button type="button" className="cx-btn" onClick={() => setRescheduling(item)}>{t("Move meeting")}</button>}
@@ -637,9 +775,11 @@ function CounselorMeetingsPage({ data, reload, notify }) {
 
   return <div className="cx-page cx-meetings">
     <CxHead title={t("Meetings")} subtitle={joinParts(t("Requests, today and this week"), timeZoneName())}>
-      <button type="button" className="cx-btn" onClick={() => setAvailabilityOpen(true)}><Calendar size={15} aria-hidden="true" />{t("My available hours")}</button>
-      <button type="button" className="cx-btn primary" onClick={() => setBooking({})}><Plus size={15} aria-hidden="true" />{t("Book with a student")}</button>
+      {picker}
+      <button type="button" className="cx-btn" onClick={guard(() => setAvailabilityOpen(true))}><Calendar size={15} aria-hidden="true" />{t("My available hours")}</button>
+      <button type="button" className="cx-btn primary" onClick={guard(() => setBooking({}))}><Plus size={15} aria-hidden="true" />{t("Book with a student")}</button>
     </CxHead>
+    {banner}
     {pending.length || week.length ? <div className={`cx-meet-grid${pending.length && week.length ? '' : ' is-single'}`}>
       {pending.length > 0 && <CxCard title={tx`Requests waiting for you · ${pending.length}`}>
         <div className="cx-requests">
@@ -689,7 +829,7 @@ function CounselorMeetingsPage({ data, reload, notify }) {
 // "Requests, today and this week" (product vision S3.4): the SLA-facing view
 // of a counselor's meetings, oldest request first. See lib/meetings.js for
 // the pending/this-week/rebook rules.
-function StaffMeetingsPage({ data, reload, notify }) {
+function StaffMeetingsPage({ data, reload, notify, guard, banner, picker }) {
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const [addingNote, setAddingNote] = useState(null);
@@ -722,7 +862,7 @@ function StaffMeetingsPage({ data, reload, notify }) {
   function weekActions(item) {
     const status = meetingStatus(item, now, { student: false });
     if (status === 'pending') return <button type="button" className="button quiet small" onClick={() => scrollToPending(item.id)}>{t("Open")}</button>;
-    if (needsRebook(item, now)) return <button type="button" className="button quiet small" onClick={() => setBooking({ studentId: item.student, studentName: item.student_name, topic: item.topic })}><CalendarClock size={14} /> {t("Rebook")}</button>;
+    if (needsRebook(item, now)) return <button type="button" className="button quiet small" onClick={guard(() => setBooking({ studentId: item.student, studentName: item.student_name, topic: item.topic }))}><CalendarClock size={14} /> {t("Rebook")}</button>;
     return <>
       <button type="button" className="button quiet small" onClick={() => setAddingNote(item)}>{t("Notes")}</button>
       {status === 'approved' && !isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'complete')}><CheckCircle2 size={14} /> {t("Mark completed")}</button>}
@@ -732,7 +872,7 @@ function StaffMeetingsPage({ data, reload, notify }) {
   }
 
   return <div className="section-stack meetings-staff">
-    <div className="portal-toolbar"><h2>{t("Meetings")}</h2><div className="booking-toolbar-actions"><button className="button secondary" onClick={() => setAvailabilityOpen(true)}><Calendar size={17} /> {t("My available hours")}</button><button className="button primary" onClick={() => setBooking({})}><Plus size={17} /> {t("Book with a student")}</button></div></div>
+    {banner}<div className="portal-toolbar"><h2>{t("Meetings")}</h2><div className="booking-toolbar-actions">{picker}<button className="button secondary" onClick={guard(() => setAvailabilityOpen(true))}><Calendar size={17} /> {t("My available hours")}</button><button className="button primary" onClick={guard(() => setBooking({}))}><Plus size={17} /> {t("Book with a student")}</button></div></div>
     <p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p>
     <div className="split-grid wide-left">
       <Panel title={tx`Requests waiting for you · ${pending.length}`}>

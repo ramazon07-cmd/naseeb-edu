@@ -1,5 +1,4 @@
 """Admissions API views — portal."""
-import math
 from datetime import date, timedelta
 from django.conf import settings
 from django.db import IntegrityError, connection, transaction
@@ -11,11 +10,13 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
+from apps.users.google import google_connect_enabled
 from apps.users.models import User
 from apps.users.serializers import ContactSerializer
 from ..models import (
     Booking,
     MeetingAvailability,
+    MeetingSchedule,
     Notification,
     ProgramService,
     ScreenTimeDaily,
@@ -29,10 +30,14 @@ from ..serializers import (
     ScreenTimeDailySerializer,
     StudentMessageSerializer,
 )
-from ..serializers.portal import CHOOSE_AVAILABLE_TIME, MeetingAvailabilityRepeatSerializer, MeetingAvailabilitySerializer
+from ..serializers.portal import CHOOSE_AVAILABLE_TIME, MeetingAvailabilityRepeatSerializer, MeetingAvailabilitySerializer, MeetingScheduleSerializer
 from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
 from ..listing import ListQueryMixin
-from ..meetings import MAX_REPEAT_SLOTS, clashes, free_slots, overlapping, upcoming_slots, weekly_starts, with_availability
+from ..meeting_mail import email_after_commit
+from ..meetings import (
+    MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, overlapping, top_up_schedule, top_up_schedules,
+    upcoming_slots, weekly_starts, with_availability,
+)
 from ..params import int_param
 from ..scoping import booking_participants_for, scope_students, visible_students
 from .common import CONTACT_LIST_LIMIT, SCREEN_TIME_TEAM_LIMIT
@@ -94,11 +99,17 @@ class StudentCollaborationPermission(permissions.BasePermission):
 BOOKING_STAFF_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACHER, User.Role.ORGANIZATION}
 
 
+# Who must connect a Google account (a verified email for meeting emails) before changing meetings.
+GOOGLE_REQUIRED_ROLES = {User.Role.STUDENT, User.Role.COUNSELOR, User.Role.ASSISTANT}
+# The writes that start something new; every other meeting action works without Google.
+GOOGLE_REQUIRED_ACTIONS = {'create', 'availability', 'availability_repeat', 'availability_weekly'}
+
+
 class BookingPermission(permissions.BasePermission):
     """Keep meeting requests scoped to the student and the selected staff participant."""
 
     STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'availability', 'cancel', 'reschedule', 'destroy'}
-    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'availability', 'availability_repeat', 'approve', 'reject', 'complete', 'cancel', 'reschedule', 'destroy'}
+    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'availability', 'availability_repeat', 'availability_weekly', 'approve', 'reject', 'complete', 'cancel', 'reschedule', 'destroy'}
 
     def has_permission(self, request, view):
         user = request.user
@@ -106,6 +117,12 @@ class BookingPermission(permissions.BasePermission):
             return False
         if user.is_superuser or user.role == User.Role.ADMIN:
             return True
+        # Starting something new (a request, published times) needs the connected account. Meetings that
+        # already exist can still be confirmed, declined, moved, cancelled and cleared without it, so
+        # turning the feature on never strands a booked meeting.
+        if (request.method not in permissions.SAFE_METHODS and view.action in GOOGLE_REQUIRED_ACTIONS
+                and user.role in GOOGLE_REQUIRED_ROLES and not user.google_email and google_connect_enabled()):
+            raise PermissionDenied('Connect your Google account to use Meetings.')
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
             return view.action in self.STUDENT_ACTIONS
         if user.role in BOOKING_STAFF_ROLES:
@@ -276,6 +293,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         if moving is not None and not self.get_queryset().filter(pk=moving).exists():
             return Response({'detail': 'Meeting not found.'}, status=404)
         if staff:
+            top_up_schedule(user.pk)
             # `editable`: no meeting, of any status, points at the slot (the PATCH rule).
             slots = MeetingAvailability.objects.filter(participant=user).annotate(
                 has_history=Exists(Booking.objects.filter(availability_slot=OuterRef('pk'))),
@@ -294,9 +312,12 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 participant_id = int_param(request.query_params, 'participant')
                 if not participants.filter(pk=participant_id).exists():
                     return Response({'participant': 'Choose a staff member from your school.'}, status=400)
+                top_up_schedule(participant_id)
                 slots = MeetingAvailability.objects.filter(participant_id=participant_id)
             else:
-                allowed_ids = participants.values_list('id', flat=True)[:CONTACT_LIST_LIMIT]
+                allowed_ids = list(participants.values_list('id', flat=True)[:CONTACT_LIST_LIMIT])
+                # Also here, not only when one person is picked: staff nobody picks would run out of times.
+                top_up_schedules(allowed_ids)
                 slots = MeetingAvailability.objects.filter(participant_id__in=allowed_ids)
                 overview = True
         else:
@@ -317,32 +338,16 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         payload.is_valid(raise_exception=True)
         data = payload.validated_data
         duration = data['duration_minutes']
-        now = timezone.now()
         starts = list(weekly_starts(
             set(data['weekdays']), data['time'], data['start_date'], data['end_date'], data['timezone'],
             until=data['end_time'], step=duration,
         ))
         if len(starts) > MAX_REPEAT_SLOTS:
             return Response({'end_time': 'That adds too many times at once. Choose fewer days or a shorter range.'}, status=400)
-        future = [start for start in starts if start > now]
-        created = []
         try:
             with transaction.atomic():
                 User.objects.select_for_update().get(pk=user.pk)
-                if future:
-                    # One read of the whole range (slots and open meetings), then checks in memory.
-                    first = min(future)
-                    span = math.ceil((max(future) - first).total_seconds() / 60) + duration
-                    taken = (
-                        overlapping(MeetingAvailability.objects.filter(participant=user), first, span)
-                        + overlapping(Booking.objects.filter(participant=user, status__in=Booking.OPEN_STATUSES), first, span)
-                    )
-                    for start in future:
-                        if not clashes(taken, start, duration):
-                            slot = MeetingAvailability(participant=user, starts_at=start, duration_minutes=duration)
-                            created.append(slot)
-                            taken.append(slot)
-                    created = MeetingAvailability.objects.bulk_create(created)
+                created = add_free_slots(user, starts, duration)
         except IntegrityError:
             return Response({'starts_at': 'This time overlaps an existing slot.'}, status=400)
         skipped = len(starts) - len(created)
@@ -351,6 +356,23 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             'skipped': skipped,
             'slots': [{**MeetingAvailabilitySerializer(slot).data, 'participant': user.id, 'available': True} for slot in created],
         }, status=201 if created else 200)
+
+    @action(detail=False, methods=['get', 'put'], url_path='availability/weekly')
+    def availability_weekly(self, request):
+        """A staff member's weekly hours; saving them rebuilds the unbooked slots generated from the old hours."""
+        user = request.user
+        if user.role not in BOOKING_STAFF_ROLES:
+            return Response({'detail': 'Only staff can manage availability.'}, status=403)
+        if request.method == 'GET':
+            schedule = MeetingSchedule.objects.filter(participant=user).first() or MeetingSchedule(participant=user)
+            return Response(MeetingScheduleSerializer(schedule).data)
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=user.pk)
+            schedule = MeetingSchedule.objects.filter(participant=user).first()
+            payload = MeetingScheduleSerializer(schedule, data=request.data)
+            payload.is_valid(raise_exception=True)
+            fill_schedule(payload.save(participant=user), replace=True)
+        return Response(payload.data)
 
     def _locked_booking(self):
         """The booking this request may act on (404 otherwise), row-locked until commit."""
@@ -374,6 +396,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         Notification.objects.create(
             student=booking.student, title=title, message=message, kind=Notification.Kind.MEETING,
         )
+        email_after_commit(booking, booking.student.user, title, self.request)
 
     def _notify_participant(self, booking, title, message):
         # A separate row addressed to the staff member: their bell (and reading it) never touches the student's feed.
@@ -382,6 +405,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 student=booking.student, recipient_id=booking.participant_id,
                 title=title, message=message, kind=Notification.Kind.MEETING, target_id=booking.pk,
             )
+            email_after_commit(booking, booking.participant, title, self.request)
 
     def _transition(self, target_status, allowed_from):
         with transaction.atomic():
