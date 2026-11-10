@@ -71,7 +71,7 @@ export const AUDIT_ACTIONS = {
   'store_item.created': 'Store item added', 'store_item.updated': 'Store item updated', 'store_item.deleted': 'Store item deleted',
   'staff.created': 'Staff account added', 'staff.tier_changed': 'Staff access tier changed',
   'student_invite.created': 'Student invite created', 'student_invite.revoked': 'Student invite revoked',
-  'student.joined_by_invite': 'Student joined by invite', 'student.join_confirmed': 'Student join confirmed', 'student.join_rejected': 'Student join rejected',
+  'student.joined_by_invite': 'Student joined by invite', 'student.created_via_bot': 'Student added from the Telegram bot', 'student.join_confirmed': 'Student join confirmed', 'student.join_rejected': 'Student join rejected',
   'assistant_invite.created': 'Assistant invited', 'assistant_invite.revoked': 'Assistant invitation revoked',
   'assistant.joined_by_invite': 'Assistant joined by invite', 'assistant.students_set': 'Assistant students changed'
 };

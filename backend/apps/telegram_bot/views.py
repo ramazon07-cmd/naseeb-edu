@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from . import services
 from .digest import build_digest, grouped_students
 from .permissions import HasServiceKey
+from .students import add_student
 
 
 def _bad_request():
@@ -121,6 +122,18 @@ class SettingsView(BotView):
             enabled=enabled,
         )
         return Response(services.settings_payload(link))
+
+
+class AddStudentView(BotView):
+    def post(self, request):
+        data = self.get_data(request)
+        link = services.resolve_link(_chat_id(data))
+        return Response(add_student(
+            link,
+            full_name=_text(data, 'full_name', 300),
+            email=_text(data, 'email', 254),
+            phone=_text(data, 'phone', 40),
+        ), status=201)
 
 
 class DueView(BotView):

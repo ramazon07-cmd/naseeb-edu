@@ -1,6 +1,6 @@
 # Counselor Telegram bot
 
-`@naseeb_counselor_bot` sends counselors and counselor assistants a daily progress update and answers `/now`, `/students`, `/settings`, `/logout`, `/help`. Only counselors and assistants can log in; every other role is refused and nothing is stored.
+`@naseeb_counselor_bot` sends counselors and counselor assistants a daily progress update and answers `/now`, `/students`, `/add`, `/settings`, `/logout`, `/help`. Only counselors and assistants can log in; every other role is refused and nothing is stored.
 
 ## How it is built
 
@@ -20,6 +20,7 @@
 | `students/` | students grouped by `StudentProfile.grade`; at most 300 are listed, `total` is the true count and `omitted` how many were left out |
 | `digest/` | the update for the chat's enabled parts |
 | `settings/` | `GET ?chat_id=` and `PUT` (`language`, `notify_time` as `HH:MM` Tashkent, `prefs`, `enabled`) |
+| `add-student/` | `chat_id, full_name, email, phone` -> `201` with `full_name, username, phone, temporary_password, expires_at, login_url`; or `400 invalid_name / invalid_email / invalid_phone`, `409 student_exists` (with `full_name, username`) / `student_exists_elsewhere`, `403 seat_limit`, `429 too_many` |
 | `due/` | chats whose update is due now; each is leased for 2 minutes |
 | `mark-sent/` | `chat_id, slot_date`: once per chat and day |
 | `logout/`, `unlink/` | delete the link and any pending login (`unlink/` is used when the user blocks the bot) |
@@ -27,6 +28,14 @@
 Errors carry `code`; an unlinked or invalidated chat gets `404 not_linked`.
 
 `due/` returns a chat when its `notify_time` equals the current Asia/Tashkent minute or one of the previous `BOT_DUE_GRACE_MINUTES` (default 5, so a bot restart does not lose the update) and it was not sent for that day yet. Setting a time that has already passed today starts tomorrow, and so does changing the time on a day whose update was already sent: an update goes out at most once a day.
+
+## Adding a student (`/add`)
+
+A counselor or assistant sends the new student's name, email and phone in one message, with `/add` or simply pasted into the chat (for example `Saydazimova Sofiya` / `saidazimova.safiiya@gmail.com` / `+998 91 007 68 25`, labels like `Email:` and a leading `@` are fine). `bot/students.py` splits the text; the bot shows a card and adds nothing until **Add** is tapped. The card's state is cleared before the call, so a double tap adds once.
+
+The backend (`apps/telegram_bot/students.py`) uses `create_student_account`, the same function as the website's quick-create, so the student lands in the actor's school with a profile, the plan's seat check and a temporary password (10 characters, valid `TEMPORARY_CREDENTIAL_TTL_HOURS`, single use). A counselor becomes the assigned counselor; an assistant's student goes to their supervising counselor with the assistant assigned, so both see it in the bot. Phones are stored as `+998XXXXXXXXX` (9 local digits get the country code, an old `8`/`0` trunk prefix is dropped). A student of the same school with the same email or phone (compared on digits only, so `+998 99 167 46 30` matches) is not created again: the counselor gets the existing login when it is their student, and only `student_exists_elsewhere` when it is another counselor's. One exception: when the same person added that student in the last 30 minutes and the student has not signed in yet (the bot timed out and they tapped again), a fresh temporary password is issued for that account and returned as a normal add. The whole add runs in one transaction with the school row locked, so two quick taps cannot create two accounts and a later failure leaves no half-made student. As on the website, an email registered elsewhere gets a placeholder and the answer never says so; the reply always gives the username to log in with. Each add writes the `student.created_via_bot` audit event; at most 60 adds per chat per hour.
+
+The reply shows the login, the temporary password, its expiry (Tashkent time) and the website link, and asks the counselor to delete the message once it is passed on.
 
 ## What the update looks like
 

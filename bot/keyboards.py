@@ -22,6 +22,10 @@ def confirm_card(lang):
     return _markup([[_button(t(lang, 'confirm'), 'login:confirm'), _button(t(lang, 'cancel'), 'login:cancel')]])
 
 
+def confirm_student(lang):
+    return _markup([[_button(t(lang, 'add_yes'), 'add:yes'), _button(t(lang, 'add_no'), 'add:no')]])
+
+
 def already_linked(lang):
     return _markup([[_button(t(lang, 'other_account'), 'login:again')]])
 

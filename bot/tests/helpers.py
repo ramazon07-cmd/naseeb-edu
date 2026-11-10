@@ -109,6 +109,14 @@ class FakeApi:
         self._record('digest', chat_id=chat_id)
         return self.digest_data
 
+    async def add_student(self, chat_id, full_name, email, phone):
+        self._record('add_student', chat_id=chat_id, full_name=full_name, email=email, phone=phone)
+        return {
+            'full_name': full_name, 'username': 'saydazimova-sofiya', 'phone': '+998910076825',
+            'temporary_password': 'Tmp-Pass-42', 'expires_at': '2026-11-13T16:14:20+00:00',
+            'login_url': 'https://naseeb.example/login',
+        }
+
     async def get_settings(self, chat_id):
         self._record('get_settings', chat_id=chat_id)
         if not self.linked:

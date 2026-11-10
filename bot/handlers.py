@@ -16,13 +16,14 @@ from .api import ApiError, ApiUnavailable
 from .delivery import list_message, send_digest
 from .i18n import DEFAULT, LANGUAGES, t
 from .render import SORT_AZ, contacts, render_detail
+from .students import format_expiry, is_complete, parse_student
 
 log = logging.getLogger('bot.handlers')
 router = Router()
 router.message.filter(F.chat.type == 'private')
 router.callback_query.filter(F.message.chat.type == 'private')
 
-COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|settings|logout)(@\w+)?(\s|$)')
+COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|add|cancel|settings|logout)(@\w+)?(\s|$)')
 TIME_PATTERN = re.compile(r'^\s*(\d{1,2})[:.](\d{2})\s*$')
 LIST_BUTTON = re.compile(r'^l:(\d{1,4}):([az]):([ai])$')
 DETAIL_BUTTON = re.compile(r'^d:(\d{1,12}):(\d{1,4}):([az]):([ai])$')
@@ -37,6 +38,11 @@ class Login(StatesGroup):
 
 class Setup(StatesGroup):
     custom_time = State()
+
+
+class AddStudent(StatesGroup):
+    details = State()
+    confirm = State()
 
 
 async def _delete(message):
@@ -411,6 +417,109 @@ async def settings_done(callback: CallbackQuery, api, cache):
     await callback.message.edit_text(t(lang, 'saved', time=_time_text(link, lang)))
 
 
+@router.message(Command('add'))
+async def add_command(message: Message, state: FSMContext, api, cache):
+    await state.clear()
+    link = await _require_link(message, api, cache, state)
+    if link is None:
+        return
+    lang = link['language']
+    # Details may come with the command itself: "/add Ali Valiyev ali@x.com +998...".
+    details = parse_student(message.text.partition(' ')[2])
+    if is_complete(details):
+        await _show_student_card(message, state, lang, details)
+        return
+    await state.set_state(AddStudent.details)
+    await state.update_data(lang=lang)
+    await message.answer(t(lang, 'add_prompt'))
+
+
+@router.message(Command('cancel'))
+async def cancel_command(message: Message, state: FSMContext, cache):
+    lang = await language_of(state, cache, message.chat.id)
+    await state.clear()
+    await message.answer(t(lang, 'add_cancelled'))
+
+
+@router.message(AddStudent.details, F.text, ~F.text.regexp(COMMAND_PATTERN))
+async def got_student_details(message: Message, state: FSMContext, cache):
+    lang = await language_of(state, cache, message.chat.id)
+    details = parse_student(message.text)
+    if not is_complete(details):
+        missing = ', '.join(t(lang, f'field_{key}') for key in ('full_name', 'email', 'phone') if not details[key])
+        await message.answer(t(lang, 'add_missing', missing=missing))
+        return
+    await _show_student_card(message, state, lang, details)
+
+
+async def _show_student_card(message, state, lang, details):
+    await state.clear()
+    await state.set_state(AddStudent.confirm)
+    text = t(
+        lang, 'add_card', name=escape(details['full_name']), email=escape(details['email']),
+        phone=escape(details['phone']),
+    )
+    await state.update_data(lang=lang, student=details, card_text=text)
+    await message.answer(text, reply_markup=keyboards.confirm_student(lang))
+
+
+@router.callback_query(AddStudent.confirm, F.data == 'add:no')
+async def add_cancel(callback: CallbackQuery, state: FSMContext, cache):
+    await callback.answer()
+    lang = await language_of(state, cache, callback.message.chat.id)
+    await state.clear()
+    await callback.message.edit_text(t(lang, 'add_cancelled'))
+
+
+ADD_REFUSALS = {
+    'invalid_name': 'add_invalid_name',
+    'invalid_email': 'add_invalid_email',
+    'invalid_phone': 'add_invalid_phone',
+    'student_exists_elsewhere': 'add_exists_elsewhere',
+    'seat_limit': 'add_seat_limit',
+    'too_many': 'add_too_many',
+}
+
+
+@router.callback_query(AddStudent.confirm, F.data == 'add:yes')
+async def add_confirm(callback: CallbackQuery, state: FSMContext, bot, api, cache):
+    await callback.answer()
+    chat_id = callback.message.chat.id
+    data = await state.get_data()
+    lang, details = data.get('lang', DEFAULT), data.get('student')
+    # Cleared before the call, so a second tap on the same card cannot add the student twice.
+    await state.clear()
+    if not details:
+        return
+    await callback.message.edit_text(t(lang, 'add_adding'))
+    try:
+        result = await api.add_student(chat_id, details['full_name'], details['email'], details['phone'])
+    except ApiUnavailable:
+        # Nothing was added: give the card and its buttons back so the tap can be repeated.
+        await state.set_state(AddStudent.confirm)
+        await state.update_data(**data)
+        await _edit(bot, chat_id, callback.message.message_id, data['card_text'], keyboards.confirm_student(lang))
+        raise
+    except ApiError as exc:
+        if exc.code == 'student_exists':
+            text = t(
+                lang, 'add_exists', name=escape(str(exc.extra.get('full_name', ''))),
+                username=escape(str(exc.extra.get('username', ''))),
+            )
+        elif exc.code in ADD_REFUSALS:
+            text = t(lang, ADD_REFUSALS[exc.code])
+        else:
+            raise
+        await callback.message.edit_text(text)
+        return
+    cache.drop_chat(chat_id)
+    await callback.message.edit_text(t(
+        lang, 'add_done', name=escape(result['full_name']), username=escape(result['username']),
+        password=escape(result['temporary_password']), expires=format_expiry(result.get('expires_at')),
+        url=escape(result.get('login_url') or ''),
+    ))
+
+
 @router.message(Command('logout'))
 async def logout(message: Message, state: FSMContext, api, cache):
     chat_id = message.chat.id
@@ -437,6 +546,13 @@ async def blocked(event: ChatMemberUpdated, api, cache):
 
 @router.message(F.text)
 async def stray_text(message: Message, state: FSMContext, api, cache):
+    # A pasted name + email + phone from a linked counselor is a new student to add.
+    details = parse_student(message.text)
+    if is_complete(details):
+        link = await get_link(api, cache, message.chat.id)
+        if link is not None:
+            await _show_student_card(message, state, link['language'], details)
+            return
     # No step expects text here. After a restart a password may arrive this way, so it is not left in the chat.
     await _delete(message)
     lang = await language_of(state, cache, message.chat.id)
