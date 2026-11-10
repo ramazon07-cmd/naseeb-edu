@@ -6,7 +6,7 @@ import { Field, PortalTabs } from '../components/forms';
 import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
 import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil } from 'lucide-react';
-import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, dayLabel as viewerDayLabel, joinParts, relativeDayText } from '../lib/format';
+import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, joinParts, relativeDayText, shortDayText } from '../lib/format';
 import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
@@ -36,7 +36,16 @@ function setMeetingZone(id) {
 const zoned = (value) => inServerZone(value, zone.id);
 const clockText = (value) => viewerClockText(zoned(value));
 const dateTimeText = (value) => viewerDateTimeText(zoned(value));
-const dayLabel = (value) => viewerDayLabel(zoned(value));
+// "Today" / "Tomorrow" / "Fri 13 Nov", with both days counted in the chosen zone
+// (not the browser's), so the label is right near midnight wherever the viewer is.
+function dayLabel(value) {
+  if (!value) return '';
+  const midnight = (date) => { const day = new Date(date); day.setHours(0, 0, 0, 0); return day; };
+  const days = Math.round((midnight(zoned(value)) - midnight(zoned(new Date()))) / 86400000);
+  if (days === 0) return t('Today');
+  if (days === 1) return t('Tomorrow');
+  return shortDayText(zoned(value));
+}
 const viewerElsewhere = () => -new Date().getTimezoneOffset() !== zone.minutes;
 // "27 Oct, 01:00 your time" when the viewer's clock differs from the chosen zone, else nothing.
 const viewerTimeHint = (value) => (viewerElsewhere() ? t('{time} your time', { time: viewerDateTimeText(value) }) : '');
