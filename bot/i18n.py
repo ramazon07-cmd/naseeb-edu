@@ -72,9 +72,9 @@ STRINGS = {
         'en': 'Done, {name}. Account linked.',
     },
     'already_linked': {
-        'uz': "Siz {name} sifatida kirgansiz.\n\n/now - hozir yangilanish\n/students - o'quvchilar\n/settings - sozlamalar\n/logout - chiqish",
-        'ru': 'Вы вошли как {name}.\n\n/now - сводка сейчас\n/students - ученики\n/settings - настройки\n/logout - выйти',
-        'en': "You're logged in as {name}.\n\n/now - update now\n/students - students\n/settings - settings\n/logout - log out",
+        'uz': "Siz {name} sifatida kirgansiz.\n\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/settings - sozlamalar\n/logout - chiqish",
+        'ru': 'Вы вошли как {name}.\n\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/settings - настройки\n/logout - выйти',
+        'en': "You're logged in as {name}.\n\n/now - update now\n/students - students\n/add - add a student\n/settings - settings\n/logout - log out",
     },
     'other_account': {'uz': 'Boshqa hisob', 'ru': 'Другой аккаунт', 'en': 'Other account'},
     'grade_name': {
@@ -246,15 +246,85 @@ STRINGS = {
         'ru': 'Сервис временно недоступен. Попробуйте чуть позже.',
         'en': 'The service is temporarily unavailable. Please try again shortly.',
     },
+    'add_prompt': {
+        'uz': "Yangi o'quvchi ma'lumotlarini bitta xabarda yuboring:\n\n<i>Familiya Ism\nemail@gmail.com\n+998 90 123 45 67</i>",
+        'ru': 'Отправьте данные нового ученика одним сообщением:\n\n<i>Фамилия Имя\nemail@gmail.com\n+998 90 123 45 67</i>',
+        'en': "Send the new student's details in one message:\n\n<i>Last name First name\nemail@gmail.com\n+998 90 123 45 67</i>",
+    },
+    'add_missing': {
+        'uz': "Topilmadi: {missing}. Ism, email va telefonni bitta xabarda qayta yuboring yoki /cancel.",
+        'ru': 'Не найдено: {missing}. Отправьте имя, email и телефон одним сообщением ещё раз или /cancel.',
+        'en': 'Missing: {missing}. Send the name, email and phone again in one message, or /cancel.',
+    },
+    'field_full_name': {'uz': 'ism', 'ru': 'имя', 'en': 'name'},
+    'field_email': {'uz': 'email', 'ru': 'email', 'en': 'email'},
+    'field_phone': {'uz': 'telefon', 'ru': 'телефон', 'en': 'phone'},
+    'add_card': {
+        'uz': "Yangi o'quvchi qo'shilsinmi?\n\n<b>{name}</b>\n{email}\n{phone}\n\nMaktab: sizning maktabingiz. Vaqtinchalik parol avtomatik yaratiladi.",
+        'ru': 'Добавить нового ученика?\n\n<b>{name}</b>\n{email}\n{phone}\n\nШкола: ваша школа. Временный пароль создаётся автоматически.',
+        'en': 'Add this new student?\n\n<b>{name}</b>\n{email}\n{phone}\n\nSchool: your school. A temporary password is made automatically.',
+    },
+    'add_yes': {'uz': "✅ Qo'shish", 'ru': '✅ Добавить', 'en': '✅ Add'},
+    'add_no': {'uz': '✖ Bekor qilish', 'ru': '✖ Отмена', 'en': '✖ Cancel'},
+    'add_adding': {
+        'uz': "Qo'shilmoqda...",
+        'ru': 'Добавляем...',
+        'en': 'Adding...',
+    },
+    'add_done': {
+        'uz': "✅ O'quvchi qo'shildi: <b>{name}</b>\n\nLogin: <code>{username}</code>\nVaqtinchalik parol: <code>{password}</code>\nAmal qiladi: {expires} gacha\nSayt: {url}\n\nShu ma'lumotni o'quvchiga yuboring. Birinchi kirishda o'z parolini o'rnatadi. Yuborgach, bu xabarni o'chirib qo'ying.",
+        'ru': '✅ Ученик добавлен: <b>{name}</b>\n\nЛогин: <code>{username}</code>\nВременный пароль: <code>{password}</code>\nДействует до: {expires}\nСайт: {url}\n\nПередайте эти данные ученику. При первом входе он задаст свой пароль. После отправки удалите это сообщение.',
+        'en': '✅ Student added: <b>{name}</b>\n\nLogin: <code>{username}</code>\nTemporary password: <code>{password}</code>\nValid until: {expires}\nWebsite: {url}\n\nSend these to the student. They set their own password at first login. Delete this message once sent.',
+    },
+    'add_cancelled': {
+        'uz': "Bekor qilindi. Hech narsa qo'shilmadi.",
+        'ru': 'Отменено. Ничего не добавлено.',
+        'en': 'Cancelled. Nothing was added.',
+    },
+    'add_invalid_name': {
+        'uz': "Ism noto'g'ri. Qayta yuboring: /add",
+        'ru': 'Неверное имя. Отправьте заново: /add',
+        'en': 'The name is not valid. Try again: /add',
+    },
+    'add_invalid_email': {
+        'uz': "Email noto'g'ri. Qayta yuboring: /add",
+        'ru': 'Неверный email. Отправьте заново: /add',
+        'en': 'The email is not valid. Try again: /add',
+    },
+    'add_invalid_phone': {
+        'uz': "Telefon raqami noto'g'ri. Qayta yuboring: /add",
+        'ru': 'Неверный номер телефона. Отправьте заново: /add',
+        'en': 'The phone number is not valid. Try again: /add',
+    },
+    'add_exists': {
+        'uz': "Bu o'quvchi allaqachon bor: <b>{name}</b> (login: <code>{username}</code>). Yangi hisob ochilmadi.",
+        'ru': 'Этот ученик уже есть: <b>{name}</b> (логин: <code>{username}</code>). Новый аккаунт не создан.',
+        'en': 'This student already exists: <b>{name}</b> (login: <code>{username}</code>). No new account was made.',
+    },
+    'add_exists_elsewhere': {
+        'uz': "Bu email yoki telefon bilan maktabingizda boshqa maslahatchining o'quvchisi bor. Yangi hisob ochilmadi. Maktab administratoriga murojaat qiling.",
+        'ru': 'С этим email или телефоном в вашей школе уже есть ученик другого консультанта. Новый аккаунт не создан. Обратитесь к администратору школы.',
+        'en': "A student with this email or phone already belongs to another counselor at your school. No new account was made. Contact your school administrator.",
+    },
+    'add_seat_limit': {
+        'uz': "Maktabingiz tarifidagi o'quvchilar soni to'lgan. Yangi o'quvchi qo'shilmadi.",
+        'ru': 'Лимит учеников по тарифу вашей школы исчерпан. Ученик не добавлен.',
+        'en': "Your school's plan has no free student seats. The student was not added.",
+    },
+    'add_too_many': {
+        'uz': "Bir soatda juda ko'p o'quvchi qo'shildi. Birozdan so'ng qayta urinib ko'ring.",
+        'ru': 'Слишком много учеников за час. Попробуйте позже.',
+        'en': 'Too many students added this hour. Please try again later.',
+    },
     'error': {
         'uz': "Xatolik yuz berdi. Qayta urinib ko'ring.",
         'ru': 'Произошла ошибка. Попробуйте ещё раз.',
         'en': 'Something went wrong. Please try again.',
     },
     'help': {
-        'uz': "/start - kirish\n/now - hozir yangilanish\n/students - o'quvchilar\n/settings - vaqt, til, nimalar kelishi\n/logout - chiqish va ma'lumotlarni o'chirish\n/help - yordam",
-        'ru': '/start - вход\n/now - сводка сейчас\n/students - ученики\n/settings - время, язык, состав сводки\n/logout - выйти и удалить данные\n/help - помощь',
-        'en': '/start - log in\n/now - update now\n/students - list students\n/settings - time, language, contents\n/logout - log out and wipe data\n/help - this help',
+        'uz': "/start - kirish\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/settings - vaqt, til, nimalar kelishi\n/logout - chiqish va ma'lumotlarni o'chirish\n/help - yordam",
+        'ru': '/start - вход\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/settings - время, язык, состав сводки\n/logout - выйти и удалить данные\n/help - помощь',
+        'en': '/start - log in\n/now - update now\n/students - list students\n/add - add a student\n/settings - time, language, contents\n/logout - log out and wipe data\n/help - this help',
     },
 }
 

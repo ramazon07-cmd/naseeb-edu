@@ -11,6 +11,6 @@ python -m bot.main                # from the repo root; --run-for 10 exits clean
 
 Tests (no network): `pip install pytest pytest-asyncio && cd bot && pytest`.
 
-Layout: `handlers.py` (commands, login flow, settings), `scheduler.py` (minute loop, flood limit, retries), `render.py` (digest text, pages under 4096 characters), `i18n.py` (all strings, uz/ru/en), `api.py` (shared aiohttp client), `keyboards.py`, `delivery.py`, `cache.py`, `config.py`.
+Layout: `handlers.py` (commands, login flow, settings, `/add`), `students.py` (reads name, email and phone from a pasted message), `scheduler.py` (minute loop, flood limit, retries), `render.py` (digest text, pages under 4096 characters), `i18n.py` (all strings, uz/ru/en), `api.py` (shared aiohttp client), `keyboards.py`, `delivery.py`, `cache.py`, `config.py`.
 
 Never log tokens, passwords or login message text; the handlers log nothing from message bodies and `main.py` masks the token and key in every log line.

@@ -66,6 +66,11 @@ class ApiClient:
     async def digest(self, chat_id):
         return await self._call('POST', 'digest', json={'chat_id': chat_id})
 
+    async def add_student(self, chat_id, full_name, email, phone):
+        return await self._call('POST', 'add-student', json={
+            'chat_id': chat_id, 'full_name': full_name, 'email': email, 'phone': phone,
+        })
+
     async def get_settings(self, chat_id):
         return await self._call('GET', 'settings', params={'chat_id': chat_id})
 
