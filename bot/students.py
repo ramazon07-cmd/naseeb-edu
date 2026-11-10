@@ -49,8 +49,9 @@ def parse_student(text):
         line = LABEL.sub('', line).strip(' \t:,;-–—')
         if line and any(char.isalpha() for char in line):
             name_parts.append(line)
-    full_name = ' '.join(' '.join(name_parts).split())
-    if len(full_name) > NAME_LIMIT or _digits(full_name):
+    # Notes next to the name ("11-sinf", "2-guruh") are dropped, not the whole name.
+    full_name = ' '.join(word for word in ' '.join(name_parts).split() if not _digits(word))
+    if len(full_name) > NAME_LIMIT:
         full_name = ''
     return {'full_name': full_name, 'email': email, 'phone': phone}
 

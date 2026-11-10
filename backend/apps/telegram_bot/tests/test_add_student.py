@@ -84,6 +84,10 @@ class AddStudentTests(BotTestCase):
         self.link(self.c1)
         first = self.add()
         self.assertEqual(first.status_code, 201)
+        # The student has signed in since, so this is a real duplicate, not a retry.
+        TemporaryCredential.objects.filter(user__username=first.json()['username']).update(
+            status=TemporaryCredential.Status.USED,
+        )
         # Same phone typed differently, other email.
         again = self.add(email='other@example.com', phone='91 007-68-25')
         self.assertEqual(again.status_code, 409)
@@ -135,6 +139,44 @@ class AddStudentTests(BotTestCase):
         self.assertFalse(self.students_named('A').exists())
 
 
+    def test_a_student_saved_with_a_spaced_phone_is_found(self):
+        # Production phones are stored as typed: "+998 99 167 46 30", "+99899 280 61 88".
+        existing = make_user('spaced', User.Role.STUDENT, self.school_a, phone='+998 99 167 46 30')
+        StudentProfile.objects.create(user=existing, school=self.school_a, assigned_counselor=self.c1)
+        self.link(self.c1)
+        response = self.add(email='new@example.com', phone='991674630')
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['username'], 'spaced')
+
+    def test_a_repeat_right_after_adding_hands_out_a_fresh_password(self):
+        # The bot timed out after the account was made; the counselor taps Add again.
+        self.link(self.c1)
+        first = self.add().json()
+        again = self.add()
+        self.assertEqual(again.status_code, 201)
+        body = again.json()
+        self.assertEqual(body['username'], first['username'])
+        self.assertNotEqual(body['temporary_password'], first['temporary_password'])
+        self.assertEqual(self.students_named('Saydazimova').count(), 1)
+        self.assertEqual(authenticate(username=body['username'], password=body['temporary_password']).username,
+                         body['username'])
+
+    def test_a_repeat_after_the_student_signed_in_is_refused(self):
+        self.link(self.c1)
+        first = self.add().json()
+        TemporaryCredential.objects.filter(user__username=first['username']).update(status=TemporaryCredential.Status.USED)
+        response = self.add()
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['code'], 'student_exists')
+
+    def test_a_failure_after_creating_leaves_no_half_made_student(self):
+        self.link(self.c1)
+        with mock.patch.object(bot_students, 'audit_product_action', side_effect=RuntimeError('audit down')):
+            with self.assertRaises(RuntimeError):
+                self.add()
+        self.assertFalse(self.students_named('Saydazimova').exists())
+        self.assertFalse(User.objects.filter(email='saidazimova.safiiya@gmail.com').exists())
+
 class PhoneTests(BotTestCase):
     def test_normalize_phone(self):
         for raw, expected in (
@@ -143,5 +185,12 @@ class PhoneTests(BotTestCase):
             ('(91) 007 68 25', '+998910076825'),
             ('998910076825', '+998910076825'),
             ('+7 916 123 45 67', '+79161234567'),
+            ('8 91 007 68 25', '+998910076825'),
+            ('0910076825', '+998910076825'),
         ):
             self.assertEqual(bot_students.normalize_phone(raw), expected)
+
+    def test_numbers_that_are_not_phones_are_refused(self):
+        for raw in ('12345', '9100768250', '1' * 16):
+            with self.assertRaises(bot_students.Refused):
+                bot_students.normalize_phone(raw)

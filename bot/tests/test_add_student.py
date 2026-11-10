@@ -19,6 +19,8 @@ def test_parser_reads_the_shapes_counselors_send():
         'full_name': 'Karimova Dilnoza', 'email': 'dil@mail.ru', 'phone': '(90) 123 45 67',
     }
     assert parse_student("O'ktamov Jobir, jobir@gmail.com, +998 (91) 104-70-06")['full_name'] == "O'ktamov Jobir"
+    # A grade next to the name is dropped, not the name.
+    assert parse_student('Ali Valiyev 11-sinf\nali@x.uz\n+998 90 123 45 67')['full_name'] == 'Ali Valiyev'
 
 
 def test_parser_does_not_mistake_a_password_or_chat_for_a_student():

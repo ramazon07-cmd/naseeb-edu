@@ -5,19 +5,24 @@ The bot sends the name, email and phone a counselor typed; the account is made b
 student gets the same school, profile, seat check and temporary password.
 """
 import re
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import F, Q, Value
+from django.db.models.functions import Replace
+from django.utils import timezone
 
-from apps.admissions.models import StudentProfile
+from apps.admissions.models import School, StudentProfile
 from apps.admissions.scoping import visible_students
 from apps.admissions.tenancy import create_student_account
 from apps.users import entitlements
 from apps.users.audit import audit_product_action
 from apps.users.cache_safety import count_hit
-from apps.users.credentials import generate_temporary_password
+from apps.users.credentials import generate_temporary_password, issue_temporary_credential
+from apps.users.models import TemporaryCredential
 
 from .services import Refused, User
 
@@ -26,18 +31,23 @@ PASSWORD_LENGTH = 10
 NAME_LIMIT = 150
 ADDS_PER_HOUR = 60
 PHONE_DIGITS = re.compile(r'\d')
+# A repeat of an add the same person made this recently (the bot timed out and they tapped
+# again) gets a fresh password for that student instead of "already exists".
+RETRY_WINDOW = timedelta(minutes=30)
 
 
 def normalize_phone(raw):
-    """'+998 91 007 68 25', '91-007-68-25', '998910076825' -> '+998910076825'.
+    """'+998 91 007 68 25', '91-007-68-25', '8 91 007 68 25', '998910076825' -> '+998910076825'.
 
-    Uzbek numbers get their country code; any other number with 9 to 15 digits is
-    kept as '+digits'. Anything else is refused.
+    Uzbek numbers get their country code (an old 8 or 0 trunk prefix is dropped); any
+    other number with 11 to 15 digits is kept as '+digits'. Anything else is refused.
     """
     digits = ''.join(PHONE_DIGITS.findall(raw or ''))
+    if len(digits) == 10 and digits[0] in '80':
+        digits = digits[1:]
     if len(digits) == 9:
         digits = '998' + digits
-    if not 9 <= len(digits) <= 15:
+    if not 11 <= len(digits) <= 15:
         raise Refused('invalid_phone', 400)
     return '+' + digits
 
@@ -54,18 +64,21 @@ def clean_input(full_name, email, phone):
     return full_name, email, normalize_phone(phone)
 
 
-def _existing(actor, email, phone):
-    """A student of the actor's school with this email or phone, or ``None``."""
-    digits = phone[1:]
-    candidates = StudentProfile.objects.select_related('user').filter(
-        school_id=actor.school_id, user__is_active=True, deactivated_at__isnull=True,
-    ).filter(Q(user__email__iexact=email) | Q(user__phone__icontains=digits[-9:]))
-    for profile in candidates[:20]:
-        if profile.user.email.lower() == email:
-            return profile
-        if ''.join(PHONE_DIGITS.findall(profile.user.phone or ''))[-9:] == digits[-9:]:
-            return profile
-    return None
+def _phone_digits(field):
+    """The phone column with the usual separators removed, so '+998 99 167 46 30' compares as digits."""
+    expression = F(field)
+    for separator in (' ', '-', '(', ')', '+', '.'):
+        expression = Replace(expression, Value(separator), Value(''))
+    return expression
+
+
+def _existing(school, email, phone):
+    """An active student of `school` with this email or phone, or ``None``."""
+    return StudentProfile.objects.select_related('user').annotate(
+        phone_digits=_phone_digits('user__phone'),
+    ).filter(
+        school_id=school.pk, user__is_active=True, deactivated_at__isnull=True,
+    ).filter(Q(user__email__iexact=email) | Q(phone_digits__endswith=phone[-9:])).order_by('id').first()
 
 
 def _assign(profile, actor):
@@ -76,47 +89,18 @@ def _assign(profile, actor):
         profile.save(update_fields=['assigned_counselor', 'assigned_assistant', 'updated_at'])
 
 
-def add_student(link, *, full_name, email, phone):
-    actor = link.user
-    full_name, email, phone = clean_input(full_name, email, phone)
-    school = actor.school
-    if school is None or not school.is_active:
-        raise Refused('account_unavailable')
-
-    existing = _existing(actor, email, phone)
-    if existing is not None:
-        if visible_students(actor).filter(pk=existing.pk).exists():
-            raise Refused(
-                'student_exists', 409,
-                full_name=existing.user.get_full_name().strip() or existing.user.username,
-                username=existing.user.username,
-            )
-        raise Refused('student_exists_elsewhere', 409)
-
-    hits = count_hit(f'tgbot-add-student:{link.chat_id}', 3600)
-    if hits is not None and hits[0] > ADDS_PER_HOUR:
-        raise Refused('too_many', 429)
-
-    for attempt in range(3):
-        password = generate_temporary_password(PASSWORD_LENGTH)
-        try:
-            profile = create_student_account(
-                school=school, full_name=full_name, password=password, created_by=actor,
-                email=email, phone=phone,
-            )
-            break
-        except entitlements.EntitlementError:
-            raise Refused('seat_limit', 403)
-        except DjangoValidationError:
-            # The random password was too close to the name; nothing was saved, so try another.
-            if attempt == 2:
-                raise
-    _assign(profile, actor)
-    student = profile.user
+def _just_added_by(student, actor):
+    """True when `actor` added `student` minutes ago and the student has not signed in yet."""
     credential = student.temporary_credentials.order_by('-issued_at', '-id').first()
-    audit_product_action(
-        actor=actor, action='student.created_via_bot', target=student, metadata={'school': school.id},
+    return bool(
+        credential and credential.issued_by_id == actor.pk
+        and credential.status == TemporaryCredential.Status.ISSUED
+        and credential.issued_at >= timezone.now() - RETRY_WINDOW
     )
+
+
+def _payload(student, password, phone):
+    credential = student.temporary_credentials.order_by('-issued_at', '-id').first()
     return {
         'full_name': student.get_full_name().strip() or student.username,
         # The login to hand out. Like quick-create, the answer never says whether the email was
@@ -127,3 +111,58 @@ def add_student(link, *, full_name, email, phone):
         'expires_at': credential.expires_at.isoformat() if credential else None,
         'login_url': f'{settings.FRONTEND_URL}/login',
     }
+
+
+def add_student(link, *, full_name, email, phone):
+    actor = link.user
+    full_name, email, phone = clean_input(full_name, email, phone)
+    if actor.school_id is None:
+        raise Refused('account_unavailable')
+
+    with transaction.atomic():
+        # One add per school at a time, so two quick taps cannot both pass the duplicate check.
+        school = School.objects.select_for_update().get(pk=actor.school_id)
+        if not school.is_active:
+            raise Refused('account_unavailable')
+        existing = _existing(school, email, phone)
+        if existing is not None:
+            if not visible_students(actor).filter(pk=existing.pk).exists():
+                raise Refused('student_exists_elsewhere', 409)
+            if _just_added_by(existing.user, actor):
+                # The first answer never reached the bot: hand out a fresh password for the same account.
+                password = generate_temporary_password(PASSWORD_LENGTH)
+                student, _, _, _ = issue_temporary_credential(
+                    user=existing.user, issued_by=actor, raw_password=password,
+                )
+                return _payload(student, password, phone)
+            raise Refused(
+                'student_exists', 409,
+                full_name=existing.user.get_full_name().strip() or existing.user.username,
+                username=existing.user.username,
+            )
+
+        hits = count_hit(f'tgbot-add-student:{link.chat_id}', 3600)
+        if hits is not None and hits[0] > ADDS_PER_HOUR:
+            raise Refused('too_many', 429)
+
+        for attempt in range(3):
+            password = generate_temporary_password(PASSWORD_LENGTH)
+            try:
+                with transaction.atomic():
+                    profile = create_student_account(
+                        school=school, full_name=full_name, password=password, created_by=actor,
+                        email=email, phone=phone,
+                    )
+                break
+            except entitlements.EntitlementError:
+                raise Refused('seat_limit', 403)
+            except DjangoValidationError:
+                # The random password was too close to the name; nothing was saved, so try another.
+                if attempt == 2:
+                    raise
+        # In the same transaction as the account: a failure here leaves no student whose password nobody saw.
+        _assign(profile, actor)
+        audit_product_action(
+            actor=actor, action='student.created_via_bot', target=profile.user, metadata={'school': school.id},
+        )
+        return _payload(profile.user, password, phone)
