@@ -52,7 +52,8 @@ from ..serializers import (
     XPTransactionSerializer,
 )
 from ..exam_scores import EXAM_KEYS
-from ..tenancy import create_student_account
+from ..scoping import visible_students
+from ..tenancy import create_student_account, find_school_student
 from apps.users import entitlements
 from apps.users.audit import audit_staff_read
 from apps.users.throttles import ScopedRateThrottle
@@ -789,6 +790,17 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
             school = School.objects.filter(id=school_id, is_active=True).first()
             if not school:
                 return Response({'school': ['Selected school does not exist or is inactive.']}, status=400)
+
+        # Adding one of your own students again (same email or phone) is refused with their
+        # login, instead of quietly making a placeholder twin. Only students the caller can
+        # already see count, so the answer never reveals anyone else's address.
+        existing = find_school_student(school, email, phone, full_name)
+        if existing is not None and visible_students(request.user).filter(pk=existing.pk).exists():
+            name = existing.user.get_full_name().strip() or existing.user.username
+            return Response({
+                'detail': f'This student already exists: {name} (login {existing.user.username}).',
+                'code': 'student_exists', 'student': existing.pk, 'username': existing.user.username,
+            }, status=409)
 
         try:
             student = create_student_account(

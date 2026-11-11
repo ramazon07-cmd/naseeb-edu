@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
@@ -97,7 +98,7 @@ class TemporaryCredentialLifecycleTests(APITestCase):
             HTTP_ACCEPT_LANGUAGE=language,
         )
 
-    def test_temporary_password_is_hashed_used_once_and_forces_change(self):
+    def test_temporary_password_is_hashed_marked_used_and_forces_change(self):
         self.assertNotIn(self.temporary_password, self.student.password)
         self.assertFalse(hasattr(self.credential, 'password'))
         login = self.login()
@@ -107,9 +108,16 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.assertEqual(self.credential.status, TemporaryCredential.Status.USED)
         self.assertIsNotNone(self.credential.used_at)
 
+        # Closing the tab before setting a password must not lock the student out.
         second_login = self.login()
-        self.assertEqual(second_login.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(second_login.data['code'], 'credential_used')
+        self.assertEqual(second_login.status_code, status.HTTP_200_OK)
+        self.assertTrue(second_login.data['must_change_password'])
+
+        # Once it expires, the used password stops working.
+        TemporaryCredential.objects.filter(pk=self.credential.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        expired = self.login()
+        self.assertEqual(expired.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(expired.data['code'], 'credential_expired')
 
         access = login.data['access']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
@@ -233,6 +241,24 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.assertEqual(changed.status_code, status.HTTP_200_OK, changed.data)
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.grade, '')
+
+    def test_sign_in_and_session_refresh_record_last_login(self):
+        from apps.users.auth_views import LAST_LOGIN_WINDOW
+
+        self.assertIsNone(self.student.last_login)
+        login = self.login()
+        self.student.refresh_from_db()
+        first = self.student.last_login
+        self.assertIsNotNone(first)
+        # A refresh inside the window writes nothing; after it, the time moves on.
+        post_refresh(self.client, refresh_cookie_value(login))
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.last_login, first)
+        type(self.student).objects.filter(pk=self.student.pk).update(last_login=first - LAST_LOGIN_WINDOW * 2)
+        refreshed = post_refresh(self.client)
+        self.assertEqual(refreshed.status_code, status.HTTP_200_OK)
+        self.student.refresh_from_db()
+        self.assertGreater(self.student.last_login, first - LAST_LOGIN_WINDOW)
 
     def test_refresh_token_rotation_blacklists_the_used_token(self):
         login = self.login()

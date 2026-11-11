@@ -1,4 +1,10 @@
 export const UI_TRANSLATIONS = {
+  'Email delivery': ['Email yuborish', 'Отправка почты'],
+  'Meeting emails and reminders are sent.': ['Uchrashuv xatlari va eslatmalar yuboriladi.', 'Письма о встречах и напоминания отправляются.'],
+  'No mail server is set, so meeting emails, reminders and invites are not sent.': ['Pochta serveri sozlanmagan: uchrashuv xatlari, eslatmalar va taklifnomalar yuborilmaydi.', 'Почтовый сервер не настроен: письма о встречах, напоминания и приглашения не отправляются.'],
+  'Shared cache': ['Umumiy kesh', 'Общий кэш'],
+  'Login limits and the AI budget are shared by all workers.': ['Kirish cheklovlari va AI byudjeti barcha workerlar uchun umumiy.', 'Лимиты входа и бюджет ИИ общие для всех воркеров.'],
+  'No Redis is set, so login limits and the AI budget are counted per worker.': ['Redis sozlanmagan: kirish cheklovlari va AI byudjeti har bir worker uchun alohida hisoblanadi.', 'Redis не настроен: лимиты входа и бюджет ИИ считаются отдельно в каждом воркере.'],
   'Student added from the Telegram bot': ['O‘quvchi Telegram bot orqali qo‘shildi', 'Ученик добавлен через Telegram-бот'],
   "This task is for your own planning.": ["Bu vazifa shaxsiy rejalashtirishingiz uchun.", "Эта задача для вашего личного планирования."],
   "Essay submitted successfully": ["Insho muvaffaqiyatli yuborildi", "Эссе успешно отправлено"],

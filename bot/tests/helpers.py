@@ -129,8 +129,8 @@ class FakeApi:
         self.link = {**self.link, **changes, 'prefs': prefs}
         return self.link
 
-    async def meeting_reminders(self):
-        self._record('meeting_reminders')
+    async def scheduled_jobs(self):
+        self._record('scheduled_jobs')
         return {'ok': True}
 
     async def due(self):
