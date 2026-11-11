@@ -1,6 +1,6 @@
 // The AI college match: the student's four rubric scores and a balanced list of
 // best-fitting universities, grouped by admission band (backend college_search.college_match).
-import { ArrowRight, Check, CheckCircle2, Clock3, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Clock3, Compass, Plus, RefreshCw, X } from 'lucide-react';
 import { formatNumberLocale, t, tx } from '../i18n';
 import { TierBand } from './college';
 import { bandLabel, priceInfo, rankText } from '../lib/college';
@@ -57,7 +57,7 @@ export function CollegeMatchPanel({ state, listed, busyId, addingAll, onAdd, onA
   const toAdd = all.filter((university) => !listed.has(university.id));
   return <section className="college-match" aria-label={t("Your best-fit colleges")}>
     <header className="college-match-header">
-      <div><span className="catalog-eyebrow"><Sparkles size={14} aria-hidden="true" /> {t("AI college match")}</span><h2>{t("Your best-fit colleges")}</h2></div>
+      <div><span className="catalog-eyebrow"><Compass size={14} aria-hidden="true" /> {t("AI college match")}</span><h2>{t("Your best-fit colleges")}</h2></div>
       <div className="college-match-actions">
         {toAdd.length > 0 && <button type="button" className="button primary small" disabled={addingAll} aria-busy={addingAll} onClick={() => onAddAll(toAdd)}><Plus size={14} aria-hidden="true" /> {tx`Add all ${formatNumberLocale(toAdd.length)} to my list`}</button>}
         <button type="button" className="icon-button" aria-label={t("Close")} onClick={onClose}><X size={16} /></button>
