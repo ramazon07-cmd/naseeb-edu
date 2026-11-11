@@ -791,19 +791,15 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
             if not school:
                 return Response({'school': ['Selected school does not exist or is inactive.']}, status=400)
 
-        # The same person twice (same email or phone in this school) is refused, not
-        # quietly created again with a placeholder address.
+        # Adding one of your own students again (same email or phone) is refused with their
+        # login, instead of quietly making a placeholder twin. Only students the caller can
+        # already see count, so the answer never reveals anyone else's address.
         existing = find_school_student(school, email, phone)
-        if existing is not None:
-            if visible_students(request.user).filter(pk=existing.pk).exists():
-                name = existing.user.get_full_name().strip() or existing.user.username
-                return Response({
-                    'detail': f'This student already exists: {name} (login {existing.user.username}).',
-                    'code': 'student_exists', 'student': existing.pk, 'username': existing.user.username,
-                }, status=409)
+        if existing is not None and visible_students(request.user).filter(pk=existing.pk).exists():
+            name = existing.user.get_full_name().strip() or existing.user.username
             return Response({
-                'detail': 'A student with this email or phone already belongs to another counselor at your school.',
-                'code': 'student_exists_elsewhere',
+                'detail': f'This student already exists: {name} (login {existing.user.username}).',
+                'code': 'student_exists', 'student': existing.pk, 'username': existing.user.username,
             }, status=409)
 
         try:

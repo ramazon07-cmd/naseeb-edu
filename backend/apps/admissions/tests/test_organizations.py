@@ -93,7 +93,7 @@ class OrganizationRoleIsolationTests(RoleIsolationBase):
         # A typed password is the counselor's own: it is never echoed back.
         typed = self.client.post(
             '/api/students/quick-create/',
-            {'email': 'student@example.com', 'phone': '+998901234567', 'name': 'Typed Student', 'password': 'NewStudentPass123!'},
+            {'email': 'student@example.com', 'phone': '+998901234568', 'name': 'Typed Student', 'password': 'NewStudentPass123!'},
             format='json',
         )
         self.assertEqual(typed.status_code, status.HTTP_201_CREATED, typed.data)
