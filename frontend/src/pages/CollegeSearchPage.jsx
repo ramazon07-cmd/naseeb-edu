@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Filter, GraduationCap, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Filter, GraduationCap, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, parseDateValue, t, tp, tx } from '../i18n';
 import { Empty, Modal } from '../components/ui';
@@ -14,6 +14,7 @@ import { PageSkeleton } from '../components/states';
 import { UniversityPage } from './UniversityPage';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
+import { CollegeMatchPanel } from '../components/CollegeMatch';
 import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
 import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
@@ -203,6 +204,9 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [researchError, setResearchError] = useState('');
   // Bumped when the profile changes: the fit of every row has to be fetched again.
   const [researchVersion, setResearchVersion] = useState(0);
+  // The AI college match: idle until the student asks for it.
+  const [match, setMatch] = useState({ loading: false, data: null, error: '' });
+  const [addingAll, setAddingAll] = useState(false);
   const previousQuery = useRef(query);
   const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
   const closeUniversity = useCallback(() => setPage('college_search'), [setPage]);
@@ -323,14 +327,18 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     } catch (error) {setResearchError(error.message);} finally {setResearchSaving(false);}
   }
 
+  function createApplication(university, tier) {
+    const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
+    return api.create('applications', { student: student?.id, university: university.id, program, tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
+  }
+
   // Without a known band the student picks the tier: an unknown band is never filed as "target".
   async function addToList(university, fit, pickedTier) {
     const tier = pickedTier || BAND_TIERS[fit?.admission_band];
     if (!tier) {setTierFor({ university, fit });return;}
-    const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
     setBusyId(university.id);
     try {
-      await api.create('applications', { student: student?.id, university: university.id, program, tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
+      await createApplication(university, tier);
       await reload();
       setTierFor(null);
       notify(tx`${university.name} added to your list.`);
@@ -355,6 +363,31 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       await reload();
       notify(tx`${name} removed from your list.`);
     } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
+  }
+
+  async function findMatches() {
+    if (!research?.ready) {setProfileFocusRequested(true);return;}
+    setMatch({ loading: true, data: null, error: '' });
+    try {setMatch({ loading: false, data: await api.collegeMatch(), error: '' });}
+    catch (error) {setMatch({ loading: false, data: null, error: error.message });}
+  }
+
+  // Every match not yet on the list, in one go; the list reloads once at the end.
+  async function addAllMatches(universities) {
+    setAddingAll(true);
+    let added = 0;
+    try {
+      for (const university of universities) {
+        const tier = BAND_TIERS[university.fit?.admission_band];
+        if (!tier) continue;
+        await createApplication(university, tier);
+        added += 1;
+      }
+      notify(tx`${formatNumberLocale(added)} universities added to your list.`);
+    } catch (err) {notify(err.message, 'error');} finally {
+      await reload();
+      setAddingAll(false);
+    }
   }
 
   function completeProfileFirst() {
@@ -386,7 +419,8 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const remaining = Math.min(pageSize, search.count - rows.length);
   const priceNotes = priceFilterNotes(filters.price, search.unpricedCount);
   return <div className="section-stack student-portal college-page">
-    <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><span className="catalog-eyebrow">NASEEB EDU / {t('College Search')}</span><h1>{t('College Search')}</h1><p>{t('Explore admissions, cost, deadlines, and your personal fit in one place.')}</p><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
+    <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><span className="catalog-eyebrow">NASEEB EDU / {t('College Search')}</span><h1>{t('College Search')}</h1><p>{t('Explore admissions, cost, deadlines, and your personal fit in one place.')}</p><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form><button type="button" className="button primary college-hero-match" onClick={findMatches} disabled={match.loading} aria-busy={match.loading}><Sparkles size={16} aria-hidden="true" /> {t('Find my best colleges')}</button></div><CollegeSkyline /></div>
+    <CollegeMatchPanel state={match} listed={listed} busyId={busyId} addingAll={addingAll} onAdd={(university) => addToList(university, university.fit)} onAddAll={addAllMatches} onOpen={openUniversity} onRetry={findMatches} onClose={() => setMatch({ loading: false, data: null, error: '' })} />
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
     {research && !research.ready && <CollegeProfileQuestions sectionRef={profileQuestionsRef} research={research} saving={researchSaving} onComplete={completeResearchProfile} />}

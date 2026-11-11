@@ -25,6 +25,7 @@ from .countries import country_key, country_name, country_spellings
 from .listing import MAX_SEARCH_LENGTH, search_terms, term_query
 from .models import StudentProfile, University, UniversityProgram
 from .pricing import with_cost
+from .student_rubric import rubric
 
 PAGE_SIZES = (10, 25, 50, 100)
 MAX_IDS = 100
@@ -143,9 +144,8 @@ def fit_context(profile):
     """
     if missing_fields(profile):
         return None
-    counts = evidence_counts(profile)
     act = [row['score'] for row in certificates(profile, 'act')]
-    return {
+    ctx = {
         'gpa': float(profile.gpa),
         'gpa_scale': int(profile.effective_gpa_scale),
         'sat': int(profile.sat_score) if profile.sat_score is not None else None,
@@ -156,8 +156,10 @@ def fit_context(profile):
         'major': profile.target_major.strip().lower(),
         'major_name': profile.target_major,
         'scholarship_needed': bool(profile.scholarship_needed),
-        'strength': min(10, sum(min(value, 2) for value in counts.values()) * 2),
     }
+    # The student's four rubric scores (0-10, None when not scored yet).
+    ctx['rubric'] = rubric(profile, ctx)
+    return ctx
 
 
 def country_match(university, countries):
@@ -599,3 +601,34 @@ def record_chance_snapshot(application):
         gates=[gap['code'] for gap in fit['gaps'] if gap['code'] in admission_chance.GATE_CODES],
         inputs=ctx,
     )
+
+
+# ---------------------------------------------------------------- AI college match
+
+# How many universities of each band the match shows, dream schools first (a balanced list).
+MATCH_QUOTAS = (('far_reach', 2), ('reach', 3), ('target', 4), ('safety', 3))
+
+
+def college_match(profile):
+    """The student's balanced list: the best-fitting universities of each band, with the rubric.
+
+    Built from the cached fit map, so it costs no more than one College Search page.
+    """
+    ctx = fit_context(profile)
+    scores = fit_scores(profile, ctx)
+    ranking = dict(University.objects.filter(pk__in=list(scores)).values_list('pk', 'ranking'))
+    picked = {}
+    for band, quota in MATCH_QUOTAS:
+        candidates = [pk for pk, (_, row_band) in scores.items() if row_band == band]
+        candidates.sort(key=lambda pk: (-scores[pk][0], ranking.get(pk) or 999999, pk))
+        picked[band] = candidates[:quota]
+    ids = [pk for ids in picked.values() for pk in ids]
+    rows = with_cost(University.objects.prefetch_related(eligible_programs())).filter(pk__in=ids)
+    serialized = {row['id']: row for row in serialize_rows(list(rows), ctx)}
+    return {
+        'rubric': ctx['rubric'],
+        'groups': [
+            {'band': band, 'quota': quota, 'results': [serialized[pk] for pk in picked[band] if pk in serialized]}
+            for band, quota in MATCH_QUOTAS
+        ],
+    }

@@ -383,7 +383,8 @@ class ReasonCodeTests(APITestCase):
         return {
             'gpa': 3.8, 'gpa_scale': 4, 'sat': None, 'sat_status': 'not_taken', 'act': None, 'english': None,
             'countries': ['us'], 'major': 'computer science', 'major_name': 'Computer Science',
-            'scholarship_needed': True, 'strength': 0, **values,
+            'scholarship_needed': True,
+            'rubric': {'academics': None, 'activities': 0, 'essays': None, 'recommendations': None}, **values,
         }
 
     def test_every_code_is_emitted_and_shaped_for_the_frontend(self):

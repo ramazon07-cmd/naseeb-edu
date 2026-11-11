@@ -2843,6 +2843,26 @@ export const UI_TRANSLATIONS = {
   "View workspaces and reset school logins": ["Ish maydonlarini ko‘rish va maktab loginlarini tiklash", "Просмотр пространств и сброс входов школ"],
   "View counselor accounts and open support views": ["Maslahatchi hisoblarini ko‘rish va yordam ko‘rinishini ochish", "Просмотр консультантов и открытие просмотра поддержки"],
   "Follow counselor milestones": ["Maslahatchilarning bosqichlarini kuzatish", "Следить за этапами консультантов"],
+  // AI college match (components/CollegeMatch.jsx)
+  "Find my best colleges": ["Menga eng mos universitetlarni topish", "Найти лучшие университеты для меня"],
+  "AI college match": ["AI universitet tanlovi", "AI-подбор университетов"],
+  "Your best-fit colleges": ["Sizga eng mos universitetlar", "Самые подходящие вам университеты"],
+  "Finding your best-fit colleges…": ["Sizga eng mos universitetlar qidirilmoqda…", "Ищем самые подходящие вам университеты…"],
+  "Scoring your profile once and matching it against every university.": ["Profilingiz bir marta baholanadi va har bir universitet bilan solishtiriladi.", "Профиль оценивается один раз и сравнивается с каждым университетом."],
+  "Your college match could not be built": ["Universitetlar ro‘yxatini tuzib bo‘lmadi", "Не удалось подобрать университеты"],
+  "Academics": ["Akademik natijalar", "Учёба"],
+  "Activities": ["Faoliyat", "Внеучебная деятельность"],
+  "Essays": ["Esse", "Эссе"],
+  "Recommendations": ["Tavsiyanomalar", "Рекомендации"],
+  "Not scored yet": ["Hali baholanmagan", "Ещё не оценено"],
+  "Essays and recommendations are scored by AI once your personal statement and letters are in Naseeb Edu.": ["Shaxsiy esse va tavsiyanomalaringiz Naseeb Edu’ga qo‘shilgach, ularni AI baholaydi.", "Эссе и рекомендации оценит AI, когда ваше личное эссе и письма появятся в Naseeb Edu."],
+  "Essays and recommendations will be scored by AI once AI is turned on. Until then they neither help nor hurt your match.": ["AI yoqilgach, esse va tavsiyanomalarni AI baholaydi. Ungacha ular natijaga ta’sir qilmaydi.", "Эссе и рекомендации оценит AI, когда он будет включён. До этого они не влияют на подбор."],
+  "Add": ["Qo‘shish", "Добавить"],
+  "Add all {0} to my list": ["Hammasini ({0}) ro‘yxatimga qo‘shish", "Добавить все ({0}) в мой список"],
+  "{0} universities added to your list.": ["{0} ta universitet ro‘yxatingizga qo‘shildi.", "В ваш список добавлено университетов: {0}."],
+  "QS {0}": ["QS {0}", "QS {0}"],
+  "No {0} universities match your profile yet.": ["“{0}” toifasida hozircha mos universitet yo‘q.", "В категории «{0}» пока нет подходящих университетов."],
+  "Matched with fixed rules: the same profile always gets the same list. Bands are estimates, not admission decisions.": ["Doimiy qoidalar asosida tanlangan: bir xil profil har doim bir xil ro‘yxatni oladi. Toifalar taxmin, qabul qarori emas.", "Подбор по фиксированным правилам: одинаковый профиль всегда получает одинаковый список. Категории — оценка, а не решение о приёме."],
 }
 
 export function uiMessages(language) {
