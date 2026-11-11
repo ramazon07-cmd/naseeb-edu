@@ -34,6 +34,7 @@ from ..models import (
     Task,
     University,
 )
+from ..college_search import record_chance_snapshot
 from ..pricing import with_cost
 from ..serializers import (
     AchievementSerializer,
@@ -102,6 +103,7 @@ class ApplicationViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.M
             changed_by=self.request.user,
             note='Application created',
         )
+        record_chance_snapshot(application)
 
     def perform_update(self, serializer):
         with transaction.atomic():

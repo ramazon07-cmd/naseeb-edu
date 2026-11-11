@@ -192,8 +192,8 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
         top = self.client.get('/api/college-search/?sort=fit').data['results'][0]
         self.assertEqual(top['id'], university.id)
         self.assertGreaterEqual(top['fit']['match_score'], 65)
-        self.assertIn(top['fit']['admission_band'], {'reach', 'target', 'safety'})
-        self.assertIn('academic', top['fit']['score_breakdown'])
+        self.assertIn(top['fit']['admission_band'], {'far_reach', 'reach', 'target', 'safety'})
+        self.assertIn('preferences', top['fit']['score_breakdown'])
         self.student_a.refresh_from_db()
         self.assertEqual(self.student_a.sat_score, 1450)
         self.assertEqual(self.student_a.target_major, 'Computer Science')

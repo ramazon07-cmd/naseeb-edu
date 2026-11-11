@@ -25,7 +25,7 @@ function UniversityOverview({ university, result, fitStatus, onRetryFit, researc
   const essay = essayProgress(essays);
   return <div className="two-column">
     <div className="stack-16">
-      <InfoCard title="Fit for your profile">{result ? <div className="fit-summary"><div className="fit-score"><b>{formatNumberLocale(result.match_score)}</b><span>{label(result.match_label)}</span><small>{t("Not an admission probability. It measures academic fit, preferences, financial aid and profile evidence.")}</small></div><ScoreBreakdown breakdown={result.score_breakdown} /></div> :
+      <InfoCard title="Fit for your profile">{result ? <div className="fit-summary"><div className="fit-score"><b>{formatNumberLocale(result.match_score)}</b><span>{label(result.match_label)}</span><small>{t("Fit measures how well country, major and financial aid suit you. Your admission chance is the band.")}</small></div><ScoreBreakdown breakdown={result.score_breakdown} /></div> :
       researchLoading ? <p className="note"><RefreshCw className="spin" size={14} aria-hidden="true" /> {t("Analyzing your profile")}</p> :
       research?.ready && fitStatus === 'loading' ? <p className="note" role="status"><RefreshCw className="spin" size={14} aria-hidden="true" /> {t("Checking fit…")}</p> :
       research?.ready && fitStatus === 'error' ? <p className="note"><FitError onRetry={onRetryFit} /></p> :

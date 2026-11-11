@@ -4,7 +4,8 @@ import { BAND_TIERS, COLLEGE_PRICE_CAPS, DEFAULT_COLLEGE_FILTERS, afterAidText, 
 import { money } from '../src/lib/format.js';
 
 test('an unknown admission band maps to no tier, never "target"', () => {
-  assert.deepEqual(BAND_TIERS, { reach: 'dream', target: 'target', safety: 'safety' });
+  assert.deepEqual(BAND_TIERS, { far_reach: 'dream', reach: 'dream', target: 'target', safety: 'safety' });
+  assert.equal(BAND_TIERS.not_eligible, undefined);
   assert.equal(BAND_TIERS[null], undefined);
   assert.equal(BAND_TIERS[undefined], undefined);
 });

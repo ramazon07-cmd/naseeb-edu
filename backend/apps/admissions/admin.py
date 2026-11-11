@@ -94,7 +94,7 @@ class UniversityAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
     audit_prefix = 'university'
     list_display = ('name', 'market', 'country', 'institution_type', 'acceptance_rate', 'net_price_usd', 'ranking', 'catalog_verified_at')
     search_fields = ('name', 'country', 'city')
-    list_filter = ('market', 'country', 'institution_type', 'degree_type', 'test_optional', 'offers_international_aid')
+    list_filter = ('market', 'country', 'institution_type', 'degree_type', 'test_optional', 'offers_international_aid', 'credential_route')
 
 
 @admin.register(UniversityProgram)
