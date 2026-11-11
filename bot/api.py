@@ -4,7 +4,7 @@ import logging
 import aiohttp
 
 log = logging.getLogger('bot.api')
-REMINDERS_TIMEOUT = 110
+JOBS_TIMEOUT = 110
 
 
 class ApiError(Exception):
@@ -80,9 +80,9 @@ class ApiClient:
     async def update_settings(self, chat_id, **changes):
         return await self._call('PUT', 'settings', json={'chat_id': chat_id, **changes})
 
-    async def meeting_reminders(self):
-        # The backend answers when every reminder email is out; just under gunicorn's 120 s.
-        return await self._call('POST', 'meeting-reminders', json={}, timeout=REMINDERS_TIMEOUT)
+    async def scheduled_jobs(self):
+        # The backend answers when the due jobs are done; just under gunicorn's 120 s.
+        return await self._call('POST', 'scheduled-jobs', json={}, timeout=JOBS_TIMEOUT)
 
     async def due(self):
         body = await self._call('POST', 'due', json={})

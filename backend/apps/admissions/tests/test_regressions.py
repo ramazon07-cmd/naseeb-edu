@@ -691,13 +691,18 @@ class QuickCreateTests(AuditFixtureMixin, APITestCase):
     """Quick-create usernames, email case and placeholder domain."""
 
     def create(self, **extra):
-        payload = {'name': 'Aziz Karimov', 'password': 'StudentPass123!', 'email': 'new-student@example.com', 'phone': '+998901234567', **extra}
+        # A new phone each time: one of the counselor's own students sent again is refused.
+        self._phones = getattr(self, '_phones', 0) + 1
+        payload = {
+            'name': 'Aziz Karimov', 'password': 'StudentPass123!', 'email': 'new-student@example.com',
+            'phone': f'+99890123{self._phones:04d}', **extra,
+        }
         return self.client.post('/api/students/quick-create/', payload, format='json')
 
     def test_usernames_are_unique_and_placeholder_domain_is_invalid(self):
         self.client.force_authenticate(self.counselor)
-        # The fixture already holds this address, so both accounts get a placeholder.
-        first, second = self.create(email='audit-student@example.com'), self.create(email='audit-student@example.com')
+        # Another school's student holds this address, so both accounts get a placeholder.
+        first, second = self.create(email='audit-student-b@example.com'), self.create(email='audit-student-b@example.com')
         self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
         self.assertEqual(second.status_code, status.HTTP_201_CREATED, second.data)
         users = User.objects.filter(first_name='Aziz').order_by('id')
@@ -707,7 +712,8 @@ class QuickCreateTests(AuditFixtureMixin, APITestCase):
     def test_taken_and_free_emails_get_identical_responses(self):
         """The response must not reveal whether an address is registered."""
         self.client.force_authenticate(self.counselor)
-        taken = self.create(name='Taken Case', email='AUDIT-STUDENT@EXAMPLE.COM')
+        # Taken by a student this counselor cannot see (another school).
+        taken = self.create(name='Taken Case', email='AUDIT-STUDENT-B@EXAMPLE.COM')
         free = self.create(name='Free Case', email='brand-new-address@example.com')
         self.assertEqual(taken.status_code, free.status_code)
         self.assertEqual(taken.status_code, status.HTTP_201_CREATED, taken.data)
@@ -715,7 +721,7 @@ class QuickCreateTests(AuditFixtureMixin, APITestCase):
         self.assertNotIn('email', taken.data['user_detail'])
         self.assertNotIn('email', free.data['user_detail'])
         # The taken address is never attached to a second account (case-insensitive).
-        self.assertEqual(User.objects.filter(email__iexact='audit-student@example.com').count(), 1)
+        self.assertEqual(User.objects.filter(email__iexact='audit-student-b@example.com').count(), 1)
         self.assertTrue(User.objects.get(first_name='Taken').email.endswith('@students.naseeb.invalid'))
         self.assertEqual(User.objects.get(first_name='Free').email, 'brand-new-address@example.com')
 

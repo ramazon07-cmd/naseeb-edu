@@ -1,13 +1,11 @@
 import datetime as dt
-from io import StringIO
-
-from django.core.management import call_command
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import services
 from .digest import build_digest, grouped_students
+from .jobs import run_due_jobs
 from .permissions import HasServiceKey
 from .students import add_student
 
@@ -139,16 +137,16 @@ class AddStudentView(BotView):
         ), status=201)
 
 
-class MeetingRemindersView(BotView):
-    """The bot calls this once an hour instead of a separate (paid) cron service.
+class ScheduledJobsView(BotView):
+    """The bot calls this once an hour instead of separate (paid) cron services.
 
-    It runs the same `send_meeting_reminders` command a cron would: under its advisory
-    lock (two bot instances during a deploy cannot send twice), recorded for the health page.
+    It runs the jobs that are due (see jobs.py) the way a cron would: each under its
+    advisory lock (two bot instances during a deploy cannot run one twice), recorded
+    for the health page.
     """
 
     def post(self, request):
-        call_command('send_meeting_reminders', stdout=StringIO())
-        return Response({'ok': True})
+        return Response({'ok': True, 'ran': run_due_jobs()})
 
 
 class DueView(BotView):

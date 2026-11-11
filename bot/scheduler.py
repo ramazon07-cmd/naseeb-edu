@@ -115,9 +115,10 @@ async def run_tick(*, bot, api, cache, limiter, sleep=asyncio.sleep, concurrency
     return results
 
 
-# Meeting reminder emails: the backend's send_meeting_reminders, run from here once an
-# hour (at minute 5) so it needs no separate cron service. The backend locks the job and
-# marks each meeting, so a restart or two instances during a deploy never send twice.
+# The backend's scheduled jobs (meeting reminders hourly; notifications and cleanups
+# daily), asked for from here once an hour at minute 5 so no cron service is needed.
+# The backend picks what is due and locks each job, so a restart or two instances
+# during a deploy never run one twice.
 REMINDER_MINUTE = 5
 
 
@@ -145,9 +146,9 @@ class HourlyJob:
         try:
             await self._job()
         except (ApiError, ApiUnavailable) as exc:
-            log.warning('meeting reminders were not run this hour: %s', type(exc).__name__)
+            log.warning('scheduled jobs were not run this hour: %s', type(exc).__name__)
         except Exception:
-            log.exception('unexpected error while running meeting reminders')
+            log.exception('unexpected error while running scheduled jobs')
 
 
 def seconds_to_next_minute(now=None):
@@ -157,7 +158,7 @@ def seconds_to_next_minute(now=None):
 
 async def run_scheduler(stop, **deps):
     """Tick once at startup (the backend's grace window covers a restart), then at every minute start."""
-    reminders = deps.pop('reminders', None) or HourlyJob(deps['api'].meeting_reminders)
+    reminders = deps.pop('reminders', None) or HourlyJob(deps['api'].scheduled_jobs)
     try:
         while not stop.is_set():
             reminders.maybe_start()

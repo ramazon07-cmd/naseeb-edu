@@ -28,3 +28,15 @@ def unused_ai_keys_check(app_configs, **kwargs):
         hint='Set OUTBOUND_AI_ENABLED=True only after legal sign-off (open item H8), or remove the keys.',
         id='naseeb.W002',
     )]
+
+
+@checks.register(checks.Tags.compatibility, deploy=True)
+def email_backend_check(app_configs, **kwargs):
+    """Meeting emails, reminders and invites need a real mail backend in production."""
+    if settings.DEBUG or not settings.EMAIL_BACKEND.endswith('console.EmailBackend'):
+        return []
+    return [checks.Warning(
+        'EMAIL_BACKEND is the console backend, so no email leaves the server.',
+        hint='Set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend and the EMAIL_HOST/PORT/USER/PASSWORD variables.',
+        id='naseeb.W003',
+    )]

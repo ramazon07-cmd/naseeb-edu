@@ -77,7 +77,12 @@ def mark_temporary_credential_used(*, user, request=None):
     if not credential:
         return None, 'credential_missing'
     if credential.status == TemporaryCredential.Status.USED:
-        return credential, 'credential_used'
+        # Signed in once but never set a new password (closed the tab, another device):
+        # the same temporary password works again until it expires. It still only opens
+        # the "set a new password" screen, and a new password ends it for good.
+        if credential.expires_at > timezone.now():
+            return credential, None
+        return credential, 'credential_expired'
     # Marked on the first late attempt; every later attempt must still say expired.
     if credential.status == TemporaryCredential.Status.EXPIRED:
         return credential, 'credential_expired'
