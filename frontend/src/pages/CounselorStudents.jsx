@@ -702,11 +702,11 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     {tab === 'overview' && <>
       <Overview student={student} records={records} meetings={upcoming} name={student.user_detail?.first_name || name} notify={notify} reload={reload} goTo={setTab} />
     </>}
-    {/* Logins and parents are the counselor's; an assistant has neither. */}
-    {user.role !== 'assistant' && <CxAccountActions>
+    {/* An assistant resets their students' logins; parent invitations stay with the counselor. */}
+    <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setCredential(true)}>{t("Reset login")}</button>
-      <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>
-    </CxAccountActions>}
+      {user.role !== 'assistant' && <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>}
+    </CxAccountActions>
     {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={() => reload({ endpoints: REVIEW_ENDPOINTS, workspace: true })} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}
     {tab === 'tasks' && <div className="section-stack">
       <RecordCard title={t("Tasks")} count={records.tasks?.length} loading={loaded.loading} empty={t("No assigned tasks found.")}>
