@@ -157,7 +157,7 @@ def seconds_to_next_minute(now=None):
 
 async def run_scheduler(stop, **deps):
     """Tick once at startup (the backend's grace window covers a restart), then at every minute start."""
-    reminders = HourlyJob(deps['api'].meeting_reminders)
+    reminders = deps.pop('reminders', None) or HourlyJob(deps['api'].meeting_reminders)
     try:
         while not stop.is_set():
             reminders.maybe_start()
