@@ -24,6 +24,14 @@ class QuickCreateDuplicateTests(RoleIsolationBase):
         self.assertEqual(self.add(phone='+998 99 000 00 00').status_code, 409)
         self.assertEqual(StudentProfile.objects.filter(user__first_name='Ali').count(), 1)
 
+    def test_a_sibling_with_the_parents_phone_is_not_a_duplicate(self):
+        self.client.force_authenticate(self.counselor)
+        self.assertEqual(self.add().status_code, 201)
+        sister = self.add(name='Malika Valiyeva', email='malika.valiyeva@gmail.com')
+        self.assertEqual(sister.status_code, 201, sister.data)
+        # The same name with the parent's phone, written the other way round, is the same person.
+        self.assertEqual(self.add(name='Valiyev Ali', email='ali.second@gmail.com').status_code, 409)
+
     def test_another_counselors_student_is_not_revealed(self):
         other = User.objects.create_user(
             username='counselor-two', email='c2@example.com', password='x-Strong-Pass-1', role=User.Role.COUNSELOR,

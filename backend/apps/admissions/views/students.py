@@ -794,7 +794,7 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         # Adding one of your own students again (same email or phone) is refused with their
         # login, instead of quietly making a placeholder twin. Only students the caller can
         # already see count, so the answer never reveals anyone else's address.
-        existing = find_school_student(school, email, phone)
+        existing = find_school_student(school, email, phone, full_name)
         if existing is not None and visible_students(request.user).filter(pk=existing.pk).exists():
             name = existing.user.get_full_name().strip() or existing.user.username
             return Response({

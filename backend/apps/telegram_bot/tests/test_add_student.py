@@ -142,6 +142,7 @@ class AddStudentTests(BotTestCase):
     def test_a_student_saved_with_a_spaced_phone_is_found(self):
         # Production phones are stored as typed: "+998 99 167 46 30", "+99899 280 61 88".
         existing = make_user('spaced', User.Role.STUDENT, self.school_a, phone='+998 99 167 46 30')
+        User.objects.filter(pk=existing.pk).update(first_name='Sofiya', last_name='Saydazimova')
         StudentProfile.objects.create(user=existing, school=self.school_a, assigned_counselor=self.c1)
         self.link(self.c1)
         response = self.add(email='new@example.com', phone='991674630')

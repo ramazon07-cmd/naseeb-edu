@@ -105,7 +105,7 @@ def add_student(link, *, full_name, email, phone):
         school = School.objects.select_for_update().get(pk=actor.school_id)
         if not school.is_active:
             raise Refused('account_unavailable')
-        existing = find_school_student(school, email, phone)
+        existing = find_school_student(school, email, phone, full_name)
         if existing is not None:
             if not visible_students(actor).filter(pk=existing.pk).exists():
                 raise Refused('student_exists_elsewhere', 409)

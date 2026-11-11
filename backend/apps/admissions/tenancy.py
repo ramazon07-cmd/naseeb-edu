@@ -242,11 +242,17 @@ def _phone_digits(field):
     return expression
 
 
-def find_school_student(school, email='', phone=''):
-    """An active student of `school` with this email, or this phone (last 9 digits), or ``None``.
+def _name_words(text):
+    return frozenset(word.lower() for word in str(text or '').split())
 
-    Used before adding a student (website quick-create and the counselor bot) so the
-    same person is not created twice; phones are compared on digits only.
+
+def find_school_student(school, email='', phone='', full_name=''):
+    """An active student of `school` who is the same person, or ``None``.
+
+    The same email is the same person. The same phone (last 9 digits, separators
+    ignored) only counts with the same name, in any word order: siblings often give
+    a parent's number. Used before adding a student (website quick-create and the
+    counselor bot) so nobody is created twice.
     """
     match = Q()
     if email:
@@ -256,11 +262,18 @@ def find_school_student(school, email='', phone=''):
         match |= Q(phone_digits__endswith=digits[-9:])
     if not match:
         return None
-    return StudentProfile.objects.select_related('user').annotate(
+    candidates = StudentProfile.objects.select_related('user').annotate(
         phone_digits=_phone_digits('user__phone'),
     ).filter(
         school_id=school.pk, user__is_active=True, deactivated_at__isnull=True,
-    ).filter(match).order_by('id').first()
+    ).filter(match).order_by('id')[:20]
+    name = _name_words(full_name)
+    for profile in candidates:
+        if email and profile.user.email.lower() == email.lower():
+            return profile
+        if name and _name_words(f'{profile.user.first_name} {profile.user.last_name}') == name:
+            return profile
+    return None
 
 
 @transaction.atomic
