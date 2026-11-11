@@ -51,7 +51,7 @@ async def test_a_backend_error_is_logged_and_waits_for_the_next_hour(caplog):
     job = HourlyJob(remind, clock=clock)
     with caplog.at_level(logging.WARNING):
         assert await finished(job)
-    assert 'meeting reminders were not run' in caplog.text
+    assert 'scheduled jobs were not run' in caplog.text
     clock.at += 60
     assert not await finished(job)
     assert calls == [1]
@@ -78,22 +78,22 @@ async def test_the_scheduler_starts_the_reminders(h):
     from bot.scheduler import RateLimiter, run_scheduler
 
     stop = asyncio.Event()
-    reminders = HourlyJob(h.api.meeting_reminders, clock=Clock(10 * HOUR + 6 * 60))
+    reminders = HourlyJob(h.api.scheduled_jobs, clock=Clock(10 * HOUR + 6 * 60))
     task = asyncio.create_task(run_scheduler(
         stop, bot=h.bot, api=h.api, cache=h.cache, limiter=RateLimiter(per_second=1000), reminders=reminders,
     ))
     for _ in range(100):
         await asyncio.sleep(0.01)
-        if h.api.names('meeting_reminders') and h.api.names('due'):
+        if h.api.names('scheduled_jobs') and h.api.names('due'):
             break
     stop.set()
     await asyncio.wait_for(task, timeout=2)
-    assert h.api.names('meeting_reminders') == [{}]
+    assert h.api.names('scheduled_jobs') == [{}]
     assert h.api.names('due')
 
 
 async def test_the_reminders_call_gets_a_long_timeout():
-    from bot.api import REMINDERS_TIMEOUT, ApiClient
+    from bot.api import JOBS_TIMEOUT, ApiClient
 
     seen = {}
 
@@ -114,5 +114,5 @@ async def test_the_reminders_call_gets_a_long_timeout():
             seen.update(kwargs)
             return Response()
 
-    assert await ApiClient('https://api.example', 'key', Session()).meeting_reminders() == {'ok': True}
-    assert seen['timeout'].total == REMINDERS_TIMEOUT
+    assert await ApiClient('https://api.example', 'key', Session()).scheduled_jobs() == {'ok': True}
+    assert seen['timeout'].total == JOBS_TIMEOUT

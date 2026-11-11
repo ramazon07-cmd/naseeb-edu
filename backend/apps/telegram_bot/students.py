@@ -11,13 +11,11 @@ from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.db import transaction
-from django.db.models import F, Q, Value
-from django.db.models.functions import Replace
 from django.utils import timezone
 
-from apps.admissions.models import School, StudentProfile
+from apps.admissions.models import School
 from apps.admissions.scoping import visible_students
-from apps.admissions.tenancy import create_student_account
+from apps.admissions.tenancy import create_student_account, find_school_student
 from apps.users import entitlements
 from apps.users.audit import audit_product_action
 from apps.users.cache_safety import count_hit
@@ -64,23 +62,6 @@ def clean_input(full_name, email, phone):
     return full_name, email, normalize_phone(phone)
 
 
-def _phone_digits(field):
-    """The phone column with the usual separators removed, so '+998 99 167 46 30' compares as digits."""
-    expression = F(field)
-    for separator in (' ', '-', '(', ')', '+', '.'):
-        expression = Replace(expression, Value(separator), Value(''))
-    return expression
-
-
-def _existing(school, email, phone):
-    """An active student of `school` with this email or phone, or ``None``."""
-    return StudentProfile.objects.select_related('user').annotate(
-        phone_digits=_phone_digits('user__phone'),
-    ).filter(
-        school_id=school.pk, user__is_active=True, deactivated_at__isnull=True,
-    ).filter(Q(user__email__iexact=email) | Q(phone_digits__endswith=phone[-9:])).order_by('id').first()
-
-
 def _assign(profile, actor):
     """Make the new student visible in the bot to whoever added them."""
     if actor.role == User.Role.ASSISTANT:
@@ -124,7 +105,7 @@ def add_student(link, *, full_name, email, phone):
         school = School.objects.select_for_update().get(pk=actor.school_id)
         if not school.is_active:
             raise Refused('account_unavailable')
-        existing = _existing(school, email, phone)
+        existing = find_school_student(school, email, phone)
         if existing is not None:
             if not visible_students(actor).filter(pk=existing.pk).exists():
                 raise Refused('student_exists_elsewhere', 409)

@@ -202,6 +202,16 @@ def cached_storage_usage(recheck=False):
     return rows, now
 
 
+def email_delivery_enabled():
+    """True when mail really leaves the server (not the console or the in-memory test backend)."""
+    backend = settings.EMAIL_BACKEND
+    return not backend.endswith(('console.EmailBackend', 'locmem.EmailBackend', 'dummy.EmailBackend'))
+
+
+def shared_cache_enabled():
+    return not settings.CACHES.get('default', {}).get('BACKEND', '').endswith('LocMemCache')
+
+
 class AdminHealthView(APIView):
     """Readiness, the last run of every scheduled job, file storage and error tracking.
 
@@ -239,4 +249,8 @@ class AdminHealthView(APIView):
             'storage': storage,
             'storage_checked_at': storage_checked_at,
             'error_tracking': {'enabled': settings.SENTRY_ENABLED, 'url': settings.ERROR_TRACKER_URL or None},
+            # Off means meeting emails, reminders and invites go nowhere.
+            'email': {'enabled': email_delivery_enabled()},
+            # Off means throttles, login lockouts and the AI budget are counted per worker.
+            'shared_cache': {'enabled': shared_cache_enabled()},
         })

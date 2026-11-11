@@ -7,7 +7,8 @@ import re
 import secrets
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q, Value
+from django.db.models.functions import Replace
 from django.utils import timezone
 
 from apps.users.models import User
@@ -231,6 +232,35 @@ def _free_username(base):
     while suffix in taken:
         suffix += 1
     return base if suffix == 1 else f'{base}{suffix}'
+
+
+def _phone_digits(field):
+    """The phone column with the usual separators removed, so '+998 99 167 46 30' compares as digits."""
+    expression = F(field)
+    for separator in (' ', '-', '(', ')', '+', '.'):
+        expression = Replace(expression, Value(separator), Value(''))
+    return expression
+
+
+def find_school_student(school, email='', phone=''):
+    """An active student of `school` with this email, or this phone (last 9 digits), or ``None``.
+
+    Used before adding a student (website quick-create and the counselor bot) so the
+    same person is not created twice; phones are compared on digits only.
+    """
+    match = Q()
+    if email:
+        match |= Q(user__email__iexact=email)
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) >= 9:
+        match |= Q(phone_digits__endswith=digits[-9:])
+    if not match:
+        return None
+    return StudentProfile.objects.select_related('user').annotate(
+        phone_digits=_phone_digits('user__phone'),
+    ).filter(
+        school_id=school.pk, user__is_active=True, deactivated_at__isnull=True,
+    ).filter(match).order_by('id').first()
 
 
 @transaction.atomic
