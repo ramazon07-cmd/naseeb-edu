@@ -40,7 +40,8 @@ services:
     envVars:
       - fromGroup: naseeb-backend
 
-  # Needs the EMAIL_* variables in the group; with the console backend it sends nothing.
+  # Optional: the counselor bot already runs this hourly through /api/bot/meeting-reminders/
+  # (see docs/telegram-bot.md). Needs the EMAIL_* variables; with the console backend it sends nothing.
   - type: cron
     name: naseeb-send-meeting-reminders
     runtime: python

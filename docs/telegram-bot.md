@@ -21,6 +21,7 @@
 | `digest/` | the update for the chat's enabled parts |
 | `settings/` | `GET ?chat_id=` and `PUT` (`language`, `notify_time` as `HH:MM` Tashkent, `prefs`, `enabled`) |
 | `add-student/` | `chat_id, full_name, email, phone` -> `201` with `full_name, username, phone, temporary_password, expires_at, login_url`; or `400 invalid_name / invalid_email / invalid_phone`, `409 student_exists` (with `full_name, username`) / `student_exists_elsewhere`, `403 seat_limit`, `429 too_many` |
+| `meeting-reminders/` | runs `send_meeting_reminders` (the hourly meeting reminder emails); the bot calls it once an hour at minute 5, so no separate cron service is needed. The command's advisory lock and `reminded_for` make a repeat or a second bot instance send nothing twice; each run is recorded for the health page |
 | `due/` | chats whose update is due now; each is leased for 2 minutes |
 | `mark-sent/` | `chat_id, slot_date`: once per chat and day |
 | `logout/`, `unlink/` | delete the link and any pending login (`unlink/` is used when the user blocks the bot) |

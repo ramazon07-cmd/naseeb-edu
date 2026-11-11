@@ -9,6 +9,7 @@ urlpatterns = [
     path('digest/', views.DigestView.as_view()),
     path('settings/', views.SettingsView.as_view()),
     path('add-student/', views.AddStudentView.as_view()),
+    path('meeting-reminders/', views.MeetingRemindersView.as_view()),
     path('due/', views.DueView.as_view()),
     path('mark-sent/', views.MarkSentView.as_view()),
     path('logout/', views.LogoutView.as_view()),

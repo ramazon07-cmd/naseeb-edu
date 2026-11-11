@@ -77,6 +77,9 @@ class ApiClient:
     async def update_settings(self, chat_id, **changes):
         return await self._call('PUT', 'settings', json={'chat_id': chat_id, **changes})
 
+    async def meeting_reminders(self):
+        return await self._call('POST', 'meeting-reminders', json={})
+
     async def due(self):
         body = await self._call('POST', 'due', json={})
         chats = body.get('chats') if isinstance(body, dict) else None
