@@ -40,16 +40,8 @@ services:
     envVars:
       - fromGroup: naseeb-backend
 
-  # Needs the EMAIL_* variables in the group; with the console backend it sends nothing.
-  - type: cron
-    name: naseeb-send-meeting-reminders
-    runtime: python
-    plan: starter
-    schedule: "5 * * * *"  # hourly
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && python manage.py send_meeting_reminders
-    envVars:
-      - fromGroup: naseeb-backend
+  # Meeting reminder emails need no cron here: the counselor bot runs them hourly
+  # through /api/bot/meeting-reminders/ (docs/telegram-bot.md).
 
   # Counselor Telegram bot (long polling, no inbound port). It has no database
   # and no passwords: it talks to the backend with BOT_SERVICE_KEY.

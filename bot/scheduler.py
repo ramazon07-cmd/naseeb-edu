@@ -115,6 +115,41 @@ async def run_tick(*, bot, api, cache, limiter, sleep=asyncio.sleep, concurrency
     return results
 
 
+# Meeting reminder emails: the backend's send_meeting_reminders, run from here once an
+# hour (at minute 5) so it needs no separate cron service. The backend locks the job and
+# marks each meeting, so a restart or two instances during a deploy never send twice.
+REMINDER_MINUTE = 5
+
+
+class HourlyJob:
+    """Starts `job` at most once per UTC hour, at or after `minute`, in the background."""
+
+    def __init__(self, job, minute=REMINDER_MINUTE, clock=time.time):
+        self._job = job
+        self._minute = minute
+        self._clock = clock
+        self._last_hour = None
+        self.task = None
+
+    def maybe_start(self):
+        now = self._clock()
+        hour, minute = int(now // 3600), int(now % 3600 // 60)
+        if minute < self._minute or hour == self._last_hour or (self.task and not self.task.done()):
+            return None
+        # One try per hour: a missed hour is harmless, reminders look a whole day ahead.
+        self._last_hour = hour
+        self.task = asyncio.create_task(self._run())
+        return self.task
+
+    async def _run(self):
+        try:
+            await self._job()
+        except (ApiError, ApiUnavailable) as exc:
+            log.warning('meeting reminders were not run this hour: %s', type(exc).__name__)
+        except Exception:
+            log.exception('unexpected error while running meeting reminders')
+
+
 def seconds_to_next_minute(now=None):
     # Tashkent is UTC+5 all year, so its minutes start exactly when UTC minutes do.
     return 60.0 - ((time.time() if now is None else now) % 60.0) + 0.5
@@ -122,10 +157,18 @@ def seconds_to_next_minute(now=None):
 
 async def run_scheduler(stop, **deps):
     """Tick once at startup (the backend's grace window covers a restart), then at every minute start."""
-    while not stop.is_set():
-        try:
-            await run_tick(**deps)
-        except Exception:
-            log.exception('scheduler tick failed; trying again next minute')
-        with suppress(asyncio.TimeoutError):
-            await asyncio.wait_for(stop.wait(), timeout=seconds_to_next_minute())
+    reminders = deps.pop('reminders', None) or HourlyJob(deps['api'].meeting_reminders)
+    try:
+        while not stop.is_set():
+            reminders.maybe_start()
+            try:
+                await run_tick(**deps)
+            except Exception:
+                log.exception('scheduler tick failed; trying again next minute')
+            with suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(stop.wait(), timeout=seconds_to_next_minute())
+    finally:
+        if reminders.task and not reminders.task.done():
+            reminders.task.cancel()
+            with suppress(asyncio.CancelledError):
+                await reminders.task

@@ -4,6 +4,7 @@ import logging
 import aiohttp
 
 log = logging.getLogger('bot.api')
+REMINDERS_TIMEOUT = 110
 
 
 class ApiError(Exception):
@@ -26,10 +27,12 @@ class ApiClient:
         self._headers = {'X-Bot-Service-Key': service_key}
         self._session = session
 
-    async def _call(self, method, path, *, json=None, params=None):
+    async def _call(self, method, path, *, json=None, params=None, timeout=None):
+        # `timeout` (seconds) overrides the session's for one slow call.
+        extra = {'timeout': aiohttp.ClientTimeout(total=timeout)} if timeout else {}
         try:
             async with self._session.request(
-                method, f'{self._base}/api/bot/{path}/', json=json, params=params, headers=self._headers,
+                method, f'{self._base}/api/bot/{path}/', json=json, params=params, headers=self._headers, **extra,
             ) as response:
                 try:
                     body = await response.json(content_type=None)
@@ -76,6 +79,10 @@ class ApiClient:
 
     async def update_settings(self, chat_id, **changes):
         return await self._call('PUT', 'settings', json={'chat_id': chat_id, **changes})
+
+    async def meeting_reminders(self):
+        # The backend answers when every reminder email is out; just under gunicorn's 120 s.
+        return await self._call('POST', 'meeting-reminders', json={}, timeout=REMINDERS_TIMEOUT)
 
     async def due(self):
         body = await self._call('POST', 'due', json={})

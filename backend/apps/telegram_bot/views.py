@@ -1,4 +1,7 @@
 import datetime as dt
+from io import StringIO
+
+from django.core.management import call_command
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -134,6 +137,18 @@ class AddStudentView(BotView):
             email=_text(data, 'email', 254),
             phone=_text(data, 'phone', 40),
         ), status=201)
+
+
+class MeetingRemindersView(BotView):
+    """The bot calls this once an hour instead of a separate (paid) cron service.
+
+    It runs the same `send_meeting_reminders` command a cron would: under its advisory
+    lock (two bot instances during a deploy cannot send twice), recorded for the health page.
+    """
+
+    def post(self, request):
+        call_command('send_meeting_reminders', stdout=StringIO())
+        return Response({'ok': True})
 
 
 class DueView(BotView):
