@@ -133,6 +133,31 @@ STRINGS = {
     'seen_days': {'uz': '{days} kun oldin', 'ru': '{days} дн. назад', 'en': '{days} days ago'},
     'seen_never': {'uz': 'hali kirmagan', 'ru': 'ещё не заходил', 'en': 'never opened'},
     'seen_expired': {'uz': 'yaqinda kirmagan', 'ru': 'давно не заходил', 'en': 'no recent activity'},
+    'password_issued': {
+        'uz': 'Vaqtinchalik parol: hali ishlatilmagan',
+        'ru': 'Временный пароль: ещё не использован',
+        'en': 'Temporary password: not used yet',
+    },
+    'password_used': {
+        'uz': "Vaqtinchalik parol: ishlatilgan, o'z parolini hali o'rnatmagan",
+        'ru': 'Временный пароль: использован, свой пароль ещё не задан',
+        'en': 'Temporary password: used, own password not set yet',
+    },
+    'password_expired': {
+        'uz': 'Vaqtinchalik parol: muddati tugagan, ishlatilmagan',
+        'ru': 'Временный пароль: срок истёк, не использован',
+        'en': 'Temporary password: expired unused',
+    },
+    'password_revoked': {
+        'uz': 'Vaqtinchalik parol: bekor qilingan',
+        'ru': 'Временный пароль: отозван',
+        'en': 'Temporary password: replaced',
+    },
+    'password_changed': {
+        'uz': "Parol: o'quvchi o'z parolini o'rnatgan",
+        'ru': 'Пароль: ученик задал свой пароль',
+        'en': 'Password: the student set their own',
+    },
     'detail_seen': {'uz': 'Oxirgi kirish: {when}', 'ru': 'Последний вход: {when}', 'en': 'Last seen: {when}'},
     'omitted_line': {
         'uz': "...yana {omitted} ta o'quvchi ko'rsatilmadi",

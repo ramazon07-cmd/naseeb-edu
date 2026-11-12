@@ -18,6 +18,7 @@ MONTHS = {
     'ru': ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
     'en': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
 }
+PASSWORD_LINES = ('issued', 'used', 'expired', 'revoked', 'changed')
 DOTS = {'today': '\U0001F7E2', 'week': '\U0001F7E1', 'inactive': '\U0001F534', 'never': '⚪'}
 
 
@@ -185,6 +186,8 @@ def render_detail(item, lang, now=None):
         t(lang, 'digest_student', name=escape(item['name']), grade=escape(grade_label(lang, item['grade']))),
         f"{DOTS[bucket]} " + t(lang, 'detail_seen', when=_seen_text(lang, item, today, detail=True)),
     ]
+    if item.get('password') in PASSWORD_LINES:
+        lines.append('\U0001F511 ' + t(lang, 'password_' + item['password']))
     essays = item.get('essays')
     if essays:
         lines.append('\U0001F4DD ' + t(lang, 'essays_line', total=essays['total'], edited=essays['edited_today']))

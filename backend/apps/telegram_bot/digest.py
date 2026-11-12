@@ -4,11 +4,19 @@ Every student comes from ``active_visible_students(user)``, the scope the
 website's dashboard counts use, so the bot cannot show anyone the website would
 not. Essays are limited by ``scope_essays`` (only essays the student shared); the streak is shown
 only for students without private essays (trashed ones included: their writing days remain).
-Query count is fixed: students, six progress queries, one essay aggregate, one last-seen aggregate.
+Query count is fixed: students, six progress queries, one essay aggregate, one last-seen aggregate,
+one credential query.
 
-``last_seen_at`` is the newest screen-time write of the student (UTC). Screen-time rows are deleted after
-``SCREEN_TIME_RETENTION_DAYS``, so a student with no row who joined before that window is marked
+``last_seen_at`` is the newest sign of life of the student (UTC): a screen-time write, a sign-in
+(``last_login``), the use of a temporary password, or the student setting their own password. The website's
+"not started" rule reads the same signals, so a student who signed in is never shown as "never opened"
+just because no screen-time row was written (or it was cleaned up). Screen-time rows are deleted after
+``SCREEN_TIME_RETENTION_DAYS``, so a student with no signal who joined before that window is marked
 ``last_seen_expired`` (no recent activity on record) instead of "never opened the app".
+
+``password`` is where the student stands with their login: ``none`` (own password from the start),
+``issued`` (temporary password not used yet), ``used`` (signed in with it, own password not set yet),
+``expired``, ``revoked`` or ``changed`` (the student set their own password).
 """
 from collections import OrderedDict
 from datetime import datetime, time, timedelta
@@ -21,6 +29,7 @@ from apps.admissions.models import Essay, ScreenTimeDaily, StudentProfile
 from apps.admissions.onboarding import PROFILE_READINESS_ITEMS, profile_readiness
 from apps.admissions.progress import attach_progress_stats
 from apps.admissions.scoping import active_visible_students, scope_essays
+from apps.users.models import TemporaryCredential
 
 from .activity import essay_activity_for
 
@@ -82,6 +91,33 @@ def _last_seen(user_ids):
     return {row['user_id']: row['last'] for row in rows}
 
 
+def _credentials(user_ids):
+    """``({user_id: latest credential}, {user_id: newest time a temporary password was used})``."""
+    latest, used = {}, {}
+    rows = (
+        TemporaryCredential.objects.filter(user_id__in=user_ids).order_by('-issued_at', '-id')
+        .only('user_id', 'status', 'expires_at', 'used_at')
+    )
+    for credential in rows:
+        latest.setdefault(credential.user_id, credential)
+        if credential.used_at and (credential.user_id not in used or credential.used_at > used[credential.user_id]):
+            used[credential.user_id] = credential.used_at
+    return latest, used
+
+
+def _password_state(user, credential, now):
+    if not user.must_change_password:
+        # A later own password ends the temporary one, whatever its row says.
+        if user.password_changed_at:
+            return 'changed'
+        return credential.status if credential else 'none'
+    if credential is None:
+        return 'none'
+    if credential.status == TemporaryCredential.Status.ISSUED and credential.expires_at <= now:
+        return TemporaryCredential.Status.EXPIRED.value
+    return credential.status
+
+
 def _application(student):
     readiness = profile_readiness(student)
     missing = {item['section'] for item in readiness['missing']}
@@ -113,17 +149,26 @@ def build_digest(user, prefs, now=None):
     ) if ids and want_streak else set()
     visible = {student.user_id for student in students if student.pk not in private} if want_streak else set()
     last_seen = _last_seen([student.user_id for student in students]) if students else {}
+    credentials, used_at = _credentials([student.user_id for student in students]) if students else ({}, {})
     retention_start = now - timedelta(days=settings.SCREEN_TIME_RETENTION_DAYS)
     streaks = essay_activity_for(sorted(visible), today) if visible else {}
     items = []
     for student in students:
-        seen = last_seen.get(student.user_id)
+        account = student.user
+        seen = max(
+            (moment for moment in (
+                last_seen.get(student.user_id), account.last_login, used_at.get(student.user_id),
+                account.password_changed_at,
+            ) if moment),
+            default=None,
+        )
         item = {
             'id': student.pk,
             'name': _name(student),
             'grade': student.grade,
             'last_seen_at': seen.isoformat() if seen else None,
-            'last_seen_expired': seen is None and student.user.date_joined < retention_start,
+            'last_seen_expired': seen is None and account.date_joined < retention_start,
+            'password': _password_state(account, credentials.get(student.user_id), now),
         }
         if want_essays:
             total, edited = essays.get(student.pk, (0, 0))
