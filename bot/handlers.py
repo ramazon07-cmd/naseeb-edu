@@ -719,6 +719,7 @@ async def reset_confirm(callback: CallbackQuery, state: FSMContext, bot, api, ca
             return
     finally:
         _resetting.discard(chat_id)
+    cache.drop_chat(chat_id)  # the student list shows the new password status
     await _edit(bot, chat_id, callback.message.message_id, t(
         lang, 'reset_done', name=escape(result['full_name']), username=escape(result['username']),
         password=escape(result['temporary_password']), expires=format_expiry(result.get('expires_at')),

@@ -344,3 +344,17 @@ def test_items_from_an_older_backend_without_ids_or_last_seen_still_render():
     text, markup = list_message(digest([old]), 'en')
     assert 'Ali' in text and 'never opened' in text
     assert not any(b.callback_data.startswith('d:') for row in markup.inline_keyboard for b in row)
+
+
+def test_detail_shows_where_the_temporary_password_stands():
+    texts = {
+        state: render_detail(student('Ali', password=state), 'en', NOW)
+        for state in ('issued', 'used', 'expired', 'revoked', 'changed')
+    }
+    assert 'Temporary password: not used yet' in texts['issued']
+    assert 'Temporary password: used, own password not set yet' in texts['used']
+    assert 'expired unused' in texts['expired']
+    assert 'replaced' in texts['revoked']
+    assert 'set their own' in texts['changed']
+    assert '\U0001F511' not in render_detail(student('Ali', password='none'), 'en', NOW)
+    assert '\U0001F511' not in render_detail(student('Ali'), 'en', NOW)
