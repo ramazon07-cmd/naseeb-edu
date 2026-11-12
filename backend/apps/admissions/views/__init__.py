@@ -33,6 +33,7 @@ from .research import (  # noqa: F401
     COLLEGE_RESEARCH_QUESTIONS,
     build_college_research,
     CollegeResearchView,
+    CollegeMatchView,
     CollegeSearchView,
     EducationMatchAIView,
 )

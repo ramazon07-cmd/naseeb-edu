@@ -742,6 +742,32 @@ class AdmissionChanceSnapshot(models.Model):
         return f'{self.application} — {self.band or "unknown"}'
 
 
+class StudentRubricScore(TimeStampedModel):
+    """An AI-read rubric score (essays or recommendations) for one version of the student's texts.
+
+    Kept while ``input_hash`` matches the current texts and rubric version (rubric_ai.py);
+    a changed essay or letter is scored again, an unchanged one never is.
+    """
+    class Factor(models.TextChoices):
+        ESSAYS = 'essays', 'Essays'
+        RECOMMENDATIONS = 'recommendations', 'Recommendations'
+
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='rubric_scores')
+    factor = models.CharField(max_length=20, choices=Factor.choices)
+    score = models.DecimalField(max_digits=3, decimal_places=1)
+    # What the model read: criterion ratings and the quotes they rest on.
+    details = models.JSONField(default=dict, blank=True)
+    input_hash = models.CharField(max_length=64)
+    rubric_version = models.CharField(max_length=20)
+    model = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['student', 'factor'], name='unique_student_rubric_factor')]
+
+    def __str__(self):
+        return f'{self.student} {self.factor} {self.score}'
+
+
 def task_priority_rank():
     """0 = urgent … 3 = low, for ordering tasks by importance."""
     return models.Case(
