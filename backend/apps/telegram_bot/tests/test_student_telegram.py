@@ -192,6 +192,30 @@ class StudentTelegramTests(RoleIsolationBase):
         self.assertFalse(StudentTelegram.objects.get().is_active)
         self.assertEqual(student_link.pending_messages(now)['messages'], [])
 
+    def test_a_waiting_reminder_is_dropped_when_its_meeting_is_cancelled_or_moved(self):
+        self.link()
+        self.outbox()
+        now = timezone.now().replace(second=0, microsecond=0)
+        kept, cancelled, moved = (
+            Booking.objects.create(student=self.student_a, participant=self.counselor, topic=topic,
+                                   starts_at=now + timedelta(minutes=55), status=Booking.Status.APPROVED)
+            for topic in ('Kept', 'Cancelled', 'Moved')
+        )
+        student_link.queue_reminders(now)
+        self.assertEqual(TelegramOutbox.objects.filter(key__isnull=False).count(), 3)
+        Booking.objects.filter(pk=cancelled.pk).update(status=Booking.Status.CANCELLED)
+        Booking.objects.filter(pk=moved.pk).update(starts_at=now + timedelta(days=3))
+        messages = student_link.pending_messages(now)['messages']
+        self.assertEqual([TelegramOutbox.objects.get(pk=m['id']).booking_id for m in messages], [kept.pk])
+        self.assertEqual(TelegramOutbox.objects.filter(key__isnull=False).count(), 1)
+
+    def test_the_linked_message_escapes_the_students_name(self):
+        self.student_a_user.first_name, self.student_a_user.last_name = 'A&B', '<Ali>'
+        self.student_a_user.save(update_fields=['first_name', 'last_name'])
+        self.link()
+        text = self.outbox()[0]['text']
+        self.assertIn('A&amp;B &lt;Ali&gt;', text)
+
     def test_bot_endpoints_need_the_service_key_and_valid_lists(self):
         self.assertEqual(self.client.post('/api/bot/student-outbox/', {}, format='json').status_code, 401)
         self.assertEqual(self.bot('student-outbox/ack', {'sent': ['x']}).status_code, 400)

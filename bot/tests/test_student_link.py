@@ -66,3 +66,23 @@ async def test_blocked_chat_is_reported_and_skipped(h):
 async def test_nothing_to_send_makes_no_ack(h):
     await deliver_student_messages(bot=h.bot, api=h.api, limiter=RateLimiter(per_second=1000))
     assert h.api.names('student_outbox_ack') == []
+
+
+async def test_a_failed_ack_is_reported_first_next_minute(h):
+    from bot.api import ApiUnavailable
+
+    unacked = {'sent': [], 'blocked': set()}
+    limiter = RateLimiter(per_second=1000)
+    h.api.outbox_items = [{'id': 1, 'chat_id': 10, 'text': 'A'}]
+    h.api.errors['student_outbox_ack'] = ApiUnavailable('timeout')
+    await deliver_student_messages(bot=h.bot, api=h.api, limiter=limiter, unacked=unacked)
+    assert unacked['sent'] == [1]
+    # Still down: nothing new is fetched (and so nothing is sent twice) until the old sends are reported.
+    await deliver_student_messages(bot=h.bot, api=h.api, limiter=limiter, unacked=unacked)
+    assert len(h.api.names('student_outbox')) == 1
+    del h.api.errors['student_outbox_ack']
+    h.api.outbox_items = [{'id': 2, 'chat_id': 11, 'text': 'B'}]
+    await deliver_student_messages(bot=h.bot, api=h.api, limiter=limiter, unacked=unacked)
+    assert h.api.names('student_outbox_ack')[-2:] == [{'sent': [1], 'blocked': []}, {'sent': [2], 'blocked': []}]
+    assert unacked == {'sent': [], 'blocked': set()}
+    assert [c[1]['text'] for c in h.session.of('SendMessage')] == ['A', 'B']

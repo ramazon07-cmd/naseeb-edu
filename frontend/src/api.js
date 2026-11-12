@@ -720,7 +720,6 @@ export const api = {
   // A student's Telegram for meeting messages: the code comes from the bot (t.me/<bot>?start=student).
   telegramStatus: () => request('/telegram/student/'),
   linkTelegram: (code) => request('/telegram/student/', { method: 'POST', body: JSON.stringify({ code }) }),
-  unlinkTelegram: () => request('/telegram/student/', { method: 'DELETE' }),
   // { duration_minutes, hours: { '0': [['09:00', '12:00']] } } with Monday = 0, Tashkent clock.
   weeklyAvailability: () => request('/bookings/availability/weekly/'),
   saveWeeklyAvailability: (payload) => request('/bookings/availability/weekly/', { method: 'PUT', body: JSON.stringify(payload) }),

@@ -115,12 +115,30 @@ async def run_tick(*, bot, api, cache, limiter, sleep=asyncio.sleep, concurrency
     return results
 
 
-async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, **_):
+async def _acknowledge(api, unacked):
+    """Report sent and blocked messages; on failure they are kept and reported on the next minute."""
+    if not (unacked['sent'] or unacked['blocked']):
+        return True
+    try:
+        await api.student_outbox_ack(unacked['sent'], sorted(unacked['blocked']))
+    except (ApiError, ApiUnavailable) as exc:
+        log.warning('student messages sent but not acknowledged yet: %s', type(exc).__name__)
+        return False
+    unacked['sent'], unacked['blocked'] = [], set()
+    return True
+
+
+async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, unacked=None, **_):
     """Students' meeting messages and reminders: fetched, sent, and reported back every minute.
 
     A message that fails for a passing reason stays unsent and is handed out again after the
     backend's lease; a chat that blocked the bot is reported so nothing more is queued for it.
+    `unacked` lives across minutes: what could not be reported is reported first next time, before
+    the backend's lease runs out and hands the same messages out again.
     """
+    unacked = {'sent': [], 'blocked': set()} if unacked is None else unacked
+    if not await _acknowledge(api, unacked):
+        return {'sent': 0, 'blocked': 0}
     try:
         messages = await api.student_outbox()
     except (ApiError, ApiUnavailable) as exc:
@@ -151,11 +169,9 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, **
                 break
             except (TelegramNetworkError, TelegramServerError):
                 break
-    if sent or blocked:
-        try:
-            await api.student_outbox_ack(sent, sorted(blocked))
-        except (ApiError, ApiUnavailable) as exc:
-            log.warning('student messages sent but not acknowledged: %s', type(exc).__name__)
+    unacked['sent'] += sent
+    unacked['blocked'] |= blocked
+    await _acknowledge(api, unacked)
     return {'sent': len(sent), 'blocked': len(blocked)}
 
 
@@ -203,17 +219,19 @@ def seconds_to_next_minute(now=None):
 async def run_scheduler(stop, **deps):
     """Tick once at startup (the backend's grace window covers a restart), then at every minute start."""
     reminders = deps.pop('reminders', None) or HourlyJob(deps['api'].scheduled_jobs)
+    unacked = {'sent': [], 'blocked': set()}
     try:
         while not stop.is_set():
             reminders.maybe_start()
+            # Meeting messages first: a reminder is due at its minute, a digest can wait for the sends before it.
+            try:
+                await deliver_student_messages(**deps, unacked=unacked)
+            except Exception:
+                log.exception('student messages failed; trying again next minute')
             try:
                 await run_tick(**deps)
             except Exception:
                 log.exception('scheduler tick failed; trying again next minute')
-            try:
-                await deliver_student_messages(**deps)
-            except Exception:
-                log.exception('student messages failed; trying again next minute')
             with suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=seconds_to_next_minute())
     finally:

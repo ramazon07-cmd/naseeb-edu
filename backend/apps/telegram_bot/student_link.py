@@ -103,8 +103,23 @@ def pending_messages(now=None):
             .exclude(claimed_at__gt=now - CLAIM_LEASE)
             .order_by('created_at', 'id')[:BATCH]
         )
+        # Bookings are read apart: FOR UPDATE cannot lock across the nullable booking join on Postgres.
+        bookings = Booking.objects.in_bulk({row.booking_id for row in rows if row.key and row.booking_id})
+        stale = [row.pk for row in rows if _stale_reminder(row, bookings)]
+        TelegramOutbox.objects.filter(pk__in=stale).delete()
+        rows = [row for row in rows if row.pk not in stale]
         TelegramOutbox.objects.filter(pk__in=[row.pk for row in rows]).update(claimed_at=now)
     return {'messages': [{'id': row.pk, 'chat_id': row.chat_id, 'text': row.text} for row in rows]}
+
+
+def _stale_reminder(row, bookings):
+    """A reminder still waiting for a meeting that was since cancelled or moved: never sent."""
+    if not (row.key or '').startswith('meeting:'):
+        return False
+    booking = bookings.get(row.booking_id)
+    if booking is None or booking.status != Booking.Status.APPROVED:
+        return True
+    return row.key.split(':')[2] != str(int(booking.starts_at.timestamp()))
 
 
 def acknowledge(sent_ids, blocked_chats):
@@ -113,7 +128,7 @@ def acknowledge(sent_ids, blocked_chats):
     if blocked_chats:
         StudentTelegram.objects.filter(chat_id__in=blocked_chats).update(is_active=False, updated_at=now)
         TelegramOutbox.objects.filter(chat_id__in=blocked_chats, sent_at__isnull=True).delete()
-    # Sent rows are kept a day for reminder de-duplication (a step is never sent twice), then cleared.
+    # Sent rows are kept two days for reminder de-duplication (a step is never sent twice), then cleared.
     TelegramOutbox.objects.filter(sent_at__lt=now - timedelta(days=2)).delete()
     return {'sent': sent}
 
@@ -142,7 +157,7 @@ def link_code(user, code):
         except IntegrityError:
             raise Refused('invalid_code', 400)
         name = user.get_full_name().strip() or user.username
-        TelegramOutbox.objects.create(chat_id=chat_id, text=text(language, 'linked', name=name))
+        TelegramOutbox.objects.create(chat_id=chat_id, text=text(language, 'linked', name=_escape(name)))
     return link_status(user)
 
 

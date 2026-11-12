@@ -13,8 +13,9 @@ class StudentTelegramView(APIView):
     throttle_scope = 'telegram_link'
 
     def get_throttles(self):
-        # Only typing a code is limited: six digits must not be guessable.
-        return [ScopedRateThrottle()] if self.request.method == 'POST' else []
+        # Typing a code has its own, tighter limit on top of the usual ones: six digits must not be guessable.
+        throttles = super().get_throttles()
+        return throttles + [ScopedRateThrottle()] if self.request.method == 'POST' else throttles
 
     def handle_exception(self, exc):
         if isinstance(exc, Refused):

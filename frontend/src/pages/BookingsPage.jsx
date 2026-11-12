@@ -681,6 +681,15 @@ export function BookingsPage({ user, data, reload, notify, updateUser }) {
   const [zoneId, setZoneId] = useState(zone.id);
   const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
   const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
+  // The link can end on the server (the bot was blocked), so the page asks again instead of trusting
+  // the status loaded with the account; a changed answer brings the card back.
+  const checkTelegram = user.role === 'student' && Boolean(user.telegram?.enabled);
+  useEffect(() => {
+    if (!checkTelegram) return undefined;
+    let live = true;
+    api.telegramStatus().then((telegram) => { if (live) updateUser?.({ telegram }); }).catch(() => {});
+    return () => { live = false; };
+  }, [checkTelegram, updateUser]);
   const locked = needsTelegram(user);
   // A button that starts something new points at the Telegram card while Telegram is not connected.
   const showCard = () => document.getElementById('telegram-code')?.focus();
