@@ -80,6 +80,7 @@ class FakeApi:
         self.digest_data = {'date': '2026-11-08', 'total_students': 0, 'omitted': 0, 'students': []}
         self.errors = {}
         self.due_items = []
+        self.found = {'students': [{'id': 7, 'full_name': 'Ali Valiyev', 'username': 'ali-valiyev'}], 'more': False}
 
     def _record(self, name, **args):
         self.calls.append((name, args))
@@ -115,6 +116,17 @@ class FakeApi:
             'full_name': full_name, 'username': 'saydazimova-sofiya', 'phone': '+998910076825',
             'temporary_password': 'Tmp-Pass-42', 'expires_at': '2026-11-13T16:14:20+00:00',
             'login_url': 'https://naseeb.example/login',
+        }
+
+    async def find_students(self, chat_id, query):
+        self._record('find_students', chat_id=chat_id, query=query)
+        return self.found
+
+    async def reset_password(self, chat_id, student_id):
+        self._record('reset_password', chat_id=chat_id, student_id=student_id)
+        return {
+            'full_name': 'Ali Valiyev', 'username': 'ali-valiyev', 'temporary_password': 'New-Pass-77',
+            'expires_at': '2026-11-13T16:14:20+00:00', 'login_url': 'https://naseeb.example/login',
         }
 
     async def get_settings(self, chat_id):

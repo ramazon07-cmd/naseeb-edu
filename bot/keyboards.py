@@ -83,3 +83,20 @@ def list_markup(lang, numbered, page, pages, sort, flt):
 
 def back_to_list(lang, page, sort, flt):
     return _markup([[_button(t(lang, 'btn_back'), f'l:{page}:{sort}:{flt}')]])
+
+
+def student_detail(lang, student_id, page, sort, flt):
+    return _markup([
+        [_button(t(lang, 'btn_new_password'), f'rp:{student_id}')],
+        [_button(t(lang, 'btn_back'), f'l:{page}:{sort}:{flt}')],
+    ])
+
+
+def pick_student(lang, students):
+    rows = [[_button(f"{row['full_name']} ({row['username']})"[:60], f"rp:{row['id']}")] for row in students]
+    rows.append([_button(t(lang, 'add_no'), 'rp:x')])
+    return _markup(rows)
+
+
+def confirm_reset(lang, student_id):
+    return _markup([[_button(t(lang, 'reset_yes'), f'rpy:{student_id}'), _button(t(lang, 'add_no'), 'rp:x')]])

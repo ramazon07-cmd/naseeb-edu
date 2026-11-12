@@ -7,7 +7,7 @@ from . import services
 from .digest import build_digest, grouped_students
 from .jobs import run_due_jobs
 from .permissions import HasServiceKey
-from .students import add_student
+from .students import add_student, find_students, reset_password
 
 
 def _bad_request():
@@ -135,6 +135,20 @@ class AddStudentView(BotView):
             email=_text(data, 'email', 254),
             phone=_text(data, 'phone', 40),
         ), status=201)
+
+
+class FindStudentsView(BotView):
+    def post(self, request):
+        data = self.get_data(request)
+        link = services.resolve_link(_chat_id(data))
+        return Response(find_students(link, _text(data, 'query', 200)))
+
+
+class ResetPasswordView(BotView):
+    def post(self, request):
+        data = self.get_data(request)
+        link = services.resolve_link(_chat_id(data))
+        return Response(reset_password(link, data.get('student_id')))
 
 
 class ScheduledJobsView(BotView):

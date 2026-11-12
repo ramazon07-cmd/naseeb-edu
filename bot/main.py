@@ -10,12 +10,15 @@ import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramAPIError
+from aiogram.types import BotCommand
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from .api import ApiClient
 from .cache import TtlCache
 from .config import load_config
 from .handlers import router
+from .i18n import DEFAULT, LANGUAGES, MENU
 from .scheduler import RateLimiter, run_scheduler
 
 log = logging.getLogger('bot')
@@ -46,6 +49,14 @@ def setup_logging(config):
     logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
 
 
+async def set_menu(bot):
+    """The "Menu" button's command list, in each language Telegram users can have."""
+    for lang in LANGUAGES:
+        commands = [BotCommand(command=name, description=text) for name, text in MENU[lang]]
+        with suppress(TelegramAPIError):
+            await bot.set_my_commands(commands, language_code=None if lang == DEFAULT else lang)
+
+
 async def run(config, run_for=None):
     http = aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(total=config.http_timeout, connect=3), connector=aiohttp.TCPConnector(limit=30),
@@ -65,6 +76,7 @@ async def run(config, run_for=None):
     try:
         me = await bot.get_me()
         log.info('authenticated with Telegram as @%s', me.username)
+        await set_menu(bot)
         scheduler = asyncio.create_task(run_scheduler(
             stop, bot=bot, api=api, cache=cache, limiter=RateLimiter(),
         ))

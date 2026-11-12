@@ -9,6 +9,8 @@ urlpatterns = [
     path('digest/', views.DigestView.as_view()),
     path('settings/', views.SettingsView.as_view()),
     path('add-student/', views.AddStudentView.as_view()),
+    path('find-students/', views.FindStudentsView.as_view()),
+    path('reset-password/', views.ResetPasswordView.as_view()),
     path('scheduled-jobs/', views.ScheduledJobsView.as_view()),
     # The name an older bot calls; same view.
     path('meeting-reminders/', views.ScheduledJobsView.as_view()),

@@ -298,7 +298,8 @@ async def test_tapping_a_student_shows_the_card_with_a_back_button_to_the_same_v
     await h.tap('d:3:1:z:i')
     edit = h.session.of('EditMessageText')[-1][1]
     assert 'Student Number 002' in edit['text'] and 'Last seen' in edit['text']
-    assert edit['reply_markup']['inline_keyboard'][0][0]['callback_data'] == 'l:1:z:i'
+    rows = edit['reply_markup']['inline_keyboard']
+    assert rows[0][0]['callback_data'] == 'rp:3' and rows[-1][0]['callback_data'] == 'l:1:z:i'
 
 
 async def test_a_student_who_left_the_list_gets_a_message_not_a_crash(h):

@@ -74,6 +74,12 @@ class ApiClient:
             'chat_id': chat_id, 'full_name': full_name, 'email': email, 'phone': phone,
         })
 
+    async def find_students(self, chat_id, query):
+        return await self._call('POST', 'find-students', json={'chat_id': chat_id, 'query': query})
+
+    async def reset_password(self, chat_id, student_id):
+        return await self._call('POST', 'reset-password', json={'chat_id': chat_id, 'student_id': student_id})
+
     async def get_settings(self, chat_id):
         return await self._call('GET', 'settings', params={'chat_id': chat_id})
 
