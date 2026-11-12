@@ -607,47 +607,208 @@
   outline-offset: 1px;
 }
 
-/* "Connect your Google account" before Meetings: one sentence, one button. */
-.telegram-gate {
-  max-width: 620px;
+/* "Connect your Telegram": a centered dialog over the blurred Meetings page, and a slim reminder once closed. */
+.telegram-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
   display: grid;
-  gap: 14px;
+  place-items: center;
+  padding: 20px;
+  background: var(--overlay);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow-y: auto;
 }
 
-.telegram-gate p {
+.telegram-dialog {
+  width: min(440px, 100%);
+  margin: auto;
+  padding: 32px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-3xl);
+  box-shadow: var(--shadow-modal);
+  outline: 0;
+}
+
+.telegram-dialog-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent-contrast);
+  background: var(--accent-gradient);
+  box-shadow: 0 8px 22px var(--accent-shadow);
+}
+
+.telegram-dialog-icon svg {
+  margin-right: 2px;
+}
+
+.telegram-dialog h2 {
+  margin: 16px 0 6px;
+  font-size: var(--text-xl);
+}
+
+.telegram-dialog p {
   margin: 0;
 }
 
-.telegram-gate-steps {
-  margin: 0;
-  padding-left: 1.25rem;
+.telegram-dialog-lead {
+  color: var(--muted);
+  max-width: 34ch;
+}
+
+.telegram-dialog-login {
+  width: 100%;
+  margin-top: 22px;
+  justify-content: center;
+}
+
+.telegram-dialog-hint {
+  margin-top: 8px !important;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.telegram-dialog-code {
+  width: 100%;
+  margin-top: 22px;
+  padding-top: 20px;
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  border-top: 1px solid var(--border-subtle);
 }
 
-.telegram-gate-steps li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
+.telegram-dialog-code > div:first-child {
+  font-weight: 600;
 }
 
-.telegram-gate-code {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+.telegram-dialog-boxes {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
-.telegram-gate-code input {
-  width: 9rem;
-  font-size: 1.125rem;
-  letter-spacing: 0.2em;
+.telegram-dialog-box {
+  width: 100%;
+  min-width: 0;
+  height: 54px;
+  padding: 0;
   text-align: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
 
-.telegram-gate-error {
+.telegram-dialog-box:focus {
+  outline: 0;
+  background: var(--surface);
+  border-color: var(--border-interactive);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.telegram-dialog-box[aria-invalid="true"] {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.telegram-dialog-error {
   color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.telegram-dialog-submit {
+  width: 100%;
+  justify-content: center;
+}
+
+.telegram-dialog-later {
+  margin-top: 10px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.telegram-dialog-later:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.telegram-dialog-later:focus-visible {
+  outline: 3px solid var(--focus-ring);
+}
+
+.telegram-reminder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  font-size: var(--text-md);
+}
+
+.telegram-reminder svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.telegram-reminder span {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .telegram-dialog-backdrop {
+    animation: telegram-dialog-fade 0.2s ease-out;
+  }
+
+  .telegram-dialog {
+    animation: telegram-dialog-rise 0.24s ease-out;
+  }
+}
+
+@keyframes telegram-dialog-fade {
+  from { opacity: 0; }
+}
+
+@keyframes telegram-dialog-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+}
+
+@media (max-width: 480px) {
+  .telegram-dialog-backdrop {
+    padding: 12px;
+  }
+
+  .telegram-dialog {
+    padding: 26px 18px 18px;
+  }
+
+  .telegram-dialog-boxes {
+    gap: 6px;
+  }
+
+  .telegram-dialog-box {
+    height: 50px;
+  }
 }
 
 /* Weekly hours: one row per weekday — the day switch, its from–to hours, "add hours". */

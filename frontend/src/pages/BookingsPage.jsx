@@ -639,42 +639,115 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
   return <Modal title={t("Meeting notes")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{earlier.length > 0 && <section className="form-wide"><h3>{t("Notes from this day")}</h3><div className="record-list">{earlier.map((note) => <Record key={note.id} title={note.title} meta={joinParts(note.summary, note.next_steps && `${t("Next steps")}: ${note.next_steps}`)} />)}</div></section>}<Field label={t("Title")}><input name="title" required defaultValue={booking.topic} /></Field><Field label={t("Summary")}><textarea name="summary" required placeholder={t("What did you cover?")} /></Field><Field label={t("Next steps")}><textarea name="next_steps" placeholder={t("Optional")} /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save note")}</button></div></form></Modal>;
 }
 
+const CODE_LENGTH = 6;
+
 // A student connects Telegram once: the bot shows a code, the student types it here, and from then on
 // the meeting answers and reminders arrive in that chat. Without it they still see and manage the
 // meetings they have; only a new request needs it (as the API does).
 const needsTelegram = (user) => user.role === 'student' && Boolean(user.telegram?.enabled) && !user.telegram?.linked;
 
-function TelegramConnectCard({ user, onLinked, notify }) {
-  const [code, setCode] = useState('');
+function TelegramConnectDialog({ user, onLinked, onClose, notify }) {
+  const [digits, setDigits] = useState(() => Array(CODE_LENGTH).fill(''));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const digits = code.replace(/\D/g, '');
-  async function submit(event) {
+  const dialogRef = useRef(null);
+  const boxes = useRef([]);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const code = digits.join('');
+  // Digits typed or pasted from box `from` on; the focus moves to the next empty box.
+  function fill(from, text) {
+    const clean = text.replace(/\D/g, '').slice(0, CODE_LENGTH - from);
+    if (!clean) return;
+    setError('');
+    setDigits((current) => current.map((digit, index) => (index >= from && index < from + clean.length ? clean[index - from] : digit)));
+    boxes.current[Math.min(from + clean.length, CODE_LENGTH - 1)]?.focus();
+  }
+  function change(index, value) {
+    if (value === '') {
+      setDigits((current) => current.map((digit, i) => (i === index ? '' : digit)));
+      return;
+    }
+    fill(index, value.length > 1 ? value : value.replace(/\D/g, '').slice(-1));
+  }
+  function keyDown(index, event) {
+    if (event.key === 'Backspace' && !digits[index] && index > 0) {
+      event.preventDefault();
+      setDigits((current) => current.map((digit, i) => (i === index - 1 ? '' : digit)));
+      boxes.current[index - 1]?.focus();
+    } else if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      boxes.current[index - 1]?.focus();
+    } else if (event.key === 'ArrowRight' && index < CODE_LENGTH - 1) {
+      event.preventDefault();
+      boxes.current[index + 1]?.focus();
+    }
+  }
+  function paste(index, event) {
     event.preventDefault();
+    const text = event.clipboardData.getData('text');
+    // A whole code replaces every box, wherever it was pasted.
+    if (text.replace(/\D/g, '').length >= CODE_LENGTH) fill(0, text);
+    else fill(index, text);
+  }
+  async function submit() {
+    if (busy || code.length !== CODE_LENGTH) return;
     setBusy(true);
     setError('');
     try {
-      onLinked(await api.linkTelegram(digits));
+      onLinked(await api.linkTelegram(code));
       notify(t("Telegram connected. Meeting messages will come there."));
     } catch (err) {
       setError(err.details?.code === 'invalid_code' ? t("This code is wrong or expired. Get a new one in the bot.") : err.message);
-    } finally {
+      setDigits(Array(CODE_LENGTH).fill(''));
       setBusy(false);
+      boxes.current[0]?.focus();
     }
   }
-  const body = <div className="telegram-gate">
-    <p>{t("Connect Telegram to request meetings. Confirmations and reminders (a day before, hours before and at the start) will come there.")}</p>
-    <ol className="telegram-gate-steps">
-      <li><a className="button primary" href={user.telegram.bot_url} target="_blank" rel="noopener noreferrer"><Send size={16} aria-hidden="true" /> {t("Log in with Telegram")}</a><span>{t("Press Start in the bot: it sends you a 6-digit code.")}</span></li>
-      <li><form className="telegram-gate-code" onSubmit={submit}>
-        <label htmlFor="telegram-code">{t("Code from the bot")}</label>
-        <input id="telegram-code" inputMode="numeric" autoComplete="one-time-code" maxLength={9} placeholder="123456" value={code} onChange={(event) => setCode(event.target.value)} aria-invalid={Boolean(error)} aria-describedby={error ? 'telegram-code-error' : undefined} />
-        <button className="button" disabled={busy || digits.length !== 6} aria-busy={busy}>{busy ? t("Connecting…") : t("Connect")}</button>
-      </form></li>
-    </ol>
-    {error && <p id="telegram-code-error" className="telegram-gate-error" role="alert">{error}</p>}
+  // The code goes out as soon as the sixth digit lands.
+  useEffect(() => {
+    if (code.length === CODE_LENGTH && !busy) submit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+  useEffect(() => {
+    const previous = document.activeElement;
+    boxes.current[0]?.focus();
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {event.preventDefault();onCloseRef.current();return;}
+      if (event.key !== 'Tab') return;
+      const items = [...(dialogRef.current?.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled)') || [])];
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {event.preventDefault();last.focus();} else
+      if (!event.shiftKey && document.activeElement === last) {event.preventDefault();first.focus();}
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {document.removeEventListener('keydown', handleKeyDown);previous?.focus?.();};
+  }, []);
+  return <div className="telegram-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section ref={dialogRef} className="telegram-dialog" role="dialog" aria-modal="true" aria-labelledby="telegram-dialog-title" tabIndex="-1">
+      <span className="telegram-dialog-icon" aria-hidden="true"><Send size={26} /></span>
+      <h2 id="telegram-dialog-title">{t("Connect your Telegram")}</h2>
+      <p className="telegram-dialog-lead">{t("Meeting confirmations and reminders will come to your Telegram.")}</p>
+      <a className="button primary telegram-dialog-login" href={user.telegram.bot_url} target="_blank" rel="noopener noreferrer"><Send size={17} aria-hidden="true" /> {t("Log in with Telegram")}</a>
+      <p className="telegram-dialog-hint">{t("Press Start in the bot: it sends you a 6-digit code.")}</p>
+      <form className="telegram-dialog-code" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+        <div id="telegram-code-label">{t("Enter the 6-digit code")}</div>
+        <div className="telegram-dialog-boxes" role="group" aria-labelledby="telegram-code-label">
+          {digits.map((digit, index) => <input key={index} ref={(node) => { boxes.current[index] = node; }} className="telegram-dialog-box" inputMode="numeric" pattern="[0-9]*" autoComplete={index === 0 ? 'one-time-code' : 'off'} value={digit} disabled={busy} aria-label={t("Digit {n} of {total}", { n: index + 1, total: CODE_LENGTH })} aria-invalid={Boolean(error)} aria-describedby={error ? 'telegram-code-error' : undefined} onChange={(event) => change(index, event.target.value)} onKeyDown={(event) => keyDown(index, event)} onPaste={(event) => paste(index, event)} onFocus={(event) => event.target.select()} />)}
+        </div>
+        {error && <p id="telegram-code-error" className="telegram-dialog-error" role="alert">{error}</p>}
+        <button className="button primary telegram-dialog-submit" disabled={busy || code.length !== CODE_LENGTH} aria-busy={busy}>{busy ? t("Connecting…") : t("Connect")}</button>
+      </form>
+      <button type="button" className="telegram-dialog-later" onClick={onClose}>{t("Later")}</button>
+    </section>
   </div>;
-  return <Panel title={t("Connect your Telegram")}>{body}</Panel>;
+}
+
+// Shown on the page while the dialog is closed and Telegram is still not connected.
+function TelegramReminder({ onOpen }) {
+  return <div className="telegram-reminder" role="status"><Send size={16} aria-hidden="true" /><span>{t("Connect Telegram to request meetings")}</span><button type="button" className="button small" onClick={onOpen}>{t("Connect")}</button></div>;
 }
 
 export function BookingsPage({ user, data, reload, notify, updateUser }) {
@@ -682,7 +755,7 @@ export function BookingsPage({ user, data, reload, notify, updateUser }) {
   const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
   const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
   // The link can end on the server (the bot was blocked), so the page asks again instead of trusting
-  // the status loaded with the account; a changed answer brings the card back.
+  // the status loaded with the account; a changed answer brings the dialog back.
   const checkTelegram = user.role === 'student' && Boolean(user.telegram?.enabled);
   useEffect(() => {
     if (!checkTelegram) return undefined;
@@ -691,10 +764,14 @@ export function BookingsPage({ user, data, reload, notify, updateUser }) {
     return () => { live = false; };
   }, [checkTelegram, updateUser]);
   const locked = needsTelegram(user);
-  // A button that starts something new points at the Telegram card while Telegram is not connected.
-  const showCard = () => document.getElementById('telegram-code')?.focus();
-  const guard = (start) => (locked ? showCard : start);
-  const banner = locked ? <TelegramConnectCard user={user} notify={notify} onLinked={(telegram) => updateUser?.({ telegram })} /> : null;
+  const [telegramOpen, setTelegramOpen] = useState(locked);
+  useEffect(() => { if (locked) setTelegramOpen(true); }, [locked]);
+  // A button that starts something new opens the Telegram dialog while Telegram is not connected.
+  const showDialog = () => setTelegramOpen(true);
+  const guard = (start) => (locked ? showDialog : start);
+  const banner = locked ? (telegramOpen
+    ? <TelegramConnectDialog user={user} notify={notify} onClose={() => setTelegramOpen(false)} onLinked={(telegram) => updateUser?.({ telegram })} />
+    : <TelegramReminder onOpen={showDialog} />) : null;
   const props = { data, reload, notify, guard, banner, picker };
   // key: a new zone redraws every time on the page.
   if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
