@@ -1,6 +1,6 @@
 # Counselor Telegram bot
 
-`@naseeb_counselor_bot` sends counselors and counselor assistants a daily progress update and answers `/now`, `/students`, `/add`, `/settings`, `/logout`, `/help`. Only counselors and assistants can log in; every other role is refused and nothing is stored.
+`@naseeb_counselor_bot` sends counselors and counselor assistants a daily progress update and answers `/now`, `/students`, `/add`, `/settings`, `/logout`, `/help`. Only counselors and assistants can log in, and only from a Telegram account a superadmin allowed (see below); every other role is refused and nothing is stored.
 
 ## How it is built
 
@@ -15,7 +15,9 @@
 
 | Path | Purpose |
 |---|---|
-| `login/` | `chat_id, username, password` -> `pending_token, full_name, email, phone, role`, or `401 invalid_credentials`, `403 role_not_allowed / password_change_required / account_unavailable`, `429 locked` |
+| `login/` | `chat_id, username, password, telegram_username` -> `pending_token, full_name, email, phone, role`, or `401 invalid_credentials`, `403 telegram_not_allowed / role_not_allowed / password_change_required / account_unavailable`, `429 locked` |
+| `whoami/` | `chat_id, telegram_username` -> `kind` (`staff_linked`, `staff_allowed`, `student`, `unknown`), `name` when linked, and `site_url` (the Meetings page). Drives what `/start` does |
+| `student-link/` | `chat_id, token, language` -> `full_name, language`; the token comes from the student's bot link. `400 invalid_token` (unknown, expired or used; carries `site_url`), `429 too_many` |
 | `confirm/` | `chat_id, pending_token, language` -> creates the link (token lives 10 minutes, single use) |
 | `students/` | students grouped by `StudentProfile.grade`; at most 300 are listed, `total` is the true count and `omitted` how many were left out |
 | `digest/` | the update for the chat's enabled parts |
@@ -60,7 +62,7 @@ Per student the essays count only essays the student shared with the counselor. 
 | `BOT_SERVICE_KEY` | backend env group **and** the bot worker | shared secret, at least 32 random characters, identical in both |
 | `BOT_TOKEN` | bot worker only | from BotFather |
 | `BACKEND_URL` | bot worker only | `https://api.naseebedu.com` |
-| `TELEGRAM_BOT_USERNAME` | backend | the bot's username without `@`. Set: students connect Telegram on Meetings (code from `t.me/<bot>?start=student`) and get meeting messages and reminders there; a student needs it to request a meeting. Unset: Meetings works without it |
+| `TELEGRAM_BOT_USERNAME` | backend | the bot's username without `@`. Set: students connect Telegram on Meetings (one-tap link `t.me/<bot>?start=s_<token>`) and get meeting messages and reminders there; a student needs it to request a meeting. Unset: Meetings works without it |
 | `BOT_LOGIN_MAX_ATTEMPTS`, `BOT_LOGIN_WINDOW_SECONDS`, `BOT_DUE_GRACE_MINUTES`, `BOT_LOGIN_ACCOUNT_CEILING` | backend, optional | defaults 5, 900, 5, 30 |
 
 Login lockouts need the shared cache (Redis) to be correct across backend instances, like the website's own lockouts.
@@ -69,9 +71,10 @@ Login lockouts need the shared cache (Redis) to be correct across backend instan
 
 1. Generate a key, for example `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 2. Add `BOT_SERVICE_KEY` to the `naseeb-backend` environment group.
-3. Deploy the backend first. Its pre-deploy command (`migrate_locked`) applies `telegram_bot.0001_initial`, which only creates the two new tables; no existing table is touched.
+3. Deploy the backend first. Its pre-deploy command (`migrate_locked`) applies the `telegram_bot` migrations (`0003_staff_access_student_link_token` creates `StaffTelegramAccess` and `StudentLinkToken` and drops the old `StudentLinkCode` table); no other table is touched.
 4. Apply the blueprint (`render.yaml`) so the `naseeb-telegram-bot` worker exists, then set `BOT_TOKEN` and the same `BOT_SERVICE_KEY` on that worker (both are `sync: false`).
-5. Check the worker log for `authenticated with Telegram as @naseeb_counselor_bot`, then send `/start` to the bot.
+5. Check the worker log for `authenticated with Telegram as @naseeb_counselor_bot`.
+6. Give each counselor and assistant access (next section), then they send `/start` to the bot.
 
 Run a single worker instance. A second one is safe (the backend leases each due chat) but wasteful. The worker keeps login state in memory, so a restart during someone's login only asks them to press `/start` again.
 
@@ -86,11 +89,25 @@ python -m bot.main
 `bot/.env` is gitignored. Tests: `cd backend && python manage.py test apps.telegram_bot`, and `cd bot && pytest`.
 
 
+## Who may log in: the counselor allowlist
+
+The counselor login in the bot is closed by default. A superadmin (role admin with the superadmin tier, or `is_superuser`) enters each counselor's or assistant's Telegram `@username` on the website: **Admin > Counselors > Edit counselor > Telegram username** (set, change or "Remove access"; the list shows `@username` next to the counselor). The API behind it is `GET /api/telegram/staff-access/` (list), and `GET`, `PUT {telegram_username}` and `DELETE` on `/api/telegram/staff-access/<user id>/`; the entries are also in the Django admin (`StaffTelegramAccess`). Only counselor and assistant accounts can have one.
+
+- A username is stored lowercase without `@`, must be 5-32 characters of `a-z 0-9 _`, and belongs to one account (`400 invalid_username`, `409 username_taken`).
+- The bot sends the chat's Telegram username with `whoami/` and `login/`. Only a username on the list gets the language picker and the username/password steps; every handler on that path checks again, so stale buttons or an old conversation state cannot reach them. Other people get a friendly "this bot is for Naseeb students and counselors" message (with a hint to set a Telegram username when they have none).
+- `login/` also refuses (`403 telegram_not_allowed`) when the credentials belong to a different account than the one assigned to that username, and a chat whose username is not on the list is refused before the password is even checked, so it burns no attempts.
+- Chats that are already linked keep working exactly as before, even if their entry is later removed or never existed; removal only blocks new logins. `/logout` and password changes behave as before.
+
 ## Students: Meetings and Telegram
 
-Students never log in to the bot. On Meetings the website shows "Log in with Telegram", which opens
-`t.me/<bot>?start=student`; the bot answers with a 6-digit code (10 minutes, `/code` for a new one) and the
-student types it on the website (`POST /api/telegram/student/`, 10 tries an hour). That chat then receives:
+Students never log in to the bot and type nothing. On Meetings the website shows one "Connect Telegram" button. It calls `POST /api/telegram/student/link/` (signed-in student, `telegram_link` throttle, 10 an hour by default), which creates a one-time token and returns `{url, expires_in}` with `url = https://t.me/<bot>?start=s_<token>`. The page opens that link in a new tab and polls `GET /api/telegram/student/` every 3 seconds (paused while the tab is hidden) until it says `linked`, or until the token's 15 minutes are over ("Link expired, try again").
+
+- The token is `secrets.token_urlsafe(32)` (43 characters, so the start payload stays under Telegram's 64), stored only as an HMAC with `SECRET_KEY`; a student has one token, the newest replaces the older, and it works once.
+- When the student presses Start, the bot calls `student-link/`, which consumes the token atomically and links the chat (one chat per student and one student per chat: the newest link replaces the older either way). The bot answers directly ("Connected: name. Meeting messages and reminders will come here."), so no message is queued for the link itself. An expired, used or unknown token gives "This link has expired or was already used" with the site address.
+- A plain `/start` is looked up with `whoami/`: a linked student is told who they are connected as, a counselor on the list gets the login, and everyone else gets the "who is this bot for" message. Students see only `/start` in their command menu (a chat-scoped menu set when they link); the default menu is the counselor commands.
+- `GET` (status: `enabled`, `linked`) and `DELETE` (disconnect) stay on `/api/telegram/student/`. The 6-digit code flow (`/code`, `student-code/`, typing a code on the site, `StudentLinkCode`) is gone.
+
+That chat then receives:
 
 - meeting events: confirmed, declined, cancelled, moved, a new time proposed, a meeting requested by staff;
 - reminders for a confirmed meeting: 1 day, 5, 4, 3, 2 and 1 hours and 30 minutes before, and when it starts.

@@ -677,59 +677,35 @@
   font-size: var(--text-sm);
 }
 
-.telegram-dialog-code {
+.telegram-dialog-waiting {
   width: 100%;
   margin-top: 22px;
-  padding-top: 20px;
+  padding: 18px 12px;
   display: grid;
-  gap: 12px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.telegram-dialog-code > div:first-child {
-  font-weight: 600;
-}
-
-.telegram-dialog-boxes {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.telegram-dialog-box {
-  width: 100%;
-  min-width: 0;
-  height: 54px;
-  padding: 0;
-  text-align: center;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--surface-inset);
+  justify-items: center;
+  gap: 10px;
+  background: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
 
-.telegram-dialog-box:focus {
-  outline: 0;
-  background: var(--surface);
-  border-color: var(--border-interactive);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+.telegram-dialog-spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
 }
 
-.telegram-dialog-box[aria-invalid="true"] {
-  border-color: var(--danger-border);
-  background: var(--danger-bg);
+.telegram-dialog-again {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .telegram-dialog-error {
   color: var(--danger);
   font-size: var(--text-sm);
-}
-
-.telegram-dialog-submit {
-  width: 100%;
-  justify-content: center;
 }
 
 .telegram-dialog-later {
@@ -783,6 +759,14 @@
   .telegram-dialog {
     animation: telegram-dialog-rise 0.24s ease-out;
   }
+
+  .telegram-dialog-spinner {
+    animation: telegram-dialog-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes telegram-dialog-spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes telegram-dialog-fade {
@@ -800,14 +784,6 @@
 
   .telegram-dialog {
     padding: 26px 18px 18px;
-  }
-
-  .telegram-dialog-boxes {
-    gap: 6px;
-  }
-
-  .telegram-dialog-box {
-    height: 50px;
   }
 }
 
