@@ -1,14 +1,15 @@
-"""Students' Telegram: linking a chat with a code, and the meeting messages sent to it.
+"""Students' Telegram: linking a chat with a one-time link, and the meeting messages sent to it.
 
-1. The student taps "Connect Telegram" on Meetings, which opens the bot.
-2. The bot asks ``issue_code`` for a 6-digit code and shows it in the chat.
-3. The student types the code on the website; ``link_code`` ties that chat to their account.
+1. The student presses "Connect Telegram" on Meetings; ``issue_token`` returns a ``t.me`` link whose
+   start payload holds a one-time token (only its HMAC is stored, 15 minutes, newest replaces older).
+2. The student opens it and presses Start; the bot calls ``consume_token``, which ties that chat to them.
 
 From then on meeting events and reminders are written to ``TelegramOutbox``; the bot asks for
 them every minute (``pending_messages``) and reports back what it sent (``acknowledge``).
 """
 import hashlib
 import hmac
+import re
 import secrets
 from datetime import timedelta
 
@@ -20,12 +21,14 @@ from apps.admissions.models import Booking
 from apps.users.cache_safety import count_hit
 from apps.users.models import User
 
-from .models import StudentLinkCode, StudentTelegram, TelegramLink, TelegramOutbox
+from .models import StudentLinkToken, StudentTelegram, TelegramLink, TelegramOutbox
 from .services import Refused
 
-CODE_DIGITS = 6
-CODE_TTL = timedelta(minutes=10)
-CODES_PER_HOUR = 10
+TOKEN_PREFIX = 's_'
+TOKEN_TTL = timedelta(minutes=15)
+# Wrong or stale tokens a chat may present per hour (a real token is 256 bits: this only stops floods).
+ATTEMPTS_PER_HOUR = 30
+TOKEN_PATTERN = re.compile(r'^[A-Za-z0-9_-]{16,62}$')
 LANGUAGES = {choice for choice, _ in TelegramLink.Language.choices}
 # Reminder steps, in minutes before the start; 0 is "the meeting has started".
 REMINDER_STEPS = (24 * 60, 5 * 60, 4 * 60, 3 * 60, 2 * 60, 60, 30, 0)
@@ -43,20 +46,16 @@ def telegram_link_enabled():
     return bool(settings.TELEGRAM_BOT_USERNAME)
 
 
-def bot_url():
-    return f'https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start=student' if telegram_link_enabled() else ''
-
-
 def is_linked(user):
     return StudentTelegram.objects.filter(user=user, is_active=True).exists()
 
 
 def link_status(user):
-    return {'enabled': telegram_link_enabled(), 'linked': is_linked(user), 'bot_url': bot_url()}
+    return {'enabled': telegram_link_enabled(), 'linked': is_linked(user)}
 
 
-def _hash(code):
-    return hmac.new(settings.SECRET_KEY.encode(), f'student-link:{code}'.encode(), hashlib.sha256).hexdigest()
+def _hash(token):
+    return hmac.new(settings.SECRET_KEY.encode(), f'student-link-token:{token}'.encode(), hashlib.sha256).hexdigest()
 
 
 def _language(value):
@@ -66,29 +65,44 @@ def _language(value):
 
 # --- bot side -------------------------------------------------------------------------------
 
-def issue_code(chat_id, language=None):
-    hits = count_hit(f'tgbot-student-code:{chat_id}', 3600)
-    if hits is not None and hits[0] > CODES_PER_HOUR:
+def meetings_url():
+    return f'{settings.FRONTEND_URL}/meetings'
+
+
+def _invalid_token():
+    # The site address lets the bot tell the student where to press the button again.
+    return Refused('invalid_token', 400, site_url=meetings_url())
+
+
+def consume_token(chat_id, token, language=None):
+    """Link ``chat_id`` to the student the token was issued for. The token works once."""
+    hits = count_hit(f'tgbot-student-link:{chat_id}', 3600)
+    if hits is not None and hits[0] > ATTEMPTS_PER_HOUR:
         raise Refused('too_many', 429)
+    token = str(token or '')
+    if not TOKEN_PATTERN.match(token):
+        raise _invalid_token()
+    language = _language(language)
     now = timezone.now()
-    StudentLinkCode.objects.filter(expires_at__lte=now).delete()
-    for _ in range(5):
-        code = ''.join(secrets.choice('0123456789') for _ in range(CODE_DIGITS))
-        digest = _hash(code)
-        # Two live codes are never the same, so a typed code names exactly one chat.
-        if not StudentLinkCode.objects.filter(code_hash=digest, expires_at__gt=now).exclude(chat_id=chat_id).exists():
-            break
-    StudentLinkCode.objects.update_or_create(
-        chat_id=chat_id,
-        defaults={'code_hash': digest, 'language': _language(language), 'expires_at': now + CODE_TTL},
-    )
-    linked = StudentTelegram.objects.filter(chat_id=chat_id, is_active=True).select_related('user').first()
-    return {
-        'code': code,
-        'expires_minutes': int(CODE_TTL.total_seconds() // 60),
-        'linked_name': (linked.user.get_full_name().strip() or linked.user.username) if linked else '',
-        'site_url': f'{settings.FRONTEND_URL}/meetings',
-    }
+    with transaction.atomic():
+        pending = (
+            StudentLinkToken.objects.select_for_update().select_related('user')
+            .filter(token_hash=_hash(token), expires_at__gt=now).first()
+        )
+        user = pending.user if pending else None
+        if user is None or not user.is_active or user.role != User.Role.STUDENT:
+            raise _invalid_token()
+        pending.delete()
+        # One chat per student and one student per chat: whatever either was linked to before is replaced.
+        StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).delete()
+        try:
+            StudentTelegram.objects.update_or_create(
+                user=user, defaults={'chat_id': chat_id, 'language': language, 'is_active': True},
+            )
+        except IntegrityError:
+            raise _invalid_token()
+    StudentLinkToken.objects.filter(expires_at__lte=now).delete()
+    return {'full_name': user.get_full_name().strip() or user.username, 'language': language}
 
 
 def pending_messages(now=None):
@@ -135,30 +149,22 @@ def acknowledge(sent_ids, blocked_chats):
 
 # --- website side ---------------------------------------------------------------------------
 
-def link_code(user, code):
+def issue_token(user):
+    """The link a signed-in student opens to connect their Telegram; replaces any earlier one."""
     if user.role != User.Role.STUDENT:
         raise Refused('role_not_allowed', 403)
-    code = ''.join(ch for ch in str(code or '') if ch.isdigit())
-    if len(code) != CODE_DIGITS:
-        raise Refused('invalid_code', 400)
+    if not telegram_link_enabled():
+        raise Refused('telegram_disabled', 404)
+    token = secrets.token_urlsafe(32)
     now = timezone.now()
-    with transaction.atomic():
-        pending = StudentLinkCode.objects.select_for_update().filter(code_hash=_hash(code), expires_at__gt=now).first()
-        if pending is None:
-            raise Refused('invalid_code', 400)
-        chat_id, language = pending.chat_id, pending.language
-        pending.delete()
-        # One chat per student and one student per chat: whatever either was linked to before is replaced.
-        StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).delete()
-        try:
-            StudentTelegram.objects.update_or_create(
-                user=user, defaults={'chat_id': chat_id, 'language': language, 'is_active': True},
-            )
-        except IntegrityError:
-            raise Refused('invalid_code', 400)
-        name = user.get_full_name().strip() or user.username
-        TelegramOutbox.objects.create(chat_id=chat_id, text=text(language, 'linked', name=_escape(name)))
-    return link_status(user)
+    StudentLinkToken.objects.filter(expires_at__lte=now).delete()
+    StudentLinkToken.objects.update_or_create(
+        user=user, defaults={'token_hash': _hash(token), 'expires_at': now + TOKEN_TTL},
+    )
+    return {
+        'url': f'https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start={TOKEN_PREFIX}{token}',
+        'expires_in': int(TOKEN_TTL.total_seconds()),
+    }
 
 
 def unlink(user):
@@ -258,11 +264,6 @@ def _with_details(entry):
 
 
 TEXTS = {
-    'linked': {
-        'uz': "✅ Telegram Naseeb hisobingizga ulandi: <b>{name}</b>.\nUchrashuv xabarlari va eslatmalar shu yerga keladi.",
-        'ru': '✅ Telegram привязан к аккаунту Naseeb: <b>{name}</b>.\nСообщения и напоминания о встречах будут приходить сюда.',
-        'en': '✅ Telegram is now linked to your Naseeb account: <b>{name}</b>.\nMeeting messages and reminders will come here.',
-    },
     'hours': {'uz': '{n} soat', 'ru': '{n} ч', 'en': '{n} h'},
     'minutes_left': {'uz': '{n} daqiqa', 'ru': '{n} мин', 'en': '{n} min'},
     'event_requested': _with_details({
