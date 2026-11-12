@@ -490,7 +490,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} />;
   if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage user={user} notify={notify} data={data} reload={reload} />;
-  if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify }} />;
+  if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify, updateUser }} />;
   if (page === 'messages') return <MessagesPage {...{ user, data, stats, notify }} initialChannel={directChannel} channelId={params.channelId} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} moreTickets={Boolean(more?.supportTickets)} loadMoreTickets={() => loadMore('supportTickets')} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;

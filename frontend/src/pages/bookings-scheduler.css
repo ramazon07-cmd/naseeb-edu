@@ -608,18 +608,45 @@
 }
 
 /* "Connect your Google account" before Meetings: one sentence, one button. */
-.google-gate {
-  max-width: 560px;
+.telegram-gate {
+  max-width: 620px;
   display: grid;
-  justify-items: start;
   gap: 14px;
 }
 
-.google-gate p {
+.telegram-gate p {
   margin: 0;
 }
 
-.google-gate-error {
+.telegram-gate-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 14px;
+}
+
+.telegram-gate-steps li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.telegram-gate-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.telegram-gate-code input {
+  width: 9rem;
+  font-size: 1.125rem;
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+
+.telegram-gate-error {
   color: var(--danger);
 }
 

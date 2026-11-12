@@ -80,6 +80,7 @@ class FakeApi:
         self.digest_data = {'date': '2026-11-08', 'total_students': 0, 'omitted': 0, 'students': []}
         self.errors = {}
         self.due_items = []
+        self.outbox_items = []
         self.found = {'students': [{'id': 7, 'full_name': 'Ali Valiyev', 'username': 'ali-valiyev'}], 'more': False}
 
     def _record(self, name, **args):
@@ -117,6 +118,19 @@ class FakeApi:
             'temporary_password': 'Tmp-Pass-42', 'expires_at': '2026-11-13T16:14:20+00:00',
             'login_url': 'https://naseeb.example/login',
         }
+
+    async def student_code(self, chat_id, language):
+        self._record('student_code', chat_id=chat_id, language=language)
+        return {'code': '482913', 'expires_minutes': 10, 'linked_name': '', 'site_url': 'https://naseeb.example/meetings'}
+
+    async def student_outbox(self):
+        self._record('student_outbox')
+        items, self.outbox_items = self.outbox_items, []
+        return items
+
+    async def student_outbox_ack(self, sent, blocked):
+        self._record('student_outbox_ack', sent=sent, blocked=blocked)
+        return {'sent': len(sent)}
 
     async def find_students(self, chat_id, query):
         self._record('find_students', chat_id=chat_id, query=query)
@@ -174,6 +188,7 @@ class Harness:
         self.dp.include_router(router)
         self._update_id = 0
         self._message_id = 0
+        self.language_code = None
 
     def close(self):
         router._parent_router = None
@@ -182,7 +197,7 @@ class Harness:
         self._message_id += 1
         return Message(
             message_id=message_id or self._message_id, date=datetime.now(), chat=Chat(id=chat_id, type='private'),
-            from_user=User(id=chat_id, is_bot=False, first_name='Dilnoza'), text=text,
+            from_user=User(id=chat_id, is_bot=False, first_name='Dilnoza', language_code=self.language_code), text=text,
         )
 
     async def say(self, text, chat_id=1, message_id=None):

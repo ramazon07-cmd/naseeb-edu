@@ -80,6 +80,19 @@ class ApiClient:
     async def reset_password(self, chat_id, student_id):
         return await self._call('POST', 'reset-password', json={'chat_id': chat_id, 'student_id': student_id})
 
+    async def student_code(self, chat_id, language):
+        return await self._call('POST', 'student-code', json={'chat_id': chat_id, 'language': language})
+
+    async def student_outbox(self):
+        body = await self._call('POST', 'student-outbox', json={})
+        messages = body.get('messages') if isinstance(body, dict) else None
+        if not isinstance(messages, list):
+            raise ApiUnavailable('outbox answer has no messages list')
+        return messages
+
+    async def student_outbox_ack(self, sent, blocked):
+        return await self._call('POST', 'student-outbox/ack', json={'sent': sent, 'blocked': blocked})
+
     async def get_settings(self, chat_id):
         return await self._call('GET', 'settings', params={'chat_id': chat_id})
 

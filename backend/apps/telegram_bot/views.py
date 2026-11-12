@@ -7,6 +7,7 @@ from . import services
 from .digest import build_digest, grouped_students
 from .jobs import run_due_jobs
 from .permissions import HasServiceKey
+from . import student_link
 from .students import add_student, find_students, reset_password
 
 
@@ -182,3 +183,33 @@ class LogoutView(BotView):
     def post(self, request):
         services.unlink(self.get_chat_id(request))
         return Response({'ok': True})
+
+
+class StudentCodeView(BotView):
+    """A code for the website, shown to whoever opened the bot from Meetings."""
+
+    def post(self, request):
+        data = self.get_data(request)
+        language = data.get('language')
+        if language is not None and not isinstance(language, str):
+            raise services.Refused('invalid_request', 400)
+        return Response(student_link.issue_code(_chat_id(data), language))
+
+
+class StudentOutboxView(BotView):
+    def post(self, request):
+        return Response(student_link.pending_messages())
+
+
+def _int_list(value, limit=500):
+    if not isinstance(value, list) or len(value) > limit or not all(
+        isinstance(item, int) and not isinstance(item, bool) and -BIGINT <= item < BIGINT for item in value
+    ):
+        raise services.Refused('invalid_request', 400)
+    return value
+
+
+class StudentOutboxAckView(BotView):
+    def post(self, request):
+        data = self.get_data(request)
+        return Response(student_link.acknowledge(_int_list(data.get('sent', [])), _int_list(data.get('blocked', []))))

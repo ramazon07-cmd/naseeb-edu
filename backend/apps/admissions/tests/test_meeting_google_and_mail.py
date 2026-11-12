@@ -38,7 +38,7 @@ class GoogleConnectTests(RoleIsolationBase):
         self.assertEqual(self.student_a_user.google_email, 'student@gmail.com')
         self.client.force_authenticate(self.student_a_user)
         me = self.client.get('/api/users/accounts/me/').data
-        self.assertEqual((me['google_email'], me['google_connect_enabled']), ('student@gmail.com', True))
+        self.assertEqual(me['google_email'], 'student@gmail.com')
 
     def test_callback_refuses_a_forged_or_stale_state_and_an_unverified_identity(self):
         forged = signing.dumps({'u': self.student_a_user.pk, 'pv': 1}, salt='other')
@@ -58,23 +58,7 @@ class GoogleConnectTests(RoleIsolationBase):
         self.student_a_user.refresh_from_db()
         self.assertEqual(self.student_a_user.google_email, '')
 
-    def test_meetings_changes_need_a_connected_account_but_reads_do_not(self):
-        start = (timezone.now() + timedelta(days=3)).replace(minute=0, second=0, microsecond=0)
-        slot = MeetingAvailability.objects.create(participant=self.counselor, starts_at=start, duration_minutes=45)
-        payload = {'participant': self.counselor.id, 'topic': 'Essay', 'starts_at': start.isoformat(),
-                   'duration_minutes': 45, 'availability_slot': slot.id}
-        self.client.force_authenticate(self.student_a_user)
-        self.assertEqual(self.client.get('/api/bookings/').status_code, 200)
-        self.assertEqual(self.client.post('/api/bookings/', payload, format='json').status_code, 403)
-        self.client.force_authenticate(self.counselor)
-        self.assertEqual(self.client.put('/api/bookings/availability/weekly/', {'duration_minutes': 45, 'hours': {}}, format='json').status_code, 403)
-        self.student_a_user.google_email = 'student@gmail.com'
-        self.student_a_user.save(update_fields=['google_email'])
-        self.client.force_authenticate(self.student_a_user)
-        self.assertEqual(self.client.post('/api/bookings/', payload, format='json').status_code, 201)
-
-    def test_existing_meetings_still_work_without_a_connected_account(self):
-        # Turning the feature on must not strand meetings that were booked before it.
+    def test_existing_meetings_work_without_a_connected_google_account(self):
         start = (timezone.now() + timedelta(days=2)).replace(minute=0, second=0, microsecond=0)
         pending = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
                                          starts_at=start, duration_minutes=45)
@@ -93,7 +77,6 @@ class GoogleConnectTests(RoleIsolationBase):
     def test_without_google_credentials_meetings_work_as_before(self):
         self.client.force_authenticate(self.student_a_user)
         self.assertEqual(self.client.post('/api/users/google/start/').status_code, 503)
-        self.assertFalse(self.client.get('/api/users/accounts/me/').data['google_connect_enabled'])
 
 
 @override_settings(**MAIL)

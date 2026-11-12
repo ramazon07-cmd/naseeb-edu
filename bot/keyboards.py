@@ -100,3 +100,7 @@ def pick_student(lang, students):
 
 def confirm_reset(lang, student_id):
     return _markup([[_button(t(lang, 'reset_yes'), f'rpy:{student_id}'), _button(t(lang, 'add_no'), 'rp:x')]])
+
+
+def new_code(lang):
+    return _markup([[_button(t(lang, 'btn_new_code'), f'scode:{lang}')]])

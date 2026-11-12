@@ -115,6 +115,50 @@ async def run_tick(*, bot, api, cache, limiter, sleep=asyncio.sleep, concurrency
     return results
 
 
+async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, **_):
+    """Students' meeting messages and reminders: fetched, sent, and reported back every minute.
+
+    A message that fails for a passing reason stays unsent and is handed out again after the
+    backend's lease; a chat that blocked the bot is reported so nothing more is queued for it.
+    """
+    try:
+        messages = await api.student_outbox()
+    except (ApiError, ApiUnavailable) as exc:
+        log.warning('could not fetch student messages: %s', type(exc).__name__)
+        return {'sent': 0, 'blocked': 0}
+    sent, blocked = [], set()
+    for message in messages:
+        chat_id = message['chat_id']
+        if chat_id in blocked:
+            continue
+        for _ in range(2):
+            try:
+                await limiter.wait()
+                await bot.send_message(chat_id, message['text'], disable_web_page_preview=True)
+                sent.append(message['id'])
+                break
+            except TelegramRetryAfter as exc:
+                await sleep(exc.retry_after)
+            except TelegramForbiddenError:
+                blocked.add(chat_id)
+                break
+            except TelegramBadRequest as exc:
+                if 'chat not found' in str(exc).lower():
+                    blocked.add(chat_id)
+                else:
+                    log.warning('telegram refused a student message: %s', type(exc).__name__)
+                    sent.append(message['id'])  # it would be refused again; do not retry it
+                break
+            except (TelegramNetworkError, TelegramServerError):
+                break
+    if sent or blocked:
+        try:
+            await api.student_outbox_ack(sent, sorted(blocked))
+        except (ApiError, ApiUnavailable) as exc:
+            log.warning('student messages sent but not acknowledged: %s', type(exc).__name__)
+    return {'sent': len(sent), 'blocked': len(blocked)}
+
+
 # The backend's scheduled jobs (meeting reminders hourly; notifications and cleanups
 # daily), asked for from here once an hour at minute 5 so no cron service is needed.
 # The backend picks what is due and locks each job, so a restart or two instances
@@ -166,6 +210,10 @@ async def run_scheduler(stop, **deps):
                 await run_tick(**deps)
             except Exception:
                 log.exception('scheduler tick failed; trying again next minute')
+            try:
+                await deliver_student_messages(**deps)
+            except Exception:
+                log.exception('student messages failed; trying again next minute')
             with suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=seconds_to_next_minute())
     finally:

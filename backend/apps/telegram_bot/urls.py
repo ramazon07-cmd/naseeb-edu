@@ -11,6 +11,9 @@ urlpatterns = [
     path('add-student/', views.AddStudentView.as_view()),
     path('find-students/', views.FindStudentsView.as_view()),
     path('reset-password/', views.ResetPasswordView.as_view()),
+    path('student-code/', views.StudentCodeView.as_view()),
+    path('student-outbox/', views.StudentOutboxView.as_view()),
+    path('student-outbox/ack/', views.StudentOutboxAckView.as_view()),
     path('scheduled-jobs/', views.ScheduledJobsView.as_view()),
     # The name an older bot calls; same view.
     path('meeting-reminders/', views.ScheduledJobsView.as_view()),

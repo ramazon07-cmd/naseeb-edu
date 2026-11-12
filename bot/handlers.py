@@ -23,7 +23,8 @@ router = Router()
 router.message.filter(F.chat.type == 'private')
 router.callback_query.filter(F.message.chat.type == 'private')
 
-COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|add|reset|cancel|settings|logout)(@\w+)?(\s|$)')
+COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|add|reset|code|cancel|settings|logout)(@\w+)?(\s|$)')
+STUDENT_HINT = "Til / Язык / Language\n\n<i>O'quvchi / Ученик / Student: /code</i>"
 TIME_PATTERN = re.compile(r'^\s*(\d{1,2})[:.](\d{2})\s*$')
 LIST_BUTTON = re.compile(r'^l:(\d{1,4}):([az]):([ai])$')
 DETAIL_BUTTON = re.compile(r'^d:(\d{1,12}):(\d{1,4}):([az]):([ai])$')
@@ -116,6 +117,53 @@ async def _change(api, cache, chat_id, **changes):
     return link
 
 
+def _telegram_language(user):
+    code = (getattr(user, 'language_code', None) or '')[:2].lower()
+    return code if code in LANGUAGES else DEFAULT
+
+
+async def _send_student_code(bot, chat_id, lang, api, edit_message_id=None):
+    """A code the student types on the website's Meetings page to link this chat."""
+    try:
+        result = await api.student_code(chat_id, lang)
+    except ApiError as exc:
+        if exc.code != 'too_many':
+            raise
+        await bot.send_message(chat_id, t(lang, 'student_code_too_many'))
+        return
+    text = t(
+        lang, 'student_code', code=escape(result['code']), minutes=result.get('expires_minutes', 10),
+        url=escape(result.get('site_url') or ''),
+    )
+    if result.get('linked_name'):
+        text += '\n\n' + t(lang, 'student_code_linked', name=escape(result['linked_name']))
+    markup = keyboards.new_code(lang)
+    if edit_message_id is not None:
+        await _edit(bot, chat_id, edit_message_id, text, markup)
+    else:
+        await bot.send_message(chat_id, text, reply_markup=markup)
+
+
+@router.message(Command('start'), F.text.regexp(r'^/start(@\w+)?\s+student\s*$'))
+async def start_student(message: Message, state: FSMContext, bot, api):
+    # Opened from the website's Meetings page: a student linking their Telegram.
+    await state.clear()
+    await _send_student_code(bot, message.chat.id, _telegram_language(message.from_user), api)
+
+
+@router.message(Command('code'))
+async def code_command(message: Message, state: FSMContext, bot, api):
+    await state.clear()
+    await _send_student_code(bot, message.chat.id, _telegram_language(message.from_user), api)
+
+
+@router.callback_query(F.data.regexp(r'^scode:(uz|ru|en)$'))
+async def new_student_code(callback: CallbackQuery, bot, api):
+    await callback.answer()
+    lang = callback.data.split(':', 1)[1]
+    await _send_student_code(bot, callback.message.chat.id, lang, api, edit_message_id=callback.message.message_id)
+
+
 @router.message(Command('start'))
 async def start(message: Message, state: FSMContext, api, cache):
     await state.clear()
@@ -128,7 +176,8 @@ async def start(message: Message, state: FSMContext, api, cache):
         )
         return
     await state.set_state(Login.language)
-    await message.answer('Til / Язык / Language', reply_markup=keyboards.languages())
+    # Students do not log in here; the line under the picker sends them to their code.
+    await message.answer(STUDENT_HINT, reply_markup=keyboards.languages())
 
 
 @router.callback_query(F.data == 'login:again')
