@@ -9,35 +9,113 @@ def buttons(call):
     return [b['callback_data'] for row in call[1]['reply_markup']['inline_keyboard'] for b in row]
 
 
-async def test_link_from_the_website_shows_a_code_in_the_students_language(h):
+TOKEN = 'Tk3-abcdEFGH_ijkl0123456789MNOPqrstuvwxyz1'
+
+
+async def test_start_with_a_token_connects_the_student_in_their_telegram_language(h):
     h.language_code = 'ru'
-    await h.say('/start student')
-    assert h.api.names('student_code') == [{'chat_id': 1, 'language': 'ru'}]
-    message = h.session.of('SendMessage')[-1]
-    assert '482913' in message[1]['text'] and 'Meetings' in message[1]['text'] and 'Ваш код' in message[1]['text']
-    assert buttons(message) == ['scode:ru']
-    # No counselor login is started for a student.
+    await h.say(f'/start s_{TOKEN}')
+    assert h.api.names('student_link') == [{'chat_id': 1, 'token': TOKEN, 'language': 'ru'}]
+    text = h.session.texts()[-1]
+    # The name is escaped for HTML mode and the reply is in Russian.
+    assert 'Подключено: <b>Ali &lt;Valiyev&gt; &amp; Co</b>' in text
+    # No counselor flow is started and no code is involved.
+    assert h.api.names('get_settings') == [] and h.api.names('whoami') == []
+    assert h.session.of('SetMyCommands')
+
+
+async def test_token_start_works_for_each_language_and_defaults_to_uzbek(h):
+    for code, expected in (('en', 'Connected: <b>'), ('uz', 'Ulandi: <b>'), ('de', 'Ulandi: <b>'), (None, 'Ulandi: <b>')):
+        h.language_code = code
+        await h.say(f'/start s_{TOKEN}')
+        assert expected in h.session.texts()[-1], code
+
+
+async def test_an_expired_or_used_link_says_so_and_points_to_the_website(h):
+    h.language_code = 'en'
+    h.api.errors['student_link'] = ApiError(400, 'invalid_token', site_url='https://naseeb.example/meetings')
+    await h.say(f'/start s_{TOKEN}')
+    text = h.session.texts()[-1]
+    assert 'expired or was already used' in text and 'https://naseeb.example/meetings' in text
+    assert 'Connect Telegram' in text
+
+
+async def test_too_many_attempts_gets_the_generic_error(h):
+    h.language_code = 'en'
+    h.api.errors['student_link'] = ApiError(429, 'too_many')
+    await h.say(f'/start s_{TOKEN}')
+    assert 'Something went wrong' in h.session.texts()[-1]
+
+
+async def test_the_old_student_deep_link_and_unknown_payloads_are_a_plain_start(h):
+    h.language_code = 'en'
+    h.api.who = {'kind': 'unknown', 'site_url': 'https://naseeb.example/meetings'}
+    for text in ('/start student', '/start whatever', '/start s_', '/start s_bad token'):
+        await h.say(text)
+    assert h.api.names('student_link') == []
+    assert len(h.api.names('whoami')) == 4
+
+
+async def test_plain_start_for_an_unknown_user_explains_who_the_bot_is_for(h):
+    h.language_code = 'en'
+    h.api.who = {'kind': 'unknown', 'site_url': 'https://naseeb.example/meetings'}
+    await h.say('/start')
+    text = h.session.texts()[-1]
+    assert 'Naseeb students and counselors' in text
+    assert "press 'Connect Telegram': https://naseeb.example/meetings" in text
+    assert 'send your Telegram username to the administrator' in text
+    # Has a username: no extra line, and no login flow, no language picker.
+    assert 'set a Telegram username' not in text
+    assert 'reply_markup' not in h.session.of('SendMessage')[-1][1] or not h.session.of('SendMessage')[-1][1]['reply_markup']
+    assert h.api.names('whoami') == [{'chat_id': 1, 'telegram_username': 'dilnoza_k'}]
+
+
+async def test_unknown_user_without_a_telegram_username_is_told_to_set_one(h):
+    h.language_code = 'ru'
+    h.username = None
+    h.api.who = {'kind': 'unknown', 'site_url': 'https://naseeb.example/meetings'}
+    await h.say('/start')
+    text = h.session.texts()[-1]
+    assert 'Этот бот для учеников и консультантов' in text and 'username в настройках Telegram' in text
+    assert h.api.names('whoami') == [{'chat_id': 1, 'telegram_username': None}]
+
+
+async def test_plain_start_for_a_linked_student_says_who_they_are(h):
+    h.language_code = 'en'
+    h.api.who = {'kind': 'student', 'name': 'Sara <N>', 'site_url': 'https://naseeb.example/meetings'}
+    await h.say('/start')
+    assert "You're connected as <b>Sara &lt;N&gt;</b>. Meeting messages come here." in h.session.texts()[-1]
+    assert h.session.of('SetMyCommands')
     assert h.api.names('get_settings') == []
 
 
-async def test_unknown_language_falls_back_to_uzbek_and_new_code_edits_the_message(h):
-    h.language_code = 'de'
-    await h.say('/code')
-    assert h.api.names('student_code')[-1]['language'] == 'uz'
-    await h.tap('scode:uz')
-    assert len(h.api.names('student_code')) == 2
-    assert '482913' in h.session.of('EditMessageText')[-1][1]['text']
-
-
-async def test_plain_start_points_students_to_code(h):
+async def test_plain_start_for_an_allowed_counselor_opens_the_language_picker(h):
     await h.say('/start')
-    assert '/code' in h.session.texts()[-1]
+    call = h.session.of('SendMessage')[-1]
+    assert 'Til' in call[1]['text']
+    assert buttons(call) == ['lang:uz', 'lang:ru', 'lang:en']
 
 
-async def test_too_many_codes_is_explained(h):
-    h.api.errors['student_code'] = ApiError(429, 'too_many')
+async def test_plain_start_for_a_linked_counselor_keeps_the_existing_behaviour(h):
+    await h.log_in()
+    h.session.calls.clear()
+    await h.say('/start')
+    assert 'Dilnoza Karimova' in h.session.texts()[-1]
+    assert buttons(h.session.of('SendMessage')[-1]) == ['login:again']
+
+
+async def test_students_menu_has_no_counselor_commands():
+    from bot.i18n import MENU, MENU_STUDENT
+
+    for lang in ('uz', 'ru', 'en'):
+        assert [name for name, _ in MENU_STUDENT[lang]] == ['start']
+        assert 'code' not in [name for name, _ in MENU[lang]]
+
+
+async def test_the_code_command_is_gone(h):
     await h.say('/code')
-    assert 'Too many codes' in h.session.texts()[-1] or "ko'p kod" in h.session.texts()[-1]
+    assert h.api.names('student_link') == []
+    assert 'Your code' not in ' '.join(h.session.texts())
 
 
 async def test_outbox_messages_are_sent_and_acknowledged(h):

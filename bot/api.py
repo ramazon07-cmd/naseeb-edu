@@ -55,8 +55,13 @@ class ApiClient:
             raise ApiError(status, (body or {}).get('code', ''), **extra)
         return body
 
-    async def login(self, chat_id, username, password):
-        return await self._call('POST', 'login', json={'chat_id': chat_id, 'username': username, 'password': password})
+    async def login(self, chat_id, username, password, telegram_username=None):
+        return await self._call('POST', 'login', json={
+            'chat_id': chat_id, 'username': username, 'password': password, 'telegram_username': telegram_username,
+        })
+
+    async def whoami(self, chat_id, telegram_username=None):
+        return await self._call('POST', 'whoami', json={'chat_id': chat_id, 'telegram_username': telegram_username})
 
     async def confirm(self, chat_id, pending_token, language):
         return await self._call('POST', 'confirm', json={
@@ -80,8 +85,8 @@ class ApiClient:
     async def reset_password(self, chat_id, student_id):
         return await self._call('POST', 'reset-password', json={'chat_id': chat_id, 'student_id': student_id})
 
-    async def student_code(self, chat_id, language):
-        return await self._call('POST', 'student-code', json={'chat_id': chat_id, 'language': language})
+    async def student_link(self, chat_id, token, language):
+        return await self._call('POST', 'student-link', json={'chat_id': chat_id, 'token': token, 'language': language})
 
     async def student_outbox(self):
         body = await self._call('POST', 'student-outbox', json={})

@@ -37,7 +37,7 @@ async def test_username_and_password_messages_are_deleted_before_anything_else(h
     login = index_of(events, lambda e: e[0] == 'api' and e[1] == 'login')
     assert delete_user < delete_pw < login
     # between the two deletions only the prompt edit happened; after the password arrived the delete is the first call
-    assert [e[1] for e in events[delete_user + 1:delete_pw]] == ['EditMessageText']
+    assert [e[1] for e in events[delete_user + 1:delete_pw]] == ['whoami', 'EditMessageText']
     assert [e[1] for e in events[delete_pw:login]] == ['DeleteMessage', 'EditMessageText', 'SendChatAction']
 
 
@@ -210,3 +210,73 @@ async def test_a_command_while_waiting_for_the_password_is_not_sent_as_the_passw
     await h.say('/help')
     assert not h.api.names('login')
     assert '/logout' in h.session.texts()[-1]
+
+
+# --- only Telegram users a superadmin allowed reach the counselor login -------------------------
+
+UNKNOWN = {'kind': 'unknown', 'site_url': 'https://naseeb.example/meetings'}
+
+
+async def test_the_chats_telegram_username_is_sent_with_the_login(h):
+    await h.log_in()
+    assert h.api.names('login')[0]['telegram_username'] == 'dilnoza_k'
+    assert h.api.names('whoami')[0] == {'chat_id': 1, 'telegram_username': 'dilnoza_k'}
+
+
+async def test_a_chat_that_is_not_allowed_never_gets_the_language_picker(h):
+    h.api.who = UNKNOWN
+    await h.say('/start')
+    assert 'for Naseeb students and counselors' in ' '.join(h.session.texts()) or 'Naseeb' in h.session.texts()[-1]
+    assert not h.session.of('SendMessage')[-1][1].get('reply_markup')
+    # Nothing is waiting for a username or password: text is just answered with help and deleted.
+    await h.say('dilnoza', message_id=70)
+    await h.say(SECRET_PASSWORD, message_id=71)
+    assert h.api.names('login') == []
+    assert [d['message_id'] for k, d in h.session.calls if k == 'DeleteMessage'] == [70, 71]
+
+
+async def test_stray_login_buttons_are_refused_for_a_chat_that_is_not_allowed(h):
+    h.api.who = UNKNOWN
+    await h.tap('login:again')
+    assert 'Naseeb students and counselors' in h.session.texts()[-1] or 'Naseeb' in h.session.texts()[-1]
+    await h.tap('lang:en')
+    assert h.api.names('login') == []
+    # The username step is not reachable afterwards either.
+    await h.say('dilnoza')
+    await h.say(SECRET_PASSWORD)
+    assert h.api.names('login') == []
+
+
+async def test_an_allowed_chat_removed_from_the_list_mid_flow_is_stopped_at_each_step(h):
+    await h.say('/start')
+    h.api.who = UNKNOWN
+    await h.tap('lang:en')
+    assert 'Naseeb' in h.session.texts()[-1]
+    # A stale state after the list changed: the username step re-checks too.
+    h.api.who = {'kind': 'staff_allowed', 'site_url': 'x'}
+    await h.say('/start')
+    await h.tap('lang:en')
+    h.api.who = UNKNOWN
+    await h.say('dilnoza', message_id=80)
+    await h.say(SECRET_PASSWORD, message_id=81)
+    assert h.api.names('login') == []
+    assert [d['message_id'] for k, d in h.session.calls if k == 'DeleteMessage'] == [80, 81]
+
+
+async def test_login_refused_by_the_backend_for_a_mismatched_account_explains_and_stores_nothing(h):
+    h.api.errors['login'] = ApiError(403, 'telegram_not_allowed')
+    await start_flow(h, 'en')
+    await h.say('someone-else')
+    await h.say(SECRET_PASSWORD)
+    assert 'not allowed to log in' in h.session.texts()[-1]
+    assert SECRET_PASSWORD not in ' '.join(str(t) for t in h.session.texts())
+    # The flow is over: another password message does nothing.
+    del h.api.errors['login']
+    await h.say(SECRET_PASSWORD)
+    assert len(h.api.names('login')) == 1
+
+
+async def test_a_linked_counselor_can_switch_account_but_only_while_they_are_still_staff(h):
+    await h.log_in()
+    await h.tap('login:again')
+    assert 'Til' in h.session.texts()[-1]
