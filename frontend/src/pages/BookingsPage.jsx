@@ -5,7 +5,7 @@ import { Modal, Badge, Empty, Panel } from '../components/ui';
 import { Field, PortalTabs } from '../components/forms';
 import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
-import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil } from 'lucide-react';
+import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil, Send } from 'lucide-react';
 import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, joinParts, relativeDayText, shortDayText } from '../lib/format';
 import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
@@ -639,46 +639,62 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
   return <Modal title={t("Meeting notes")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{earlier.length > 0 && <section className="form-wide"><h3>{t("Notes from this day")}</h3><div className="record-list">{earlier.map((note) => <Record key={note.id} title={note.title} meta={joinParts(note.summary, note.next_steps && `${t("Next steps")}: ${note.next_steps}`)} />)}</div></section>}<Field label={t("Title")}><input name="title" required defaultValue={booking.topic} /></Field><Field label={t("Summary")}><textarea name="summary" required placeholder={t("What did you cover?")} /></Field><Field label={t("Next steps")}><textarea name="next_steps" placeholder={t("Optional")} /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save note")}</button></div></form></Modal>;
 }
 
-// Students and counselors connect a Google account once: its verified email
-// receives the meeting confirmations and reminders. Without it they still see and
-// manage the meetings they have; only new requests and published times need it (as the API does).
-const GOOGLE_ROLES = ['student', 'counselor', 'assistant'];
-const needsGoogle = (user) => Boolean(user.google_connect_enabled) && GOOGLE_ROLES.includes(user.role) && !user.google_email;
+// A student connects Telegram once: the bot shows a code, the student types it here, and from then on
+// the meeting answers and reminders arrive in that chat. Without it they still see and manage the
+// meetings they have; only a new request needs it (as the API does).
+const needsTelegram = (user) => user.role === 'student' && Boolean(user.telegram?.enabled) && !user.telegram?.linked;
 
-async function connectGoogle(notify) {
-  try {
-    const { url } = await api.startGoogleConnect();
-    window.location.assign(url);
-  } catch (err) {
-    notify(err.message, 'error');
-  }
-}
-
-function GoogleConnectBanner({ user, notify }) {
+function TelegramConnectCard({ user, onLinked, notify }) {
+  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const failed = new URLSearchParams(window.location.search).get('google') === 'failed';
-  async function connect() {
+  const [error, setError] = useState('');
+  const digits = code.replace(/\D/g, '');
+  async function submit(event) {
+    event.preventDefault();
     setBusy(true);
-    await connectGoogle(notify);
-    setBusy(false);
+    setError('');
+    try {
+      onLinked(await api.linkTelegram(digits));
+      notify(t("Telegram connected. Meeting messages will come there."));
+    } catch (err) {
+      setError(err.details?.code === 'invalid_code' ? t("This code is wrong or expired. Get a new one in the bot.") : err.message);
+    } finally {
+      setBusy(false);
+    }
   }
-  const body = <div className="google-gate">
-    <p>{t("Connect the Google account whose inbox you read to request new meetings and get email confirmations and reminders. Your current meetings keep working.")}</p>
-    {failed && <p className="google-gate-error" role="alert">{t("Google could not confirm your account. Try again.")}</p>}
-    <button type="button" className="button primary" disabled={busy} aria-busy={busy} onClick={connect}>{busy ? t("Opening Google…") : t("Continue with Google")}</button>
+  const body = <div className="telegram-gate">
+    <p>{t("Connect Telegram to request meetings. Confirmations and reminders (a day before, hours before and at the start) will come there.")}</p>
+    <ol className="telegram-gate-steps">
+      <li><a className="button primary" href={user.telegram.bot_url} target="_blank" rel="noopener noreferrer"><Send size={16} aria-hidden="true" /> {t("Log in with Telegram")}</a><span>{t("Press Start in the bot: it sends you a 6-digit code.")}</span></li>
+      <li><form className="telegram-gate-code" onSubmit={submit}>
+        <label htmlFor="telegram-code">{t("Code from the bot")}</label>
+        <input id="telegram-code" inputMode="numeric" autoComplete="one-time-code" maxLength={9} placeholder="123456" value={code} onChange={(event) => setCode(event.target.value)} aria-invalid={Boolean(error)} aria-describedby={error ? 'telegram-code-error' : undefined} />
+        <button className="button" disabled={busy || digits.length !== 6} aria-busy={busy}>{busy ? t("Connecting…") : t("Connect")}</button>
+      </form></li>
+    </ol>
+    {error && <p id="telegram-code-error" className="telegram-gate-error" role="alert">{error}</p>}
   </div>;
-  if (usesCounselorLayout(user)) return <CxCard title={t("Connect your Google account")}>{body}</CxCard>;
-  return <Panel title={t("Connect your Google account")}>{body}</Panel>;
+  return <Panel title={t("Connect your Telegram")}>{body}</Panel>;
 }
 
-export function BookingsPage({ user, data, reload, notify }) {
+export function BookingsPage({ user, data, reload, notify, updateUser }) {
   const [zoneId, setZoneId] = useState(zone.id);
   const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
   const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
-  const locked = needsGoogle(user);
-  // A button that starts something new goes to Google first while the account is not connected.
-  const guard = (start) => (locked ? () => connectGoogle(notify) : start);
-  const banner = locked ? <GoogleConnectBanner user={user} notify={notify} /> : null;
+  // The link can end on the server (the bot was blocked), so the page asks again instead of trusting
+  // the status loaded with the account; a changed answer brings the card back.
+  const checkTelegram = user.role === 'student' && Boolean(user.telegram?.enabled);
+  useEffect(() => {
+    if (!checkTelegram) return undefined;
+    let live = true;
+    api.telegramStatus().then((telegram) => { if (live) updateUser?.({ telegram }); }).catch(() => {});
+    return () => { live = false; };
+  }, [checkTelegram, updateUser]);
+  const locked = needsTelegram(user);
+  // A button that starts something new points at the Telegram card while Telegram is not connected.
+  const showCard = () => document.getElementById('telegram-code')?.focus();
+  const guard = (start) => (locked ? showCard : start);
+  const banner = locked ? <TelegramConnectCard user={user} notify={notify} onLinked={(telegram) => updateUser?.({ telegram })} /> : null;
   const props = { data, reload, notify, guard, banner, picker };
   // key: a new zone redraws every time on the page.
   if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;

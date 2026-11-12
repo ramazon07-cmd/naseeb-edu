@@ -422,6 +422,7 @@ REST_FRAMEWORK = {
         'refresh_ip': config('AUTH_REFRESH_IP_RATE', default='600/minute'),
         'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
         'google_connect': config('GOOGLE_CONNECT_RATE', default='20/hour'),
+        'telegram_link': config('TELEGRAM_LINK_RATE', default='10/hour'),
         'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
         'remind': config('REMIND_RATE', default='60/hour'),
         'account_change': config('AUTH_ACCOUNT_CHANGE_RATE', default='10/hour'),
@@ -444,6 +445,8 @@ REST_FRAMEWORK = {
 
 # Telegram counselor bot (apps/telegram_bot). Empty key = every bot endpoint answers 401.
 BOT_SERVICE_KEY = config('BOT_SERVICE_KEY', default='')
+# The counselor bot's @username (without @). Set: students connect Telegram on Meetings for meeting messages.
+TELEGRAM_BOT_USERNAME = config('TELEGRAM_BOT_USERNAME', default='').lstrip('@')
 
 # Per-account login lockout shared by /api/auth/token/ and /admin/login/.
 LOGIN_LOCKOUT_THRESHOLD = config('LOGIN_LOCKOUT_THRESHOLD', default=10, cast=int)

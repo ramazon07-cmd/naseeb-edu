@@ -60,6 +60,7 @@ Per student the essays count only essays the student shared with the counselor. 
 | `BOT_SERVICE_KEY` | backend env group **and** the bot worker | shared secret, at least 32 random characters, identical in both |
 | `BOT_TOKEN` | bot worker only | from BotFather |
 | `BACKEND_URL` | bot worker only | `https://api.naseebedu.com` |
+| `TELEGRAM_BOT_USERNAME` | backend | the bot's username without `@`. Set: students connect Telegram on Meetings (code from `t.me/<bot>?start=student`) and get meeting messages and reminders there; a student needs it to request a meeting. Unset: Meetings works without it |
 | `BOT_LOGIN_MAX_ATTEMPTS`, `BOT_LOGIN_WINDOW_SECONDS`, `BOT_DUE_GRACE_MINUTES`, `BOT_LOGIN_ACCOUNT_CEILING` | backend, optional | defaults 5, 900, 5, 30 |
 
 Login lockouts need the shared cache (Redis) to be correct across backend instances, like the website's own lockouts.
@@ -83,3 +84,17 @@ python -m bot.main
 ```
 
 `bot/.env` is gitignored. Tests: `cd backend && python manage.py test apps.telegram_bot`, and `cd bot && pytest`.
+
+
+## Students: Meetings and Telegram
+
+Students never log in to the bot. On Meetings the website shows "Log in with Telegram", which opens
+`t.me/<bot>?start=student`; the bot answers with a 6-digit code (10 minutes, `/code` for a new one) and the
+student types it on the website (`POST /api/telegram/student/`, 10 tries an hour). That chat then receives:
+
+- meeting events: confirmed, declined, cancelled, moved, a new time proposed, a meeting requested by staff;
+- reminders for a confirmed meeting: 1 day, 5, 4, 3, 2 and 1 hours and 30 minutes before, and when it starts.
+
+The backend writes these to `TelegramOutbox`; the bot fetches them every minute (`/api/bot/student-outbox/`),
+sends them and acknowledges (`/api/bot/student-outbox/ack/`). A step whose moment passed more than 15 minutes ago
+is skipped, so a late booking or a restart sends only the latest step. A chat that blocks the bot is unlinked.

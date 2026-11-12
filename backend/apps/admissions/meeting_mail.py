@@ -83,3 +83,12 @@ def email_after_commit(booking, recipient, title, request):
         # shortcut: sent in the request after commit (waits up to EMAIL_TIMEOUT); move to a queue when mail volume grows.
         # robust: the change is already saved, so nothing about the email may turn the response into an error.
         transaction.on_commit(lambda: send_meeting_email(booking, recipient, event), robust=True)
+
+
+def telegram_after_commit(booking, recipient, title, request):
+    """The Telegram message matching an in-app notification `title`, for a student who linked the bot."""
+    event = EVENTS.get(title)
+    if event and recipient and recipient.pk != request.user.pk:
+        from apps.telegram_bot.student_link import queue_event
+
+        transaction.on_commit(lambda: queue_event(booking, recipient, event), robust=True)

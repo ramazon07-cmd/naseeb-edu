@@ -1,6 +1,6 @@
 import { CounselorStudentTable as StudentTable, StatusTag, LateWork, targetText } from '../components/CounselorStudentTable';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, KeyRound, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
 import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag } from '../components/counselorUi';
@@ -693,6 +693,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
         <DownloadCvButton studentId={student.id} className="cx-btn" notify={notify} />
         <button type="button" className="cx-btn" onClick={() => onDirect(student.user_detail?.id)}><MessageCircle size={15} aria-hidden="true" />{t("Message")}</button>
         <button type="button" className="cx-btn" onClick={() => setBooking(true)}><Calendar size={15} aria-hidden="true" />{t("Book meeting")}</button>
+        <button type="button" className="cx-btn" onClick={() => setCredential(true)}><KeyRound size={15} aria-hidden="true" />{t("Reset login")}</button>
         <button type="button" className="cx-btn primary" onClick={() => setAssigning(true)}><Plus size={15} aria-hidden="true" />{t("Assign task")}</button>
     </Student360Header>
 
@@ -702,11 +703,10 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     {tab === 'overview' && <>
       <Overview student={student} records={records} meetings={upcoming} name={student.user_detail?.first_name || name} notify={notify} reload={reload} goTo={setTab} />
     </>}
-    {/* An assistant resets their students' logins; parent invitations stay with the counselor. */}
-    <CxAccountActions>
-      <button type="button" role="menuitem" onClick={() => setCredential(true)}>{t("Reset login")}</button>
-      {user.role !== 'assistant' && <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>}
-    </CxAccountActions>
+    {/* "Reset login" sits in the header for counselors and assistants; parent invitations stay with the counselor. */}
+    {user.role !== 'assistant' && <CxAccountActions>
+      <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>
+    </CxAccountActions>}
     {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={() => reload({ endpoints: REVIEW_ENDPOINTS, workspace: true })} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}
     {tab === 'tasks' && <div className="section-stack">
       <RecordCard title={t("Tasks")} count={records.tasks?.length} loading={loaded.loading} empty={t("No assigned tasks found.")}>

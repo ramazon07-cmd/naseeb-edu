@@ -72,9 +72,9 @@ STRINGS = {
         'en': 'Done, {name}. Account linked.',
     },
     'already_linked': {
-        'uz': "Siz {name} sifatida kirgansiz.\n\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/settings - sozlamalar\n/logout - chiqish",
-        'ru': 'Вы вошли как {name}.\n\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/settings - настройки\n/logout - выйти',
-        'en': "You're logged in as {name}.\n\n/now - update now\n/students - students\n/add - add a student\n/settings - settings\n/logout - log out",
+        'uz': "Siz {name} sifatida kirgansiz.\n\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/reset - o'quvchiga yangi parol\n/settings - sozlamalar\n/logout - chiqish",
+        'ru': 'Вы вошли как {name}.\n\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/reset - новый пароль ученику\n/settings - настройки\n/logout - выйти',
+        'en': "You're logged in as {name}.\n\n/now - update now\n/students - students\n/add - add a student\n/reset - new password for a student\n/settings - settings\n/logout - log out",
     },
     'other_account': {'uz': 'Boshqa hisob', 'ru': 'Другой аккаунт', 'en': 'Other account'},
     'grade_name': {
@@ -316,16 +316,113 @@ STRINGS = {
         'ru': 'Слишком много учеников за час. Попробуйте позже.',
         'en': 'Too many students added this hour. Please try again later.',
     },
+    'btn_new_password': {'uz': '🔑 Yangi parol', 'ru': '🔑 Новый пароль', 'en': '🔑 New password'},
+    'reset_prompt': {
+        'uz': "Kimga yangi parol kerak? O'quvchining ismi, familiyasi yoki loginini yuboring.",
+        'ru': 'Кому нужен новый пароль? Отправьте имя, фамилию или логин ученика.',
+        'en': "Who needs a new password? Send the student's name, last name or login.",
+    },
+    'reset_short': {
+        'uz': "Kamida 2 ta harf yuboring yoki /cancel.",
+        'ru': 'Отправьте хотя бы 2 буквы или /cancel.',
+        'en': 'Send at least 2 letters, or /cancel.',
+    },
+    'reset_none': {
+        'uz': "\"{query}\" bo'yicha o'quvchingiz topilmadi. Boshqacha yozib ko'ring yoki /cancel.",
+        'ru': 'Ученик по запросу «{query}» не найден. Попробуйте иначе или /cancel.',
+        'en': 'No student of yours matches "{query}". Try another spelling, or /cancel.',
+    },
+    'reset_pick': {
+        'uz': "Qaysi o'quvchi?",
+        'ru': 'Какой ученик?',
+        'en': 'Which student?',
+    },
+    'reset_more': {
+        'uz': "Hammasi ko'rsatilmadi: aniqroq yozing (ism va familiya).",
+        'ru': 'Показаны не все: уточните запрос (имя и фамилия).',
+        'en': 'Not all are shown: be more specific (first and last name).',
+    },
+    'reset_card': {
+        'uz': "<b>{name}</b> (login: <code>{username}</code>) uchun yangi vaqtinchalik parol yaratilsinmi?\n\nEski parol darhol ishlamay qoladi.",
+        'ru': 'Создать новый временный пароль для <b>{name}</b> (логин: <code>{username}</code>)?\n\nСтарый пароль сразу перестанет работать.',
+        'en': 'Make a new temporary password for <b>{name}</b> (login: <code>{username}</code>)?\n\nThe old password stops working at once.',
+    },
+    'reset_card_no_login': {
+        'uz': "<b>{name}</b> uchun yangi vaqtinchalik parol yaratilsinmi?\n\nEski parol darhol ishlamay qoladi.",
+        'ru': 'Создать новый временный пароль для <b>{name}</b>?\n\nСтарый пароль сразу перестанет работать.',
+        'en': 'Make a new temporary password for <b>{name}</b>?\n\nThe old password stops working at once.',
+    },
+    'reset_yes': {'uz': '🔑 Yangi parol', 'ru': '🔑 Новый пароль', 'en': '🔑 New password'},
+    'reset_working': {
+        'uz': 'Yangi parol yaratilmoqda...',
+        'ru': 'Создаём новый пароль...',
+        'en': 'Making a new password...',
+    },
+    'reset_done': {
+        'uz': "🔑 Yangi parol tayyor: <b>{name}</b>\n\nLogin: <code>{username}</code>\nVaqtinchalik parol: <code>{password}</code>\nAmal qiladi: {expires} gacha\nSayt: {url}\n\nShu ma'lumotni o'quvchiga yuboring. Kirgach, o'z parolini o'rnatadi. Yuborgach, bu xabarni o'chirib qo'ying.",
+        'ru': '🔑 Новый пароль готов: <b>{name}</b>\n\nЛогин: <code>{username}</code>\nВременный пароль: <code>{password}</code>\nДействует до: {expires}\nСайт: {url}\n\nПередайте эти данные ученику. После входа он задаст свой пароль. После отправки удалите это сообщение.',
+        'en': '🔑 New password ready: <b>{name}</b>\n\nLogin: <code>{username}</code>\nTemporary password: <code>{password}</code>\nValid until: {expires}\nWebsite: {url}\n\nSend these to the student. They set their own password after signing in. Delete this message once sent.',
+    },
+    'reset_cancelled': {
+        'uz': "Bekor qilindi. Parol o'zgarmadi.",
+        'ru': 'Отменено. Пароль не изменён.',
+        'en': 'Cancelled. The password was not changed.',
+    },
+    'reset_not_found': {
+        'uz': "Bu o'quvchi endi ro'yxatingizda yo'q. Parol o'zgarmadi.",
+        'ru': 'Этого ученика больше нет в вашем списке. Пароль не изменён.',
+        'en': 'This student is no longer on your list. The password was not changed.',
+    },
+    'reset_too_many': {
+        'uz': "Bir soatda juda ko'p parol yangilandi. Birozdan so'ng qayta urinib ko'ring.",
+        'ru': 'Слишком много новых паролей за час. Попробуйте позже.',
+        'en': 'Too many passwords reset this hour. Please try again later.',
+    },
+    'student_code': {
+        'uz': "\U0001F511 Kodingiz: <code>{code}</code>\n\nUni Naseeb saytidagi <b>Meetings</b> sahifasiga kiriting. Kod {minutes} daqiqa amal qiladi.\n{url}\n\nShundan so'ng uchrashuv xabarlari va eslatmalar shu yerga keladi.",
+        'ru': '\U0001F511 Ваш код: <code>{code}</code>\n\nВведите его на странице <b>Meetings</b> на сайте Naseeb. Код действует {minutes} мин.\n{url}\n\nПосле этого сообщения и напоминания о встречах будут приходить сюда.',
+        'en': '\U0001F511 Your code: <code>{code}</code>\n\nEnter it on the <b>Meetings</b> page of the Naseeb website. It is valid for {minutes} minutes.\n{url}\n\nAfter that, meeting messages and reminders come here.',
+    },
+    'student_code_linked': {
+        'uz': 'Bu chat hozir ulangan: <b>{name}</b>.',
+        'ru': 'Этот чат сейчас привязан: <b>{name}</b>.',
+        'en': 'This chat is linked now: <b>{name}</b>.',
+    },
+    'btn_new_code': {'uz': '\U0001F504 Yangi kod', 'ru': '\U0001F504 Новый код', 'en': '\U0001F504 New code'},
+    'student_code_too_many': {
+        'uz': "Juda ko'p kod so'raldi. Birozdan so'ng qayta urinib ko'ring.",
+        'ru': 'Слишком много кодов. Попробуйте позже.',
+        'en': 'Too many codes requested. Please try again later.',
+    },
     'error': {
         'uz': "Xatolik yuz berdi. Qayta urinib ko'ring.",
         'ru': 'Произошла ошибка. Попробуйте ещё раз.',
         'en': 'Something went wrong. Please try again.',
     },
     'help': {
-        'uz': "/start - kirish\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/settings - vaqt, til, nimalar kelishi\n/logout - chiqish va ma'lumotlarni o'chirish\n/help - yordam",
-        'ru': '/start - вход\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/settings - время, язык, состав сводки\n/logout - выйти и удалить данные\n/help - помощь',
-        'en': '/start - log in\n/now - update now\n/students - list students\n/add - add a student\n/settings - time, language, contents\n/logout - log out and wipe data\n/help - this help',
+        'uz': "/start - kirish\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/reset - o'quvchiga yangi parol\n/settings - vaqt, til, nimalar kelishi\n/logout - chiqish va ma'lumotlarni o'chirish\n/help - yordam",
+        'ru': '/start - вход\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/reset - новый пароль ученику\n/settings - время, язык, состав сводки\n/logout - выйти и удалить данные\n/help - помощь',
+        'en': '/start - log in\n/now - update now\n/students - list students\n/add - add a student\n/reset - new password for a student\n/settings - time, language, contents\n/logout - log out and wipe data\n/help - this help',
     },
+}
+
+# The command list behind Telegram's "Menu" button.
+MENU = {
+    'uz': [
+        ('add', "Yangi o'quvchi qo'shish"), ('reset', "O'quvchiga yangi parol"), ('students', "O'quvchilar"),
+        ('now', 'Hozirgi holat'), ('settings', 'Sozlamalar'), ('help', 'Yordam'), ('logout', 'Chiqish'),
+        ('code', "O'quvchi: saytga ulash kodi"),
+    ],
+    'ru': [
+        ('add', 'Добавить ученика'), ('reset', 'Новый пароль ученику'), ('students', 'Ученики'),
+        ('now', 'Сводка сейчас'), ('settings', 'Настройки'), ('help', 'Помощь'), ('logout', 'Выйти'),
+        ('code', 'Ученик: код для сайта'),
+    ],
+    'en': [
+        ('add', 'Add a student'), ('reset', 'New password for a student'), ('students', 'Students'),
+        ('now', 'Update now'), ('settings', 'Settings'), ('help', 'Help'), ('logout', 'Log out'),
+        ('code', 'Student: code for the website'),
+    ],
 }
 
 

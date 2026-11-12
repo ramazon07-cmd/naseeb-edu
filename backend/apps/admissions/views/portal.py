@@ -10,7 +10,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
-from apps.users.google import google_connect_enabled
+from apps.telegram_bot.student_link import is_linked, telegram_link_enabled
 from apps.users.models import User
 from apps.users.serializers import ContactSerializer
 from ..models import (
@@ -33,7 +33,7 @@ from ..serializers import (
 from ..serializers.portal import CHOOSE_AVAILABLE_TIME, MeetingAvailabilityRepeatSerializer, MeetingAvailabilitySerializer, MeetingScheduleSerializer
 from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
 from ..listing import ListQueryMixin
-from ..meeting_mail import email_after_commit
+from ..meeting_mail import email_after_commit, telegram_after_commit
 from ..meetings import (
     MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, overlapping, top_up_schedule, top_up_schedules,
     upcoming_slots, weekly_starts, with_availability,
@@ -99,10 +99,8 @@ class StudentCollaborationPermission(permissions.BasePermission):
 BOOKING_STAFF_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACHER, User.Role.ORGANIZATION}
 
 
-# Who must connect a Google account (a verified email for meeting emails) before changing meetings.
-GOOGLE_REQUIRED_ROLES = {User.Role.STUDENT, User.Role.COUNSELOR, User.Role.ASSISTANT}
-# The writes that start something new; every other meeting action works without Google.
-GOOGLE_REQUIRED_ACTIONS = {'create', 'availability', 'availability_repeat', 'availability_weekly'}
+# A student connects Telegram (meeting messages and reminders) before requesting a new meeting.
+TELEGRAM_REQUIRED_ACTIONS = {'create'}
 
 
 class BookingPermission(permissions.BasePermission):
@@ -117,12 +115,11 @@ class BookingPermission(permissions.BasePermission):
             return False
         if user.is_superuser or user.role == User.Role.ADMIN:
             return True
-        # Starting something new (a request, published times) needs the connected account. Meetings that
-        # already exist can still be confirmed, declined, moved, cancelled and cleared without it, so
-        # turning the feature on never strands a booked meeting.
-        if (request.method not in permissions.SAFE_METHODS and view.action in GOOGLE_REQUIRED_ACTIONS
-                and user.role in GOOGLE_REQUIRED_ROLES and not user.google_email and google_connect_enabled()):
-            raise PermissionDenied('Connect your Google account to use Meetings.')
+        # A new request needs the student's Telegram, where its answer and reminders arrive. Meetings that
+        # already exist can still be cancelled and moved without it, so turning this on strands nothing.
+        if (request.method not in permissions.SAFE_METHODS and view.action in TELEGRAM_REQUIRED_ACTIONS
+                and user.role == User.Role.STUDENT and telegram_link_enabled() and not is_linked(user)):
+            raise PermissionDenied({'detail': 'Connect Telegram to request meetings.', 'code': 'telegram_required'})
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
             return view.action in self.STUDENT_ACTIONS
         if user.role in BOOKING_STAFF_ROLES:
@@ -397,6 +394,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             student=booking.student, title=title, message=message, kind=Notification.Kind.MEETING,
         )
         email_after_commit(booking, booking.student.user, title, self.request)
+        telegram_after_commit(booking, booking.student.user, title, self.request)
 
     def _notify_participant(self, booking, title, message):
         # A separate row addressed to the staff member: their bell (and reading it) never touches the student's feed.
