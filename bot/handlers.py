@@ -9,12 +9,12 @@ from aiogram.filters import Command, ChatMemberUpdatedFilter, KICKED
 from aiogram.filters.exception import ExceptionTypeFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, ChatMemberUpdated, ErrorEvent, Message
+from aiogram.types import BotCommand, BotCommandScopeChat, CallbackQuery, ChatMemberUpdated, ErrorEvent, Message
 
 from . import keyboards
 from .api import ApiError, ApiUnavailable
 from .delivery import list_message, send_digest
-from .i18n import DEFAULT, LANGUAGES, t
+from .i18n import DEFAULT, LANGUAGES, MENU_STUDENT, t
 from .render import SORT_AZ, contacts, render_detail
 from .students import format_expiry, is_complete, parse_student
 
@@ -23,8 +23,10 @@ router = Router()
 router.message.filter(F.chat.type == 'private')
 router.callback_query.filter(F.message.chat.type == 'private')
 
-COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|add|reset|code|cancel|settings|logout)(@\w+)?(\s|$)')
-STUDENT_HINT = "Til / Язык / Language\n\n<i>O'quvchi / Ученик / Student: /code</i>"
+COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|add|reset|cancel|settings|logout)(@\w+)?(\s|$)')
+LANGUAGE_PROMPT = 'Til / Язык / Language'
+STUDENT_START = r'^/start(@\w+)?\s+s_([A-Za-z0-9_-]{1,62})\s*$'
+STAFF_KINDS = ('staff_linked', 'staff_allowed')
 TIME_PATTERN = re.compile(r'^\s*(\d{1,2})[:.](\d{2})\s*$')
 LIST_BUTTON = re.compile(r'^l:(\d{1,4}):([az]):([ai])$')
 DETAIL_BUTTON = re.compile(r'^d:(\d{1,12}):(\d{1,4}):([az]):([ai])$')
@@ -122,77 +124,105 @@ def _telegram_language(user):
     return code if code in LANGUAGES else DEFAULT
 
 
-async def _send_student_code(bot, chat_id, lang, api, edit_message_id=None):
-    """A code the student types on the website's Meetings page to link this chat."""
-    try:
-        result = await api.student_code(chat_id, lang)
-    except ApiError as exc:
-        if exc.code != 'too_many':
-            raise
-        await bot.send_message(chat_id, t(lang, 'student_code_too_many'))
-        return
-    text = t(
-        lang, 'student_code', code=escape(result['code']), minutes=result.get('expires_minutes', 10),
-        url=escape(result.get('site_url') or ''),
-    )
-    if result.get('linked_name'):
-        text += '\n\n' + t(lang, 'student_code_linked', name=escape(result['linked_name']))
-    markup = keyboards.new_code(lang)
+def _username(user):
+    return getattr(user, 'username', None) or None
+
+
+async def _unknown_reply(bot, chat_id, user, who, edit_message_id=None):
+    """Who the bot is for, shown to a chat that is neither a counselor nor a student."""
+    lang = _telegram_language(user)
+    text = t(lang, 'unknown_user', url=escape(who.get('site_url') or ''))
+    if not _username(user):
+        text += '\n\n' + t(lang, 'unknown_no_username')
     if edit_message_id is not None:
-        await _edit(bot, chat_id, edit_message_id, text, markup)
+        await _edit(bot, chat_id, edit_message_id, text)
     else:
-        await bot.send_message(chat_id, text, reply_markup=markup)
+        await bot.send_message(chat_id, text)
 
 
-@router.message(Command('start'), F.text.regexp(r'^/start(@\w+)?\s+student\s*$'))
+async def _staff_gate(bot, api, chat_id, user, edit_message_id=None):
+    """True when this chat may use the counselor login; otherwise it is told who the bot is for."""
+    who = await api.whoami(chat_id, _username(user))
+    if who.get('kind') in STAFF_KINDS:
+        return True
+    await _unknown_reply(bot, chat_id, user, who, edit_message_id)
+    return False
+
+
+async def _set_student_menu(bot, chat_id, lang):
+    # Students only need /start: hide the counselor commands from this chat's menu.
+    commands = [BotCommand(command=name, description=text) for name, text in MENU_STUDENT[lang]]
+    with suppress(TelegramAPIError):
+        await bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=chat_id))
+
+
+@router.message(Command('start'), F.text.regexp(STUDENT_START))
 async def start_student(message: Message, state: FSMContext, bot, api):
-    # Opened from the website's Meetings page: a student linking their Telegram.
+    # Opened from the website's Meetings page: the one-time link of a student connecting their Telegram.
     await state.clear()
-    await _send_student_code(bot, message.chat.id, _telegram_language(message.from_user), api)
-
-
-@router.message(Command('code'))
-async def code_command(message: Message, state: FSMContext, bot, api):
-    await state.clear()
-    await _send_student_code(bot, message.chat.id, _telegram_language(message.from_user), api)
-
-
-@router.callback_query(F.data.regexp(r'^scode:(uz|ru|en)$'))
-async def new_student_code(callback: CallbackQuery, bot, api):
-    await callback.answer()
-    lang = callback.data.split(':', 1)[1]
-    await _send_student_code(bot, callback.message.chat.id, lang, api, edit_message_id=callback.message.message_id)
+    chat_id = message.chat.id
+    lang = _telegram_language(message.from_user)
+    token = re.match(STUDENT_START, message.text).group(2)
+    try:
+        result = await api.student_link(chat_id, token, lang)
+    except ApiError as exc:
+        if exc.code not in ('invalid_token', 'too_many'):
+            raise
+        if exc.code == 'invalid_token':
+            await message.answer(t(lang, 'student_link_invalid', url=escape(exc.extra.get('site_url', ''))))
+        else:
+            await message.answer(t(lang, 'error'))
+        return
+    await message.answer(t(lang, 'student_linked', name=escape(result['full_name'])))
+    await _set_student_menu(bot, chat_id, lang)
 
 
 @router.message(Command('start'))
-async def start(message: Message, state: FSMContext, api, cache):
+async def start(message: Message, state: FSMContext, bot, api, cache):
     await state.clear()
     chat_id = message.chat.id
-    link = await get_link(api, cache, chat_id, fresh=True)
-    if link:
-        lang = link['language']
-        await message.answer(
-            t(lang, 'already_linked', name=escape(link['full_name'])), reply_markup=keyboards.already_linked(lang),
-        )
+    who = await api.whoami(chat_id, _username(message.from_user))
+    kind = who.get('kind')
+    if kind == 'staff_linked':
+        link = await get_link(api, cache, chat_id, fresh=True)
+        if link:
+            lang = link['language']
+            await message.answer(
+                t(lang, 'already_linked', name=escape(link['full_name'])), reply_markup=keyboards.already_linked(lang),
+            )
+            return
+    elif kind == 'student':
+        lang = _telegram_language(message.from_user)
+        await message.answer(t(lang, 'student_connected', name=escape(who.get('name') or '')))
+        await _set_student_menu(bot, chat_id, lang)
+        return
+    elif kind != 'staff_allowed':
+        await _unknown_reply(bot, chat_id, message.from_user, who)
         return
     await state.set_state(Login.language)
-    # Students do not log in here; the line under the picker sends them to their code.
-    await message.answer(STUDENT_HINT, reply_markup=keyboards.languages())
+    await message.answer(LANGUAGE_PROMPT, reply_markup=keyboards.languages())
 
 
 @router.callback_query(F.data == 'login:again')
-async def login_again(callback: CallbackQuery, state: FSMContext):
+async def login_again(callback: CallbackQuery, state: FSMContext, bot, api):
     await callback.answer()
     await state.clear()
+    chat_id = callback.message.chat.id
+    if not await _staff_gate(bot, api, chat_id, callback.from_user, callback.message.message_id):
+        return
     await state.set_state(Login.language)
-    await callback.message.edit_text('Til / Язык / Language', reply_markup=keyboards.languages())
+    await callback.message.edit_text(LANGUAGE_PROMPT, reply_markup=keyboards.languages())
 
 
 @router.callback_query(Login.language, F.data.startswith('lang:'))
-async def pick_language(callback: CallbackQuery, state: FSMContext):
+async def pick_language(callback: CallbackQuery, state: FSMContext, bot, api):
     await callback.answer()
     lang = callback.data.split(':', 1)[1]
     if lang not in LANGUAGES:
+        return
+    # The allowlist may have changed since /start: re-check before asking for any credentials.
+    if not await _staff_gate(bot, api, callback.message.chat.id, callback.from_user, callback.message.message_id):
+        await state.clear()
         return
     await state.update_data(lang=lang, prompt_id=callback.message.message_id)
     await state.set_state(Login.username)
@@ -200,9 +230,12 @@ async def pick_language(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(Login.username, F.text, ~F.text.regexp(COMMAND_PATTERN))
-async def got_username(message: Message, state: FSMContext, bot):
+async def got_username(message: Message, state: FSMContext, bot, api):
     username = message.text.strip()
     await _delete(message)
+    if not await _staff_gate(bot, api, message.chat.id, message.from_user):
+        await state.clear()
+        return
     data = await state.get_data()
     lang = data.get('lang', DEFAULT)
     await state.update_data(username=username)
@@ -224,7 +257,7 @@ async def got_password(message: Message, state: FSMContext, bot, api):
     await _edit(bot, chat_id, prompt_id, t(lang, 'checking'))
     await bot.send_chat_action(chat_id, 'typing')
     try:
-        card = await api.login(chat_id, username, password)
+        card = await api.login(chat_id, username, password, _username(message.from_user))
     except ApiError as exc:
         await _login_refused(bot, state, chat_id, prompt_id, lang, exc)
         return
@@ -246,6 +279,7 @@ async def _login_refused(bot, state, chat_id, prompt_id, lang, exc):
         await state.clear()
         text = {
             'locked': lambda: t(lang, 'locked', minutes=_minutes(exc)),
+            'telegram_not_allowed': lambda: t(lang, 'staff_not_allowed'),
             'role_not_allowed': lambda: t(lang, 'role_refused'),
             'password_change_required': lambda: t(lang, 'password_change_required'),
             'account_unavailable': lambda: t(lang, 'account_unavailable'),

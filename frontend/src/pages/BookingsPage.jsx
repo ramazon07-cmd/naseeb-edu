@@ -14,6 +14,7 @@ import { isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab
 import { StudentSearchInput } from '../components/StudentSearchInput';
 import './bookings-scheduler.css';
 import { InlineLoadError } from '../components/states';
+import { closeWindow, createLinkWatch, navigateWindow, openBlankWindow } from '../lib/telegramLink';
 
 // Meetings are shown and entered in one chosen zone: Tashkent by default, or
 // China for people there. Neither has daylight saving, so each is a fixed offset.
@@ -639,42 +640,96 @@ export function MeetingNoteForm({ booking, onClose, onSaved, notify }) {
   return <Modal title={t("Meeting notes")} onClose={onClose}><form className="form-grid" onSubmit={submit}>{earlier.length > 0 && <section className="form-wide"><h3>{t("Notes from this day")}</h3><div className="record-list">{earlier.map((note) => <Record key={note.id} title={note.title} meta={joinParts(note.summary, note.next_steps && `${t("Next steps")}: ${note.next_steps}`)} />)}</div></section>}<Field label={t("Title")}><input name="title" required defaultValue={booking.topic} /></Field><Field label={t("Summary")}><textarea name="summary" required placeholder={t("What did you cover?")} /></Field><Field label={t("Next steps")}><textarea name="next_steps" placeholder={t("Optional")} /></Field><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Saving…") : t("Save note")}</button></div></form></Modal>;
 }
 
-// A student connects Telegram once: the bot shows a code, the student types it here, and from then on
-// the meeting answers and reminders arrive in that chat. Without it they still see and manage the
-// meetings they have; only a new request needs it (as the API does).
+// A student connects Telegram once with one tap: the site opens a one-time bot link, the student presses
+// Start there, and from then on the meeting answers and reminders arrive in that chat. Without it they
+// still see and manage the meetings they have; only a new request needs it (as the API does).
 const needsTelegram = (user) => user.role === 'student' && Boolean(user.telegram?.enabled) && !user.telegram?.linked;
 
-function TelegramConnectCard({ user, onLinked, notify }) {
-  const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
+function TelegramConnectDialog({ onLinked, onClose, notify }) {
+  // idle -> starting (asking for the link) -> waiting (Start not pressed yet) -> expired | error
+  const [phase, setPhase] = useState('idle');
+  const [link, setLink] = useState('');
+  const [blocked, setBlocked] = useState(false);
   const [error, setError] = useState('');
-  const digits = code.replace(/\D/g, '');
-  async function submit(event) {
-    event.preventDefault();
-    setBusy(true);
+  const dialogRef = useRef(null);
+  const watchRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const callbacks = useRef({});
+  callbacks.current = { onLinked, notify };
+  useEffect(() => () => watchRef.current?.stop(), []);
+  async function connect() {
+    if (phase === 'starting') return;
+    // Opened now, in the click itself, and pointed at the link once the server has made it.
+    const win = openBlankWindow();
+    watchRef.current?.stop();
+    setPhase('starting');
     setError('');
+    setBlocked(false);
     try {
-      onLinked(await api.linkTelegram(digits));
-      notify(t("Telegram connected. Meeting messages will come there."));
+      const { url, expires_in: expiresIn } = await api.startTelegramLink();
+      setLink(url);
+      setBlocked(!navigateWindow(win, url));
+      const watch = createLinkWatch({
+        check: () => api.telegramStatus(),
+        ttlMs: (Number(expiresIn) || 900) * 1000,
+        onLinked: (telegram) => {
+          callbacks.current.notify(t("Telegram connected"));
+          callbacks.current.onLinked(telegram);
+          onCloseRef.current();
+        },
+        onExpired: () => setPhase('expired'),
+      });
+      watchRef.current = watch;
+      watch.start();
+      setPhase('waiting');
     } catch (err) {
-      setError(err.details?.code === 'invalid_code' ? t("This code is wrong or expired. Get a new one in the bot.") : err.message);
-    } finally {
-      setBusy(false);
+      closeWindow(win);
+      setError(err.message);
+      setPhase('error');
     }
   }
-  const body = <div className="telegram-gate">
-    <p>{t("Connect Telegram to request meetings. Confirmations and reminders (a day before, hours before and at the start) will come there.")}</p>
-    <ol className="telegram-gate-steps">
-      <li><a className="button primary" href={user.telegram.bot_url} target="_blank" rel="noopener noreferrer"><Send size={16} aria-hidden="true" /> {t("Log in with Telegram")}</a><span>{t("Press Start in the bot: it sends you a 6-digit code.")}</span></li>
-      <li><form className="telegram-gate-code" onSubmit={submit}>
-        <label htmlFor="telegram-code">{t("Code from the bot")}</label>
-        <input id="telegram-code" inputMode="numeric" autoComplete="one-time-code" maxLength={9} placeholder="123456" value={code} onChange={(event) => setCode(event.target.value)} aria-invalid={Boolean(error)} aria-describedby={error ? 'telegram-code-error' : undefined} />
-        <button className="button" disabled={busy || digits.length !== 6} aria-busy={busy}>{busy ? t("Connecting…") : t("Connect")}</button>
-      </form></li>
-    </ol>
-    {error && <p id="telegram-code-error" className="telegram-gate-error" role="alert">{error}</p>}
+  useEffect(() => {
+    const previous = document.activeElement;
+    dialogRef.current?.querySelector('button, a[href]')?.focus();
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {event.preventDefault();onCloseRef.current();return;}
+      if (event.key !== 'Tab') return;
+      const items = [...(dialogRef.current?.querySelectorAll('a[href], button:not(:disabled)') || [])];
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {event.preventDefault();last.focus();} else
+      if (!event.shiftKey && document.activeElement === last) {event.preventDefault();first.focus();}
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {document.removeEventListener('keydown', handleKeyDown);previous?.focus?.();};
+  }, []);
+  const waiting = phase === 'waiting';
+  return <div className="telegram-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section ref={dialogRef} className="telegram-dialog" role="dialog" aria-modal="true" aria-labelledby="telegram-dialog-title" tabIndex="-1">
+      <span className="telegram-dialog-icon" aria-hidden="true"><Send size={26} /></span>
+      <h2 id="telegram-dialog-title">{t("Connect your Telegram")}</h2>
+      <p className="telegram-dialog-lead">{t("Meeting confirmations and reminders will come to your Telegram.")}</p>
+      {waiting ? <div className="telegram-dialog-waiting" role="status">
+        <span className="telegram-dialog-spinner" aria-hidden="true" />
+        <b>{t("Press Start in Telegram…")}</b>
+        {blocked && <p className="telegram-dialog-hint">{t("Your browser blocked the new tab. Use the link below.")}</p>}
+        <a className="telegram-dialog-again" href={link} target="_blank" rel="noopener noreferrer">{t("Open Telegram again")}</a>
+      </div> : <>
+        <button type="button" className="button primary telegram-dialog-login" onClick={connect} disabled={phase === 'starting'} aria-busy={phase === 'starting'}><Send size={17} aria-hidden="true" /> {phase === 'starting' ? t("Connecting…") : t("Connect Telegram")}</button>
+        {phase === 'idle' && <p className="telegram-dialog-hint">{t("We open the bot for you. Just press Start there.")}</p>}
+        {phase === 'expired' && <p className="telegram-dialog-error" role="alert">{t("Link expired, try again")}</p>}
+        {phase === 'error' && <p className="telegram-dialog-error" role="alert">{error}</p>}
+      </>}
+      <button type="button" className="telegram-dialog-later" onClick={onClose}>{t("Later")}</button>
+    </section>
   </div>;
-  return <Panel title={t("Connect your Telegram")}>{body}</Panel>;
+}
+
+// Shown on the page while the dialog is closed and Telegram is still not connected.
+function TelegramReminder({ onOpen }) {
+  return <div className="telegram-reminder" role="status"><Send size={16} aria-hidden="true" /><span>{t("Connect Telegram to request meetings")}</span><button type="button" className="button small" onClick={onOpen}>{t("Connect")}</button></div>;
 }
 
 export function BookingsPage({ user, data, reload, notify, updateUser }) {
@@ -682,7 +737,7 @@ export function BookingsPage({ user, data, reload, notify, updateUser }) {
   const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
   const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
   // The link can end on the server (the bot was blocked), so the page asks again instead of trusting
-  // the status loaded with the account; a changed answer brings the card back.
+  // the status loaded with the account; a changed answer brings the dialog back.
   const checkTelegram = user.role === 'student' && Boolean(user.telegram?.enabled);
   useEffect(() => {
     if (!checkTelegram) return undefined;
@@ -691,10 +746,14 @@ export function BookingsPage({ user, data, reload, notify, updateUser }) {
     return () => { live = false; };
   }, [checkTelegram, updateUser]);
   const locked = needsTelegram(user);
-  // A button that starts something new points at the Telegram card while Telegram is not connected.
-  const showCard = () => document.getElementById('telegram-code')?.focus();
-  const guard = (start) => (locked ? showCard : start);
-  const banner = locked ? <TelegramConnectCard user={user} notify={notify} onLinked={(telegram) => updateUser?.({ telegram })} /> : null;
+  const [telegramOpen, setTelegramOpen] = useState(locked);
+  useEffect(() => { if (locked) setTelegramOpen(true); }, [locked]);
+  // A button that starts something new opens the Telegram dialog while Telegram is not connected.
+  const showDialog = () => setTelegramOpen(true);
+  const guard = (start) => (locked ? showDialog : start);
+  const banner = locked ? (telegramOpen
+    ? <TelegramConnectDialog notify={notify} onClose={() => setTelegramOpen(false)} onLinked={(telegram) => updateUser?.({ telegram })} />
+    : <TelegramReminder onOpen={showDialog} />) : null;
   const props = { data, reload, notify, guard, banner, picker };
   // key: a new zone redraws every time on the page.
   if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;

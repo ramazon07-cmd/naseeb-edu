@@ -717,9 +717,15 @@ export const api = {
   // { weekdays: [0-6, Monday = 0], time: 'HH:MM', end_time?: 'HH:MM' (a range cut into slots), duration_minutes, start_date, end_date, timezone } → { created, skipped, slots }
   repeatBookingAvailability: (payload) => request('/bookings/availability/repeat/', { method: 'POST', body: JSON.stringify(payload) }),
   // → { url }: Google's sign-in page; it returns to /meetings?google=connected|failed.
-  // A student's Telegram for meeting messages: the code comes from the bot (t.me/<bot>?start=student).
+  // A student's Telegram for meeting messages. startTelegramLink → { url, expires_in }: a one-time t.me link; the
+  // student presses Start there, and telegramStatus → { enabled, linked } turns linked.
   telegramStatus: () => request('/telegram/student/'),
-  linkTelegram: (code) => request('/telegram/student/', { method: 'POST', body: JSON.stringify({ code }) }),
+  startTelegramLink: () => request('/telegram/student/link/', { method: 'POST', body: JSON.stringify({}) }),
+  // Superadmin: the Telegram @username a counselor or assistant may log in to the bot with.
+  // List → [{ user_id, telegram_username, role, ... }]; PUT { telegram_username }; DELETE clears it.
+  telegramStaffAccess: () => request('/telegram/staff-access/'),
+  setTelegramStaffAccess: (userId, telegramUsername) => request(`/telegram/staff-access/${userId}/`, { method: 'PUT', body: JSON.stringify({ telegram_username: telegramUsername }) }),
+  clearTelegramStaffAccess: (userId) => request(`/telegram/staff-access/${userId}/`, { method: 'DELETE' }),
   // { duration_minutes, hours: { '0': [['09:00', '12:00']] } } with Monday = 0, Tashkent clock.
   weeklyAvailability: () => request('/bookings/availability/weekly/'),
   saveWeeklyAvailability: (payload) => request('/bookings/availability/weekly/', { method: 'PUT', body: JSON.stringify(payload) }),

@@ -403,21 +403,35 @@ STRINGS = {
         'ru': 'Слишком много новых паролей за час. Попробуйте позже.',
         'en': 'Too many passwords reset this hour. Please try again later.',
     },
-    'student_code': {
-        'uz': "\U0001F511 Kodingiz: <code>{code}</code>\n\nUni Naseeb saytidagi <b>Meetings</b> sahifasiga kiriting. Kod {minutes} daqiqa amal qiladi.\n{url}\n\nShundan so'ng uchrashuv xabarlari va eslatmalar shu yerga keladi.",
-        'ru': '\U0001F511 Ваш код: <code>{code}</code>\n\nВведите его на странице <b>Meetings</b> на сайте Naseeb. Код действует {minutes} мин.\n{url}\n\nПосле этого сообщения и напоминания о встречах будут приходить сюда.',
-        'en': '\U0001F511 Your code: <code>{code}</code>\n\nEnter it on the <b>Meetings</b> page of the Naseeb website. It is valid for {minutes} minutes.\n{url}\n\nAfter that, meeting messages and reminders come here.',
+    'student_linked': {
+        'uz': "✅ Ulandi: <b>{name}</b>. Uchrashuv xabarlari va eslatmalar shu yerga keladi.",
+        'ru': '✅ Подключено: <b>{name}</b>. Сообщения и напоминания о встречах будут приходить сюда.',
+        'en': '✅ Connected: <b>{name}</b>. Meeting messages and reminders will come here.',
     },
-    'student_code_linked': {
-        'uz': 'Bu chat hozir ulangan: <b>{name}</b>.',
-        'ru': 'Этот чат сейчас привязан: <b>{name}</b>.',
-        'en': 'This chat is linked now: <b>{name}</b>.',
+    'student_link_invalid': {
+        'uz': "Bu havola eskirgan yoki allaqachon ishlatilgan. Saytda Meetings sahifasini oching va «Telegramni ulash» tugmasini qayta bosing.\n{url}",
+        'ru': 'Эта ссылка устарела или уже использована. Откройте Meetings на сайте и снова нажмите «Подключить Telegram».\n{url}',
+        'en': 'This link has expired or was already used. Open Meetings on the website and press Connect Telegram again.\n{url}',
     },
-    'btn_new_code': {'uz': '\U0001F504 Yangi kod', 'ru': '\U0001F504 Новый код', 'en': '\U0001F504 New code'},
-    'student_code_too_many': {
-        'uz': "Juda ko'p kod so'raldi. Birozdan so'ng qayta urinib ko'ring.",
-        'ru': 'Слишком много кодов. Попробуйте позже.',
-        'en': 'Too many codes requested. Please try again later.',
+    'student_connected': {
+        'uz': "Siz <b>{name}</b> sifatida ulangansiz. Uchrashuv xabarlari shu yerga keladi.",
+        'ru': 'Вы подключены как <b>{name}</b>. Сообщения о встречах приходят сюда.',
+        'en': "You're connected as <b>{name}</b>. Meeting messages come here.",
+    },
+    'unknown_user': {
+        'uz': "Bu bot Naseeb o'quvchilari va maslahatchilari uchun.\n\nO'quvchilar: saytda Meetings sahifasini oching va «Telegramni ulash» tugmasini bosing: {url}\nMaslahatchilar: kirish uchun Telegram username'ingizni administratorga yuboring.",
+        'ru': 'Этот бот для учеников и консультантов Naseeb.\n\nУченики: откройте Meetings на сайте и нажмите «Подключить Telegram»: {url}\nКонсультанты: отправьте свой Telegram username администратору, чтобы получить доступ.',
+        'en': "This bot is for Naseeb students and counselors.\n\nStudents: open Meetings on the website and press 'Connect Telegram': {url}\nCounselors: send your Telegram username to the administrator to get access.",
+    },
+    'unknown_no_username': {
+        'uz': "Maslahatchilar avval Telegram sozlamalarida username o'rnatishi kerak.",
+        'ru': 'Консультантам сначала нужно задать username в настройках Telegram.',
+        'en': 'Counselors must first set a Telegram username in Telegram settings.',
+    },
+    'staff_not_allowed': {
+        'uz': "Bu Telegram akkaunti ushbu hisobga kira olmaydi. Administratorga murojaat qiling. Hech narsa saqlanmadi.",
+        'ru': 'Этому Telegram-аккаунту нельзя войти в этот аккаунт. Обратитесь к администратору. Ничего не сохранено.',
+        'en': 'This Telegram account is not allowed to log in to that account. Contact the administrator. Nothing was saved.',
     },
     'error': {
         'uz': "Xatolik yuz berdi. Qayta urinib ko'ring.",
@@ -436,18 +450,22 @@ MENU = {
     'uz': [
         ('add', "Yangi o'quvchi qo'shish"), ('reset', "O'quvchiga yangi parol"), ('students', "O'quvchilar"),
         ('now', 'Hozirgi holat'), ('settings', 'Sozlamalar'), ('help', 'Yordam'), ('logout', 'Chiqish'),
-        ('code', "O'quvchi: saytga ulash kodi"),
     ],
     'ru': [
         ('add', 'Добавить ученика'), ('reset', 'Новый пароль ученику'), ('students', 'Ученики'),
         ('now', 'Сводка сейчас'), ('settings', 'Настройки'), ('help', 'Помощь'), ('logout', 'Выйти'),
-        ('code', 'Ученик: код для сайта'),
     ],
     'en': [
         ('add', 'Add a student'), ('reset', 'New password for a student'), ('students', 'Students'),
         ('now', 'Update now'), ('settings', 'Settings'), ('help', 'Help'), ('logout', 'Log out'),
-        ('code', 'Student: code for the website'),
     ],
+}
+
+# Students link their chat with a one-time link; they only need /start.
+MENU_STUDENT = {
+    'uz': [('start', 'Boshlash')],
+    'ru': [('start', 'Начать')],
+    'en': [('start', 'Start')],
 }
 
 

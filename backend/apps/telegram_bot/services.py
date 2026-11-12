@@ -19,7 +19,7 @@ from apps.users.throttles import hashed
 
 from . import conf
 from .digest import tashkent_now
-from .models import DEFAULT_PREFS, PendingLogin, TelegramLink
+from .models import DEFAULT_PREFS, PendingLogin, StaffTelegramAccess, StudentTelegram, TelegramLink
 
 User = get_user_model()
 
@@ -109,8 +109,16 @@ def _resolve_login(login_value):
     return login_value, login_value.lower()
 
 
-def login(chat_id, login_value, password):
+def _telegram_name(value):
+    return str(value or '').strip().lstrip('@').strip().lower()
+
+
+def login(chat_id, login_value, password, telegram_username=None):
     login_value = login_value.strip()
+    telegram_name = _telegram_name(telegram_username)
+    # Only Telegram users a superadmin put on the list may try to log in; no password attempt is counted for others.
+    if not telegram_name or not StaffTelegramAccess.objects.filter(telegram_username=telegram_name).exists():
+        raise Refused('telegram_not_allowed', 403)
     username, account = _resolve_login(login_value)
     keys = _attempt_keys(chat_id)
     web_keys = _web_lockout_keys(chat_id, account)
@@ -130,6 +138,9 @@ def login(chat_id, login_value, password):
     error = _account_error(user)
     if error:
         raise Refused(error)
+    # The right password is not enough: the account must be the one the admin assigned to this Telegram username.
+    if not StaffTelegramAccess.objects.filter(user=user, telegram_username=telegram_name).exists():
+        raise Refused('telegram_not_allowed', 403)
     remember_login_device((login_value, user.get_username(), user.email), _device(chat_id))
     token = secrets.token_urlsafe(32)
     PendingLogin.objects.filter(expires_at__lt=timezone.now()).delete()
@@ -269,3 +280,22 @@ def mark_sent(chat_id, slot_date):
     return TelegramLink.objects.filter(chat_id=chat_id).filter(
         Q(last_sent_date__isnull=True) | Q(last_sent_date__lt=slot_date),
     ).update(last_sent_date=slot_date, claimed_at=None)
+
+
+def whoami(chat_id, telegram_username=None):
+    """What the bot should treat this chat as: a linked or allowed counselor, a linked student, or unknown."""
+    try:
+        link = resolve_link(chat_id)
+    except Refused:
+        link = None
+    if link is not None:
+        return {'kind': 'staff_linked', 'name': link.user.get_full_name().strip() or link.user.username}
+    telegram_name = _telegram_name(telegram_username)
+    if telegram_name:
+        access = StaffTelegramAccess.objects.select_related('user').filter(telegram_username=telegram_name).first()
+        if access is not None and access.user.is_active and access.user.role in ALLOWED_ROLES:
+            return {'kind': 'staff_allowed'}
+    student = StudentTelegram.objects.select_related('user').filter(chat_id=chat_id, is_active=True).first()
+    if student is not None:
+        return {'kind': 'student', 'name': student.user.get_full_name().strip() or student.user.username}
+    return {'kind': 'unknown'}

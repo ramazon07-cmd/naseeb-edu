@@ -44,12 +44,12 @@ class PendingLogin(models.Model):
 
 
 class StudentTelegram(models.Model):
-    """A student's Telegram chat, linked with a code from the bot; meeting messages go here."""
+    """A student's Telegram chat, linked through a one-time bot link; meeting messages go here."""
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='student_telegram')
     chat_id = models.BigIntegerField(unique=True)
     language = models.CharField(max_length=2, choices=TelegramLink.Language.choices, default=TelegramLink.Language.UZ)
-    # Off when the student blocked the bot; the next code links again.
+    # Off when the student blocked the bot; the next link works again.
     is_active = models.BooleanField(default=True)
     linked_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -58,14 +58,35 @@ class StudentTelegram(models.Model):
         return f'student telegram user={self.user_id}'
 
 
-class StudentLinkCode(models.Model):
-    """A short code the bot showed in a chat; typed on the website, it links that chat to the student."""
+class StudentLinkToken(models.Model):
+    """A one-time token inside the bot link the website gives a signed-in student.
 
-    chat_id = models.BigIntegerField(unique=True)
-    code_hash = models.CharField(max_length=64, db_index=True)
-    language = models.CharField(max_length=2, choices=TelegramLink.Language.choices, default=TelegramLink.Language.UZ)
+    Only an HMAC of the token is stored. A student has at most one: the newest replaces the older one.
+    """
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
+    token_hash = models.CharField(max_length=64, unique=True)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class StaffTelegramAccess(models.Model):
+    """The Telegram @username a superadmin allowed for a counselor or assistant.
+
+    Only that Telegram user gets the counselor login in the bot, and only for this account.
+    """
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='telegram_access')
+    # Lowercase, no '@'.
+    telegram_username = models.CharField(max_length=32, unique=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'@{self.telegram_username} -> user={self.user_id}'
 
 
 class TelegramOutbox(models.Model):

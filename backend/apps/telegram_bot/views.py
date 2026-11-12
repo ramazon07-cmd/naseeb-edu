@@ -67,7 +67,12 @@ class BotView(APIView):
 class LoginView(BotView):
     def post(self, request):
         data = self.get_data(request)
-        payload = services.login(_chat_id(data), _text(data, 'username', 254), _text(data, 'password', 256))
+        telegram_username = data.get('telegram_username')
+        if telegram_username is not None and (not isinstance(telegram_username, str) or len(telegram_username) > 100):
+            raise services.Refused('invalid_request', 400)
+        payload = services.login(
+            _chat_id(data), _text(data, 'username', 254), _text(data, 'password', 256), telegram_username,
+        )
         return Response(payload)
 
 
@@ -185,15 +190,24 @@ class LogoutView(BotView):
         return Response({'ok': True})
 
 
-class StudentCodeView(BotView):
-    """A code for the website, shown to whoever opened the bot from Meetings."""
+class StudentLinkView(BotView):
+    """The student pressed Start on the link from the website: tie this chat to them."""
 
     def post(self, request):
         data = self.get_data(request)
         language = data.get('language')
         if language is not None and not isinstance(language, str):
             raise services.Refused('invalid_request', 400)
-        return Response(student_link.issue_code(_chat_id(data), language))
+        return Response(student_link.consume_token(_chat_id(data), _text(data, 'token', 100), language))
+
+
+class WhoAmIView(BotView):
+    def post(self, request):
+        data = self.get_data(request)
+        username = data.get('telegram_username')
+        if username is not None and (not isinstance(username, str) or len(username) > 100):
+            raise services.Refused('invalid_request', 400)
+        return Response({**services.whoami(_chat_id(data), username), 'site_url': student_link.meetings_url()})
 
 
 class StudentOutboxView(BotView):

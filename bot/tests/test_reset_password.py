@@ -137,6 +137,7 @@ async def test_menu_lists_the_commands_in_each_language():
     await set_menu(FakeBot())
     assert [code for code, _ in calls] == [None, 'ru', 'en']
     assert all(names[:2] == ['add', 'reset'] for _, names in calls)
+    assert all('code' not in names for _, names in calls)
 
 
 async def test_a_reset_tap_keeps_a_waiting_add_card(h):
