@@ -23,7 +23,8 @@
 | `digest/` | the update for the chat's enabled parts |
 | `settings/` | `GET ?chat_id=` and `PUT` (`language`, `notify_time` as `HH:MM` Tashkent, `prefs`, `enabled`) |
 | `add-student/` | `chat_id, full_name, email, phone` -> `201` with `full_name, username, phone, temporary_password, expires_at, login_url`; or `400 invalid_name / invalid_email / invalid_phone`, `409 student_exists` (with `full_name, username`) / `student_exists_elsewhere`, `403 seat_limit`, `429 too_many` |
-| `scheduled-jobs/` (alias `meeting-reminders/`) | runs the backend jobs that are due (`apps/telegram_bot/jobs.py`): `send_meeting_reminders` every hour; `flush_expired_tokens` and `purge_screen_time` once a day from 03:00 Tashkent; `generate_notifications` once a day from 07:00. The bot calls it once an hour at minute 5, so production needs no cron service. A daily job counts as done only after an `ok` run, so a failure is tried again the next hour. Each job keeps its advisory lock and is recorded in JobRun for the health page |
+| `scheduled-jobs/` (alias `meeting-reminders/`) | runs the backend jobs that are due (`apps/telegram_bot/jobs.py`): `send_meeting_reminders` every hour (it only queues reminder emails, at most 200 meetings per run, soonest first, so it finishes in well under a second whatever the mail server does); `flush_expired_tokens` and `purge_screen_time` once a day from 03:00 Tashkent; `generate_notifications` once a day from 07:00. The bot calls it once an hour at minute 5, so production needs no cron service. A daily job counts as done only after an `ok` run, so a failure is tried again the next hour. Each job keeps its advisory lock and is recorded in JobRun for the health page |
+| `meeting-emails/` | sends queued meeting emails (requests, confirmations, cancellations, moves, reminders) for up to `MEETING_EMAIL_SEND_SECONDS` (25 s) and at most 50 emails -> `sent, failed, dropped, waiting`. The bot calls it every minute in the background (60 s timeout; a run still going is not started again). See [Meeting emails](#meeting-emails) |
 | `due/` | chats whose update is due now; each is leased for 2 minutes |
 | `mark-sent/` | `chat_id, slot_date`: once per chat and day |
 | `logout/`, `unlink/` | delete the link and any pending login (`unlink/` is used when the user blocks the bot) |
@@ -115,3 +116,25 @@ That chat then receives:
 The backend writes these to `TelegramOutbox`; the bot fetches them every minute (`/api/bot/student-outbox/`),
 sends them and acknowledges (`/api/bot/student-outbox/ack/`). A step whose moment passed more than 15 minutes ago
 is skipped, so a late booking or a restart sends only the latest step. A chat that blocks the bot is unlinked.
+
+## Meeting emails
+
+Meeting emails never wait on the mail server inside a web request or inside the hourly job.
+
+- A booking request, approval, rejection, cancellation or reschedule writes a `MeetingEmail` row for the other
+  side in the same transaction as the change (`meeting_mail.queue_meeting_email`). A change that rolls back
+  leaves no email behind.
+- `send_meeting_reminders` (hourly, from `scheduled-jobs/`) claims up to 200 due meetings, soonest first, and
+  queues one reminder per person in one transaction: it writes `Booking.reminded_for` and the rows together, so
+  a run killed half way leaves nothing and its retry queues each reminder once. Each reminder row also has a
+  unique key (meeting, start time, person). Meetings past the cap wait for the next hour (reminders look 24 h ahead).
+- The bot calls `POST /api/bot/meeting-emails/` every minute. `meeting_mail.deliver_queued_emails` reads up to
+  50 due rows and sends them one by one over one SMTP connection until 25 s have passed. Each row is claimed
+  with a committed update (`sending_at`) before its message goes to the mail server, so two bot instances never
+  send the same row, and a worker killed mid-send never sends it twice: a row still "sending" after 10 minutes is
+  dropped, not resent.
+- A send that raises is tried again after 2, 4, 8 and 16 minutes, then dropped after 5 attempts. A reminder for
+  a meeting that was cancelled, moved or has started is dropped. Unsent event emails older than a day are
+  dropped; sent and dropped rows are deleted after 7 days.
+- Without the bot (local development, or a deployment that has no bot), run `python manage.py send_meeting_emails`
+  by hand or from a cron. `EMAIL_TIMEOUT` (default 5 s) bounds each SMTP step.

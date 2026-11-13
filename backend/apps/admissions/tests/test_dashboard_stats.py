@@ -245,10 +245,77 @@ class DashboardSummaryTests(AuditBaseMixin, APITestCase):
 
     def test_sign_in_does_not_drop_the_cache(self):
         self.summary(self.counselor)
-        version = cache.get(progress_cache.VERSION_KEY)
+        keys = [progress_cache.EPOCH_KEY, progress_cache.ALL_KEY, progress_cache.school_key(self.school_a.pk)]
+        versions = cache.get_many(keys)
         self.counselor.last_login = timezone.now()
         self.counselor.save(update_fields=['last_login'])
-        self.assertEqual(cache.get(progress_cache.VERSION_KEY), version)
+        self.assertEqual(cache.get_many(keys), versions)
+
+    def versions(self):
+        return cache.get_many([
+            progress_cache.EPOCH_KEY, progress_cache.ALL_KEY,
+            progress_cache.school_key(self.school_a.pk), progress_cache.school_key(self.school_b.pk),
+        ])
+
+    def test_a_write_in_one_school_keeps_the_other_schools_cache(self):
+        student_a = self.new_student()
+        student_b = self.new_student(school=self.school_b, counselor=self.counselor_b)
+        self.summary(self.counselor)
+        before_b = self.summary(self.counselor_b)
+        self.summary(self.admin)
+        before = self.versions()
+        task = Task.objects.create(student=student_a, title='A', due_date=self.today + timedelta(days=1))
+        after = self.versions()
+        school_a, school_b = (progress_cache.school_key(school.pk) for school in (self.school_a, self.school_b))
+        # Only school A (and the all-schools view admins use) moved.
+        self.assertNotEqual(after[school_a], before[school_a])
+        self.assertNotEqual(after[progress_cache.ALL_KEY], before[progress_cache.ALL_KEY])
+        self.assertEqual(after[school_b], before[school_b])
+        self.assertEqual(after[progress_cache.EPOCH_KEY], before[progress_cache.EPOCH_KEY])
+        with mock.patch.object(progress_cache, 'summarize_progress', side_effect=AssertionError('recomputed')):
+            self.assertEqual(self.summary(self.counselor_b), before_b)
+        # School A's counselor and the admin see the new task at once.
+        self.assertEqual(self.summary(self.counselor), expected_summary(self.scope(self.counselor)))
+        self.assertEqual(self.summary(self.admin), expected_summary(self.scope(self.admin)))
+        # A write in school B leaves school A cached.
+        cached_a = self.summary(self.counselor)
+        Task.objects.create(student=student_b, title='B', due_date=self.today + timedelta(days=1))
+        with mock.patch.object(progress_cache, 'summarize_progress', side_effect=AssertionError('recomputed')):
+            self.assertEqual(self.summary(self.counselor), cached_a)
+        task.delete()
+        self.assertEqual(self.summary(self.counselor), expected_summary(self.scope(self.counselor)))
+
+    def test_a_student_moving_school_drops_both_schools(self):
+        student = self.new_student()
+        self.summary(self.counselor)
+        self.summary(self.counselor_b)
+        before = self.versions()
+        student.school = self.school_b
+        student.assigned_counselor = self.counselor_b
+        student.save()
+        after = self.versions()
+        for school in (self.school_a, self.school_b):
+            key = progress_cache.school_key(school.pk)
+            self.assertNotEqual(after[key], before[key])
+        self.assertEqual(self.summary(self.counselor), expected_summary(self.scope(self.counselor)))
+        self.assertEqual(self.summary(self.counselor_b), expected_summary(self.scope(self.counselor_b)))
+
+    def test_one_transaction_bumps_each_school_once_after_commit(self):
+        student = self.new_student()
+        # The test runs inside one transaction: start from an empty set of touched schools.
+        connection.progress_cache_pending = set()
+        for index in range(3):
+            Task.objects.create(student=student, title=f'T{index}', due_date=self.today)
+        hooks = [entry for entry in connection.run_on_commit if entry[1] is progress_cache._flush_pending]
+        self.assertEqual(len(hooks), 1)
+        self.assertEqual(connection.progress_cache_pending, {self.school_a.pk})
+        before = self.versions()
+        progress_cache._flush_pending()
+        after = self.versions()
+        school_a, school_b = (progress_cache.school_key(school.pk) for school in (self.school_a, self.school_b))
+        self.assertNotEqual(after[school_a], before[school_a])
+        self.assertEqual(after.get(school_b), before.get(school_b))
+        self.assertEqual(connection.progress_cache_pending, set())
 
     def test_scope_keys_separate_tenants(self):
         keys = {user.username: student_scope_key(user) for user in (

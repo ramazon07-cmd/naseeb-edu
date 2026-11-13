@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.users.google import STATE_SALT
 
-from ..models import Booking, MeetingAvailability
+from ..models import Booking, MeetingAvailability, MeetingEmail
 from .base import RoleIsolationBase
 
 GOOGLE = dict(GOOGLE_OAUTH_CLIENT_ID='client-id', GOOGLE_OAUTH_CLIENT_SECRET='secret', FRONTEND_URL='https://app.example.com')
@@ -79,6 +79,12 @@ class GoogleConnectTests(RoleIsolationBase):
         self.assertEqual(self.client.post('/api/users/google/start/').status_code, 503)
 
 
+def send_queued():
+    from ..meeting_mail import deliver_queued_emails
+
+    return deliver_queued_emails(budget=60)
+
+
 @override_settings(**MAIL)
 class MeetingEmailTests(RoleIsolationBase):
     def setUp(self):
@@ -89,30 +95,40 @@ class MeetingEmailTests(RoleIsolationBase):
         self.counselor.save(update_fields=['google_email'])
         self.start = (timezone.now() + timedelta(hours=5)).replace(second=0, microsecond=0)
 
+    def approved(self, **extra):
+        values = dict(student=self.student_a, participant=self.counselor, topic='Essay', starts_at=self.start,
+                      duration_minutes=45, status=Booking.Status.APPROVED)
+        return Booking.objects.create(**{**values, **extra})
+
     def test_request_and_confirmation_are_emailed_to_the_other_side(self):
         slot = MeetingAvailability.objects.create(participant=self.counselor, starts_at=self.start, duration_minutes=45)
         self.client.force_authenticate(self.student_a_user)
-        with self.captureOnCommitCallbacks(execute=True):
-            booked = self.client.post('/api/bookings/', {
-                'participant': self.counselor.id, 'topic': 'Essay review', 'starts_at': self.start.isoformat(),
-                'duration_minutes': 45, 'availability_slot': slot.id,
-            }, format='json', HTTP_ACCEPT_LANGUAGE='uz')
+        booked = self.client.post('/api/bookings/', {
+            'participant': self.counselor.id, 'topic': 'Essay review', 'starts_at': self.start.isoformat(),
+            'duration_minutes': 45, 'availability_slot': slot.id,
+        }, format='json', HTTP_ACCEPT_LANGUAGE='uz')
         self.assertEqual(booked.status_code, 201, booked.data)
+        # The request only queued it; the mail server is never called inside a request.
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(MeetingEmail.objects.filter(sent_at__isnull=True).count(), 1)
+        self.assertEqual(send_queued()['sent'], 1)
         self.assertEqual([message.to for message in mail.outbox], [['counselor@gmail.com']])
         self.assertIn('Essay review', mail.outbox[0].body)
         self.assertIn('https://app.example.com/meetings', mail.outbox[0].body)
         self.client.force_authenticate(self.counselor)
-        with self.captureOnCommitCallbacks(execute=True):
-            self.client.post(f"/api/bookings/{booked.data['id']}/approve/")
+        self.client.post(f"/api/bookings/{booked.data['id']}/approve/")
+        send_queued()
         self.assertEqual(mail.outbox[-1].to, ['student@gmail.com'])
+        # Sent rows are never sent again.
+        self.assertEqual(send_queued()['sent'], 0)
+        self.assertEqual(len(mail.outbox), 2)
 
     def test_whoever_cancels_is_not_emailed_and_mail_is_in_uzbek(self):
-        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
-                                         starts_at=self.start, duration_minutes=45, status=Booking.Status.APPROVED)
+        booking = self.approved()
         self.client.force_authenticate(self.student_a_user)
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(f'/api/bookings/{booking.id}/cancel/', HTTP_ACCEPT_LANGUAGE='ru')
+        response = self.client.post(f'/api/bookings/{booking.id}/cancel/', HTTP_ACCEPT_LANGUAGE='ru')
         self.assertEqual(response.status_code, 200, response.data)
+        send_queued()
         self.assertEqual([message.to for message in mail.outbox], [['counselor@gmail.com']])
         self.assertEqual(mail.outbox[0].subject, 'Uchrashuv bekor qilindi')
 
@@ -123,28 +139,26 @@ class MeetingEmailTests(RoleIsolationBase):
         self.assertEqual(meeting_address(self.student_a_user), '')
 
     def test_reminder_goes_out_once_per_start_time(self):
-        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
-                                         starts_at=self.start, duration_minutes=45, status=Booking.Status.APPROVED)
-        Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Later',
-                               starts_at=self.start + timedelta(days=3), duration_minutes=45, status=Booking.Status.APPROVED)
-        Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Pending',
-                               starts_at=self.start + timedelta(hours=2), duration_minutes=45)
+        booking = self.approved()
+        self.approved(topic='Later', starts_at=self.start + timedelta(days=3))
+        self.approved(topic='Pending', starts_at=self.start + timedelta(hours=2), status=Booking.Status.PENDING)
         call_command('send_meeting_reminders')
         call_command('send_meeting_reminders')
+        send_queued()
         self.assertEqual(sorted(message.to[0] for message in mail.outbox), ['counselor@gmail.com', 'student@gmail.com'])
         booking.starts_at += timedelta(hours=1)
         booking.save(update_fields=['starts_at'])
         call_command('send_meeting_reminders')
+        send_queued()
         self.assertEqual(len(mail.outbox), 4)
 
     def test_a_mail_error_never_turns_a_saved_change_into_an_error(self):
-        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
-                                         starts_at=self.start, duration_minutes=45)
+        booking = self.approved(status=Booking.Status.PENDING)
         self.client.force_authenticate(self.counselor)
         # BadHeaderError is a ValueError, not an SMTP error; any backend may raise its own.
-        with mock.patch('apps.admissions.meeting_mail.send_mail', side_effect=ValueError('bad header')):
-            with self.captureOnCommitCallbacks(execute=True):
-                response = self.client.post(f'/api/bookings/{booking.id}/approve/')
+        with mock.patch('django.core.mail.EmailMessage.send', side_effect=ValueError('bad header')):
+            response = self.client.post(f'/api/bookings/{booking.id}/approve/')
+            self.assertEqual(send_queued()['failed'], 1)
         self.assertEqual(response.status_code, 200)
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Status.APPROVED)
@@ -153,31 +167,36 @@ class MeetingEmailTests(RoleIsolationBase):
         from ..meeting_mail import send_meeting_email
         self.student_a_user.first_name, self.student_a_user.last_name = 'Ali\nBek', 'Valiyev'
         self.student_a_user.save(update_fields=['first_name', 'last_name'])
-        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
-                                         starts_at=self.start, duration_minutes=45)
+        booking = self.approved(status=Booking.Status.PENDING)
         self.assertTrue(send_meeting_email(booking, self.counselor, 'requested', 'en'))
         self.assertNotIn('\n', mail.outbox[-1].subject)
         self.assertIn('Ali Bek Valiyev', mail.outbox[-1].subject)
 
-    def test_a_failed_reminder_is_tried_again_on_the_next_run(self):
-        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
-                                         starts_at=self.start, duration_minutes=45, status=Booking.Status.APPROVED)
-        with mock.patch('apps.admissions.meeting_mail.send_mail', side_effect=OSError('mail server down')):
-            call_command('send_meeting_reminders')
-        booking.refresh_from_db()
-        self.assertIsNone(booking.reminded_for)
+    def test_a_failed_reminder_is_tried_again_later(self):
+        booking = self.approved()
         call_command('send_meeting_reminders')
         booking.refresh_from_db()
         self.assertEqual(booking.reminded_for, booking.starts_at)
+        with mock.patch('django.core.mail.EmailMessage.send', side_effect=OSError('mail server down')):
+            self.assertEqual(send_queued()['failed'], 2)
+        self.assertEqual(mail.outbox, [])
+        # Not before its back-off ends...
+        self.assertEqual(send_queued()['sent'], 0)
+        MeetingEmail.objects.update(send_after=timezone.now())
+        self.assertEqual(send_queued()['sent'], 2)
         self.assertEqual(sorted(message.to[0] for message in mail.outbox), ['counselor@gmail.com', 'student@gmail.com'])
+        # ...and the hourly run does not queue the meeting again.
+        call_command('send_meeting_reminders')
+        self.assertEqual(MeetingEmail.objects.count(), 2)
 
     def test_a_meeting_nobody_can_be_emailed_about_is_not_retried_forever(self):
         for user in (self.student_a_user, self.counselor):
             user.google_email, user.email = '', f'{user.username}@students.naseeb.invalid'
             user.save(update_fields=['google_email', 'email'])
-        booking = Booking.objects.create(student=self.student_a, participant=self.counselor, topic='Essay',
-                                         starts_at=self.start, duration_minutes=45, status=Booking.Status.APPROVED)
+        booking = self.approved()
         call_command('send_meeting_reminders')
         booking.refresh_from_db()
         self.assertEqual(booking.reminded_for, booking.starts_at)
+        self.assertFalse(MeetingEmail.objects.exists())
+        send_queued()
         self.assertEqual(mail.outbox, [])

@@ -220,7 +220,8 @@ class TaskViewSet(StudentRecordListMixin, StaffControlledWorkMixin, SendBackMixi
                 Task(student_id=student_id, assigned_by=request.user, is_self_assigned=False, **values) for student_id in ids
             ])
             # bulk_create skips post_save, which drops the cached progress summary on a single create.
-            transaction.on_commit(invalidate_progress_summary)
+            schools = set(StudentProfile.objects.filter(pk__in=ids).values_list('school_id', flat=True))
+            transaction.on_commit(lambda: invalidate_progress_summary(*schools))
         return Response({'created': len(tasks), 'ids': [task.pk for task in tasks]}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])

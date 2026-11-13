@@ -221,13 +221,21 @@ def queue_reminders(now=None):
         )
         .select_related('student__user__student_telegram', 'participant')
     )
-    queued = 0
+    due = []
     for booking in bookings:
         step = _step(booking, now)
-        if step is None:
+        if step is not None:
+            due.append((booking, step, f'meeting:{booking.pk}:{int(booking.starts_at.timestamp())}:{step}'))
+    if not due:
+        return 0
+    # One read for the keys already queued (or sent), one insert for the rest: no query per meeting.
+    # ignore_conflicts covers another caller queueing the same key in between.
+    existing = set(TelegramOutbox.objects.filter(key__in=[key for _, _, key in due]).values_list('key', flat=True))
+    rows = []
+    for booking, step, key in due:
+        if key in existing:
             continue
         link = booking.student.user.student_telegram
-        key = f'meeting:{booking.pk}:{int(booking.starts_at.timestamp())}:{step}'
         name = 'reminder_started' if step == 0 else 'reminder_day' if step == REMINDER_STEPS[0] else 'reminder_before'
         before = f'{step // 60}' if step >= 60 else f'{step}'
         values_key = 'hours' if step >= 60 else 'minutes_left'
@@ -236,11 +244,9 @@ def queue_reminders(now=None):
             time=_when(booking.starts_at), minutes=booking.duration_minutes, url=f'{settings.FRONTEND_URL}/meetings',
             left=text(link.language, values_key, n=before),
         )
-        _, created = TelegramOutbox.objects.get_or_create(
-            key=key, defaults={'chat_id': link.chat_id, 'booking': booking, 'text': body},
-        )
-        queued += created
-    return queued
+        rows.append(TelegramOutbox(key=key, chat_id=link.chat_id, booking=booking, text=body))
+    TelegramOutbox.objects.bulk_create(rows, ignore_conflicts=True)
+    return len(rows)
 
 
 def _escape(value):

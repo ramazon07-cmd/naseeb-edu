@@ -3,6 +3,8 @@ import datetime as dt
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.admissions.meeting_mail import deliver_queued_emails
+
 from . import services
 from .digest import build_digest, grouped_students
 from .jobs import run_due_jobs
@@ -167,6 +169,18 @@ class ScheduledJobsView(BotView):
 
     def post(self, request):
         return Response({'ok': True, 'ran': run_due_jobs()})
+
+
+class MeetingEmailsView(BotView):
+    """The bot calls this every minute: send queued meeting emails for up to MEETING_EMAIL_SEND_SECONDS.
+
+    Web requests and the reminder job only queue emails (meeting_mail.py); this is the one place
+    they are handed to the mail server, outside every user's request. Each row is claimed and
+    committed before it is sent, so this must not run inside a transaction.
+    """
+
+    def post(self, request):
+        return Response(deliver_queued_emails())
 
 
 class DueView(BotView):

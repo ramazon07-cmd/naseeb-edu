@@ -322,9 +322,9 @@ class StoredObjectCleanupTests(ObjectStorageFixture):
             self.student_user.delete()
         # Nothing is removed until the transaction commits.
         self.assert_exist(names, True)
-        from .progress_cache import _bump
+        from .progress_cache import _flush_pending
 
-        self.assertEqual(len([callback for callback in callbacks if callback is not _bump]), 5)
+        self.assertEqual(len([callback for callback in callbacks if callback is not _flush_pending]), 5)
         for callback in callbacks:
             callback()
         self.assert_exist(names, False)

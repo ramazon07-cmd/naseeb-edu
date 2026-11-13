@@ -174,7 +174,7 @@ def set_assistant_students(*, counselor, assistant, student_ids):
     removed = own.filter(assigned_assistant=assistant).exclude(pk__in=ids).update(assigned_assistant=None, updated_at=now)
     added = own.filter(pk__in=ids).exclude(assigned_assistant=assistant).update(assigned_assistant=assistant, updated_at=now)
     if removed or added:
-        invalidate_progress_summary()
+        invalidate_progress_summary(counselor.school_id)
         audit_product_action(
             actor=counselor, action='assistant.students_set', target=assistant,
             metadata={'students': sorted(ids), 'added': added, 'removed': removed}, school=counselor.school,
@@ -192,7 +192,7 @@ def deactivate_assistant(*, counselor, assistant):
         assistant.password_version += 1
         assistant.save(update_fields=['is_active', 'password_version'])
         audit_product_action(actor=counselor, action='account.deactivated', target=assistant, school=counselor.school)
-    invalidate_progress_summary()
+    invalidate_progress_summary(counselor.school_id)
     return assistant
 
 

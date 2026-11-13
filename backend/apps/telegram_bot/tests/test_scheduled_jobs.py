@@ -12,7 +12,7 @@ from .base import BotTestCase
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', FRONTEND_URL='https://app.example.com')
 class MeetingRemindersEndpointTests(BotTestCase):
-    def test_the_bot_runs_the_reminder_job(self):
+    def test_the_bot_runs_the_reminder_job_and_sends_the_queue(self):
         booking = Booking.objects.create(
             student=self.s1, participant=self.c1, topic='Essay', duration_minutes=45,
             starts_at=timezone.now() + timedelta(hours=3), status=Booking.Status.APPROVED,
@@ -22,16 +22,23 @@ class MeetingRemindersEndpointTests(BotTestCase):
         self.assertEqual(response.json()['ran']['send_meeting_reminders'], 'ok')
         booking.refresh_from_db()
         self.assertEqual(booking.reminded_for, booking.starts_at)
-        self.assertEqual(sorted(message.to[0] for message in mail.outbox), ['counselor1@example.com', 'stu1@example.com'])
+        # The hourly job only queues: nothing waits on the mail server inside it.
+        self.assertEqual(mail.outbox, [])
         # Recorded like a cron run, so the health page sees the job is alive.
         self.assertEqual(JobRun.objects.filter(name='send_meeting_reminders', result='ok').count(), 1)
+        sent = self.post('meeting-emails', {})
+        self.assertEqual(sent.status_code, 200)
+        self.assertEqual(sent.json(), {'sent': 2, 'failed': 0, 'dropped': 0, 'waiting': 0})
+        self.assertEqual(sorted(message.to[0] for message in mail.outbox), ['counselor1@example.com', 'stu1@example.com'])
         # A second call (the other bot instance during a deploy) sends nothing new.
         self.post('scheduled-jobs', {})
+        self.post('meeting-emails', {})
         self.assertEqual(len(mail.outbox), 2)
 
     def test_needs_the_service_key(self):
         self.assertEqual(self.post('scheduled-jobs', {}, key=None).status_code, 401)
         self.assertEqual(self.post('scheduled-jobs', {}, key='wrong').status_code, 401)
+        self.assertEqual(self.post('meeting-emails', {}, key=None).status_code, 401)
         self.assertFalse(JobRun.objects.exists())
 
 

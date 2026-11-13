@@ -323,7 +323,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         elif choice != 'unassign':
             raise CodedError(COUNSELOR_HAS_STUDENTS_MESSAGE, 'counselor_has_students', 409, students=count)
         students.update(assigned_counselor=target, updated_at=timezone.now())
-        invalidate_progress_summary()
+        invalidate_progress_summary(account.school_id)
         return {'students_handed_over': count, 'handover': choice, 'reassigned_to': target.pk if target else None}
 
     @action(detail=True, methods=['get'], url_path='avatar')
