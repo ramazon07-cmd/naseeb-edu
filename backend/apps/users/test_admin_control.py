@@ -191,6 +191,25 @@ class AdminControlTests(APITestCase):
         denied = self.client.post(f'/api/users/accounts/{counselor.id}/temporary-credential/', {}, format='json')
         self.assertIn(denied.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND})
 
+    def test_support_admins_reset_an_assistant_login_and_counselors_cannot(self):
+        counselor = self.create_counselor(1)
+        assistant = User.objects.create_user(
+            'helper', 'helper@example.com', 'StrongPass123!', role=User.Role.ASSISTANT,
+            school=self.school, supervising_counselor=counselor,
+        )
+        self.client.force_authenticate(self.admin)
+        reset = self.client.post(f'/api/users/accounts/{assistant.id}/temporary-credential/', {}, format='json')
+        self.assertEqual(reset.status_code, status.HTTP_200_OK, reset.data)
+        self.assertTrue(reset.data['temporary_password'])
+        assistant.refresh_from_db()
+        self.assertTrue(assistant.must_change_password)
+        listed = self.client.get('/api/users/accounts/', {'role': 'assistant'}).data['results']
+        self.assertEqual([(row['id'], row['supervising_counselor_name']) for row in listed], [(assistant.id, counselor.username)])
+        # Their own counselor is not a product admin: resetting stays with support staff.
+        self.client.force_authenticate(counselor)
+        denied = self.client.post(f'/api/users/accounts/{assistant.id}/temporary-credential/', {}, format='json')
+        self.assertIn(denied.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND})
+
     def test_deactivating_a_counselor_hands_their_students_over_first(self):
         from apps.users.models import ProductAuditEvent
         leaving, staying = self.create_counselor(1), self.create_counselor(2)
