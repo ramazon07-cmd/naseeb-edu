@@ -7,7 +7,8 @@ import re
 import secrets
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q, Value
+from django.db.models.functions import Replace
 from django.utils import timezone
 
 from apps.users.models import User
@@ -233,6 +234,48 @@ def _free_username(base):
     return base if suffix == 1 else f'{base}{suffix}'
 
 
+def _phone_digits(field):
+    """The phone column with the usual separators removed, so '+998 99 167 46 30' compares as digits."""
+    expression = F(field)
+    for separator in (' ', '-', '(', ')', '+', '.'):
+        expression = Replace(expression, Value(separator), Value(''))
+    return expression
+
+
+def _name_words(text):
+    return frozenset(word.lower() for word in str(text or '').split())
+
+
+def find_school_student(school, email='', phone='', full_name=''):
+    """An active student of `school` who is the same person, or ``None``.
+
+    The same email is the same person. The same phone (last 9 digits, separators
+    ignored) only counts with the same name, in any word order: siblings often give
+    a parent's number. Used before adding a student (website quick-create and the
+    counselor bot) so nobody is created twice.
+    """
+    match = Q()
+    if email:
+        match |= Q(user__email__iexact=email)
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) >= 9:
+        match |= Q(phone_digits__endswith=digits[-9:])
+    if not match:
+        return None
+    candidates = StudentProfile.objects.select_related('user').annotate(
+        phone_digits=_phone_digits('user__phone'),
+    ).filter(
+        school_id=school.pk, user__is_active=True, deactivated_at__isnull=True,
+    ).filter(match).order_by('id')[:20]
+    name = _name_words(full_name)
+    for profile in candidates:
+        if email and profile.user.email.lower() == email.lower():
+            return profile
+        if name and _name_words(f'{profile.user.first_name} {profile.user.last_name}') == name:
+            return profile
+    return None
+
+
 @transaction.atomic
 def create_student_account(*, school, full_name, password, created_by, email='', phone='', request=None):
     """The one way to create a student: account, profile and credential together.
@@ -287,9 +330,14 @@ def create_student_account(*, school, full_name, password, created_by, email='',
     user, _, _, _ = issue_temporary_credential(
         user=user, issued_by=created_by, raw_password=password, request=request,
     )
+    counselor = created_by.supervising_counselor if created_by.role == User.Role.ASSISTANT else created_by
     profile = ensure_student_profile(
         user,
-        assigned_counselor=created_by if created_by.role == User.Role.COUNSELOR else None,
+        assigned_counselor=counselor if counselor.role == User.Role.COUNSELOR else None,
     )
+    if created_by.role == User.Role.ASSISTANT:
+        # The student stays the counselor's and is given to the assistant who added them.
+        StudentProfile.objects.filter(pk=profile.pk).update(assigned_assistant=created_by)
+        profile.assigned_assistant = created_by
     ActivityLog.objects.create(actor=created_by, student=profile, action=f'Student profile created: {full_name}')
     return profile

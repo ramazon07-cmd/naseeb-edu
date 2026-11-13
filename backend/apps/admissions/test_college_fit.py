@@ -112,18 +112,20 @@ class OtherTestsTests(FitFixture, APITestCase):
         self.assertTrue(research['ready'])
         fit = self.fit(self.mit)
         self.assertEqual(codes(fit, 'gaps')[:2], ['test_score_missing', 'english_missing'])
-        # Unknown, not zero and not a bonus: only the GPA counts in the academic part.
-        self.assertEqual(fit['score_breakdown']['academic'], round(3.8 / 4 * 15))
+        # Fit is country, major and aid only: missing tests neither lower nor raise it.
+        self.assertEqual(fit['score_breakdown'], {'preferences': 12 + 4, 'financial': 8})
 
-    def test_missing_tests_take_the_missing_weight_path(self):
+    def test_test_scores_change_the_band_not_the_fit(self):
         self.ready_profile(sat_score=None, ielts_score=None)
+        without = self.fit(self.state)
+        self.ready_profile(sat_score=1100)
+        low = self.fit(self.state)
+        self.assertEqual(without['match_score'], low['match_score'])
+        # Test-optional: grades place it without a score; a score under the range pulls it down.
+        self.assertEqual((without['admission_band'], low['admission_band']), ('safety', 'target'))
         ctx = fit_context(self.student)
         university = with_cost(University.objects.prefetch_related(college_search.eligible_programs())).get(pk=self.mit.pk)
-        fit = score_university(university, ctx)
-        breakdown = fit['score_breakdown']
-        earned = sum(breakdown.values())
-        missing = college_search.TEST_POINTS + college_search.ENGLISH_POINTS
-        self.assertEqual(fit['match_score'], min(100, round(earned * 100 / (college_search.TOTAL_POINTS - missing) * (1 - missing / (2 * college_search.TOTAL_POINTS)))))
+        self.assertEqual(score_university(university, ctx)['match_score'], self.fit(self.mit)['match_score'])
 
     def test_act_is_scored_against_the_act_range(self):
         self.ready_profile(sat_score=None)
@@ -134,7 +136,7 @@ class OtherTestsTests(FitFixture, APITestCase):
         self.certificates({'type': 'act', 'score': 28}, {'type': 'act', 'score': 30})
         fit = self.fit(self.mit)
         self.assertIn('act_below_minimum', codes(fit, 'gaps'))
-        self.assertEqual(fit['admission_band'], 'reach')
+        self.assertEqual(fit['admission_band'], 'far_reach')
 
     def test_the_better_of_sat_and_act_counts(self):
         self.ready_profile(sat_score=1300)
@@ -142,22 +144,23 @@ class OtherTestsTests(FitFixture, APITestCase):
         fit = self.fit(self.mit)
         self.assertIn('act_above_range', codes(fit, 'reasons'))
         self.assertNotIn('sat_below_minimum', codes(fit, 'gaps'))
-        self.assertEqual(fit['score_breakdown']['academic'], round(3.8 / 4 * 15) + 25 + 8)
+        # ACT 36 against 34-36 (spread at least 3) beats SAT 1300; GPA 3.8/4 sits at MIT's grade bar.
+        self.assertEqual(fit['chance']['academic_position'], round(0.6 * (36 - 34) / 3, 2))
 
     def test_sat_not_required_and_test_optional_universities(self):
         self.ready_profile(sat_score=None, sat_status='not_required')
         optional = University.objects.create(name='Optional College', country='USA', test_optional=True, acceptance_rate='50.00')
         fit = self.fit(optional)
         self.assertIn('tests_optional', codes(fit, 'reasons'))
-        self.assertEqual(fit['score_breakdown']['academic'], round(3.8 / 4 * 15) + 20 + 8)
+        self.assertEqual(fit['admission_band'], 'safety')
         # A university that publishes ranges and is not test-optional expects a score.
         self.assertIn('tests_required', codes(self.fit(self.mit), 'gaps'))
-        # Not taken yet at a test-optional university: unknown, not a bonus.
+        # Not taken yet at a test-optional university: grades alone place it the same way.
         self.student.sat_status = 'not_taken'
         self.student.save()
         fit = self.fit(optional)
         self.assertIn('tests_optional', codes(fit, 'reasons'))
-        self.assertEqual(fit['score_breakdown']['academic'], round(3.8 / 4 * 15) + 8)
+        self.assertEqual(fit['admission_band'], 'safety')
 
     def test_english_tests_are_converted_to_ielts_and_the_best_counts(self):
         self.ready_profile(ielts_score='6.0')
@@ -219,17 +222,19 @@ class UnknownBandTests(FitFixture, APITestCase):
     def test_unticking_a_band_keeps_the_rows_without_one(self):
         self.ready_profile()
         everything = {self.mit.name, self.state.name, self.oxford.name, self.tashkent.name, self.unranked.name}
-        self.assertEqual(set(self.names('bands=reach,target,unknown')), {self.mit.name, self.oxford.name, self.tashkent.name})
-        self.assertEqual(set(self.names('bands=reach,target,safety')), {self.mit.name, self.state.name, self.unranked.name})
+        self.assertEqual(set(self.names('bands=far_reach,target,unknown')), {self.mit.name, self.oxford.name, self.tashkent.name})
+        self.assertEqual(set(self.names('bands=far_reach,reach,target,safety')), {self.mit.name, self.state.name, self.unranked.name})
         self.assertEqual(set(self.names('bands=unknown')), {self.oxford.name, self.tashkent.name})
-        self.assertEqual(set(self.names('bands=reach,target,safety,unknown')), everything)
-        self.assertEqual(set(self.names('bands=reach&bands=target&bands=unknown')), {self.mit.name, self.oxford.name, self.tashkent.name})
+        self.assertEqual(set(self.names('bands=far_reach,reach,target,safety,not_eligible,unknown')), everything)
+        self.assertEqual(set(self.names('bands=far_reach&bands=target&bands=unknown')), {self.mit.name, self.oxford.name, self.tashkent.name})
         self.assertEqual(self.client.get(f'{URL}?bands=dream').status_code, 400)
 
     def test_without_a_ready_profile_every_row_is_unknown(self):
         self.assertEqual(self.search('bands=unknown')['count'], 5)
-        self.assertEqual(self.search('bands=reach,target,safety')['count'], 0)
-        self.assertEqual(self.search('facets=true')['facets']['bands'], {'reach': 0, 'target': 0, 'safety': 0, 'unknown': 5})
+        self.assertEqual(self.search('bands=far_reach,reach,target,safety,not_eligible')['count'], 0)
+        self.assertEqual(self.search('facets=true')['facets']['bands'], {
+            'far_reach': 0, 'reach': 0, 'target': 0, 'safety': 0, 'not_eligible': 0, 'unknown': 5,
+        })
 
     def test_a_test_required_university_is_unknown_without_a_score(self):
         required = University.objects.create(
@@ -245,28 +250,28 @@ class UnknownBandTests(FitFixture, APITestCase):
             self.ready_profile(sat_score=None, sat_status=status)
             self.assertIsNone(self.fit(required)['admission_band'], status)
             self.assertIsNone(self.fit(middling)['admission_band'], status)
-            # Selective enough to be a reach whatever the score.
-            self.assertEqual(self.fit(self.mit)['admission_band'], 'reach', status)
+            # Selective enough to be a far reach whatever the score.
+            self.assertEqual(self.fit(self.mit)['admission_band'], 'far_reach', status)
             # Test-optional: the acceptance rate still places it.
             self.assertEqual(self.fit(optional)['admission_band'], 'safety', status)
-        self.ready_profile(sat_score=1350)
+        self.ready_profile(sat_score=1400)
         self.assertEqual(self.fit(required)['admission_band'], 'safety')
         self.assertEqual(self.fit(middling)['admission_band'], 'target')
 
-    def test_no_acceptance_rate_and_nothing_compared_is_unknown(self):
+    def test_no_acceptance_rate_is_unknown_whatever_the_scores(self):
         ranged = University.objects.create(name='Ranged College', country='USA', sat_min=1100, sat_max=1300)
         self.ready_profile(sat_score=None)
         self.assertIsNone(self.fit(ranged)['admission_band'])
         self.certificates({'type': 'act', 'score': 30})
-        # An ACT score cannot be compared with an SAT-only range.
         self.assertIsNone(self.fit(ranged)['admission_band'])
+        # A score in range says where the student stands, but without an admit rate there is no band.
         self.ready_profile(sat_score=1350)
-        self.assertEqual(self.fit(ranged)['admission_band'], 'target')
+        self.assertIsNone(self.fit(ranged)['admission_band'])
 
     def test_facets_count_unknown_as_the_rest_of_the_catalogue(self):
         self.ready_profile()
         bands = self.search('facets=true')['facets']['bands']
-        self.assertEqual(bands, {'reach': 1, 'target': 0, 'safety': 2, 'unknown': 2})
+        self.assertEqual(bands, {'far_reach': 1, 'reach': 0, 'target': 0, 'safety': 2, 'not_eligible': 0, 'unknown': 2})
         self.assertEqual(sum(bands.values()), University.objects.count())
 
 
@@ -355,13 +360,17 @@ FIT_CODES = {
     'english_strong', 'english_suitable', 'english_check', 'english_missing',
     'country_match', 'major_match', 'major_check',
     'aid_available', 'aid_not_offered', 'aid_unknown',
+    # Entry gates and band notes (admission_chance.py).
+    'credential_foundation', 'credential_one_year', 'credential_studienkolleg', 'credential_not_accepted',
+    'english_below_minimum', 'academics_below_bar', 'need_aware', 'entrance_exam',
 }
 
 
 def stub_university(**values):
     fields = dict(
         country='United States', market='us', sat_min=None, sat_max=None, act_min=None, act_max=None,
-        test_optional=False, popular_majors='', cost=None, acceptance_rate=None,
+        test_optional=False, popular_majors='', cost=None, acceptance_rate=None, intl_acceptance_rate=None,
+        intl_need_policy='', credential_route='', ielts_min=None, entrance_exam='',
         offers_international_aid=False, offers_merit_aid=False, offers_need_based_aid=False,
         **dict.fromkeys(college_search.AID_DETAILS),
     )
@@ -397,6 +406,12 @@ class ReasonCodeTests(APITestCase):
             (dict(cost=25000), dict()),
             (dict(cost=90000), dict()),
             (dict(financial_aid_url='https://example.edu/aid', popular_majors='Computer Science'), dict(sat=1400, english=english(7))),
+            *((dict(credential_route=route), dict()) for route in ('foundation', 'one_year_uni', 'studienkolleg', 'not_accepted')),
+            (dict(ielts_min=7.0), dict(english=english(6.5))),
+            # SAT a full range below the 25th percentile and weak grades: capped at reach.
+            (dict(acceptance_rate=60, sat_min=1200, sat_max=1300), dict(sat=1100, gpa=2.0)),
+            (dict(acceptance_rate=60, intl_need_policy='need_aware'), dict()),
+            (dict(acceptance_rate=60, entrance_exam='Mathematics test'), dict()),
         ]
         seen = set()
         for university, ctx in scenarios:

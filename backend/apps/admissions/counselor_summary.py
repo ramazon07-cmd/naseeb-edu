@@ -25,17 +25,23 @@ from django.utils import timezone
 
 from .models import (
     Achievement,
+    Activity,
     ActivityLog,
     Application,
     Booking,
     ChannelMessage,
     Document,
+    Essay,
     MeetingNote,
     MessageChannel,
     RecommendationLetter,
     RoadmapMission,
+    ScreenTimeDaily,
+    StudentProfile,
     Task,
 )
+from apps.users.models import TemporaryCredential
+
 from .progress import (
     APPLICATION_DONE, DOCUMENT_AWAITING_REVIEW, DOCUMENT_MISSING, OPEN_MISSION_STATUSES, OPEN_TASK_STATUSES, ProgressStats,
     late_tasks, load_progress_stats, percent,
@@ -328,7 +334,32 @@ def need_you_list(students, today):
     return {'total': needing.count(), 'students': listed}
 
 
-def progress_bucket(completion, expected, late):
+def not_started_condition():
+    """Rows of StudentProfile that have not started: see ``progress_bucket``."""
+    return (
+        Q(user__last_login__isnull=True)
+        & Q(~Exists(ScreenTimeDaily.objects.filter(user=OuterRef('user'))))
+        & Q(~Exists(TemporaryCredential.objects.filter(user=OuterRef('user'), status=TemporaryCredential.Status.USED)))
+        & Q(~Exists(Task.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(RoadmapMission.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(Essay.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(Activity.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(Document.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(Achievement.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(Application.objects.filter(student=OuterRef('pk'))))
+        & Q(~Exists(RecommendationLetter.objects.filter(student=OuterRef('pk'))))
+    )
+
+
+def not_started_ids(student_ids):
+    """The ids among ``student_ids`` that have not started, in one query."""
+    student_ids = list(student_ids)
+    if not student_ids:
+        return set()
+    return set(StudentProfile.objects.filter(pk__in=student_ids).filter(not_started_condition()).values_list('pk', flat=True))
+
+
+def progress_bucket(completion, expected, late, not_started=False):
     """Where a student stands on their roadmap.
 
     * ``completion``: completed missions / all missions (the roadmap %).
@@ -336,9 +367,14 @@ def progress_bucket(completion, expected, late):
       what a student keeping to schedule would have finished by today.
     * ``late``: late tasks + late missions (open work past its due date, the
       same rule as at-risk).
+    * ``not_started``: the student has never been seen in the app (no screen
+      time, no recorded sign-in), never signed in with a temporary password,
+      and has no work of any kind (tasks, roadmap missions, essays,
+      activities, documents, honors, applications, recommendation letters).
 
     Needs attention: 3+ late items, or completion 25+ points under expected.
     Behind: any late item, or completion under expected.
+    Not started: nothing late and ``not_started``; a brand-new student is not "on track".
     On track: nothing late and completion at or above expected.
     """
     gap = expected - completion
@@ -346,6 +382,8 @@ def progress_bucket(completion, expected, late):
         return 'needs_attention'
     if late > 0 or gap > 0:
         return 'behind'
+    if not_started:
+        return 'not_started'
     return 'on_track'
 
 
@@ -366,13 +404,14 @@ def student_progress(students, today):
         .values('student_id').annotate(total=Count('pk')).values_list('student_id', 'total')
     )
     progress = []
-    buckets = {'on_track': 0, 'behind': 0, 'needs_attention': 0}
+    buckets = {'on_track': 0, 'behind': 0, 'needs_attention': 0, 'not_started': 0}
+    unstarted = not_started_ids(names)
     for student_id, name in names.items():
         item = stats.get(student_id) or ProgressStats()
         late = item.tasks_overdue_count + item.missions_overdue_count
         completion = item.roadmap_progress_percent
         expected = percent(due_by_today.get(student_id, 0), item.missions_total)
-        bucket = progress_bucket(completion, expected, late)
+        bucket = progress_bucket(completion, expected, late, student_id in unstarted)
         buckets[bucket] += 1
         progress.append({
             'id': student_id, 'name': name, 'completion': completion, 'expected': expected,

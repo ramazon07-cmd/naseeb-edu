@@ -85,8 +85,8 @@ class CounselorOrOwnerPermission(permissions.BasePermission):
         'researches', 'projects', 'internships', 'activities',
         'honors', 'recommendations',
     }
-    # Adding students is how the counselor fills their own list; an assistant only works on the ones given to them.
-    assistant_denied_student_actions = {'create', 'quick_create'}
+    # An assistant adds students through quick-create only, which ties them to their counselor and to them.
+    assistant_denied_student_actions = {'create'}
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:

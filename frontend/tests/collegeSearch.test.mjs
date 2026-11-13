@@ -26,10 +26,10 @@ test('QS filters apply only in the QS view, and unticking every band is sent as 
 });
 
 test('every band, unknown included, is checked by default and then sends no band filter', () => {
-  assert.deepEqual(COLLEGE_BANDS, ['reach', 'target', 'safety', 'unknown']);
+  assert.deepEqual(COLLEGE_BANDS, ['far_reach', 'reach', 'target', 'safety', 'not_eligible', 'unknown']);
   assert.deepEqual(DEFAULT_COLLEGE_FILTERS.bands, COLLEGE_BANDS);
   assert.equal(query({}).bands, undefined);
-  assert.equal(query({ filters: { ...DEFAULT_COLLEGE_FILTERS, bands: ['unknown', 'safety', 'target', 'reach'] } }).bands, undefined);
+  assert.equal(query({ filters: { ...DEFAULT_COLLEGE_FILTERS, bands: ['unknown', 'not_eligible', 'safety', 'target', 'reach', 'far_reach'] } }).bands, undefined);
 });
 
 test('unticking a band sends the checked set, keeping unknown while it stays checked', () => {

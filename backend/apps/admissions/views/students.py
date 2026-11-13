@@ -52,7 +52,8 @@ from ..serializers import (
     XPTransactionSerializer,
 )
 from ..exam_scores import EXAM_KEYS
-from ..tenancy import create_student_account
+from ..scoping import visible_students
+from ..tenancy import create_student_account, find_school_student
 from apps.users import entitlements
 from apps.users.audit import audit_staff_read
 from apps.users.throttles import ScopedRateThrottle
@@ -61,7 +62,7 @@ from ..params import int_param
 from ..section_review import SECTION_KEYS, changed_sections, mark_waiting, set_review
 from ..listing import STUDENT_SEARCH_FIELDS, ListQueryMixin
 from ..progress import DOCUMENT_AWAITING_REVIEW, attach_progress_stats
-from ..counselor_summary import _attention_sources, _count_of, _sort_name
+from ..counselor_summary import _attention_sources, _count_of, _sort_name, not_started_condition, not_started_ids
 from ..countries import country_key, country_spellings
 from ..onboarding import COUNTRIES
 from .common import ScopedQuerysetMixin
@@ -72,7 +73,7 @@ from core.storage import delete_file_on_commit
 ASSIGNMENT_CANDIDATE_LIMIT = 200
 # The Students page's "Quiet for 14+ days" (lib/studentReasons.js QUIET_DAYS).
 QUIET_DAYS = 14
-STUDENT_STATUSES = ('need_you', 'late', 'missing_documents', 'quiet', 'on_track')
+STUDENT_STATUSES = ('need_you', 'late', 'missing_documents', 'quiet', 'on_track', 'not_started')
 MAX_COUNTRY_LENGTH = 80
 # A generated first password the student types from the counselor's message.
 STUDENT_PASSWORD_LENGTH = 10
@@ -107,7 +108,8 @@ def student_status_conditions(today, now):
 
     The same rules as lib/studentReasons.js: "need you" is late work or a
     missing document (Home's rule), "quiet" no sign-in for 14+ days, and
-    "on track" none of those and nothing waiting for review.
+    "on track" none of those and nothing waiting for review, and "not started"
+    a student who has never been seen, signed in or given work (counselor_summary.progress_bucket).
     """
     exists = {key: Exists(rows.filter(student=OuterRef('pk'))) for key, rows in _attention_sources(today)}
     late = exists['late_task'] | exists['late_mission']
@@ -119,12 +121,14 @@ def student_status_conditions(today, now):
         | Exists(Achievement.objects.filter(student=OuterRef('pk'), verified=False, counselor_comment=''))
     )
     quiet = Q(user__last_login__lte=now - timedelta(days=QUIET_DAYS))
+    not_started = not_started_condition()
     return {
         'need_you': need_you,
         'late': late,
         'missing_documents': Q(exists['missing_document']),
         'quiet': quiet,
-        'on_track': ~(need_you | to_review | quiet),
+        'on_track': ~(need_you | to_review | quiet | not_started),
+        'not_started': not_started,
     }
 
 
@@ -174,6 +178,9 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
         page = super().paginate_queryset(queryset)
         if page is not None:
             attach_progress_stats(page)
+            unstarted = not_started_ids(profile.pk for profile in page)
+            for profile in page:
+                profile._not_started = profile.pk in unstarted
         return page
 
     def apply_filters(self, queryset, params):
@@ -766,7 +773,9 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
                 'target_countries': [f'Use {target_countries_max_length} characters or fewer.'],
             }, status=400)
 
-        if request.user.is_organization or request.user.role == User.Role.COUNSELOR:
+        if request.user.is_assistant and not request.user.supervising_counselor_id:
+            return Response({'detail': 'Your assistant account is not connected to a counselor.'}, status=400)
+        if request.user.is_organization or request.user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT}:
             # Staff add students to their own school, and only while it is active.
             school = request.user.school
             if not school or not school.is_active:
@@ -781,6 +790,17 @@ class StudentProfileViewSet(ListQueryMixin, ScopedQuerysetMixin, viewsets.ModelV
             school = School.objects.filter(id=school_id, is_active=True).first()
             if not school:
                 return Response({'school': ['Selected school does not exist or is inactive.']}, status=400)
+
+        # Adding one of your own students again (same email or phone) is refused with their
+        # login, instead of quietly making a placeholder twin. Only students the caller can
+        # already see count, so the answer never reveals anyone else's address.
+        existing = find_school_student(school, email, phone, full_name)
+        if existing is not None and visible_students(request.user).filter(pk=existing.pk).exists():
+            name = existing.user.get_full_name().strip() or existing.user.username
+            return Response({
+                'detail': f'This student already exists: {name} (login {existing.user.username}).',
+                'code': 'student_exists', 'student': existing.pk, 'username': existing.user.username,
+            }, status=409)
 
         try:
             student = create_student_account(

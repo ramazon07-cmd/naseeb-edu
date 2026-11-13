@@ -716,6 +716,19 @@ export const api = {
   editBookingAvailability: (id, payload) => request('/bookings/availability/', { method: 'PATCH', body: JSON.stringify({ ...payload, id }) }),
   // { weekdays: [0-6, Monday = 0], time: 'HH:MM', end_time?: 'HH:MM' (a range cut into slots), duration_minutes, start_date, end_date, timezone } → { created, skipped, slots }
   repeatBookingAvailability: (payload) => request('/bookings/availability/repeat/', { method: 'POST', body: JSON.stringify(payload) }),
+  // → { url }: Google's sign-in page; it returns to /meetings?google=connected|failed.
+  // A student's Telegram for meeting messages. startTelegramLink → { url, expires_in }: a one-time t.me link; the
+  // student presses Start there, and telegramStatus → { enabled, linked } turns linked.
+  telegramStatus: () => request('/telegram/student/'),
+  startTelegramLink: () => request('/telegram/student/link/', { method: 'POST', body: JSON.stringify({}) }),
+  // Superadmin: the Telegram @username a counselor or assistant may log in to the bot with.
+  // List → [{ user_id, telegram_username, role, ... }]; PUT { telegram_username }; DELETE clears it.
+  telegramStaffAccess: () => request('/telegram/staff-access/'),
+  setTelegramStaffAccess: (userId, telegramUsername) => request(`/telegram/staff-access/${userId}/`, { method: 'PUT', body: JSON.stringify({ telegram_username: telegramUsername }) }),
+  clearTelegramStaffAccess: (userId) => request(`/telegram/staff-access/${userId}/`, { method: 'DELETE' }),
+  // { duration_minutes, hours: { '0': [['09:00', '12:00']] } } with Monday = 0, Tashkent clock.
+  weeklyAvailability: () => request('/bookings/availability/weekly/'),
+  saveWeeklyAvailability: (payload) => request('/bookings/availability/weekly/', { method: 'PUT', body: JSON.stringify(payload) }),
   approveBooking: (id) => request(`/bookings/${id}/approve/`, { method: 'POST' }),
   rejectBooking: (id) => request(`/bookings/${id}/reject/`, { method: 'POST' }),
   completeBooking: (id) => request(`/bookings/${id}/complete/`, { method: 'POST' }),

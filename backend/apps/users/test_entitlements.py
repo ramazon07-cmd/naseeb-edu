@@ -97,9 +97,11 @@ class SeatLimitTests(APITestCase):
         self.counselor = make_user('seat-counselor', User.Role.COUNSELOR, self.school)
 
     def quick_create(self, name):
+        # A different person each time: the same email or phone is refused as a duplicate.
+        self._quick_creates = getattr(self, '_quick_creates', 0) + 1
         return self.client.post('/api/students/quick-create/', {
-            'email': 'student@example.com',
-            'phone': '+998901234567',
+            'email': f'student{self._quick_creates}@example.com',
+            'phone': f'+99890123{self._quick_creates:04d}',
             'name': name, 'password': 'StrongPass123!',
         }, format='json')
 

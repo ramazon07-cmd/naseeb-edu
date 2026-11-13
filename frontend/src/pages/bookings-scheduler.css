@@ -607,6 +607,270 @@
   outline-offset: 1px;
 }
 
+/* "Connect your Telegram": a centered dialog over the blurred Meetings page, and a slim reminder once closed. */
+.telegram-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--overlay);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow-y: auto;
+}
+
+.telegram-dialog {
+  width: min(440px, 100%);
+  margin: auto;
+  padding: 32px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-3xl);
+  box-shadow: var(--shadow-modal);
+  outline: 0;
+}
+
+.telegram-dialog-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent-contrast);
+  background: var(--accent-gradient);
+  box-shadow: 0 8px 22px var(--accent-shadow);
+}
+
+.telegram-dialog-icon svg {
+  margin-right: 2px;
+}
+
+.telegram-dialog h2 {
+  margin: 16px 0 6px;
+  font-size: var(--text-xl);
+}
+
+.telegram-dialog p {
+  margin: 0;
+}
+
+.telegram-dialog-lead {
+  color: var(--muted);
+  max-width: 34ch;
+}
+
+.telegram-dialog-login {
+  width: 100%;
+  margin-top: 22px;
+  justify-content: center;
+}
+
+.telegram-dialog-hint {
+  margin-top: 8px !important;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.telegram-dialog-waiting {
+  width: 100%;
+  margin-top: 22px;
+  padding: 18px 12px;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.telegram-dialog-spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+}
+
+.telegram-dialog-again {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.telegram-dialog-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.telegram-dialog-later {
+  margin-top: 10px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.telegram-dialog-later:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.telegram-dialog-later:focus-visible {
+  outline: 3px solid var(--focus-ring);
+}
+
+.telegram-reminder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  font-size: var(--text-md);
+}
+
+.telegram-reminder svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.telegram-reminder span {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .telegram-dialog-backdrop {
+    animation: telegram-dialog-fade 0.2s ease-out;
+  }
+
+  .telegram-dialog {
+    animation: telegram-dialog-rise 0.24s ease-out;
+  }
+
+  .telegram-dialog-spinner {
+    animation: telegram-dialog-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes telegram-dialog-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes telegram-dialog-fade {
+  from { opacity: 0; }
+}
+
+@keyframes telegram-dialog-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+@media (max-width: 560px) {
+  .telegram-dialog-backdrop {
+    padding: 12px;
+  }
+
+  .telegram-dialog {
+    padding: 26px 18px 18px;
+  }
+}
+
+/* Weekly hours: one row per weekday — the day switch, its from–to hours, "add hours". */
+.modal > .availability-tabs {
+  padding: 14px 22px 0;
+}
+
+.availability-weekly {
+  padding: 18px 22px 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.weekly-days {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  list-style: none;
+}
+
+.weekly-days li {
+  min-height: 60px;
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.weekly-day {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.weekly-ranges {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.weekly-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekly-off {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.weekly-add {
+  margin-top: 4px;
+}
+
+.weekly-add:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+@media (max-width: 560px) {
+  .weekly-days li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .weekly-ranges {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .weekly-off {
+    min-height: 0;
+  }
+}
+
 /* Save sits under every option it saves, not beside the time fields. */
 .availability-add-actions {
   display: flex;
@@ -701,4 +965,39 @@
   .booking-cal-confirm {
     animation: none;
   }
+}
+
+/* Time zone choice: Tashkent (default) or China. */
+.meeting-zone {
+  min-height: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.8125rem;
+}
+
+.meeting-zone select {
+  padding: 6px 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.meeting-zone select:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.weekly-equivalent {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
 }

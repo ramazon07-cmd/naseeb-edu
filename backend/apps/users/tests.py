@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
@@ -97,7 +98,7 @@ class TemporaryCredentialLifecycleTests(APITestCase):
             HTTP_ACCEPT_LANGUAGE=language,
         )
 
-    def test_temporary_password_is_hashed_used_once_and_forces_change(self):
+    def test_temporary_password_is_hashed_marked_used_and_forces_change(self):
         self.assertNotIn(self.temporary_password, self.student.password)
         self.assertFalse(hasattr(self.credential, 'password'))
         login = self.login()
@@ -107,9 +108,16 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.assertEqual(self.credential.status, TemporaryCredential.Status.USED)
         self.assertIsNotNone(self.credential.used_at)
 
+        # Closing the tab before setting a password must not lock the student out.
         second_login = self.login()
-        self.assertEqual(second_login.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(second_login.data['code'], 'credential_used')
+        self.assertEqual(second_login.status_code, status.HTTP_200_OK)
+        self.assertTrue(second_login.data['must_change_password'])
+
+        # Once it expires, the used password stops working.
+        TemporaryCredential.objects.filter(pk=self.credential.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        expired = self.login()
+        self.assertEqual(expired.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(expired.data['code'], 'credential_expired')
 
         access = login.data['access']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
@@ -195,6 +203,20 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.grade, '')
 
+    def test_a_password_like_the_username_is_refused_with_400_not_500(self):
+        # Only the user-aware validators catch this, so the serializer must run them.
+        access = self.login().data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
+        refused = self.client.post(
+            '/api/users/accounts/change-password/',
+            {'new_password': 'credential-student1', 'confirm_password': 'credential-student1', 'grade': '10'},
+            format='json',
+        )
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('new_password', refused.data)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.must_change_password)
+
     def test_the_class_cannot_be_rewritten_by_a_later_password_change(self):
         changed = self.change_password(grade='11')
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {changed.data['access']}")
@@ -219,6 +241,24 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.assertEqual(changed.status_code, status.HTTP_200_OK, changed.data)
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.grade, '')
+
+    def test_sign_in_and_session_refresh_record_last_login(self):
+        from apps.users.auth_views import LAST_LOGIN_WINDOW
+
+        self.assertIsNone(self.student.last_login)
+        login = self.login()
+        self.student.refresh_from_db()
+        first = self.student.last_login
+        self.assertIsNotNone(first)
+        # A refresh inside the window writes nothing; after it, the time moves on.
+        post_refresh(self.client, refresh_cookie_value(login))
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.last_login, first)
+        type(self.student).objects.filter(pk=self.student.pk).update(last_login=first - LAST_LOGIN_WINDOW * 2)
+        refreshed = post_refresh(self.client)
+        self.assertEqual(refreshed.status_code, status.HTTP_200_OK)
+        self.student.refresh_from_db()
+        self.assertGreater(self.student.last_login, first - LAST_LOGIN_WINDOW)
 
     def test_refresh_token_rotation_blacklists_the_used_token(self):
         login = self.login()
@@ -247,6 +287,15 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         self.assertIn('истёк', response.data['detail'])
         self.credential.refresh_from_db()
         self.assertEqual(self.credential.status, TemporaryCredential.Status.EXPIRED)
+
+    def test_expired_temporary_password_still_says_expired_on_the_next_attempt(self):
+        self.credential.expires_at = timezone.now()
+        self.credential.save(update_fields=['expires_at'])
+        self.login()
+        response = self.login(language='en')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data['code'], 'credential_expired')
+        self.assertIn('expired', response.data['detail'])
 
     def test_scoped_reissue_revokes_previous_credential_and_sessions(self):
         first_login = self.login()

@@ -117,6 +117,46 @@ export const FIT_REASON_TEMPLATES = {
     uz: 'Moliyaviy yordam tafsilotlari katalogda ko‘rsatilmagan',
     ru: 'Сведений о финансовой помощи в каталоге нет',
   },
+  credential_foundation: {
+    en: 'The Uzbek school certificate needs a foundation year here first',
+    uz: 'Bu yerda avval o‘zbek maktab attestati bilan foundation yilini o‘qish kerak',
+    ru: 'С узбекским школьным аттестатом здесь сначала нужен подготовительный год (foundation)',
+  },
+  credential_one_year: {
+    en: 'The Uzbek school certificate needs one year of university study first',
+    uz: 'O‘zbek maktab attestati bilan avval bir yil universitetda o‘qish kerak',
+    ru: 'С узбекским школьным аттестатом сначала нужен один год учёбы в университете',
+  },
+  credential_studienkolleg: {
+    en: 'The Uzbek school certificate needs a Studienkolleg year first',
+    uz: 'O‘zbek maktab attestati bilan avval Studienkolleg yilini o‘qish kerak',
+    ru: 'С узбекским школьным аттестатом сначала нужен год в Studienkolleg',
+  },
+  credential_not_accepted: {
+    en: 'The Uzbek school certificate alone is not accepted; IB, A-levels or a university year may be',
+    uz: 'Faqat o‘zbek maktab attestati qabul qilinmaydi; IB, A-level yoki bir yil universitet o‘qishi qabul qilinishi mumkin',
+    ru: 'Одного узбекского школьного аттестата недостаточно; могут принять IB, A-level или год учёбы в университете',
+  },
+  english_below_minimum: {
+    en: '{test} {score} is below the IELTS {min} minimum',
+    uz: '{test} {score} IELTS {min} minimumidan past',
+    ru: '{test} {score} ниже минимума IELTS {min}',
+  },
+  academics_below_bar: {
+    en: 'Your academics are below most admitted students here',
+    uz: 'Akademik natijalaringiz bu yerga qabul qilinganlarning ko‘pchiligidan past',
+    ru: 'Ваши академические результаты ниже, чем у большинства принятых сюда студентов',
+  },
+  need_aware: {
+    en: 'Asking for aid lowers the chances at this need-aware university',
+    uz: 'Bu universitet ehtiyojni hisobga oladi: yordam so‘rash imkoniyatni pasaytiradi',
+    ru: 'Этот университет учитывает потребность в помощи: запрос помощи снижает шансы',
+  },
+  entrance_exam: {
+    en: 'Admission also depends on an entrance exam: {exam}',
+    uz: 'Qabul kirish imtihoniga ham bog‘liq: {exam}',
+    ru: 'Поступление зависит и от вступительного экзамена: {exam}',
+  },
 };
 
 export const fitReasonKey = (code) => `fit_reason.${code}`;

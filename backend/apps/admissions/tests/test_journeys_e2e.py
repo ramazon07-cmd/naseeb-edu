@@ -61,9 +61,11 @@ class JourneyBase(APITestCase):
 
     def create_student(self, name, school=None):
         self.as_user(self.admin)
+        # A different person each time: the same contact details are refused as a duplicate.
+        self._created = getattr(self, '_created', 0) + 1
         return self.post('/api/students/quick-create/', {
-            'email': 'student@example.com',
-            'phone': '+998901234567',
+            'email': f'student{self._created}@example.com',
+            'phone': f'+99890123{self._created:04d}',
             'name': name, 'password': PASSWORD, 'school': (school or self.school).id,
         }, expected=201)
 

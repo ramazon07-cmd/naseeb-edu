@@ -1,6 +1,6 @@
 import { CounselorStudentTable as StudentTable, StatusTag, LateWork, targetText } from '../components/CounselorStudentTable';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, KeyRound, LayoutGrid, MessageCircle, Plus, Rows3, Search, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import { t, tp, tx, formatNumberLocale, formatPercentLocale } from '../i18n';
 import { CxAccountActions, CxAvatar, CxCard, CxHead, CxPills, CxProgress, CxTabs, CxTag } from '../components/counselorUi';
@@ -26,6 +26,7 @@ import { mergeReviewQueue } from '../lib/reviewQueue';
 import { documentStatus, hasSubmission } from '../lib/reviewSubmission';
 import { failedPage, pageAfterLoad, pageCount } from '../lib/studentListPage';
 import { studentReasons } from '../lib/studentReasons';
+import { BULK_TASK_LIMIT, SELECT_PAGE_SIZE, canSelectAllMatching, collectMatchingIds, pageSelectionState, togglePageSelection } from '../lib/studentSelection';
 import { BookingForm, MeetingNoteForm } from './BookingsPage';
 import { ReviewWorkspace } from './ReviewPage';
 import './counselor-students.css';
@@ -66,7 +67,7 @@ function BulkTaskForm({ studentIds, onClose, onSaved, notify }) {
 // at a time (GET /api/students/?page=&status=&grade=&country=&ordering=).
 const PAGE_SIZE = 25;
 const VIEW_KEY = 'naseeb-counselor-students-view';
-const STATUS_PILLS = [['all', 'All'], ['need_you', 'Need you'], ['late', 'Late work'], ['missing_documents', 'Missing documents'], ['quiet', 'Quiet for 14+ days'], ['on_track', 'On track']];
+const STATUS_PILLS = [['all', 'All'], ['need_you', 'Need you'], ['late', 'Late work'], ['missing_documents', 'Missing documents'], ['quiet', 'Quiet for 14+ days'], ['on_track', 'On track'], ['not_started', 'Not started yet']];
 const SORTS = [['need_you', 'Needs you first'], ['late', 'Most late work'], ['name', 'Name A–Z']];
 const COUNTRIES =['US', 'UK', 'Canada', 'Turkey', 'Vietnam', 'Hong Kong', 'China', 'Europe', 'Other'];
 export const STUDENT_LIST_DEFAULTS = Object.freeze({ status: 'all', grade: '', country: '', ordering: 'need_you', page: 1, search: '' });
@@ -110,18 +111,42 @@ function filterParams(state) {
   return params;
 }
 
+// The list's filters and sort as a query, for any page.
+function listQuery(state, page, pageSize) {
+  const params = filterParams(state);
+  params.set('page', String(page));
+  params.set('page_size', String(pageSize));
+  params.set('ordering', state.ordering);
+  if (state.status !== 'all') params.set('status', state.status);
+  return `?${params}`;
+}
+
+// The "select all" box and count above the list, in both views.
+function SelectionBar({ pageIds, total, selected, onTogglePage, onSelectAll, onClear, busy }) {
+  const box = useRef(null);
+  const state = pageSelectionState(pageIds, selected);
+  useEffect(() => { if (box.current) box.current.indeterminate = state === 'some'; }, [state]);
+  const offerAll = canSelectAllMatching({ total, pageIds, selected });
+  const tooMany = total > BULK_TASK_LIMIT;
+  return <div className="cs-selectbar">
+    <label className="cs-selectall">
+      <input ref={box} type="checkbox" checked={state === 'all'} onChange={onTogglePage} disabled={!pageIds.length} />
+      <span>{t("Select all on this page")}</span>
+    </label>
+    <span className="cs-selectcount" role="status" aria-live="polite">{tp('{n} student selected|{n} students selected', selected.size, { n: selected.size })}</span>
+    {offerAll && <button type="button" className="cx-btn" onClick={onSelectAll} disabled={busy} aria-busy={busy}>{busy ? t("Selecting…") : t('Select all {n} students', { n: total })}</button>}
+    {state === 'all' && tooMany && <span className="cx-faint">{t('You can assign a task to {n} students at a time.', { n: BULK_TASK_LIMIT })}</span>}
+    {selected.size > 0 && <button type="button" className="cx-btn" onClick={onClear}>{t("Clear selection")}</button>}
+  </div>;
+}
+
 // One page of students and the pill counts (GET /api/students/summary/).
 function useStudentPage(state, version) {
   const [page, setPage] = useState({ key: '', items: [], count: 0, loading: true, error: '', status: 0 });
   const [summary, setSummary] = useState(null);
   const filters = filterParams(state);
   const summaryKey = `?${filters}`;
-  const params = new URLSearchParams(filters);
-  params.set('page', String(state.page));
-  params.set('page_size', String(PAGE_SIZE));
-  params.set('ordering', state.ordering);
-  if (state.status !== 'all') params.set('status', state.status);
-  const pageKey = `?${params}`;
+  const pageKey = listQuery(state, state.page, PAGE_SIZE);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -161,12 +186,14 @@ function StudentCards({ rows, selecting, selected, toggle, onPreview }) {
 }
 
 function CounselorStudentList({ user, data, query, setQuery, listState, setListState, onItems, onOpen, onDirect, onAddStudent, notify, reload }) {
-  // Adding and connecting students stays with the counselor; an assistant works on the ones given to them.
-  const addsStudents = user.role !== 'assistant';
+  // Connecting unassigned students stays with the counselor; an assistant adds new ones, which become theirs.
+  const connectsStudents = user.role !== 'assistant';
   const [view, setView] = useState(readView);
   const [version, setVersion] = useState(0);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectRun = useRef(0);
   const [assigning, setAssigning] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -227,8 +254,42 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
   }
 
   function stopSelecting() {
+    selectRun.current += 1;
+    setSelectingAll(false);
     setSelecting(false);
     setSelected(new Set());
+  }
+
+  function clearSelected() {
+    selectRun.current += 1;
+    setSelectingAll(false);
+    setSelected(new Set());
+  }
+
+  // Selected students must stay among those the filters show, so a new filter starts a new selection.
+  const filterKey = `${state.status}|${state.grade}|${state.country}|${state.search}`;
+  const firstFilter = useRef(true);
+  useEffect(() => {
+    if (firstFilter.current) { firstFilter.current = false; return; }
+    selectRun.current += 1;
+    setSelectingAll(false);
+    setSelected(new Set());
+  }, [filterKey]);
+
+  async function selectAllMatching() {
+    const run = (selectRun.current += 1);
+    setSelectingAll(true);
+    try {
+      const everyone = await collectMatchingIds(
+        (page) => api.page('students', listQuery(state, page, SELECT_PAGE_SIZE)),
+        { total: list.count, aborted: () => run !== selectRun.current },
+      );
+      if (everyone) setSelected(new Set(everyone));
+    } catch (failure) {
+      if (run === selectRun.current) notify(failure.message, 'error');
+    } finally {
+      if (run === selectRun.current) setSelectingAll(false);
+    }
   }
 
   function refresh() {
@@ -252,7 +313,7 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
         <Plus size={15} aria-hidden="true" />{selecting && selected.size ? tp('Assign task to {n} student|Assign task to {n} students', selected.size, { n: selected.size }) : t("Assign task to several")}
       </button>
       {/* "Add student" slot: the page's onAddStudent decides what adding a student means. */}
-      {addsStudents && <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>}
+      <span className="cs-add-slot"><button type="button" className="cx-btn primary" onClick={onAddStudent || (() => setAdding(true))}><UserPlus size={15} aria-hidden="true" />{t("Add student")}</button></span>
     </CxHead>
 
     <CxPills label={t("Filter students")} active={state.status} onChange={(status) => update({ status })} items={STATUS_PILLS.map(([key, title]) => [key, title, counts[key]])} />
@@ -294,6 +355,8 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
     </div>
 
     {list.error && !moving && <div className="alert error" role="alert">{list.error} <button type="button" className="cx-btn" onClick={() => setVersion((value) => value + 1)}>{t("Retry")}</button></div>}
+    {selecting && rows.length > 0 && <SelectionBar pageIds={rows.map(({ student }) => student.id)} total={list.count} selected={selected} busy={selectingAll}
+      onTogglePage={() => setSelected((current) => togglePageSelection(current, rows.map(({ student }) => student.id)))} onSelectAll={selectAllMatching} onClear={clearSelected} />}
     <div className="cs-results" aria-busy={list.loading}>
       {(list.loading || moving) && !list.items.length ? <PageSkeleton /> : rows.length
         ? (view === 'cards' ? <StudentCards {...shown} /> : <StudentTable {...shown} />)
@@ -312,14 +375,14 @@ function CounselorStudentList({ user, data, query, setQuery, listState, setListS
       </div>
     </nav>}
     <p className="cx-footnote">{t("Click a student for a quick look; “Open student” shows their Student 360.")}</p>
-    {addsStudents && <CxAccountActions>
+    {connectsStudents && <CxAccountActions>
       <button type="button" role="menuitem" onClick={() => setConnecting(true)}>{t("Connect students")}</button>
     </CxAccountActions>}
 
     {preview && <StudentQuickPanel user={user} student={preview} onClose={closePreview} onOpen={onOpen} onDirect={onDirect} />}
     {assigning && <BulkTaskForm studentIds={[...selected]} onClose={() => setAssigning(false)} onSaved={() => { setAssigning(false); stopSelecting(); refresh(); }} notify={notify} />}
-    {addsStudents && adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
-    {addsStudents && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
+    {adding && <StudentForm user={user} data={data} student={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh(); }} notify={notify} />}
+    {connectsStudents && connecting && <StudentAssignmentModal user={user} data={data} onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); refresh(); }} notify={notify} />}
   </div>;
 }
 
@@ -630,6 +693,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
         <DownloadCvButton studentId={student.id} className="cx-btn" notify={notify} />
         <button type="button" className="cx-btn" onClick={() => onDirect(student.user_detail?.id)}><MessageCircle size={15} aria-hidden="true" />{t("Message")}</button>
         <button type="button" className="cx-btn" onClick={() => setBooking(true)}><Calendar size={15} aria-hidden="true" />{t("Book meeting")}</button>
+        <button type="button" className="cx-btn" onClick={() => setCredential(true)}><KeyRound size={15} aria-hidden="true" />{t("Reset login")}</button>
         <button type="button" className="cx-btn primary" onClick={() => setAssigning(true)}><Plus size={15} aria-hidden="true" />{t("Assign task")}</button>
     </Student360Header>
 
@@ -639,9 +703,8 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     {tab === 'overview' && <>
       <Overview student={student} records={records} meetings={upcoming} name={student.user_detail?.first_name || name} notify={notify} reload={reload} goTo={setTab} />
     </>}
-    {/* Logins and parents are the counselor's; an assistant has neither. */}
+    {/* "Reset login" sits in the header for counselors and assistants; parent invitations stay with the counselor. */}
     {user.role !== 'assistant' && <CxAccountActions>
-      <button type="button" role="menuitem" onClick={() => setCredential(true)}>{t("Reset login")}</button>
       <button type="button" role="menuitem" onClick={() => setInvite(true)}>{t("Invite parent")}</button>
     </CxAccountActions>}
     {tab === 'review' && <ReviewWorkspace items={reviewItems} loaded={!loaded.loading} notify={notify} reload={() => reload({ endpoints: REVIEW_ENDPOINTS, workspace: true })} setPage={setPage} studentLink={false} emptyText={t("Nothing from this student is waiting for review.")} />}

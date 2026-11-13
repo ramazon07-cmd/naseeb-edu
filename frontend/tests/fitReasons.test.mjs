@@ -31,6 +31,14 @@ const ITEMS = {
   aid_available: [{}, 'A suitable type of financial aid is available'],
   aid_not_offered: [{}, 'The catalog lists no international, merit or need-based aid at this university'],
   aid_unknown: [{}, 'Financial aid details are not listed in the catalog'],
+  credential_foundation: [{}, 'The Uzbek school certificate needs a foundation year here first'],
+  credential_one_year: [{}, 'The Uzbek school certificate needs one year of university study first'],
+  credential_studienkolleg: [{}, 'The Uzbek school certificate needs a Studienkolleg year first'],
+  credential_not_accepted: [{}, 'The Uzbek school certificate alone is not accepted; IB, A-levels or a university year may be'],
+  english_below_minimum: [{ test: 'TOEFL', score: 80, min: 7 }, 'TOEFL 80 is below the IELTS 7 minimum'],
+  academics_below_bar: [{}, 'Your academics are below most admitted students here'],
+  need_aware: [{}, 'Asking for aid lowers the chances at this need-aware university'],
+  entrance_exam: [{ exam: 'Mathematics test' }, 'Admission also depends on an entrance exam: Mathematics test'],
 };
 const item = (code) => ({ code, params: ITEMS[code][0], text: ITEMS[code][1] });
 

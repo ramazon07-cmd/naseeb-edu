@@ -14,6 +14,7 @@ import { OneTimePassword, TemporaryCredentialModal } from '../components/Tempora
 import { PLAN_FEATURES } from '../lib/workspacePlan';
 import { canManageWorkspaces, isPlatformAdmin, isSuperAdmin } from '../lib/roles';
 import { auditFilters } from '../lib/auditQuery';
+import { normalizeTelegramUsername, telegramUsernameProblem } from '../lib/telegramUsername';
 import { SupportViewModal } from '../components/SupportViewModal';
 import { ModerationCard, moderateReport } from '../components/moderation';
 import { dateText, dateTimeText, formatFileSize, joinParts } from '../lib/format';
@@ -64,6 +65,16 @@ export function AdminCounselorsPage({ user, query, reload, notify }) {
   const counselors = list.items;
   // Assistants are listed only so support can reset their login; their counselor manages everything else.
   const assistants = usePagedList('users/accounts', { search: query, filters: { role: 'assistant' }, ordering: 'name', pageSize: 50 });
+  // The bot's allowlist is a superadmin matter: {user id: telegram username}, or null when it is not theirs to see.
+  const telegramAdmin = isSuperAdmin(user);
+  const [telegramNames, setTelegramNames] = useState({});
+  useEffect(() => {
+    if (!telegramAdmin) return undefined;
+    let live = true;
+    api.telegramStaffAccess().then((rows) => { if (live) setTelegramNames(Object.fromEntries((Array.isArray(rows) ? rows : []).map((row) => [row.user_id, row.telegram_username]))); }).catch(() => {});
+    return () => { live = false; };
+  }, [telegramAdmin]);
+  const setTelegramName = (id, value) => setTelegramNames((current) => { const next = { ...current }; if (value) next[id] = value; else delete next[id]; return next; });
   async function deactivate(account) {
     if (!window.confirm(tx`Deactivate ${fullName(account)}? Their login will stop immediately.`)) return;
     try {await api.deactivateAccount(account.id);notify(t("Counselor deactivated."));reload();} catch (error) {
@@ -72,7 +83,7 @@ export function AdminCounselorsPage({ user, query, reload, notify }) {
       else notify(error.message, 'error');
     }
   }
-  return <><Panel title={t("Counselor provisioning")} action={canManage && <button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {t("Add counselor")}</button>}><div className="record-list admin-list" aria-busy={list.loading}>{counselors.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.school_name || t("No school"))}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.school_workspace_type === 'individual' ? t("Individual workspace") : t("Organization school")}</span></div></div><div className="record-actions"><button className="icon-button" onClick={() => setSupportTarget(account)} title={t("Support view")} aria-label={t("Support view")}><LifeBuoy size={16} /></button>{account.is_active && <button className="icon-button" onClick={() => setCredentialTarget(account)} title={t("Reset login")} aria-label={t("Reset login")}><Fingerprint size={16} /></button>}{canManage && <button className="icon-button" onClick={() => setEditing(account)} title={t("Edit counselor")}><Pencil size={16} /></button>}{canManage && account.is_active && account.school_workspace_type !== 'individual' && <button className="button quiet" onClick={() => setTransfer(account)}><Building2 size={15} /> {t("Transfer")}</button>}{canManage && account.is_active && <button className="icon-button danger" onClick={() => deactivate(account)} title={t("Deactivate counselor")}><Trash2 size={16} /></button>}</div></article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !counselors.length && <Empty text={t("No counselors found.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{assistants.items.length > 0 && <Panel title={t("Counselor assistants")}><div className="record-list admin-list">{assistants.items.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.school_name, account.supervising_counselor_name)}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge></div></div><div className="record-actions">{account.is_active && <button className="icon-button" onClick={() => setCredentialTarget(account)} title={t("Reset login")} aria-label={t("Reset login")}><Fingerprint size={16} /></button>}</div></article>)}</div><PagedListError list={assistants} /><LoadMore list={assistants} /></Panel>}{open && <CounselorProvisionForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{editing && <CounselorEditForm account={editing} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}{transfer && <AccountTransferForm account={transfer} onClose={() => setTransfer(null)} onSaved={() => {setTransfer(null);reload();}} notify={notify} />}{supportTarget && <SupportViewModal account={supportTarget} onClose={() => setSupportTarget(null)} notify={notify} />}{credentialTarget && <TemporaryCredentialModal account={credentialTarget} onClose={() => setCredentialTarget(null)} notify={notify} />}{handover && <CounselorHandoverModal {...handover} notify={notify} onClose={() => setHandover(null)} onDone={() => {setHandover(null);list.reload();reload();}} />}</>;
+  return <><Panel title={t("Counselor provisioning")} action={canManage && <button className="button primary" onClick={() => setOpen(true)}><Plus size={16} /> {t("Add counselor")}</button>}><div className="record-list admin-list" aria-busy={list.loading}>{counselors.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.school_name || t("No school"))}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge><span>{account.school_workspace_type === 'individual' ? t("Individual workspace") : t("Organization school")}</span>{telegramNames[account.id] && <span>@{telegramNames[account.id]}</span>}</div></div><div className="record-actions"><button className="icon-button" onClick={() => setSupportTarget(account)} title={t("Support view")} aria-label={t("Support view")}><LifeBuoy size={16} /></button>{account.is_active && <button className="icon-button" onClick={() => setCredentialTarget(account)} title={t("Reset login")} aria-label={t("Reset login")}><Fingerprint size={16} /></button>}{canManage && <button className="icon-button" onClick={() => setEditing(account)} title={t("Edit counselor")}><Pencil size={16} /></button>}{canManage && account.is_active && account.school_workspace_type !== 'individual' && <button className="button quiet" onClick={() => setTransfer(account)}><Building2 size={15} /> {t("Transfer")}</button>}{canManage && account.is_active && <button className="icon-button danger" onClick={() => deactivate(account)} title={t("Deactivate counselor")}><Trash2 size={16} /></button>}</div></article>)}{firstPageLoading(list) && <p className="paged-list-loading" role="status">{t("Loading…")}</p>}{list.loaded && !counselors.length && <Empty text={t("No counselors found.")} />}</div><PagedListError list={list} /><LoadMore list={list} /></Panel>{assistants.items.length > 0 && <Panel title={t("Counselor assistants")}><div className="record-list admin-list">{assistants.items.map((account) => <article className="record" key={account.id}><span className="avatar">{initials(fullName(account))}</span><div className="record-main"><h3>{fullName(account)}</h3><p>{joinParts(account.email, account.school_name, account.supervising_counselor_name)}</p><div className="record-meta"><Badge tone={account.is_active ? 'success' : 'danger'}>{account.is_active ? t("Active") : t("Inactive")}</Badge></div></div><div className="record-actions">{account.is_active && <button className="icon-button" onClick={() => setCredentialTarget(account)} title={t("Reset login")} aria-label={t("Reset login")}><Fingerprint size={16} /></button>}</div></article>)}</div><PagedListError list={assistants} /><LoadMore list={assistants} /></Panel>}{open && <CounselorProvisionForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{editing && <CounselorEditForm account={editing} telegramAccess={telegramAdmin ? { value: telegramNames[editing.id] || '', onChange: (value) => setTelegramName(editing.id, value) } : null} onClose={() => setEditing(null)} onSaved={() => {setEditing(null);reload();}} notify={notify} />}{transfer && <AccountTransferForm account={transfer} onClose={() => setTransfer(null)} onSaved={() => {setTransfer(null);reload();}} notify={notify} />}{supportTarget && <SupportViewModal account={supportTarget} onClose={() => setSupportTarget(null)} notify={notify} />}{credentialTarget && <TemporaryCredentialModal account={credentialTarget} onClose={() => setCredentialTarget(null)} notify={notify} />}{handover && <CounselorHandoverModal {...handover} notify={notify} onClose={() => setHandover(null)} onDone={() => {setHandover(null);list.reload();reload();}} />}</>;
 }
 
 const HANDOVER_OPTIONS = [
@@ -104,7 +115,52 @@ function CounselorHandoverModal({ account, students, changes, notify, onClose, o
   </form></Modal>;
 }
 
-export function CounselorEditForm({ account, schoolManaged = false, onClose, onSaved, notify }) {
+// The Telegram @username that may log this account in to the bot. Saved on its own (not with the form below):
+// the server keeps one name per account and refuses a name another account already has.
+function TelegramAccessField({ account, value, onChange, notify }) {
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const problem = telegramUsernameProblem(draft);
+  const clean = normalizeTelegramUsername(draft);
+  const hint = { characters: t("Use only letters a-z, digits and _."), short: t("At least 5 characters."), long: t("At most 32 characters.") }[problem] || '';
+  async function save() {
+    if (problem || !clean || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const saved = await api.setTelegramStaffAccess(account.id, clean);
+      setDraft(saved.telegram_username);
+      onChange(saved.telegram_username);
+      notify(t("Telegram username saved."));
+    } catch (err) {
+      setError(err.details?.code === 'username_taken' ? t("This Telegram username is already given to another account.") : err.message);
+    } finally {setSaving(false);}
+  }
+  async function clear() {
+    if (saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      await api.clearTelegramStaffAccess(account.id);
+      setDraft('');
+      onChange('');
+      notify(t("Telegram access removed."));
+    } catch (err) {setError(err.message);} finally {setSaving(false);}
+  }
+  return <div className="form-wide telegram-access">
+    <Field label={t("Telegram username")} hint={t("Only this Telegram user can log this account in to the bot.")}>
+      <input value={draft} onChange={(event) => { setDraft(event.target.value); setError(''); }} placeholder="@username" autoCapitalize="none" autoComplete="off" spellCheck={false} maxLength={40} aria-invalid={Boolean(problem || error)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); save(); } }} />
+    </Field>
+    {(hint || error) && <p className="counselor-form-error" role="alert">{hint || error}</p>}
+    <div className="form-actions">
+      {value && <button type="button" className="button quiet" onClick={clear} disabled={saving}>{t("Remove access")}</button>}
+      <button type="button" className="button" onClick={save} disabled={saving || !clean || Boolean(problem) || clean === value} aria-busy={saving}>{t("Save username")}</button>
+    </div>
+  </div>;
+}
+
+export function CounselorEditForm({ account, schoolManaged = false, telegramAccess = null, onClose, onSaved, notify }) {
   const [saving, setSaving] = useState(false);
   const [handover, setHandover] = useState(null);
   const [accessEnabled, setAccessEnabled] = useState(account.is_active);
@@ -129,6 +185,7 @@ export function CounselorEditForm({ account, schoolManaged = false, onClose, onS
       <Field label={t("Last name")}><input name="last_name" defaultValue={account.last_name} placeholder={t("e.g. Karimova")} /></Field>
       <Field label={t("Phone")}><input name="phone" type="tel" defaultValue={account.phone} placeholder={t("e.g. +998 90 123 45 67")} /></Field>
       <Field label={t("Email")}><input name="email" type="email" defaultValue={account.email} readOnly={schoolManaged} required /></Field>
+      {telegramAccess && !schoolManaged && <TelegramAccessField account={account} value={telegramAccess.value} onChange={telegramAccess.onChange} notify={notify} />}
       <div className="counselor-access form-wide">
         <div><b>{t("Allow platform access")}</b><p>{accessEnabled ? t("The counselor can sign in and work with students.") : t("Sign-in will be blocked. The counselor's records are kept.")}</p><small>{t("Changes apply when you save.")}</small></div>
         <button type="button" className="counselor-access-switch" role="switch" aria-checked={accessEnabled} aria-label={t("Allow platform access")} onClick={() => setAccessEnabled(!accessEnabled)} />
@@ -534,6 +591,8 @@ export function AdminHealthPage() {
     <Panel title={t("Readiness")} action={<button type="button" className="button quiet small" onClick={health.retry} aria-busy={health.loading}><RefreshCw size={14} /> {t("Check again")}</button>}><div className="record-meta"><Badge tone={readiness.status === 'ok' ? 'success' : 'urgent'}>{readiness.status === 'ok' ? t("Ready") : readiness.status === 'degraded' ? t("Degraded") : t("Unavailable")}</Badge><span>{t("Database")}: {readiness.database === 'ok' ? t("OK") : t("Not answering")}</span><span>{t("Cache")}: {readiness.cache === 'ok' ? t("OK") : t("Not answering")}</span></div></Panel>
     <Panel title={t("Scheduled jobs")}><div className="record-list">{data.jobs.map((job) => <article className={`record health-job ${job.overdue ? 'overdue' : ''}`} key={job.name}><div className="record-main"><h3>{t(JOB_LABELS[job.name] || job.name)}</h3><div className="record-meta">{job.last_run ? <><Badge tone={JOB_RESULT_TONES[job.last_run.result]}>{t(JOB_RESULT_LABELS[job.last_run.result])}</Badge><span>{dateTimeText(job.last_run.started_at)}</span><span>{tx`${formatNumberLocale(job.last_run.duration_seconds)} s`}</span>{job.last_run.processed !== null && <span>{tx`${formatNumberLocale(job.last_run.processed)} processed`}</span>}{job.last_run.error && <span>{job.last_run.error}</span>}</> : <span>{t("No run recorded yet")}</span>}{job.last_run && job.last_run.result !== 'ok' && job.last_success_at && <span>{tx`Last success ${dateTimeText(job.last_success_at)}`}</span>}{job.skipped_recently > 0 && <span>{tx`${formatNumberLocale(job.skipped_recently)} skipped: already running`}</span>}{job.overdue && <Badge tone="urgent">{t("No successful run in the last 26 hours")}</Badge>}</div></div></article>)}</div></Panel>
     <Panel title={t("File storage")} action={<button type="button" className="button quiet small" onClick={checkStorage} aria-busy={health.loading}><RefreshCw size={14} /> {t("Check again")}</button>}>{data.storage_checked_at && <p className="form-note">{tx`Counted ${dateTimeText(data.storage_checked_at)}; recounted at most once a minute.`}</p>}<div className="table-wrap"><table><thead><tr><th>{t("Kind")}</th><th>{t("Files")}</th><th>{t("Size")}</th></tr></thead><tbody>{data.storage.map((row) => <tr key={row.category}><td>{t(STORAGE_LABELS[row.category] || row.category)}</td><td>{formatNumberLocale(row.files)}</td><td>{formatFileSize(row.bytes)}</td></tr>)}</tbody></table></div><p className="form-note"><ShieldCheck size={16} /> {t("Sizes come from the uploads' saved sizes; profile photos and avatars are not counted.")}</p></Panel>
+    <Panel title={t("Email delivery")}><div className="record-meta"><Badge tone={data.email?.enabled ? 'success' : 'reviewing'}>{data.email?.enabled ? t("On") : t("Off")}</Badge><span>{data.email?.enabled ? t("Meeting emails and reminders are sent.") : t("No mail server is set, so meeting emails, reminders and invites are not sent.")}</span></div></Panel>
+    <Panel title={t("Shared cache")}><div className="record-meta"><Badge tone={data.shared_cache?.enabled ? 'success' : 'reviewing'}>{data.shared_cache?.enabled ? t("On") : t("Off")}</Badge><span>{data.shared_cache?.enabled ? t("Login limits and the AI budget are shared by all workers.") : t("No Redis is set, so login limits and the AI budget are counted per worker.")}</span></div></Panel>
     <Panel title={t("Error tracking")}><div className="record-meta"><Badge tone={data.error_tracking.enabled ? 'success' : 'reviewing'}>{data.error_tracking.enabled ? t("On") : t("Off")}</Badge>{data.error_tracking.url ? <a href={data.error_tracking.url} target="_blank" rel="noreferrer">{t("Open the error tracker")} <ExternalLink size={14} /></a> : <span>{t("No error tracker link is configured.")}</span>}</div></Panel>
   </div>;
 }

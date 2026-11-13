@@ -81,15 +81,15 @@ class QueryCountMixin(AuditBaseMixin):
 
 class StudentListQueryCountTests(QueryCountMixin, APITestCase):
     def test_counselor(self):
-        response = self.assert_constant(self.counselor, '/api/students/', bound=10)
+        response = self.assert_constant(self.counselor, '/api/students/', bound=11)
         self.assertEqual(response.data['count'], 3 * N + 1)
 
     def test_admin(self):
-        response = self.assert_constant(self.admin, '/api/students/', bound=10)
+        response = self.assert_constant(self.admin, '/api/students/', bound=11)
         self.assertEqual(response.data['count'], 3 * N + 2)
 
     def test_organization(self):
-        response = self.assert_constant(self.organization, '/api/students/', bound=10)
+        response = self.assert_constant(self.organization, '/api/students/', bound=11)
         self.assertEqual(response.data['count'], 3 * N + 1)
 
 

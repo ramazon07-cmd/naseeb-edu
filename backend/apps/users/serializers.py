@@ -40,11 +40,11 @@ class UserSerializer(serializers.ModelSerializer):
             'role', 'phone', 'position', 'avatar', 'school', 'school_name', 'school_workspace_type',
             'is_active', 'is_superuser', 'admin_tier', 'staff_tier', 'last_login',
             'must_change_password', 'password_changed_at', 'credential_status', 'credential_expires_at',
-            'supervising_counselor_name',
+            'supervising_counselor_name', 'google_email',
         )
         read_only_fields = (
             'id', 'full_name', 'must_change_password', 'password_changed_at', 'last_login',
-            'credential_status', 'credential_expires_at', 'is_superuser', 'staff_tier',
+            'credential_status', 'credential_expires_at', 'is_superuser', 'staff_tier', 'google_email',
         )
 
     staff_tier = serializers.CharField(read_only=True)
@@ -441,7 +441,7 @@ class CounselorTransferSerializer(serializers.Serializer):
 
 
 class PasswordChangeSerializer(serializers.Serializer):
-    new_password = serializers.CharField(write_only=True, validators=[validate_password])
+    new_password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
     # A student also picks their class here: the first sign-in is the one step every student passes.
     grade = serializers.ChoiceField(choices=StudentProfile.PICKABLE_GRADES, required=False)
@@ -449,6 +449,11 @@ class PasswordChangeSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs['new_password'] != attrs['confirm_password']:
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
+        # With the user, so "too similar to the username" is a 400 here, not a 500 in complete_password_change.
+        try:
+            validate_password(attrs['new_password'], user=self.context['request'].user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'new_password': list(exc.messages)}) from exc
         return attrs
 
 

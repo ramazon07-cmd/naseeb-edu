@@ -111,13 +111,35 @@ class AdminSummaryView(APIView):
         return Response(summary)
 
 
+# Percentiles are computed in Python over the window's rows, so repeat views reuse the result.
+AI_TOKENS_CACHE_SECONDS = 60
+
+
 class AdminAiUsageView(APIView):
-    """Paid AI calls today against their daily caps. Counters only: no student content."""
+    """Paid AI calls today against their daily caps, plus token usage over ``?days=`` (default 30,
+    optionally one ``?feature=``). Counters only: no student content."""
 
     permission_classes = [IsSupportStaff]
+    MAX_DAYS = 365
 
     def get(self, request):
-        from .. import ai_budget
+        from .. import ai_budget, ai_usage
+
+        try:
+            days = min(max(int(request.query_params.get('days', 30)), 1), self.MAX_DAYS)
+        except (TypeError, ValueError):
+            days = 30
+        only_feature = request.query_params.get('feature') or None
+        if only_feature is not None and only_feature not in ai_usage.FEATURES:
+            return Response({'detail': 'Unknown feature.', 'features': list(ai_usage.FEATURES)}, status=400)
+        tokens_key = f'admin-ai-tokens:{days}:{only_feature or "all"}'
+        tokens = cache_get(tokens_key)
+        if tokens is None:
+            tokens = {
+                'window_days': days,
+                **ai_usage.summary(timezone.now() - timedelta(days=days), only_feature),
+            }
+            cache_set(tokens_key, tokens, AI_TOKENS_CACHE_SECONDS)
 
         names = dict(School.objects.filter(is_active=True).values_list('id', 'name'))
         report = ai_budget.usage_today(list(names))
@@ -129,6 +151,7 @@ class AdminAiUsageView(APIView):
             'cache_available': report is not None,
             'fallback_active': ai_budget.fallback_active(),
             'features': report,
+            'tokens': tokens,
         })
 
 
@@ -179,6 +202,16 @@ def cached_storage_usage(recheck=False):
     return rows, now
 
 
+def email_delivery_enabled():
+    """True when mail really leaves the server (not the console or the in-memory test backend)."""
+    backend = settings.EMAIL_BACKEND
+    return not backend.endswith(('console.EmailBackend', 'locmem.EmailBackend', 'dummy.EmailBackend'))
+
+
+def shared_cache_enabled():
+    return not settings.CACHES.get('default', {}).get('BACKEND', '').endswith('LocMemCache')
+
+
 class AdminHealthView(APIView):
     """Readiness, the last run of every scheduled job, file storage and error tracking.
 
@@ -216,4 +249,8 @@ class AdminHealthView(APIView):
             'storage': storage,
             'storage_checked_at': storage_checked_at,
             'error_tracking': {'enabled': settings.SENTRY_ENABLED, 'url': settings.ERROR_TRACKER_URL or None},
+            # Off means meeting emails, reminders and invites go nowhere.
+            'email': {'enabled': email_delivery_enabled()},
+            # Off means throttles, login lockouts and the AI budget are counted per worker.
+            'shared_cache': {'enabled': shared_cache_enabled()},
         })

@@ -1,5 +1,5 @@
 """Admissions API serializers — portal."""
-from datetime import timedelta
+from datetime import time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rest_framework import serializers
@@ -10,6 +10,7 @@ from apps.users.serializers import ContactSerializer
 from ..models import (
     Booking,
     MeetingAvailability,
+    MeetingSchedule,
     ProgramService,
     ScreenTimeDaily,
     StudentMessage,
@@ -176,6 +177,37 @@ class MeetingAvailabilityRepeatSerializer(serializers.Serializer):
         if attrs['end_time'] is not None and attrs['end_time'] <= attrs['time']:
             raise serializers.ValidationError({'end_time': 'Choose an end time after the start time.'})
         return attrs
+
+
+class MeetingScheduleSerializer(serializers.ModelSerializer):
+    """Weekly hours: {"0": [["09:00", "12:00"]]} with Monday = 0 and ranges on the Tashkent clock."""
+
+    MAX_RANGES_PER_DAY = 4
+
+    class Meta:
+        model = MeetingSchedule
+        fields = ('duration_minutes', 'hours')
+
+    validate_duration_minutes = BookingSerializer.validate_duration_minutes
+
+    def validate_hours(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Send the hours of each weekday.')
+        clean = {}
+        for weekday, ranges in value.items():
+            if weekday not in {'0', '1', '2', '3', '4', '5', '6'} or not isinstance(ranges, list) or len(ranges) > self.MAX_RANGES_PER_DAY:
+                raise serializers.ValidationError('Send the hours of each weekday.')
+            try:
+                parsed = sorted((time.fromisoformat(begin), time.fromisoformat(end)) for begin, end in ranges)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError('Enter each time as HH:MM.')
+            if any(end <= begin for begin, end in parsed):
+                raise serializers.ValidationError('Choose an end time after the start time.')
+            if any(later[0] < earlier[1] for earlier, later in zip(parsed, parsed[1:])):
+                raise serializers.ValidationError('Hours on the same day cannot overlap.')
+            if parsed:
+                clean[weekday] = [[begin.strftime('%H:%M'), end.strftime('%H:%M')] for begin, end in parsed]
+        return clean
 
 
 class StudentMessageSerializer(serializers.ModelSerializer):

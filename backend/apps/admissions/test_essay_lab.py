@@ -21,6 +21,7 @@ from .essay_lab.doc import (
 from .essay_lab.tabs import tab_from_text
 from .essay_lab.views import CHECKPOINT_CAP, DEPTH_CHECK_KEEP
 from .models import (
+    AiUsageLog,
     Application,
     Essay,
     EssayCheckpoint,
@@ -1102,6 +1103,48 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertEqual(EssayDepthCheck.objects.filter(essay=self.essay).count(), DEPTH_CHECK_KEEP)
         self.assertTrue(EssayDepthCheck.objects.filter(pk=response.data['id']).exists())
 
+    def usage_response(self, content, model='openai/gpt-5.4-mini'):
+        body = json.dumps({'choices': [{'message': {'content': content}}], 'model': model, 'usage': {'prompt_tokens': 1200, 'completion_tokens': 300, 'total_tokens': 1500, 'prompt_tokens_details': {'cached_tokens': 400}, 'completion_tokens_details': {'reasoning_tokens': 50}}}).encode('utf-8')
+        response = mock.MagicMock()
+        response.read.return_value = body
+        response.__enter__.return_value = response
+        return response
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_ai_check_logs_the_providers_token_usage_and_no_content(self):
+        with mock.patch('urllib.request.urlopen', return_value=self.usage_response(json.dumps(self.ai_payload()))):
+            self.assertEqual(self.check().status_code, status.HTTP_200_OK)
+        row = AiUsageLog.objects.get(feature='essay_coach')
+        self.assertEqual((row.status, row.provider, row.model, row.user_id, row.school_id, row.role),
+                         ('ok', 'gateway', 'openai/gpt-5.4-mini', self.student_user.pk, self.school.pk, 'student'))
+        self.assertEqual((row.input_tokens, row.output_tokens, row.cached_input_tokens, row.reasoning_tokens,
+                          row.total_tokens, row.usage_estimated, row.fallback_used), (1200, 300, 400, 50, 1500, False, False))
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_ai_check_logs_gateway_fallback_and_unusable_output(self):
+        with mock.patch('urllib.request.urlopen', return_value=self.usage_response('not json', 'openai/gpt-5.4-nano')):
+            self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        row = AiUsageLog.objects.get(feature='essay_coach')
+        self.assertEqual((row.status, row.model, row.fallback_used, row.input_tokens), ('invalid_output', 'openai/gpt-5.4-nano', True, 1200))
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_ai_check_logs_a_provider_error_without_tokens(self):
+        with mock.patch('urllib.request.urlopen', side_effect=OSError('down')):
+            self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        row = AiUsageLog.objects.get(feature='essay_coach')
+        self.assertEqual((row.status, row.total_tokens, row.model), ('provider_error', 0, ''))
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_DAILY_BUDGET=0)
+    def test_budget_refusal_is_logged_without_tokens(self):
+        self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(AiUsageLog.objects.get(feature='essay_coach').status, 'budget_refused')
+
+    @override_settings(AI_GATEWAY_API_KEY='')
+    def test_local_check_is_logged_without_tokens(self):
+        self.assertEqual(self.check().status_code, status.HTTP_200_OK)
+        row = AiUsageLog.objects.get(feature='essay_coach')
+        self.assertEqual((row.status, row.total_tokens, row.provider), ('local_fallback', 0, ''))
+
 
 class EssayLabSearchTests(EssayLabTestCase):
     def test_search_matches_the_essay_text(self):
@@ -1285,16 +1328,17 @@ class EssayLabQueryBudgetTests(StatementCountMixin, EssayLabTestCase):
         # A normal save: lock the essay, lock the tab, checkpoint probe, update the tab,
         # read the tabs' text, update the essay's derived text. The same for any number of tabs.
         # The first save also writes an automatic checkpoint and prunes: two more.
-        with self.assertNumQueries(8):
+        # A save that changes the word count adds one more: the writing-streak upsert.
+        with self.assertNumQueries(9):
             response = self.client.put(url, {'doc': make_doc('One'), 'base_seq': 0, 'client_save_id': 'a',
                                              'tab': tab.pk}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(7):
             self.client.put(url, {'doc': make_doc('One two'), 'base_seq': 1, 'client_save_id': 'b', 'tab': tab.pk},
                             format='json')
         for index in range(20):
             EssayTab.objects.create(essay=essay, title=f'More {index}', position=index + 1, content='Other text.')
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(7):
             response = self.client.put(url, {'doc': make_doc('One two 3'), 'base_seq': 2, 'client_save_id': 'b2',
                                              'tab': tab.pk}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
@@ -1318,12 +1362,26 @@ class EssayLabQueryBudgetTests(StatementCountMixin, EssayLabTestCase):
                                   'tab': tab.pk}, format='json')
         self.assertEqual(EssayCheckpoint.objects.filter(essay=essay).count(), CHECKPOINT_CAP)
 
+    def test_a_save_that_keeps_the_word_count_adds_no_query(self):
+        essay = self.make_essay(content='One two three')
+        tab = self.tab_of(essay)
+        url = f'{BASE}/essays/{essay.pk}/autosave/'
+        with self.assertNumQueries(8):
+            self.client.put(url, {'doc': make_doc('One two 3'), 'base_seq': 0, 'client_save_id': 'a', 'tab': tab.pk},
+                            format='json')
+        with self.assertNumQueries(6):
+            self.client.put(url, {'doc': make_doc('Four five 6'), 'base_seq': 1, 'client_save_id': 'b', 'tab': tab.pk},
+                            format='json')
+        with self.assertNumQueries(7):
+            self.client.put(url, {'doc': make_doc('Four five 6 7'), 'base_seq': 2, 'client_save_id': 'c',
+                                  'tab': tab.pk}, format='json')
+
     def test_delta_autosave_budget(self):
         essay = self.make_essay()
         self.client.put(f'{BASE}/essays/{essay.pk}/autosave/',
                         {'doc': make_doc('One'), 'base_seq': 0, 'client_save_id': 'a'}, format='json')
         # Same as a full save (the tab lock now reads the doc).
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(7):
             response = self.client.put(f'{BASE}/essays/{essay.pk}/autosave/', {
                 'ops': [{'at': 1, 'delete': 0, 'insert': [paragraph('Two')]}],
                 'doc_hash': doc_hash(make_doc('One', 'Two')), 'base_seq': 1, 'client_save_id': 'b',

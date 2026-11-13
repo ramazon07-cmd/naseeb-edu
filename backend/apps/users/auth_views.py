@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
 from django.db import OperationalError, ProgrammingError
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, Throttled
 from rest_framework.permissions import AllowAny
@@ -15,6 +16,7 @@ from apps.users.throttles import (
 )
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .auth_cookies import (
@@ -26,6 +28,19 @@ from .localization import localized_message
 from .security import (
     client_ip, login_locked, note_account_failure, register_login_failure, remember_login_device, reset_login_failures,
 )
+
+
+# last_login is "last seen signed in": a password sign-in or a session refresh
+# (every 30 minutes while a tab is open). Written at most once per window, so an
+# open tab costs one small UPDATE an hour.
+LAST_LOGIN_WINDOW = timedelta(hours=1)
+
+
+def note_sign_in(user_id, now=None):
+    now = now or timezone.now()
+    get_user_model().objects.filter(pk=user_id).filter(
+        Q(last_login__isnull=True) | Q(last_login__lt=now - LAST_LOGIN_WINDOW),
+    ).update(last_login=now)
 
 
 class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
@@ -122,6 +137,7 @@ class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
                     'code': error_key,
                 })
             data['credential_expires_at'] = credential.expires_at
+        note_sign_in(self.user.pk)
         data['must_change_password'] = self.user.must_change_password
         data['role'] = self.user.role
         return data
@@ -175,6 +191,9 @@ class SafeTokenRefreshView(TokenRefreshView):
             serializer.is_valid(raise_exception=True)
         except TokenError as exc:
             raise InvalidToken(exc.args[0]) from exc
+        user_id = UntypedToken(token).payload.get(api_settings.USER_ID_CLAIM)
+        if user_id is not None:
+            note_sign_in(user_id)
         return move_refresh_to_cookie(Response(serializer.validated_data, status=status.HTTP_200_OK))
 
 

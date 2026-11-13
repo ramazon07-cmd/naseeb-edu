@@ -65,8 +65,9 @@ class StudentListFilterTests(RoleIsolationBase):
         self.assertEqual(self.names({'status': 'missing_documents'}), ['Doc'])
         self.assertEqual(sorted(self.names({'status': 'need_you'})), ['Doc', 'Lata', 'Mila'])
         self.assertEqual(self.names({'status': 'quiet'}), ['Quin'])
-        # Work to review or a quiet spell is not "on track"; never signing in is not quiet.
-        self.assertEqual(sorted(self.names({'status': 'on_track'})), ['Neve', 'Zed'])
+        # Work to review or a quiet spell is not "on track"; never signing in is not quiet, and with no work either it is "not started".
+        self.assertEqual(sorted(self.names({'status': 'on_track'})), ['Zed'])
+        self.assertEqual(self.names({'status': 'not_started'}), ['Neve'])
         self.assertEqual(self.client.get('/api/students/', {'status': 'asleep'}).status_code, 400)
 
     def test_level_grade_and_country_filters(self):
@@ -186,7 +187,7 @@ class StudentListFilterTests(RoleIsolationBase):
         response = self.client.get('/api/students/summary/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['counts'], {
-            'all': 4, 'need_you': 2, 'late': 1, 'missing_documents': 2, 'quiet': 1, 'on_track': 1,
+            'all': 4, 'need_you': 2, 'late': 1, 'missing_documents': 2, 'quiet': 1, 'on_track': 1, 'not_started': 0,
         })
         self.assertEqual(response.data['levels'], [1, 2, 4])
         self.assertEqual(response.data['countries'], ['US'])

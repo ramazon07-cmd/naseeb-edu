@@ -77,7 +77,15 @@ def mark_temporary_credential_used(*, user, request=None):
     if not credential:
         return None, 'credential_missing'
     if credential.status == TemporaryCredential.Status.USED:
-        return credential, 'credential_used'
+        # Signed in once but never set a new password (closed the tab, another device):
+        # the same temporary password works again until it expires. It still only opens
+        # the "set a new password" screen, and a new password ends it for good.
+        if credential.expires_at > timezone.now():
+            return credential, None
+        return credential, 'credential_expired'
+    # Marked on the first late attempt; every later attempt must still say expired.
+    if credential.status == TemporaryCredential.Status.EXPIRED:
+        return credential, 'credential_expired'
     if credential.status != TemporaryCredential.Status.ISSUED:
         return credential, 'credential_missing'
     if credential.expires_at <= timezone.now():
@@ -113,7 +121,9 @@ def complete_password_change(*, user, new_password, request=None):
     locked_user.must_change_password = False
     locked_user.password_version += 1
     locked_user.password_changed_at = timezone.now()
-    locked_user.save(update_fields=['password', 'must_change_password', 'password_version', 'password_changed_at'])
+    # Setting the password is a sign-in too: the session is issued from here.
+    locked_user.last_login = locked_user.password_changed_at
+    locked_user.save(update_fields=['password', 'must_change_password', 'password_version', 'password_changed_at', 'last_login'])
     credential = locked_user.temporary_credentials.order_by('-issued_at', '-id').first()
     CredentialAuditEvent.objects.create(
         target_user=locked_user,

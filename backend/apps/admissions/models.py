@@ -429,6 +429,18 @@ class University(TimeStampedModel):
         FOUR_YEAR = 'four_year', '4-year'
         TWO_YEAR = 'two_year', '2-year'
 
+    class CredentialRoute(models.TextChoices):
+        """What a student with only the Uzbek school certificate (attestat) needs first."""
+        DIRECT = 'direct', 'Accepted directly'
+        FOUNDATION = 'foundation', 'Foundation year first'
+        ONE_YEAR_UNIVERSITY = 'one_year_uni', 'One year of university first'
+        STUDIENKOLLEG = 'studienkolleg', 'Studienkolleg first'
+        NOT_ACCEPTED = 'not_accepted', 'Not accepted'
+
+    class IntlNeedPolicy(models.TextChoices):
+        NEED_BLIND = 'need_blind', 'Need-blind for international students'
+        NEED_AWARE = 'need_aware', 'Need-aware for international students'
+
     name = models.CharField(max_length=220)
     country = models.CharField(max_length=120)
     market = models.CharField(max_length=20, choices=Market.choices, blank=True, db_index=True)
@@ -472,6 +484,15 @@ class University(TimeStampedModel):
     scholarship_deadline = models.DateField(null=True, blank=True)
     catalog_source_url = models.URLField(blank=True)
     catalog_verified_at = models.DateField(null=True, blank=True)
+    # Admission requirements for students from Uzbekistan (admission_chance.py). Blank means
+    # unknown, never "no requirement"; each value comes from requirements_source_url.
+    intl_acceptance_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    intl_need_policy = models.CharField(max_length=20, choices=IntlNeedPolicy.choices, blank=True)
+    credential_route = models.CharField(max_length=20, choices=CredentialRoute.choices, blank=True)
+    ielts_min = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    entrance_exam = models.CharField(max_length=160, blank=True)
+    requirements_source_url = models.URLField(max_length=500, blank=True)
+    requirements_verified_at = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
     # Name, city and country spellings folded for search (search_text.py); kept by save().
     search_text = models.TextField(blank=True, default='', editable=False)
@@ -697,6 +718,30 @@ class ApplicationStatusHistory(models.Model):
         return f'{self.application} — {self.status}'
 
 
+class AdmissionChanceSnapshot(models.Model):
+    """What College Search said about a university when the student added it.
+
+    Frozen at creation and never rescored: once decisions come in (Application.status),
+    these rows show how often each band was right, which is how the weights get tuned.
+    """
+    application = models.OneToOneField(Application, on_delete=models.CASCADE, related_name='chance_snapshot')
+    algorithm_version = models.CharField(max_length=40)
+    band = models.CharField(max_length=20, blank=True)
+    fit_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    position = models.FloatField(null=True, blank=True)
+    academic_position = models.FloatField(null=True, blank=True)
+    admit_rate = models.FloatField(null=True, blank=True)
+    admit_rate_estimated = models.BooleanField(default=False)
+    admission_model = models.CharField(max_length=40, blank=True)
+    gates = models.JSONField(default=list, blank=True)
+    # The profile answers the fit was computed from (college_search.fit_context).
+    inputs = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.application} — {self.band or "unknown"}'
+
+
 def task_priority_rank():
     """0 = urgent … 3 = low, for ordering tasks by importance."""
     return models.Case(
@@ -870,10 +915,23 @@ class MeetingAvailability(TimeStampedModel):
     participant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='meeting_availability')
     starts_at = models.DateTimeField()
     duration_minutes = models.PositiveSmallIntegerField(default=45)
+    # Generated from the staff member's weekly hours; replaced when those hours change.
+    from_schedule = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['starts_at', 'id']
         constraints = [models.UniqueConstraint(fields=['participant', 'starts_at'], name='unique_meeting_availability_start')]
+
+
+class MeetingSchedule(TimeStampedModel):
+    """A staff member's weekly hours; the dated MeetingAvailability slots students book are generated from it."""
+
+    participant = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='meeting_schedule')
+    duration_minutes = models.PositiveSmallIntegerField(default=45)
+    # {"0": [["09:00", "12:00"], ["14:00", "17:00"]]}: Monday = 0, ranges on the server's (Tashkent) clock.
+    hours = models.JSONField(default=dict, blank=True)
+    # Slots exist through this day; later days are added as time moves on (meetings.fill_schedule).
+    generated_until = models.DateField(null=True, blank=True)
 
 
 class Booking(TimeStampedModel):
@@ -903,6 +961,8 @@ class Booking(TimeStampedModel):
     duration_minutes = models.PositiveSmallIntegerField(default=45)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     notes = models.TextField(blank=True)
+    # The start time the reminder email was sent for; a moved meeting is reminded again.
+    reminded_for = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['starts_at']
@@ -1151,6 +1211,29 @@ class ScreenTimeDaily(models.Model):
 
     def __str__(self):
         return f'{self.user} — {self.date} — {self.page}'
+
+
+class EssayWritingDay(models.Model):
+    """What a student wrote in the Essay Lab on one Tashkent calendar day (feeds the writing streak)."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='essay_writing_days')
+    date = models.DateField()
+    # The day's running net of new text (never below 0) and the highest it reached.
+    words_net = models.PositiveIntegerField(default=0)
+    words_peak = models.PositiveIntegerField(default=0)
+    # Essay Lab screen-time seconds, dated by the server's Tashkent calendar (added when the tracker reports).
+    active_seconds = models.PositiveIntegerField(default=0)
+    # Kept up to date by the writes that change words or seconds, so reading the streak never recomputes it.
+    goal_met = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-date']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'date'], name='unique_essay_writing_user_day'),
+        ]
+
+    def __str__(self):
+        return f'{self.user} - {self.date} - {self.words_peak} words'
 
 
 class StoreItem(TimeStampedModel):
@@ -2280,3 +2363,43 @@ class AssistantInvite(TimeStampedModel):
 
     def __str__(self):
         return f'{self.email} · {self.school} · {self.status}'
+
+
+class AiUsageLog(models.Model):
+    """One paid (or refused) AI call: counts only, never a prompt, essay text or reply."""
+
+    class Status(models.TextChoices):
+        OK = 'ok', 'ok'
+        PROVIDER_ERROR = 'provider_error', 'provider_error'
+        INVALID_OUTPUT = 'invalid_output', 'invalid_output'
+        BUDGET_REFUSED = 'budget_refused', 'budget_refused'
+        LOCAL_FALLBACK = 'local_fallback', 'local_fallback'
+
+    created_at = models.DateTimeField(default=timezone.now)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    school = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    role = models.CharField(max_length=30, blank=True)
+    feature = models.CharField(max_length=40)
+    provider = models.CharField(max_length=20, blank=True)
+    model = models.CharField(max_length=120, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    cached_input_tokens = models.PositiveIntegerField(default=0)
+    reasoning_tokens = models.PositiveIntegerField(default=0)
+    total_tokens = models.PositiveIntegerField(default=0)
+    usage_estimated = models.BooleanField(default=False)
+    latency_ms = models.PositiveIntegerField(default=0)
+    language = models.CharField(max_length=10, blank=True)
+    fallback_used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['created_at'], name='ai_usage_time_idx'),
+            models.Index(fields=['feature', 'created_at'], name='ai_usage_feature_time_idx'),
+            models.Index(fields=['school', 'created_at'], name='ai_usage_school_time_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.feature} {self.status} {self.total_tokens} tokens'

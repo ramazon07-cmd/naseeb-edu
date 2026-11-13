@@ -8,7 +8,7 @@ from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ErrorDetail, ValidationError
 from rest_framework.response import Response
-from apps.users.throttles import ScopedRateThrottle
+from apps.users.throttles import ScopedRateThrottle, UserRateThrottle
 from apps.admissions.listing import ListQueryMixin
 from core.exceptions import CodedError
 from . import entitlements
@@ -65,7 +65,7 @@ def student_account_in_scope(account, user):
     """
     from apps.admissions.scoping import student_lookups
 
-    if user.role not in {User.Role.COUNSELOR, User.Role.ORGANIZATION}:
+    if user.role not in {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.ORGANIZATION}:
         return False
     lookups = student_lookups(user)
     if not lookups:
@@ -137,7 +137,10 @@ class IsRoleScopedUserAccess(permissions.BasePermission):
             and view.action in {'list', 'retrieve', 'update', 'partial_update'}
         ):
             return True
-        return obj.role == User.Role.STUDENT and student_account_in_scope(obj, user)
+        if obj.role != User.Role.STUDENT or not student_account_in_scope(obj, user):
+            return False
+        # An assistant resets their students' logins; editing the account stays with the counselor.
+        return user.role != User.Role.ASSISTANT or view.action in {'retrieve', 'temporary_credential'}
 
 
 class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
@@ -171,7 +174,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         user = self.request.user
         if user.is_product_admin:
             return User.objects.order_by('first_name', 'last_name', 'id')
-        if user.role in {User.Role.COUNSELOR, User.Role.ORGANIZATION}:
+        if user.role in {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.ORGANIZATION}:
             from apps.admissions.scoping import student_lookups
 
             lookups = student_lookups(user)
@@ -182,7 +185,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
             visible = Q(role=User.Role.STUDENT, **{
                 f'student_profile__{key}': value for key, value in lookups.items()
             })
-            visible |= Q(role=User.Role.COUNSELOR, school_id=user.school_id)
+            if user.role == User.Role.ASSISTANT:
+                visible |= Q(pk=user.pk)
+            else:
+                visible |= Q(role=User.Role.COUNSELOR, school_id=user.school_id)
             return User.objects.filter(visible).order_by('first_name', 'last_name', 'id')
         return User.objects.filter(id=user.id).order_by('id')
 
@@ -338,6 +344,9 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         data['assistant_enabled'] = entitlements.assistant_available(request.user, subscription)
         from apps.admissions.invites import pending_join_info, self_join_enabled
 
+        # Students connect Telegram on Meetings (code from the bot) for meeting messages and reminders.
+        from apps.telegram_bot.student_link import link_status
+        data['telegram'] = link_status(request.user) if request.user.role == User.Role.STUDENT else None
         # Off: "Add student" offers only the account the counselor creates.
         data['student_self_join'] = self_join_enabled()
         # A student who joined by invite sees only the waiting screen until confirmed.
@@ -351,7 +360,7 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         detail=False,
         methods=['post'],
         url_path='change-password',
-        throttle_classes=[ScopedRateThrottle],
+        throttle_classes=[UserRateThrottle],
         throttle_scope='password_change',
     )
     def change_password(self, request):
@@ -361,6 +370,10 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
         serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
+        # Counted only now: a refused password costs no hash and must not lock a student out for an hour.
+        limit = ScopedRateThrottle()
+        if not limit.allow_request(request, self):
+            self.throttled(request, limit.wait())
         try:
             with transaction.atomic():
                 user = complete_password_change(

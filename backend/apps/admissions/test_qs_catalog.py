@@ -158,7 +158,8 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         University.objects.create(name='Selective University', country='United Kingdom', acceptance_rate='9.00')
         University.objects.create(name='Open University', country='United Kingdom', acceptance_rate='60.00')
         bands = {item['name']: item['fit']['admission_band'] for item in self.research_as_student('UK')}
-        self.assertEqual(bands, {'Selective University': 'reach', 'Open University': 'safety'})
+        # 9% overall is about 4.5% for students from abroad: far reach for everyone.
+        self.assertEqual(bands, {'Selective University': 'far_reach', 'Open University': 'safety'})
 
     def test_onboarding_country_codes_match_catalogue_spellings(self):
         University.objects.create(name='Spelling University', country='United States of America')
@@ -169,7 +170,7 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         University.objects.bulk_create(University(name=f'Scored University {index}', country='Germany') for index in range(60))
         rows = self.research_as_student('UK')
         self.assertEqual(len(rows), 60)
-        self.assertTrue(all(row['fit']['reasons'] and 'academic' in row['fit']['score_breakdown'] for row in rows))
+        self.assertTrue(all(row['fit']['reasons'] and 'preferences' in row['fit']['score_breakdown'] for row in rows))
         scores = [row['fit']['match_score'] for row in rows]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
@@ -187,8 +188,9 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         # universities tie; QS rank only orders them within that tie.
         self.assertEqual(scores[priced.id], scores[unrelated.id])
         self.assertGreater(scores[target.id][0], scores[unrelated.id][0])
-        self.assertGreater(scores[with_data.id][0], scores[unrelated.id][0])
-        self.assertEqual([row['id'] for row in rows[-2:]], [unrelated.id, priced.id])
+        # Admissions data places the band; it adds nothing to fit.
+        self.assertEqual(scores[with_data.id][0], scores[unrelated.id][0])
+        self.assertEqual([row['id'] for row in rows[-3:]], [unrelated.id, priced.id, with_data.id])
 
     def test_fit_sort_queries_do_not_grow_with_the_catalogue(self):
         def queries():
@@ -211,12 +213,13 @@ class WorldwideCollegeResearchTests(RoleIsolationBase):
         University.objects.create(name='Optional University', country='United Kingdom', ranking=60, test_optional=True)
         results = {item['name']: item['fit'] for item in self.research_as_student('UK')}
         unknown, known = results['Unknown University'], results['Known University']
-        # The same row with admissions data that fits ranks above the one without.
-        self.assertGreater(known['match_score'], unknown['match_score'])
+        # Admissions data places the band; without it the band is unknown, and fit is the same.
+        self.assertEqual(known['match_score'], unknown['match_score'])
+        self.assertIsNone(unknown['admission_band'])
+        self.assertIsNotNone(known['admission_band'])
         self.assertNotIn('tests_optional', [reason['code'] for reason in unknown['reasons']])
         self.assertFalse([reason for reason in unknown['reasons'] if 'SAT' in reason['text']])
         self.assertIn('test_range_missing', [gap['code'] for gap in unknown['gaps']])
-        self.assertEqual(unknown['score_breakdown']['academic'] - known['score_breakdown']['academic'], -22)
         self.assertIn('tests_optional', [reason['code'] for reason in results['Optional University']['reasons']])
 
     def test_qs_only_rows_do_not_outrank_curated_universities(self):

@@ -108,6 +108,7 @@ export const INVITE_TRANSLATIONS = {
   'Password requirements': ['Parol talablari', 'Требования к паролю'],
   'At least 8 characters': ['Kamida 8 ta belgi', 'Не меньше 8 символов'],
   'Not only numbers': ['Faqat raqamlardan iborat emas', 'Не только из цифр'],
+  'Not like your name or login': ['Ismingiz yoki loginingizga o‘xshamaydi', 'Не похож на ваше имя или логин'],
   'Both passwords match': ['Ikkala parol bir xil', 'Оба пароля совпадают'],
   'If you sign out now, ask your counselor for a new temporary password.': [
     'Hozir chiqsangiz, yangi vaqtinchalik parolni maslahatchingizdan so‘rashingiz kerak bo‘ladi.',
