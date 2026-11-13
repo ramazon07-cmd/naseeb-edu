@@ -276,6 +276,49 @@ def find_school_student(school, email='', phone='', full_name=''):
     return None
 
 
+SURNAME_ENDINGS = (
+    'ova', 'ov', 'eva', 'ev', 'yeva', 'yev', 'iyeva', 'iyev', 'bekova', 'bekov',
+    'skiy', 'skaya', 'zoda', 'zade', 'iy', 'aya',
+    'ова', 'ов', 'ева', 'ев', 'ёва', 'ёв', 'ский', 'ская', 'зода', 'заде', 'ий', 'ая',
+)
+# "o'g'li" / "qizi" (son / daughter of) and their Cyrillic forms, compared without apostrophes.
+PATRONYMIC_MARKERS = frozenset({'ogli', 'ugli', 'qizi', 'kizi', 'ўғли', 'угли', 'оглы', 'қизи', 'кизи', 'кызы'})
+_APOSTROPHES = "'\u2019\u2018\u02bb\u02bc\u02b9`\u00b4"
+
+
+def _plain(word):
+    return ''.join(ch for ch in word.lower() if ch not in _APOSTROPHES)
+
+
+def _looks_like_surname(word):
+    word = _plain(word)
+    # At least two letters before the ending, so given names such as "Eva" are not surnames.
+    return any(word.endswith(end) and len(word) - len(end) >= 2 for end in SURNAME_ENDINGS)
+
+
+def split_full_name(full_name):
+    """``'Muzaffarova Manzura'`` -> ``('Manzura', 'Muzaffarova')``: (first name, last name).
+
+    Counselors in Uzbekistan usually type the surname first. Rule: when the FIRST word
+    looks like an Uzbek/Russian surname (-ova/-ov, -eva/-ev, -yeva/-yev, -iyeva/-iyev,
+    -bekova/-bekov, -skiy/-skaya, -zoda/-zade, -iy, -aya, and the Cyrillic forms) and the
+    LAST word does not, the first word is the last name and the remaining words are the
+    first name. Anything else keeps the typed order: first word = first name, the rest =
+    last name ("Akbar Axmedov", "Sofiya Saydazimova", "Eva Ivanova"). A trailing
+    patronymic ("Bahodir o'g'li", "Bahodir qizi") is never part of the decision and always
+    stays with the last name. One word is a first name only.
+    """
+    words = str(full_name or '').split()
+    if not words:
+        return '', ''
+    patronymic = []
+    if len(words) >= 3 and _plain(words[-1]) in PATRONYMIC_MARKERS:
+        patronymic, words = words[-2:], words[:-2]
+    if len(words) >= 2 and _looks_like_surname(words[0]) and not _looks_like_surname(words[-1]):
+        return ' '.join(words[1:]), ' '.join([words[0], *patronymic])
+    return words[0], ' '.join([*words[1:], *patronymic])
+
+
 @transaction.atomic
 def create_student_account(*, school, full_name, password, created_by, email='', phone='', request=None):
     """The one way to create a student: account, profile and credential together.
@@ -295,7 +338,7 @@ def create_student_account(*, school, full_name, password, created_by, email='',
     from .models import ActivityLog
     from .services import ensure_student_profile
 
-    parts = full_name.split()
+    first_name, last_name = split_full_name(full_name)
     base_username = (slugify(full_name) or 'student')[:140]
     supplied_email = email if email and not User.objects.filter(email__iexact=email).exists() else ''
     username = _free_username(base_username)
@@ -311,8 +354,8 @@ def create_student_account(*, school, full_name, password, created_by, email='',
                     username=username,
                     email=supplied_email or f'{username}@{settings.PLACEHOLDER_EMAIL_DOMAIN}',
                     password=None,
-                    first_name=parts[0],
-                    last_name=' '.join(parts[1:]),
+                    first_name=first_name,
+                    last_name=last_name,
                     role=User.Role.STUDENT,
                     phone=phone,
                     school=school,

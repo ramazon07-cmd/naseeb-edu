@@ -285,6 +285,12 @@ STRINGS = {
     'field_email': {'uz': 'email', 'ru': 'email', 'en': 'email'},
     'field_phone': {'uz': 'telefon', 'ru': 'телефон', 'en': 'phone'},
     'add_card': {
+        'uz': "Yangi o'quvchi qo'shilsinmi?\n\nIsm: <b>{first}</b>\nFamiliya: <b>{last}</b>\n{email}\n{phone}\n\nMaktab: {school}. Vaqtinchalik parol avtomatik yaratiladi.",
+        'ru': 'Добавить нового ученика?\n\nИмя: <b>{first}</b>\nФамилия: <b>{last}</b>\n{email}\n{phone}\n\nШкола: {school}. Временный пароль создаётся автоматически.',
+        'en': 'Add this new student?\n\nFirst name: <b>{first}</b>\nLast name: <b>{last}</b>\n{email}\n{phone}\n\nSchool: {school}. A temporary password is made automatically.',
+    },
+    # Used when the backend gives no school name or name split (an older backend).
+    'add_card_plain': {
         'uz': "Yangi o'quvchi qo'shilsinmi?\n\n<b>{name}</b>\n{email}\n{phone}\n\nMaktab: sizning maktabingiz. Vaqtinchalik parol avtomatik yaratiladi.",
         'ru': 'Добавить нового ученика?\n\n<b>{name}</b>\n{email}\n{phone}\n\nШкола: ваша школа. Временный пароль создаётся автоматически.',
         'en': 'Add this new student?\n\n<b>{name}</b>\n{email}\n{phone}\n\nSchool: your school. A temporary password is made automatically.',
@@ -297,10 +303,11 @@ STRINGS = {
         'en': 'Adding...',
     },
     'add_done': {
-        'uz': "✅ O'quvchi qo'shildi: <b>{name}</b>\n\nLogin: <code>{username}</code>\nVaqtinchalik parol: <code>{password}</code>\nAmal qiladi: {expires} gacha\nSayt: {url}\n\nShu ma'lumotni o'quvchiga yuboring. Birinchi kirishda o'z parolini o'rnatadi. Yuborgach, bu xabarni o'chirib qo'ying.",
-        'ru': '✅ Ученик добавлен: <b>{name}</b>\n\nЛогин: <code>{username}</code>\nВременный пароль: <code>{password}</code>\nДействует до: {expires}\nСайт: {url}\n\nПередайте эти данные ученику. При первом входе он задаст свой пароль. После отправки удалите это сообщение.',
-        'en': '✅ Student added: <b>{name}</b>\n\nLogin: <code>{username}</code>\nTemporary password: <code>{password}</code>\nValid until: {expires}\nWebsite: {url}\n\nSend these to the student. They set their own password at first login. Delete this message once sent.',
+        'uz': "✅ O'quvchi qo'shildi: <b>{name}</b>\n{school_line}\nLogin: <code>{username}</code>\nVaqtinchalik parol: <code>{password}</code>\nAmal qiladi: {expires} gacha\nSayt: {url}\n\nShu ma'lumotni o'quvchiga yuboring. Birinchi kirishda o'z parolini o'rnatadi. Yuborgach, bu xabarni o'chirib qo'ying.",
+        'ru': '✅ Ученик добавлен: <b>{name}</b>\n{school_line}\nЛогин: <code>{username}</code>\nВременный пароль: <code>{password}</code>\nДействует до: {expires}\nСайт: {url}\n\nПередайте эти данные ученику. При первом входе он задаст свой пароль. После отправки удалите это сообщение.',
+        'en': '✅ Student added: <b>{name}</b>\n{school_line}\nLogin: <code>{username}</code>\nTemporary password: <code>{password}</code>\nValid until: {expires}\nWebsite: {url}\n\nSend these to the student. They set their own password at first login. Delete this message once sent.',
     },
+    'add_done_school': {'uz': 'Maktab: {school}\n', 'ru': 'Школа: {school}\n', 'en': 'School: {school}\n'},
     'add_cancelled': {
         'uz': "Bekor qilindi. Hech narsa qo'shilmadi.",
         'ru': 'Отменено. Ничего не добавлено.',

@@ -1,6 +1,7 @@
 from unittest import mock
 
 from django.contrib.auth import authenticate
+from django.db.models import Q
 
 from apps.admissions.models import StudentProfile
 from apps.telegram_bot import students as bot_students
@@ -21,8 +22,9 @@ class AddStudentTests(BotTestCase):
         }
         return self.post('add-student', payload)
 
-    def students_named(self, first_name):
-        return StudentProfile.objects.filter(user__first_name=first_name)
+    def students_named(self, name):
+        # Saved split: 'Saydazimova Sofiya' becomes first name Sofiya, last name Saydazimova.
+        return StudentProfile.objects.filter(Q(user__first_name=name) | Q(user__last_name=name))
 
     def test_counselor_adds_a_student_end_to_end(self):
         self.link(self.c1)
@@ -33,7 +35,7 @@ class AddStudentTests(BotTestCase):
         profile = StudentProfile.objects.select_related('user').get(user__username=body['username'])
         student = profile.user
         self.assertEqual(body['username'], 'saydazimova-sofiya')
-        self.assertEqual(body['full_name'], 'Saydazimova Sofiya')
+        self.assertEqual(body['full_name'], 'Sofiya Saydazimova')
         self.assertEqual(body['phone'], '+998910076825')
         self.assertNotIn('email', body)
         self.assertTrue(body['login_url'].endswith('/login'))
@@ -54,7 +56,7 @@ class AddStudentTests(BotTestCase):
         ).exists())
         # And the counselor sees the new student in the bot right away.
         names = self.names(self.post('students', {'chat_id': self.chat}))
-        self.assertIn('Saydazimova Sofiya', names)
+        self.assertIn('Sofiya Saydazimova', names)
 
     def test_assistant_adds_a_student_for_their_counselor(self):
         self.link(self.a1)
@@ -64,7 +66,7 @@ class AddStudentTests(BotTestCase):
         profile = StudentProfile.objects.get(user__username=response.json()['username'])
         self.assertEqual(profile.assigned_counselor, self.c1)
         self.assertEqual(profile.assigned_assistant, self.a1)
-        self.assertIn('Saydazimova Sofiya', self.names(self.post('students', {'chat_id': self.chat})))
+        self.assertIn('Sofiya Saydazimova', self.names(self.post('students', {'chat_id': self.chat})))
 
     def test_bad_input_is_refused_and_nothing_is_saved(self):
         self.link(self.c1)

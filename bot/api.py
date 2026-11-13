@@ -79,6 +79,9 @@ class ApiClient:
             'chat_id': chat_id, 'full_name': full_name, 'email': email, 'phone': phone,
         })
 
+    async def preview_student(self, chat_id, full_name):
+        return await self._call('POST', 'add-student/preview', json={'chat_id': chat_id, 'full_name': full_name})
+
     async def find_students(self, chat_id, query):
         return await self._call('POST', 'find-students', json={'chat_id': chat_id, 'query': query})
 

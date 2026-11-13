@@ -40,7 +40,7 @@ async def test_add_command_asks_then_confirms_then_creates(h):
     assert 'one message' in h.session.texts()[-1]
     await h.say(SOFIYA)
     card = h.session.of('SendMessage')[-1]
-    assert 'Saydazimova Sofiya' in card[1]['text'] and 'saidazimova.safiiya@gmail.com' in card[1]['text']
+    assert 'Saydazimova' in card[1]['text'] and 'Sofiya' in card[1]['text'] and 'saidazimova.safiiya@gmail.com' in card[1]['text']
     assert buttons(card) == ['add:yes', 'add:no']
     assert h.api.names('add_student') == []
 
@@ -123,9 +123,54 @@ async def test_backend_down_gives_the_card_back(h):
     await h.say(SOFIYA)
     await h.tap('add:yes')
     assert 'temporarily unavailable' in h.session.texts()[-1]
-    restored = [call for call in h.session.of('EditMessageText') if 'Saydazimova Sofiya' in call[1]['text']]
+    restored = [call for call in h.session.of('EditMessageText') if 'Saydazimova' in call[1]['text']]
     assert restored and buttons(restored[-1]) == ['add:yes', 'add:no']
     h.api.errors.pop('add_student')
     await h.tap('add:yes')
     assert len(h.api.names('add_student')) == 2
     assert 'Tmp-Pass-42' in h.session.texts()[-1]
+
+
+async def test_card_shows_the_split_name_and_the_real_school_escaped(h):
+    await h.log_in()
+    await h.say(SOFIYA)
+    assert h.api.names('preview_student') == [{'chat_id': 1, 'full_name': 'Saydazimova Sofiya'}]
+    card = h.session.of('SendMessage')[-1][1]['text']
+    assert 'First name: <b>Sofiya</b>' in card and 'Last name: <b>Saydazimova</b>' in card
+    assert 'School: Tashkent &lt;Int&gt; &amp; Co School.' in card
+    assert 'your school' not in card
+
+
+async def test_card_and_success_reply_in_uzbek_and_russian(h):
+    await h.log_in()
+    for lang, first, last, school_label in (
+        ('uz', 'Ism:', 'Familiya:', 'Maktab: Tashkent'), ('ru', 'Имя:', 'Фамилия:', 'Школа: Tashkent'),
+    ):
+        h.api.link = {**h.api.link, 'language': lang}
+        h.cache.drop_chat(1)
+        await h.say(SOFIYA)
+        card = h.session.of('SendMessage')[-1][1]['text']
+        assert first in card and last in card and school_label in card
+        await h.tap('add:yes')
+        assert school_label in h.session.texts()[-1]
+
+
+async def test_success_reply_names_the_school(h):
+    await h.log_in()
+    await h.say(SOFIYA)
+    await h.tap('add:yes')
+    done = h.session.texts()[-1]
+    assert 'School: Tashkent &lt;Int&gt; &amp; Co School\n' in done
+    assert 'Login: <code>saydazimova-sofiya</code>' in done
+
+
+async def test_an_older_backend_without_a_school_keeps_the_old_texts(h):
+    h.api.school = None
+    await h.log_in()
+    await h.say(SOFIYA)
+    card = h.session.of('SendMessage')[-1][1]['text']
+    assert 'School: your school.' in card and 'Saydazimova Sofiya' in card and 'First name' not in card
+    assert buttons(h.session.of('SendMessage')[-1]) == ['add:yes', 'add:no']
+    await h.tap('add:yes')
+    done = h.session.texts()[-1]
+    assert 'School:' not in done and 'Student added: <b>Saydazimova Sofiya</b>\n\nLogin' in done
