@@ -1,6 +1,6 @@
 # Rubric: supplemental essay
 
-rubric_version: 2 · essay_type: `supplement` (also used for `scholarship` until it gets its own rubric) · loaded with `_core.md`
+rubric_version: 3 · essay_type: `supplement` · loaded with `_core.md`
 
 Typical forms: "Why this university or major?", "Describe a community you belong to", "Tell us about
 something you enjoy learning". Lengths vary a lot (often 50 to 650 words). Use the `word_limit` the server
@@ -64,7 +64,18 @@ vocabulary, grammar or sentence variety.
 3. Another school's name or the wrong major left in. Flag as `clarity`; score `fit_specificity` 1.
 4. Prestige as the reason. Ask for a reason that survives if the school were unknown.
 
+## Uzbek and Russian writers
+
+Follow `_core.md` (Language fairness). Judge ideas, events and details, never grammar, spelling or vocabulary.
+A second-language English essay must not lose points in `voice` or `reflection` for plain wording, short
+sentences or literal phrasing; a plain sentence that only this person would write can earn a 3 or 4. A formal
+register, proverbs, a collective "we" and respect for elders are cultural rhetoric, not genericness. Essays in
+Uzbek or Russian use the same scale and the same criteria, and the reply is in the essay's language. Family
+work, caring duties and tutoring count as evidence the same as clubs. Never ask a student to start a new
+activity.
+
 ## Calibration
 
-`calibration/supplemental_essay/`: at least ten texts (why this school, community, curiosity), including
-Uzbek and Russian texts, two adversarial texts, and expected score ranges. Block production use until then.
+`calibration/supplement/` holds the texts (why this school, community, curiosity) and expected score
+ranges, including Uzbek and Russian texts and two adversarial texts. Block production use until the
+calibration tests pass.

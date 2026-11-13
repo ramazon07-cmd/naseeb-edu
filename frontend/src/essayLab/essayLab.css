@@ -5008,3 +5008,50 @@ span.el-tab-caret {
     background: var(--nb-card-soft);
   }
 }
+
+/* ---------- coach: per-type criteria, evidence, safety ---------- */
+.el-score-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.el-score-toggle {
+  width: 24px;
+  height: 24px;
+}
+
+.el-score-evidence {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--el-line);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--el-muted);
+}
+
+.el-score-evidence .el-link {
+  margin-left: 8px;
+}
+
+.el-coach-rubric {
+  margin: 0;
+  color: var(--el-muted);
+}
+
+.el-coach-safety {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--el-surface);
+  border: 1px solid var(--el-line);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--el-text);
+}
+
+.el-coach-safety p {
+  margin: 0;
+}

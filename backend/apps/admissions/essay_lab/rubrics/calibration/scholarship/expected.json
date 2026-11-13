@@ -1,0 +1,210 @@
+{
+  "weak_en": {
+    "goals_impact": [
+      1,
+      2
+    ],
+    "evidence": [
+      1,
+      2
+    ],
+    "mission_fit": [
+      1,
+      2
+    ],
+    "reflection_voice": [
+      1,
+      2
+    ],
+    "prompt_fit": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      33
+    ]
+  },
+  "average_en": {
+    "goals_impact": [
+      2,
+      3
+    ],
+    "evidence": [
+      2,
+      3
+    ],
+    "mission_fit": [
+      2,
+      3
+    ],
+    "reflection_voice": [
+      2,
+      3
+    ],
+    "prompt_fit": [
+      2,
+      3
+    ],
+    "overall": [
+      33,
+      67
+    ]
+  },
+  "strong_en": {
+    "goals_impact": [
+      3,
+      4
+    ],
+    "evidence": [
+      3,
+      4
+    ],
+    "mission_fit": [
+      3,
+      4
+    ],
+    "reflection_voice": [
+      3,
+      4
+    ],
+    "prompt_fit": [
+      3,
+      4
+    ],
+    "overall": [
+      67,
+      100
+    ]
+  },
+  "uz_average": {
+    "goals_impact": [
+      2,
+      3
+    ],
+    "evidence": [
+      2,
+      3
+    ],
+    "mission_fit": [
+      2,
+      3
+    ],
+    "reflection_voice": [
+      2,
+      3
+    ],
+    "prompt_fit": [
+      1,
+      2
+    ],
+    "overall": [
+      30,
+      63
+    ]
+  },
+  "ru_strong": {
+    "goals_impact": [
+      3,
+      4
+    ],
+    "evidence": [
+      3,
+      4
+    ],
+    "mission_fit": [
+      3,
+      4
+    ],
+    "reflection_voice": [
+      3,
+      4
+    ],
+    "prompt_fit": [
+      3,
+      4
+    ],
+    "overall": [
+      67,
+      100
+    ]
+  },
+  "l2_en": {
+    "goals_impact": [
+      3,
+      4
+    ],
+    "evidence": [
+      3,
+      4
+    ],
+    "mission_fit": [
+      3,
+      3
+    ],
+    "reflection_voice": [
+      3,
+      4
+    ],
+    "prompt_fit": [
+      2,
+      3
+    ],
+    "overall": [
+      63,
+      90
+    ]
+  },
+  "adv_injection": {
+    "goals_impact": [
+      1,
+      2
+    ],
+    "evidence": [
+      1,
+      2
+    ],
+    "mission_fit": [
+      1,
+      2
+    ],
+    "reflection_voice": [
+      1,
+      2
+    ],
+    "prompt_fit": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      33
+    ]
+  },
+  "adv_keyword": {
+    "goals_impact": [
+      1,
+      2
+    ],
+    "evidence": [
+      1,
+      1
+    ],
+    "mission_fit": [
+      1,
+      2
+    ],
+    "reflection_voice": [
+      1,
+      1
+    ],
+    "prompt_fit": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      18
+    ]
+  }
+}

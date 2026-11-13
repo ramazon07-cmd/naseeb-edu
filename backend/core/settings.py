@@ -85,6 +85,18 @@ GROQ_API_KEY = config('GROQ_API_KEY', default='').strip()
 GROQ_API_URL = config('GROQ_API_URL', default='https://api.groq.com/openai/v1/chat/completions').strip()
 GROQ_RECOMMENDATION_MODEL = config('GROQ_RECOMMENDATION_MODEL', default='openai/gpt-oss-20b').strip()
 AI_RECOMMENDATION_TIMEOUT_SECONDS = config('AI_RECOMMENDATION_TIMEOUT_SECONDS', default=30, cast=int)
+# Education-match guidance is cached per profile, so these count real provider calls only.
+# The platform budget is required (0 = AI off; rule-based guidance remains); 0 = no cap for school/user.
+EDUCATION_MATCH_AI_DAILY_BUDGET = config('EDUCATION_MATCH_AI_DAILY_BUDGET', default=3000, cast=int)
+EDUCATION_MATCH_AI_SCHOOL_DAILY_BUDGET = config('EDUCATION_MATCH_AI_SCHOOL_DAILY_BUDGET', default=600, cast=int)
+EDUCATION_MATCH_AI_USER_DAILY_LIMIT = config('EDUCATION_MATCH_AI_USER_DAILY_LIMIT', default=30, cast=int)
+# Non-streaming provider calls (letter suggestions, education match) retry transient failures
+# (timeout, connection error, 429, 5xx) this many extra times; the call is budgeted once.
+AI_PROVIDER_RETRIES = config('AI_PROVIDER_RETRIES', default=1, cast=int)
+# Optional USD prices per 1M tokens: when both are set, the admin Health page and
+# `ai_usage_report` show estimated spend. Empty = no cost figure.
+AI_PRICE_INPUT_USD_PER_1M = config('AI_PRICE_INPUT_USD_PER_1M', default='').strip()
+AI_PRICE_OUTPUT_USD_PER_1M = config('AI_PRICE_OUTPUT_USD_PER_1M', default='').strip()
 # Essay Lab. The coach reuses the AI gateway credentials above.
 ESSAY_COACH_MODEL = config('ESSAY_COACH_MODEL', default=AI_ASSISTANT_MODEL).strip()
 ESSAY_COACH_TIMEOUT_SECONDS = config('ESSAY_COACH_TIMEOUT_SECONDS', default=40, cast=int)

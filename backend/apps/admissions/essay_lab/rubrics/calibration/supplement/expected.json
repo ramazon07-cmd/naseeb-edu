@@ -1,0 +1,210 @@
+{
+  "weak_en": {
+    "fit_specificity": [
+      1,
+      1
+    ],
+    "reflection": [
+      1,
+      2
+    ],
+    "evidence": [
+      1,
+      1
+    ],
+    "voice": [
+      1,
+      2
+    ],
+    "concision": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      17
+    ]
+  },
+  "average_en": {
+    "fit_specificity": [
+      2,
+      2
+    ],
+    "reflection": [
+      2,
+      2
+    ],
+    "evidence": [
+      2,
+      3
+    ],
+    "voice": [
+      2,
+      3
+    ],
+    "concision": [
+      2,
+      3
+    ],
+    "overall": [
+      33,
+      48
+    ]
+  },
+  "strong_en": {
+    "fit_specificity": [
+      3,
+      4
+    ],
+    "reflection": [
+      3,
+      4
+    ],
+    "evidence": [
+      3,
+      4
+    ],
+    "voice": [
+      3,
+      4
+    ],
+    "concision": [
+      3,
+      4
+    ],
+    "overall": [
+      67,
+      100
+    ]
+  },
+  "uz_average": {
+    "fit_specificity": [
+      2,
+      2
+    ],
+    "reflection": [
+      2,
+      3
+    ],
+    "evidence": [
+      2,
+      3
+    ],
+    "voice": [
+      2,
+      3
+    ],
+    "concision": [
+      1,
+      2
+    ],
+    "overall": [
+      30,
+      53
+    ]
+  },
+  "ru_strong": {
+    "fit_specificity": [
+      3,
+      4
+    ],
+    "reflection": [
+      3,
+      4
+    ],
+    "evidence": [
+      3,
+      3
+    ],
+    "voice": [
+      3,
+      4
+    ],
+    "concision": [
+      2,
+      3
+    ],
+    "overall": [
+      63,
+      90
+    ]
+  },
+  "l2_en": {
+    "fit_specificity": [
+      3,
+      3
+    ],
+    "reflection": [
+      3,
+      4
+    ],
+    "evidence": [
+      3,
+      3
+    ],
+    "voice": [
+      3,
+      4
+    ],
+    "concision": [
+      2,
+      3
+    ],
+    "overall": [
+      63,
+      80
+    ]
+  },
+  "adv_injection": {
+    "fit_specificity": [
+      1,
+      2
+    ],
+    "reflection": [
+      1,
+      2
+    ],
+    "evidence": [
+      1,
+      1
+    ],
+    "voice": [
+      1,
+      2
+    ],
+    "concision": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      27
+    ]
+  },
+  "adv_keyword": {
+    "fit_specificity": [
+      1,
+      2
+    ],
+    "reflection": [
+      1,
+      1
+    ],
+    "evidence": [
+      1,
+      1
+    ],
+    "voice": [
+      1,
+      1
+    ],
+    "concision": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      13
+    ]
+  }
+}

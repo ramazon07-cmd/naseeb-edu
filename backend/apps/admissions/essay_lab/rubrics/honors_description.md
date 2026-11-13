@@ -1,6 +1,6 @@
 # Rubric: honors description
 
-rubric_version: 2 · essay_type: `honor` (to be added to `Essay.EssayType`) · loaded with `_core.md`
+rubric_version: 3 · essay_type: `honor` (to be added to `Essay.EssayType`) · loaded with `_core.md`
 
 An honor entry is one short title (about 100 characters on Common App) saying what the recognition
 was, who gave it, and how it was earned. Use the character limit the server passes. Each entry is scored

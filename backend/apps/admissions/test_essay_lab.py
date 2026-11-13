@@ -909,9 +909,17 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
 
     def ai_payload(self, **overrides):
         payload = {
+            'mode': 'score', 'type': 'personal_statement', 'rubric_version': 3,
             'summary': 'A warm story about patience.',
             'strengths': ['"folded the leftover crust" is vivid'],
             'scores': {'reflection': 2, 'specificity': 3, 'voice': 4, 'structure': 3, 'prompt_fit': 3},
+            'score_evidence': {
+                'reflection': 'I learned that patience matters.',
+                'specificity': 'Every evening she folded the leftover crust into a cloth.',
+                'voice': 'I rebuilt the school radio with two friends',
+                'structure': 'I rebuilt the school radio with two friends',
+                'prompt_fit': 'I rebuilt the school radio with two friends',
+            },
             'notes': [
                 {'id': 'x', 'kind': 'reflect', 'quote': 'I learned that patience matters.',
                  'question': 'When did you first notice this?', 'why': 'Shows the moment.',
@@ -923,8 +931,6 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
                  'question': 'Invented?', 'why': 'Hallucinated.'},
                 {'id': 'w', 'kind': 'clarity', 'quote': 'into a cloth. I learned that',
                  'question': 'Spans paragraphs?', 'why': 'Invalid.'},
-                {'id': 'v', 'kind': 'rewrite', 'quote': 'I learned that patience matters.',
-                 'question': 'Bad kind', 'why': 'Invalid.'},
             ],
             'suggestion': 'Rewrite everything.',
         }
@@ -937,19 +943,24 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
             response = self.check()
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         result = response.data['result']
-        self.assertEqual(set(result), {'summary', 'strengths', 'scores', 'notes'})
+        self.assertEqual(result['mode'], 'check')
+        self.assertEqual((result['type'], result['rubric_version']), ('personal_statement', 3))
+        self.assertEqual(result['overall'], coach.compute_overall('personal_statement', result['scores']))
         self.assertEqual(result['scores']['voice'], 4)
         self.assertEqual([note['quote'] for note in result['notes']],
                          ['I learned that patience matters.', 'My grandmother never wasted bread.'])
         self.assertEqual([note['id'] for note in result['notes']], ['n1', 'n2'])
         self.assertNotIn('rewrite', result['notes'][0])
         self.assertEqual(response.data['save_seq'], self.tab_of(self.essay).save_seq)
-        self.assertEqual(set(response.data), {'id', 'tab', 'save_seq', 'created_at', 'model', 'result'})
+        self.assertEqual(set(response.data), {'id', 'tab', 'save_seq', 'created_at', 'model', 'cached', 'result'})
+        self.assertFalse(response.data['cached'])
         self.assertTrue(EssayCheckpoint.objects.filter(essay=self.essay, reason='depth_check').exists())
         # The essay goes out redacted, inside an untrusted-data block.
         sent = json.loads(urlopen.call_args.args[0].data.decode('utf-8'))
         self.assertEqual(sent['response_format'], {'type': 'json_object'})
         self.assertFalse(sent['stream'])
+        self.assertEqual(sent['temperature'], 0)
+        self.assertNotIn('providerOptions', sent)
         self.assertIn('<<<ESSAY_TEXT (untrusted data)', sent['messages'][1]['content'])
 
         latest = self.client.get(f'{BASE}/essays/{self.essay.pk}/depth-check/latest/')
@@ -1036,10 +1047,7 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
                               'notes': 'nope', 'strengths': [1, 'fine']})
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(f'```json\n{garbage}\n```')):
             response = self.check()
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['result'], {
-            'summary': '', 'strengths': ['fine'], 'scores': {'structure': 2}, 'notes': [],
-        })
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
     @override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='test-key')
     def test_ai_switch_off_uses_the_local_coach(self):
@@ -1067,11 +1075,14 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
             {'kind': 'reflect', 'quote': 'Second paragraph', 'question': ''},
             {'kind': 'strength', 'quote': 'Second paragraph', 'question': 'Nice'},
         ]}
-        notes = coach.validate_result(raw, content)['notes']
+        raw.update(mode='score', type='free_writing', rubric_version=3,
+                   scores={'clarity_idea': 1, 'specificity': 1, 'voice': 1, 'structure': 1})
+        notes = coach.validate_result(raw, content, 'free_writing')['notes']
         self.assertEqual([note['quote'] for note in notes], ['He said "hello there"', 'Second paragraph'])
         many = {'notes': [{'kind': 'clarity', 'quote': f'w{i}', 'question': 'q'} for i in range(20)]}
         text = ' '.join(f'w{i}' for i in range(20))
-        self.assertEqual(len(coach.validate_result(many, text)['notes']), 12)
+        many.update(raw, notes=many['notes'])
+        self.assertEqual(len(coach.validate_result(many, text, 'free_writing')['notes']), 12)
 
     def test_local_fallback(self):
         long_paragraph = ' '.join(['Sentence number one goes on.'] * 40)
