@@ -102,6 +102,24 @@ class TelegramIsolationAuditTests(BotTestCase):
         texts = [m['text'] for m in student_link.pending_messages()['messages'] if m['chat_id'] == 7100]
         self.assertEqual(texts, [])
 
+    def test_a_student_moving_to_a_new_chat_keeps_their_waiting_messages(self):
+        """Unsent texts follow the SAME student to the new chat (lease cleared); sent ones and other chats stay."""
+        self.link_student(self.s1.user, 7110)
+        self.link_student(self.s4.user, 7111)
+        waiting = TelegramOutbox.objects.create(chat_id=7110, text='Meeting at 10:00')
+        leased = TelegramOutbox.objects.create(chat_id=7110, text='Leased, not yet sent', claimed_at=timezone.now())
+        done = TelegramOutbox.objects.create(chat_id=7110, text='Already sent', sent_at=timezone.now())
+        other = TelegramOutbox.objects.create(chat_id=7111, text='Another student message')
+        self.link_student(self.s1.user, 7112)          # same student, new chat
+        for row in (waiting, leased, done, other):
+            row.refresh_from_db()
+        self.assertEqual((waiting.chat_id, waiting.claimed_at), (7112, None))
+        self.assertEqual((leased.chat_id, leased.claimed_at), (7112, None))
+        self.assertEqual(done.chat_id, 7110)
+        self.assertEqual(other.chat_id, 7111)
+        delivered = {m['text'] for m in student_link.pending_messages()['messages'] if m['chat_id'] == 7112}
+        self.assertEqual(delivered, {'Meeting at 10:00', 'Leased, not yet sent'})
+
     def test_meeting_texts_are_addressed_to_the_students_own_chat_only(self):
         self.link_student(self.s1.user, 7201)
         self.link_student(self.s4.user, 7202)

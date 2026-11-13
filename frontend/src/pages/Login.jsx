@@ -3,8 +3,8 @@ import { api } from '../api';
 import { ArrowRight, Check, Circle, Eye, EyeOff, Lock, LogOut, User } from 'lucide-react';
 import { t } from '../i18n';
 import { Field, PasswordInput } from '../components/forms';
-import { LanguagePicker, ThemePicker } from '../design/blue/controls';
-import { useBlueTheme } from '../design/blue/theme';
+import { LanguagePicker, LoginThemeToggle } from '../design/blue/controls';
+import { useLoginTheme } from '../design/blue/theme';
 import '../design/blue/login.css';
 import { GRADES, gradeText } from '../lib/format';
 import { fullName } from '../lib/labels';
@@ -15,6 +15,12 @@ export const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SH
 const REMEMBER_KEY = 'naseeb-edu-remember-username-v1';
 const rememberedUsername = () => {
   try { return window.localStorage.getItem(REMEMBER_KEY) || ''; } catch { return ''; }
+};
+// Called on an explicit sign-out: on a shared school computer the next person
+// must not find the previous username in the form. Remembering is opt-in again
+// (the box is ticked per sign-in).
+export const forgetRememberedUsername = () => {
+  try { window.localStorage.removeItem(REMEMBER_KEY); } catch { /* A convenience only. */ }
 };
 const rememberUsername = (username) => {
   try {
@@ -33,7 +39,7 @@ function greeting() {
 // The sign-in backdrop, top bar (logo, language, theme) and footer, shared by
 // the sign-in form and the first-password step.
 function LoginFrame({ language, changeLanguage, onBrand, brandLabel, leave, children }) {
-  const theme = useBlueTheme();
+  const theme = useLoginTheme();
   return <main className="nb-login" data-nb-theme={theme.mode} data-nb-read={theme.reading ? 'true' : 'false'}>
     <div className="nb-backdrop" aria-hidden="true" />
     <header className="nb-login-bar">
@@ -43,7 +49,7 @@ function LoginFrame({ language, changeLanguage, onBrand, brandLabel, leave, chil
       <div className="nb-login-prefs">
         {leave}
         <LanguagePicker language={language} onChange={changeLanguage} variant="segmented" />
-        <ThemePicker variant="toggle" />
+        <LoginThemeToggle />
       </div>
     </header>
     {children}

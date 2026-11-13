@@ -219,35 +219,6 @@
 }
 
 /* ---- Telegram connect dialog and reminder ---------------------------------- */
-.nb-blue .telegram-dialog-backdrop,
-.nb-blue .modal-backdrop {
-  --text: var(--nb-card-fg);
-  --text-subtle: var(--nb-muted);
-  --text-disabled: var(--nb-faint);
-  --muted: var(--nb-muted);
-  --surface: var(--nb-card);
-  --surface-raised: var(--nb-card);
-  --surface-soft: var(--nb-card-soft);
-  --surface-inset: var(--nb-card-soft);
-  --surface-hover: var(--nb-card-hover);
-  --surface-active: var(--nb-tint-strong);
-  --canvas: var(--nb-card-soft);
-  --border: var(--nb-line);
-  --border-subtle: var(--nb-line-soft);
-  --border-strong: var(--nb-line);
-  --accent: var(--nb-blue);
-  --accent-deep: var(--nb-blue);
-  --accent-hover: var(--nb-blue-d);
-  --accent-contrast: var(--nb-on-blue, #fff);
-  --accent-gradient: var(--nb-btn);
-  --accent-shadow: rgba(0, 62, 190, 0.3);
-  --focus-ring: var(--nb-focus);
-  --danger: var(--nb-late);
-  --overlay: rgba(4, 22, 63, 0.5);
-  --shadow-modal: 0 28px 70px -20px rgba(4, 22, 63, 0.55);
-  font-family: var(--nb-font);
-}
-
 .nb-blue .telegram-dialog {
   width: min(460px, 100%);
   padding: 34px 28px 22px;
@@ -340,79 +311,10 @@
   color: var(--nb-blue);
 }
 
-/* ---- Request / reschedule scheduler (a classic Modal inside the shell) ----- */
-.nb-blue .modal-backdrop {
-  background: var(--overlay);
-}
-
-.nb-blue .modal-backdrop .modal {
-  border: 1px solid var(--nb-line-soft);
-  border-radius: var(--nb-r-xl);
-  background: var(--nb-card);
-  color: var(--nb-card-fg);
-}
-
-.nb-blue .modal-backdrop .modal > header {
-  background: var(--nb-card);
-  border-bottom: 1px solid var(--nb-line-soft);
-}
-
-.nb-blue .modal-backdrop .modal > header .eyebrow {
-  color: var(--nb-blue);
-  font-weight: 800;
-}
-
-.nb-blue .modal-backdrop .modal > header h2 {
-  color: var(--nb-ink-strong);
-  font-weight: 800;
-}
-
-.nb-blue .modal-backdrop .modal .icon-button {
-  border-radius: 50%;
-  background: var(--nb-card-soft);
-  color: var(--nb-ink-2);
-  border-color: var(--nb-line-soft);
-}
-
-.nb-blue .modal-backdrop .modal :where(input, select, textarea) {
-  border: 1px solid var(--nb-line);
-  border-radius: var(--nb-r-sm);
-  background: var(--nb-card-soft);
-  color: var(--nb-card-fg);
-  font-family: inherit;
-}
-
-.nb-blue .modal-backdrop .modal :where(input, select, textarea):focus-visible {
-  outline: 3px solid var(--nb-focus);
-  outline-offset: 1px;
-}
-
-.nb-blue .modal-backdrop .modal .button {
-  min-height: 46px;
-  padding: 0 24px;
-  border: 1px solid transparent;
-  border-radius: var(--nb-r-pill);
-  font-family: inherit;
-  font-weight: 700;
-}
-
-.nb-blue .modal-backdrop .modal .button.primary {
-  background: var(--nb-btn);
-  color: var(--nb-btn-fg);
-  box-shadow: var(--nb-btn-shadow);
-}
-
-.nb-blue .modal-backdrop .modal .button.quiet {
-  background: var(--nb-btn-ghost);
-  color: var(--nb-btn-ghost-fg);
-  border-color: var(--nb-line);
-  box-shadow: none;
-}
-
-.nb-blue .modal-backdrop .modal .button:disabled {
-  opacity: 0.55;
-}
-
+/* ---- Request / reschedule scheduler (a classic Modal inside the shell) -----
+   The generic modal skin and its legacy-token bridge live in shell.css, so every
+   student dialog looks the same whether or not this chunk was loaded. Only the
+   booking calendar inside it is styled here. */
 .nb-blue .booking-cal-side {
   border-right-color: var(--nb-line-soft);
 }

@@ -11,6 +11,13 @@ import { ShellContext } from './ui';
 
 const SIDEBAR_KEY = 'naseeb-edu-sidebar';
 
+// Pages that draw their own blue PageHeader. While their lazy chunk or data is
+// still loading the shell does not know that yet, and it used to show a
+// fallback heading and wrap the skeleton in the frosted "legacy" panel: when the
+// page arrived both vanished and the whole page jumped (layout shift). These
+// pages never get them; only a page not on this list can.
+const BLUE_HEADER_PAGES = new Set(['dashboard', 'find_personality', 'student_center', 'roadmap', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'notifications']);
+
 // The student navigation in the design's order. A page the account cannot open
 // is skipped (Store is the one shown locked). Roadmap is locked for students
 // today (lib/routes.js); until it opens, its slot keeps the Tasks page reachable.
@@ -79,7 +86,8 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
     nav.find((item) => item.key === 'messages'),
     nav.find((item) => item.key === 'programs'),
   ].filter(Boolean);
-  const showFallbackTitle = headers === 0;
+  // A page known to draw its own header shows neither the fallback heading nor the legacy panel while it loads.
+  const showFallbackTitle = headers === 0 && !BLUE_HEADER_PAGES.has(page);
   const title = pageMeta ? (navLabels[page] || t(pageMeta.label)) : '';
 
   return <ShellContext.Provider value={shellContext}>

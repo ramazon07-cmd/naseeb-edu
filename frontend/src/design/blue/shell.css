@@ -459,6 +459,21 @@
   padding-top: 0;
 }
 
+/* "Refreshing this page" / "Busy, retrying" notes come and go while a page loads:
+   in the flow they pushed the whole page down and up again (layout shift), so they
+   float above the content instead. Errors stay in the flow on purpose. */
+.nb-content > .data-state.refreshing {
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  z-index: 40;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 .nb-fallback-header {
   margin-bottom: var(--nb-gap);
 }
@@ -476,8 +491,16 @@
   color: var(--text);
 }
 
-.nb-blue[data-nb-theme='tinted'] .nb-content.is-legacy,
-.nb-blue[data-nb-theme='night'] .nb-content.is-legacy {
+/* ---- Legacy token bridge (single source) ---------------------------------------
+   The classic components read the classic colour variables (--surface, --control-bg,
+   --placeholder ...). Every legacy surface under .nb-blue is mapped here, once, so no
+   page chunk has to repeat it and nothing depends on which chunk loaded first.
+
+   A) Surfaces that sit directly on the page panel (un-ported pages, Student Center,
+      Tasks, Roadmap): the cards are lifted one step above the panel, so these are
+      fixed values, not the card tokens. */
+.nb-blue[data-nb-theme='tinted'] :is(.nb-content.is-legacy, .nb-center, .nb-tasks, .nb-roadmap),
+.nb-blue[data-nb-theme='night'] :is(.nb-content.is-legacy, .nb-center, .nb-tasks, .nb-roadmap) {
   --text: #f2f5fa;
   --muted: #a7b4c9;
   --text-subtle: #a7b4c9;
@@ -504,7 +527,7 @@
   --eyebrow: #8cc4f7;
 }
 
-.nb-blue[data-nb-theme='night'] .nb-content.is-legacy {
+.nb-blue[data-nb-theme='night'] :is(.nb-content.is-legacy, .nb-center, .nb-tasks, .nb-roadmap) {
   --surface: #2c2c2e;
   --surface-raised: #2c2c2e;
   --surface-soft: #252527;
@@ -516,6 +539,122 @@
   --control-bg-hover: #252527;
   --control-bg-disabled: #252527;
   --control-option-bg: #2c2c2e;
+}
+
+/* B) Ported pages and dialogs whose classic components sit on a blue card
+      (.nb-bridge pages, Messages, every Modal): the classic surface, control and
+      placeholder tokens follow the blue card tokens, so all three looks and Reading
+      mode apply. Page files add only what they need on top (text, border, accent). */
+.nb-blue :is(.nb-bridge, .messaging-page, .modal-backdrop, .telegram-dialog-backdrop) {
+  --muted: var(--nb-muted);
+  --text-subtle: var(--nb-muted);
+  --placeholder: var(--nb-faint);
+  --canvas: var(--nb-card-soft);
+  --surface: var(--nb-card);
+  --surface-raised: var(--nb-card);
+  --surface-soft: var(--nb-card-soft);
+  --surface-inset: var(--nb-card-soft);
+  --surface-hover: var(--nb-card-hover);
+  --surface-active: var(--nb-tint-strong);
+  --control-bg: var(--nb-card);
+  --control-bg-hover: var(--nb-card-hover);
+  --control-bg-disabled: var(--nb-card-soft);
+  --control-option-bg: var(--nb-card);
+}
+
+/* ---- Student dialogs (the classic <Modal>, used by every student page) ------------
+   Lives here, not in a lazy page chunk: the look of a dialog must not depend on
+   which page was opened first. */
+.nb-blue :is(.modal-backdrop, .telegram-dialog-backdrop) {
+  --text: var(--nb-card-fg);
+  --text-disabled: var(--nb-faint);
+  --control-bg: var(--nb-card-soft);
+  --border: var(--nb-line);
+  --border-subtle: var(--nb-line-soft);
+  --border-strong: var(--nb-line);
+  --accent: var(--nb-blue);
+  --accent-deep: var(--nb-blue);
+  --accent-hover: var(--nb-blue-d);
+  --accent-contrast: var(--nb-on-blue, #fff);
+  --accent-gradient: var(--nb-btn);
+  --accent-shadow: rgba(0, 62, 190, 0.3);
+  --focus-ring: var(--nb-focus);
+  --danger: var(--nb-late);
+  --overlay: rgba(4, 22, 63, 0.5);
+  --shadow-modal: 0 28px 70px -20px rgba(4, 22, 63, 0.55);
+  font-family: var(--nb-font);
+}
+
+.nb-blue .modal-backdrop {
+  background: var(--overlay);
+}
+
+.nb-blue .modal-backdrop .modal {
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-xl);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+}
+
+.nb-blue .modal-backdrop .modal > header {
+  background: var(--nb-card);
+  border-bottom: 1px solid var(--nb-line-soft);
+}
+
+.nb-blue .modal-backdrop .modal > header .eyebrow {
+  color: var(--nb-blue);
+  font-weight: 800;
+}
+
+.nb-blue .modal-backdrop .modal > header h2 {
+  color: var(--nb-ink-strong);
+  font-weight: 800;
+}
+
+.nb-blue .modal-backdrop .modal .icon-button {
+  border-radius: 50%;
+  background: var(--nb-card-soft);
+  color: var(--nb-ink-2);
+  border-color: var(--nb-line-soft);
+}
+
+.nb-blue .modal-backdrop .modal :where(input, select, textarea) {
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-card-soft);
+  color: var(--nb-card-fg);
+  font-family: inherit;
+}
+
+.nb-blue .modal-backdrop .modal :where(input, select, textarea):focus-visible {
+  outline: 3px solid var(--nb-focus);
+  outline-offset: 1px;
+}
+
+.nb-blue .modal-backdrop .modal .button {
+  min-height: 46px;
+  padding: 0 24px;
+  border: 1px solid transparent;
+  border-radius: var(--nb-r-pill);
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.nb-blue .modal-backdrop .modal .button.primary {
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+  box-shadow: var(--nb-btn-shadow);
+}
+
+.nb-blue .modal-backdrop .modal .button.quiet {
+  background: var(--nb-btn-ghost);
+  color: var(--nb-btn-ghost-fg);
+  border-color: var(--nb-line);
+  box-shadow: none;
+}
+
+.nb-blue .modal-backdrop .modal .button:disabled {
+  opacity: 0.55;
 }
 
 /* Collapsed rail (desktop): icons only. */

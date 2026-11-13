@@ -28,6 +28,7 @@ import { fullName, initials, label, ownStudent } from './lib/labels';
 import { isCounselor, isPlatformAdmin, isTaskManager, usesCounselorLayout } from './lib/roles';
 import { LANDING_PATH, LOGIN_PATH, assistantInviteTokenFor, buildPath, canOpenPage, isPageLocked, joinTokenFor, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
 import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchResultTarget, searchText } from './lib/searchIndex';
+import { ASSESSMENT_DESCRIPTION } from './lib/assessmentMeta';
 import { STUDENT_SHELL_KEYS, loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
@@ -39,7 +40,7 @@ import { NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, summary
 import { liveReloadKeys, unreadConversations } from './lib/counselorCounts';
 import { createPoller } from './lib/poller';
 import { busyRetryDelay } from './lib/backoff';
-import { ForcedPasswordChange, Login } from './pages/Login';
+import { ForcedPasswordChange, Login, forgetRememberedUsername } from './pages/Login';
 import { clearUserSessionStorage, clearUserStorage, dropLegacySharedKeys } from './userStorage';
 import { forgetAccountDashboardLayout, loadAccountDashboardLayout } from './dashboardLayout';
 import { useTheme } from './hooks/useTheme';
@@ -101,10 +102,6 @@ const RecentlyJoinedPage = lazyNamed(() => import('./components/StudentInvites')
 const JoinedBanner = lazyNamed(() => import('./components/StudentInvites'), 'JoinedBanner');
 const AddStudentModal = lazyNamed(() => import('./components/StudentInvites'), 'AddStudentModal');
 
-// Kept equal to CHALLENGES.length by tests/codeSplitting.test.mjs, so the
-// navigation does not pull the question banks into the main bundle.
-export const ASSESSMENT_CHALLENGE_COUNT = 7;
-
 const SIDEBAR_KEY = 'naseeb-edu-sidebar';
 
 const readLocation = () => ({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash });
@@ -136,7 +133,7 @@ const PAGE_META = {
   certificates: { label: 'Certificates', icon: Award, description: 'Certificates and supporting files' },
   essays: { label: 'Essays', icon: GraduationCap, description: 'Essay drafts and revision history' },
   student_center: { label: 'Student Center', icon: UsersRound, description: 'Academic profile, portfolio, activities, and documents' },
-  find_personality: { label: 'Profile Assessment', icon: Fingerprint, description: `${ASSESSMENT_CHALLENGE_COUNT} challenges that reveal your best-fit study directions` },
+  find_personality: { label: 'Profile Assessment', icon: Fingerprint, description: ASSESSMENT_DESCRIPTION },
   roadmap: { label: 'Roadmap', icon: Compass, description: 'Level-linked missions, milestones, and reflections' },
   bookings: { label: 'Meetings', icon: CalendarClock, description: 'Schedule and manage meetings' },
   messages: { label: 'Messages', icon: MessageCircle, description: 'Private, group, and discussion messages' },
@@ -504,7 +501,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
   if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} />;
   if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage user={user} notify={notify} data={data} reload={reload} />;
-  if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify, updateUser, setPage }} />;
+  if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify, updateUser, setPage, resourceStatus, retryResources }} />;
   if (page === 'messages') return <MessagesPage {...{ user, data, stats, notify }} initialChannel={directChannel} channelId={params.channelId} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} moreTickets={Boolean(more?.supportTickets)} loadMoreTickets={() => loadMore('supportTickets')} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;
@@ -736,6 +733,8 @@ export default function App() {
   // seconds), so on a shared computer the cookie is gone before the form shows.
   async function finishSignOut({ keepDrafts = false } = {}) {
     const signedOut = user?.id;
+    // An explicit sign-out also forgets the "Remember me" username (shared school computers).
+    forgetRememberedUsername();
     setSignOutPrompt(false);
     resetWorkspace();
     const ended = api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);

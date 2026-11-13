@@ -90,7 +90,12 @@ class StudentCollaborationPermission(permissions.BasePermission):
             if isinstance(obj, Booking):
                 return obj.counselor_id == user.id
             if isinstance(obj, StudentMessage):
-                return user.id in {obj.sender_id, obj.recipient_id}
+                if user.id not in {obj.sender_id, obj.recipient_id}:
+                    return False
+                # Same rule as the student: staff may change only what they wrote; marking read is separate.
+                if request.method in permissions.SAFE_METHODS:
+                    return True
+                return view.action == 'read' or obj.sender_id == user.id
             return False
         if getattr(obj, 'student_id', None) != user.student_profile.id:
             return False

@@ -6,6 +6,7 @@ import { Panel } from '../components/ui';
 import { PageHeader } from '../design/blue/ui';
 import { ProfileResultCard } from '../components/ProfileResultCard';
 import { fullName, ownStudent } from '../lib/labels';
+import { ASSESSMENT_DESCRIPTION } from '../lib/assessmentMeta';
 import { profileCardData } from '../lib/profileCard';
 import { USER_STORAGE, userStorageKey } from '../userStorage';
 import {
@@ -842,7 +843,7 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
   }
 
   // The blue shell hides its fallback title once a PageHeader is mounted, so every state renders one.
-  const mindHeader = <PageHeader title={t('Profile Assessment')} subtitle={t('7 challenges that reveal your best-fit study directions')} />;
+  const mindHeader = <PageHeader title={t('Profile Assessment')} subtitle={t(ASSESSMENT_DESCRIPTION)} />;
 
   if (open) return <>{mindHeader}<ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} /></>
 

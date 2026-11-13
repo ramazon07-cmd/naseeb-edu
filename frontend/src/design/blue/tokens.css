@@ -7,11 +7,38 @@
    text falls through to the system UI font in the --nb-font stack. */
 @import url('@fontsource-variable/mona-sans/wght.css');
 
+/* The Latin subset is also served from /fonts so index.html can preload it for
+   the sign-in page and signed-in browsers (it is declared after the package's
+   own faces, so it wins for the Latin range). */
+@font-face {
+  font-family: 'Mona Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('/fonts/mona-sans-latin.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Metric-matched stand-in while Mona Sans loads, so the swap does not move the
+   layout (CLS). Mona Sans is about 7% wider than Arial at the weights the app
+   uses; ascent / descent are Mona's own (1090 / 320 per 1000) divided by the
+   size adjustment. Latin only: Cyrillic is not in Mona Sans and keeps the plain
+   system font. */
+@font-face {
+  font-family: 'Mona Sans Fallback';
+  src: local('Arial'), local('ArialMT'), local('Helvetica Neue'), local('Helvetica');
+  size-adjust: 107%;
+  ascent-override: 101.9%;
+  descent-override: 29.9%;
+  line-gap-override: 0%;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212;
+}
+
 :is(.nb-blue, .nb-login) {
   color-scheme: light;
 
   /* Type */
-  --nb-font: 'Mona Sans Variable', 'Mona Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --nb-font: 'Mona Sans Variable', 'Mona Sans', 'Mona Sans Fallback', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --nb-text-xs: 0.75rem;
   --nb-text-sm: 0.8125rem;
   --nb-text-md: 0.9375rem;

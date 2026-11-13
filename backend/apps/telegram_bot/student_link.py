@@ -94,13 +94,18 @@ def consume_token(chat_id, token, language=None):
             raise _invalid_token()
         pending.delete()
         # One chat per student and one student per chat: whatever either was linked to before is replaced.
-        # Their unsent messages are dropped too, so the new owner never receives them.
+        # When the chat changes owner, the previous owner's unsent messages are dropped so the new owner
+        # never receives them.
         if StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).exists():
             TelegramOutbox.objects.filter(chat_id=chat_id, sent_at__isnull=True).delete()
         StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).delete()
         previous = StudentTelegram.objects.filter(user=user).exclude(chat_id=chat_id).first()
         if previous:
-            TelegramOutbox.objects.filter(chat_id=previous.chat_id, sent_at__isnull=True).delete()
+            # The same student moved to a new chat: what was still waiting for them follows them there.
+            # The lease is cleared so the next bot poll picks the rows up for the new address.
+            TelegramOutbox.objects.filter(chat_id=previous.chat_id, sent_at__isnull=True).update(
+                chat_id=chat_id, claimed_at=None,
+            )
         try:
             StudentTelegram.objects.update_or_create(
                 user=user, defaults={'chat_id': chat_id, 'language': language, 'is_active': True},

@@ -27,7 +27,10 @@ const dayParts = (value) => {
   return { day: String(date.getDate()), month: formatDateLocale(value, { month: 'short' }).replace(/\bSept\b/, 'Sep').replace(/\.$/, '') };
 };
 
-function StudentNotifications({ notify, setPage }) {
+// Everything both lists share: the unread summary (kept fresh by the bell's
+// change event), the notice + chat feed, and the cleanup that stops notices read
+// here from coming back unread from the page cache (Back, the bell).
+function useNotificationsPageData({ staff, notify }) {
   const [summary, setSummary] = useState(null);
   const loadSummary = useCallback(() => api.notificationSummary().then(setSummary).catch(() => {}), []);
   useEffect(() => {
@@ -35,9 +38,14 @@ function StudentNotifications({ notify, setPage }) {
     window.addEventListener(NOTIFICATIONS_CHANGED, loadSummary);
     return () => window.removeEventListener(NOTIFICATIONS_CHANGED, loadSummary);
   }, [loadSummary]);
-  const feed = useNotificationFeed({ summary, notify, staff: false });
-  const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
+  const feed = useNotificationFeed({ summary, notify, staff });
   useEffect(() => () => invalidatePagedLists(['notifications']), []);
+  return { summary, feed };
+}
+
+function StudentNotifications({ notify, setPage }) {
+  const { summary, feed } = useNotificationsPageData({ staff: false, notify });
+  const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
   function open(notification) {
     const target = feed.read(notification);
     if (target) setPage(target.page, target.params);
@@ -87,17 +95,8 @@ function StudentNotifications({ notify, setPage }) {
 }
 
 function StaffNotifications({ notify, setPage }) {
-  const [summary, setSummary] = useState(null);
-  const loadSummary = useCallback(() => api.notificationSummary().then(setSummary).catch(() => {}), []);
-  useEffect(() => {
-    loadSummary();
-    window.addEventListener(NOTIFICATIONS_CHANGED, loadSummary);
-    return () => window.removeEventListener(NOTIFICATIONS_CHANGED, loadSummary);
-  }, [loadSummary]);
-  const feed = useNotificationFeed({ summary, notify, staff: true });
+  const { summary, feed } = useNotificationsPageData({ staff: false, notify });
   const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
-  // Notices read here must not come back unread from the page cache (Back, the bell).
-  useEffect(() => () => invalidatePagedLists(['notifications']), []);
 
   function open(notification) {
     const item = reviewItemForNotice(notification);

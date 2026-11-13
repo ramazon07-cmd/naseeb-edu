@@ -4,9 +4,10 @@ import { readFileSync } from 'node:fs';
 import { CHALLENGES } from '../src/challenges.js';
 
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+const assessmentMeta = readFileSync(new URL('../src/lib/assessmentMeta.js', import.meta.url), 'utf8');
 
 test('the navigation challenge count matches the question banks it no longer imports', () => {
-  const count = Number(app.match(/ASSESSMENT_CHALLENGE_COUNT = (\d+)/)[1]);
+  const count = Number(assessmentMeta.match(/ASSESSMENT_CHALLENGE_COUNT = (\d+)/)[1]);
   assert.equal(count, CHALLENGES.length);
 });
 

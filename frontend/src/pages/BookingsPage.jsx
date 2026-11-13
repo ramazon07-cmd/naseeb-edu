@@ -16,6 +16,7 @@ import './bookings-scheduler.css';
 import '../design/pages/meetings-blue.css';
 import { Avatar, BlueButton, Chip, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader, PillTabs, tabId } from '../design/blue/ui';
 import { InlineLoadError } from '../components/states';
+import { resourceDisplayState } from '../lib/resourceState';
 import { closeWindow, createLinkWatch, navigateWindow, openBlankWindow } from '../lib/telegramLink';
 
 // Meetings are shown and entered in one chosen zone: Tashkent by default, or
@@ -734,7 +735,7 @@ function TelegramReminder({ onOpen }) {
   return <div className="telegram-reminder" role="status"><Send size={16} aria-hidden="true" /><span>{t("Connect Telegram to request meetings")}</span><BlueButton size="sm" onClick={onOpen}>{t("Connect")}</BlueButton></div>;
 }
 
-export function BookingsPage({ user, data, reload, notify, updateUser, setPage }) {
+export function BookingsPage({ user, data, reload, notify, updateUser, setPage, resourceStatus, retryResources }) {
   const [zoneId, setZoneId] = useState(zone.id);
   const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
   const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
@@ -756,7 +757,7 @@ export function BookingsPage({ user, data, reload, notify, updateUser, setPage }
   const banner = locked ? (telegramOpen
     ? <TelegramConnectDialog notify={notify} onClose={() => setTelegramOpen(false)} onLinked={(telegram) => updateUser?.({ telegram })} />
     : <TelegramReminder onOpen={showDialog} />) : null;
-  const props = { data, reload, notify, guard, banner, picker, setPage };
+  const props = { data, reload, notify, guard, banner, picker, setPage, resourceStatus, retryResources };
   // key: a new zone redraws every time on the page.
   if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
   if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
@@ -765,30 +766,25 @@ export function BookingsPage({ user, data, reload, notify, updateUser, setPage }
 
 const statusChip = (status) => ({ confirmed: 'ok', completed: 'ok', pending: 'warn', cancelled: 'overdue', rejected: 'overdue', expired_unconfirmed: 'overdue' }[status] || 'default');
 
-// "My Naseeb team" (counselor, school contact): the same list the dashboard shows,
-// each person one tap from a direct message.
-function useStudentTeam() {
-  const [state, setState] = useState({ items: [], loading: true, error: '' });
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    let active = true;
-    setState((current) => ({ ...current, loading: true, error: '' }));
-    api.list('student-team').then(
-      (items) => active && setState({ items: Array.isArray(items) ? items : [], loading: false, error: '' }),
-      (err) => active && setState({ items: [], loading: false, error: err.message }),
-    );
-    return () => { active = false; };
-  }, [attempt]);
-  return { ...state, retry: () => setAttempt((value) => value + 1) };
+// "My Naseeb team" (counselor, school contact): the same list the dashboard shows. The workspace loader
+// fetches it with this page (data.team), so loading and error come from its resource status.
+function useStudentTeam(data, resourceStatus, retryResources) {
+  const state = resourceDisplayState(resourceStatus?.team);
+  return {
+    items: Array.isArray(data.team) ? data.team : [],
+    loading: state === 'loading',
+    error: state === 'error' ? resourceStatus.team.error : '',
+    retry: () => retryResources?.(['team']),
+  };
 }
 
-function StudentBookingsPage({ data, reload, notify, guard, banner, picker, setPage }) {
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker, setPage, resourceStatus, retryResources }) {
   const [tab, setTab] = useState('upcoming');
   const [open, setOpen] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const teamRef = useRef(null);
-  const team = useStudentTeam();
+  const team = useStudentTeam(data, resourceStatus, retryResources);
   const [openingId, setOpeningId] = useState(null);
   // A direct chat with a team member: open (or find) it, then land on it in Messages by its id.
   async function messageMember(member) {
@@ -799,6 +795,8 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, setP
       setPage('messages', { channelId: channel.id });
     } catch (err) {
       notify(err.message, 'error');
+    } finally {
+      // Navigation may not happen (page changed elsewhere, request failed): never leave the buttons disabled.
       setOpeningId(null);
     }
   }

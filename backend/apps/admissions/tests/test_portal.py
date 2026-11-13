@@ -9,6 +9,7 @@ from ..models import (
     ProgramService,
     ScreenTimeDaily,
     StoreItem,
+    StudentMessage,
 )
 from .base import RoleIsolationBase
 
@@ -74,6 +75,34 @@ class PortalRoleIsolationTests(RoleIsolationBase):
         self.assertEqual(completed.status_code, status.HTTP_200_OK)
         self.assertEqual(completed.data['status'], Booking.Status.COMPLETED)
         self.assertTrue(Notification.objects.filter(student=self.student_a, title='Meeting completed').exists())
+
+    def test_counselor_cannot_edit_or_delete_a_student_message_but_can_mark_it_read_and_edit_their_own(self):
+        self.client.force_authenticate(self.student_a_user)
+        sent = self.client.post('/api/student-messages/', {'body': 'Original question'}, format='json')
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED)
+        student_url = f"/api/student-messages/{sent.data['id']}/"
+
+        self.client.force_authenticate(self.counselor)
+        edited = self.client.patch(student_url, {'body': 'Rewritten by staff'}, format='json')
+        self.assertEqual(edited.status_code, status.HTTP_403_FORBIDDEN)
+        deleted = self.client.delete(student_url)
+        self.assertEqual(deleted.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(StudentMessage.objects.get(pk=sent.data['id']).body, 'Original question')
+
+        read = self.client.post(f'{student_url}read/', {}, format='json')
+        self.assertEqual(read.status_code, status.HTTP_200_OK)
+        self.assertTrue(StudentMessage.objects.get(pk=sent.data['id']).is_read)
+        self.assertEqual(self.client.get(student_url).status_code, status.HTTP_200_OK)
+
+        reply = self.client.post(
+            '/api/student-messages/', {'student': self.student_a.id, 'body': 'First answer'}, format='json',
+        )
+        self.assertEqual(reply.status_code, status.HTTP_201_CREATED)
+        own_url = f"/api/student-messages/{reply.data['id']}/"
+        own_edit = self.client.patch(own_url, {'body': 'Corrected answer'}, format='json')
+        self.assertEqual(own_edit.status_code, status.HTTP_200_OK)
+        self.assertEqual(own_edit.data['body'], 'Corrected answer')
+        self.assertEqual(self.client.delete(own_url).status_code, status.HTTP_204_NO_CONTENT)
 
     def test_booking_is_limited_to_related_staff_and_target_participant(self):
         other_school_staff = User.objects.create_user(

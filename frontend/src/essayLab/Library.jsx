@@ -14,7 +14,6 @@ import StreakCard from './StreakCard.jsx'
 import { latestEdit } from './streakModel.js'
 import { BlueButton, KpiRow, KpiTile, PageHeader } from '../design/blue/ui'
 import '../design/pages/catalog-blue-base.css'
-import '../design/pages/essay-blue.css'
 
 const LAYOUT_KEY = 'naseeb-essay-lab-layout'
 const STATUS_FILTERS = [
@@ -205,6 +204,8 @@ export default function Library({ user, essays, folders, loading, error, setEssa
       {error && <div className="el-alert is-error" role="alert"><span>{error}</span><button type="button" className="el-btn is-small" onClick={refresh}>{t('Retry')}</button></div>}
 
       {pickup && <PickupCard essay={pickup} onOpen={onOpen} />}
+      {/* Holds the pick-up card's place while essays load, so the list below does not jump down when it arrives. */}
+      {!pickup && loading && !essays.length && selected.kind !== 'trash' && <div className="el-pickup is-skeleton" aria-hidden="true" />}
 
       {selected.kind === 'trash'
         ? <TrashList trash={trash} onRestore={restoreEssay} onDelete={(essay) => setDialog({ kind: 'delete-forever', essay })} onBack={() => select({ kind: 'all' })} />

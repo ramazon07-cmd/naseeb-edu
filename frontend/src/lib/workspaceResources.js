@@ -118,7 +118,8 @@ export const STUDENT_PAGE_KEYS = {
   student_center: ['tasks', 'applications', 'essays', 'documents', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations'],
   find_personality: [],
   tasks: ['tasks'],
-  bookings: ['bookings'],
+  // The team strip on Meetings reads the same list the dashboard shows.
+  bookings: ['bookings', 'team'],
   messages: ['messageChannels'],
   programs: ['opportunityPrograms'],
   essay_lab: [],

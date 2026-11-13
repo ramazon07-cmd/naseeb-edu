@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronDown, Globe2, Moon, Sun } from 'lucide-react';
 import { LANGUAGE_OPTIONS, t } from '../../i18n';
-import { BLUE_MODES, isDarkMode, useBlueTheme } from './theme';
+import { BLUE_MODES, isDarkMode, useBlueTheme, useLoginTheme } from './theme';
 
 // A button that opens a small menu: closes on outside press, Escape and blur.
 function useMenu() {
@@ -48,18 +48,22 @@ export function LanguagePicker({ language, onChange, variant = 'menu' }) {
 
 const MODE_LABELS = () => ({ light: t('Light'), tinted: t('Dark · Tinted'), night: t('Dark · Night') });
 
-// Light / Dark Tinted / Dark Night plus Reading mode (menu), or `variant="toggle"`:
-// the sign-in page's single moon button.
-export function ThemePicker({ variant = 'menu' }) {
+// The sign-in page's single moon button. It uses the sign-in page's own
+// appearance store, so it never changes the in-app student theme.
+export function LoginThemeToggle() {
+  const theme = useLoginTheme();
+  const label = isDarkMode(theme.mode) ? t('Light') : t('Dark · Tinted');
+  const CurrentIcon = isDarkMode(theme.mode) ? Moon : Sun;
+  return <button type="button" className="nb-control nb-icon-control" onClick={theme.toggleDark} aria-label={label} title={label}><CurrentIcon size={18} aria-hidden="true" /></button>;
+}
+
+// Light / Dark Tinted / Dark Night plus Reading mode (menu), for the student app.
+export function ThemePicker() {
   const theme = useBlueTheme();
   const menu = useMenu();
   const id = useId();
   const labels = MODE_LABELS();
   const CurrentIcon = isDarkMode(theme.mode) ? Moon : Sun;
-  if (variant === 'toggle') {
-    const label = isDarkMode(theme.mode) ? t('Light') : t('Dark · Tinted');
-    return <button type="button" className="nb-control nb-icon-control" onClick={theme.toggleDark} aria-label={label} title={label}><CurrentIcon size={18} aria-hidden="true" /></button>;
-  }
   return <div className="nb-menu-wrap" ref={menu.ref}>
     <button type="button" className="nb-control nb-icon-control" aria-haspopup="menu" aria-expanded={menu.open} aria-controls={menu.open ? id : undefined} aria-label={`${t('Theme')}: ${labels[theme.mode]}`} title={t('Theme')} onClick={() => menu.setOpen(!menu.open)}>
       <CurrentIcon size={18} aria-hidden="true" />

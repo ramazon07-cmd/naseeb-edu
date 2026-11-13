@@ -1,29 +1,17 @@
 /* Shared bridge for the blue Programs, Essay Lab, Applications, College Search and Store pages.
    Those pages still use the classic stylesheets (catalog.css, college-redesign.css, ...), which read
    the classic tokens (--text, --surface, --border ...). Inside a blue page root (.nb-bridge) the
-   classic tokens are re-pointed at the blue tokens, so every classic rule follows the three looks
+   classic tokens are re-pointed at the blue tokens (the surface / control / placeholder tokens come
+   from the shared bridge in shell.css, the rest are set here), so every classic rule follows the three looks
    (light, tinted, night) and Reading mode. Scoped to .nb-blue: counselor screens never see it. */
 
 .nb-blue .nb-bridge {
   --text: var(--nb-ink);
-  --muted: var(--nb-muted);
-  --text-subtle: var(--nb-muted);
   --text-disabled: var(--nb-faint);
-  --placeholder: var(--nb-faint);
   --border: var(--nb-line);
   --border-subtle: var(--nb-line-soft);
   --border-strong: var(--nb-line);
   --border-interactive: var(--nb-blue);
-  --canvas: var(--nb-card-soft);
-  --surface: var(--nb-card);
-  --surface-raised: var(--nb-card);
-  --surface-soft: var(--nb-card-soft);
-  --surface-inset: var(--nb-card-soft);
-  --surface-hover: var(--nb-card-hover);
-  --surface-active: var(--nb-tint-strong);
-  --control-bg: var(--nb-card);
-  --control-bg-hover: var(--nb-card-hover);
-  --control-option-bg: var(--nb-card);
   --accent: var(--nb-blue);
   --accent-deep: var(--nb-blue-d);
   --accent-hover: var(--nb-blue-d);
