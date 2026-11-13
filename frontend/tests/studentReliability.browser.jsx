@@ -300,17 +300,17 @@ async function run() {
   });
   await check('Dashboard pending layout retries when online returns without reverting the chosen widgets', async () => {
     layoutBroken = true;
-    click('.dashboard-heading-actions button');
+    click('#nb-header-tools button');
     await waitFor(() => document.querySelector('.dashboard-customize-modal'));
     click('[data-widget-id="programs"] [aria-label="Hide widget: Programs"]');
     await waitFor(() => document.querySelector('[data-widget-column="hidden"] [data-widget-id="programs"]'));
     click('.dashboard-customize-modal footer .button.primary');
-    await waitFor(() => document.querySelector('.compact-dashboard > p[role="status"]'));
+    await waitFor(() => document.querySelector('.nb-dash > p.nb-dash-save-error[role="status"]'));
     assert(!document.querySelector('.nb-dash-w-programs'), 'Failed save reverted the local choice');
     layoutBroken = false;
     await new Promise((resolve) => setTimeout(resolve, 50));
     window.dispatchEvent(new Event('online'));
-    await waitFor(() => !document.querySelector('.compact-dashboard > p[role="status"]'));
+    await waitFor(() => !document.querySelector('.nb-dash > p.nb-dash-save-error[role="status"]'));
     assert(serverLayout?.hidden.includes('programs'), 'Pending layout was not uploaded');
     assert(!document.querySelector('.nb-dash-w-programs'), 'Retry changed the chosen widgets');
   });

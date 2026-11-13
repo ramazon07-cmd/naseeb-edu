@@ -95,7 +95,8 @@ function StudentNotifications({ notify, setPage }) {
 }
 
 function StaffNotifications({ notify, setPage }) {
-  const { summary, feed } = useNotificationsPageData({ staff: false, notify });
+  // staff: only notices addressed to this counselor (`mine`), never their students' own bell.
+  const { summary, feed } = useNotificationsPageData({ staff: true, notify });
   const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
 
   function open(notification) {

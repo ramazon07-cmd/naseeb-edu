@@ -99,13 +99,16 @@ def consume_token(chat_id, token, language=None):
         if StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).exists():
             TelegramOutbox.objects.filter(chat_id=chat_id, sent_at__isnull=True).delete()
         StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).delete()
-        previous = StudentTelegram.objects.filter(user=user).exclude(chat_id=chat_id).first()
+        # Locked so the old chat cannot change owner while its waiting rows are moved: another
+        # student's link to that chat first deletes this row and so waits for this transaction.
+        previous = StudentTelegram.objects.select_for_update().filter(user=user).exclude(chat_id=chat_id).first()
         if previous:
             # The same student moved to a new chat: what was still waiting for them follows them there.
-            # The lease is cleared so the next bot poll picks the rows up for the new address.
-            TelegramOutbox.objects.filter(chat_id=previous.chat_id, sent_at__isnull=True).update(
-                chat_id=chat_id, claimed_at=None,
-            )
+            # Rows the bot has already leased stay put (it is sending them to this student's old chat),
+            # so an acknowledgement never marks a moved row as delivered.
+            TelegramOutbox.objects.filter(
+                chat_id=previous.chat_id, sent_at__isnull=True, claimed_at__isnull=True,
+            ).update(chat_id=chat_id)
         try:
             StudentTelegram.objects.update_or_create(
                 user=user, defaults={'chat_id': chat_id, 'language': language, 'is_active': True},
