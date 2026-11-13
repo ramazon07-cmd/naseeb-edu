@@ -6,6 +6,9 @@ export const BLUE_MEETINGS_TRANSLATIONS = {
   'Minutes in meetings': ['Uchrashuvlarda o‘tkazilgan daqiqalar', 'Минут на встречах'],
   'Upcoming · {0}': ['Kelgusi · {0}', 'Предстоящие · {0}'],
   'Past meetings · {0}': ['O‘tgan uchrashuvlar · {0}', 'Прошедшие встречи · {0}'],
+  // A meeting the counselor proposed: the student confirms or declines it.
+  'Waiting for your confirmation': ['Tasdiqlashingiz kutilmoqda', 'Ждёт вашего подтверждения'],
+  'Confirm': ['Tasdiqlash', 'Подтвердить'],
 };
 
 export function blueMeetingsMessages(language) {

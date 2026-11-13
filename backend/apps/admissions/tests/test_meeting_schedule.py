@@ -19,7 +19,7 @@ class MeetingScheduleTests(RoleIsolationBase):
 
     def test_weekly_hours_become_bookable_slots(self):
         self.client.force_authenticate(self.counselor)
-        self.assertEqual(self.client.get(URL).data, {'duration_minutes': 45, 'hours': {}})
+        self.assertEqual(self.client.get(URL).data, {'duration_minutes': 45, 'hours': {}, 'min_notice_hours': 12})
         response = self.save()
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(self.client.get(URL).data['hours'], EVERY_DAY)
