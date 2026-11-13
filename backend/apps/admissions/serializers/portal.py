@@ -15,7 +15,7 @@ from ..models import (
     ScreenTimeDaily,
     StudentMessage,
 )
-from ..meetings import MAX_REPEAT_DAYS, MEETING_DURATIONS, overlapping
+from ..meetings import MAX_MIN_NOTICE_HOURS, MAX_REPEAT_DAYS, MEETING_DURATIONS, overlapping
 from ..scoping import booking_participants_for, school_staff, tenant_school_id
 from .common import StudentRecordSerializerMixin, scope_related_field
 
@@ -54,7 +54,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
     class Meta:
         model = Booking
         fields = '__all__'
-        read_only_fields = ('student', 'status', 'previous_starts_at')
+        read_only_fields = ('student', 'status', 'previous_starts_at', 'staff_requested')
 
     def get_participant_name(self, obj):
         if not obj.participant:
@@ -186,7 +186,8 @@ class MeetingScheduleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MeetingSchedule
-        fields = ('duration_minutes', 'hours')
+        fields = ('duration_minutes', 'hours', 'min_notice_hours')
+        extra_kwargs = {'min_notice_hours': {'min_value': 0, 'max_value': MAX_MIN_NOTICE_HOURS}}
 
     validate_duration_minutes = BookingSerializer.validate_duration_minutes
 
@@ -201,12 +202,14 @@ class MeetingScheduleSerializer(serializers.ModelSerializer):
                 parsed = sorted((time.fromisoformat(begin), time.fromisoformat(end)) for begin, end in ranges)
             except (TypeError, ValueError):
                 raise serializers.ValidationError('Enter each time as HH:MM.')
-            if any(end <= begin for begin, end in parsed):
+            # An end of 00:00 means midnight, the end of that day.
+            parsed = [(begin, end, end if end != time(0, 0) else time.max) for begin, end in parsed]
+            if any(real_end <= begin for begin, _, real_end in parsed):
                 raise serializers.ValidationError('Choose an end time after the start time.')
-            if any(later[0] < earlier[1] for earlier, later in zip(parsed, parsed[1:])):
+            if any(later[0] < earlier[2] for earlier, later in zip(parsed, parsed[1:])):
                 raise serializers.ValidationError('Hours on the same day cannot overlap.')
             if parsed:
-                clean[weekday] = [[begin.strftime('%H:%M'), end.strftime('%H:%M')] for begin, end in parsed]
+                clean[weekday] = [[begin.strftime('%H:%M'), end.strftime('%H:%M')] for begin, end, _ in parsed]
         return clean
 
 

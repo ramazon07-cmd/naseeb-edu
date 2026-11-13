@@ -24,6 +24,8 @@ import { UPLOAD_ACCEPT, toFormData, uploadProblem } from '../lib/fileUpload';
 import { formatFileSize } from '../lib/format';
 import { unreadConversations } from '../lib/counselorCounts';
 import { nextMenuIndex } from '../lib/menuNavigation';
+import '../design/pages/messages-blue.css';
+import { PageHeader } from '../design/blue/ui';
 
 const CONTACT_PAGE = 30;
 const CONTACT_SEARCH_DELAY_MS = 250;
@@ -768,6 +770,7 @@ export function MessagesPage({ user, data, stats = null, notify, initialChannel,
   }
 
   return <div className={`messaging-page section-stack kind-${activeChannel?.kind || tab} ${user.role === 'student' ? 'student-portal' : ''}`}>
+    {user.role === 'student' && <PageHeader title={t("Messages")} subtitle={t("Chat")} />}
     <div className={`messages-shell ${activeChannel || telegramOpen ? 'has-active-channel' : ''} ${activeChannel && detailsOpen ? 'has-details' : ''}`}>
       <aside className="channel-sidebar">
         <header className="chat-sidebar-header">

@@ -18,6 +18,10 @@ EVENTS = {
     'Meeting cancelled': 'cancelled',
     'Meeting reschedule requested': 'move_requested',
     'Meeting moved': 'moved',
+    # A staff member invited the student, who answers it.
+    'Meeting invitation': 'invited',
+    'Meeting invitation accepted': 'invite_accepted',
+    'Meeting invitation declined': 'invite_declined',
 }
 
 

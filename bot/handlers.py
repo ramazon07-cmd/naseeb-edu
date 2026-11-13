@@ -86,6 +86,18 @@ async def get_link(api, cache, chat_id, *, fresh=False):
     return link
 
 
+def command_args(text):
+    """What follows the command, split on any whitespace: "/add\nName" keeps the whole name."""
+    parts = (text or '').split(maxsplit=1)
+    return parts[1] if len(parts) > 1 else ''
+
+
+async def _leave_text_prompt(state):
+    """A new command ends a waiting /add or /reset prompt, so plain text is not read as its answer."""
+    if await state.get_state() in {AddStudent.details.state, ResetPassword.query.state}:
+        await state.set_state(None)
+
+
 async def language_of(state, cache, chat_id):
     data = await state.get_data()
     if data.get('lang'):
@@ -328,6 +340,7 @@ async def login_confirm(callback: CallbackQuery, state: FSMContext, bot, api, ca
 @router.message(Command('help'))
 async def help_command(message: Message, state: FSMContext, api, cache):
     lang = await language_of(state, cache, message.chat.id)
+    await _leave_text_prompt(state)
     await message.answer(t(lang, 'help'))
 
 
@@ -418,6 +431,7 @@ async def student_detail(callback: CallbackQuery, bot, api, cache):
 
 @router.message(Command('settings'))
 async def settings_command(message: Message, state: FSMContext, bot, api, cache):
+    await _leave_text_prompt(state)
     link = await _require_link(message, api, cache, state)
     if link is not None:
         await _panel(bot, message.chat.id, None, link)
@@ -518,7 +532,7 @@ async def add_command(message: Message, state: FSMContext, api, cache):
         return
     lang = link['language']
     # Details may come with the command itself: "/add Ali Valiyev ali@x.com +998...".
-    details = parse_student(message.text.partition(' ')[2])
+    details = parse_student(command_args(message.text))
     if is_complete(details):
         await _show_student_card(message, state, lang, details)
         return
@@ -621,7 +635,7 @@ async def reset_command(message: Message, state: FSMContext, bot, api, cache):
     if link is None:
         return
     lang = link['language']
-    query = message.text.partition(' ')[2].strip()
+    query = command_args(message.text).strip()
     if query:
         await _search_students(message, state, api, lang, query)
         return

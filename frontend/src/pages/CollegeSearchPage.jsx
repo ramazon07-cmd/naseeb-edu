@@ -19,6 +19,9 @@ import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
 import './college-redesign.css';
 import './college-toolbar.css';
+import { PageHeader } from '../design/blue/ui';
+import '../design/pages/catalog-blue-base.css';
+import '../design/pages/colleges-blue.css';
 
 // Downloaded university logos are served locally, including under the image CSP.
 function UniversityLogo({ university }) {
@@ -374,10 +377,11 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   }, [profileFocusRequested, universityId, tierFor, research]);
 
   const tierPicker = tierFor && <TierPicker university={tierFor.university} state={tierPickerState({ research, loading: researchLoading, error: researchError })} onRetry={refreshResearch} busy={busyId === tierFor.university.id} onPick={(tier) => addToList(tierFor.university, tierFor.fit, tier)} onCompleteProfile={completeProfileFirst} onClose={() => setTierFor(null)} />;
+  const header = <PageHeader title={t('College Search')} subtitle={t('Find, compare, and shortlist universities')} />;
   if (universityId != null) {
-    if (opened?.university) return <><UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} fitStatus={fitState.status} onRetryFit={() => setOpenedFitAttempt((value) => value + 1)} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} onCompleteProfile={completeProfileFirst} />{tierPicker}</>;
-    if (opened?.error) return <div className="section-stack student-portal college-page"><div className="college-research-state error"><X size={22} /><div><b>{t("This university could not be opened")}</b><p>{opened.error}</p></div><button className="button quiet small" onClick={closeUniversity}>{t("Back to College Search")}</button></div></div>;
-    return <PageSkeleton />;
+    if (opened?.university) return <div className="nb-bridge nb-colleges">{header}<UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} fitStatus={fitState.status} onRetryFit={() => setOpenedFitAttempt((value) => value + 1)} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} onCompleteProfile={completeProfileFirst} />{tierPicker}</div>;
+    if (opened?.error) return <div className="section-stack student-portal college-page nb-bridge nb-colleges">{header}<div className="college-research-state error"><X size={22} /><div><b>{t("This university could not be opened")}</b><p>{opened.error}</p></div><button className="button quiet small" onClick={closeUniversity}>{t("Back to College Search")}</button></div></div>;
+    return <div className="nb-bridge nb-colleges">{header}<PageSkeleton /></div>;
   }
 
   const chips = collegeFilterChips(filters, setFilters);
@@ -385,8 +389,9 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const filtersPanel = <CollegeFilters {...{ filters, setFilters, facets, chips }} showBands={ready} />;
   const remaining = Math.min(pageSize, search.count - rows.length);
   const priceNotes = priceFilterNotes(filters.price, search.unpricedCount);
-  return <div className="section-stack student-portal college-page">
-    <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><span className="catalog-eyebrow">NASEEB EDU / {t('College Search')}</span><h1>{t('College Search')}</h1><p>{t('Explore admissions, cost, deadlines, and your personal fit in one place.')}</p><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
+  return <div className="section-stack student-portal college-page nb-bridge nb-colleges">
+    {header}
+    <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
     {research && !research.ready && <CollegeProfileQuestions sectionRef={profileQuestionsRef} research={research} saving={researchSaving} onComplete={completeResearchProfile} />}

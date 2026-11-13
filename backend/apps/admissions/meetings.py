@@ -4,8 +4,10 @@ from datetime import datetime, time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import DateTimeField, DurationField, Exists, ExpressionWrapper, F, Func, OuterRef, Window
-from django.db.models.functions import RowNumber
+from django.db.models import (
+    DateTimeField, DurationField, Exists, ExpressionWrapper, F, Func, IntegerField, OuterRef, Subquery, Value, Window,
+)
+from django.db.models.functions import Coalesce, RowNumber
 from django.utils import timezone
 
 from .models import Booking, MeetingAvailability, MeetingSchedule
@@ -25,6 +27,9 @@ SCHEDULE_DAYS = 28
 # The student's picker then loads the chosen person's full list.
 OVERVIEW_SLOTS_PER_PARTICIPANT = 20
 MAX_OVERVIEW_SLOTS = 2000
+# How far ahead a student must book when the staff member set no minimum of their own.
+DEFAULT_MIN_NOTICE_HOURS = 12
+MAX_MIN_NOTICE_HOURS = 168
 
 
 def overlapping(qs, start, duration_minutes, exclude_pk=None):
@@ -56,6 +61,35 @@ class _Minutes(Func):
 
 def _ends_at():
     return ExpressionWrapper(F('starts_at') + _Minutes(F('duration_minutes')), output_field=DateTimeField())
+
+
+def min_notice_hours(participant_id):
+    """How many hours ahead a student must book this staff member (the default until they set it)."""
+    value = MeetingSchedule.objects.filter(participant_id=participant_id).values_list('min_notice_hours', flat=True).first()
+    return DEFAULT_MIN_NOTICE_HOURS if value is None else value
+
+
+def too_soon_for_student(participant_id, starts_at, now=None):
+    """True when a student may not take a slot starting at `starts_at` with this staff member."""
+    return starts_at < (now or timezone.now()) + timedelta(hours=min_notice_hours(participant_id))
+
+
+def notice_message(participant_id):
+    hours = min_notice_hours(participant_id)
+    return f'Meetings must be booked at least {hours} hour{"" if hours == 1 else "s"} ahead. Choose a later time.'
+
+
+def respecting_notice(qs, now=None):
+    """Slots of `qs` that start at least their staff member's minimum notice from now (what a student may book)."""
+    notice = Coalesce(
+        Subquery(MeetingSchedule.objects.filter(participant_id=OuterRef('participant_id')).values('min_notice_hours')[:1]),
+        Value(DEFAULT_MIN_NOTICE_HOURS), output_field=IntegerField(),
+    )
+    earliest = ExpressionWrapper(
+        Value(now or timezone.now(), output_field=DateTimeField()) + _Minutes(F('notice_hours') * 60),
+        output_field=DateTimeField(),
+    )
+    return qs.annotate(notice_hours=notice).filter(starts_at__gte=earliest)
 
 
 def free_slots(qs, moving=None):
@@ -128,6 +162,8 @@ def weekly_starts(weekdays, time, start_date, end_date, tz, until=None, step=Non
                 yield start
             else:
                 end = datetime.combine(day, until, tzinfo=tz)
+                if until <= time:
+                    end += timedelta(days=1)  # a range ending at 00:00 runs to midnight
                 while start + timedelta(minutes=step) <= end:
                     yield start
                     start += timedelta(minutes=step)
@@ -159,15 +195,17 @@ def add_free_slots(user, starts, duration, **fields):
     return MeetingAvailability.objects.bulk_create(created)
 
 
-def fill_schedule(schedule, replace=False):
+def fill_schedule(schedule, replace=False, first_day=None, until=None):
     """Generate the weekly hours' slots through SCHEDULE_DAYS ahead; the caller holds the per-staff lock.
 
     `replace` (the hours changed): unbooked generated slots are dropped and rebuilt from today.
     Hand-added slots and any slot with an open meeting stay, and new slots never overlap them.
     """
     today = timezone.localdate()
-    until = today + timedelta(days=SCHEDULE_DAYS)
-    first_day = today if replace or not schedule.generated_until else schedule.generated_until + timedelta(days=1)
+    # `first_day` / `until` (the book_meetings command) set the window; the API never passes them.
+    until = until or today + timedelta(days=SCHEDULE_DAYS)
+    if first_day is None:
+        first_day = today if replace or not schedule.generated_until else schedule.generated_until + timedelta(days=1)
     if replace:
         MeetingAvailability.objects.filter(
             participant=schedule.participant, from_schedule=True, starts_at__gt=timezone.now(),

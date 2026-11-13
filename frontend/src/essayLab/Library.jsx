@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2, ChevronRight, Cloud, Copy, FileText, Folder, FolderInput, History, Inbox, LayoutGrid, List,
-  MoreHorizontal, PenLine, Plus, RotateCcw, Sparkles, Trash2, X,
+  MoreHorizontal, PenLine, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, UsersRound, X,
 } from 'lucide-react'
 import { t, tp } from '../i18n.js'
 import Folders, { ESSAY_DRAG_TYPE } from './Folders.jsx'
@@ -12,6 +12,8 @@ import { SCORE_KEYS, scoreBand } from './coachModel.js'
 import { SharedBadge, useEssaySharing } from './ShareControl.jsx'
 import StreakCard from './StreakCard.jsx'
 import { latestEdit } from './streakModel.js'
+import { BlueButton, KpiRow, KpiTile, PageHeader } from '../design/blue/ui'
+import '../design/pages/catalog-blue-base.css'
 
 const LAYOUT_KEY = 'naseeb-essay-lab-layout'
 const STATUS_FILTERS = [
@@ -186,11 +188,24 @@ export default function Library({ user, essays, folders, loading, error, setEssa
   const title = selected.kind === 'trash' ? t('Trash') : selected.kind === 'folder' ? folderPath(folders, selected.id) : t('My essays')
   const newEssayFolder = selected.kind === 'folder' ? selected.id : null
 
-  return <div className="el-library">
+  const countBy = (id) => essays.filter((essay) => STATUS_FILTERS.find((item) => item.id === id).match?.(essay.status) ?? true).length
+  const showStatus = (id) => { setSelected({ kind: 'all' }); setStatusFilter(id); document.getElementById('el-essays-heading')?.scrollIntoView({ block: 'start' }) }
+
+  return <div className="el-library nb-bridge nb-essay">
+    <PageHeader title={t('Essay Lab')} subtitle={t('Essay drafts, feedback, and revision history')}
+      actions={<BlueButton icon={Plus} onClick={() => onNew(newEssayFolder)}>{t('New essay')}</BlueButton>} />
+    <KpiRow className="nb-essay-kpis" label={t('Essay summary')}>
+      <KpiTile tone={0} icon={FileText} value={essays.length} label={t('My essays')} onClick={() => showStatus('all')} actionLabel={`${t('My essays')}: ${essays.length}`} loading={loading && !essays.length} />
+      <KpiTile tone={1} icon={PenLine} value={countBy('draft')} label={t('Drafts')} onClick={() => showStatus('draft')} actionLabel={`${t('Drafts')}: ${countBy('draft')}`} loading={loading && !essays.length} />
+      <KpiTile tone={2} icon={UsersRound} value={countBy('counselor')} label={t('With counselor')} onClick={() => showStatus('counselor')} actionLabel={`${t('With counselor')}: ${countBy('counselor')}`} loading={loading && !essays.length} />
+      <KpiTile tone={3} icon={ShieldCheck} value={countBy('approved')} label={t('Approved')} onClick={() => showStatus('approved')} actionLabel={`${t('Approved')}: ${countBy('approved')}`} loading={loading && !essays.length} />
+    </KpiRow>
     <main className="el-main">
       {error && <div className="el-alert is-error" role="alert"><span>{error}</span><button type="button" className="el-btn is-small" onClick={refresh}>{t('Retry')}</button></div>}
 
       {pickup && <PickupCard essay={pickup} onOpen={onOpen} />}
+      {/* Holds the pick-up card's place while essays load, so the list below does not jump down when it arrives. */}
+      {!pickup && loading && !essays.length && selected.kind !== 'trash' && <div className="el-pickup is-skeleton" aria-hidden="true" />}
 
       {selected.kind === 'trash'
         ? <TrashList trash={trash} onRestore={restoreEssay} onDelete={(essay) => setDialog({ kind: 'delete-forever', essay })} onBack={() => select({ kind: 'all' })} />
@@ -207,7 +222,6 @@ export default function Library({ user, essays, folders, loading, error, setEssa
                 <button type="button" aria-label={t('List view')} aria-pressed={layout === 'list'} className={layout === 'list' ? 'is-on' : ''} onClick={() => setLayout('list')}><List size={17} /></button>
               </div>
               <button type="button" className="el-btn el-folders-toggle" aria-expanded={panelOpen} aria-controls="el-folder-panel" onClick={() => setPanelOpen(true)}><Folder size={16} aria-hidden="true" />{t('Folders')}</button>
-              <button type="button" className="el-btn is-primary el-new-essay" onClick={() => onNew(newEssayFolder)}><Plus size={17} aria-hidden="true" />{t('New essay')}</button>
             </div>
           </div>
 
@@ -279,7 +293,7 @@ function PickupCard({ essay, onOpen }) {
   return <section className="el-pickup" aria-labelledby="el-pickup-title">
     <div className="el-pickup-main">
       <span className="el-eyebrow is-accent">{t('PICK UP WHERE YOU LEFT OFF')}</span>
-      <h1 id="el-pickup-title">{essay.title}</h1>
+      <h2 id="el-pickup-title">{essay.title}</h2>
       {essay.preview && <p className="el-pickup-text">{essay.preview}{(essay.word_count ?? 0) > 30 ? '…' : ''}<span className="el-caret" aria-hidden="true" /></p>}
       <div className="el-pickup-meta">
         <span>{t('Last edited {when}', { when: relativeTime(essay.last_edited_at) })}</span>

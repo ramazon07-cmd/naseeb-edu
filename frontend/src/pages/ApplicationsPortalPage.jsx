@@ -11,6 +11,9 @@ import { matchesQuery } from '../lib/searchIndex';
 import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, priceInfo, satLabel, scalePercent, shortDate, stageOf } from '../lib/college';
 import { ApplicationPlan } from '../components/ApplicationPlan';
 import { planNextStep } from '../lib/applicationPlan';
+import { BlueButton, EmptyState, PageHeader } from '../design/blue/ui';
+import '../design/pages/catalog-blue-base.css';
+import '../design/pages/apps-blue.css';
 
 function ApplicationSummary({ applications, essays, letters, openApplication }) {
   const next = nextDeadline(applications);
@@ -234,9 +237,11 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
     } catch (err) {notify(err.message, 'error');} finally {setRemovingId(null);}
   }
 
-  if (!data.applications.length) return <div className="section-stack student-portal"><section className="info-card applications-empty"><h3>{t("Your application list is empty")}</h3><p className="note">{t("Add universities from College Search and they will appear here as cards you can move through each stage.")}</p><button type="button" className="button primary" onClick={() => setPage('college_search')}><Search size={16} aria-hidden="true" /> {t("Find universities")}</button></section></div>;
+  const header = <PageHeader title={t('Applications')} subtitle={t('University application pipeline')} />;
+  if (!data.applications.length) return <div className="section-stack student-portal nb-bridge nb-apps">{header}<EmptyState icon={Search} title={t("Your application list is empty")} text={t("Add universities from College Search and they will appear here as cards you can move through each stage.")} action={<BlueButton icon={Search} onClick={() => setPage('college_search')}>{t("Find universities")}</BlueButton>} /></div>;
 
-  return <div className="section-stack student-portal applications-page">
+  return <div className="section-stack student-portal applications-page nb-bridge nb-apps">
+    {header}
     <ApplicationSummary applications={applications} essays={data.essays} letters={data.recommendations} openApplication={setEditing} />
     <div className="board-toolbar">
       <div className="chip-row" role="group" aria-label={t("Filter by tier")}>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isOpenMeeting, meetingStatus, meetingsForTab, studentMeetingsForTab, upcomingMeetings } from '../src/lib/meetings.js';
+import { isAwaitingStudent, isOpenMeeting, meetingStatus, meetingsForTab, pendingMeetings, studentMeetingsForTab, upcomingMeetings } from '../src/lib/meetings.js';
 
 const now = new Date('2026-09-25T12:00:00Z');
 const meeting = (id, status, starts_at, extra = {}) => ({ id, status, starts_at, ...extra });
@@ -51,4 +51,21 @@ test('student tabs: Upcoming soonest first, Past newest first', () => {
   assert.deepEqual(ids(studentMeetingsForTab(shuffled, 'history', now)), [6, 4, 3, 5, 7]);
   // The shared helper keeps its input order for other pages.
   assert.deepEqual(ids(meetingsForTab(shuffled, 'history', false, now)), [7, 4, 5, 3, 6]);
+});
+
+test('a staff invitation waits for the student and sits on top of their Upcoming', () => {
+  const invite = meeting(10, 'pending', '2026-09-30T09:00:00Z', { staff_requested: true });
+  const confirmed = meeting(11, 'approved', '2026-09-28T09:00:00Z');
+  assert.equal(isAwaitingStudent(invite, now), true);
+  assert.equal(isAwaitingStudent(items[0], now), false); // a student's own request waits for staff
+  assert.equal(isAwaitingStudent({ ...invite, status: 'approved' }, now), false);
+  assert.equal(isAwaitingStudent({ ...invite, starts_at: '2026-09-24T09:00:00Z' }, now), false); // expired
+  assert.deepEqual(ids(studentMeetingsForTab([confirmed, items[0], invite], 'upcoming', now)), [10, 1, 11]);
+});
+
+test('staff: an invitation is not a request waiting for the counselor', () => {
+  const invite = meeting(10, 'pending', '2026-09-30T09:00:00Z', { staff_requested: true, created_at: '2026-09-25T08:00:00Z' });
+  assert.deepEqual(ids(pendingMeetings([invite, items[0]], now)), [1]);
+  // It still counts as an open meeting for the staff member's views.
+  assert.equal(isOpenMeeting(invite, now), true);
 });

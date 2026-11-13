@@ -186,3 +186,14 @@ rescheduled, and it shows in History as "Expired — not confirmed".
 Cancelling and rescheduling are for pending or approved meetings that have not
 started; a reschedule sets the meeting back to `pending`. Each change posts a
 notification on the student's feed, which their counselor also sees.
+
+**Staff-proposed meetings.** A counselor booking (`POST /api/bookings/`, `ask_student` defaults to true)
+is created `pending` with `staff_requested = true`: the student confirms (`approve`) or declines (`reject`)
+it; the counselor cannot approve their own invitation (they can cancel or reschedule it). With
+`ask_student: false` it is confirmed at once. A student-requested meeting still waits for the staff
+participant. A slot of the counselor that covers the time is taken by the booking.
+
+**Minimum notice.** `MeetingSchedule.min_notice_hours` (0-168, default 12, set in the weekly hours) hides
+and refuses student bookings and student reschedules that start sooner than now + notice. Staff
+bookings are not restricted. `manage.py book_meetings` sets hours/notice and invites students through
+the same code (`--dry-run` previews).

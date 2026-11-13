@@ -8,6 +8,9 @@ const startsAfter = (item, now) => new Date(item.starts_at) > now;
 // Pending or approved and not started: can still happen, be cancelled or moved.
 export const isOpenMeeting = (item, now = new Date()) => OPEN_STATUSES.includes(item?.status) && startsAfter(item, now);
 
+// A meeting a staff member proposed that the STUDENT has not answered yet.
+export const isAwaitingStudent = (item, now = new Date()) => Boolean(item?.staff_requested) && item?.status === 'pending' && !isExpiredMeeting(item, now) && startsAfter(item, now);
+
 // The API flags a request nobody confirmed before it started; the fallback
 // covers a page left open past the start time.
 export const isExpiredMeeting = (item, now = new Date()) => Boolean(item?.is_expired) || (item?.status === 'pending' && !startsAfter(item, now));
@@ -30,7 +33,7 @@ export const meetingBadgeStatus = (status) => status === 'approved' ? 'confirmed
 
 // Staff Meetings page: requests waiting for a decision, oldest request first.
 export const pendingMeetings = (items = [], now = new Date()) => items.
-filter((item) => item.status === 'pending' && isOpenMeeting(item, now)).
+filter((item) => item.status === 'pending' && !item.staff_requested && isOpenMeeting(item, now)).
 sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
 // Staff Meetings page: everything starting in the next 7 days, any status,
@@ -63,9 +66,11 @@ export function meetingsForTab(items = [], tab, staff, now = new Date()) {
   });
 }
 
-// Student Meetings page: Upcoming soonest first, Past newest first.
+// Student Meetings page: Upcoming soonest first with invitations waiting for the
+// student's answer on top, Past newest first.
 export function studentMeetingsForTab(items = [], tab, now = new Date()) {
   const time = (item) => new Date(item.starts_at).getTime();
-  const order = tab === 'upcoming' ? (a, b) => time(a) - time(b) : (a, b) => time(b) - time(a);
+  const waiting = (item) => (isAwaitingStudent(item, now) ? 0 : 1);
+  const order = tab === 'upcoming' ? (a, b) => waiting(a) - waiting(b) || time(a) - time(b) : (a, b) => time(b) - time(a);
   return meetingsForTab(items, tab, false, now).sort(order);
 }

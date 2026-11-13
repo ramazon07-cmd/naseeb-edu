@@ -94,7 +94,24 @@ def consume_token(chat_id, token, language=None):
             raise _invalid_token()
         pending.delete()
         # One chat per student and one student per chat: whatever either was linked to before is replaced.
+        # When the chat changes owner, the previous owner's unsent messages are dropped so the new owner
+        # never receives them.
+        # Anything still unsent on a chat this student does not already own was addressed to whoever had
+        # it before (a current owner, or one who has since moved away and left leased rows behind), so it
+        # is dropped whatever its lease state: a chat only ever receives its own student's messages.
+        if not StudentTelegram.objects.filter(chat_id=chat_id, user=user).exists():
+            TelegramOutbox.objects.filter(chat_id=chat_id, sent_at__isnull=True).delete()
         StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).delete()
+        # Locked so the old chat cannot change owner while its waiting rows are moved: another
+        # student's link to that chat first deletes this row and so waits for this transaction.
+        previous = StudentTelegram.objects.select_for_update().filter(user=user).exclude(chat_id=chat_id).first()
+        if previous:
+            # The same student moved to a new chat: what was still waiting for them follows them there.
+            # Rows the bot has already leased stay put (it is sending them to this student's old chat),
+            # so an acknowledgement never marks a moved row as delivered.
+            TelegramOutbox.objects.filter(
+                chat_id=previous.chat_id, sent_at__isnull=True, claimed_at__isnull=True,
+            ).update(chat_id=chat_id)
         try:
             StudentTelegram.objects.update_or_create(
                 user=user, defaults={'chat_id': chat_id, 'language': language, 'is_active': True},
@@ -168,6 +185,8 @@ def issue_token(user):
 
 
 def unlink(user):
+    for link in StudentTelegram.objects.filter(user=user):
+        TelegramOutbox.objects.filter(chat_id=link.chat_id, sent_at__isnull=True).delete()
     StudentTelegram.objects.filter(user=user).delete()
     return link_status(user)
 
@@ -270,6 +289,11 @@ TEXTS = {
         'uz': '📅 Sizga yangi uchrashuv taklif qilindi.',
         'ru': '📅 Вам предложили новую встречу.',
         'en': '📅 A new meeting was requested with you.',
+    }),
+    'event_invited': _with_details({
+        'uz': '📅 {other} sizni {time} ga uchrashuvga taklif qildi. Saytda tasdiqlang.',
+        'ru': '📅 {other} приглашает вас на встречу ({time}). Подтвердите на сайте.',
+        'en': '📅 {other} invited you to a meeting on {time}. Confirm it on the website.',
     }),
     'event_confirmed': _with_details({
         'uz': '✅ Uchrashuvingiz tasdiqlandi.',

@@ -1,19 +1,22 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { api, request } from '../api';
 import { t, tx, locale, formatDateLocale } from '../i18n';
-import { Modal, Badge, Empty, Panel } from '../components/ui';
+import { Modal, Empty, Panel } from '../components/ui';
 import { Field, PortalTabs } from '../components/forms';
 import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
-import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil, Send } from 'lucide-react';
+import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil, Send, Timer, History, UsersRound, MessageCircle } from 'lucide-react';
 import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, joinParts, relativeDayText, shortDayText } from '../lib/format';
 import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
-import { isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook } from '../lib/meetings';
+import { isAwaitingStudent, isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook } from '../lib/meetings';
 import { StudentSearchInput } from '../components/StudentSearchInput';
 import './bookings-scheduler.css';
+import '../design/pages/meetings-blue.css';
+import { Avatar, BlueButton, Chip, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader, PillTabs, tabId } from '../design/blue/ui';
 import { InlineLoadError } from '../components/states';
+import { resourceDisplayState } from '../lib/resourceState';
 import { closeWindow, createLinkWatch, navigateWindow, openBlankWindow } from '../lib/telegramLink';
 
 // Meetings are shown and entered in one chosen zone: Tashkent by default, or
@@ -255,12 +258,13 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
         topic: values.get('topic'),
         starts_at: fromZone(values.get('starts_at')).toISOString(),
         duration_minutes: Number(values.get('duration_minutes')),
-        notes: values.get('notes')
+        notes: values.get('notes'),
+        ask_student: values.get('ask_student') === 'on'
       } : {
         participant: Number(participantId), availability_slot: selectedSlot.id,
         topic, starts_at: selectedSlot.starts_at, duration_minutes: selectedSlot.duration_minutes, notes
       });
-      notify(staff ? t("Meeting confirmed.") : t("Meeting request sent for approval."));
+      notify(staff ? (values.get('ask_student') === 'on' ? t("Invitation sent. Waiting for the student to confirm.") : t("Meeting confirmed.")) : t("Meeting request sent for approval."));
       onSaved();
     } catch (err) {
       notify(err.message, 'error');
@@ -270,6 +274,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
   }
   if (staff) return <Modal title={t("Book a meeting")} onClose={onClose}><form className="form-grid" onSubmit={submit}>
     <StudentSearchInput name="student" required value={student} onChange={setStudent} /><Field label={t("Topic")}><input name="topic" required defaultValue={defaultTopic} placeholder={t("Essay review, university list...")} /></Field><Field label={t("Date & time")}><input name="starts_at" type="datetime-local" required /></Field><Field label={t("Duration")}><select name="duration_minutes" defaultValue="45"><option value="30">{t("30 min")}</option><option value="45">{t("45 min")}</option><option value="60">{t("60 min")}</option></select></Field><Field label={t("Notes")}><textarea name="notes" placeholder={t("What would you like to discuss?")} /></Field>
+    <label className="weekly-day"><input type="checkbox" name="ask_student" defaultChecked /> {t("Ask the student to confirm")}</label>
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Booking…") : t("Book meeting")}</button></div>
   </form></Modal>;
   const details = step === 'details' && selectedSlot;
@@ -341,6 +346,7 @@ const rangesOverlap = (ranges) => [...ranges].sort().some((range, index, sorted)
 function WeeklyHours({ notify, onSaved }) {
   const [hours, setHours] = useState(null);
   const [duration, setDuration] = useState(45);
+  const [notice, setNotice] = useState('12');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -351,6 +357,7 @@ function WeeklyHours({ notify, onSaved }) {
       if (!active) return;
       setHours(data.hours || {});
       setDuration(data.duration_minutes || 45);
+      setNotice(String(data.min_notice_hours ?? 12));
     }).catch((err) => { if (active) setError(err.message); });
     return () => { active = false; };
   }, [attempt]);
@@ -359,12 +366,15 @@ function WeeklyHours({ notify, onSaved }) {
   async function save(event) {
     event.preventDefault();
     const days = Object.values(hours);
-    if (days.some((ranges) => ranges.some(([from, to]) => !from || !to || to <= from))) { notify(t("Choose an end time after the start time."), 'error'); return; }
+    if (days.some((ranges) => ranges.some(([from, to]) => !from || !to || (to <= from && to !== '00:00')))) { notify(t("Choose an end time after the start time."), 'error'); return; }
     if (days.some(rangesOverlap)) { notify(t("Hours on the same day cannot overlap."), 'error'); return; }
+    const noticeHours = Number(notice);
+    if (notice === '' || !Number.isInteger(noticeHours) || noticeHours < 0 || noticeHours > 168) { notify(t("Enter a notice between 0 and 168 hours."), 'error'); return; }
     setBusy(true);
     try {
-      const saved = await api.saveWeeklyAvailability({ duration_minutes: duration, hours });
+      const saved = await api.saveWeeklyAvailability({ duration_minutes: duration, hours, min_notice_hours: noticeHours });
       setHours(saved.hours || {});
+      setNotice(String(saved.min_notice_hours ?? noticeHours));
       notify(t("Weekly hours saved."));
       onSaved();
     } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
@@ -376,6 +386,11 @@ function WeeklyHours({ notify, onSaved }) {
     <div className="availability-add-row">
       <b>{t("Meeting length")}</b>
       <fieldset className="availability-durations"><legend className="sr-only">{t("Meeting length")}</legend>{[30, 45, 60].map((value) => <label key={value}><input type="radio" name="weekly-duration" checked={duration === value} onChange={() => setDuration(value)} /><span>{value} {t("min")}</span></label>)}</fieldset>
+    </div>
+    <div className="availability-add-row">
+      <label htmlFor="weekly-notice"><b>{t("Students must book at least")}</b></label>
+      <input id="weekly-notice" type="number" inputMode="numeric" min="0" max="168" step="1" value={notice} onChange={(event) => setNotice(event.target.value)} style={{ width: '5rem' }} />
+      <span>{t("hours ahead")}</span>
     </div>
     <ul className="weekly-days">{WEEKDAYS.map((name, day) => {
       const ranges = hours[day] || [];
@@ -717,7 +732,7 @@ function TelegramConnectDialog({ onLinked, onClose, notify }) {
         {blocked && <p className="telegram-dialog-hint">{t("Your browser blocked the new tab. Use the link below.")}</p>}
         <a className="telegram-dialog-again" href={link} target="_blank" rel="noopener noreferrer">{t("Open Telegram again")}</a>
       </div> : <>
-        <button type="button" className="button primary telegram-dialog-login" onClick={connect} disabled={phase === 'starting'} aria-busy={phase === 'starting'}><Send size={17} aria-hidden="true" /> {phase === 'starting' ? t("Connecting…") : t("Connect Telegram")}</button>
+        <BlueButton className="telegram-dialog-login" icon={Send} onClick={connect} disabled={phase === 'starting'} aria-busy={phase === 'starting'}>{phase === 'starting' ? t("Connecting…") : t("Connect Telegram")}</BlueButton>
         {phase === 'idle' && <p className="telegram-dialog-hint">{t("We open the bot for you. Just press Start there.")}</p>}
         {phase === 'expired' && <p className="telegram-dialog-error" role="alert">{t("Link expired, try again")}</p>}
         {phase === 'error' && <p className="telegram-dialog-error" role="alert">{error}</p>}
@@ -729,10 +744,10 @@ function TelegramConnectDialog({ onLinked, onClose, notify }) {
 
 // Shown on the page while the dialog is closed and Telegram is still not connected.
 function TelegramReminder({ onOpen }) {
-  return <div className="telegram-reminder" role="status"><Send size={16} aria-hidden="true" /><span>{t("Connect Telegram to request meetings")}</span><button type="button" className="button small" onClick={onOpen}>{t("Connect")}</button></div>;
+  return <div className="telegram-reminder" role="status"><Send size={16} aria-hidden="true" /><span>{t("Connect Telegram to request meetings")}</span><BlueButton size="sm" onClick={onOpen}>{t("Connect")}</BlueButton></div>;
 }
 
-export function BookingsPage({ user, data, reload, notify, updateUser }) {
+export function BookingsPage({ user, data, reload, notify, updateUser, setPage, resourceStatus, retryResources }) {
   const [zoneId, setZoneId] = useState(zone.id);
   const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
   const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
@@ -754,28 +769,64 @@ export function BookingsPage({ user, data, reload, notify, updateUser }) {
   const banner = locked ? (telegramOpen
     ? <TelegramConnectDialog notify={notify} onClose={() => setTelegramOpen(false)} onLinked={(telegram) => updateUser?.({ telegram })} />
     : <TelegramReminder onOpen={showDialog} />) : null;
-  const props = { data, reload, notify, guard, banner, picker };
+  const props = { data, reload, notify, guard, banner, picker, setPage, resourceStatus, retryResources };
   // key: a new zone redraws every time on the page.
   if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
   if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
   return <StaffMeetingsPage key={zoneId} {...props} />;
 }
 
-function StudentBookingsPage({ data, reload, notify, guard, banner, picker }) {
+const statusChip = (status) => ({ confirmed: 'ok', completed: 'ok', pending: 'warn', cancelled: 'overdue', rejected: 'overdue', expired_unconfirmed: 'overdue' }[status] || 'default');
+
+// "My Naseeb team" (counselor, school contact): the same list the dashboard shows. The workspace loader
+// fetches it with this page (data.team), so loading and error come from its resource status.
+function useStudentTeam(data, resourceStatus, retryResources) {
+  const state = resourceDisplayState(resourceStatus?.team);
+  return {
+    items: Array.isArray(data.team) ? data.team : [],
+    loading: state === 'loading',
+    error: state === 'error' ? resourceStatus.team.error : '',
+    retry: () => retryResources?.(['team']),
+  };
+}
+
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker, setPage, resourceStatus, retryResources }) {
   const [tab, setTab] = useState('upcoming');
   const [open, setOpen] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
+  const teamRef = useRef(null);
+  const team = useStudentTeam(data, resourceStatus, retryResources);
+  const [openingId, setOpeningId] = useState(null);
+  // A direct chat with a team member: open (or find) it, then land on it in Messages by its id.
+  async function messageMember(member) {
+    if (openingId) return;
+    setOpeningId(member.id);
+    try {
+      const channel = await api.openDirectChannel(member.id);
+      setPage('messages', { channelId: channel.id });
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      // Navigation may not happen (page changed elsewhere, request failed): never leave the buttons disabled.
+      setOpeningId(null);
+    }
+  }
   const now = new Date();
-  const tabs = [['upcoming', 'Upcoming'], ['history', 'Past']];
-  const items = studentMeetingsForTab(data.bookings, tab, now);
+  const upcoming = studentMeetingsForTab(data.bookings, 'upcoming', now);
+  const past = studentMeetingsForTab(data.bookings, 'history', now);
+  const items = tab === 'upcoming' ? upcoming : past;
+  // Minutes spent in meetings that took place (confirmed and past, or marked completed).
+  const minutes = past.reduce((total, item) => (['completed', 'past_unmarked'].includes(meetingStatus(item, now, { student: true })) ? total + (Number(item.duration_minutes) || 0) : total), 0);
+  const tabs = [{ key: 'upcoming', label: t('Upcoming') }, { key: 'history', label: t('Past'), count: past.length }];
   async function transition(item, action) {
     if (action === 'cancel' && !window.confirm(t("Cancel this meeting?"))) return;
+    if (action === 'reject' && !window.confirm(t("Decline this meeting?"))) return;
     setSavingId(item.id);
     try {
-      const methods = { cancel: api.cancelBooking };
+      const methods = { cancel: api.cancelBooking, approve: api.approveBooking, reject: api.rejectBooking };
       await methods[action](item.id);
-      notify({ cancel: t("Meeting cancelled.") }[action]);
+      notify({ cancel: t("Meeting cancelled."), approve: t("Meeting confirmed."), reject: t("Meeting declined.") }[action]);
       reload();
     } catch (err) {
       notify(err.message, 'error');
@@ -783,7 +834,61 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker }) {
       setSavingId(null);
     }
   }
-  return <div className="section-stack student-portal">{banner}<div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} /><div className="booking-toolbar-actions">{picker}<button className="button primary" onClick={guard(() => setOpen(true))}><Plus size={17} /> {t("Request meeting")}</button></div></div><p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p><div className="booking-grid">{items.map((item) => { const status = meetingBadgeStatus(meetingStatus(item, now, { student: true })); return <article className={`booking-card is-${status}`} key={item.id}><div className="booking-date"><strong>{zoned(item.starts_at).getDate()}</strong><span>{formatDateLocale(item.starts_at, { month: 'short' })}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p><small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{status}</Badge>{isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Reschedule")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button></div>}{!isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}><Trash2 size={14} /> {t("Delete")}</button></div>}</div></article>; })}{!items.length && <Empty text={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}</div>;
+  const requestButton = <BlueButton icon={Plus} onClick={guard(() => setOpen(true))}>{t("Request meeting")}</BlueButton>;
+  return <div className="nb-meet student-portal">
+    <PageHeader title={t("Meetings")} subtitle={t("Schedule and manage meetings")} actions={requestButton} />
+    {banner}
+    <KpiRow label={t("Meetings summary")}>
+      <KpiTile tone={0} icon={CalendarClock} value={upcoming.length} label={t("Upcoming")} onClick={() => setTab('upcoming')} actionLabel={tx`Upcoming · ${upcoming.length}`} />
+      <KpiTile tone={1} icon={History} value={past.length} label={t("Past meetings")} onClick={() => setTab('history')} actionLabel={tx`Past meetings · ${past.length}`} />
+      <KpiTile tone={2} icon={Timer} value={minutes} unit={t("min")} label={t("Minutes in meetings")} />
+      <KpiTile tone={3} icon={UsersRound} value={team.items.length} loading={team.loading} label={t("My Naseeb team")} onClick={() => teamRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} actionLabel={t("My Naseeb team")} />
+    </KpiRow>
+    <div className="nb-meet-bar">
+      <PillTabs tabs={tabs} value={tab} onChange={setTab} label={t("Meetings")} idPrefix="nb-meet" />
+      <div className="nb-meet-zone">{picker}<p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p></div>
+    </div>
+    <div className="nb-meet-grid">
+      <GlassCard tone="solid" className="nb-meet-list" role="tabpanel" aria-labelledby={tabId('nb-meet', tab)}>
+        {items.length ? <div className="nb-meet-rows">{items.map((item) => {
+          const status = meetingBadgeStatus(meetingStatus(item, now, { student: true }));
+          const isOpen = isOpenMeeting(item, now);
+          const awaiting = isAwaitingStudent(item, now);
+          return <article className={`nb-meet-row is-${awaiting ? 'awaiting-you' : status}`} key={item.id}>
+            <DateTile day={zoned(item.starts_at).getDate()} month={formatDateLocale(zoned(item.starts_at), { month: 'short' })} hot={tab === 'upcoming'} />
+            <div className="nb-meet-copy">
+              <h3>{item.topic}</h3>
+              <p><Clock3 size={15} aria-hidden="true" /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p>
+              <small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>
+              {item.notes && <p className="nb-meet-notes">{item.notes}</p>}
+            </div>
+            <div className="nb-meet-side">
+              <Chip variant={awaiting ? 'warn' : statusChip(status)}>{awaiting ? t("Waiting for your confirmation") : label(status)}</Chip>
+              <div className="nb-meet-actions">
+                {awaiting && <>
+                  <BlueButton size="sm" icon={Check} disabled={savingId === item.id} aria-busy={savingId === item.id} onClick={() => transition(item, 'approve')}>{t("Confirm")}</BlueButton>
+                  <BlueButton variant="ghost" size="sm" icon={X} disabled={savingId === item.id} onClick={() => transition(item, 'reject')}>{t("Decline")}</BlueButton>
+                </>}
+                {isOpen ? <>
+                  <BlueButton variant="ghost" size="sm" icon={CalendarClock} disabled={savingId === item.id} onClick={() => setRescheduling(item)}>{t("Reschedule")}</BlueButton>
+                  <BlueButton variant="ghost" size="sm" icon={Ban} disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}>{t("Cancel meeting")}</BlueButton>
+                </> : <BlueButton variant="ghost" size="sm" icon={Trash2} disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}>{t("Delete")}</BlueButton>}
+              </div>
+            </div>
+          </article>;
+        })}</div> : <EmptyState icon={CalendarClock} title={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} text={tab === 'upcoming' ? t("Make time for your next step.") : undefined} action={tab === 'upcoming' ? requestButton : undefined} />}
+      </GlassCard>
+      <GlassCard tone="solid" className="nb-meet-team" title={t("My Naseeb team")} icon={UsersRound} ref={teamRef}>
+        {team.loading ? <p className="nb-meet-note" role="status">{t("Loading…")}</p> : team.error ? <InlineLoadError message={team.error} onRetry={team.retry} /> : team.items.length ? <ul className="nb-meet-people">{team.items.map((member) => <li key={`${member.kind}-${member.id}`}>
+          <Avatar name={member.name} size={44} />
+          <span><b>{member.name}</b><small>{t(member.role)}</small></span>
+          {setPage && <button type="button" className="nb-meet-msg" disabled={Boolean(openingId)} onClick={() => messageMember(member)} aria-label={tx`Message ${member.name}`} title={t("Message")}><MessageCircle size={18} aria-hidden="true" /></button>}
+        </li>)}</ul> : <p className="nb-meet-note">{t("No team members have been assigned yet.")}</p>}
+      </GlassCard>
+    </div>
+    {open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
+    {rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
+  </div>;
 }
 
 const meetingTone = (status) => ({ confirmed: 'ok', pending: 'warn' }[status] || 'quiet');
@@ -838,6 +943,10 @@ function CounselorMeetingsPage({ data, reload, notify, guard, banner, picker }) 
 
   function weekActions(item) {
     const status = meetingStatus(item, now, { student: false });
+    if (isAwaitingStudent(item, now)) return <>
+      <button type="button" className="cx-btn" onClick={() => setRescheduling(item)}>{t("Move meeting")}</button>
+      <button type="button" className="cx-btn" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}>{t("Cancel meeting")}</button>
+    </>;
     if (status === 'pending') return <button type="button" className="cx-btn" onClick={() => scrollToPending(item.id)}>{t("Open")}</button>;
     if (needsRebook(item, now)) return <button type="button" className="cx-btn" onClick={guard(() => setBooking({ studentId: item.student, studentName: item.student_name, topic: item.topic }))}>{t("Rebook")}</button>;
     return <>
@@ -887,7 +996,7 @@ function CounselorMeetingsPage({ data, reload, notify, guard, banner, picker }) 
             return <div key={item.id} className="cx-week-row">
               <span className="cx-week-when"><b>{dayLabel(item.starts_at)}</b><small>{clockAndLength(item)}</small></span>
               <span className="cx-row-copy"><b>{item.student_name}</b><small>{item.topic}</small></span>
-              <CxTag tone={meetingTone(status)}>{label(status)}</CxTag>
+              <CxTag tone={meetingTone(status)}>{isAwaitingStudent(item, now) ? t("Waiting for student") : label(status)}</CxTag>
               <span className="cx-week-actions">{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={15} aria-hidden="true" />{t("Delete")}</button>}</span>
             </div>;
           })}
@@ -936,6 +1045,10 @@ function StaffMeetingsPage({ data, reload, notify, guard, banner, picker }) {
 
   function weekActions(item) {
     const status = meetingStatus(item, now, { student: false });
+    if (isAwaitingStudent(item, now)) return <>
+      <button type="button" className="button quiet small" onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Move meeting")}</button>
+      <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button>
+    </>;
     if (status === 'pending') return <button type="button" className="button quiet small" onClick={() => scrollToPending(item.id)}>{t("Open")}</button>;
     if (needsRebook(item, now)) return <button type="button" className="button quiet small" onClick={guard(() => setBooking({ studentId: item.student, studentName: item.student_name, topic: item.topic }))}><CalendarClock size={14} /> {t("Rebook")}</button>;
     return <>
@@ -967,7 +1080,7 @@ function StaffMeetingsPage({ data, reload, notify, guard, banner, picker }) {
       </Panel>
       <Panel title={t("This week")}>
         <div className="record-list">
-          {thisWeek.map((item) => <Record key={item.id} title={joinParts(dateTimeText(item.starts_at), item.topic)} meta={joinParts(item.student_name, viewerTimeHint(item.starts_at))} badge={meetingBadgeStatus(meetingStatus(item, now, { student: false }))} actions={<>{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} title={t("Delete")} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={14} aria-hidden="true" /> {t("Delete")}</button>}</>} />)}
+          {thisWeek.map((item) => <Record key={item.id} title={joinParts(dateTimeText(item.starts_at), item.topic)} meta={joinParts(item.student_name, viewerTimeHint(item.starts_at))} badge={isAwaitingStudent(item, now) ? 'waiting_for_student' : meetingBadgeStatus(meetingStatus(item, now, { student: false }))} actions={<>{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} title={t("Delete")} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={14} aria-hidden="true" /> {t("Delete")}</button>}</>} />)}
           {!thisWeek.length && <Empty text={t("Nothing scheduled this week.")} />}
         </div>
       </Panel>

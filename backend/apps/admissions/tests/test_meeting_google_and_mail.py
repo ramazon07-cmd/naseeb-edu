@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.users.google import STATE_SALT
 
-from ..models import Booking, MeetingAvailability
+from ..models import Booking, MeetingAvailability, MeetingSchedule
 from .base import RoleIsolationBase
 
 GOOGLE = dict(GOOGLE_OAUTH_CLIENT_ID='client-id', GOOGLE_OAUTH_CLIENT_SECRET='secret', FRONTEND_URL='https://app.example.com')
@@ -91,6 +91,7 @@ class MeetingEmailTests(RoleIsolationBase):
 
     def test_request_and_confirmation_are_emailed_to_the_other_side(self):
         slot = MeetingAvailability.objects.create(participant=self.counselor, starts_at=self.start, duration_minutes=45)
+        MeetingSchedule.objects.create(participant=self.counselor, min_notice_hours=0)  # the slot is 5 hours away
         self.client.force_authenticate(self.student_a_user)
         with self.captureOnCommitCallbacks(execute=True):
             booked = self.client.post('/api/bookings/', {

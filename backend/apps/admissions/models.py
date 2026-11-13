@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils import timezone
 from pathlib import Path
@@ -932,6 +933,8 @@ class MeetingSchedule(TimeStampedModel):
     hours = models.JSONField(default=dict, blank=True)
     # Slots exist through this day; later days are added as time moves on (meetings.fill_schedule).
     generated_until = models.DateField(null=True, blank=True)
+    # Students cannot book (or move to) a slot starting sooner than this many hours from now; staff are not held to it.
+    min_notice_hours = models.PositiveSmallIntegerField(default=12, validators=[MaxValueValidator(168)])
 
 
 class Booking(TimeStampedModel):
@@ -963,6 +966,9 @@ class Booking(TimeStampedModel):
     notes = models.TextField(blank=True)
     # The start time the reminder email was sent for; a moved meeting is reminded again.
     reminded_for = models.DateTimeField(null=True, blank=True)
+    # True: the staff participant proposed this meeting, so a pending one waits for the STUDENT's answer.
+    # False (every older row): the student asked, and the participant answers.
+    staff_requested = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['starts_at']
