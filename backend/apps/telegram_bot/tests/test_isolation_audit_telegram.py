@@ -123,6 +123,24 @@ class TelegramIsolationAuditTests(BotTestCase):
         delivered = {m['text'] for m in student_link.pending_messages()['messages'] if m['chat_id'] == 7112}
         self.assertEqual(delivered, {'Meeting at 10:00'})
 
+    def test_leased_rows_left_on_an_old_chat_never_reach_the_chats_next_owner(self):
+        """Picked up but never acknowledged, then the student moves away and another student takes the chat."""
+        self.link_student(self.s1.user, 7120)
+        TelegramOutbox.objects.create(chat_id=7120, text='Your meeting is confirmed', claimed_at=timezone.now())
+        self.link_student(self.s1.user, 7121)          # same student moves; the leased row stays on 7120
+        self.link_student(self.s4.user, 7120)          # another school's student takes the old chat
+        TelegramOutbox.objects.filter(chat_id=7120).update(claimed_at=None)  # lease would have expired
+        texts = [m['text'] for m in student_link.pending_messages()['messages'] if m['chat_id'] == 7120]
+        self.assertEqual(texts, [])
+        self.assertFalse(TelegramOutbox.objects.filter(chat_id=7120, sent_at__isnull=True).exists())
+
+    def test_relinking_the_same_chat_keeps_its_waiting_messages(self):
+        self.link_student(self.s1.user, 7130)
+        TelegramOutbox.objects.create(chat_id=7130, text='Meeting at 18:00')
+        self.link_student(self.s1.user, 7130)          # opens the link again from the same chat
+        texts = [m['text'] for m in student_link.pending_messages()['messages'] if m['chat_id'] == 7130]
+        self.assertEqual(texts, ['Meeting at 18:00'])
+
     def test_meeting_texts_are_addressed_to_the_students_own_chat_only(self):
         self.link_student(self.s1.user, 7201)
         self.link_student(self.s4.user, 7202)

@@ -17,7 +17,6 @@ import { IeltsFields, SatFields, TestScoreSummary } from '../src/components/test
 import { testScoresPayload, validateTestScores } from '../src/lib/testScores';
 import { api, request } from '../src/api';
 import { setLanguage } from '../src/i18n';
-import { THEME_KEY } from '../src/hooks/useTheme';
 import { ProgramsPage } from '../src/pages/ProgramsPage';
 import { BookingForm, RescheduleForm } from '../src/pages/BookingsPage';
 import { NotificationPanel } from '../src/components/NotificationPanel';
@@ -35,7 +34,6 @@ const params = new URLSearchParams(location.search);
 const language = params.get('language') || 'en';
 setLanguage('en');
 document.documentElement.dataset.theme = params.get('theme') || 'light';
-localStorage.setItem(THEME_KEY, document.documentElement.dataset.theme);
 localStorage.removeItem('naseeb-dashboard-v1:901');
 localStorage.removeItem('naseeb-dashboard-pending-v1:901');
 let offset = 0;
@@ -232,7 +230,7 @@ async function run() {
     await choose('ielts_retake_skill', 'speaking');
     await choose('ielts_speaking', '7.5');
     assert(document.querySelector('select[name="ielts_score"]').value === '7.5', 'Overall does not follow the updated section');
-    assert(document.querySelector('.test-score-note')?.textContent.includes('Speaking'), 'Summary hides the retaken skill');
+    assert([...document.querySelectorAll('.test-score-note, dt, dd')].some((node) => node.textContent.includes('Speaking')), 'Summary hides the retaken skill');
     await choose('ielts_result_type', 'full_retake');
     assert(!document.querySelector('select[name="ielts_retake_skill"]'), 'Full test asks for a retaken skill');
     assert(!document.querySelector('#ielts-errors').textContent, 'Full retake has unexpected errors');

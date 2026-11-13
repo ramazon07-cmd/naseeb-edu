@@ -96,7 +96,10 @@ def consume_token(chat_id, token, language=None):
         # One chat per student and one student per chat: whatever either was linked to before is replaced.
         # When the chat changes owner, the previous owner's unsent messages are dropped so the new owner
         # never receives them.
-        if StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).exists():
+        # Anything still unsent on a chat this student does not already own was addressed to whoever had
+        # it before (a current owner, or one who has since moved away and left leased rows behind), so it
+        # is dropped whatever its lease state: a chat only ever receives its own student's messages.
+        if not StudentTelegram.objects.filter(chat_id=chat_id, user=user).exists():
             TelegramOutbox.objects.filter(chat_id=chat_id, sent_at__isnull=True).delete()
         StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).delete()
         # Locked so the old chat cannot change owner while its waiting rows are moved: another
