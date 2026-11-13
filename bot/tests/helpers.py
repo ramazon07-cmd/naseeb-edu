@@ -79,6 +79,9 @@ class FakeApi:
         ]}
         self.digest_data = {'date': '2026-11-08', 'total_students': 0, 'omitted': 0, 'students': []}
         self.errors = {}
+        # None plays an older backend that knows no school name and has no preview call.
+        self.school = 'Tashkent <Int> & Co School'
+        self.split = ('Sofiya', 'Saydazimova')
         # What whoami answers for a chat that is not linked as a counselor.
         self.who = {'kind': 'staff_allowed', 'site_url': 'https://naseeb.example/meetings'}
         self.due_items = []
@@ -119,9 +122,16 @@ class FakeApi:
         self._record('digest', chat_id=chat_id)
         return self.digest_data
 
+    async def preview_student(self, chat_id, full_name):
+        self._record('preview_student', chat_id=chat_id, full_name=full_name)
+        if self.school is None:
+            raise ApiError(404)
+        return {'school': self.school, 'first_name': self.split[0], 'last_name': self.split[1]}
+
     async def add_student(self, chat_id, full_name, email, phone):
         self._record('add_student', chat_id=chat_id, full_name=full_name, email=email, phone=phone)
         return {
+            **({'school': self.school} if self.school else {}),
             'full_name': full_name, 'username': 'saydazimova-sofiya', 'phone': '+998910076825',
             'temporary_password': 'Tmp-Pass-42', 'expires_at': '2026-11-13T16:14:20+00:00',
             'login_url': 'https://naseeb.example/login',

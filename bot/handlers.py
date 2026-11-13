@@ -520,7 +520,7 @@ async def add_command(message: Message, state: FSMContext, api, cache):
     # Details may come with the command itself: "/add Ali Valiyev ali@x.com +998...".
     details = parse_student(message.text.partition(' ')[2])
     if is_complete(details):
-        await _show_student_card(message, state, lang, details)
+        await _show_student_card(message, state, api, lang, details)
         return
     await state.set_state(AddStudent.details)
     await state.update_data(lang=lang)
@@ -536,23 +536,35 @@ async def cancel_command(message: Message, state: FSMContext, cache):
 
 
 @router.message(AddStudent.details, F.text, ~F.text.regexp(COMMAND_PATTERN))
-async def got_student_details(message: Message, state: FSMContext, cache):
+async def got_student_details(message: Message, state: FSMContext, api, cache):
     lang = await language_of(state, cache, message.chat.id)
     details = parse_student(message.text)
     if not is_complete(details):
         missing = ', '.join(t(lang, f'field_{key}') for key in ('full_name', 'email', 'phone') if not details[key])
         await message.answer(t(lang, 'add_missing', missing=missing))
         return
-    await _show_student_card(message, state, lang, details)
+    await _show_student_card(message, state, api, lang, details)
 
 
-async def _show_student_card(message, state, lang, details):
+async def _show_student_card(message, state, api, lang, details):
     await state.clear()
     await state.set_state(AddStudent.confirm)
-    text = t(
-        lang, 'add_card', name=escape(details['full_name']), email=escape(details['email']),
-        phone=escape(details['phone']),
-    )
+    try:
+        preview = await api.preview_student(message.chat.id, details['full_name'])
+    except (ApiError, ApiUnavailable):
+        # An older backend (or a hiccup): the card still works, just without the school and name split.
+        preview = {}
+    school, first, last = (str(preview.get(key) or '') for key in ('school', 'first_name', 'last_name'))
+    if school and first:
+        text = t(
+            lang, 'add_card', first=escape(first), last=escape(last or '-'), email=escape(details['email']),
+            phone=escape(details['phone']), school=escape(school),
+        )
+    else:
+        text = t(
+            lang, 'add_card_plain', name=escape(details['full_name']), email=escape(details['email']),
+            phone=escape(details['phone']),
+        )
     await state.update_data(lang=lang, student=details, card_text=text)
     await message.answer(text, reply_markup=keyboards.confirm_student(lang))
 
@@ -611,6 +623,7 @@ async def add_confirm(callback: CallbackQuery, state: FSMContext, bot, api, cach
         lang, 'add_done', name=escape(result['full_name']), username=escape(result['username']),
         password=escape(result['temporary_password']), expires=format_expiry(result.get('expires_at')),
         url=escape(result.get('login_url') or ''),
+        school_line=t(lang, 'add_done_school', school=escape(result['school'])) if result.get('school') else '',
     ))
 
 
@@ -792,7 +805,7 @@ async def stray_text(message: Message, state: FSMContext, api, cache):
     if is_complete(details):
         link = await get_link(api, cache, message.chat.id)
         if link is not None:
-            await _show_student_card(message, state, link['language'], details)
+            await _show_student_card(message, state, api, link['language'], details)
             return
     # No step expects text here. After a restart a password may arrive this way, so it is not left in the chat.
     await _delete(message)

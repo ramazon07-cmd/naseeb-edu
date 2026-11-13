@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from apps.admissions.models import School
 from apps.admissions.scoping import active_visible_students, visible_students
-from apps.admissions.tenancy import create_student_account, find_school_student
+from apps.admissions.tenancy import create_student_account, find_school_student, split_full_name
 from apps.users import entitlements
 from apps.users.audit import audit_product_action
 from apps.users.cache_safety import count_hit
@@ -90,7 +90,7 @@ def _name(user):
     return user.get_full_name().strip() or user.username
 
 
-def _payload(student, password, phone=None):
+def _payload(student, password, phone=None, school_name=None):
     credential = student.temporary_credentials.order_by('-issued_at', '-id').first()
     payload = {
         'full_name': _name(student),
@@ -103,7 +103,22 @@ def _payload(student, password, phone=None):
     }
     if phone is not None:
         payload['phone'] = phone
+    if school_name:
+        payload['school'] = school_name
     return payload
+
+
+def preview_student(link, *, full_name):
+    """What the confirmation card shows: the caller's own school and the name split as it will be saved."""
+    actor = link.user
+    full_name = ' '.join(str(full_name or '').split())
+    if not full_name or len(full_name) > NAME_LIMIT:
+        raise Refused('invalid_name', 400)
+    school = actor.school
+    if school is None or not school.is_active:
+        raise Refused('account_unavailable')
+    first_name, last_name = split_full_name(full_name)
+    return {'school': school.name, 'first_name': first_name, 'last_name': last_name}
 
 
 def add_student(link, *, full_name, email, phone):
@@ -127,7 +142,7 @@ def add_student(link, *, full_name, email, phone):
                 student, _, _, _ = issue_temporary_credential(
                     user=existing.user, issued_by=actor, raw_password=password,
                 )
-                return _payload(student, password, phone)
+                return _payload(student, password, phone, school.name)
             raise Refused(
                 'student_exists', 409,
                 full_name=_name(existing.user),
@@ -158,7 +173,7 @@ def add_student(link, *, full_name, email, phone):
         audit_product_action(
             actor=actor, action='student.created_via_bot', target=profile.user, metadata={'school': school.id},
         )
-        return _payload(profile.user, password, phone)
+        return _payload(profile.user, password, phone, school.name)
 
 
 def find_students(link, query):
