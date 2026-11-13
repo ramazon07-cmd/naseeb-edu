@@ -394,7 +394,7 @@ function AuditRecord({ event }) {
   </article>;
 }
 
-const AI_FEATURES = [['assistant', 'AI assistant'], ['essay_coach', 'Essay coach'], ['recommendation_letter', 'Letter suggestions']];
+const AI_FEATURES = [['assistant', 'AI assistant'], ['essay_coach', 'Essay coach'], ['recommendation_letter', 'Letter suggestions'], ['education_match', 'Education match']];
 
 // Paid AI calls today against the daily caps (#39); counters only, no student content.
 function AiUsagePanel() {
@@ -591,8 +591,23 @@ export function AdminHealthPage() {
     <Panel title={t("File storage")} action={<button type="button" className="button quiet small" onClick={checkStorage} aria-busy={health.loading}><RefreshCw size={14} /> {t("Check again")}</button>}>{data.storage_checked_at && <p className="form-note">{tx`Counted ${dateTimeText(data.storage_checked_at)}; recounted at most once a minute.`}</p>}<div className="table-wrap"><table><thead><tr><th>{t("Kind")}</th><th>{t("Files")}</th><th>{t("Size")}</th></tr></thead><tbody>{data.storage.map((row) => <tr key={row.category}><td>{t(STORAGE_LABELS[row.category] || row.category)}</td><td>{formatNumberLocale(row.files)}</td><td>{formatFileSize(row.bytes)}</td></tr>)}</tbody></table></div><p className="form-note"><ShieldCheck size={16} /> {t("Sizes come from the uploads' saved sizes; profile photos and avatars are not counted.")}</p></Panel>
     <Panel title={t("Email delivery")}><div className="record-meta"><Badge tone={data.email?.enabled ? 'success' : 'reviewing'}>{data.email?.enabled ? t("On") : t("Off")}</Badge><span>{data.email?.enabled ? t("Meeting emails and reminders are sent.") : t("No mail server is set, so meeting emails, reminders and invites are not sent.")}</span></div></Panel>
     <Panel title={t("Shared cache")}><div className="record-meta"><Badge tone={data.shared_cache?.enabled ? 'success' : 'reviewing'}>{data.shared_cache?.enabled ? t("On") : t("Off")}</Badge><span>{data.shared_cache?.enabled ? t("Login limits and the AI budget are shared by all workers.") : t("No Redis is set, so login limits and the AI budget are counted per worker.")}</span></div></Panel>
+    <AiHealthPanel ai={data.ai} />
     <Panel title={t("Error tracking")}><div className="record-meta"><Badge tone={data.error_tracking.enabled ? 'success' : 'reviewing'}>{data.error_tracking.enabled ? t("On") : t("Off")}</Badge>{data.error_tracking.url ? <a href={data.error_tracking.url} target="_blank" rel="noreferrer">{t("Open the error tracker")} <ExternalLink size={14} /></a> : <span>{t("No error tracker link is configured.")}</span>}</div></Panel>
   </div>;
+}
+
+const AI_HEALTH_LABELS = { assistant: 'AI assistant', essay_coach: 'Essay coach', recommendation_letter: 'Letter suggestions', education_match: 'Education match' };
+
+// Per-feature calls, error rate, latency, tokens and estimated cost for the last day (metadata only).
+function AiHealthPanel({ ai }) {
+  if (!ai) return null;
+  const rows = Object.entries(ai.features || {});
+  const percent = (value) => `${formatNumberLocale(Math.round((value || 0) * 1000) / 10)}%`;
+  return <Panel title={t("AI health, last 24 hours")}>
+    <div className="record-meta"><Badge tone={ai.outbound_enabled ? 'success' : 'reviewing'}>{ai.outbound_enabled ? t("On") : t("Off")}</Badge><span>{ai.outbound_enabled ? (ai.gateway_key_set ? t("Outbound AI is on.") : t("Outbound AI is on, but no gateway key is set.")) : t("Outbound AI is off: every feature uses its built-in fallback.")}</span></div>
+    <div className="table-wrap"><table><thead><tr><th>{t("Feature")}</th><th>{t("Calls")}</th><th>{t("Errors")}</th><th>{t("Latency p50 / p95")}</th><th>{t("Tokens in / out")}</th><th>{t("Refused / local")}</th>{ai.cost_estimated && <th>{t("Cost (USD)")}</th>}</tr></thead><tbody>{rows.map(([key, row]) => <tr key={key}><td>{t(AI_HEALTH_LABELS[key] || key)}</td><td>{formatNumberLocale(row.paid_calls)}</td><td>{row.paid_calls ? percent(row.error_rate) : '—'}</td><td>{row.paid_calls ? `${formatNumberLocale(row.latency_p50_ms)} / ${formatNumberLocale(row.latency_p95_ms)} ms` : '—'}</td><td>{formatNumberLocale(row.input_tokens)} / {formatNumberLocale(row.output_tokens)}</td><td>{formatNumberLocale(row.budget_refused)} / {formatNumberLocale(row.local_fallback)}</td>{ai.cost_estimated && <td>{row.cost_usd === null ? '—' : formatNumberLocale(row.cost_usd)}</td>}</tr>)}</tbody></table></div>
+    <p className="form-note"><ShieldCheck size={16} /> {t("Counters only: no prompts, essays or replies are stored.")}</p>
+  </Panel>;
 }
 
 const JOB_RESULT_LABELS = { ok: 'Finished', failed: 'Failed', skipped: 'Skipped: already running' };

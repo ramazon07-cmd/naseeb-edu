@@ -152,14 +152,21 @@ class AiBudgetTests(APITestCase):
 class EssayCoachBudgetTests(EssayLabTestCase):
     def test_per_user_daily_limit(self):
         essay = self.make_essay()
-        payload = {'summary': 'ok', 'strengths': [], 'scores': {}, 'notes': []}
+        other = self.make_essay(content='A different essay about a radio, a soldering iron and two friends.')
+        payload = {
+            'mode': 'score', 'type': 'personal_statement', 'rubric_version': 3, 'summary': 'ok', 'strengths': [],
+            'scores': {'reflection': 1, 'specificity': 1, 'voice': 1, 'structure': 1, 'prompt_fit': 1},
+            'score_evidence': {}, 'notes': [],
+        }
 
-        def check():
+        def check(target):
             with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(payload))):
-                return self.client.post(f'{BASE}/essays/{essay.pk}/depth-check/', {'base_seq': 0},
+                return self.client.post(f'{BASE}/essays/{target.pk}/depth-check/', {'base_seq': 0},
                                         format='json')
 
-        self.assertEqual(check().status_code, status.HTTP_200_OK)
-        response = check()
+        self.assertEqual(check(essay).status_code, status.HTTP_200_OK)
+        # The same unchanged essay is answered from the cache and costs no credit.
+        self.assertEqual(check(essay).status_code, status.HTTP_200_OK)
+        response = check(other)
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(response.data['code'], 'coach_resting')

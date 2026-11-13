@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, Info, MessageCircleQuestion, RefreshCw, Sparkles, X } from 'lucide-react'
 import { t, tp } from '../i18n.js'
-import { NOTE_KINDS, SCORE_KEYS, coachSource, kindOf, overallScore, scoreBand } from './coachModel.js'
+import { NOTE_KINDS, coachSource, criteriaRows, isCached, kindOf, noteForQuote, overallScore, resultMode, rubricName, safetyContent } from './coachModel.js'
 import { relativeTime } from './format.js'
 
 const ERROR_TEXT = {
@@ -23,22 +23,42 @@ function ScoreRing({ percent, label }) {
   </svg>
 }
 
-function ScoreBars({ scores }) {
+function ScoreBars({ rows, visibleNotes, evidenceIds, onJump }) {
+  const [open, setOpen] = useState(null)
   return <dl className="el-scores">
-    {SCORE_KEYS.map(({ key, label }) => {
-      const value = Number(scores?.[key]) || 0
-      const band = scoreBand(value)
-      return <div key={key} className="el-score">
-        <dt>{t(label)}</dt>
-        <dd>
-          <span className="el-score-bar" role="img" aria-label={t('{label}: {value} of 4, {band}', { label: t(label), value, band: t(band.label) })}>
-            {[1, 2, 3, 4].map((step) => <span key={step} className={step <= value ? `is-on is-${band.tone}` : ''} />)}
-          </span>
-          <span className="el-score-label">{t(band.label)}</span>
-        </dd>
+    {rows.map(({ key, label, value, band, evidence }) => {
+      // The server names the note an evidence quote belongs to; matching the quote text is the fallback.
+      const linked = evidenceIds?.[key] ? visibleNotes.find((item) => item.id === evidenceIds[key]) : null
+      const note = linked || (evidence ? noteForQuote(visibleNotes, evidence) : null)
+      const shown = open === key && evidence
+      return <div key={key} className="el-score-row">
+        <div className="el-score">
+          <dt>{t(label)}</dt>
+          <dd>
+            <span className="el-score-bar" role="img" aria-label={t('{label}: {value} of 4, {band}', { label: t(label), value, band: t(band.label) })}>
+              {[1, 2, 3, 4].map((step) => <span key={step} className={step <= value ? `is-on is-${band.tone}` : ''} />)}
+            </span>
+            <span className="el-score-label">{t(band.label)}</span>
+            {evidence && <button type="button" className="el-icon-btn el-score-toggle" aria-expanded={shown} aria-label={t('Show the words behind this score: {label}', { label: t(label) })}
+              onClick={() => setOpen(shown ? null : key)}>{shown ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}</button>}
+          </dd>
+        </div>
+        {shown && <blockquote className="el-score-evidence">
+          “{evidence}”
+          {note && <button type="button" className="el-link" onClick={() => onJump(note)}>{t('Jump to it')}</button>}
+        </blockquote>}
       </div>
     })}
   </dl>
+}
+
+function SafetyCard({ result }) {
+  const { message, resources } = safetyContent(result)
+  return <div className="el-coach-safety" role="status">
+    <p>{message || t('You are not alone. A person you trust can help with this.')}</p>
+    {resources.map((item, index) => <p key={index} className="el-coach-resource">{item.label && <strong>{item.label} </strong>}{item.text}</p>)}
+    <p className="el-small">{t('Coach has no score for this text. Your essay is saved.')}</p>
+  </div>
 }
 
 // Coach panel: overall ring, five score bars, tabs and note cards.
@@ -51,10 +71,13 @@ function CoachPanel({
   const [showSummary, setShowSummary] = useState(false)
   const listRef = useRef(null)
   const result = check?.result
-  const overall = overallScore(result?.scores)
+  const safety = resultMode(check) === 'safety'
+  const overall = safety ? null : overallScore(result)
+  const rows = useMemo(() => (safety ? [] : criteriaRows(result)), [result, safety])
+  const rubric = safety ? '' : rubricName(result)
 
-  const visibleNotes = useMemo(() => (result?.notes || []).filter((note) => anchored.has(note.id) && !dismissed.has(note.id)), [result, anchored, dismissed])
-  const goneCount = (result?.notes || []).filter((note) => !anchored.has(note.id) && !dismissed.has(note.id)).length
+  const visibleNotes = useMemo(() => (safety ? [] : result?.notes || []).filter((note) => anchored.has(note.id) && !dismissed.has(note.id)), [result, safety, anchored, dismissed])
+  const goneCount = (safety ? [] : result?.notes || []).filter((note) => !anchored.has(note.id) && !dismissed.has(note.id)).length
   const counts = useMemo(() => Object.fromEntries(NOTE_KINDS.map((kind) => [kind.id, visibleNotes.filter((note) => kindOf(note).id === kind.id).length])), [visibleNotes])
   const notes = tab === 'all' ? visibleNotes : visibleNotes.filter((note) => kindOf(note).id === tab)
   const strengths = (tab === 'all' || tab === 'strength') ? (result?.strengths || []).filter(Boolean) : []
@@ -95,7 +118,7 @@ function CoachPanel({
         : <span className="el-coach-icon" aria-hidden="true"><Sparkles size={20} /></span>}
       <div className="el-coach-title">
         <strong>{overall ? t('Depth score') : t('Naseeb Coach')}</strong>
-        <span>{check
+        <span>{safety ? t('Checked {when}', { when: relativeTime(check.created_at) }) : check
           ? (visibleNotes.length === 1 ? t('Checked {when} · 1 idea', { when: relativeTime(check.created_at) }) : tp('Checked {when} · {n} ideas', visibleNotes.length, { when: relativeTime(check.created_at), n: visibleNotes.length }))
           : t('Questions that help you go deeper')}</span>
         {overall && <span className={`el-badge is-${overall.band.tone}`}>{t(overall.band.label)}</span>}
@@ -125,12 +148,21 @@ function CoachPanel({
         {words < 80 && <p className="el-small">{t('Tip: it works best once you have a paragraph or two.')}</p>}
       </div>}
 
-      {result && !status.loading && <>
+      {result && safety && !status.loading && <SafetyCard result={result} />}
+
+      {result && !safety && !status.loading && <>
         {coachSource(check) === 'rules' && <p className="el-alert is-info el-coach-source" role="note">
           <Info size={15} aria-hidden="true" />
           <span><strong>{t('Quick check (built-in rules)')}</strong> {t('AI feedback isn’t available right now, so these ideas come from simple writing checks. They can still help.')}</span>
         </p>}
-        <ScoreBars scores={result.scores} />
+        {rows.length > 0 && <ScoreBars rows={rows} visibleNotes={visibleNotes} evidenceIds={result?.evidence_ids} onJump={onJump} />}
+        {(rubric || isCached(check)) && <p className="el-small el-coach-rubric">
+          {rubric && (result.rubric_version != null
+            ? t('Scored with the {name} rubric v{version}', { name: t(rubric), version: result.rubric_version })
+            : t('Scored with the {name} rubric', { name: t(rubric) }))}
+          {rubric && isCached(check) && ' · '}
+          {isCached(check) && t('Same essay, same result. Change your text to check again.')}
+        </p>}
         {result.summary && <div className="el-coach-summary">
           <p className={showSummary ? '' : 'is-clamped'}>{result.summary}</p>
           {result.summary.length > 140 && <button type="button" className="el-link" onClick={() => setShowSummary((value) => !value)}>{showSummary ? t('Show less') : t('Read more')}</button>}

@@ -243,9 +243,15 @@ class CheckpointDetailSerializer(CheckpointSummarySerializer):
 
 
 class DepthCheckSerializer(serializers.ModelSerializer):
+    # True when this check was answered from the cache (stored as result['cached'] too, so reads agree).
+    cached = serializers.SerializerMethodField()
+
+    def get_cached(self, obj):
+        return bool(getattr(obj, 'cached', False) or (obj.result or {}).get('cached'))
+
     class Meta:
         model = EssayDepthCheck
-        fields = ('id', 'tab', 'save_seq', 'created_at', 'model', 'result')
+        fields = ('id', 'tab', 'save_seq', 'created_at', 'model', 'cached', 'result')
         read_only_fields = fields
 
 
