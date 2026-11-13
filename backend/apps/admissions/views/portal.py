@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
 from apps.telegram_bot.student_link import is_linked, telegram_link_enabled
 from apps.users.models import User
+from apps.users.throttles import ActionThrottleMixin
 from apps.users.serializers import ContactSerializer
 from ..models import (
     Booking,
@@ -33,7 +34,7 @@ from ..serializers import (
 from ..serializers.portal import CHOOSE_AVAILABLE_TIME, MeetingAvailabilityRepeatSerializer, MeetingAvailabilitySerializer, MeetingScheduleSerializer
 from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
 from ..listing import ListQueryMixin
-from ..meeting_mail import email_after_commit, telegram_after_commit
+from ..meeting_mail import queue_meeting_email, telegram_after_commit
 from ..meetings import (
     MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, overlapping, top_up_schedule, top_up_schedules,
     upcoming_slots, weekly_starts, with_availability,
@@ -142,8 +143,13 @@ class StudentPortalOwnedViewSet(viewsets.ModelViewSet):
         return self.queryset.filter(student=self.request.user.student_profile)
 
 
-class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
+class BookingViewSet(ActionThrottleMixin, ListQueryMixin, viewsets.ModelViewSet):
     serializer_class = BookingSerializer
+    # Each meeting change notifies (and emails) the other side.
+    action_throttle_scopes = dict.fromkeys(
+        ('create', 'update', 'partial_update', 'destroy', 'approve', 'reject', 'complete', 'cancel', 'reschedule'),
+        'booking_write',
+    )
     permission_classes = [BookingPermission]
     queryset = Booking.objects.select_related('student__user', 'participant', 'participant__school').all()
     search_fields = ('topic',)
@@ -393,7 +399,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         Notification.objects.create(
             student=booking.student, title=title, message=message, kind=Notification.Kind.MEETING,
         )
-        email_after_commit(booking, booking.student.user, title, self.request)
+        queue_meeting_email(booking, booking.student.user, title, self.request)
         telegram_after_commit(booking, booking.student.user, title, self.request)
 
     def _notify_participant(self, booking, title, message):
@@ -403,7 +409,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 student=booking.student, recipient_id=booking.participant_id,
                 title=title, message=message, kind=Notification.Kind.MEETING, target_id=booking.pk,
             )
-            email_after_commit(booking, booking.participant, title, self.request)
+            queue_meeting_email(booking, booking.participant, title, self.request)
 
     def _transition(self, target_status, allowed_from):
         with transaction.atomic():
@@ -529,8 +535,9 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         return Response(self.get_serializer(booking).data)
 
 
-class StudentMessageViewSet(viewsets.ModelViewSet):
+class StudentMessageViewSet(ActionThrottleMixin, viewsets.ModelViewSet):
     serializer_class = StudentMessageSerializer
+    action_throttle_scopes = {'create': 'chat_post'}
     permission_classes = [StudentCollaborationPermission]
     queryset = StudentMessage.objects.select_related('student__user', 'sender', 'recipient').all()
     # ?cursor= pages newest first; a thread is read from its latest message.

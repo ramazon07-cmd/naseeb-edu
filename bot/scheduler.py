@@ -175,7 +175,7 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, un
     return {'sent': len(sent), 'blocked': len(blocked)}
 
 
-# The backend's scheduled jobs (meeting reminders hourly; notifications and cleanups
+# The backend's scheduled jobs (queueing meeting reminders hourly; notifications and cleanups
 # daily), asked for from here once an hour at minute 5 so no cron service is needed.
 # The backend picks what is due and locks each job, so a restart or two instances
 # during a deploy never run one twice.
@@ -211,6 +211,29 @@ class HourlyJob:
             log.exception('unexpected error while running scheduled jobs')
 
 
+class BackgroundJob:
+    """Starts `job` in the background whenever asked, unless its last run is still going."""
+
+    def __init__(self, job, label):
+        self._job = job
+        self._label = label
+        self.task = None
+
+    def maybe_start(self):
+        if self.task and not self.task.done():
+            return None
+        self.task = asyncio.create_task(self._run())
+        return self.task
+
+    async def _run(self):
+        try:
+            await self._job()
+        except (ApiError, ApiUnavailable) as exc:
+            log.warning('%s were not handled this minute: %s', self._label, type(exc).__name__)
+        except Exception:
+            log.exception('unexpected error in %s', self._label)
+
+
 def seconds_to_next_minute(now=None):
     # Tashkent is UTC+5 all year, so its minutes start exactly when UTC minutes do.
     return 60.0 - ((time.time() if now is None else now) % 60.0) + 0.5
@@ -219,10 +242,14 @@ def seconds_to_next_minute(now=None):
 async def run_scheduler(stop, **deps):
     """Tick once at startup (the backend's grace window covers a restart), then at every minute start."""
     reminders = deps.pop('reminders', None) or HourlyJob(deps['api'].scheduled_jobs)
+    # Meeting emails are queued by the website and the hourly job; the backend sends them when
+    # asked, every minute, in the background so a slow mail server never delays Telegram sends.
+    mail = deps.pop('mail', None) or BackgroundJob(deps['api'].send_meeting_emails, 'meeting emails')
     unacked = {'sent': [], 'blocked': set()}
     try:
         while not stop.is_set():
             reminders.maybe_start()
+            mail.maybe_start()
             # Meeting messages first: a reminder is due at its minute, a digest can wait for the sends before it.
             try:
                 await deliver_student_messages(**deps, unacked=unacked)
@@ -235,7 +262,8 @@ async def run_scheduler(stop, **deps):
             with suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=seconds_to_next_minute())
     finally:
-        if reminders.task and not reminders.task.done():
-            reminders.task.cancel()
-            with suppress(asyncio.CancelledError):
-                await reminders.task
+        for job in (reminders, mail):
+            if job.task and not job.task.done():
+                job.task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await job.task

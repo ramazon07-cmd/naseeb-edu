@@ -167,6 +167,10 @@ class FakeApi:
         self._record('scheduled_jobs')
         return {'ok': True}
 
+    async def send_meeting_emails(self):
+        self._record('send_meeting_emails')
+        return {'sent': 0, 'failed': 0, 'dropped': 0, 'waiting': 0}
+
     async def due(self):
         self._record('due')
         items, self.due_items = self.due_items, []

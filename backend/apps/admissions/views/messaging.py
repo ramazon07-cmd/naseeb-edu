@@ -24,6 +24,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework import serializers as drf_serializers
 from apps.users.models import User
+from apps.users.throttles import ActionThrottleMixin
 from apps.users.serializers import ContactSerializer
 from apps.users.services import audit_product_action
 from core.pagination import BoundedCountPaginator, ListPagination, keyset_filter
@@ -541,8 +542,9 @@ class ChannelMessagePermission(permissions.BasePermission):
         return bool(role)
 
 
-class ChannelMessageViewSet(viewsets.ModelViewSet):
+class ChannelMessageViewSet(ActionThrottleMixin, viewsets.ModelViewSet):
     serializer_class = ChannelMessageSerializer
+    action_throttle_scopes = {'create': 'chat_post'}
     permission_classes = [ChannelMessagePermission]
     pagination_class = ChannelMessagePagination
     queryset = ChannelMessage.objects.select_related('channel', 'sender', 'parent').all()

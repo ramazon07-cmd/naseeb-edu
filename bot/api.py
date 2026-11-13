@@ -5,6 +5,8 @@ import aiohttp
 
 log = logging.getLogger('bot.api')
 JOBS_TIMEOUT = 110
+# Sending queued meeting emails: the backend stops starting new sends after ~25 s.
+MAIL_TIMEOUT = 60
 
 
 class ApiError(Exception):
@@ -107,6 +109,10 @@ class ApiClient:
     async def scheduled_jobs(self):
         # The backend answers when the due jobs are done; just under gunicorn's 120 s.
         return await self._call('POST', 'scheduled-jobs', json={}, timeout=JOBS_TIMEOUT)
+
+    async def send_meeting_emails(self):
+        # The backend sends what the website and the reminder job queued, for a bounded time.
+        return await self._call('POST', 'meeting-emails', json={}, timeout=MAIL_TIMEOUT)
 
     async def due(self):
         body = await self._call('POST', 'due', json={})

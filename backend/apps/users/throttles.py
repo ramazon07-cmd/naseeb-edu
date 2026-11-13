@@ -170,6 +170,41 @@ class ScopedRateThrottle(WindowRateThrottle):
         return f'ip:{self.get_ident(request)}'
 
 
+class ActionRateThrottle(ScopedRateThrottle):
+    """The scope ``view.action_throttle_scopes`` names for the running action; other actions pass.
+
+    For limits on a few writes of a viewset (posting a chat message, changing a meeting)
+    that should not touch its reads.
+    """
+
+    def allow_request(self, request, view):
+        self.scope = (getattr(view, 'action_throttle_scopes', None) or {}).get(getattr(view, 'action', None))
+        if not self.scope:
+            return True
+        return WindowRateThrottle.allow_request(self, request, view)
+
+
+class ActionThrottleMixin:
+    """Adds ActionRateThrottle to a viewset's usual throttles.
+
+    Only writes that succeed are counted: a refused one (validation error, not found,
+    forbidden) is taken back, so mistakes never use up a person's allowance. Floods of
+    refused requests are still held by the general per-user rate.
+    """
+
+    action_throttle_scopes = {}
+
+    def get_throttles(self):
+        self._action_throttle = ActionRateThrottle()
+        return [*super().get_throttles(), self._action_throttle]
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        throttle = getattr(self, '_action_throttle', None)
+        if throttle is not None and throttle.scope and response.status_code >= 400 and response.status_code != 429:
+            throttle.refund()
+        return super().finalize_response(request, response, *args, **kwargs)
+
+
 def _body_field(request, name):
     data = request.data
     value = data.get(name) if isinstance(data, dict) else None

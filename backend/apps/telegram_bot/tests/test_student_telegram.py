@@ -273,6 +273,29 @@ class StudentTelegramTests(RoleIsolationBase):
         self.assertEqual([TelegramOutbox.objects.get(pk=m['id']).booking_id for m in messages], [kept.pk])
         self.assertEqual(TelegramOutbox.objects.filter(key__isnull=False).count(), 1)
 
+    def test_queueing_reminders_takes_the_same_queries_for_any_number_of_meetings(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.link()
+        now = timezone.now().replace(second=0, microsecond=0)
+
+        def measure(count):
+            Booking.objects.all().delete()
+            for index in range(count):
+                Booking.objects.create(student=self.student_a, participant=self.counselor, topic=f'T{index}',
+                                       starts_at=now + timedelta(minutes=55), status=Booking.Status.APPROVED)
+            with CaptureQueriesContext(connection) as context:
+                queued = student_link.queue_reminders(now)
+            self.assertEqual(queued, count)
+            return len(context.captured_queries)
+
+        self.assertEqual(measure(2), measure(10))
+        # Already queued: nothing new, still no query per meeting.
+        with CaptureQueriesContext(connection) as context:
+            self.assertEqual(student_link.queue_reminders(now), 0)
+        self.assertLessEqual(len(context.captured_queries), 3)
+
     def test_bot_endpoints_need_the_service_key_and_valid_lists(self):
         self.assertEqual(self.client.post('/api/bot/student-outbox/', {}, format='json').status_code, 401)
         self.assertEqual(self.bot('student-outbox/ack', {'sent': ['x']}).status_code, 400)

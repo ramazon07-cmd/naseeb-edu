@@ -40,8 +40,9 @@ services:
     envVars:
       - fromGroup: naseeb-backend
 
-  # Meeting reminder emails need no cron here: the counselor bot runs them hourly
-  # through /api/bot/meeting-reminders/ (docs/telegram-bot.md).
+  # Meeting emails need no cron here: the counselor bot queues reminders hourly
+  # (/api/bot/scheduled-jobs/) and sends the email queue every minute
+  # (/api/bot/meeting-emails/); see docs/telegram-bot.md.
 
   # Counselor Telegram bot (long polling, no inbound port). It has no database
   # and no passwords: it talks to the backend with BOT_SERVICE_KEY.

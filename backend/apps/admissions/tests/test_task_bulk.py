@@ -56,7 +56,8 @@ class BulkTaskTests(RoleIsolationBase):
             invalidate.assert_not_called()
             for callback in callbacks:
                 callback()
-            invalidate.assert_called_once_with()
+            # Only the school the tasks belong to is dropped.
+            invalidate.assert_called_once_with(self.student_a.school_id)
 
     def test_validates_fields_like_a_single_create(self):
         response = self.client.post(URL, self.payload([self.student_a.pk], priority='whenever', due_date=''), format='json')

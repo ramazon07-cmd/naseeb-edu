@@ -16,6 +16,7 @@ urlpatterns = [
     path('student-outbox/', views.StudentOutboxView.as_view()),
     path('student-outbox/ack/', views.StudentOutboxAckView.as_view()),
     path('scheduled-jobs/', views.ScheduledJobsView.as_view()),
+    path('meeting-emails/', views.MeetingEmailsView.as_view()),
     # The name an older bot calls; same view.
     path('meeting-reminders/', views.ScheduledJobsView.as_view()),
     path('due/', views.DueView.as_view()),

@@ -234,6 +234,8 @@ class StudentProfile(TimeStampedModel):
                 for name in ('sat_reading', 'sat_math', 'sat_superscore_reading', 'sat_superscore_math')
             ],
         ]
+        # A counselor's student list and every counselor scope filter on both.
+        indexes = [models.Index(fields=['assigned_counselor', 'school'], name='student_counselor_school_idx')]
 
     def __str__(self):
         return self.user.get_full_name() or self.user.username
@@ -966,7 +968,11 @@ class Booking(TimeStampedModel):
 
     class Meta:
         ordering = ['starts_at']
-        indexes = [models.Index(fields=['starts_at', 'id'], name='booking_starts_id_idx')]
+        indexes = [
+            models.Index(fields=['starts_at', 'id'], name='booking_starts_id_idx'),
+            # A staff member's open meetings in time order: overlap checks, their calendar.
+            models.Index(fields=['participant', 'status', 'starts_at'], name='booking_part_status_start_idx'),
+        ]
 
     def __str__(self):
         return f'{self.student} — {self.topic}'
@@ -979,6 +985,43 @@ class Booking(TimeStampedModel):
     def is_expired(self):
         """A request nobody confirmed before its start time; derived, never stored."""
         return self.status == self.Status.PENDING and self.has_started
+
+
+class MeetingEmail(models.Model):
+    """A meeting email waiting to go out. Requests only write these rows; ``deliver_queued_emails``
+    sends them (the counselor bot asks for that every minute), so a slow mail server never holds
+    a web request.
+
+    Each row is claimed (``sending_at``) and committed before its message is handed to the mail
+    server, so a worker killed mid-send never sends it again: an interrupted row is dropped.
+    """
+
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name='+')
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
+    event = models.CharField(max_length=30)
+    # Reminders: one per meeting, start time and person, so a retried run never queues it twice.
+    key = models.CharField(max_length=120, unique=True, null=True, blank=True)
+    # The meeting's start when queued: a reminder for a meeting moved since is dropped.
+    meeting_start = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    send_after = models.DateTimeField(default=timezone.now)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    sending_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    # Given up: failed too often, interrupted mid-send, too old, or a stale reminder.
+    dropped_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['send_after', 'id'], name='meeting_email_due_idx',
+                condition=models.Q(sent_at__isnull=True, dropped_at__isnull=True, sending_at__isnull=True),
+            ),
+            models.Index(fields=['created_at'], name='meeting_email_created_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.event} for booking {self.booking_id}'
 
 
 class StudentMessage(TimeStampedModel):

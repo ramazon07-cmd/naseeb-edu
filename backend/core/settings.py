@@ -131,7 +131,9 @@ EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=10, cast=int)
+# Seconds per SMTP step. Meeting emails are sent from a queue (never inside a user's request),
+# but each queued send still waits this long on a stuck server, so keep it short.
+EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=5, cast=int)
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Naseeb Edu <no-reply@naseebedu.com>')
 # "Connect Google" on Meetings: a verified email for meeting confirmations and reminders.
 # Empty client id = the feature is off and Meetings needs no Google account.
@@ -142,6 +144,9 @@ GOOGLE_OAUTH_CLIENT_SECRET = config('GOOGLE_OAUTH_CLIENT_SECRET', default='')
 GOOGLE_OAUTH_REDIRECT_URI = config('GOOGLE_OAUTH_REDIRECT_URI', default='')
 # A reminder email goes out once a confirmed meeting is this close (send_meeting_reminders, hourly cron).
 MEETING_REMINDER_HOURS = config('MEETING_REMINDER_HOURS', default=24, cast=int)
+# How long one call to send queued meeting emails may keep going (the bot calls every minute and
+# waits 60 s; a send already started may add up to EMAIL_TIMEOUT per SMTP step).
+MEETING_EMAIL_SEND_SECONDS = config('MEETING_EMAIL_SEND_SECONDS', default=25, cast=int)
 
 environment_errors = validate_runtime_environment(
     app_env=APP_ENV,
@@ -428,6 +433,11 @@ REST_FRAMEWORK = {
         'account_change': config('AUTH_ACCOUNT_CHANGE_RATE', default='10/hour'),
         'public_reach': config('PUBLIC_REACH_RATE', default='60/minute'),
         'telegram_feed': config('TELEGRAM_FEED_RATE', default='60/minute'),
+        # Chat messages posted per user: far above any person typing, it stops a runaway script.
+        'chat_post': config('CHAT_POST_RATE', default='60/minute'),
+        # Meeting writes per user (book, approve, reject, cancel, reschedule): each one notifies
+        # and emails the other side.
+        'booking_write': config('BOOKING_WRITE_RATE', default='30/hour'),
         # The public join page. Per client IP: page loads, successful sign-ups
         # (failures are not counted) and every attempt; plus attempts per
         # invite token. A class joining from one school address fits, a
