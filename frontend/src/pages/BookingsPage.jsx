@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { api, request } from '../api';
 import { t, tx, locale, formatDateLocale } from '../i18n';
-import { Modal, Badge, Empty, Panel } from '../components/ui';
+import { Modal, Empty, Panel } from '../components/ui';
 import { Field, PortalTabs } from '../components/forms';
 import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
-import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil, Send } from 'lucide-react';
+import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil, Send, Timer, History, UsersRound, MessageCircle } from 'lucide-react';
 import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, joinParts, relativeDayText, shortDayText } from '../lib/format';
 import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
@@ -13,6 +13,8 @@ import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
 import { isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook } from '../lib/meetings';
 import { StudentSearchInput } from '../components/StudentSearchInput';
 import './bookings-scheduler.css';
+import '../design/pages/meetings-blue.css';
+import { Avatar, BlueButton, Chip, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader, PillTabs, tabId } from '../design/blue/ui';
 import { InlineLoadError } from '../components/states';
 import { closeWindow, createLinkWatch, navigateWindow, openBlankWindow } from '../lib/telegramLink';
 
@@ -717,7 +719,7 @@ function TelegramConnectDialog({ onLinked, onClose, notify }) {
         {blocked && <p className="telegram-dialog-hint">{t("Your browser blocked the new tab. Use the link below.")}</p>}
         <a className="telegram-dialog-again" href={link} target="_blank" rel="noopener noreferrer">{t("Open Telegram again")}</a>
       </div> : <>
-        <button type="button" className="button primary telegram-dialog-login" onClick={connect} disabled={phase === 'starting'} aria-busy={phase === 'starting'}><Send size={17} aria-hidden="true" /> {phase === 'starting' ? t("Connecting…") : t("Connect Telegram")}</button>
+        <BlueButton className="telegram-dialog-login" icon={Send} onClick={connect} disabled={phase === 'starting'} aria-busy={phase === 'starting'}>{phase === 'starting' ? t("Connecting…") : t("Connect Telegram")}</BlueButton>
         {phase === 'idle' && <p className="telegram-dialog-hint">{t("We open the bot for you. Just press Start there.")}</p>}
         {phase === 'expired' && <p className="telegram-dialog-error" role="alert">{t("Link expired, try again")}</p>}
         {phase === 'error' && <p className="telegram-dialog-error" role="alert">{error}</p>}
@@ -729,10 +731,10 @@ function TelegramConnectDialog({ onLinked, onClose, notify }) {
 
 // Shown on the page while the dialog is closed and Telegram is still not connected.
 function TelegramReminder({ onOpen }) {
-  return <div className="telegram-reminder" role="status"><Send size={16} aria-hidden="true" /><span>{t("Connect Telegram to request meetings")}</span><button type="button" className="button small" onClick={onOpen}>{t("Connect")}</button></div>;
+  return <div className="telegram-reminder" role="status"><Send size={16} aria-hidden="true" /><span>{t("Connect Telegram to request meetings")}</span><BlueButton size="sm" onClick={onOpen}>{t("Connect")}</BlueButton></div>;
 }
 
-export function BookingsPage({ user, data, reload, notify, updateUser }) {
+export function BookingsPage({ user, data, reload, notify, updateUser, setPage }) {
   const [zoneId, setZoneId] = useState(zone.id);
   const changeZone = (id) => { setMeetingZone(id); setZoneId(id); };
   const picker = <ZonePicker value={zoneId} onChange={changeZone} />;
@@ -754,21 +756,59 @@ export function BookingsPage({ user, data, reload, notify, updateUser }) {
   const banner = locked ? (telegramOpen
     ? <TelegramConnectDialog notify={notify} onClose={() => setTelegramOpen(false)} onLinked={(telegram) => updateUser?.({ telegram })} />
     : <TelegramReminder onOpen={showDialog} />) : null;
-  const props = { data, reload, notify, guard, banner, picker };
+  const props = { data, reload, notify, guard, banner, picker, setPage };
   // key: a new zone redraws every time on the page.
   if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
   if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
   return <StaffMeetingsPage key={zoneId} {...props} />;
 }
 
-function StudentBookingsPage({ data, reload, notify, guard, banner, picker }) {
+const statusChip = (status) => ({ confirmed: 'ok', completed: 'ok', pending: 'warn', cancelled: 'overdue', rejected: 'overdue', expired_unconfirmed: 'overdue' }[status] || 'default');
+
+// "My Naseeb team" (counselor, school contact): the same list the dashboard shows,
+// each person one tap from a direct message.
+function useStudentTeam() {
+  const [state, setState] = useState({ items: [], loading: true, error: '' });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setState((current) => ({ ...current, loading: true, error: '' }));
+    api.list('student-team').then(
+      (items) => active && setState({ items: Array.isArray(items) ? items : [], loading: false, error: '' }),
+      (err) => active && setState({ items: [], loading: false, error: err.message }),
+    );
+    return () => { active = false; };
+  }, [attempt]);
+  return { ...state, retry: () => setAttempt((value) => value + 1) };
+}
+
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker, setPage }) {
   const [tab, setTab] = useState('upcoming');
   const [open, setOpen] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
+  const teamRef = useRef(null);
+  const team = useStudentTeam();
+  const [openingId, setOpeningId] = useState(null);
+  // A direct chat with a team member: open (or find) it, then land on it in Messages by its id.
+  async function messageMember(member) {
+    if (openingId) return;
+    setOpeningId(member.id);
+    try {
+      const channel = await api.openDirectChannel(member.id);
+      setPage('messages', { channelId: channel.id });
+    } catch (err) {
+      notify(err.message, 'error');
+      setOpeningId(null);
+    }
+  }
   const now = new Date();
-  const tabs = [['upcoming', 'Upcoming'], ['history', 'Past']];
-  const items = studentMeetingsForTab(data.bookings, tab, now);
+  const upcoming = studentMeetingsForTab(data.bookings, 'upcoming', now);
+  const past = studentMeetingsForTab(data.bookings, 'history', now);
+  const items = tab === 'upcoming' ? upcoming : past;
+  // Minutes spent in meetings that took place (confirmed and past, or marked completed).
+  const minutes = past.reduce((total, item) => (['completed', 'past_unmarked'].includes(meetingStatus(item, now, { student: true })) ? total + (Number(item.duration_minutes) || 0) : total), 0);
+  const tabs = [{ key: 'upcoming', label: t('Upcoming') }, { key: 'history', label: t('Past'), count: past.length }];
   async function transition(item, action) {
     if (action === 'cancel' && !window.confirm(t("Cancel this meeting?"))) return;
     setSavingId(item.id);
@@ -783,7 +823,56 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker }) {
       setSavingId(null);
     }
   }
-  return <div className="section-stack student-portal">{banner}<div className="portal-toolbar"><PortalTabs active={tab} onChange={setTab} items={tabs} /><div className="booking-toolbar-actions">{picker}<button className="button primary" onClick={guard(() => setOpen(true))}><Plus size={17} /> {t("Request meeting")}</button></div></div><p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p><div className="booking-grid">{items.map((item) => { const status = meetingBadgeStatus(meetingStatus(item, now, { student: true })); return <article className={`booking-card is-${status}`} key={item.id}><div className="booking-date"><strong>{zoned(item.starts_at).getDate()}</strong><span>{formatDateLocale(item.starts_at, { month: 'short' })}</span></div><div><h3>{item.topic}</h3><p><Clock3 size={15} /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p><small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>{item.notes && <p>{item.notes}</p>}</div><div><Badge>{status}</Badge>{isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => setRescheduling(item)}><CalendarClock size={14} /> {t("Reschedule")}</button><button className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}><Ban size={14} /> {t("Cancel meeting")}</button></div>}{!isOpenMeeting(item, now) && <div className="booking-actions"><button className="button quiet small" disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}><Trash2 size={14} /> {t("Delete")}</button></div>}</div></article>; })}{!items.length && <Empty text={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} />}</div>{open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}{rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}</div>;
+  const requestButton = <BlueButton icon={Plus} onClick={guard(() => setOpen(true))}>{t("Request meeting")}</BlueButton>;
+  return <div className="nb-meet student-portal">
+    <PageHeader title={t("Meetings")} subtitle={t("Schedule and manage meetings")} actions={requestButton} />
+    {banner}
+    <KpiRow label={t("Meetings summary")}>
+      <KpiTile tone={0} icon={CalendarClock} value={upcoming.length} label={t("Upcoming")} onClick={() => setTab('upcoming')} actionLabel={tx`Upcoming · ${upcoming.length}`} />
+      <KpiTile tone={1} icon={History} value={past.length} label={t("Past meetings")} onClick={() => setTab('history')} actionLabel={tx`Past meetings · ${past.length}`} />
+      <KpiTile tone={2} icon={Timer} value={minutes} unit={t("min")} label={t("Minutes in meetings")} />
+      <KpiTile tone={3} icon={UsersRound} value={team.items.length} loading={team.loading} label={t("My Naseeb team")} onClick={() => teamRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} actionLabel={t("My Naseeb team")} />
+    </KpiRow>
+    <div className="nb-meet-bar">
+      <PillTabs tabs={tabs} value={tab} onChange={setTab} label={t("Meetings")} idPrefix="nb-meet" />
+      <div className="nb-meet-zone">{picker}<p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p></div>
+    </div>
+    <div className="nb-meet-grid">
+      <GlassCard tone="solid" className="nb-meet-list" role="tabpanel" aria-labelledby={tabId('nb-meet', tab)}>
+        {items.length ? <div className="nb-meet-rows">{items.map((item) => {
+          const status = meetingBadgeStatus(meetingStatus(item, now, { student: true }));
+          const isOpen = isOpenMeeting(item, now);
+          return <article className={`nb-meet-row is-${status}`} key={item.id}>
+            <DateTile day={zoned(item.starts_at).getDate()} month={formatDateLocale(zoned(item.starts_at), { month: 'short' })} hot={tab === 'upcoming'} />
+            <div className="nb-meet-copy">
+              <h3>{item.topic}</h3>
+              <p><Clock3 size={15} aria-hidden="true" /> {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</p>
+              <small>{joinParts(t("Meeting with {name}", { name: item.participant_name || t("Meeting participant") }), item.participant_role && label(item.participant_role))}</small>
+              {item.notes && <p className="nb-meet-notes">{item.notes}</p>}
+            </div>
+            <div className="nb-meet-side">
+              <Chip variant={statusChip(status)}>{label(status)}</Chip>
+              <div className="nb-meet-actions">
+                {isOpen ? <>
+                  <BlueButton variant="ghost" size="sm" icon={CalendarClock} disabled={savingId === item.id} onClick={() => setRescheduling(item)}>{t("Reschedule")}</BlueButton>
+                  <BlueButton variant="ghost" size="sm" icon={Ban} disabled={savingId === item.id} onClick={() => transition(item, 'cancel')}>{t("Cancel meeting")}</BlueButton>
+                </> : <BlueButton variant="ghost" size="sm" icon={Trash2} disabled={savingId === item.id} onClick={() => deleteMeeting(item, { setSavingId, reload, notify, question: t("Delete this meeting? It disappears for your counselor too.") })}>{t("Delete")}</BlueButton>}
+              </div>
+            </div>
+          </article>;
+        })}</div> : <EmptyState icon={CalendarClock} title={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} text={tab === 'upcoming' ? t("Make time for your next step.") : undefined} action={tab === 'upcoming' ? requestButton : undefined} />}
+      </GlassCard>
+      <GlassCard tone="solid" className="nb-meet-team" title={t("My Naseeb team")} icon={UsersRound} ref={teamRef}>
+        {team.loading ? <p className="nb-meet-note" role="status">{t("Loading…")}</p> : team.error ? <InlineLoadError message={team.error} onRetry={team.retry} /> : team.items.length ? <ul className="nb-meet-people">{team.items.map((member) => <li key={`${member.kind}-${member.id}`}>
+          <Avatar name={member.name} size={44} />
+          <span><b>{member.name}</b><small>{t(member.role)}</small></span>
+          {setPage && <button type="button" className="nb-meet-msg" disabled={Boolean(openingId)} onClick={() => messageMember(member)} aria-label={tx`Message ${member.name}`} title={t("Message")}><MessageCircle size={18} aria-hidden="true" /></button>}
+        </li>)}</ul> : <p className="nb-meet-note">{t("No team members have been assigned yet.")}</p>}
+      </GlassCard>
+    </div>
+    {open && <BookingForm onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
+    {rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
+  </div>;
 }
 
 const meetingTone = (status) => ({ confirmed: 'ok', pending: 'warn' }[status] || 'quiet');

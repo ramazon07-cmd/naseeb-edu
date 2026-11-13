@@ -94,7 +94,13 @@ def consume_token(chat_id, token, language=None):
             raise _invalid_token()
         pending.delete()
         # One chat per student and one student per chat: whatever either was linked to before is replaced.
+        # Their unsent messages are dropped too, so the new owner never receives them.
+        if StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).exists():
+            TelegramOutbox.objects.filter(chat_id=chat_id, sent_at__isnull=True).delete()
         StudentTelegram.objects.filter(chat_id=chat_id).exclude(user=user).delete()
+        previous = StudentTelegram.objects.filter(user=user).exclude(chat_id=chat_id).first()
+        if previous:
+            TelegramOutbox.objects.filter(chat_id=previous.chat_id, sent_at__isnull=True).delete()
         try:
             StudentTelegram.objects.update_or_create(
                 user=user, defaults={'chat_id': chat_id, 'language': language, 'is_active': True},
@@ -168,6 +174,8 @@ def issue_token(user):
 
 
 def unlink(user):
+    for link in StudentTelegram.objects.filter(user=user):
+        TelegramOutbox.objects.filter(chat_id=link.chat_id, sent_at__isnull=True).delete()
     StudentTelegram.objects.filter(user=user).delete()
     return link_status(user)
 

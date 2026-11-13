@@ -92,7 +92,12 @@ class StudentCollaborationPermission(permissions.BasePermission):
             if isinstance(obj, StudentMessage):
                 return user.id in {obj.sender_id, obj.recipient_id}
             return False
-        return getattr(obj, 'student_id', None) == user.student_profile.id
+        if getattr(obj, 'student_id', None) != user.student_profile.id:
+            return False
+        # In their own thread a student may only change what they wrote; reading is a separate action.
+        if isinstance(obj, StudentMessage) and request.method not in permissions.SAFE_METHODS:
+            return view.action == 'read' or obj.sender_id == user.id
+        return True
 
 
 # Staff who take meetings with their students; an assistant has their own calendar.
@@ -546,7 +551,10 @@ class StudentMessageViewSet(viewsets.ModelViewSet):
             return scope_students(
                 self.queryset.filter(Q(sender=user) | Q(recipient=user)), user, via='student',
             )
-        return self.queryset.filter(student=user.student_profile)
+        profile = getattr(user, 'student_profile', None)
+        if profile is None:
+            return self.queryset.none()
+        return self.queryset.filter(student=profile)
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -560,6 +568,8 @@ class StudentMessageViewSet(viewsets.ModelViewSet):
         profile = user.student_profile
         if not profile.assigned_counselor:
             raise drf_serializers.ValidationError({'recipient': 'A counselor has not been assigned yet.'})
+        if profile.assigned_counselor.school_id != profile.school_id:
+            raise drf_serializers.ValidationError({'recipient': 'Your assigned counselor is not available at your school.'})
         serializer.save(student=profile, sender=user, recipient=profile.assigned_counselor)
 
     @action(detail=True, methods=['post'])

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { PortalTabs } from '../components/forms';
-import { Award, Briefcase, FolderGit2, Mail, Sparkles, Trophy } from 'lucide-react';
+import { Award, Briefcase, ClipboardCheck, FolderGit2, GraduationCap, Mail, Sparkles, Star, Trophy } from 'lucide-react';
 import { t } from '../i18n';
 import { StudentOverview } from './StudentsPage';
 import { ownStudent } from '../lib/labels';
@@ -10,6 +9,8 @@ import { AddMenu } from '../components/AddMenu';
 import { ResourceForm, ResourceSection } from './ResourceSection';
 import { DocumentsPage } from './DocumentsPage';
 import { DownloadCvButton } from '../components/CvDocument';
+import { KpiRow, KpiTile, PageHeader, PillTabs, tabId } from '../design/blue/ui';
+import '../design/pages/center-blue.css';
 
 // Each tab with several record types gets one "Add" chooser instead of an
 // Add button per card. [resource, card title, menu label, hint, form title, empty text, empty link, icon]
@@ -52,14 +53,26 @@ export function StudentCenterPage({ user, data, query, reload, notify, tab = 'ov
   const sections = { reload, notify, onEditDone, student, data };
   // Changes when the profile or a CV record is saved, so the prefetched CV is loaded again.
   const cvKey = [student?.updated_at, ...CV_RECORDS.map((kind) => (data?.[kind] || []).map((item) => `${item.id}:${item.updated_at}`).join(','))].join('|');
-  return <div className="section-stack student-portal">
+  const roadmapLocked = isPageLocked('roadmap', user);
+  const taskCount = Object.values(student?.task_status_counts || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const applicationCount = (data?.applications || []).filter((item) => !student || Number(item.student) === Number(student.id)).length;
+  const tabs = [['overview', 'Overview'], ['academics', 'Academics'], ['portfolio', 'Portfolio'], ['activities', 'Activities & honors'], ['documents', 'Documents']].map(([key, text]) => ({ key, label: t(text) }));
+  return <div className="section-stack student-portal nb-center">
+    <PageHeader title={t('Student Center')} subtitle={t('Academic profile, portfolio, activities, and documents')} actions={<DownloadCvButton refreshKey={cvKey} notify={notify} className="nb-btn nb-btn-ghost nb-btn-sm" />} />
     <div className="student-center-head">
-      <PortalTabs active={tab} onChange={onTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
-      <DownloadCvButton refreshKey={cvKey} notify={notify} />
+      <PillTabs tabs={tabs} value={tab} onChange={onTab} label={t('Student Center')} idPrefix="center" />
     </div>
-    {tab === 'overview' && <StudentOverview student={student} data={data} user={user} notify={notify} roadmapLocked={isPageLocked('roadmap', user)} profile={<ProfileSections {...sections} editSection={editSection} onOpenRecords={() => { onTab('activities'); window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }} />} />}
-    {tab === 'academics' && <div className="section-stack"><ProfileSections {...sections} sections={['academics', 'tests']} showReadiness={false} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}
-    {TAB_RESOURCES[tab] && <ResourceTab key={tab} tab={tab} {...{ user, data, query, reload, notify }} />}
-    {tab === 'documents' && <DocumentsPage {...{ user, data, query, reload, notify }} />}
+    {tab === 'overview' && student && <KpiRow label={t('Student Center')} columns={roadmapLocked ? 2 : 4}>
+      {!roadmapLocked && <KpiTile tone={0} icon={Trophy} value={student.level ?? 1} label={t('Level')} />}
+      {!roadmapLocked && <KpiTile tone={1} icon={Star} value={student.roadmap_stars ?? 0} label={t('Stars')} />}
+      <KpiTile tone={2} icon={ClipboardCheck} value={taskCount} label={t('Assigned tasks')} />
+      <KpiTile tone={3} icon={GraduationCap} value={applicationCount} label={t('Applications')} />
+    </KpiRow>}
+    <div role="tabpanel" aria-labelledby={tabId('center', tab)} className="section-stack nb-center-panel">
+      {tab === 'overview' && <StudentOverview student={student} data={data} user={user} notify={notify} roadmapLocked={roadmapLocked} profile={<ProfileSections {...sections} editSection={editSection} onOpenRecords={() => { onTab('activities'); window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }} />} />}
+      {tab === 'academics' && <div className="section-stack"><ProfileSections {...sections} sections={['academics', 'tests']} showReadiness={false} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}
+      {TAB_RESOURCES[tab] && <ResourceTab key={tab} tab={tab} {...{ user, data, query, reload, notify }} />}
+      {tab === 'documents' && <DocumentsPage {...{ user, data, query, reload, notify }} />}
+    </div>
   </div>;
 }

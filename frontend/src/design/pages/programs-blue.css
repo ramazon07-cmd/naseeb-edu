@@ -1,0 +1,273 @@
+/* Programs (student, blue design). Scoped to .nb-blue; the classic rows keep their layout
+   (programs-redesign.css) and follow the blue tokens through the .nb-bridge variables. */
+
+.nb-blue .nb-programs {
+  display: grid;
+  gap: var(--nb-gap);
+  max-width: none;
+  margin: 0;
+}
+
+.nb-blue .nb-programs > * {
+  margin: 0;
+}
+
+.nb-blue .nb-prog-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--nb-gap);
+  align-items: stretch;
+}
+
+.nb-blue .nb-prog-top.is-plain {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.nb-blue .nb-prog-top .nb-prog-kpis {
+  --nb-kpi-cols: 2;
+}
+
+.nb-blue .nb-prog-featured {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: var(--nb-pad);
+}
+
+.nb-blue .nb-prog-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nb-hero-soft);
+}
+
+.nb-blue .nb-prog-eyebrow svg {
+  color: var(--nb-gold);
+}
+
+.nb-blue .nb-prog-featured-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--nb-hero-line);
+  border-radius: var(--nb-r-md);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.nb-blue .nb-prog-featured-card h2 {
+  margin: 0;
+  font-size: var(--nb-text-xl);
+  line-height: 1.2;
+  color: var(--nb-hero-fg);
+}
+
+.nb-blue .nb-prog-featured-card p {
+  margin: 6px 0 0;
+  font-size: var(--nb-text-sm);
+  color: var(--nb-hero-soft);
+}
+
+.nb-blue .nb-prog-featured-date {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border-radius: var(--nb-r-sm);
+  background: #fff;
+  color: #04163f;
+  line-height: 1;
+}
+
+.nb-blue .nb-prog-featured-date b {
+  font-size: var(--nb-text-2xl);
+}
+
+.nb-blue .nb-prog-featured-date small {
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.nb-blue .nb-prog-featured .nb-card-body {
+  display: grid;
+  gap: 14px;
+}
+
+.nb-blue .nb-prog-featured .nb-card-body > .nb-chip {
+  justify-self: start;
+  background: var(--nb-gold);
+  color: var(--nb-gold-fg);
+}
+
+.nb-blue .nb-prog-featured-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Search and filters */
+.nb-blue .nb-programs .program-database-header {
+  display: none;
+}
+
+.nb-blue .nb-programs .program-layout {
+  display: block;
+}
+
+.nb-blue .nb-programs .program-main {
+  display: grid;
+  gap: 14px;
+}
+
+.nb-blue .nb-programs .program-search {
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-glass);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+  box-shadow: var(--nb-glass-hi);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-programs .program-search input {
+  color: var(--nb-ink);
+  background: transparent;
+}
+
+.nb-blue .nb-programs .program-pill-button,
+.nb-blue .nb-programs .program-pill-toggle {
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-glass);
+  color: var(--nb-ink);
+  font-weight: 700;
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+}
+
+.nb-blue .nb-programs .program-pill.is-active .program-pill-button {
+  border-color: var(--nb-blue);
+  background: var(--nb-tint);
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-programs .program-pill-toggle[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+  box-shadow: var(--nb-btn-shadow);
+}
+
+.nb-blue .nb-programs .program-pill-menu {
+  border: 1px solid var(--nb-menu-line);
+  background: var(--nb-menu-bg);
+  color: var(--nb-ink);
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-blue .nb-programs .program-results-bar {
+  color: var(--nb-ink);
+  font-weight: 700;
+}
+
+.nb-blue .nb-programs .program-month-head {
+  background: none;
+  color: var(--nb-ink-strong);
+  font-family: var(--nb-font);
+  font-size: var(--nb-text-xl);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.nb-blue .nb-programs .program-month-head small {
+  padding: 3px 10px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+  font-weight: 700;
+}
+
+/* Rows: frosted cards */
+.nb-blue .nb-programs .program-row {
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-glass);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+  box-shadow: var(--nb-shadow);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-programs .program-row:hover {
+  background: var(--nb-glass-hover);
+  border-color: var(--nb-glass-line);
+}
+
+.nb-blue .nb-programs .program-row h3 {
+  font-family: var(--nb-font);
+  font-size: var(--nb-text-lg);
+  font-weight: 800;
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-programs .program-tile {
+  border-radius: var(--nb-r-sm);
+}
+
+.nb-blue .nb-programs .program-row-countdown {
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-gold);
+  color: var(--nb-gold-fg);
+  font-weight: 800;
+}
+
+.nb-blue .nb-programs .program-row-countdown.hot {
+  background: var(--nb-late-bg);
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-programs .program-icon-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--nb-ink-2);
+}
+
+.nb-blue .nb-programs .program-icon-button:hover:not(:disabled) {
+  background: var(--nb-tint);
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-programs .program-icon-button[aria-pressed='true'] {
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-programs .program-rail {
+  border: 1px solid var(--nb-menu-line);
+  background: var(--nb-menu-bg);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-programs .program-empty {
+  padding: 28px;
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-glass);
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .nb-blue .nb-prog-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-prog-featured-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

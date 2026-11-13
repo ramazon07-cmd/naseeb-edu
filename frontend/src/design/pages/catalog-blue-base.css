@@ -1,0 +1,96 @@
+/* Shared bridge for the blue Programs, Essay Lab, Applications, College Search and Store pages.
+   Those pages still use the classic stylesheets (catalog.css, college-redesign.css, ...), which read
+   the classic tokens (--text, --surface, --border ...). Inside a blue page root (.nb-bridge) the
+   classic tokens are re-pointed at the blue tokens, so every classic rule follows the three looks
+   (light, tinted, night) and Reading mode. Scoped to .nb-blue: counselor screens never see it. */
+
+.nb-blue .nb-bridge {
+  --text: var(--nb-ink);
+  --muted: var(--nb-muted);
+  --text-subtle: var(--nb-muted);
+  --text-disabled: var(--nb-faint);
+  --placeholder: var(--nb-faint);
+  --border: var(--nb-line);
+  --border-subtle: var(--nb-line-soft);
+  --border-strong: var(--nb-line);
+  --border-interactive: var(--nb-blue);
+  --canvas: var(--nb-card-soft);
+  --surface: var(--nb-card);
+  --surface-raised: var(--nb-card);
+  --surface-soft: var(--nb-card-soft);
+  --surface-inset: var(--nb-card-soft);
+  --surface-hover: var(--nb-card-hover);
+  --surface-active: var(--nb-tint-strong);
+  --control-bg: var(--nb-card);
+  --control-bg-hover: var(--nb-card-hover);
+  --control-option-bg: var(--nb-card);
+  --accent: var(--nb-blue);
+  --accent-deep: var(--nb-blue-d);
+  --accent-hover: var(--nb-blue-d);
+  --accent-contrast: var(--nb-on-blue);
+  --accent-gradient: var(--nb-btn);
+  --badge-accent-text: var(--nb-link);
+  --eyebrow: var(--nb-link);
+  --selected-bg: var(--nb-tint);
+  --selected-border: var(--nb-blue);
+  --focus-color: var(--nb-focus);
+  --success: var(--nb-ok);
+  --success-bg: var(--nb-ok-bg);
+  --danger-bg: var(--nb-late-bg);
+  --danger-border: var(--nb-late-line);
+  --warning-bg: var(--nb-warn-bg);
+  --shadow-card: var(--nb-shadow-soft);
+  --progress-track: var(--nb-line);
+  --table-hover: var(--nb-tint);
+  --nb-bridge-solid: var(--nb-card);
+
+  max-width: none;
+  color: var(--nb-ink);
+  font-family: var(--nb-font);
+}
+
+.nb-blue .nb-bridge button,
+.nb-blue .nb-bridge input,
+.nb-blue .nb-bridge select {
+  font-family: inherit;
+}
+
+/* Classic buttons inside blue pages: the blue pill / frosted ghost. */
+.nb-blue .nb-bridge .button {
+  min-height: 40px;
+  border-radius: var(--nb-r-pill);
+  font-weight: 700;
+}
+
+.nb-blue .nb-bridge .button.primary {
+  border: 1px solid transparent;
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+  box-shadow: var(--nb-btn-shadow);
+}
+
+.nb-blue .nb-bridge .button.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  background: var(--nb-btn);
+}
+
+.nb-blue .nb-bridge .button.quiet {
+  border: 1px solid var(--nb-glass-line);
+  background: var(--nb-btn-ghost);
+  color: var(--nb-btn-ghost-fg);
+}
+
+.nb-blue .nb-bridge .button.quiet:hover:not(:disabled) {
+  background: var(--nb-card-hover);
+}
+
+.nb-blue .nb-bridge .link-button {
+  color: var(--nb-link);
+  font-weight: 700;
+}
+
+.nb-blue .nb-bridge .icon-button {
+  border-color: var(--nb-line);
+  background: var(--nb-btn-ghost);
+  color: var(--nb-ink-2);
+}

@@ -4,6 +4,7 @@ import Library from './Library.jsx'
 import NewEssay from './NewEssay.jsx'
 import { essayLabApi } from './essayLabApi.js'
 import { lazyWithRetry } from '../lib/retryableLazy.js'
+import { PageHeader } from '../design/blue/ui'
 import './essayLab.css'
 
 // The editor (Tiptap + ProseMirror) is its own chunk; the library preloads it
@@ -75,11 +76,11 @@ export default function EssayLab({ user, notify = () => {}, essayId = null, onEs
 
   return <div className="essay-lab">
     {view.name === 'editor'
-      ? <Suspense fallback={<div className="el-editor-loading" role="status">{t('Opening your essay…')}</div>}>
+      ? <><PageHeader title={t('Essay Lab')} subtitle={t('Essay drafts, feedback, and revision history')} /><Suspense fallback={<div className="el-editor-loading" role="status">{t('Opening your essay…')}</div>}>
         <EditorScreen key={view.id} essayId={view.id} user={user} folders={folders} notify={notify}
           initialPanel={view.panel} initialFocus={view.focus} fresh={view.fresh} onTaskSubmitted={onTaskSubmitted}
           onClose={closeEditor} onFoldersChanged={setFolders} />
-      </Suspense>
+      </Suspense></>
       : <Library user={user} essays={essays} folders={folders} loading={status.loading} error={status.error}
         setEssays={setEssays} setFolders={setFolders} refresh={refresh} notify={notify}
         onOpen={openEssay} onNew={(folder = null) => setNewEssay({ folder })} />}

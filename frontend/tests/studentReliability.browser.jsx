@@ -282,17 +282,17 @@ async function run() {
 
   await check('Dashboard failure is an error, never completed work; Retry recovers', async () => {
     await mount(<App />);
-    await waitFor(() => document.querySelector('.dashboard-tile-tasks [role="alert"]'));
-    assert(!document.querySelector('.dashboard-tile-tasks').textContent.includes('All tasks are complete.'), 'Failed tasks shown as complete');
+    await waitFor(() => document.querySelector('.nb-dash-w-tasks [role="alert"]'));
+    assert(!document.querySelector('.nb-dash-w-tasks').textContent.includes('All tasks are complete.'), 'Failed tasks shown as complete');
     tasksBroken = false;
-    click('.dashboard-tile-tasks [role="alert"] button');
-    await waitFor(() => document.querySelector('.dashboard-tile-tasks').textContent.includes('Assigned task'));
+    click('.nb-dash-w-tasks [role="alert"] button');
+    await waitFor(() => document.querySelector('.nb-dash-w-tasks').textContent.includes('Assigned task'));
   });
   await check('Student focus refresh sees a counselor change and is throttled', async () => {
     taskTitle = 'Updated by counselor';
     offset += 61000;
     window.dispatchEvent(new Event('focus'));
-    await waitFor(() => document.querySelector('.dashboard-tile-tasks').textContent.includes(taskTitle));
+    await waitFor(() => document.querySelector('.nb-dash-w-tasks').textContent.includes(taskTitle));
     const count = calls.filter((call) => call.path === '/tasks/').length;
     window.dispatchEvent(new Event('focus'));
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -306,13 +306,13 @@ async function run() {
     await waitFor(() => document.querySelector('[data-widget-column="hidden"] [data-widget-id="programs"]'));
     click('.dashboard-customize-modal footer .button.primary');
     await waitFor(() => document.querySelector('.compact-dashboard > p[role="status"]'));
-    assert(!document.querySelector('.dashboard-tile-programs'), 'Failed save reverted the local choice');
+    assert(!document.querySelector('.nb-dash-w-programs'), 'Failed save reverted the local choice');
     layoutBroken = false;
     await new Promise((resolve) => setTimeout(resolve, 50));
     window.dispatchEvent(new Event('online'));
     await waitFor(() => !document.querySelector('.compact-dashboard > p[role="status"]'));
     assert(serverLayout?.hidden.includes('programs'), 'Pending layout was not uploaded');
-    assert(!document.querySelector('.dashboard-tile-programs'), 'Retry changed the chosen widgets');
+    assert(!document.querySelector('.nb-dash-w-programs'), 'Retry changed the chosen widgets');
   });
   await check('Tasks opens directly with Roadmap locked and sends the student response', async () => {
     history.replaceState({}, '', '/tasks');
@@ -562,7 +562,7 @@ async function run() {
   } else if (params.get('preview') === 'dashboard') {
     tasksBroken = true;
     await mount(<App />);
-    await waitFor(() => document.querySelector('.dashboard-tile-tasks [role="alert"]'));
+    await waitFor(() => document.querySelector('.nb-dash-w-tasks [role="alert"]'));
   } else if (params.get('preview') === 'ielts') {
     await mount(<IeltsProbe />);
   } else if (params.get('preview') === 'sat') {

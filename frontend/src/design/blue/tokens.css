@@ -1,0 +1,322 @@
+/* Blue design tokens (students, and the sign-in page through .nb-login).
+   Mapped from the prototype's :root / [data-theme=dark] / data-dk / data-read
+   rules. Everything is scoped, so counselor / admin / parent screens never see
+   these values. Looks are selected with attributes on the same element:
+     data-nb-theme="light" | "tinted" | "night"     data-nb-read="true"
+   Mona Sans (variable, self-hosted by @fontsource) has no Cyrillic: Russian
+   text falls through to the system UI font in the --nb-font stack. */
+@import url('@fontsource-variable/mona-sans/wght.css');
+
+:is(.nb-blue, .nb-login) {
+  color-scheme: light;
+
+  /* Type */
+  --nb-font: 'Mona Sans Variable', 'Mona Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --nb-text-xs: 0.75rem;
+  --nb-text-sm: 0.8125rem;
+  --nb-text-md: 0.9375rem;
+  --nb-text-lg: 1.0625rem;
+  --nb-text-xl: 1.25rem;
+  --nb-text-2xl: 1.75rem;
+  --nb-text-title: clamp(1.875rem, 3.6vw, 2.75rem);
+  --nb-scale: 1;
+
+  /* Shape and spacing */
+  --nb-r-xs: 10px;
+  --nb-r-sm: 14px;
+  --nb-r-md: 18px;
+  --nb-r-lg: 24px;
+  --nb-r-xl: 28px;
+  --nb-r-pill: 999px;
+  --nb-gap: 16px;
+  --nb-gap-lg: 24px;
+  --nb-pad: 22px;
+  --nb-page-x: clamp(16px, 2.4vw, 32px);
+  --nb-side-w: 284px;
+  --nb-side-w-collapsed: 84px;
+  --nb-dock-h: 68px;
+
+  /* Colour: light (Summit Glass) */
+  --nb-bg: #dce9fa;
+  --nb-backdrop: url('./assets/backdrop.webp');
+  --nb-backdrop-veil: linear-gradient(180deg, rgba(227, 242, 255, 0.08) 0%, rgba(227, 242, 255, 0) 30%, rgba(232, 242, 255, 0.42) 62%, rgba(238, 245, 255, 0.82) 100%);
+  --nb-ink: #0a1f44;
+  --nb-ink-strong: #04163f;
+  --nb-ink-2: #21365c;
+  --nb-muted: #3d5479;
+  --nb-faint: #6b7fa3;
+  --nb-line: rgba(4, 46, 123, 0.14);
+  --nb-line-soft: rgba(4, 46, 123, 0.08);
+  --nb-blue: #004ee0;
+  --nb-blue-d: #0a3fa8;
+  --nb-blue-l: #1883ff;
+  --nb-link: #0042c4;
+  --nb-on-blue: #fff;
+  --nb-tint: rgba(0, 78, 224, 0.11);
+  --nb-tint-strong: rgba(0, 78, 224, 0.18);
+  --nb-chip-bg: rgba(0, 78, 224, 0.11);
+  --nb-chip-fg: #0042c4;
+
+  /* Surfaces */
+  --nb-card: #fff;
+  --nb-card-fg: #0a1f44;
+  --nb-card-soft: #eef5ff;
+  --nb-card-hover: #e3f2ff;
+  --nb-glass: rgba(255, 255, 255, 0.46);
+  --nb-glass-hover: rgba(255, 255, 255, 0.58);
+  --nb-glass-line: rgba(255, 255, 255, 0.72);
+  --nb-glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --nb-blur: blur(22px) saturate(175%);
+  --nb-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 12px 34px rgba(4, 22, 63, 0.1);
+  --nb-shadow-soft: 0 8px 20px -14px rgba(4, 22, 63, 0.35);
+  --nb-side-bg: rgba(255, 255, 255, 0.26);
+  --nb-side-line: rgba(255, 255, 255, 0.62);
+  --nb-side-ink: #21365c;
+  --nb-side-ico: #2b4a88;
+  --nb-side-label: #2b4a88;
+  --nb-side-active-bg: #fff;
+  --nb-side-active-fg: #04163f;
+  --nb-side-active-ico: #004ee0;
+  --nb-side-hover: rgba(255, 255, 255, 0.38);
+  --nb-control-bg: rgba(255, 255, 255, 0.46);
+  --nb-control-line: rgba(255, 255, 255, 0.72);
+  --nb-menu-bg: #fff;
+  --nb-menu-line: rgba(4, 46, 123, 0.12);
+
+  /* Blue gradient tiles (KPI row, application tiles) */
+  --nb-kpi-0: radial-gradient(120% 90% at 0% 0%, #1883ff, transparent 60%), radial-gradient(120% 120% at 100% 100%, #042e7b, transparent 60%), #004ee0;
+  --nb-kpi-1: radial-gradient(120% 90% at 0% 0%, #4da3ff, transparent 60%), radial-gradient(120% 120% at 100% 100%, #0a3fa8, transparent 60%), #0a55d8;
+  --nb-kpi-2: radial-gradient(120% 90% at 0% 0%, #7dbdff, transparent 60%), radial-gradient(120% 120% at 100% 100%, #042e7b, transparent 60%), #1468e8;
+  --nb-kpi-3: radial-gradient(120% 90% at 0% 0%, #99caff, transparent 60%), radial-gradient(120% 120% at 100% 100%, #0a3fa8, transparent 60%), #2b6fe0;
+  --nb-kpi-fg: #fff;
+  --nb-kpi-line: rgba(255, 255, 255, 0.45);
+  --nb-kpi-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 24px rgba(4, 46, 123, 0.22);
+  --nb-kpi-chip: rgba(255, 255, 255, 0.2);
+  --nb-kpi-chip-line: rgba(255, 255, 255, 0.4);
+
+  /* Navy "opportunity" panels (Programs card) */
+  --nb-hero: radial-gradient(120% 80% at 100% 0%, rgba(24, 131, 255, 0.55), transparent 60%), linear-gradient(160deg, #0a3fa8, #04163f);
+  --nb-hero-fg: #fff;
+  --nb-hero-soft: #e3f2ff;
+  --nb-hero-line: rgba(153, 202, 255, 0.35);
+
+  /* Buttons */
+  --nb-btn: linear-gradient(135deg, #1883ff, #004ee0 55%, #03307f);
+  --nb-btn-fg: #fff;
+  --nb-btn-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 12px 24px -12px rgba(0, 62, 190, 0.7);
+  --nb-btn-ghost: rgba(255, 255, 255, 0.7);
+  --nb-btn-ghost-fg: #0a1f44;
+
+  /* Status */
+  --nb-ok: #0e7a45;
+  --nb-ok-bg: #ddf4e6;
+  --nb-warn: #8a5200;
+  --nb-warn-bg: #fff1cc;
+  --nb-late: #b3261e;
+  --nb-late-bg: rgba(220, 70, 60, 0.12);
+  --nb-late-line: rgba(220, 70, 60, 0.3);
+  --nb-gold: #d9ae5f;
+  --nb-gold-fg: #2a1a00;
+  --nb-dot: #f04458;
+  --nb-focus: #004ee0;
+
+  /* Legacy (un-ported) pages sit on a frosted panel: keep their tokens light. */
+  --nb-legacy-bg: rgba(255, 255, 255, 0.78);
+}
+
+/* Dark: Telegram "Tinted" */
+:is(.nb-blue, .nb-login)[data-nb-theme='tinted'] {
+  color-scheme: dark;
+  --nb-bg: #18222d;
+  --nb-backdrop: none;
+  --nb-backdrop-veil: none;
+  --nb-ink: #fff;
+  --nb-ink-strong: #fff;
+  --nb-ink-2: #e3eaf2;
+  --nb-muted: #93a4b6;
+  --nb-faint: #7a8ca0;
+  --nb-line: #2e4053;
+  --nb-line-soft: rgba(46, 64, 83, 0.6);
+  --nb-blue: #3e88f7;
+  --nb-blue-d: #2f74db;
+  --nb-blue-l: #6ab3f3;
+  --nb-link: #6ab3f3;
+  --nb-tint: rgba(62, 136, 247, 0.16);
+  --nb-tint-strong: rgba(62, 136, 247, 0.26);
+  --nb-chip-bg: rgba(62, 136, 247, 0.16);
+  --nb-chip-fg: #6ab3f3;
+  --nb-card: #213040;
+  --nb-card-fg: #fff;
+  --nb-card-soft: #2a3b4e;
+  --nb-card-hover: #283849;
+  --nb-glass: #213040;
+  --nb-glass-hover: #283849;
+  --nb-glass-line: #2e4053;
+  --nb-glass-hi: none;
+  --nb-blur: none;
+  --nb-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --nb-shadow-soft: none;
+  --nb-side-bg: #213040;
+  --nb-side-line: #2e4053;
+  --nb-side-ink: #e3eaf2;
+  --nb-side-ico: #93a4b6;
+  --nb-side-label: #93a4b6;
+  --nb-side-active-bg: #3e88f7;
+  --nb-side-active-fg: #fff;
+  --nb-side-active-ico: #fff;
+  --nb-side-hover: #283849;
+  --nb-control-bg: #213040;
+  --nb-control-line: #2e4053;
+  --nb-menu-bg: #2a3b4e;
+  --nb-menu-line: #2e4053;
+  --nb-kpi-0: #213040;
+  --nb-kpi-1: #213040;
+  --nb-kpi-2: #3e88f7;
+  --nb-kpi-3: #3e88f7;
+  --nb-kpi-fg: #fff;
+  --nb-kpi-line: #2e4053;
+  --nb-kpi-shadow: none;
+  --nb-kpi-chip: #2a3b4e;
+  --nb-kpi-chip-line: #2e4053;
+  --nb-hero: linear-gradient(150deg, #2b5278, #24456a);
+  --nb-hero-soft: #e3eaf2;
+  --nb-hero-line: #2e4053;
+  --nb-btn: #3e88f7;
+  --nb-btn-shadow: none;
+  --nb-btn-ghost: #2a3b4e;
+  --nb-btn-ghost-fg: #fff;
+  --nb-ok: #58e0a0;
+  --nb-ok-bg: rgba(88, 224, 160, 0.14);
+  --nb-warn: #ddb66e;
+  --nb-warn-bg: rgba(221, 182, 110, 0.14);
+  --nb-late: #ff8a98;
+  --nb-late-bg: rgba(255, 138, 152, 0.14);
+  --nb-late-line: rgba(255, 138, 152, 0.3);
+  --nb-focus: #6ab3f3;
+  --nb-legacy-bg: #213040;
+}
+
+/* Dark: Telegram "Night" (true black) */
+:is(.nb-blue, .nb-login)[data-nb-theme='night'] {
+  color-scheme: dark;
+  --nb-bg: #000;
+  --nb-backdrop: none;
+  --nb-backdrop-veil: none;
+  --nb-ink: #fff;
+  --nb-ink-strong: #fff;
+  --nb-ink-2: #ebebf0;
+  --nb-muted: #98989f;
+  --nb-faint: #7e7e86;
+  --nb-line: #38383a;
+  --nb-line-soft: rgba(56, 56, 58, 0.6);
+  --nb-blue: #3e88f7;
+  --nb-blue-d: #2f74db;
+  --nb-blue-l: #5ea5ff;
+  --nb-link: #5ea5ff;
+  --nb-tint: rgba(62, 136, 247, 0.18);
+  --nb-tint-strong: rgba(62, 136, 247, 0.28);
+  --nb-chip-bg: rgba(62, 136, 247, 0.18);
+  --nb-chip-fg: #5ea5ff;
+  --nb-card: #1c1c1d;
+  --nb-card-fg: #fff;
+  --nb-card-soft: #2c2c2e;
+  --nb-card-hover: #252527;
+  --nb-glass: #1c1c1d;
+  --nb-glass-hover: #252527;
+  --nb-glass-line: #38383a;
+  --nb-glass-hi: none;
+  --nb-blur: none;
+  --nb-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --nb-shadow-soft: none;
+  --nb-side-bg: #1c1c1d;
+  --nb-side-line: #38383a;
+  --nb-side-ink: #ebebf0;
+  --nb-side-ico: #98989f;
+  --nb-side-label: #98989f;
+  --nb-side-active-bg: #3e88f7;
+  --nb-side-active-fg: #fff;
+  --nb-side-active-ico: #fff;
+  --nb-side-hover: #252527;
+  --nb-control-bg: #1c1c1d;
+  --nb-control-line: #38383a;
+  --nb-menu-bg: #2c2c2e;
+  --nb-menu-line: #38383a;
+  --nb-kpi-0: #1c1c1d;
+  --nb-kpi-1: #1c1c1d;
+  --nb-kpi-2: #3e88f7;
+  --nb-kpi-3: #3e88f7;
+  --nb-kpi-fg: #fff;
+  --nb-kpi-line: #38383a;
+  --nb-kpi-shadow: none;
+  --nb-kpi-chip: #2c2c2e;
+  --nb-kpi-chip-line: #38383a;
+  --nb-hero: linear-gradient(150deg, #1f3b63, #182f50);
+  --nb-hero-soft: #ebebf0;
+  --nb-hero-line: #38383a;
+  --nb-btn: #3e88f7;
+  --nb-btn-shadow: none;
+  --nb-btn-ghost: #2c2c2e;
+  --nb-btn-ghost-fg: #fff;
+  --nb-ok: #58e0a0;
+  --nb-ok-bg: rgba(88, 224, 160, 0.14);
+  --nb-warn: #ddb66e;
+  --nb-warn-bg: rgba(221, 182, 110, 0.14);
+  --nb-late: #ff8a98;
+  --nb-late-bg: rgba(255, 138, 152, 0.14);
+  --nb-late-line: rgba(255, 138, 152, 0.3);
+  --nb-focus: #5ea5ff;
+  --nb-legacy-bg: #1c1c1d;
+}
+
+/* Reading mode: calm flat background, larger text, no motion. */
+:is(.nb-blue, .nb-login)[data-nb-read='true'] {
+  --nb-scale: 1.08;
+}
+
+:is(.nb-blue, .nb-login)[data-nb-read='true'][data-nb-theme='light'] {
+  --nb-bg: #eef2f7;
+  --nb-backdrop: none;
+  --nb-backdrop-veil: none;
+}
+
+:is(.nb-blue, .nb-login)[data-nb-read='true'] *,
+:is(.nb-blue, .nb-login)[data-nb-read='true'] *::before,
+:is(.nb-blue, .nb-login)[data-nb-read='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+:is(.nb-blue, .nb-login)[data-nb-read='true'] p {
+  line-height: 1.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.nb-blue, .nb-login) *,
+  :is(.nb-blue, .nb-login) *::before,
+  :is(.nb-blue, .nb-login) *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The mountain backdrop: fixed, under everything, never scrolls. */
+.nb-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--nb-bg);
+  background-image: var(--nb-backdrop);
+  background-position: center 34%;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.nb-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--nb-backdrop-veil);
+}

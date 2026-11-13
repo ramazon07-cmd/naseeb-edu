@@ -1,0 +1,173 @@
+/* Student Roadmap and Tasks (blue design). The shared card, button and dark-look
+   mapping is in center-blue.css; this file styles the level path itself. */
+
+.nb-blue .nb-roadmap .roadmap-track {
+  gap: var(--nb-gap);
+}
+
+.nb-blue .nb-roadmap .roadmap-progress-card {
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-xl);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-blue .nb-roadmap .roadmap-progress-card > .eyebrow {
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-roadmap .roadmap-progress-card h2 {
+  color: var(--nb-ink-strong);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.nb-blue .nb-roadmap .roadmap-star-count {
+  border: 0;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-gold);
+  color: var(--nb-gold-fg);
+}
+
+.nb-blue .nb-roadmap .roadmap-star-count strong {
+  color: inherit;
+  font-family: var(--nb-font);
+}
+
+.nb-blue .nb-roadmap .roadmap-star-count small {
+  color: inherit;
+}
+
+.nb-blue .nb-roadmap .roadmap-progress-meter > b {
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-roadmap .roadmap-progress-meter > :is(span, small) {
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-roadmap .roadmap-steps {
+  padding: var(--nb-pad);
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-xl);
+  background: var(--nb-glass);
+  box-shadow: var(--nb-shadow);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+}
+
+.nb-blue .nb-roadmap .roadmap-step:not(:last-child)::after {
+  background: var(--nb-line);
+}
+
+.nb-blue .nb-roadmap .roadmap-step-badge {
+  border: 1.5px solid var(--nb-blue);
+  border-radius: 50%;
+  background: var(--nb-card);
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-roadmap .roadmap-step-card {
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+}
+
+.nb-blue .nb-roadmap .roadmap-step-card > span {
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-roadmap .roadmap-step-card h3 {
+  color: var(--nb-ink-strong);
+  font-size: var(--nb-text-md);
+  font-weight: 700;
+}
+
+.nb-blue .nb-roadmap .roadmap-step-card > p {
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-roadmap button.roadmap-step-card:hover:not([aria-disabled='true']) {
+  border-color: var(--nb-blue);
+}
+
+.nb-blue .nb-roadmap button.roadmap-step-card:focus-visible {
+  outline: 2px solid var(--nb-focus);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.complete .roadmap-step-badge {
+  border-color: var(--nb-blue);
+  background: var(--nb-blue);
+  color: var(--nb-on-blue);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.complete .roadmap-step-card {
+  background: var(--nb-card);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.complete .roadmap-step-card > p {
+  color: var(--nb-ok);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.current .roadmap-step-badge {
+  border-color: var(--nb-blue);
+  background: var(--nb-blue);
+  color: var(--nb-on-blue);
+  box-shadow: 0 0 0 5px var(--nb-tint-strong);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.current .roadmap-step-card {
+  border-color: var(--nb-blue);
+  background: var(--nb-tint);
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.current .roadmap-step-card > p {
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.approval .roadmap-step-badge {
+  border-color: var(--nb-warn);
+  background: var(--nb-warn-bg);
+  color: var(--nb-warn);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.approval .roadmap-step-card {
+  border-color: var(--nb-warn);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.locked .roadmap-step-badge {
+  border-color: var(--nb-line);
+  color: var(--nb-faint);
+}
+
+.nb-blue .nb-roadmap .roadmap-step.checkpoint .roadmap-step-badge {
+  border-style: dashed;
+}
+
+.nb-blue .nb-roadmap .roadmap-step.checkpoint .roadmap-step-card {
+  background: var(--nb-card-soft);
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-roadmap .roadmap-steps {
+    padding: 14px;
+  }
+
+  .nb-blue .nb-roadmap .roadmap-step {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .nb-blue .nb-roadmap .roadmap-step-badge {
+    width: 32px;
+    height: 32px;
+  }
+
+  .nb-blue .nb-roadmap .roadmap-step:not(:last-child)::after {
+    left: 16px;
+    top: 40px;
+  }
+}

@@ -3,6 +3,7 @@ import { ArrowRight, BrainCircuit, Check, CheckCircle2, ChevronRight, CloudOff, 
 import { api } from '../api';
 import { t } from '../i18n';
 import { Panel } from '../components/ui';
+import { PageHeader } from '../design/blue/ui';
 import { ProfileResultCard } from '../components/ProfileResultCard';
 import { fullName, ownStudent } from '../lib/labels';
 import { profileCardData } from '../lib/profileCard';
@@ -18,6 +19,7 @@ import {
 '../challenges';
 import { EQ_LEAD, EQ_NAME, EQ_ORDER } from '../challengeBanksMind';
 import './assessment-hub.css';
+import '../design/pages/mind-blue.css';
 import {
   MAJOR_ENTRIES, NAMES, recRank, recSignals, subjectPerformance } from
 '../careers';
@@ -839,9 +841,13 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
     target.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })
   }
 
-  if (open) return <ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} />
+  // The blue shell hides its fallback title once a PageHeader is mounted, so every state renders one.
+  const mindHeader = <PageHeader title={t('Profile Assessment')} subtitle={t('7 challenges that reveal your best-fit study directions')} />;
+
+  if (open) return <>{mindHeader}<ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} /></>
 
   return <div className="section-stack student-portal profile-assessment-page">
+    {mindHeader}
     {loadState === 'error' && <div className="assessment-load-error" role="alert">
       <CloudOff size={16} aria-hidden="true" />
       <span>{t('We couldn’t load the results saved to your account.')}</span>
