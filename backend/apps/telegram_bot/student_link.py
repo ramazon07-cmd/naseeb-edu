@@ -287,6 +287,11 @@ TEXTS = {
         'ru': '📅 Вам предложили новую встречу.',
         'en': '📅 A new meeting was requested with you.',
     }),
+    'event_invited': _with_details({
+        'uz': '📅 {other} sizni {time} ga uchrashuvga taklif qildi. Saytda tasdiqlang.',
+        'ru': '📅 {other} приглашает вас на встречу ({time}). Подтвердите на сайте.',
+        'en': '📅 {other} invited you to a meeting on {time}. Confirm it on the website.',
+    }),
     'event_confirmed': _with_details({
         'uz': '✅ Uchrashuvingiz tasdiqlandi.',
         'ru': '✅ Ваша встреча подтверждена.',
