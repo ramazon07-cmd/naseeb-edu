@@ -15,7 +15,7 @@ from . import keyboards
 from .api import ApiError, ApiUnavailable
 from .delivery import list_message, send_digest
 from .i18n import DEFAULT, LANGUAGES, MENU_STUDENT, t
-from .render import SORT_AZ, contacts, render_detail
+from .render import SORT_AZ, contacts, render_detail, render_meetings
 from .students import format_expiry, is_complete, parse_student
 
 log = logging.getLogger('bot.handlers')
@@ -23,7 +23,7 @@ router = Router()
 router.message.filter(F.chat.type == 'private')
 router.callback_query.filter(F.message.chat.type == 'private')
 
-COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|add|reset|cancel|settings|logout)(@\w+)?(\s|$)')
+COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|meetings|add|reset|cancel|settings|logout)(@\w+)?(\s|$)')
 LANGUAGE_PROMPT = 'Til / Язык / Language'
 STUDENT_START = r'^/start(@\w+)?\s+s_([A-Za-z0-9_-]{1,62})\s*$'
 STAFF_KINDS = ('staff_linked', 'staff_allowed')
@@ -369,6 +369,18 @@ async def students_command(message: Message, state: FSMContext, bot, api, cache)
     chat_id, lang = message.chat.id, link['language']
     await bot.send_chat_action(chat_id, 'typing')
     await send_digest(bot, chat_id, await _load_digest(api, cache, chat_id), lang, sort=SORT_AZ)
+
+
+@router.message(Command('meetings'))
+async def meetings_command(message: Message, state: FSMContext, bot, api, cache):
+    """Upcoming meetings of whoever this chat is linked as: a counselor (with counts) or a student (their own)."""
+    await _leave_text_prompt(state)
+    chat_id = message.chat.id
+    link = await get_link(api, cache, chat_id)
+    lang = link['language'] if link else _telegram_language(message.from_user)
+    await bot.send_chat_action(chat_id, 'typing')
+    # The backend decides the role by the chat; a chat linked as neither gets the usual "not linked" reply.
+    await message.answer(render_meetings(await api.meetings(chat_id), lang))
 
 
 @router.message(Command('now'))

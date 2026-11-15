@@ -162,6 +162,12 @@ class Command(BaseCommand):
         hours = to_server_hours(weekly, zone, first)
         schedule.hours = hours
         schedule.generated_until = None
+        # Students only see slots inside the booking window, so widen it to reach the last day asked for.
+        if schedule.window_mode == MeetingSchedule.WindowMode.RANGE:
+            if schedule.window_end and schedule.window_end < last:
+                schedule.window_end = last
+        else:
+            schedule.window_days = min(365, max(schedule.window_days, (last - timezone.localdate()).days))
         schedule.save()
         before = counselor.meeting_availability.count()
         fill_schedule(schedule, replace=True, first_day=first, until=last)

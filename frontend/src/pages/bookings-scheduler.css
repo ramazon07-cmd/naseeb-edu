@@ -1001,3 +1001,237 @@
   font-size: 0.75rem;
   white-space: nowrap;
 }
+
+/* Counselor "Weekly hours", laid out like Calendly: duration, date range and
+   notice, weekly hours, then one Save. */
+.availability-block {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.availability-block h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.availability-block > select {
+  width: 100%;
+  max-width: 220px;
+  min-height: 44px;
+}
+
+.availability-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.window-block {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.window-sentence {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.window-options {
+  display: grid;
+  gap: 8px;
+}
+
+.window-option {
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.window-option > label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.window-option input[type='number'] {
+  width: 5rem;
+  min-height: 44px;
+}
+
+.window-range {
+  position: relative;
+}
+
+.window-range-field {
+  min-height: 44px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.window-range-field:hover {
+  border-color: var(--accent-deep);
+}
+
+.window-notice {
+  padding-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.window-notice input {
+  width: 5rem;
+  min-height: 44px;
+}
+
+.window-stats {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.availability-block .field-error,
+.availability-weekly > .field-error {
+  color: var(--danger);
+  font-size: 0.8125rem;
+}
+
+.window-range-field:focus-visible,
+.range-popover:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Two months in a popover under the range field; stacked in the flow on a phone. */
+.range-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 5;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-modal);
+}
+
+.range-popover-months {
+  display: grid;
+  grid-template-columns: repeat(2, 292px);
+  gap: 24px;
+}
+
+.range-popover .booking-cal-days {
+  column-gap: 0;
+}
+
+.range-popover .booking-cal-day {
+  max-width: none;
+}
+
+.range-popover .booking-cal-day.is-range-mid {
+  color: var(--accent-deep);
+  background: var(--surface-soft);
+  border-radius: 0;
+}
+
+.range-popover .booking-cal-day:disabled {
+  color: var(--text-disabled);
+}
+
+.range-popover-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.range-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 820px) {
+  .range-popover {
+    position: static;
+    margin-top: 8px;
+    flex-basis: 100%;
+  }
+
+  .range-popover-months {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .window-block {
+    padding: 12px;
+  }
+
+  .availability-block > select {
+    max-width: none;
+  }
+}
+
+/* Student calendar: the zone picker sits right under the month. */
+.booking-cal-zone-row {
+  margin-top: 18px;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.booking-cal-zone-row > b {
+  font-size: 0.875rem;
+}
+
+.booking-cal-zone-row .booking-cal-zone {
+  margin: 0;
+}
+
+/* Counselor "This week": counts, and cancelled meetings muted and struck through. */
+.week-summary {
+  margin: 0 0 10px;
+  display: grid;
+  gap: 2px;
+  font-size: 0.875rem;
+}
+
+.week-summary small {
+  color: var(--muted);
+}
+
+.cx-week-row.is-cancelled .cx-row-copy,
+.cx-week-row.is-cancelled .cx-week-when,
+.record.is-cancelled .record-main > div:first-child {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.availability-block > select {
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+}

@@ -79,6 +79,9 @@ class FakeApi:
         ]}
         self.digest_data = {'date': '2026-11-08', 'total_students': 0, 'omitted': 0, 'students': []}
         self.errors = {}
+        self.meetings_data = {'role': 'staff', 'meetings': [], 'counts': {
+            'booked': 0, 'waiting_for_you': 0, 'waiting_for_student': 0, 'cancelled_week': 0,
+        }, 'free_slots': 0, 'settings': None}
         # What whoami answers for a chat that is not linked as a counselor.
         self.who = {'kind': 'staff_allowed', 'site_url': 'https://naseeb.example/meetings'}
         self.due_items = []
@@ -114,6 +117,10 @@ class FakeApi:
     async def students(self, chat_id):
         self._record('students', chat_id=chat_id)
         return self.students_data
+
+    async def meetings(self, chat_id):
+        self._record('meetings', chat_id=chat_id)
+        return self.meetings_data
 
     async def digest(self, chat_id):
         self._record('digest', chat_id=chat_id)

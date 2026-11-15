@@ -5,24 +5,24 @@ from datetime import datetime, time, timedelta
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import (
-    DateTimeField, DurationField, Exists, ExpressionWrapper, F, Func, IntegerField, OuterRef, Subquery, Value, Window,
+    DateTimeField, DurationField, Exists, ExpressionWrapper, F, Func, IntegerField, OuterRef, Q, Subquery, Value, Window,
 )
 from django.db.models.functions import Coalesce, RowNumber
 from django.utils import timezone
 
 from .models import Booking, MeetingAvailability, MeetingSchedule
 
-MEETING_DURATIONS = (30, 45, 60)
+MEETING_DURATIONS = (15, 20, 30, 45, 60, 90)
 MAX_MEETING_MINUTES = max(MEETING_DURATIONS)
 # "Repeat weekly" covers at most this many days, so one request adds at most ~85 slots.
 MAX_REPEAT_DAYS = 12 * 7
 # One request may add at most this many times (a 12-week range of full days would be thousands).
 MAX_REPEAT_SLOTS = 400
 # Each staff member's next slots; a busy colleague cannot crowd out the rest.
-# Covers four weeks of full weekdays from the weekly hours (about 10 slots a day).
-SLOTS_PER_PARTICIPANT = 400
-# Weekly hours are turned into dated slots this far ahead, topped up once less than a week short.
-SCHEDULE_DAYS = 28
+# (A 90-day horizon of 10 slots a day fits.)
+SLOTS_PER_PARTICIPANT = 1000
+# Weekly hours are turned into dated slots this far ahead (never past the booking window), topped up once less than a week short.
+SCHEDULE_DAYS = 90
 # A student's all-staff overview: the next few free times of each staff member, and a hard total.
 # The student's picker then loads the chosen person's full list.
 OVERVIEW_SLOTS_PER_PARTICIPANT = 20
@@ -90,6 +90,56 @@ def respecting_notice(qs, now=None):
         output_field=DateTimeField(),
     )
     return qs.annotate(notice_hours=notice).filter(starts_at__gte=earliest)
+
+
+def window_dates(schedule, today=None):
+    """(first, last) Tashkent dates, inclusive, students may book under this schedule; first may be past `last` once a range has ended."""
+    today = today or timezone.localdate()
+    if schedule.window_mode == MeetingSchedule.WindowMode.RANGE and schedule.window_start and schedule.window_end:
+        return max(today, schedule.window_start), schedule.window_end
+    return today, today + timedelta(days=schedule.window_days)
+
+
+def _day_start(day):
+    return timezone.make_aware(datetime.combine(day, time.min))
+
+
+def window_bounds(participant_ids, today=None):
+    """{participant id: (start, end) datetimes, end exclusive} for staff with a schedule; others have no limit."""
+    bounds = {}
+    for schedule in MeetingSchedule.objects.filter(participant_id__in=list(participant_ids)):
+        first, last = window_dates(schedule, today)
+        bounds[schedule.participant_id] = (_day_start(first), _day_start(last + timedelta(days=1)))
+    return bounds
+
+
+def within_window(qs, participant_ids, today=None):
+    """Rows of `qs` (slots or meetings) inside their staff member's booking window; staff without a schedule are unlimited."""
+    participant_ids = list(participant_ids)
+    bounds = window_bounds(participant_ids, today)
+    by_bounds = {}
+    for participant_id, span in bounds.items():
+        by_bounds.setdefault(span, []).append(participant_id)
+    keep = Q(participant_id__in=[pid for pid in participant_ids if pid not in bounds])
+    for (start, end), ids in by_bounds.items():
+        keep |= Q(participant_id__in=ids, starts_at__gte=start, starts_at__lt=end)
+    return qs.filter(keep)
+
+
+def outside_window(participant_id, starts_at):
+    """True when a student may not book `starts_at` with this staff member because it is past their booking window."""
+    span = window_bounds([participant_id]).get(participant_id)
+    return span is not None and not span[0] <= starts_at < span[1]
+
+
+def window_summary(user):
+    """Open meetings and free slots still ahead inside `user`'s booking window (the counselor's tally)."""
+    now = timezone.now()
+    booked = within_window(
+        Booking.objects.filter(participant=user, status__in=Booking.OPEN_STATUSES, starts_at__gt=now), [user.pk],
+    ).count()
+    free = free_slots(within_window(MeetingAvailability.objects.filter(participant=user, starts_at__gt=now), [user.pk])).count()
+    return {'upcoming_booked': booked, 'free_slots': free}
 
 
 def free_slots(qs, moving=None):
@@ -196,16 +246,19 @@ def add_free_slots(user, starts, duration, **fields):
 
 
 def fill_schedule(schedule, replace=False, first_day=None, until=None):
-    """Generate the weekly hours' slots through SCHEDULE_DAYS ahead; the caller holds the per-staff lock.
+    """Generate the weekly hours' slots inside the booking window, at most SCHEDULE_DAYS ahead; the caller holds the per-staff lock.
 
-    `replace` (the hours changed): unbooked generated slots are dropped and rebuilt from today.
-    Hand-added slots and any slot with an open meeting stay, and new slots never overlap them.
+    `replace` (the hours or window changed): unbooked generated slots are dropped and rebuilt from today,
+    so slots outside the new window disappear. Hand-added slots and any slot with an open meeting stay,
+    and new slots never overlap them.
     """
     today = timezone.localdate()
-    # `first_day` / `until` (the book_meetings command) set the window; the API never passes them.
-    until = until or today + timedelta(days=SCHEDULE_DAYS)
+    window_first, window_last = window_dates(schedule, today)
+    # `first_day` / `until` (the book_meetings command) set the days themselves; the API never passes them.
+    until = until or min(today + timedelta(days=SCHEDULE_DAYS), window_last)
     if first_day is None:
         first_day = today if replace or not schedule.generated_until else schedule.generated_until + timedelta(days=1)
+        first_day = max(first_day, window_first)
     if replace:
         MeetingAvailability.objects.filter(
             participant=schedule.participant, from_schedule=True, starts_at__gt=timezone.now(),
@@ -225,23 +278,37 @@ def fill_schedule(schedule, replace=False, first_day=None, until=None):
     schedule.save(update_fields=['generated_until', 'updated_at'])
 
 
+def _generation_target(schedule, today):
+    """The last day slots should exist for: the window's end, but never more than SCHEDULE_DAYS ahead."""
+    return min(today + timedelta(days=SCHEDULE_DAYS), window_dates(schedule, today)[1])
+
+
+def _needs_top_up(schedule, today):
+    # Less than a week short of the target (a window shorter than a week is topped up daily).
+    return schedule.generated_until is not None and schedule.generated_until < min(
+        _generation_target(schedule, today), today + timedelta(days=SCHEDULE_DAYS - 7),
+    )
+
+
 def top_up_schedules(participant_ids):
-    """Extend the generated slots of these staff members where they reach less than three weeks ahead.
+    """Extend the generated slots of these staff members where they run out before their window (or the horizon) does.
 
     One query finds who is short (usually nobody); each of those is filled under their own lock.
     """
-    short = timezone.localdate() + timedelta(days=SCHEDULE_DAYS - 7)
-    due = list(MeetingSchedule.objects.filter(
-        participant_id__in=list(participant_ids), generated_until__lt=short,
-    ).values_list('participant_id', flat=True))
+    today = timezone.localdate()
+    due = [
+        schedule.participant_id
+        for schedule in MeetingSchedule.objects.filter(participant_id__in=list(participant_ids), generated_until__isnull=False)
+        if _needs_top_up(schedule, today)
+    ]
     for participant_id in due:
         with transaction.atomic():
             get_user_model().objects.select_for_update().get(pk=participant_id)
             schedule = MeetingSchedule.objects.get(participant_id=participant_id)
-            if schedule.generated_until < short:
+            if _needs_top_up(schedule, today):
                 fill_schedule(schedule)
 
 
 def top_up_schedule(participant_id):
-    """Extend one staff member's generated slots when they reach less than three weeks ahead."""
+    """Extend one staff member's generated slots when they run short of their window."""
     top_up_schedules([participant_id])

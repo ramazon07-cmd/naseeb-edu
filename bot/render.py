@@ -30,6 +30,67 @@ def grade_label(lang, grade):
     return t(lang, 'grade_name', grade=grade)
 
 
+MAX_MEETING_LINES = 30
+
+
+def render_meetings(data, lang):
+    """A counselor's (counts, settings) or a student's upcoming meetings, grouped by day, at most MAX_MEETING_LINES lines."""
+    lines = [t(lang, 'meetings_title')]
+    counts = data.get('counts')
+    if counts:
+        waiting = counts.get('waiting_for_you', 0) + counts.get('waiting_for_student', 0)
+        lines.append(t(
+            lang, 'meetings_counts', booked=counts['booked'], waiting=waiting, cancelled=counts['cancelled_week'],
+            free=data.get('free_slots', 0),
+        ))
+    meetings = data.get('meetings') or []
+    if not meetings:
+        lines.append('')
+        lines.append(t(lang, 'meetings_empty'))
+    settings = data.get('settings')
+    footer = []
+    if settings:
+        if settings['window_mode'] == 'range' and settings.get('window_start') and settings.get('window_end'):
+            footer = [t(
+                lang, 'meetings_settings_range', minutes=settings['duration_minutes'], notice=settings['min_notice_hours'],
+                start=_day(lang, settings['window_start']), end=_day(lang, settings['window_end']),
+            )]
+        else:
+            footer = [t(
+                lang, 'meetings_settings_rolling', minutes=settings['duration_minutes'], notice=settings['min_notice_hours'],
+                days=settings['window_days'],
+            )]
+    # Room for the lines already written, the footer, and a "more" line.
+    budget = MAX_MEETING_LINES - len(lines) - len(footer) - 3  # blank lines around the list and the "more" line
+    shown, day, used = 0, None, 0
+    body = []
+    for item in meetings:
+        header = item['date'] != day
+        if used + 1 + header > budget:
+            break
+        if header:
+            day = item['date']
+            body.append(f'<b>{_day(lang, day)}</b>')
+        mark = '✅' if item['status'] == 'approved' else '⏳'
+        line = f"{mark} {item['time']} · {t(lang, 'meetings_minutes', n=item['duration_minutes'])} · {escape(_short(item['name']))}"
+        waiting = item.get('waiting_for')
+        if waiting:
+            who = ('student' if waiting == 'student' else 'you' if counts else 'staff')
+            line += f" ({t(lang, 'meetings_wait_' + who)})"
+        body.append(line)
+        used += 1 + header
+        shown += 1
+    if body:
+        lines.append('')
+        lines.extend(body)
+    if shown < len(meetings):
+        lines.append(t(lang, 'meetings_more', n=len(meetings) - shown))
+    if footer:
+        lines.append('')
+        lines.extend(footer)
+    return '\n'.join(lines)
+
+
 def contacts(email, phone):
     return '\n'.join(escape(value) for value in (email, phone) if value)
 

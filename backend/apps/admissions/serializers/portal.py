@@ -15,7 +15,7 @@ from ..models import (
     ScreenTimeDaily,
     StudentMessage,
 )
-from ..meetings import MAX_MIN_NOTICE_HOURS, MAX_REPEAT_DAYS, MEETING_DURATIONS, overlapping
+from ..meetings import MAX_MIN_NOTICE_HOURS, MAX_REPEAT_DAYS, MEETING_DURATIONS, overlapping, window_summary
 from ..scoping import booking_participants_for, school_staff, tenant_school_id
 from .common import StudentRecordSerializerMixin, scope_related_field
 
@@ -54,7 +54,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
     class Meta:
         model = Booking
         fields = '__all__'
-        read_only_fields = ('student', 'status', 'previous_starts_at', 'staff_requested')
+        read_only_fields = ('student', 'status', 'previous_starts_at', 'staff_requested', 'cancelled_by_role')
 
     def get_participant_name(self, obj):
         if not obj.participant:
@@ -99,7 +99,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
 
     def validate_duration_minutes(self, value):
         if value not in MEETING_DURATIONS:
-            raise serializers.ValidationError('Choose a 30, 45, or 60 minute meeting.')
+            raise serializers.ValidationError('Choose a 15, 20, 30, 45, 60, or 90 minute meeting.')
         return value
 
     def validate(self, attrs):
@@ -184,12 +184,52 @@ class MeetingScheduleSerializer(serializers.ModelSerializer):
 
     MAX_RANGES_PER_DAY = 4
 
+    # Read-only: the clock all hours and dates use, and the counselor's tally inside the booking window.
+    timezone = serializers.SerializerMethodField()
+    upcoming_booked = serializers.SerializerMethodField()
+    free_slots = serializers.SerializerMethodField()
+
     class Meta:
         model = MeetingSchedule
-        fields = ('duration_minutes', 'hours', 'min_notice_hours')
-        extra_kwargs = {'min_notice_hours': {'min_value': 0, 'max_value': MAX_MIN_NOTICE_HOURS}}
+        fields = (
+            'duration_minutes', 'hours', 'min_notice_hours', 'window_mode', 'window_days', 'window_start', 'window_end',
+            'timezone', 'upcoming_booked', 'free_slots',
+        )
+        extra_kwargs = {
+            'min_notice_hours': {'min_value': 0, 'max_value': MAX_MIN_NOTICE_HOURS},
+            'window_days': {'min_value': 1, 'max_value': 365},
+        }
 
     validate_duration_minutes = BookingSerializer.validate_duration_minutes
+
+    def get_timezone(self, obj):
+        return settings.TIME_ZONE
+
+    def _summary(self, obj):
+        # One pair of count queries serves both fields.
+        if not hasattr(self, '_tally'):
+            self._tally = window_summary(obj.participant)
+        return self._tally
+
+    def get_upcoming_booked(self, obj):
+        return self._summary(obj)['upcoming_booked']
+
+    def get_free_slots(self, obj):
+        return self._summary(obj)['free_slots']
+
+    def validate(self, attrs):
+        # A request that omits a field keeps what is stored, so older clients still work.
+        current = self.instance or MeetingSchedule()
+        mode, start, end = (attrs.get(name, getattr(current, name)) for name in ('window_mode', 'window_start', 'window_end'))
+        if mode == MeetingSchedule.WindowMode.RANGE:
+            if not start or not end:
+                raise serializers.ValidationError({'window_start': 'Choose the first and last day students may book.'}
+                                                  if not start else {'window_end': 'Choose the last day students may book.'})
+            if end < start:
+                raise serializers.ValidationError({'window_end': 'Choose an end date on or after the start date.'})
+            if end < timezone.localdate():
+                raise serializers.ValidationError({'window_end': 'Choose an end date that is not in the past.'})
+        return attrs
 
     def validate_hours(self, value):
         if not isinstance(value, dict):
