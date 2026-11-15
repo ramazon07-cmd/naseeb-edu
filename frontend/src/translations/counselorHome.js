@@ -3,6 +3,8 @@
 export const COUNSELOR_HOME_TRANSLATIONS = {
   'Ask the student to confirm': ['Talabadan tasdiqlashni so‘rash', 'Попросить ученика подтвердить'],
   'Invitation sent. Waiting for the student to confirm.': ['Taklif yuborildi. Talaba tasdiqlashi kutilmoqda.', 'Приглашение отправлено. Ждём подтверждения ученика.'],
+  'Waiting for your confirmation': ['Tasdiqlashingiz kutilmoqda', 'Ждёт вашего подтверждения'],
+  'Confirm': ['Tasdiqlash', 'Подтвердить'],
   'Waiting for student': ['Talaba tasdiqlashini kutmoqda', 'Ждёт ученика'],
   'Students must book at least': ['Talabalar kamida', 'Ученики должны записываться не позднее чем за'],
   'hours ahead': ['soat oldin band qilishi kerak', 'ч. до встречи'],
