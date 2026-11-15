@@ -12,6 +12,7 @@ import { fitReasonMessages } from "./translations/fitReasons.js";
 import { letterMessages } from "./translations/letters.js";
 import { catalogAdminMessages } from "./translations/catalogAdmin.js";
 import { counselorHomeMessages } from "./translations/counselorHome.js";
+import { meetingMessages } from "./translations/meetings.js";
 import { inviteMessages } from "./translations/invites.js";
 import { counselorStudentsMessages } from "./translations/counselorStudents.js";
 import { reviewMessages } from "./translations/review.js";
@@ -48,6 +49,7 @@ export const TRANSLATIONS = {
     ...letterMessages("uz"),
     ...catalogAdminMessages("uz"),
     ...counselorHomeMessages("uz"),
+    ...meetingMessages("uz"),
     ...counselorStudentsMessages("uz"),
     ...reviewMessages("uz"),
     ...counselorShellMessages("uz"),
@@ -264,6 +266,7 @@ export const TRANSLATIONS = {
     ...letterMessages("ru"),
     ...catalogAdminMessages("ru"),
     ...counselorHomeMessages("ru"),
+    ...meetingMessages("ru"),
     ...counselorStudentsMessages("ru"),
     ...reviewMessages("ru"),
     ...counselorShellMessages("ru"),

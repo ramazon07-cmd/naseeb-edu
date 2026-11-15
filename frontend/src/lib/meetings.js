@@ -74,3 +74,27 @@ export function studentMeetingsForTab(items = [], tab, now = new Date()) {
   const order = tab === 'upcoming' ? (a, b) => waiting(a) - waiting(b) || time(a) - time(b) : (a, b) => time(b) - time(a);
   return meetingsForTab(items, tab, false, now).sort(order);
 }
+
+// The API says who cancelled when it knows; a student's own cancel reads
+// "Cancelled by student" on the counselor's list.
+export const cancelledByStudent = (item) => item?.status === 'cancelled' && (
+  item.cancelled_by_role === 'student' || item.cancelled_by === 'student' || (item.cancelled_by != null && item.cancelled_by === item.student)
+);
+
+// "5 booked · 2 cancelled this week": cancelled and declined ones are not booked.
+export function weekCounts(items = []) {
+  const booked = items.filter((item) => ['pending', 'approved', 'completed'].includes(item.status) && !item.is_expired).length;
+  const cancelled = items.filter((item) => item.status === 'cancelled').length;
+  return { booked, cancelled };
+}
+
+// Booked meetings per calendar day, in day order: [['2026-11-17', 2], …]. `dayOf` turns a start into its day key.
+export function bookedPerDay(items = [], dayOf = (value) => String(value).slice(0, 10)) {
+  const counts = new Map();
+  for (const item of items) {
+    if (!['pending', 'approved', 'completed'].includes(item.status) || item.is_expired) continue;
+    const key = dayOf(item.starts_at);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts].sort(([a], [b]) => (a < b ? -1 : 1));
+}

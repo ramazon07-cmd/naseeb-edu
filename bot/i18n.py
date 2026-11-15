@@ -72,8 +72,8 @@ STRINGS = {
         'en': 'Done, {name}. Account linked.',
     },
     'already_linked': {
-        'uz': "Siz {name} sifatida kirgansiz.\n\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/reset - o'quvchiga yangi parol\n/settings - sozlamalar\n/logout - chiqish",
-        'ru': 'Вы вошли как {name}.\n\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/reset - новый пароль ученику\n/settings - настройки\n/logout - выйти',
+        'uz': "Siz {name} sifatida kirgansiz.\n\n/now - hozir yangilanish\n/students - o'quvchilar\n/meetings - uchrashuvlar\n/add - yangi o'quvchi qo'shish\n/reset - o'quvchiga yangi parol\n/settings - sozlamalar\n/logout - chiqish",
+        'ru': 'Вы вошли как {name}.\n\n/now - сводка сейчас\n/students - ученики\n/meetings - встречи\n/add - добавить ученика\n/reset - новый пароль ученику\n/settings - настройки\n/logout - выйти',
         'en': "You're logged in as {name}.\n\n/now - update now\n/students - students\n/add - add a student\n/reset - new password for a student\n/settings - settings\n/logout - log out",
     },
     'other_account': {'uz': 'Boshqa hisob', 'ru': 'Другой аккаунт', 'en': 'Other account'},
@@ -433,39 +433,65 @@ STRINGS = {
         'ru': 'Этому Telegram-аккаунту нельзя войти в этот аккаунт. Обратитесь к администратору. Ничего не сохранено.',
         'en': 'This Telegram account is not allowed to log in to that account. Contact the administrator. Nothing was saved.',
     },
+    'meetings_title': {
+        'uz': '📅 <b>Uchrashuvlar</b>', 'ru': '📅 <b>Встречи</b>', 'en': '📅 <b>Meetings</b>',
+    },
+    'meetings_empty': {
+        'uz': "Yaqin uchrashuvlar yo'q.", 'ru': 'Ближайших встреч нет.', 'en': 'No upcoming meetings.',
+    },
+    'meetings_counts': {
+        'uz': "Band: {booked} · kutilmoqda: {waiting} · oxirgi 7 kunda bekor: {cancelled} · bo'sh vaqt: {free}",
+        'ru': 'Занято: {booked} · ждут ответа: {waiting} · отменено за 7 дней: {cancelled} · свободно: {free}',
+        'en': 'Booked: {booked} · waiting: {waiting} · cancelled in 7 days: {cancelled} · free slots: {free}',
+    },
+    'meetings_wait_you': {'uz': 'sizning javobingiz kutilmoqda', 'ru': 'ждёт вашего ответа', 'en': 'waiting for you'},
+    'meetings_wait_student': {'uz': "o'quvchi javobi kutilmoqda", 'ru': 'ждёт ответа ученика', 'en': 'waiting for student'},
+    'meetings_wait_staff': {'uz': 'tasdiqlash kutilmoqda', 'ru': 'ждёт подтверждения', 'en': 'waiting for confirmation'},
+    'meetings_minutes': {'uz': '{n} daq', 'ru': '{n} мин', 'en': '{n} min'},
+    'meetings_more': {'uz': "… yana {n} ta", 'ru': '… и ещё {n}', 'en': '… and {n} more'},
+    'meetings_settings_rolling': {
+        'uz': 'Sozlamalar: {minutes} daqiqa · oldindan {notice} soat · keyingi {days} kun',
+        'ru': 'Настройки: {minutes} мин · заранее за {notice} ч · ближайшие {days} дн.',
+        'en': 'Settings: {minutes} min · {notice} h notice · next {days} days',
+    },
+    'meetings_settings_range': {
+        'uz': 'Sozlamalar: {minutes} daqiqa · oldindan {notice} soat · {start} – {end}',
+        'ru': 'Настройки: {minutes} мин · заранее за {notice} ч · {start} – {end}',
+        'en': 'Settings: {minutes} min · {notice} h notice · {start} – {end}',
+    },
     'error': {
         'uz': "Xatolik yuz berdi. Qayta urinib ko'ring.",
         'ru': 'Произошла ошибка. Попробуйте ещё раз.',
         'en': 'Something went wrong. Please try again.',
     },
     'help': {
-        'uz': "/start - kirish\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/reset - o'quvchiga yangi parol\n/settings - vaqt, til, nimalar kelishi\n/logout - chiqish va ma'lumotlarni o'chirish\n/help - yordam",
-        'ru': '/start - вход\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/reset - новый пароль ученику\n/settings - время, язык, состав сводки\n/logout - выйти и удалить данные\n/help - помощь',
-        'en': '/start - log in\n/now - update now\n/students - list students\n/add - add a student\n/reset - new password for a student\n/settings - time, language, contents\n/logout - log out and wipe data\n/help - this help',
+        'uz': "/start - kirish\n/now - hozir yangilanish\n/students - o'quvchilar\n/meetings - uchrashuvlar\n/add - yangi o'quvchi qo'shish\n/reset - o'quvchiga yangi parol\n/settings - vaqt, til, nimalar kelishi\n/logout - chiqish va ma'lumotlarni o'chirish\n/help - yordam",
+        'ru': '/start - вход\n/now - сводка сейчас\n/students - ученики\n/meetings - встречи\n/add - добавить ученика\n/reset - новый пароль ученику\n/settings - время, язык, состав сводки\n/logout - выйти и удалить данные\n/help - помощь',
+        'en': '/start - log in\n/now - update now\n/students - list students\n/meetings - upcoming meetings\n/add - add a student\n/reset - new password for a student\n/settings - time, language, contents\n/logout - log out and wipe data\n/help - this help',
     },
 }
 
 # The command list behind Telegram's "Menu" button.
 MENU = {
     'uz': [
-        ('add', "Yangi o'quvchi qo'shish"), ('reset', "O'quvchiga yangi parol"), ('students', "O'quvchilar"),
+        ('add', "Yangi o'quvchi qo'shish"), ('reset', "O'quvchiga yangi parol"), ('students', "O'quvchilar"), ('meetings', 'Uchrashuvlar'),
         ('now', 'Hozirgi holat'), ('settings', 'Sozlamalar'), ('help', 'Yordam'), ('logout', 'Chiqish'),
     ],
     'ru': [
-        ('add', 'Добавить ученика'), ('reset', 'Новый пароль ученику'), ('students', 'Ученики'),
+        ('add', 'Добавить ученика'), ('reset', 'Новый пароль ученику'), ('students', 'Ученики'), ('meetings', 'Встречи'),
         ('now', 'Сводка сейчас'), ('settings', 'Настройки'), ('help', 'Помощь'), ('logout', 'Выйти'),
     ],
     'en': [
-        ('add', 'Add a student'), ('reset', 'New password for a student'), ('students', 'Students'),
+        ('add', 'Add a student'), ('reset', 'New password for a student'), ('students', 'Students'), ('meetings', 'Meetings'),
         ('now', 'Update now'), ('settings', 'Settings'), ('help', 'Help'), ('logout', 'Log out'),
     ],
 }
 
 # Students link their chat with a one-time link; they only need /start.
 MENU_STUDENT = {
-    'uz': [('start', 'Boshlash')],
-    'ru': [('start', 'Начать')],
-    'en': [('start', 'Start')],
+    'uz': [('start', 'Boshlash'), ('meetings', 'Uchrashuvlar')],
+    'ru': [('start', 'Начать'), ('meetings', 'Встречи')],
+    'en': [('start', 'Start'), ('meetings', 'Meetings')],
 }
 
 

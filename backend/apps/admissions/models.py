@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from pathlib import Path
@@ -936,6 +936,17 @@ class MeetingSchedule(TimeStampedModel):
     # Students cannot book (or move to) a slot starting sooner than this many hours from now; staff are not held to it.
     min_notice_hours = models.PositiveSmallIntegerField(default=12, validators=[MaxValueValidator(168)])
 
+    class WindowMode(models.TextChoices):
+        ROLLING = 'rolling', 'Next N days'
+        RANGE = 'range', 'Date range'
+
+    # How far ahead students may book: the next `window_days` calendar days (rolling), or between two dates (range).
+    window_mode = models.CharField(max_length=10, choices=WindowMode.choices, default=WindowMode.ROLLING)
+    window_days = models.PositiveSmallIntegerField(default=60, validators=[MinValueValidator(1), MaxValueValidator(365)])
+    # Inclusive Tashkent dates; only used (and then required) in range mode.
+    window_start = models.DateField(null=True, blank=True)
+    window_end = models.DateField(null=True, blank=True)
+
 
 class Booking(TimeStampedModel):
     class Status(models.TextChoices):
@@ -969,6 +980,8 @@ class Booking(TimeStampedModel):
     # True: the staff participant proposed this meeting, so a pending one waits for the STUDENT's answer.
     # False (every older row): the student asked, and the participant answers.
     staff_requested = models.BooleanField(default=False)
+    # Who cancelled it ('student' or 'staff'); empty unless the meeting is cancelled.
+    cancelled_by_role = models.CharField(max_length=10, null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ['starts_at']

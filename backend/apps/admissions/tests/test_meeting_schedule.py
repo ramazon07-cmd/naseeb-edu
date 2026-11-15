@@ -2,11 +2,12 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from ..meetings import SCHEDULE_DAYS
 from ..models import Booking, MeetingAvailability, MeetingSchedule
 from .base import RoleIsolationBase
 
 URL = '/api/bookings/availability/weekly/'
+# The default booking window: today and the 60 days after it.
+WINDOW = 60
 EVERY_DAY = {str(day): [['09:00', '10:30']] for day in range(7)}
 
 
@@ -19,12 +20,15 @@ class MeetingScheduleTests(RoleIsolationBase):
 
     def test_weekly_hours_become_bookable_slots(self):
         self.client.force_authenticate(self.counselor)
-        self.assertEqual(self.client.get(URL).data, {'duration_minutes': 45, 'hours': {}, 'min_notice_hours': 12})
+        self.assertEqual(self.client.get(URL).data, {
+            'duration_minutes': 45, 'hours': {}, 'min_notice_hours': 12, 'window_mode': 'rolling', 'window_days': 60,
+            'window_start': None, 'window_end': None, 'timezone': 'Asia/Tashkent', 'upcoming_booked': 0, 'free_slots': 0,
+        })
         response = self.save()
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(self.client.get(URL).data['hours'], EVERY_DAY)
         # 09:00 and 09:45 each day; today's may already be past.
-        self.assertIn(self.slots().count(), range(SCHEDULE_DAYS * 2, (SCHEDULE_DAYS + 1) * 2 + 1))
+        self.assertIn(self.slots().count(), range(WINDOW * 2, (WINDOW + 1) * 2 + 1))
         local = {timezone.localtime(slot.starts_at).strftime('%H:%M') for slot in self.slots()}
         self.assertEqual(local, {'09:00', '09:45'})
         self.client.force_authenticate(self.student_a_user)
@@ -46,28 +50,28 @@ class MeetingScheduleTests(RoleIsolationBase):
         self.client.force_authenticate(self.counselor)
         self.save()
         before = self.slots().count()
-        MeetingSchedule.objects.update(generated_until=timezone.localdate() + timedelta(days=SCHEDULE_DAYS - 10))
+        MeetingSchedule.objects.update(generated_until=timezone.localdate() + timedelta(days=WINDOW - 10))
         self.client.force_authenticate(self.student_a_user)
         self.client.get(f'/api/bookings/availability/?participant={self.counselor.id}')
         # The ten missing days overlap what exists, so nothing is duplicated and the horizon moves.
         self.assertEqual(self.slots().count(), before)
-        self.assertEqual(MeetingSchedule.objects.get().generated_until, timezone.localdate() + timedelta(days=SCHEDULE_DAYS))
+        self.assertEqual(MeetingSchedule.objects.get().generated_until, timezone.localdate() + timedelta(days=WINDOW))
 
     def test_the_all_staff_overview_tops_up_too(self):
         # Students mostly see the overview; a counselor nobody picks must not run out of times there.
         self.client.force_authenticate(self.counselor)
         self.save()
-        MeetingSchedule.objects.update(generated_until=timezone.localdate() + timedelta(days=SCHEDULE_DAYS - 10))
+        MeetingSchedule.objects.update(generated_until=timezone.localdate() + timedelta(days=WINDOW - 10))
         self.client.force_authenticate(self.student_a_user)
         self.assertEqual(self.client.get('/api/bookings/availability/').status_code, 200)
-        self.assertEqual(MeetingSchedule.objects.get().generated_until, timezone.localdate() + timedelta(days=SCHEDULE_DAYS))
+        self.assertEqual(MeetingSchedule.objects.get().generated_until, timezone.localdate() + timedelta(days=WINDOW))
 
     def test_bad_hours_are_rejected(self):
         self.client.force_authenticate(self.counselor)
         for hours in ({'7': [['09:00', '10:00']]}, {'0': [['10:00', '09:00']]}, {'0': [['09:00', '11:00'], ['10:00', '12:00']]},
                       {'0': [['9am', '10:00']]}, {'0': 'all day'}, []):
             self.assertEqual(self.save(hours=hours).status_code, 400, hours)
-        self.assertEqual(self.save(duration=20).status_code, 400)
+        self.assertEqual(self.save(duration=25).status_code, 400)
         self.assertFalse(self.slots().exists())
 
     def test_students_cannot_read_or_set_weekly_hours(self):

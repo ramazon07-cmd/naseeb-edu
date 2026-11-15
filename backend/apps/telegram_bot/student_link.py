@@ -218,6 +218,20 @@ def queue_event(booking, recipient, event):
     return True
 
 
+def queue_own_action(booking, action):
+    """The student's own confirmation of what they just did ('booked', 'cancelled', 'moved'), if their Telegram is linked."""
+    link = StudentTelegram.objects.filter(user_id=booking.student.user_id, is_active=True).first()
+    if link is None:
+        return False
+    if action == 'cancelled':
+        key = 'own_cancelled'
+    else:
+        waiting = booking.status == Booking.Status.PENDING
+        key = f'own_{action}_{"waiting" if waiting else "confirmed"}'
+    TelegramOutbox.objects.create(chat_id=link.chat_id, booking=booking, text=_meeting_text(link, booking, key))
+    return True
+
+
 def _step(booking, now):
     """The reminder step due now for `booking`, or None."""
     passed = [step for step in REMINDER_STEPS if now >= booking.starts_at - timedelta(minutes=step)]
@@ -282,6 +296,10 @@ def _with_details(entry):
     return {lang: value + _DETAILS[lang] for lang, value in entry.items()}
 
 
+def _with_topic(entry):
+    return {lang: value + '\n<b>{topic}</b>\n{url}' for lang, value in entry.items()}
+
+
 TEXTS = {
     'hours': {'uz': '{n} soat', 'ru': '{n} ч', 'en': '{n} h'},
     'minutes_left': {'uz': '{n} daqiqa', 'ru': '{n} мин', 'en': '{n} min'},
@@ -320,6 +338,61 @@ TEXTS = {
         'ru': '🔁 Время встречи изменено.',
         'en': '🔁 Your meeting was moved.',
     }),
+    'own_booked_waiting': _with_topic({
+        'uz': '✅ Band qilindi: {other}, {time} (Toshkent), {minutes} daqiqa — tasdiqlash kutilmoqda.',
+        'ru': '✅ Записано: {other}, {time} (Ташкент), {minutes} мин — ожидает подтверждения.',
+        'en': '✅ Booked: {other}, {time} Tashkent, {minutes} min — waiting for confirmation.',
+    }),
+    'own_booked_confirmed': _with_topic({
+        'uz': '✅ Band qilindi: {other}, {time} (Toshkent), {minutes} daqiqa — tasdiqlandi.',
+        'ru': '✅ Записано: {other}, {time} (Ташкент), {minutes} мин — подтверждено.',
+        'en': '✅ Booked: {other}, {time} Tashkent, {minutes} min — confirmed.',
+    }),
+    'own_cancelled': _with_topic({
+        'uz': '❌ Siz uchrashuvni bekor qildingiz: {other}, {time} (Toshkent), {minutes} daqiqa.',
+        'ru': '❌ Вы отменили встречу: {other}, {time} (Ташкент), {minutes} мин.',
+        'en': '❌ You cancelled your meeting: {other}, {time} Tashkent, {minutes} min.',
+    }),
+    'own_moved_waiting': _with_topic({
+        'uz': '🔁 Uchrashuvni {time} (Toshkent) ga ko\'chirishni so\'radingiz ({other}, {minutes} daqiqa) — tasdiqlash kutilmoqda.',
+        'ru': '🔁 Вы попросили перенести встречу на {time} (Ташкент) ({other}, {minutes} мин) — ожидает подтверждения.',
+        'en': '🔁 You asked to move your meeting with {other} to {time} Tashkent, {minutes} min — waiting for confirmation.',
+    }),
+    'own_moved_confirmed': _with_topic({
+        'uz': '🔁 Uchrashuv {time} (Toshkent) ga ko\'chirildi ({other}, {minutes} daqiqa) — tasdiqlandi.',
+        'ru': '🔁 Встреча перенесена на {time} (Ташкент) ({other}, {minutes} мин) — подтверждено.',
+        'en': '🔁 Your meeting with {other} moved to {time} Tashkent, {minutes} min — confirmed.',
+    }),
+    'staff_booked': {
+        'uz': '📅 {student} uchrashuv band qildi.\n🕒 {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
+        'ru': '📅 {student} записал(а)ся на встречу.\n🕒 {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
+        'en': '📅 {student} booked a meeting.\n🕒 {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
+    },
+    'staff_cancelled': {
+        'uz': '❌ {student} uchrashuvni bekor qildi.\n🕒 {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
+        'ru': '❌ {student} отменил(а) встречу.\n🕒 {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
+        'en': '❌ {student} cancelled a meeting.\n🕒 {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
+    },
+    'staff_moved': {
+        'uz': '🔁 {student} uchrashuvni ko\'chirishni so\'radi.\n🕒 Yangi vaqt: {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
+        'ru': '🔁 {student} просит перенести встречу.\n🕒 Новое время: {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
+        'en': '🔁 {student} asked to move a meeting.\n🕒 New time: {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
+    },
+    'staff_accepted': {
+        'uz': '✅ {student} taklifingizni qabul qildi.\n🕒 {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
+        'ru': '✅ {student} принял(а) ваше приглашение.\n🕒 {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
+        'en': '✅ {student} accepted your invitation.\n🕒 {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
+    },
+    'staff_declined': {
+        'uz': '🚫 {student} taklifingizni rad etdi.\n🕒 {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
+        'ru': '🚫 {student} отклонил(а) ваше приглашение.\n🕒 {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
+        'en': '🚫 {student} declined your invitation.\n🕒 {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
+    },
+    'staff_tally': {
+        'uz': 'Bu oynada: {booked} ta band · {free} ta bo\'sh vaqt qoldi',
+        'ru': 'В этом окне: {booked} занято · {free} свободных слотов осталось',
+        'en': 'This window: {booked} booked · {free} free slots left',
+    },
     'reminder_day': _with_details({
         'uz': '⏰ Eslatma: ertaga shu vaqtda uchrashuvingiz bor.',
         'ru': '⏰ Напоминание: завтра в это время у вас встреча.',

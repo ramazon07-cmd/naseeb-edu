@@ -108,7 +108,7 @@ async def test_students_menu_has_no_counselor_commands():
     from bot.i18n import MENU, MENU_STUDENT
 
     for lang in ('uz', 'ru', 'en'):
-        assert [name for name, _ in MENU_STUDENT[lang]] == ['start']
+        assert [name for name, _ in MENU_STUDENT[lang]] == ['start', 'meetings']
         assert 'code' not in [name for name, _ in MENU[lang]]
 
 

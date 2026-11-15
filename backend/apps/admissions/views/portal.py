@@ -35,8 +35,8 @@ from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
 from ..listing import ListQueryMixin
 from ..meeting_service import create_staff_booking, notice_time, notify_participant, notify_student
 from ..meetings import (
-    MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, notice_message, overlapping, respecting_notice,
-    too_soon_for_student, top_up_schedule, top_up_schedules, upcoming_slots, weekly_starts, with_availability,
+    MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, notice_message, outside_window, overlapping, respecting_notice,
+    too_soon_for_student, top_up_schedule, top_up_schedules, upcoming_slots, weekly_starts, with_availability, within_window,
 )
 from ..params import flag_param, int_param
 from ..scoping import booking_participants_for, scope_students, visible_students
@@ -104,6 +104,7 @@ class StudentCollaborationPermission(permissions.BasePermission):
 BOOKING_STAFF_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACHER, User.Role.ORGANIZATION}
 
 
+OUTSIDE_WINDOW = 'This time is outside the days this staff member accepts meetings. Choose another time.'
 # A student connects Telegram (meeting messages and reminders) before requesting a new meeting.
 TELEGRAM_REQUIRED_ACTIONS = {'create'}
 
@@ -204,6 +205,8 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                     raise drf_serializers.ValidationError({'availability_slot': 'This time just changed. Pick it again.'})
                 if too_soon_for_student(locked.participant_id, locked.starts_at):
                     raise drf_serializers.ValidationError({'availability_slot': notice_message(locked.participant_id)})
+                if outside_window(locked.participant_id, locked.starts_at):
+                    raise drf_serializers.ValidationError({'availability_slot': OUTSIDE_WINDOW})
                 if locked.bookings.filter(status__in=Booking.OPEN_STATUSES).exists():
                     raise drf_serializers.ValidationError({'availability_slot': 'This time has already been requested.'})
                 meetings = Booking.objects.filter(participant_id=slot.participant_id, status__in=Booking.OPEN_STATUSES)
@@ -308,12 +311,12 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 if not participants.filter(pk=participant_id).exists():
                     return Response({'participant': 'Choose a staff member from your school.'}, status=400)
                 top_up_schedule(participant_id)
-                slots = respecting_notice(MeetingAvailability.objects.filter(participant_id=participant_id))
+                slots = respecting_notice(within_window(MeetingAvailability.objects.filter(participant_id=participant_id), [participant_id]))
             else:
                 allowed_ids = list(participants.values_list('id', flat=True)[:CONTACT_LIST_LIMIT])
                 # Also here, not only when one person is picked: staff nobody picks would run out of times.
                 top_up_schedules(allowed_ids)
-                slots = respecting_notice(MeetingAvailability.objects.filter(participant_id__in=allowed_ids))
+                slots = respecting_notice(within_window(MeetingAvailability.objects.filter(participant_id__in=allowed_ids), allowed_ids))
                 overview = True
         else:
             return Response({'detail': 'Availability is unavailable for this role.'}, status=403)
@@ -464,7 +467,8 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             if booking.status not in Booking.OPEN_STATUSES or booking.has_started:
                 return Response({'detail': 'Only a meeting that has not started yet can be cancelled.'}, status=400)
             booking.status = Booking.Status.CANCELLED
-            booking.save(update_fields=['status', 'updated_at'])
+            booking.cancelled_by_role = 'student' if request.user.role == User.Role.STUDENT else 'staff'
+            booking.save(update_fields=['status', 'cancelled_by_role', 'updated_at'])
             student_name, participant_name, meeting_time = self._names(booking)
             if request.user.role == User.Role.STUDENT:
                 message = f'{student_name} cancelled the meeting "{booking.topic}" on {meeting_time}.'
@@ -510,6 +514,8 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                     return Response({'availability_slot': 'Choose a time from this staff member’s availability.'}, status=400)
                 if student_moves and too_soon_for_student(slot.participant_id, slot.starts_at):
                     return Response({'availability_slot': notice_message(slot.participant_id)}, status=400)
+                if student_moves and outside_window(slot.participant_id, slot.starts_at):
+                    return Response({'availability_slot': OUTSIDE_WINDOW}, status=400)
                 if slot.bookings.filter(status__in=Booking.OPEN_STATUSES).exclude(pk=booking.pk).exists():
                     return Response({'availability_slot': 'This time has already been requested.'}, status=400)
             meetings = Booking.objects.filter(participant_id=booking.participant_id, status__in=Booking.OPEN_STATUSES)

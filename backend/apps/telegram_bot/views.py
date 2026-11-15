@@ -8,6 +8,7 @@ from .digest import build_digest, grouped_students
 from .jobs import run_due_jobs
 from .permissions import HasServiceKey
 from . import student_link
+from .staff_meetings import meetings_overview
 from .students import add_student, find_students, reset_password
 
 
@@ -148,6 +149,13 @@ class FindStudentsView(BotView):
         data = self.get_data(request)
         link = services.resolve_link(_chat_id(data))
         return Response(find_students(link, _text(data, 'query', 200)))
+
+
+class MeetingsView(BotView):
+    """The caller's own upcoming meetings (counselor: with counts and settings; student: just theirs)."""
+
+    def post(self, request):
+        return Response(meetings_overview(self.get_chat_id(request)))
 
 
 class ResetPasswordView(BotView):
