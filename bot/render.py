@@ -60,6 +60,8 @@ def render_meetings(data, lang):
                 lang, 'meetings_settings_rolling', minutes=settings['duration_minutes'], notice=settings['min_notice_hours'],
                 days=settings['window_days'],
             )]
+    if counts and data.get('booking_url'):
+        footer.append(t(lang, 'meetings_booking_link', url=escape(data['booking_url'])))
     # Room for the lines already written, the footer, and a "more" line.
     budget = MAX_MEETING_LINES - len(lines) - len(footer) - 3  # blank lines around the list and the "more" line
     shown, day, used = 0, None, 0

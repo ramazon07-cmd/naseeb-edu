@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.utils import timezone
 
 from apps.admissions.models import Booking, MeetingAvailability, MeetingSchedule
@@ -45,6 +46,7 @@ class MeetingsEndpointTests(BotTestCase):
         self.assertEqual(response.status_code, 200, response.content)
         data = response.json()
         self.assertEqual(data['role'], 'staff')
+        self.assertEqual(data['booking_url'], f'{settings.FRONTEND_URL}/meetings?book={self.c1.pk}')
         self.assertEqual(data['timezone'], 'Asia/Tashkent')
         self.assertEqual([m['topic'] for m in data['meetings']], ['Essay', 'Plan', 'Final'])
         first = data['meetings'][0]
@@ -64,6 +66,7 @@ class MeetingsEndpointTests(BotTestCase):
         other = self.link(self.c2, chat_id=2002)
         data = self.post('meetings', {'chat_id': other}).json()
         self.assertEqual([m['topic'] for m in data['meetings']], ['Not mine'])
+        self.assertEqual(data['booking_url'], f'{settings.FRONTEND_URL}/meetings?book={self.c2.pk}')
         self.assertIsNone(data['settings'])
         self.assertEqual(data['counts']['booked'], 1)
         other_school = self.link(self.cb, chat_id=2003)
@@ -87,6 +90,7 @@ class MeetingsEndpointTests(BotTestCase):
         self.assertEqual(data['role'], 'student')
         self.assertEqual([(m['topic'], m['name']) for m in data['meetings']], [('Plan', 'Counselor1 Tester'), ('Final', 'Counselor1 Tester')])
         self.assertNotIn('counts', data)
+        self.assertNotIn('booking_url', data)
         StudentTelegram.objects.update(is_active=False)
         self.assertEqual(self.post('meetings', {'chat_id': 3001}).status_code, 404)
 

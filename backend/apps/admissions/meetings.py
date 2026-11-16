@@ -142,6 +142,16 @@ def window_summary(user):
     return {'upcoming_booked': booked, 'free_slots': free}
 
 
+def bookable_slots(participant_ids):
+    """Slots a student may book with these staff members: inside their window and past their minimum notice.
+
+    The one definition of "what a student sees": the student listing and a staff member's
+    "preview as student" both start here, so the preview cannot drift from reality.
+    """
+    participant_ids = list(participant_ids)
+    return respecting_notice(within_window(MeetingAvailability.objects.filter(participant_id__in=participant_ids), participant_ids))
+
+
 def free_slots(qs, moving=None):
     """Slots of `qs` that no open meeting of the same staff member overlaps, decided in SQL.
 

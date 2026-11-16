@@ -98,3 +98,49 @@ export function bookedPerDay(items = [], dayOf = (value) => String(value).slice(
   }
   return [...counts].sort(([a], [b]) => (a < b ? -1 : 1));
 }
+
+// Staff who can publish meeting hours (the backend's BOOKING_STAFF_ROLES): their Meetings page shows their own
+// booking page, with the preview as a student and the shareable link.
+export const OWNS_MEETING_HOURS = ['counselor', 'assistant', 'teacher', 'organization'];
+export const ownsMeetingHours = (user) => OWNS_MEETING_HOURS.includes(user?.role);
+
+// The link a student opens to book one staff member: the Meetings page with that person's dialog already open.
+export const bookingLink = (origin, participantId) => `${String(origin).replace(/\/+$/, '')}/meetings?book=${participantId}`;
+
+// The staff id a Meetings address asks for (?book=7), or null.
+export function bookParam(search) {
+  const value = new URLSearchParams(search || '').get('book');
+  return /^[1-9]\d{0,9}$/.test(value || '') ? Number(value) : null;
+}
+
+const addDays = (key, days) => {
+  const [year, month, day] = key.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+};
+
+// First and last day (inclusive, Tashkent calendar days like the server) students may book under these
+// weekly-availability settings; `first` can be past `last` once a range has ended.
+export function bookingWindow(settings, today) {
+  if (settings?.window_mode === 'range' && settings.window_start && settings.window_end) {
+    return { first: settings.window_start > today ? settings.window_start : today, last: settings.window_end };
+  }
+  return { first: today, last: addDays(today, Number(settings?.window_days ?? 60)) };
+}
+
+// A staff member's overview calendar: { 'YYYY-MM-DD': { free: [slot], booked: [meeting] } } in the viewer's zone.
+// Free times are the upcoming, unrequested slots inside the booking window (what students can take, before the
+// minimum notice); booked ones are every upcoming pending or approved meeting, window or not.
+export function overviewDays({ slots = [], bookings = [], settings, now = new Date(), dayOf, windowDayOf }) {
+  const days = new Map();
+  const day = (key) => { if (!days.has(key)) days.set(key, { free: [], booked: [] }); return days.get(key); };
+  const { first, last } = bookingWindow(settings, windowDayOf(now));
+  const byStart = (x, y) => new Date(x.starts_at) - new Date(y.starts_at);
+  for (const slot of [...slots].sort(byStart)) {
+    const inside = windowDayOf(slot.starts_at);
+    if (slot.available && new Date(slot.starts_at) > now && inside >= first && inside <= last) day(dayOf(slot.starts_at)).free.push(slot);
+  }
+  for (const meeting of [...bookings].sort(byStart)) {
+    if (isOpenMeeting(meeting, now)) day(dayOf(meeting.starts_at)).booked.push(meeting);
+  }
+  return days;
+}

@@ -710,7 +710,8 @@ export const api = {
   studentXpHistory: (id) => request(`/students/${id}/xp-history/`),
   studentDataVisibility: (id) => request(`/students/${id}/data-visibility/`),
   bookingParticipants: () => request('/bookings/participants/'),
-  bookingAvailability: (participant) => request(`/bookings/availability/${participant ? `?participant=${participant}` : ''}`),
+  // `asStudent` (staff, their own id only): the times a student would be offered — window, notice and free times applied.
+  bookingAvailability: (participant, { asStudent = false } = {}) => request(`/bookings/availability/${participant ? `?participant=${participant}${asStudent ? '&as_student=1' : ''}` : ''}`),
   addBookingAvailability: (payload) => request('/bookings/availability/', { method: 'POST', body: JSON.stringify(payload) }),
   removeBookingAvailability: (id) => request('/bookings/availability/', { method: 'DELETE', body: JSON.stringify({ id }) }),
   editBookingAvailability: (id, payload) => request('/bookings/availability/', { method: 'PATCH', body: JSON.stringify({ ...payload, id }) }),

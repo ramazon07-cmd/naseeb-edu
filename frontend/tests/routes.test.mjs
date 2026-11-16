@@ -118,6 +118,15 @@ test('the post-login destination is limited to workspace paths on this site', ()
   assert.equal(new URLSearchParams(loginPath('/programs?type=national').split('?')[1]).get('next'), '/programs?type=national');
 });
 
+test('a booking link survives sign-in: the next path keeps ?book= and nothing else can sneak in', () => {
+  assert.equal(safeNextPath('/meetings?book=7'), '/meetings?book=7');
+  assert.equal(loginPath('/meetings?book=7'), '/login?next=%2Fmeetings%3Fbook%3D7');
+  assert.equal(new URLSearchParams(loginPath('/meetings?book=7').split('?')[1]).get('next'), '/meetings?book=7');
+  for (const bad of ['//evil.example/meetings?book=7', 'https://evil.example/meetings?book=7', '/\\evil.example/meetings?book=7', '/meetings/book/7/../../..//evil']) {
+    assert.equal(safeNextPath(bad), null, bad);
+  }
+});
+
 test('public pages: landing, /login and the old #/login link', () => {
   assert.equal(publicPageFor('/'), 'landing');
   assert.equal(publicPageFor('/', '#journey'), 'landing');
