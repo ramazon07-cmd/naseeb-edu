@@ -295,3 +295,25 @@ class ResendMeetingCardsTests(MeetingCardTests):
     def test_participant_filter_skips_other_staff(self):
         TelegramOutbox.objects.all().delete()
         self.assertIn('queued: 0 staff cards, 0 student cards', self.run_command('--participant', str(self.c1.pk + 9999)))
+
+
+@override_settings(TELEGRAM_BOT_USERNAME='naseeb_test_bot', FRONTEND_URL='https://app.example.com')
+class RememberUsernameTests(BotTestCase):
+    def test_start_and_meetings_fill_in_a_linked_students_username_and_never_clear_it(self):
+        link = StudentTelegram.objects.create(user=self.s1.user, chat_id=STUDENT_CHAT, language='en')
+        self.assertEqual(self.post('whoami', {'chat_id': STUDENT_CHAT, 'telegram_username': '@sardor_a'}).status_code, 200)
+        link.refresh_from_db()
+        self.assertEqual(link.telegram_username, 'sardor_a')
+        self.post('meetings', {'chat_id': STUDENT_CHAT, 'telegram_username': 'sardor_new'})
+        link.refresh_from_db()
+        self.assertEqual(link.telegram_username, 'sardor_new')
+        self.post('meetings', {'chat_id': STUDENT_CHAT, 'telegram_username': None})
+        self.post('whoami', {'chat_id': STUDENT_CHAT, 'telegram_username': 'bad name!'})
+        link.refresh_from_db()
+        self.assertEqual(link.telegram_username, 'sardor_new')
+
+    def test_a_chat_that_is_not_a_student_link_changes_nothing(self):
+        other = StudentTelegram.objects.create(user=self.s4.user, chat_id=9911, language='en', telegram_username='keep')
+        self.post('whoami', {'chat_id': 9912, 'telegram_username': 'someone'})
+        other.refresh_from_db()
+        self.assertEqual(other.telegram_username, 'keep')

@@ -381,7 +381,7 @@ async def meetings_command(message: Message, state: FSMContext, bot, api, cache)
     lang = link['language'] if link else _telegram_language(message.from_user)
     await bot.send_chat_action(chat_id, 'typing')
     # The backend decides the role by the chat; a chat linked as neither gets the usual "not linked" reply.
-    await message.answer(render_meetings(await api.meetings(chat_id), lang))
+    await message.answer(render_meetings(await api.meetings(chat_id, _username(message.from_user)), lang))
 
 
 @router.message(Command('now'))

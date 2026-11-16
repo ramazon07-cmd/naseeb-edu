@@ -120,8 +120,8 @@ class FakeApi:
         self._record('students', chat_id=chat_id)
         return self.students_data
 
-    async def meetings(self, chat_id):
-        self._record('meetings', chat_id=chat_id)
+    async def meetings(self, chat_id, telegram_username=None):
+        self._record('meetings', chat_id=chat_id, telegram_username=telegram_username)
         return self.meetings_data
 
     async def digest(self, chat_id):

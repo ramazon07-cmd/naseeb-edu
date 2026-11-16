@@ -65,6 +65,17 @@ def clean_username(value):
     return value if USERNAME_PATTERN.match(value) else ''
 
 
+def remember_username(chat_id, telegram_username):
+    """Keep a linked student's @username current whenever they talk to the bot (students who linked
+    before usernames were stored get theirs this way). A missing username never clears a stored one."""
+    username = clean_username(telegram_username)
+    if not username:
+        return 0
+    return StudentTelegram.objects.filter(chat_id=chat_id).exclude(telegram_username=username).update(
+        telegram_username=username,
+    )
+
+
 def _language(value):
     value = str(value or '')[:2].lower()
     return value if value in LANGUAGES else TelegramLink.Language.UZ

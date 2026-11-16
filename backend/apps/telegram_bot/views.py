@@ -155,7 +155,11 @@ class MeetingsView(BotView):
     """The caller's own upcoming meetings (counselor: with counts and settings; student: just theirs)."""
 
     def post(self, request):
-        return Response(meetings_overview(self.get_chat_id(request)))
+        chat_id = self.get_chat_id(request)
+        username = self.get_data(request).get('telegram_username')
+        if isinstance(username, str) and len(username) <= 100:
+            student_link.remember_username(chat_id, username)
+        return Response(meetings_overview(chat_id))
 
 
 class ResetPasswordView(BotView):
@@ -218,7 +222,9 @@ class WhoAmIView(BotView):
         username = data.get('telegram_username')
         if username is not None and (not isinstance(username, str) or len(username) > 100):
             raise services.Refused('invalid_request', 400)
-        return Response({**services.whoami(_chat_id(data), username), 'site_url': student_link.meetings_url()})
+        chat_id = _chat_id(data)
+        student_link.remember_username(chat_id, username)
+        return Response({**services.whoami(chat_id, username), 'site_url': student_link.meetings_url()})
 
 
 class StudentOutboxView(BotView):

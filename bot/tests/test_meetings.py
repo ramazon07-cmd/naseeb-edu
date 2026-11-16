@@ -26,7 +26,7 @@ async def test_meetings_command_shows_counts_days_status_and_settings(h):
     h.api.linked = True
     h.api.meetings_data = STAFF
     await h.say('/meetings')
-    assert h.api.names('meetings') == [{'chat_id': 1}]
+    assert h.api.names('meetings') == [{'chat_id': 1, 'telegram_username': 'dilnoza_k'}]
     text = h.session.texts()[-1]
     assert 'Booked: 3 · waiting: 2 · cancelled in 7 days: 2 · free slots: 12' in text
     assert '<b>18 Nov</b>' in text and '<b>19 Nov</b>' in text
