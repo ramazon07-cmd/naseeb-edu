@@ -26,7 +26,7 @@ PROVIDER_ERROR = AiUsageLog.Status.PROVIDER_ERROR
 BUDGET_REFUSED = AiUsageLog.Status.BUDGET_REFUSED
 FAILED = 'failed'
 PERCENTILES = (50, 90)
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'education_match')
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'education_match', 'rubric_scoring')
 _SNAPSHOT_SUFFIX = re.compile(r'-(?:\d{4}-\d{2}-\d{2}|\d{8}|\d{4})$')
 _local = threading.local()
 

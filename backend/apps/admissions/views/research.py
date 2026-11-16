@@ -5,7 +5,8 @@ from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from rest_framework.views import APIView
 from apps.users.models import User
-from ..college_search import CollegeSearchParams, college_search, evidence_counts, missing_fields
+from .. import rubric_ai
+from ..college_search import CollegeSearchParams, college_match, college_search, evidence_counts, missing_fields
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
 
@@ -103,3 +104,28 @@ class EducationMatchAIView(APIView):
         )
         result['provider_available'] = recommendation_ai_available()
         return Response(result)
+
+
+class CollegeMatchView(APIView):
+    """The AI college match (``POST /api/college-match/``): a balanced list of best-fitting universities.
+
+    AI reads the student's essay and letters once per text (rubric_ai.py, only when outbound AI
+    is allowed); every university is then matched with fixed rules, never by AI.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'assistant'
+
+    def post(self, request):
+        profile = student_profile(request)
+        if not profile:
+            return Response({'detail': 'The college match is available to student accounts only.'}, status=403)
+        missing = missing_fields(profile)
+        if missing:
+            return Response({'detail': 'Complete your research profile first.', 'missing_fields': missing}, status=400)
+        rubric_ai.score_student(profile, request.user)
+        data = college_match(profile)
+        data['ai_scoring'] = rubric_ai.ai_available()
+        data['generated_at'] = timezone.now()
+        return Response(data)
