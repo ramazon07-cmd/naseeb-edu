@@ -24,6 +24,11 @@ def _name(user):
     return (user.get_full_name().strip() or user.username) if user else '—'
 
 
+def booking_link(user):
+    """The page where a student books this staff member (the Meetings page opens their booking dialog)."""
+    return f'{settings.FRONTEND_URL}/meetings?book={user.pk}'
+
+
 def queue_staff_update(booking, action):
     """Tell the booking's staff participant what their student just did ('booked', 'cancelled', 'moved',
     'accepted', 'declined'), in their link's language, with the window's tally. False when nothing was queued."""
@@ -68,6 +73,7 @@ def _staff_overview(user):
     return {
         'role': 'staff',
         'timezone': settings.TIME_ZONE,
+        'booking_url': booking_link(user),
         'meetings': [_item(row, row.student.user) for row in rows],
         'counts': {
             'booked': summary['upcoming_booked'],

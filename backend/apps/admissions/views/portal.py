@@ -35,7 +35,7 @@ from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
 from ..listing import ListQueryMixin
 from ..meeting_service import create_staff_booking, notice_time, notify_participant, notify_student
 from ..meetings import (
-    MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, notice_message, outside_window, overlapping, respecting_notice,
+    MAX_REPEAT_SLOTS, add_free_slots, bookable_slots, fill_schedule, free_slots, notice_message, outside_window, overlapping, respecting_notice,
     too_soon_for_student, top_up_schedule, top_up_schedules, upcoming_slots, weekly_starts, with_availability, within_window,
 )
 from ..params import flag_param, int_param
@@ -290,6 +290,15 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         moving = int_param(request.query_params, 'reschedule')
         if moving is not None and not self.get_queryset().filter(pk=moving).exists():
             return Response({'detail': 'Meeting not found.'}, status=404)
+        if staff and request.query_params.get('as_student') in ('1', 'true'):
+            # Preview as student: only the caller's own calendar, through the exact filters a student's request uses.
+            if int_param(request.query_params, 'participant') != user.pk:
+                return Response({'participant': 'You can only preview your own booking page.'}, status=403)
+            top_up_schedule(user.pk)
+            return Response([
+                {**MeetingAvailabilitySerializer(slot).data, 'participant': slot.participant_id, 'available': True}
+                for slot in upcoming_slots(free_slots(bookable_slots([user.pk]), moving=moving))
+            ])
         if staff:
             top_up_schedule(user.pk)
             # `editable`: no meeting, of any status, points at the slot (the PATCH rule).
@@ -311,12 +320,12 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 if not participants.filter(pk=participant_id).exists():
                     return Response({'participant': 'Choose a staff member from your school.'}, status=400)
                 top_up_schedule(participant_id)
-                slots = respecting_notice(within_window(MeetingAvailability.objects.filter(participant_id=participant_id), [participant_id]))
+                slots = bookable_slots([participant_id])
             else:
                 allowed_ids = list(participants.values_list('id', flat=True)[:CONTACT_LIST_LIMIT])
                 # Also here, not only when one person is picked: staff nobody picks would run out of times.
                 top_up_schedules(allowed_ids)
-                slots = respecting_notice(within_window(MeetingAvailability.objects.filter(participant_id__in=allowed_ids), allowed_ids))
+                slots = bookable_slots(allowed_ids)
                 overview = True
         else:
             return Response({'detail': 'Availability is unavailable for this role.'}, status=403)

@@ -459,6 +459,9 @@ STRINGS = {
         'ru': 'Настройки: {minutes} мин · заранее за {notice} ч · {start} – {end}',
         'en': 'Settings: {minutes} min · {notice} h notice · {start} – {end}',
     },
+    'meetings_booking_link': {
+        'uz': 'Sizning bron havolangiz: {url}', 'ru': 'Ваша ссылка для записи: {url}', 'en': 'Your booking link: {url}',
+    },
     'error': {
         'uz': "Xatolik yuz berdi. Qayta urinib ko'ring.",
         'ru': 'Произошла ошибка. Попробуйте ещё раз.',

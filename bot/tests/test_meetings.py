@@ -16,6 +16,7 @@ STAFF = {
     ],
     'counts': {'booked': 3, 'waiting_for_you': 1, 'waiting_for_student': 1, 'cancelled_week': 2},
     'free_slots': 12,
+    'booking_url': 'https://app.example.com/meetings?book=7',
     'settings': {'duration_minutes': 30, 'min_notice_hours': 6, 'window_mode': 'rolling', 'window_days': 30,
                  'window_start': None, 'window_end': None},
 }
@@ -33,6 +34,7 @@ async def test_meetings_command_shows_counts_days_status_and_settings(h):
     assert '⏳ 11:00 · 45 min · Sara Nazarova (waiting for you)' in text
     assert '(waiting for student)' in text
     assert 'Settings: 30 min · 6 h notice · next 30 days' in text
+    assert 'Your booking link: https://app.example.com/meetings?book=7' in text
 
 
 async def test_meetings_in_russian_and_range_settings(h):
