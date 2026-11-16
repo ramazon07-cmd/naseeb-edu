@@ -259,3 +259,39 @@ class MeetingCardTests(BotTestCase):
         # Cancelling stays possible, and staff are never gated.
         self.client.force_authenticate(self.c1)
         self.assertEqual(self.client.post(f'/api/bookings/{self.booking.pk}/reschedule/', payload, format='json').status_code, 200)
+
+
+@override_settings(TELEGRAM_BOT_USERNAME='naseeb_test_bot', FRONTEND_URL='https://app.example.com')
+class ResendMeetingCardsTests(MeetingCardTests):
+    def run_command(self, *args):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('resend_meeting_cards', *args, stdout=out)
+        return out.getvalue()
+
+    def test_open_meetings_get_one_card_each_with_buttons_and_reruns_send_nothing(self):
+        TelegramOutbox.objects.all().delete()
+        Booking.objects.create(
+            student=self.s1, participant=self.c1, topic='Old', starts_at=timezone.now() - timedelta(days=1),
+            duration_minutes=45, status='pending',
+        )
+        Booking.objects.create(
+            student=self.s1, participant=self.c1, topic='Gone', starts_at=soon(5), duration_minutes=45,
+            status='cancelled',
+        )
+        self.assertIn('would send: 1 staff cards, 1 student cards', self.run_command('--dry-run'))
+        self.assertFalse(TelegramOutbox.objects.exists())
+        self.assertIn('queued: 1 staff cards, 1 student cards', self.run_command())
+        staff = TelegramOutbox.objects.get(chat_id=STAFF_CHAT)
+        student = TelegramOutbox.objects.get(chat_id=STUDENT_CHAT)
+        self.assertIn('@sardor_a', staff.text)
+        self.assertIn('mt:confirm:%d' % self.booking.pk, str(staff.buttons))
+        self.assertNotIn('mt:', str(student.buttons))
+        self.assertIn('queued: 0 staff cards, 0 student cards', self.run_command())
+
+    def test_participant_filter_skips_other_staff(self):
+        TelegramOutbox.objects.all().delete()
+        self.assertIn('queued: 0 staff cards, 0 student cards', self.run_command('--participant', str(self.c1.pk + 9999)))
