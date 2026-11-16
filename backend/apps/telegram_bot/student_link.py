@@ -28,6 +28,7 @@ TOKEN_PREFIX = 's_'
 TOKEN_TTL = timedelta(minutes=15)
 # Wrong or stale tokens a chat may present per hour (a real token is 256 bits: this only stops floods).
 ATTEMPTS_PER_HOUR = 30
+USERNAME_PATTERN = re.compile(r'^[A-Za-z0-9_]{1,32}$')
 TOKEN_PATTERN = re.compile(r'^[A-Za-z0-9_-]{16,62}$')
 LANGUAGES = {choice for choice, _ in TelegramLink.Language.choices}
 # Reminder steps, in minutes before the start; 0 is "the meeting has started".
@@ -58,6 +59,23 @@ def _hash(token):
     return hmac.new(settings.SECRET_KEY.encode(), f'student-link-token:{token}'.encode(), hashlib.sha256).hexdigest()
 
 
+def clean_username(value):
+    """A Telegram @username as stored: no '@', and only what Telegram allows (blank otherwise)."""
+    value = str(value or '').strip().lstrip('@')
+    return value if USERNAME_PATTERN.match(value) else ''
+
+
+def remember_username(chat_id, telegram_username):
+    """Keep a linked student's @username current whenever they talk to the bot (students who linked
+    before usernames were stored get theirs this way). A missing username never clears a stored one."""
+    username = clean_username(telegram_username)
+    if not username:
+        return 0
+    return StudentTelegram.objects.filter(chat_id=chat_id).exclude(telegram_username=username).update(
+        telegram_username=username,
+    )
+
+
 def _language(value):
     value = str(value or '')[:2].lower()
     return value if value in LANGUAGES else TelegramLink.Language.UZ
@@ -74,7 +92,7 @@ def _invalid_token():
     return Refused('invalid_token', 400, site_url=meetings_url())
 
 
-def consume_token(chat_id, token, language=None):
+def consume_token(chat_id, token, language=None, telegram_username=None):
     """Link ``chat_id`` to the student the token was issued for. The token works once."""
     hits = count_hit(f'tgbot-student-link:{chat_id}', 3600)
     if hits is not None and hits[0] > ATTEMPTS_PER_HOUR:
@@ -114,7 +132,10 @@ def consume_token(chat_id, token, language=None):
             ).update(chat_id=chat_id)
         try:
             StudentTelegram.objects.update_or_create(
-                user=user, defaults={'chat_id': chat_id, 'language': language, 'is_active': True},
+                user=user, defaults={
+                    'chat_id': chat_id, 'language': language, 'is_active': True,
+                    'telegram_username': clean_username(telegram_username),
+                },
             )
         except IntegrityError:
             raise _invalid_token()
@@ -140,7 +161,9 @@ def pending_messages(now=None):
         TelegramOutbox.objects.filter(pk__in=stale).delete()
         rows = [row for row in rows if row.pk not in stale]
         TelegramOutbox.objects.filter(pk__in=[row.pk for row in rows]).update(claimed_at=now)
-    return {'messages': [{'id': row.pk, 'chat_id': row.chat_id, 'text': row.text} for row in rows]}
+    return {'messages': [
+        {'id': row.pk, 'chat_id': row.chat_id, 'text': row.text, 'buttons': row.buttons or []} for row in rows
+    ]}
 
 
 def _stale_reminder(row, bookings):
@@ -202,34 +225,20 @@ def _other(booking):
     return (person.get_full_name().strip() or person.username) if person else '—'
 
 
-def _meeting_text(link, booking, key):
-    return text(
-        link.language, key, topic=_escape(booking.topic), other=_escape(_other(booking)),
-        time=_when(booking.starts_at), minutes=booking.duration_minutes, url=f'{settings.FRONTEND_URL}/meetings',
-    )
-
-
 def queue_event(booking, recipient, event):
-    """A message about a change to `booking` for the student `recipient`, if their Telegram is linked."""
-    link = StudentTelegram.objects.filter(user=recipient, is_active=True).first()
-    if link is None or f'event_{event}' not in TEXTS:
+    """A card about a change to `booking` for the student `recipient`, if their Telegram is linked."""
+    from .meeting_cards import queue_student_card
+
+    if recipient is None or recipient.pk != booking.student.user_id:
         return False
-    TelegramOutbox.objects.create(chat_id=link.chat_id, booking=booking, text=_meeting_text(link, booking, f'event_{event}'))
-    return True
+    return queue_student_card(booking, event)
 
 
 def queue_own_action(booking, action):
-    """The student's own confirmation of what they just did ('booked', 'cancelled', 'moved'), if their Telegram is linked."""
-    link = StudentTelegram.objects.filter(user_id=booking.student.user_id, is_active=True).first()
-    if link is None:
-        return False
-    if action == 'cancelled':
-        key = 'own_cancelled'
-    else:
-        waiting = booking.status == Booking.Status.PENDING
-        key = f'own_{action}_{"waiting" if waiting else "confirmed"}'
-    TelegramOutbox.objects.create(chat_id=link.chat_id, booking=booking, text=_meeting_text(link, booking, key))
-    return True
+    """The student's own confirmation of what they just did ('booked', 'cancelled', 'moved'), if linked."""
+    from .meeting_cards import queue_student_card
+
+    return queue_student_card(booking, action)
 
 
 def _step(booking, now):
@@ -296,103 +305,9 @@ def _with_details(entry):
     return {lang: value + _DETAILS[lang] for lang, value in entry.items()}
 
 
-def _with_topic(entry):
-    return {lang: value + '\n<b>{topic}</b>\n{url}' for lang, value in entry.items()}
-
-
 TEXTS = {
     'hours': {'uz': '{n} soat', 'ru': '{n} ч', 'en': '{n} h'},
     'minutes_left': {'uz': '{n} daqiqa', 'ru': '{n} мин', 'en': '{n} min'},
-    'event_requested': _with_details({
-        'uz': '📅 Sizga yangi uchrashuv taklif qilindi.',
-        'ru': '📅 Вам предложили новую встречу.',
-        'en': '📅 A new meeting was requested with you.',
-    }),
-    'event_invited': _with_details({
-        'uz': '📅 {other} sizni {time} ga uchrashuvga taklif qildi. Saytda tasdiqlang.',
-        'ru': '📅 {other} приглашает вас на встречу ({time}). Подтвердите на сайте.',
-        'en': '📅 {other} invited you to a meeting on {time}. Confirm it on the website.',
-    }),
-    'event_confirmed': _with_details({
-        'uz': '✅ Uchrashuvingiz tasdiqlandi.',
-        'ru': '✅ Ваша встреча подтверждена.',
-        'en': '✅ Your meeting is confirmed.',
-    }),
-    'event_declined': _with_details({
-        'uz': '❌ Uchrashuv so\'rovingiz rad etildi.',
-        'ru': '❌ Ваш запрос на встречу отклонён.',
-        'en': '❌ Your meeting request was declined.',
-    }),
-    'event_cancelled': _with_details({
-        'uz': '🚫 Uchrashuv bekor qilindi.',
-        'ru': '🚫 Встреча отменена.',
-        'en': '🚫 The meeting was cancelled.',
-    }),
-    'event_move_requested': _with_details({
-        'uz': '🔁 Uchrashuv vaqtini o\'zgartirish so\'raldi. Saytda tasdiqlang.',
-        'ru': '🔁 Предложено перенести встречу. Подтвердите на сайте.',
-        'en': '🔁 A new time was proposed for your meeting. Confirm it on the website.',
-    }),
-    'event_moved': _with_details({
-        'uz': '🔁 Uchrashuv vaqti o\'zgardi.',
-        'ru': '🔁 Время встречи изменено.',
-        'en': '🔁 Your meeting was moved.',
-    }),
-    'own_booked_waiting': _with_topic({
-        'uz': '✅ Band qilindi: {other}, {time} (Toshkent), {minutes} daqiqa — tasdiqlash kutilmoqda.',
-        'ru': '✅ Записано: {other}, {time} (Ташкент), {minutes} мин — ожидает подтверждения.',
-        'en': '✅ Booked: {other}, {time} Tashkent, {minutes} min — waiting for confirmation.',
-    }),
-    'own_booked_confirmed': _with_topic({
-        'uz': '✅ Band qilindi: {other}, {time} (Toshkent), {minutes} daqiqa — tasdiqlandi.',
-        'ru': '✅ Записано: {other}, {time} (Ташкент), {minutes} мин — подтверждено.',
-        'en': '✅ Booked: {other}, {time} Tashkent, {minutes} min — confirmed.',
-    }),
-    'own_cancelled': _with_topic({
-        'uz': '❌ Siz uchrashuvni bekor qildingiz: {other}, {time} (Toshkent), {minutes} daqiqa.',
-        'ru': '❌ Вы отменили встречу: {other}, {time} (Ташкент), {minutes} мин.',
-        'en': '❌ You cancelled your meeting: {other}, {time} Tashkent, {minutes} min.',
-    }),
-    'own_moved_waiting': _with_topic({
-        'uz': '🔁 Uchrashuvni {time} (Toshkent) ga ko\'chirishni so\'radingiz ({other}, {minutes} daqiqa) — tasdiqlash kutilmoqda.',
-        'ru': '🔁 Вы попросили перенести встречу на {time} (Ташкент) ({other}, {minutes} мин) — ожидает подтверждения.',
-        'en': '🔁 You asked to move your meeting with {other} to {time} Tashkent, {minutes} min — waiting for confirmation.',
-    }),
-    'own_moved_confirmed': _with_topic({
-        'uz': '🔁 Uchrashuv {time} (Toshkent) ga ko\'chirildi ({other}, {minutes} daqiqa) — tasdiqlandi.',
-        'ru': '🔁 Встреча перенесена на {time} (Ташкент) ({other}, {minutes} мин) — подтверждено.',
-        'en': '🔁 Your meeting with {other} moved to {time} Tashkent, {minutes} min — confirmed.',
-    }),
-    'staff_booked': {
-        'uz': '📅 {student} uchrashuv band qildi.\n🕒 {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
-        'ru': '📅 {student} записал(а)ся на встречу.\n🕒 {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
-        'en': '📅 {student} booked a meeting.\n🕒 {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
-    },
-    'staff_cancelled': {
-        'uz': '❌ {student} uchrashuvni bekor qildi.\n🕒 {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
-        'ru': '❌ {student} отменил(а) встречу.\n🕒 {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
-        'en': '❌ {student} cancelled a meeting.\n🕒 {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
-    },
-    'staff_moved': {
-        'uz': '🔁 {student} uchrashuvni ko\'chirishni so\'radi.\n🕒 Yangi vaqt: {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
-        'ru': '🔁 {student} просит перенести встречу.\n🕒 Новое время: {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
-        'en': '🔁 {student} asked to move a meeting.\n🕒 New time: {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
-    },
-    'staff_accepted': {
-        'uz': '✅ {student} taklifingizni qabul qildi.\n🕒 {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
-        'ru': '✅ {student} принял(а) ваше приглашение.\n🕒 {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
-        'en': '✅ {student} accepted your invitation.\n🕒 {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
-    },
-    'staff_declined': {
-        'uz': '🚫 {student} taklifingizni rad etdi.\n🕒 {time} (Toshkent), {minutes} daqiqa\n<b>{topic}</b>\n{tally}',
-        'ru': '🚫 {student} отклонил(а) ваше приглашение.\n🕒 {time} (Ташкент), {minutes} мин\n<b>{topic}</b>\n{tally}',
-        'en': '🚫 {student} declined your invitation.\n🕒 {time} (Tashkent), {minutes} min\n<b>{topic}</b>\n{tally}',
-    },
-    'staff_tally': {
-        'uz': 'Bu oynada: {booked} ta band · {free} ta bo\'sh vaqt qoldi',
-        'ru': 'В этом окне: {booked} занято · {free} свободных слотов осталось',
-        'en': 'This window: {booked} booked · {free} free slots left',
-    },
     'reminder_day': _with_details({
         'uz': '⏰ Eslatma: ertaga shu vaqtda uchrashuvingiz bor.',
         'ru': '⏰ Напоминание: завтра в это время у вас встреча.',

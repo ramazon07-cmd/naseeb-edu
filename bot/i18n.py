@@ -261,6 +261,11 @@ STRINGS = {
         'ru': 'Активности {activities}, достижения {honors}, документы {docs_done}/{docs_total}, заявки {apps_done}/{apps_total}, рекомендации {rec_done}/{rec_total}',
         'en': 'Extracurriculars {activities}, honors {honors}, documents {docs_done}/{docs_total}, applications {apps_done}/{apps_total}, letters {rec_done}/{rec_total}',
     },
+    'meeting_forbidden': {
+        'uz': 'Bu uchrashuv bilan amal bajarib bo\'lmaydi.',
+        'ru': 'С этой встречей нельзя выполнить это действие.',
+        'en': 'This action is not available for this meeting.',
+    },
     'expired': {
         'uz': "Muddati o'tdi. Yangisini olish uchun /now.",
         'ru': 'Устарело. Получить новую сводку: /now.',

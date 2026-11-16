@@ -10,7 +10,7 @@ import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, joinP
 import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
-import { isAwaitingStudent, isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook, cancelledByStudent, weekCounts, bookedPerDay, bookParam, bookingLink, overviewDays, ownsMeetingHours } from '../lib/meetings';
+import { isAwaitingStudent, isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook, cancelledByStudent, weekCounts, bookedPerDay, bookParam, bookingLink, overviewDays, ownsMeetingHours, studentProfilePath, telegramUrl } from '../lib/meetings';
 import { TASHKENT_MINUTES, convertZone, shiftRange, tashkentToZone, zoneToTashkent } from '../lib/weeklyZone';
 import { copyText } from '../lib/clipboard';
 import { withQuery } from '../lib/routes';
@@ -952,6 +952,28 @@ function StudentPreview({ user, onClose, onEdit }) {
   </div></Modal>;
 }
 
+// A student's name as a link to their profile, opened in the app without a reload.
+function StudentLink({ item }) {
+  const name = item.student_name || t("Student");
+  if (!item.student) return name;
+  const path = studentProfilePath(item.student);
+  const open = (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    window.history.pushState(null, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+  return <a className="meet-student-link" href={path} onClick={open} title={t("Open student profile")}>{name}</a>;
+}
+
+// "@username" linking to t.me, or "Telegram not linked".
+function TelegramTag({ item }) {
+  const url = telegramUrl(item.student_telegram_username);
+  return url
+    ? <a className="meet-tg" href={url} target="_blank" rel="noopener noreferrer">@{item.student_telegram_username}</a>
+    : <span className="meet-tg is-none">{t("Telegram not linked")}</span>;
+}
+
 const statusWords = (booking) => (booking.status === 'approved' ? t('Confirmed') : booking.staff_requested ? t('Waiting for student') : t('Waiting for you'));
 
 // "Your booking page": what students can book (window, notice, zone), a month calendar of free and booked
@@ -1026,7 +1048,7 @@ function BookingOverview({ user, bookings, notify, onEditHours, version, autoPre
           <b>{dayTitle(shownDay)}</b>
           <div className="meet-overview-chips">{times.map(({ kind, item }) => kind === 'free'
             ? <span key={`s${item.id}`} className="meet-chip is-free" title={t("Free time")}>{clockText(item.starts_at)}</span>
-            : <span key={`b${item.id}`} className={`meet-chip is-booked${item.status === 'pending' ? ' is-waiting' : ''}`}><b>{clockText(item.starts_at)}</b> {item.student_name || t("Student")}<small>{statusWords(item)}</small></span>)}</div>
+            : <span key={`b${item.id}`} className={`meet-chip is-booked${item.status === 'pending' ? ' is-waiting' : ''}`}><b>{clockText(item.starts_at)}</b> <StudentLink item={item} /> <TelegramTag item={item} /><small>{statusWords(item)}</small></span>)}</div>
         </div> : <p className="booking-cal-note">{t("No free times or meetings coming up.")}</p>}
       </div>
     </div>;
@@ -1073,19 +1095,21 @@ export function BookingsPage({ user, data, reload, notify, updateUser }) {
       window.history.replaceState(window.history.state, '', `${window.location.pathname}${withQuery(window.location.search, { book: null })}${window.location.hash}`);
     }
   }, []);
-  const props = { user, data, reload, notify, guard, banner, picker, bookId };
+  const props = { user, data, reload, notify, guard, banner, picker, bookId, locked };
   // key: a new zone redraws every time on the page.
   if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
   if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
   return <StaffMeetingsPage key={zoneId} {...props} />;
 }
 
-function StudentBookingsPage({ data, reload, notify, guard, banner, picker, bookId }) {
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker, bookId, locked }) {
   const [tab, setTab] = useState('upcoming');
   const [open, setOpen] = useState(false);
   // The staff member a shared link names, until the dialog closes (then Request meeting opens it as usual).
   const [linked, setLinked] = useState(bookId);
-  useEffect(() => { if (bookId) guard(() => setOpen(true))(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- once, on arrival
+  // A booking link opens the picker for that person; while Telegram is not connected the dialog shows first,
+  // and the picker follows as soon as the link is confirmed.
+  useEffect(() => { if (bookId && !locked) setOpen(true); }, [bookId, locked]);
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const now = new Date();
@@ -1205,7 +1229,8 @@ function CounselorMeetingsPage({ user, data, reload, notify, guard, banner, pick
             <div className="cx-request-head">
               <CxAvatar name={item.student_name} />
               <span className="cx-row-copy">
-                <b>{joinParts(item.student_name, item.topic)}</b>
+                <b><StudentLink item={item} />{item.topic ? ` · ${item.topic}` : ''}</b>
+                <small><TelegramTag item={item} /></small>
                 <small>{joinParts(
                   `${dayLabel(item.starts_at)} ${clockText(item.starts_at)}`,
                   item.duration_minutes > 0 && tx`${item.duration_minutes} min`,
@@ -1230,7 +1255,7 @@ function CounselorMeetingsPage({ user, data, reload, notify, guard, banner, pick
             const status = meetingBadgeStatus(meetingStatus(item, now, { student: false }));
             return <div key={item.id} className={`cx-week-row${item.status === 'cancelled' ? ' is-cancelled' : ''}`}>
               <span className="cx-week-when"><b>{dayLabel(item.starts_at)}</b><small>{clockAndLength(item)}</small></span>
-              <span className="cx-row-copy"><b>{item.student_name}</b><small>{item.topic}</small></span>
+              <span className="cx-row-copy"><b><StudentLink item={item} /></b><small>{item.topic} · <TelegramTag item={item} /></small></span>
               <CxTag tone={meetingTone(status)}>{isAwaitingStudent(item, now) ? t("Waiting for student") : cancelledByStudent(item) ? t("Cancelled by student") : label(status)}</CxTag>
               <span className="cx-week-actions">{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={15} aria-hidden="true" />{t("Delete")}</button>}</span>
             </div>;
@@ -1303,8 +1328,8 @@ function StaffMeetingsPage({ user, data, reload, notify, guard, banner, picker, 
       <Panel title={tx`Requests waiting for you · ${pending.length}`}>
         <div className="record-list">
           {pending.map((item) => <div key={item.id} data-pending-id={item.id}><Record
-            title={joinParts(item.student_name, item.topic)}
-            meta={joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`, item.created_at && tx`requested ${relativeDayText(item.created_at).toLowerCase()}`)}
+            title={<><StudentLink item={item} />{item.topic ? ` · ${item.topic}` : ''}</>}
+            meta={<><TelegramTag item={item} /> · {joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`, item.created_at && tx`requested ${relativeDayText(item.created_at).toLowerCase()}`)}</>}
             badge={meetingBadgeStatus(item.status)}
             actions={<div className="booking-actions">
               <button type="button" className="button quiet small" disabled={savingId === item.id} onClick={() => transition(item, 'reject')}><X size={14} /> {t("Decline")}</button>
@@ -1318,7 +1343,7 @@ function StaffMeetingsPage({ user, data, reload, notify, guard, banner, picker, 
       <Panel title={t("This week")}>
         <WeekSummary items={thisWeek} />
         <div className="record-list">
-          {thisWeek.map((item) => <Record key={item.id} className={item.status === 'cancelled' ? 'is-cancelled' : undefined} title={joinParts(dateTimeText(item.starts_at), item.topic)} meta={joinParts(item.student_name, cancelledByStudent(item) && t("Cancelled by student"), viewerTimeHint(item.starts_at))} badge={isAwaitingStudent(item, now) ? 'waiting_for_student' : meetingBadgeStatus(meetingStatus(item, now, { student: false }))} actions={<>{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} title={t("Delete")} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={14} aria-hidden="true" /> {t("Delete")}</button>}</>} />)}
+          {thisWeek.map((item) => <Record key={item.id} className={item.status === 'cancelled' ? 'is-cancelled' : undefined} title={joinParts(dateTimeText(item.starts_at), item.topic)} meta={<><StudentLink item={item} /> <TelegramTag item={item} />{' · '}{joinParts(cancelledByStudent(item) && t("Cancelled by student"), viewerTimeHint(item.starts_at))}</>} badge={isAwaitingStudent(item, now) ? 'waiting_for_student' : meetingBadgeStatus(meetingStatus(item, now, { student: false }))} actions={<>{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="button quiet small" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} title={t("Delete")} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={14} aria-hidden="true" /> {t("Delete")}</button>}</>} />)}
           {!thisWeek.length && <Empty text={t("Nothing scheduled this week.")} />}
         </div>
       </Panel>

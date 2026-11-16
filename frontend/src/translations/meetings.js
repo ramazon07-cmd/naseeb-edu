@@ -1,6 +1,8 @@
 // Calendly-style meetings (pages/BookingsPage.jsx): English key -> [Uzbek (Latin), Russian].
 // Russian plural keys hold "one|few|many" forms.
 export const MEETING_TRANSLATIONS = {
+  "Telegram not linked": ["Telegram ulanmagan", "Telegram не подключён"],
+  "Open student profile": ["O‘quvchi profilini ochish", "Открыть профиль ученика"],
   "Meeting duration": ["Uchrashuv davomiyligi", "Длительность встречи"],
   "Date range": ["Sana oralig‘i", "Период записи"],
   "Invitees can schedule within {summary} with at least {notice} notice": ["Taklif qilinganlar {summary} ichida, kamida {notice} oldin band qila oladi", "Приглашённые могут записаться в пределах {summary} не позднее чем за {notice}"],

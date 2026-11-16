@@ -1,6 +1,7 @@
 """Booking window (next N days / date range), the longer list of meeting lengths, and Telegram messages for student changes."""
 from datetime import timedelta
 
+from django.test import override_settings
 from django.utils import timezone
 
 from apps.telegram_bot.models import StudentTelegram, TelegramLink, TelegramOutbox
@@ -216,6 +217,7 @@ class MeetingLengthTests(WindowTestBase):
         self.assertEqual(response.status_code, 201, response.data)
 
 
+@override_settings(FRONTEND_URL='https://app.example.com')
 class TelegramMessageTests(WindowTestBase):
     """A student's own change reaches the student (confirmation) and their counselor (update), never anyone else."""
 
@@ -249,17 +251,18 @@ class TelegramMessageTests(WindowTestBase):
         response = self.book()
         self.assertEqual(response.status_code, 201, response.data)
         (mine,) = self.texts(self.student_chat)
-        self.assertIn('Booked', mine)
-        self.assertIn('Tashkent', mine)
-        self.assertIn('45 min', mine)
-        self.assertIn('waiting for confirmation', mine)
+        self.assertTrue(mine.startswith('✅ Meeting requested'))
+        self.assertIn('(Tashkent) · 45 min', mine)
+        self.assertIn('Status: waiting for confirmation', mine)
         (theirs,) = self.texts(self.counselor_chat)
-        self.assertIn('booked a meeting', theirs)
+        self.assertTrue(theirs.startswith('📅 New meeting request'))
         self.assertIn(self.student_a_user.get_full_name() or self.student_a_user.username, theirs)
-        self.assertIn('Essay &lt;draft&gt;', theirs)
         self.assertIn('45 min', theirs)
-        self.assertIn('This window: 1 booked', theirs)
-        self.assertRegex(theirs, r'· \d+ free slots left')
+        self.assertRegex(theirs, r'Slots left: \d+')
+        self.assertIn('Telegram: linked, no username', theirs)
+        row = TelegramOutbox.objects.get(chat_id=self.counselor_chat)
+        self.assertEqual([b['text'] for b in row.buttons[0]], ['✅ Confirm', '❌ Decline'])
+        self.assertEqual(TelegramOutbox.objects.get(chat_id=self.student_chat).buttons[0][0]['text'], '🌐 Open on website')
 
     def test_cancelling_frees_the_slot_and_messages_both_sides(self):
         booking_id = self.book().data['id']
@@ -268,11 +271,12 @@ class TelegramMessageTests(WindowTestBase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data['status'], 'cancelled')
         (mine,) = self.texts(self.student_chat)
-        self.assertIn('You cancelled your meeting', mine)
+        self.assertTrue(mine.startswith('🚫 Meeting cancelled'))
+        self.assertIn('Status: cancelled by you', mine)
         self.assertEqual(response.data['cancelled_by_role'], 'student')
         (theirs,) = self.texts(self.counselor_chat)
-        self.assertIn('cancelled a meeting', theirs)
-        self.assertIn('This window: 0 booked', theirs)
+        self.assertTrue(theirs.startswith('🚫 Meeting cancelled'))
+        self.assertEqual(TelegramOutbox.objects.get(chat_id=self.counselor_chat).buttons[0][0]['text'], '👤 Profile')
         # The slot is bookable again.
         self.assertIn(self.slot.id, {row['id'] for row in self.offered()})
 
@@ -285,10 +289,10 @@ class TelegramMessageTests(WindowTestBase):
         })
         self.assertEqual(response.status_code, 200, response.data)
         (mine,) = self.texts(self.student_chat)
-        self.assertIn('You asked to move', mine)
-        self.assertIn('waiting for confirmation', mine)
+        self.assertTrue(mine.startswith('🔁 Reschedule requested'))
+        self.assertIn('Status: waiting for confirmation', mine)
         (theirs,) = self.texts(self.counselor_chat)
-        self.assertIn('asked to move a meeting', theirs)
+        self.assertTrue(theirs.startswith('🔁 Reschedule requested'))
 
     def test_answering_an_invitation_tells_only_the_counselor(self):
         self.client.force_authenticate(self.counselor)
@@ -302,12 +306,12 @@ class TelegramMessageTests(WindowTestBase):
         self.act(self.student_a_user, 'post', f'/api/bookings/{booking_id}/approve/')
         self.assertEqual(len(self.texts(self.student_chat)), 1)
         (theirs,) = self.texts(self.counselor_chat)
-        self.assertIn('accepted your invitation', theirs)
+        self.assertTrue(theirs.startswith('✅ Invitation accepted'))
         declined = self.act(self.counselor, 'post', '/api/bookings/', {
             'student': self.student_a.pk, 'topic': 'Plan 2', 'starts_at': (start + timedelta(days=1)).isoformat(), 'duration_minutes': 30,
         }).data['id']
         self.act(self.student_a_user, 'post', f'/api/bookings/{declined}/reject/')
-        self.assertIn('declined your invitation', self.texts(self.counselor_chat)[-1])
+        self.assertTrue(self.texts(self.counselor_chat)[-1].startswith('❌ Invitation declined'))
 
     def test_counselor_actions_do_not_message_the_counselor(self):
         booking_id = self.book().data['id']
@@ -323,7 +327,7 @@ class TelegramMessageTests(WindowTestBase):
         TelegramLink.objects.update(language='ru')
         self.book()
         self.assertIn('Ташкент', self.texts(self.counselor_chat)[0])
-        self.assertIn('В этом окне', self.texts(self.counselor_chat)[0])
+        self.assertIn('Свободных слотов', self.texts(self.counselor_chat)[0])
 
     def test_nothing_is_queued_for_unlinked_or_inactive_chats(self):
         StudentTelegram.objects.update(is_active=False)

@@ -7,7 +7,7 @@ from . import services
 from .digest import build_digest, grouped_students
 from .jobs import run_due_jobs
 from .permissions import HasServiceKey
-from . import student_link
+from . import meeting_cards, student_link
 from .staff_meetings import meetings_overview
 from .students import add_student, find_students, reset_password
 
@@ -155,7 +155,11 @@ class MeetingsView(BotView):
     """The caller's own upcoming meetings (counselor: with counts and settings; student: just theirs)."""
 
     def post(self, request):
-        return Response(meetings_overview(self.get_chat_id(request)))
+        chat_id = self.get_chat_id(request)
+        username = self.get_data(request).get('telegram_username')
+        if isinstance(username, str) and len(username) <= 100:
+            student_link.remember_username(chat_id, username)
+        return Response(meetings_overview(chat_id))
 
 
 class ResetPasswordView(BotView):
@@ -206,7 +210,10 @@ class StudentLinkView(BotView):
         language = data.get('language')
         if language is not None and not isinstance(language, str):
             raise services.Refused('invalid_request', 400)
-        return Response(student_link.consume_token(_chat_id(data), _text(data, 'token', 100), language))
+        username = data.get('telegram_username')
+        if username is not None and (not isinstance(username, str) or len(username) > 100):
+            raise services.Refused('invalid_request', 400)
+        return Response(student_link.consume_token(_chat_id(data), _text(data, 'token', 100), language, username))
 
 
 class WhoAmIView(BotView):
@@ -215,7 +222,9 @@ class WhoAmIView(BotView):
         username = data.get('telegram_username')
         if username is not None and (not isinstance(username, str) or len(username) > 100):
             raise services.Refused('invalid_request', 400)
-        return Response({**services.whoami(_chat_id(data), username), 'site_url': student_link.meetings_url()})
+        chat_id = _chat_id(data)
+        student_link.remember_username(chat_id, username)
+        return Response({**services.whoami(chat_id, username), 'site_url': student_link.meetings_url()})
 
 
 class StudentOutboxView(BotView):
@@ -235,3 +244,22 @@ class StudentOutboxAckView(BotView):
     def post(self, request):
         data = self.get_data(request)
         return Response(student_link.acknowledge(_int_list(data.get('sent', [])), _int_list(data.get('blocked', []))))
+
+
+class MeetingActionView(BotView):
+    """A card button: confirm, decline or cancel the caller's own meeting (the same rules as the website)."""
+
+    def post(self, request):
+        data = self.get_data(request)
+        booking_id = data.get('booking_id')
+        if isinstance(booking_id, bool) or not isinstance(booking_id, int) or not 0 < booking_id < BIGINT:
+            raise services.Refused('invalid_request', 400)
+        action = data.get('action')
+        if action not in meeting_cards.ACTIONS:
+            raise services.Refused('invalid_request', 400)
+        username = data.get('telegram_username')
+        if username is not None and (not isinstance(username, str) or len(username) > 100):
+            raise services.Refused('invalid_request', 400)
+        return Response(meeting_cards.perform_action(
+            _chat_id(data), booking_id, action, student_link.clean_username(username),
+        ))

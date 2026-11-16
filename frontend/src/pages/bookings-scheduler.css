@@ -1402,3 +1402,30 @@
 .weekly-zone-label {
   color: var(--accent-deep);
 }
+
+.meet-student-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 2px;
+}
+
+.meet-student-link:hover {
+  text-decoration-color: currentColor;
+}
+
+.meet-tg {
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+a.meet-tg {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.meet-tg.is-none {
+  opacity: 0.65;
+}

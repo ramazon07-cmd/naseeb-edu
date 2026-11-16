@@ -7,6 +7,7 @@ from aiogram.exceptions import (
     TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramRetryAfter, TelegramServerError,
 )
 
+from . import keyboards
 from .api import ApiError, ApiUnavailable
 from .delivery import send_digest
 
@@ -149,10 +150,11 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, un
         chat_id = message['chat_id']
         if chat_id in blocked:
             continue
+        markup = keyboards.from_rows(message.get('buttons'))
         for _ in range(2):
             try:
                 await limiter.wait()
-                await bot.send_message(chat_id, message['text'], disable_web_page_preview=True)
+                await bot.send_message(chat_id, message['text'], disable_web_page_preview=True, reply_markup=markup)
                 sent.append(message['id'])
                 break
             except TelegramRetryAfter as exc:
@@ -163,6 +165,11 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, un
             except TelegramBadRequest as exc:
                 if 'chat not found' in str(exc).lower():
                     blocked.add(chat_id)
+                elif markup is not None:
+                    # A button Telegram does not accept must not cost the message: send it without buttons.
+                    log.warning('telegram refused the buttons of a student message: %s', type(exc).__name__)
+                    markup = None
+                    continue
                 else:
                     log.warning('telegram refused a student message: %s', type(exc).__name__)
                     sent.append(message['id'])  # it would be refused again; do not retry it

@@ -144,3 +144,9 @@ export function overviewDays({ slots = [], bookings = [], settings, now = new Da
   }
   return days;
 }
+
+// Where a staff member opens a booked student's profile (the Students page, record route /students/<profile id>).
+export const studentProfilePath = (studentId) => `/students/${studentId}`;
+
+// The t.me address of a Telegram @username, or '' when the student has none.
+export const telegramUrl = (username) => (/^[A-Za-z0-9_]{1,32}$/.test(String(username ?? '')) ? `https://t.me/${username}` : '');

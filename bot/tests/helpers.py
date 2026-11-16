@@ -86,6 +86,8 @@ class FakeApi:
         self.who = {'kind': 'staff_allowed', 'site_url': 'https://naseeb.example/meetings'}
         self.due_items = []
         self.outbox_items = []
+        self.action_result = {'result': 'done', 'alert': None, 'text': 'card\n\n✅ Confirmed', 'buttons': [
+            [{'text': 'Cancel', 'callback_data': 'mt:cancel:5'}]]}
         self.found = {'students': [{'id': 7, 'full_name': 'Ali Valiyev', 'username': 'ali-valiyev'}], 'more': False}
 
     def _record(self, name, **args):
@@ -118,8 +120,8 @@ class FakeApi:
         self._record('students', chat_id=chat_id)
         return self.students_data
 
-    async def meetings(self, chat_id):
-        self._record('meetings', chat_id=chat_id)
+    async def meetings(self, chat_id, telegram_username=None):
+        self._record('meetings', chat_id=chat_id, telegram_username=telegram_username)
         return self.meetings_data
 
     async def digest(self, chat_id):
@@ -134,8 +136,12 @@ class FakeApi:
             'login_url': 'https://naseeb.example/login',
         }
 
-    async def student_link(self, chat_id, token, language):
-        self._record('student_link', chat_id=chat_id, token=token, language=language)
+    async def meeting_action(self, chat_id, booking_id, action, telegram_username=None):
+        self._record('meeting_action', chat_id=chat_id, booking_id=booking_id, action=action, telegram_username=telegram_username)
+        return self.action_result
+
+    async def student_link(self, chat_id, token, language, telegram_username=None):
+        self._record('student_link', chat_id=chat_id, token=token, language=language, telegram_username=telegram_username)
         return {'full_name': 'Ali <Valiyev> & Co', 'language': language}
 
     async def student_outbox(self):

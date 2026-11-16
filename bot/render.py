@@ -75,6 +75,8 @@ def render_meetings(data, lang):
             body.append(f'<b>{_day(lang, day)}</b>')
         mark = '✅' if item['status'] == 'approved' else '⏳'
         line = f"{mark} {item['time']} · {t(lang, 'meetings_minutes', n=item['duration_minutes'])} · {escape(_short(item['name']))}"
+        if item.get('telegram_username'):
+            line += f" · @{escape(item['telegram_username'])}"
         waiting = item.get('waiting_for')
         if waiting:
             who = ('student' if waiting == 'student' else 'you' if counts else 'staff')

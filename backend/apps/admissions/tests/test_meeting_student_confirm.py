@@ -51,7 +51,8 @@ class StaffInvitationTests(RoleIsolationBase):
         self.assertEqual([m.to for m in mail.outbox], [['student-a@gmail.com']])
         outbox = TelegramOutbox.objects.get()
         self.assertEqual(outbox.chat_id, 4242)
-        self.assertIn('College list', outbox.text)
+        self.assertTrue(outbox.text.startswith('📅 Uchrashuvga taklif'))
+        self.assertIn('saytda tasdiqlang', outbox.text)
 
     def test_ask_student_false_confirms_at_once(self):
         response = self.invite(ask_student=False)

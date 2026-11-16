@@ -28,6 +28,7 @@ LANGUAGE_PROMPT = 'Til / Язык / Language'
 STUDENT_START = r'^/start(@\w+)?\s+s_([A-Za-z0-9_-]{1,62})\s*$'
 STAFF_KINDS = ('staff_linked', 'staff_allowed')
 TIME_PATTERN = re.compile(r'^\s*(\d{1,2})[:.](\d{2})\s*$')
+MEETING_BUTTON = re.compile(r'^mt:(confirm|decline|cancel):(\d{1,12})$')
 LIST_BUTTON = re.compile(r'^l:(\d{1,4}):([az]):([ai])$')
 DETAIL_BUTTON = re.compile(r'^d:(\d{1,12}):(\d{1,4}):([az]):([ai])$')
 RESET_PICK = re.compile(r'^rp:(\d{1,12})$')
@@ -176,7 +177,7 @@ async def start_student(message: Message, state: FSMContext, bot, api):
     lang = _telegram_language(message.from_user)
     token = re.match(STUDENT_START, message.text).group(2)
     try:
-        result = await api.student_link(chat_id, token, lang)
+        result = await api.student_link(chat_id, token, lang, _username(message.from_user))
     except ApiError as exc:
         if exc.code not in ('invalid_token', 'too_many'):
             raise
@@ -380,7 +381,7 @@ async def meetings_command(message: Message, state: FSMContext, bot, api, cache)
     lang = link['language'] if link else _telegram_language(message.from_user)
     await bot.send_chat_action(chat_id, 'typing')
     # The backend decides the role by the chat; a chat linked as neither gets the usual "not linked" reply.
-    await message.answer(render_meetings(await api.meetings(chat_id), lang))
+    await message.answer(render_meetings(await api.meetings(chat_id, _username(message.from_user)), lang))
 
 
 @router.message(Command('now'))
@@ -404,6 +405,22 @@ async def now_command(message: Message, state: FSMContext, bot, api, cache):
 @router.callback_query(F.data == 'noop')
 async def noop(callback: CallbackQuery):
     await callback.answer()
+
+
+@router.callback_query(F.data.regexp(MEETING_BUTTON))
+async def meeting_button(callback: CallbackQuery, bot, api):
+    """Confirm / Decline / Cancel under a meeting card: the backend applies it (or refuses) and redraws the card."""
+    chat_id = callback.message.chat.id
+    action, booking_id = MEETING_BUTTON.match(callback.data).groups()
+    try:
+        result = await api.meeting_action(chat_id, int(booking_id), action, _username(callback.from_user))
+    except ApiError:
+        # Not this chat's meeting, or not its answer to give: a short alert and nothing else.
+        await callback.answer(t(_telegram_language(callback.from_user), 'meeting_forbidden'), show_alert=True)
+        return
+    alert = result.get('alert')
+    await callback.answer(alert or None, show_alert=bool(alert))
+    await _edit(bot, chat_id, callback.message.message_id, result['text'], keyboards.from_rows(result.get('buttons')))
 
 
 @router.callback_query(F.data.regexp(LIST_BUTTON))

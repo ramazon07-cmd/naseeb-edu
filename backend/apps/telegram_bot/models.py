@@ -51,6 +51,8 @@ class StudentTelegram(models.Model):
     language = models.CharField(max_length=2, choices=TelegramLink.Language.choices, default=TelegramLink.Language.UZ)
     # Off when the student blocked the bot; the next link works again.
     is_active = models.BooleanField(default=True)
+    # The student's Telegram @username (no '@'), as the bot last saw it; blank when they have none.
+    telegram_username = models.CharField(max_length=32, blank=True, default='')
     linked_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -94,6 +96,8 @@ class TelegramOutbox(models.Model):
 
     chat_id = models.BigIntegerField()
     text = models.TextField()
+    # Inline buttons under the message: rows of {'text', 'callback_data'} or {'text', 'url'}.
+    buttons = models.JSONField(default=list, blank=True)
     # Set for meeting reminders: one row per meeting, start time and step, so nothing is sent twice.
     key = models.CharField(max_length=120, unique=True, null=True, blank=True)
     booking = models.ForeignKey('admissions.Booking', on_delete=models.CASCADE, null=True, blank=True, related_name='+')
