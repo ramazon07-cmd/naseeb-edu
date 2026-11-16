@@ -167,8 +167,9 @@ class StudentTelegramTests(RoleIsolationBase):
 
     def test_a_student_needs_telegram_to_request_a_meeting(self):
         refused = self.request_meeting()
-        self.assertEqual(refused.status_code, 403)
+        self.assertEqual(refused.status_code, 400)
         self.assertEqual(refused.json()['code'], 'telegram_required')
+        self.assertEqual(refused.json()['detail'], 'Connect Telegram to book a meeting.')
         self.client.force_authenticate(self.student_a_user)
         self.assertEqual(self.client.get('/api/bookings/').status_code, 200)
         self.link()
@@ -198,8 +199,10 @@ class StudentTelegramTests(RoleIsolationBase):
             self.client.post(f"/api/bookings/{booked.json()['id']}/approve/")
         messages = self.outbox()
         self.assertEqual(len(messages), 1)
-        self.assertIn('Essay', messages[0]['text'])
-        self.assertIn('https://app.example.com/meetings', messages[0]['text'])
+        self.assertIn('подтверждена', messages[0]['text'])
+        self.assertEqual(messages[0]['buttons'], [[
+            {'text': '🌐 Открыть на сайте', 'url': 'https://app.example.com/meetings'},
+        ]])
         # Handed out once: a second bot instance asking within the lease gets nothing.
         self.assertEqual(self.outbox(), [])
         ack = self.bot('student-outbox/ack', {'sent': [messages[0]['id']], 'blocked': []})

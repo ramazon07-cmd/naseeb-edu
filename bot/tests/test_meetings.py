@@ -82,3 +82,8 @@ async def test_help_and_menu_list_meetings(h):
     for lang in ('uz', 'ru', 'en'):
         assert '/meetings' in t(lang, 'help')
         assert 'meetings' in [name for name, _ in MENU[lang]]
+
+
+def test_the_telegram_username_is_shown_next_to_the_name():
+    data = {**STAFF, 'meetings': [{**meeting('2026-11-18', '10:00', 'Ali', 'pending', 'staff'), 'telegram_username': 'ali_v'}]}
+    assert '⏳ 10:00 · 30 min · Ali · @ali_v (waiting for you)' in render_meetings(data, 'en')

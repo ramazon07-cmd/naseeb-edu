@@ -15,7 +15,7 @@ TOKEN = 'Tk3-abcdEFGH_ijkl0123456789MNOPqrstuvwxyz1'
 async def test_start_with_a_token_connects_the_student_in_their_telegram_language(h):
     h.language_code = 'ru'
     await h.say(f'/start s_{TOKEN}')
-    assert h.api.names('student_link') == [{'chat_id': 1, 'token': TOKEN, 'language': 'ru'}]
+    assert h.api.names('student_link') == [{'chat_id': 1, 'token': TOKEN, 'language': 'ru', 'telegram_username': 'dilnoza_k'}]
     text = h.session.texts()[-1]
     # The name is escaped for HTML mode and the reply is in Russian.
     assert 'Подключено: <b>Ali &lt;Valiyev&gt; &amp; Co</b>' in text
@@ -164,3 +164,50 @@ async def test_a_failed_ack_is_reported_first_next_minute(h):
     assert h.api.names('student_outbox_ack')[-2:] == [{'sent': [1], 'blocked': []}, {'sent': [2], 'blocked': []}]
     assert unacked == {'sent': [], 'blocked': set()}
     assert [c[1]['text'] for c in h.session.of('SendMessage')] == ['A', 'B']
+
+
+async def test_the_telegram_username_is_sent_when_a_student_links(h):
+    await h.say('/start s_' + 'a' * 43)
+    assert h.api.names('student_link')[0]['telegram_username'] == h.username
+
+
+async def test_buttons_from_the_outbox_are_sent_and_a_refused_button_costs_no_message(h):
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import SendMessage
+
+    rows = [[{'text': 'Confirm', 'callback_data': 'mt:confirm:5'}], [{'text': 'Profile', 'url': 'https://x.example/s/1'}]]
+    h.api.outbox_items = [{'id': 1, 'chat_id': 10, 'text': 'Card', 'buttons': rows}]
+    await deliver_student_messages(bot=h.bot, api=h.api, limiter=RateLimiter(per_second=1000))
+    markup = h.session.of('SendMessage')[-1][1]['reply_markup']
+    assert [[(b['text'], b.get('callback_data'), b.get('url')) for b in row] for row in markup['inline_keyboard']] == [
+        [('Confirm', 'mt:confirm:5', None)], [('Profile', None, 'https://x.example/s/1')]]
+    h.session.calls.clear()
+    h.session.failures['SendMessage'] = [TelegramBadRequest(method=SendMessage(chat_id=10, text='x'), message='wrong url')]
+    h.api.outbox_items = [{'id': 2, 'chat_id': 10, 'text': 'Card 2', 'buttons': rows}]
+    await deliver_student_messages(bot=h.bot, api=h.api, limiter=RateLimiter(per_second=1000))
+    sends = h.session.of('SendMessage')
+    assert len(sends) == 2 and sends[-1][1]['reply_markup'] is None
+    assert h.api.names('student_outbox_ack')[-1] == {'sent': [2], 'blocked': []}
+
+
+async def test_a_meeting_button_calls_the_backend_and_redraws_the_card(h):
+    await h.tap('mt:confirm:5')
+    assert h.api.names('meeting_action') == [
+        {'chat_id': 1, 'booking_id': 5, 'action': 'confirm', 'telegram_username': h.username}]
+    edit = h.session.of('EditMessageText')[-1][1]
+    assert edit['text'].endswith('✅ Confirmed')
+    assert edit['reply_markup']['inline_keyboard'][0][0]['callback_data'] == 'mt:cancel:5'
+    assert h.session.of('AnswerCallbackQuery')[-1][1]['show_alert'] in (None, False)
+
+
+async def test_a_stale_press_shows_the_alert_and_a_refused_one_only_an_alert(h):
+    h.api.action_result = {'result': 'already', 'alert': 'Already cancelled', 'text': 'card\n\nAlready cancelled', 'buttons': []}
+    await h.tap('mt:cancel:5')
+    answer = h.session.of('AnswerCallbackQuery')[-1][1]
+    assert answer['text'] == 'Already cancelled' and answer['show_alert'] is True
+    assert h.session.of('EditMessageText')[-1][1]['reply_markup'] is None
+    h.session.calls.clear()
+    h.api.errors['meeting_action'] = ApiError(403, 'not_allowed')
+    await h.tap('mt:cancel:5')
+    assert h.session.of('EditMessageText') == [] and h.session.of('SendMessage') == []
+    assert h.session.of('AnswerCallbackQuery')[-1][1]['show_alert'] is True

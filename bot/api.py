@@ -88,8 +88,15 @@ class ApiClient:
     async def reset_password(self, chat_id, student_id):
         return await self._call('POST', 'reset-password', json={'chat_id': chat_id, 'student_id': student_id})
 
-    async def student_link(self, chat_id, token, language):
-        return await self._call('POST', 'student-link', json={'chat_id': chat_id, 'token': token, 'language': language})
+    async def student_link(self, chat_id, token, language, telegram_username=None):
+        return await self._call('POST', 'student-link', json={
+            'chat_id': chat_id, 'token': token, 'language': language, 'telegram_username': telegram_username,
+        })
+
+    async def meeting_action(self, chat_id, booking_id, action, telegram_username=None):
+        return await self._call('POST', 'meeting-action', json={
+            'chat_id': chat_id, 'booking_id': booking_id, 'action': action, 'telegram_username': telegram_username,
+        })
 
     async def student_outbox(self):
         body = await self._call('POST', 'student-outbox', json={})

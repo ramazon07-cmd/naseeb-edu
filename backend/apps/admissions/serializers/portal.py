@@ -48,6 +48,9 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
     participant_role = serializers.CharField(source='participant.role', read_only=True)
     participant_detail = ContactSerializer(source='participant', read_only=True)
     student_name = serializers.SerializerMethodField()
+    # Only for staff who can see the booking; a student never gets these (null).
+    student_username = serializers.SerializerMethodField()
+    student_telegram_username = serializers.SerializerMethodField()
     is_expired = serializers.BooleanField(read_only=True)
     availability_slot = serializers.PrimaryKeyRelatedField(queryset=MeetingAvailability.objects.all(), required=False, allow_null=True)
 
@@ -63,6 +66,20 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
 
     def get_student_name(self, obj):
         return obj.student.user.get_full_name() or obj.student.user.username
+
+    def _staff_viewer(self):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        return bool(user and user.is_authenticated and user.role != User.Role.STUDENT)
+
+    def get_student_username(self, obj):
+        return obj.student.user.username if self._staff_viewer() else None
+
+    def get_student_telegram_username(self, obj):
+        if not self._staff_viewer():
+            return None
+        link = getattr(obj.student.user, 'student_telegram', None)
+        return (link.telegram_username or None) if link else None
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

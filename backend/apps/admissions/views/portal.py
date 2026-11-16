@@ -105,8 +105,8 @@ BOOKING_STAFF_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACH
 
 
 OUTSIDE_WINDOW = 'This time is outside the days this staff member accepts meetings. Choose another time.'
-# A student connects Telegram (meeting messages and reminders) before requesting a new meeting.
-TELEGRAM_REQUIRED_ACTIONS = {'create'}
+# A student connects Telegram (meeting messages and reminders) before requesting or moving a meeting.
+TELEGRAM_REQUIRED_ACTIONS = {'create', 'reschedule'}
 
 
 class BookingPermission(permissions.BasePermission):
@@ -121,11 +121,11 @@ class BookingPermission(permissions.BasePermission):
             return False
         if user.is_superuser or user.role == User.Role.ADMIN:
             return True
-        # A new request needs the student's Telegram, where its answer and reminders arrive. Meetings that
-        # already exist can still be cancelled and moved without it, so turning this on strands nothing.
+        # A new request or a move needs the student's Telegram, where its answer and reminders arrive. Existing
+        # meetings can still be cancelled without it, so turning this on strands nothing. Staff are never gated.
         if (request.method not in permissions.SAFE_METHODS and view.action in TELEGRAM_REQUIRED_ACTIONS
                 and user.role == User.Role.STUDENT and telegram_link_enabled() and not is_linked(user)):
-            raise PermissionDenied({'detail': 'Connect Telegram to request meetings.', 'code': 'telegram_required'})
+            raise drf_serializers.ValidationError({'detail': 'Connect Telegram to book a meeting.', 'code': 'telegram_required'})
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
             return view.action in self.STUDENT_ACTIONS
         if user.role in BOOKING_STAFF_ROLES:
@@ -151,7 +151,7 @@ class StudentPortalOwnedViewSet(viewsets.ModelViewSet):
 class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
     serializer_class = BookingSerializer
     permission_classes = [BookingPermission]
-    queryset = Booking.objects.select_related('student__user', 'participant', 'participant__school').all()
+    queryset = Booking.objects.select_related('student__user', 'student__user__student_telegram', 'participant', 'participant__school').all()
     search_fields = ('topic',)
     search_student_path = 'student'
     int_filters = {'student': 'student_id', 'participant': 'participant_id'}

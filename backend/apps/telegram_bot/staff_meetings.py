@@ -11,9 +11,8 @@ from django.utils import timezone
 from apps.admissions.meetings import window_summary, within_window
 from apps.admissions.models import Booking, MeetingSchedule
 
-from .models import StudentTelegram, TelegramLink, TelegramOutbox
+from .models import StudentTelegram, TelegramLink
 from .services import Refused, resolve_link
-from .student_link import TEXTS, _escape, _when, text
 
 # Upcoming meetings sent to the bot; it shows fewer.
 MAX_LISTED = 60
@@ -24,6 +23,11 @@ def _name(user):
     return (user.get_full_name().strip() or user.username) if user else '—'
 
 
+def _username(student):
+    link = getattr(student, 'student_telegram', None)
+    return link.telegram_username if link else ''
+
+
 def booking_link(user):
     """The page where a student books this staff member (the Meetings page opens their booking dialog)."""
     return f'{settings.FRONTEND_URL}/meetings?book={user.pk}'
@@ -31,23 +35,13 @@ def booking_link(user):
 
 def queue_staff_update(booking, action):
     """Tell the booking's staff participant what their student just did ('booked', 'cancelled', 'moved',
-    'accepted', 'declined'), in their link's language, with the window's tally. False when nothing was queued."""
-    if not booking.participant_id:
-        return False
-    link = TelegramLink.objects.filter(user_id=booking.participant_id, is_active=True).first()
-    if link is None or f'staff_{action}' not in TEXTS:
-        return False
-    summary = window_summary(booking.participant)
-    tally = text(link.language, 'staff_tally', booked=summary['upcoming_booked'], free=summary['free_slots'])
-    body = text(
-        link.language, f'staff_{action}', student=_escape(_name(booking.student.user)), topic=_escape(booking.topic),
-        time=_when(booking.starts_at), minutes=booking.duration_minutes, tally=tally,
-    )
-    TelegramOutbox.objects.create(chat_id=link.chat_id, booking=booking, text=body)
-    return True
+    'accepted', 'declined'), as a card in their link's language. False when nothing was queued."""
+    from .meeting_cards import queue_staff_card
+
+    return queue_staff_card(booking, action)
 
 
-def _item(booking, who):
+def _item(booking, who, username=''):
     start = timezone.localtime(booking.starts_at)
     waiting = None
     if booking.status == Booking.Status.PENDING:
@@ -56,7 +50,7 @@ def _item(booking, who):
     return {
         'id': booking.pk, 'name': _name(who), 'date': start.date().isoformat(), 'time': start.strftime('%H:%M'),
         'duration_minutes': booking.duration_minutes, 'status': booking.status, 'waiting_for': waiting,
-        'topic': booking.topic,
+        'topic': booking.topic, 'telegram_username': username,
     }
 
 
@@ -65,7 +59,7 @@ def _staff_overview(user):
     base = Booking.objects.filter(participant=user, student__school_id=user.school_id) if user.school_id else Booking.objects.none()
     upcoming = within_window(
         base.filter(status__in=Booking.OPEN_STATUSES, starts_at__gt=now), [user.pk],
-    ).select_related('student__user').order_by('starts_at', 'id')
+    ).select_related('student__user__student_telegram').order_by('starts_at', 'id')
     rows = list(upcoming[:MAX_LISTED])
     summary = window_summary(user)
     schedule = MeetingSchedule.objects.filter(participant=user).first()
@@ -74,7 +68,7 @@ def _staff_overview(user):
         'role': 'staff',
         'timezone': settings.TIME_ZONE,
         'booking_url': booking_link(user),
-        'meetings': [_item(row, row.student.user) for row in rows],
+        'meetings': [_item(row, row.student.user, _username(row.student.user)) for row in rows],
         'counts': {
             'booked': summary['upcoming_booked'],
             'waiting_for_you': waiting.filter(staff_requested=False).count(),
