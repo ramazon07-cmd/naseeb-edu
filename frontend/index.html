@@ -74,6 +74,18 @@
         try {
           signedIn = localStorage.getItem('__SESSION_HINT_KEY__') !== null
         } catch { /* storage disabled: treat as a visitor */ }
+        // The sign-in page sets its text in Mona Sans (Latin subset): fetch it early
+        // there only. The session hint holds no role, so a signed-in browser (staff
+        // included) does not preload it; the student app loads it with its styles.
+        if ((location.pathname || '').startsWith('/login') || location.hash === '#/login') {
+          const mona = document.createElement('link')
+          mona.rel = 'preload'
+          mona.as = 'font'
+          mona.type = 'font/woff2'
+          mona.href = '/fonts/mona-sans-latin.woff2'
+          mona.crossOrigin = ''
+          document.head.appendChild(mona)
+        }
         const hero = document.querySelector('link[data-theme-hero]')
         if (hero && (signedIn || location.hash === '#/login')) hero.remove()
         else if (hero) {

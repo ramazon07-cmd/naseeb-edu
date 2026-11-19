@@ -2,8 +2,9 @@
 // dashboard and onboarding sheets and before styles.css in main.jsx).
 import './landing.css';
 import { Activity, Award, Bell, CheckSquare, ChevronsLeft, ChevronsRight, BookOpen, Building2, CalendarClock, ChevronRight, ClipboardCheck, Clock3, Compass, Download, FileText, Fingerprint, FolderKanban, Globe2, GraduationCap, HeartPulse, Layers, LayoutDashboard, LifeBuoy, Library, Lock, LogOut, Menu, MessageCircle, MessageSquareText, PenLine, RefreshCw, School, Search, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Target, UserCog, UserRound, Users, UsersRound, WifiOff, X, UserPlus, Flag } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './dashboard.css';
+import { SIDEBAR_KEY } from './design/blue/theme';
 import { ScreenTimeShortcut } from './components/ScreenTimeShortcut';
 import { api } from './api';
 import { AssistantCenter } from './components/AssistantCenter';
@@ -24,10 +25,11 @@ import { fullName, initials, label, ownStudent } from './lib/labels';
 import { isCounselor, isPlatformAdmin, isTaskManager, usesCounselorLayout } from './lib/roles';
 import { LANDING_PATH, LOGIN_PATH, assistantInviteTokenFor, buildPath, canOpenPage, isPageLocked, joinTokenFor, loginPath, navigationFor, openablePage, parsePath, publicPageFor, resolveRoute, safeNextPath } from './lib/routes';
 import { buildIndex, mergeSearchResults, remoteSearchEntries, searchIndex, searchResultTarget, searchText } from './lib/searchIndex';
+import { ASSESSMENT_DESCRIPTION } from './lib/assessmentMeta';
 import { STUDENT_SHELL_KEYS, loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
-import { useNotificationBell } from './hooks/useNotificationBell';
+import { BellSummaryContext, useNotificationBell } from './hooks/useNotificationBell';
 import { STUDENT_REFRESH_MS } from './lib/workspaceFreshness';
 import { studentPrimaryKeys } from './lib/resourceState';
 import { invalidatePagedLists } from './hooks/usePagedList';
@@ -35,7 +37,7 @@ import { NOTIFICATIONS_CHANGED, announceNotificationsChanged, bellTotal, summary
 import { liveReloadKeys, unreadConversations } from './lib/counselorCounts';
 import { createPoller } from './lib/poller';
 import { busyRetryDelay } from './lib/backoff';
-import { ForcedPasswordChange, Login } from './pages/Login';
+import { ForcedPasswordChange, Login, forgetRememberedUsername } from './pages/Login';
 import { clearUserSessionStorage, clearUserStorage, dropLegacySharedKeys } from './userStorage';
 import { forgetAccountDashboardLayout, loadAccountDashboardLayout } from './dashboardLayout';
 import { useTheme } from './hooks/useTheme';
@@ -81,9 +83,14 @@ const CounselorTasksPage = lazyNamed(() => import('./pages/CounselorTasks'), 'Co
 const NotificationsPage = lazyNamed(() => import('./pages/NotificationsPage'), 'NotificationsPage');
 const ReviewPage = lazyNamed(() => import('./pages/ReviewPage'), 'ReviewPage');
 const RoadmapPage = lazyNamed(() => import('./pages/RoadmapPage'), 'RoadmapPage');
+const StudentTasksPage = lazyNamed(() => import('./pages/RoadmapPage'), 'StudentTasksPage');
 const SchoolsPage = lazyNamed(() => import('./pages/SchoolsPage'), 'SchoolsPage');
 const ScreenTimePage = lazyNamed(() => import('./pages/ScreenTimePage'), 'ScreenTimePage');
 const StorePage = lazyNamed(() => import('./pages/StorePage'), 'StorePage');
+// The student shell (and the blue css it carries) loads for students only.
+const StudentShell = lazyNamed(() => import('./design/blue/StudentShell'), 'StudentShell');
+// A direct link to a locked page (Store) shows its 'Coming soon' page; the fallback chunk is the store page itself until it has one.
+const StoreComingSoon = lazyWithRetry(() => import('./pages/StorePage').then((module) => ({ default: module.StoreComingSoon || module.StorePage })));
 const StudentCenterPage = lazyNamed(() => import('./pages/StudentCenterPage'), 'StudentCenterPage');
 const StudentsPage = lazyNamed(() => import('./pages/StudentsPage'), 'StudentsPage');
 const SupportPage = lazyNamed(() => import('./pages/SupportPage'), 'SupportPage');
@@ -96,11 +103,6 @@ const RecentlyJoinedPage = lazyNamed(() => import('./components/StudentInvites')
 const JoinedBanner = lazyNamed(() => import('./components/StudentInvites'), 'JoinedBanner');
 const AddStudentModal = lazyNamed(() => import('./components/StudentInvites'), 'AddStudentModal');
 
-// Kept equal to CHALLENGES.length by tests/codeSplitting.test.mjs, so the
-// navigation does not pull the question banks into the main bundle.
-export const ASSESSMENT_CHALLENGE_COUNT = 7;
-
-const SIDEBAR_KEY = 'naseeb-edu-sidebar';
 
 const readLocation = () => ({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash });
 
@@ -131,7 +133,7 @@ const PAGE_META = {
   certificates: { label: 'Certificates', icon: Award, description: 'Certificates and supporting files' },
   essays: { label: 'Essays', icon: GraduationCap, description: 'Essay drafts and revision history' },
   student_center: { label: 'Student Center', icon: UsersRound, description: 'Academic profile, portfolio, activities, and documents' },
-  find_personality: { label: 'Profile Assessment', icon: Fingerprint, description: `${ASSESSMENT_CHALLENGE_COUNT} challenges that reveal your best-fit study directions` },
+  find_personality: { label: 'Profile Assessment', icon: Fingerprint, description: ASSESSMENT_DESCRIPTION },
   roadmap: { label: 'Roadmap', icon: Compass, description: 'Level-linked missions, milestones, and reflections' },
   bookings: { label: 'Meetings', icon: CalendarClock, description: 'Schedule and manage meetings' },
   messages: { label: 'Messages', icon: MessageCircle, description: 'Private, group, and discussion messages' },
@@ -344,6 +346,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     // Opening the bell always shows the newest notices, never a cached page.
     invalidatePagedLists(['notifications']);
     bell.refresh();
+    if (user.role === 'student') {setMobileOpen(false);setPage('notifications');return;}
     setUtility('notifications');
   }
   function openFromNotification(nextPage, params) {
@@ -419,6 +422,13 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
       {overlays}
     </div>;
   }
+  // Students get the blue design; every other role below keeps the classic shell.
+  if (user.role === 'student' && !isPlatformAdmin(user)) {
+    return <Suspense fallback={<div className="app-boot" role="status" aria-label={t('Loading…')} />}><StudentShell {...{ user, data, page, setPage, setQuery, language, changeLanguage, bellCount, bellLabel, unreadChats, supportBadge, logout, banners, overlays }}
+      pageMeta={meta} notificationsOpen={page === 'notifications'} openNotifications={openNotifications} openSearch={() => setUtility('search')} canExport={PDF_EXPORT_PAGES.has(page)}>
+      <PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} lazy={loadsLazily(user)} retry={retryResources}><BellSummaryContext.Provider value={{ summary: bell.summary, failed: bell.failed }}>{children}</BellSummaryContext.Provider></PageDataBoundary>
+    </StudentShell></Suspense>;
+  }
   return <div className={`app-shell role-${user.role} ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="sidebar-top">
@@ -454,7 +464,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   </div>;
 }
 
-function PageRouter({ page, params, user, data, stats, query, setQuery, reload, notify, setPage, search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources, refreshStats, updateStats, more, loadMore }) {
+function PageRouter({ lockedStore, page, params, user, data, stats, query, setQuery, reload, notify, setPage, search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources, refreshStats, updateStats, more, loadMore }) {
   const [directChannel, setDirectChannel] = useState(null);
   const [addingStudent, setAddingStudent] = useState(false);
   const openingDirect = useRef(false);
@@ -482,6 +492,7 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (isPlatformAdmin(user) && page === 'admin_plans') return <AdminPlansPage user={user} notify={notify} />;
   if (isPlatformAdmin(user) && page === 'admin_staff') return <AdminStaffPage user={user} query={query} notify={notify} reload={reload} />;
   if (isPlatformAdmin(user) && page === 'admin_health') return <AdminHealthPage />;
+  if (lockedStore) return <StoreComingSoon kind={lockedStore} {...{ setPage }} />;
   if (page === 'dashboard') return <Dashboard {...{ user, data, stats, reload, notify, setPage, onDirect, resourceStatus, loadResources, retryResources, refreshStats, updateStats }} />;
   if (user.role === 'student' && page === 'student_center') {
     const editSection = new URLSearchParams(search).get('edit');
@@ -489,9 +500,9 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
       onEditDone={() => { if (editSection) navigate(buildPath({ page, params }), { replace: true }); }} />;
   }
   if (isTaskManager(user) && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} />;
-  if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} />;
+  if (user.role === 'student' && page === 'roadmap') return <RoadmapPage {...{ user, data, query, reload, notify, setPage }} tab={params.tab} onTab={(tab) => setPage(page, { tab })} />;
   if (user.role === 'student' && page === 'find_personality') return <ProfileAssessmentPage user={user} notify={notify} data={data} reload={reload} />;
-  if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify, updateUser }} />;
+  if (page === 'bookings') return <BookingsPage {...{ user, data, reload, notify, updateUser, setPage, resourceStatus, retryResources }} />;
   if (page === 'messages') return <MessagesPage {...{ user, data, stats, notify }} initialChannel={directChannel} channelId={params.channelId} onChannelOpened={() => navigate(buildPath({ page: 'messages' }), { replace: true })} />;
   if (page === 'support') return <SupportPage {...{ user, data, query, reload, notify }} moreTickets={Boolean(more?.supportTickets)} loadMoreTickets={() => loadMore('supportTickets')} />;
   if (page === 'screen_time') return <ScreenTimePage user={user} pageLabel={(key) => PAGE_META[key] ? t(PAGE_META[key].label) : ''} />;
@@ -524,8 +535,9 @@ function PageRouter({ page, params, user, data, stats, query, setQuery, reload, 
   if (page === 'recommendations') return <ResourceSection title={t("Recommendation letters")} resource="recommendations" {...{ user, data, query, reload, notify }} />;
   if (page === 'documents') return <DocumentsPage {...{ user, data, query, reload, notify }} />;
   if (page === 'certificates') return <DocumentsPage typeFilter="certificate" title={t("Certificates")} {...{ user, data, query, reload, notify }} />;
-  if (page === 'notifications' && usesCounselorLayout(user)) return <NotificationsPage {...{ notify, setPage }} />;
+  if (page === 'notifications' && (usesCounselorLayout(user) || user.role === 'student')) return <NotificationsPage {...{ notify, setPage, user }} />;
   if (page === 'essays' && usesCounselorLayout(user)) return params.essayId ? <CounselorEssayReview key={params.essayId} essayId={params.essayId} notify={notify} reload={reload} onBack={() => setPage('essays')} /> : <CounselorEssaysPage {...{ user, data }} onOpen={(essayId) => setPage('essays', { essayId })} />;
+  if (page === 'tasks' && user.role === 'student') return <StudentTasksPage {...{ user, data, query, reload, notify }} />;
   if (page === 'tasks' && usesCounselorLayout(user)) return <CounselorTasksPage resource="tasks" {...{ user, data, reload, notify }} />;
   const titleMap = { tasks: 'Tasks', applications: 'University applications', essays: 'Essays' };
   return <ResourceSection title={titleMap[page] || label(page)} resource={page} {...{ user, data, query, reload, notify }} />;
@@ -575,7 +587,9 @@ export default function App() {
 
   const publicPage = publicPageFor(location.pathname, location.hash);
   const requestedRoute = useMemo(() => parsePath(location.pathname), [location.pathname]);
-  const route = useMemo(() => resolveRoute(requestedRoute, user), [requestedRoute, user]);
+  // A direct link to Store or Roadmap (locked, but offered in the menu) keeps its address and shows the 'Coming soon' page.
+  const lockedStore = Boolean(user) && user.role === 'student' && ['store', 'roadmap'].includes(requestedRoute?.page) && isPageLocked(requestedRoute.page, user) && navigationFor(user).includes(requestedRoute.page) ? requestedRoute.page : null;
+  const route = useMemo(() => (lockedStore ? { page: lockedStore, params: {} } : resolveRoute(requestedRoute, user)), [requestedRoute, user, lockedStore]);
   const page = route.page;
   const pageRef = useRef(page);
   pageRef.current = page;
@@ -652,8 +666,9 @@ export default function App() {
       if (next) {navigate(next, { replace: true });return;}
     }
     const canonical = buildPath(route);
+    if (lockedStore) return;
     if (canonical !== location.pathname) navigate(`${canonical}${requestedRoute?.page === route.page ? location.search : ''}`, { replace: true });
-  }, [inWorkspace, publicPage, route, requestedRoute, location, navigate]);
+  }, [inWorkspace, publicPage, route, requestedRoute, location, navigate, lockedStore]);
 
   // Students fetch a page's collections the first time it opens (see
   // useWorkspaceData); later visits revalidate stale or invalidated keys.
@@ -722,6 +737,9 @@ export default function App() {
   // seconds), so on a shared computer the cookie is gone before the form shows.
   async function finishSignOut({ keepDrafts = false } = {}) {
     const signedOut = user?.id;
+    // An explicit sign-out also forgets the "Remember me" username (shared school computers).
+    // "Sign in again" (keepDrafts) is not an explicit sign-out: the username stays.
+    if (!keepDrafts) forgetRememberedUsername();
     setSignOutPrompt(false);
     resetWorkspace();
     const ended = api.signOut(signedOut, { keepDrafts });forgetAccountDashboardLayout();clearUserStorage(() => window.localStorage, signedOut);clearUserSessionStorage(() => window.sessionStorage, signedOut);
@@ -813,7 +831,7 @@ export default function App() {
   if (user.role === 'student' && !isPlatformAdmin(user) && !user.student_profile_complete) return <LazyBoundary fallback={<AppBootLoader />}><StudentOnboarding userId={user.id} onSaved={afterPasswordChanged} onSignOut={logout} /></LazyBoundary>;
   return <>
     <AppShell {...{ user, updateUser, data, stats, page, setPage, query, setQuery, loading, error, resourceStatus, retryResources, onSearchOpen: loadSearchable, isOnline, refresh: () => loadData(user), notify, logout, theme, language, changeLanguage }}>
-      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ page, params: route.params, user, data, stats, query, setQuery, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources, refreshStats, updateStats, more, loadMore }} /></LazyBoundary>
+      <LazyBoundary resetKey={page} fallback={<PageSkeleton />}><PageRouter {...{ lockedStore, page, params: route.params, user, data, stats, query, setQuery, reload: () => loadData(user, RELOAD_CHANGED), notify, setPage, search: location.search, navigate, language, changeLanguage, updateUser, resourceStatus, loadResources, retryResources, refreshStats, updateStats, more, loadMore }} /></LazyBoundary>
     </AppShell>
     {signOutPrompt && <Modal title={t("Sign out?")} backdropClassName="is-above-editor" onClose={() => setSignOutPrompt(false)}>
       <div className="sign-out-prompt" role="alert">

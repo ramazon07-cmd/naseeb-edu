@@ -117,6 +117,8 @@ export const STUDENT_PAGE_KEYS = {
   dashboard: ['tasks', 'bookings', 'essays', 'team', 'programServices'],
   student_center: ['tasks', 'applications', 'essays', 'documents', 'researches', 'projects', 'internships', 'activities', 'honors', 'achievements', 'recommendations'],
   find_personality: [],
+  // Locked for students: the menu lists it with a "Coming soon" page, which loads nothing.
+  roadmap: [],
   tasks: ['tasks'],
   bookings: ['bookings'],
   messages: ['messageChannels'],

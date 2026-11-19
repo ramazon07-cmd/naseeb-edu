@@ -154,7 +154,7 @@ export function navigationFor(user) {
   if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'school_counselors', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
 }
 
 // Unavailable pages fall back to Home, including old bookmarks. Only pages
@@ -174,7 +174,7 @@ export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
 // Pages opened from the account menu (or, for counselors, the shell's
 // Notifications item) rather than the sidebar list.
-const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings', 'notifications'] };
+const ACCOUNT_MENU_PAGES = { student: ['account_settings', 'notifications'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings', 'notifications'] };
 
 export function reachablePages(user) {
   if (!user) return new Set();
