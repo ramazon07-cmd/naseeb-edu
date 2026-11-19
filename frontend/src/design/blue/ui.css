@@ -575,3 +575,15 @@
     min-height: 44px;
   }
 }
+
+/* The tiles follow the content width, not the window: beside the sidebar on a laptop or tablet the
+   content column can be narrow while the window is wide, and four tiles then squeeze their labels. */
+.nb-main {
+  container: nb-main / inline-size;
+}
+
+@container nb-main (max-width: 760px) {
+  .nb-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
