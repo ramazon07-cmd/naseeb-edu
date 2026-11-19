@@ -497,14 +497,29 @@
 /* Pages not ported to the blue design yet sit on a frosted panel so their
    white cards and dark text stay readable on the backdrop and in dark looks. */
 .nb-content.is-legacy {
+  /* No isolation or z-index here: the panel must not become a stacking context either, or
+     an inline dialog's backdrop would be layered under the sidebar. */
+  position: relative;
   padding: var(--nb-pad);
   border-radius: var(--nb-r-lg);
   background: var(--nb-legacy-bg);
   border: 1px solid var(--nb-glass-line);
   box-shadow: var(--nb-shadow);
+  color: var(--text);
+}
+
+/* The blur lives on a decorative layer: a backdrop-filter on the panel itself would make it
+   the containing block for position: fixed children, so inline dialogs (Support) would be
+   placed against the panel instead of the viewport. */
+.nb-content.is-legacy::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
   -webkit-backdrop-filter: var(--nb-blur);
   backdrop-filter: var(--nb-blur);
-  color: var(--text);
 }
 
 /* ---- Legacy token bridge (single source) ---------------------------------------
