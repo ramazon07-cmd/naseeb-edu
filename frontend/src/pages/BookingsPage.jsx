@@ -1110,7 +1110,8 @@ export function BookingsPage({ user, data, reload, notify, updateUser, setPage, 
   }, []);
   const props = { user, data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, retryResources };
   // key: a new zone redraws every time on the page.
-  if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
+  // No key for students: a new zone redraws with the times already loaded instead of asking the server again.
+  if (user.role === 'student') return <StudentBookingsPage zoneId={zoneId} {...props} />;
   if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
   return <StaffMeetingsPage key={zoneId} {...props} />;
 }
@@ -1181,7 +1182,7 @@ function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId
     const days = new Map();
     for (const slot of shown) if (slot.available) days.set(meetingDay(slot.starts_at), (days.get(meetingDay(slot.starts_at)) || 0) + 1);
     return days;
-  }, [shown]);
+  }, [shown, zone.id]); // eslint-disable-line react-hooks/exhaustive-deps -- the day of a time depends on the chosen zone
   const lastOpen = [...openDays.keys()].sort().at(-1);
   const month = view || monthStart(date ? `${date}T00:00` : new Date());
   const daySlots = shown.filter((slot) => slot.available && meetingDay(slot.starts_at) === date);
@@ -1373,7 +1374,7 @@ function useStudentTeam(data, resourceStatus) {
   };
 }
 
-function StudentBookingsPage({ data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, retryResources }) {
+function StudentBookingsPage({ zoneId, data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, retryResources }) {
   const [tab, setTab] = useState('upcoming');
   // The staff member a shared link names: the booking panel opens on them (while Telegram is not connected the
   // dialog shows first, and the panel loads as soon as the link is confirmed).
