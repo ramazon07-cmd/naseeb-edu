@@ -568,12 +568,15 @@
 /* Phones: the conversation list keeps its header, folders and search rows instead of
    squeezing them into a short box. */
 @media (max-width: 820px) {
-  .nb-blue .messaging-page .messages-shell {
+  /* Only the conversation list grows with its rows; an open chat keeps the classic
+     viewport-bounded height so the thread scrolls inside .message-list (older messages
+     load on scroll) and the composer stays on screen. */
+  .nb-blue .messaging-page .messages-shell:not(.has-active-channel) {
     height: auto;
     min-height: calc(100dvh - 220px);
   }
 
-  .nb-blue .messaging-page .channel-sidebar {
+  .nb-blue .messaging-page .messages-shell:not(.has-active-channel) .channel-sidebar {
     grid-template-rows: auto auto auto minmax(0, 1fr);
     height: auto;
     max-height: none;

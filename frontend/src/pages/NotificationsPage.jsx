@@ -7,6 +7,7 @@ import { NOTIFICATIONS_CHANGED, reviewItemForNotice } from '../lib/notifications
 import { notificationTitle } from '../lib/notificationText';
 import { KIND_ICONS, noticeMessage, useNotificationFeed } from '../components/NotificationPanel';
 import { LoadMore, PagedListError, firstPageLoading } from '../components/paged';
+import { InlineLoadError } from '../components/states';
 import { CxHead } from '../components/counselorUi';
 import { invalidatePagedLists } from '../hooks/usePagedList';
 import { BellSummaryContext } from '../hooks/useNotificationBell';
@@ -60,7 +61,7 @@ function useNotificationsPageData({ staff, notify, sharedSummary, bellFailed = f
 function StudentNotifications({ notify, setPage }) {
   const bell = useContext(BellSummaryContext);
   const { summary, feed } = useNotificationsPageData({ staff: false, notify, sharedSummary: bell?.summary ?? null, bellFailed: Boolean(bell?.failed) });
-  const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
+  const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty, chatsError, chatHeadLoading, retryChats } = feed;
   function open(notification) {
     const target = feed.read(notification);
     if (target) setPage(target.page, target.params);
@@ -78,6 +79,9 @@ function StudentNotifications({ notify, setPage }) {
       <KpiTile tone={3} icon={Target} value={formatNumberLocale(kindCount('deadline'))} label={t('Recent deadline alerts')} />
     </KpiRow>
     <GlassCard tone="solid" className="nb-notif-card" title={t('Notifications')} icon={Bell}>
+      {/* Unread chats failed to load: say so and offer a retry (the bell summary alone would not refetch them). */}
+      {chatsError && <InlineLoadError message={chatsError} onRetry={retryChats} />}
+      {chatHeadLoading && <p className="nb-dash-note" role="status">{t('Loading…')}</p>}
       {(chats.length > 0 || list.items.length > 0) && <ul className="nb-notif-list">
         {chats.map((chat) => <li key={`chat-${chat.id}`}>
           <button type="button" className="nb-notif-row is-unread" onClick={() => setPage('messages', { channelId: chat.id })}>
