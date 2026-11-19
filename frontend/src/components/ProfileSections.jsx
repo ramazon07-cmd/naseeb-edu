@@ -33,7 +33,7 @@ function SectionSummary({ section, student }) {
     <Detail label={t('GPA')} value={student.gpa != null && student.gpa !== '' ? `${Number(student.gpa)}${student.gpa_scale ? ` / ${student.gpa_scale}` : ''}` : null} />
     <Detail label={t('Class ranking')} value={answers.class_rank ? `${answers.class_rank}${answers.class_size ? ` / ${answers.class_size}` : ''}` : null} />
   </div>;
-  if (section === 'tests') return <TestScoreSummary student={student} />;
+  if (section === 'tests') return <TestScoreSummary student={student} meters />;
   if (section === 'goal') return <div className="detail-grid">
     <Detail label={t('Applying countries')} value={listText(student.target_countries)} />
     <Detail label={t('Areas of interest')} value={list(answers.interests)} />

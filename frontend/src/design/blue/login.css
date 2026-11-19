@@ -147,6 +147,8 @@ span.nb-login-brand {
   box-shadow: var(--nb-shadow);
   -webkit-backdrop-filter: var(--nb-blur);
   backdrop-filter: var(--nb-blur);
+  animation: nb-login-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  transition: opacity 0.45s, transform 0.45s, filter 0.45s;
 }
 
 .nb-login-head {
@@ -269,6 +271,7 @@ span.nb-login-brand {
 }
 
 .nb-login-check {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -278,10 +281,11 @@ span.nb-login-brand {
 }
 
 .nb-login-check input {
+  position: absolute;
   width: 22px;
   height: 22px;
   margin: 0;
-  accent-color: var(--nb-blue);
+  opacity: 0;
 }
 
 .nb-login-link {
@@ -414,7 +418,229 @@ span.nb-login-brand {
   color: var(--nb-ink);
 }
 
+/* "First sign-in with a temporary password": a dashed row with a lock and an arrow. */
 .nb-login-first {
-  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
   margin-top: 4px;
+  padding: 10px 14px;
+  border: 1px dashed var(--nb-line);
+  border-radius: var(--nb-r-md);
+  text-align: left;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.nb-login-first > span {
+  flex: 1;
+}
+
+.nb-login-first:hover {
+  border-style: solid;
+  background: var(--nb-tint);
+}
+
+.nb-login-first-go {
+  transition: transform 0.2s;
+}
+
+.nb-login-first:hover .nb-login-first-go {
+  transform: translateX(3px);
+}
+
+/* Help notes open as a small info box. */
+.nb-login-help.is-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-tint);
+  text-align: left;
+  animation: nb-login-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.nb-login-help.is-info[hidden] {
+  display: none;
+}
+
+.nb-login-help.is-info > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--nb-link);
+}
+
+/* Remember me: a drawn box, not the browser's checkbox. */
+.nb-login-box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--nb-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #fff;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.nb-login-box svg {
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.2s, transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.nb-login-check input:checked + .nb-login-box {
+  border-color: var(--nb-blue);
+  background: var(--nb-blue);
+}
+
+.nb-login-check input:checked + .nb-login-box svg {
+  opacity: 1;
+  transform: none;
+}
+
+.nb-login-check input:focus-visible + .nb-login-box {
+  outline: 3px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+.nb-login:is([data-nb-theme='tinted'], [data-nb-theme='night']) .nb-login-box {
+  background: var(--nb-card-soft);
+}
+
+/* The field's icon turns blue while it has focus. */
+.nb-login-input:focus-within > svg:first-child {
+  color: var(--nb-blue);
+}
+
+/* Entrance: the sky drifts slowly, the card rises in, and lifts away after sign-in. */
+.nb-login .nb-backdrop {
+  transform: scale(1.04);
+  animation: nb-login-drift 28s ease-in-out infinite alternate;
+}
+
+.nb-login-card.is-leaving {
+  opacity: 0;
+  transform: scale(1.03);
+  filter: blur(6px);
+}
+
+@keyframes nb-login-drift {
+  to {
+    transform: scale(1.09) translate(-1%, -1%);
+  }
+}
+
+@keyframes nb-login-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.97);
+  }
+}
+
+@keyframes nb-login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.nb-login-spin {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: nb-login-spin 0.7s linear infinite;
+}
+
+/* Choosing a class on the first-password step: one chip per class. */
+.nb-login-classes {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nb-login-classes legend {
+  padding: 0;
+  margin-bottom: 8px;
+  color: var(--nb-ink-2);
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+}
+
+.nb-login-class-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.nb-login-class {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-sm);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--nb-ink-strong);
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.nb-login-class input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.nb-login-class:hover {
+  border-color: var(--nb-blue);
+}
+
+.nb-login-class:has(input:checked) {
+  border-color: var(--nb-blue);
+  background: var(--nb-blue);
+  color: var(--nb-on-blue, #fff);
+}
+
+.nb-login-class:has(input:focus-visible) {
+  outline: 3px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+.nb-login:is([data-nb-theme='tinted'], [data-nb-theme='night']) .nb-login-class:not(:has(input:checked)) {
+  background: var(--nb-card-soft);
+  color: var(--nb-ink);
+}
+
+@media (max-width: 380px) {
+  .nb-login-class-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-login .nb-backdrop,
+  .nb-login-card,
+  .nb-login-help.is-info,
+  .nb-login-spin {
+    animation: none;
+  }
+
+  .nb-login-card,
+  .nb-login-card.is-leaving {
+    transition: none;
+    filter: none;
+    transform: none;
+  }
 }

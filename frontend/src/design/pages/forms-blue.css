@@ -1,0 +1,94 @@
+/* Form controls shared by the student Support and Account settings pages (blue design). */
+.nb-blue .nb-fld {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nb-blue .nb-fld > span:first-child,
+.nb-blue .nb-fld-label {
+  color: var(--nb-ink-2);
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+}
+
+.nb-blue .nb-fld :is(input, select, textarea),
+.nb-blue .nb-pw input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-ink-strong);
+  font: inherit;
+  font-size: var(--nb-text-md);
+}
+
+.nb-blue .nb-fld textarea {
+  min-height: 130px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.nb-blue .nb-fld :is(input, select, textarea):focus-visible,
+.nb-blue .nb-pw input:focus-visible {
+  border-color: var(--nb-blue);
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 1px;
+}
+
+.nb-blue .nb-fld input[readonly] {
+  background: var(--nb-card-soft);
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-fld [aria-invalid='true'] {
+  border-color: var(--nb-late);
+}
+
+.nb-blue .nb-fld-hint {
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-fld-error {
+  color: var(--nb-late);
+  font-size: var(--nb-text-sm);
+  font-weight: 600;
+}
+
+.nb-blue .nb-pw {
+  position: relative;
+  display: block;
+}
+
+.nb-blue .nb-pw input {
+  padding-right: 48px;
+}
+
+.nb-blue .nb-pw button {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nb-r-sm);
+  background: none;
+  color: var(--nb-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.nb-blue .nb-pw button:hover {
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-pw button:focus-visible {
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 1px;
+}

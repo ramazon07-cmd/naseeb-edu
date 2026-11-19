@@ -1,12 +1,13 @@
-import { useRef, useState } from 'react';
-import { Award, Camera, Briefcase, ClipboardCheck, FolderGit2, Globe2, GraduationCap, Mail, MapPin, Sparkles, Star, Target, Trophy } from 'lucide-react';
-import { t, tx } from '../i18n';
+import { useEffect, useRef, useState } from 'react';
+import { Award, Camera, Search, Briefcase, ClipboardCheck, FolderGit2, Globe2, GraduationCap, Mail, MapPin, Sparkles, Star, Target, Trophy } from 'lucide-react';
+import { t, tx, tp } from '../i18n';
 import { api } from '../api';
 import { StudentAvatar } from '../components/records';
 import { BrandLogo } from '../components/brand';
 import { fullName } from '../lib/labels';
 import { gradeText, contactEmail } from '../lib/format';
-import { listText } from '../lib/profileSections';
+import { listText, readinessHints } from '../lib/profileSections';
+import { Modal } from '../components/ui';
 import { StudentOverview } from './StudentsPage';
 import { ownStudent } from '../lib/labels';
 import { isPageLocked } from '../lib/routes';
@@ -49,24 +50,139 @@ function ResourceTab({ tab, user, data, query, reload, notify }) {
   </div>;
 }
 
-// The student ID card and a row of contact and goal chips, from the profile the student already has.
+// Photo editor: drag and zoom inside a 3:4 frame, then the framed part is saved as the profile photo.
+const FRAME_W = 600;
+const FRAME_H = 800;
+function PhotoEditor({ file, hasPhoto, busy, onChoose, onRemove, onSave, onClose }) {
+  const frame = useRef(null);
+  const drag = useRef(null);
+  const [src, setSrc] = useState('');
+  const [nat, setNat] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setSrc(url); setNat(null); setZoom(1); setFailed(false);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const box = () => ({ w: frame.current?.clientWidth || 1, h: frame.current?.clientHeight || 1 });
+  const base = nat ? Math.max(box().w / nat.w, box().h / nat.h) : 1;
+  const clamp = (p, z) => {
+    if (!nat) return p;
+    const { w, h } = box();
+    return { x: Math.min(0, Math.max(w - nat.w * base * z, p.x)), y: Math.min(0, Math.max(h - nat.h * base * z, p.y)) };
+  };
+  function loaded(event) {
+    const el = event.currentTarget;
+    const size = { w: el.naturalWidth, h: el.naturalHeight };
+    const { w, h } = box();
+    const scale = Math.max(w / size.w, h / size.h);
+    setNat(size);
+    setPos({ x: (w - size.w * scale) / 2, y: Math.min(0, (h - size.h * scale) * 0.3) });
+  }
+  function zoomTo(next) {
+    const value = Math.min(3, Math.max(1, next));
+    const { w, h } = box();
+    const cx = (w / 2 - pos.x) / zoom;
+    const cy = (h / 2 - pos.y) / zoom;
+    setPos(clamp({ x: w / 2 - cx * value, y: h / 2 - cy * value }, value));
+    setZoom(value);
+  }
+  const zoomRef = useRef(zoomTo);
+  zoomRef.current = zoomTo;
+  const zoomNow = useRef(zoom);
+  zoomNow.current = zoom;
+  // The wheel zooms the frame instead of scrolling the page behind the dialog.
+  useEffect(() => {
+    const el = frame.current;
+    if (!el) return undefined;
+    const wheel = (event) => { event.preventDefault(); zoomRef.current(zoomNow.current - event.deltaY * 0.002); };
+    el.addEventListener('wheel', wheel, { passive: false });
+    return () => el.removeEventListener('wheel', wheel);
+  }, []);
+  function keyDown(event) {
+    const step = { ArrowLeft: [8, 0], ArrowRight: [-8, 0], ArrowUp: [0, 8], ArrowDown: [0, -8] }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    setPos((p) => clamp({ x: p.x + step[0], y: p.y + step[1] }, zoom));
+  }
+  function save() {
+    const img = frame.current?.querySelector('img');
+    if (!img || !nat) return;
+    const { w, h } = box();
+    const k = base * zoom;
+    const canvas = document.createElement('canvas');
+    canvas.width = FRAME_W; canvas.height = FRAME_H;
+    canvas.getContext('2d').drawImage(img, -pos.x / k, -pos.y / k, w / k, h / k, 0, 0, FRAME_W, FRAME_H);
+    canvas.toBlob((blob) => { if (blob) onSave(new File([blob], 'photo.jpg', { type: 'image/jpeg' })); }, 'image/jpeg', 0.9);
+  }
+  const imgStyle = nat ? { width: nat.w * base * zoom, transform: `translate(${pos.x}px, ${pos.y}px)` } : undefined;
+  const previewStyle = nat ? { width: `${(nat.w * base * zoom / box().w) * 100}%`, left: `${(pos.x / box().w) * 100}%`, top: `${(pos.y / box().h) * 100}%` } : undefined;
+  return <Modal title={t('Place your photo')} onClose={busy ? () => {} : onClose} className="nb-photo-modal">
+    <p className="nb-photo-hint">{t('Drag and zoom. Keep your face in the middle of the frame.')}</p>
+    {failed ? <p className="alert error" role="alert">{t('This image could not be opened. Choose another one.')}</p> : <div className="nb-photo-ed">
+      <div className="nb-photo-main">
+        <div ref={frame} className="nb-photo-frame" tabIndex={0} aria-label={t('Drag and zoom. Keep your face in the middle of the frame.')} onKeyDown={keyDown}
+          onPointerDown={(event) => { drag.current = { x: event.clientX - pos.x, y: event.clientY - pos.y }; event.currentTarget.setPointerCapture?.(event.pointerId); }}
+          onPointerMove={(event) => { if (drag.current) setPos(clamp({ x: event.clientX - drag.current.x, y: event.clientY - drag.current.y }, zoom)); }}
+          onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+          {src && <img src={src} alt="" draggable={false} style={imgStyle} onLoad={loaded} onError={() => setFailed(true)} />}
+        </div>
+        <label className="nb-photo-zoom"><Search size={16} aria-hidden="true" /><span className="sr-only">{t('Zoom')}</span>
+          <input type="range" min="1" max="3" step="0.01" value={zoom} onChange={(event) => zoomTo(Number(event.target.value))} /></label>
+      </div>
+      <div className="nb-photo-side"><p>{t('How it will look')}</p>
+        <div className="nb-photo-preview"><span><img src={src} alt="" style={previewStyle} /></span></div>
+      </div>
+    </div>}
+    <div className="nb-photo-actions">
+      {hasPhoto && <button type="button" className="nb-btn nb-btn-ghost nb-btn-sm" onClick={onRemove} disabled={busy}>{t('Remove photo')}</button>}
+      <button type="button" className="nb-btn nb-btn-ghost nb-btn-sm" onClick={onChoose} disabled={busy}>{t('Choose another')}</button>
+      <span className="nb-photo-gap" />
+      <button type="button" className="nb-btn nb-btn-ghost nb-btn-sm" onClick={onClose} disabled={busy}>{t('Cancel')}</button>
+      <button type="button" className="nb-btn nb-btn-sm" onClick={save} disabled={busy || !nat || failed} aria-busy={busy}>{t('Use photo')}</button>
+    </div>
+  </Modal>;
+}
+
+// A progress dial with its percent inside.
+function IdDial({ percent, label }) {
+  return <span className="nb-id-dial" role="img" aria-label={`${label}: ${percent}%`} style={{ '--pct': `${percent}%` }}><b aria-hidden="true">{percent}%</b></span>;
+}
+
+// The student ID card, the contact and goal chips and the two readiness dials, from the profile the student already has.
 function StudentIdCard({ student, user, reload, notify }) {
   const fileInput = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [picked, setPicked] = useState(null);
   if (!student) return null;
-  // The photo is saved at once with the request the profile's own photo field makes (students/<id>/photo/).
-  async function choosePhoto(event) {
+  function choosePhoto(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || uploading) return;
+    if (file) setPicked(file);
+  }
+  // The photo is saved at once with the request the profile's own photo field makes (students/<id>/photo/).
+  async function savePhoto(file) {
+    if (uploading) return;
     setUploading(true);
-    try { await api.uploadStudentPhoto(student.id, file); notify?.(t('Photo updated.')); reload?.(); }
+    try { await api.uploadStudentPhoto(student.id, file); notify?.(t('Photo updated.')); setPicked(null); reload?.(); }
+    catch (err) { notify?.(err.message, 'error'); }
+    finally { setUploading(false); }
+  }
+  async function removePhoto() {
+    if (uploading) return;
+    setUploading(true);
+    try { await api.removeStudentPhoto(student.id); notify?.(t('Photo removed.')); setPicked(null); reload?.(); }
     catch (err) { notify?.(err.message, 'error'); }
     finally { setUploading(false); }
   }
   const readyDone = Number(student.readiness_items_done) || 0;
   const readyTotal = Number(student.readiness_items_total) || 0;
   const readyPercent = readyTotal ? Math.round((readyDone / readyTotal) * 100) : null;
+  const profile = student.profile_readiness;
+  const profilePercent = profile ? Math.max(0, Math.min(100, Math.round(Number(profile.percent) || 0))) : null;
+  const hints = readinessHints(profile);
   const answers = student.application_profile || {};
   const name = fullName(student.user_detail) || fullName(user);
   const countries = listText(student.target_countries);
@@ -89,10 +205,18 @@ function StudentIdCard({ student, user, reload, notify }) {
           </dl>
         </div>
       </div>
-      {readyPercent != null && <div className="nb-id-ready" role="img" aria-label={`${t('Profile ready')}: ${readyPercent}%`}><span className="nb-id-ring" style={{ '--pct': `${readyPercent}%` }} aria-hidden="true" /><span>{t('Profile ready')} · {readyPercent}%</span></div>}
       <p className="nb-id-foot"><span>{answers.graduation_year ? tx`Class of ${String(answers.graduation_year)}` : ''}</span><span>{countries}</span></p>
     </article>
-    {chips.length > 0 && <div className="nb-id-chips"><p className="eyebrow">{t('Contact and goal')}</p><div>{chips.map(([Icon, value]) => <span key={value}><Icon size={16} aria-hidden="true" />{value}</span>)}</div></div>}
+    <div className="nb-id-right">
+      {chips.length > 0 && <div className="nb-id-chips"><p className="eyebrow">{t('Contact and goal')}</p><div>{chips.map(([Icon, value]) => <span key={value}><Icon size={16} aria-hidden="true" />{value}</span>)}</div></div>}
+      {(profilePercent != null || readyPercent != null) && <div className="nb-id-dials">
+        {profilePercent != null && <div className="nb-id-dialblk"><IdDial percent={profilePercent} label={t('Profile ready')} />
+          <div><b>{t('Profile ready')}</b>{student.counselor_name && <small>{tx`Counselor: ${student.counselor_name}`}</small>}{hints.length > 0 && <small className="nb-id-raise">{t('To raise it:')} {hints.map((hint) => t(hint.text)).join(', ')}.</small>}</div></div>}
+        {readyPercent != null && <div className="nb-id-dialblk"><IdDial percent={readyPercent} label={t('Application readiness')} />
+          <div><b>{t('Application readiness')}</b><small>{tp('{done} of {n} item finished|{done} of {n} items finished', readyTotal, { done: readyDone, n: readyTotal })}</small></div></div>}
+      </div>}
+    </div>
+    {picked && <PhotoEditor file={picked} hasPhoto={Boolean(student.has_photo)} busy={uploading} onChoose={() => fileInput.current?.click()} onRemove={removePhoto} onSave={savePhoto} onClose={() => setPicked(null)} />}
   </section>;
 }
 
@@ -101,7 +225,7 @@ const CV_RECORDS = ['activities', 'internships', 'researches', 'projects', 'hono
 // The open tab lives in the URL (/student-center/documents), so it survives a
 // reload and back/forward. Profile answers are edited in place on their cards;
 // ?edit=<section> opens one card in edit mode.
-export function StudentCenterPage({ user, data, query, reload, notify, tab = 'overview', onTab, editSection = null, onEditDone }) {
+export function StudentCenterPage({ user, data, query, reload, notify, tab = 'overview', onTab, setPage, editSection = null, onEditDone }) {
   const student = ownStudent(data);
   const sections = { reload, notify, onEditDone, student, data };
   // Changes when the profile or a CV record is saved, so the prefetched CV is loaded again.
@@ -115,8 +239,8 @@ export function StudentCenterPage({ user, data, query, reload, notify, tab = 'ov
     {tab === 'overview' && student && <KpiRow label={t('Student Center')} columns={roadmapLocked ? 2 : 4}>
       {!roadmapLocked && <KpiTile tone={0} icon={Trophy} value={student.level ?? 1} label={<>{t('Level')}<small className="nb-kpi-note">{t('Approved by staff')}</small></>} />}
       {!roadmapLocked && <KpiTile tone={1} icon={Star} value={student.roadmap_stars ?? 0} label={<>{t('Stars')}<small className="nb-kpi-note">{t('One per approved roadmap mission')}</small></>} />}
-      <KpiTile tone={2} icon={ClipboardCheck} value={taskCount} label={t('Assigned tasks')} />
-      <KpiTile tone={3} icon={GraduationCap} value={applicationCount} label={t('Applications')} />
+      <KpiTile tone={2} icon={ClipboardCheck} value={taskCount} label={t('Assigned tasks')} onClick={setPage ? () => setPage('roadmap', roadmapLocked ? undefined : { tab: 'tasks' }) : undefined} actionLabel={setPage ? `${t('Assigned tasks')}: ${taskCount}` : undefined} />
+      <KpiTile tone={3} icon={GraduationCap} value={applicationCount} label={t('Applications')} onClick={setPage ? () => setPage('applications') : undefined} actionLabel={setPage ? `${t('Applications')}: ${applicationCount}` : undefined} />
     </KpiRow>}
     {tab === 'overview' && <StudentIdCard student={student} user={user} reload={reload} notify={notify} />}
     <div className="student-center-head">

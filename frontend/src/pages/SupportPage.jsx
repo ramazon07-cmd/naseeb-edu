@@ -4,7 +4,7 @@ import { t, tp, tx } from '../i18n';
 import { Modal, Badge, Empty } from '../components/ui';
 import { Field, PortalTabs } from '../components/forms';
 import { label, initials } from '../lib/labels';
-import { ShieldCheck, Send, MessageSquareText, Plus, Eye, LifeBuoy } from 'lucide-react';
+import { ShieldCheck, Send, MessageSquareText, Plus, Eye, LifeBuoy, Bell, Clock3, Inbox, CircleHelp as HelpIcon } from 'lucide-react';
 import { SupportViewModal } from '../components/SupportViewModal';
 import { dateTimeText, dateText, joinParts } from '../lib/format';
 import { matchesQuery } from '../lib/searchIndex';
@@ -12,6 +12,9 @@ import { isPlatformAdmin } from '../lib/roles';
 import { usePagedList } from '../hooks/usePagedList';
 import { useSupportCounts } from '../hooks/useSupportCounts';
 import { LoadMore, PagedListError, firstPageLoading } from '../components/paged';
+import { BlueButton, Chip, EmptyState, GlassCard, PageHeader } from '../design/blue/ui';
+import '../design/pages/forms-blue.css';
+import '../design/pages/support-blue.css';
 
 export const SUPPORT_CATEGORIES = ['technical', 'account', 'academic', 'application', 'billing', 'other'];
 
@@ -100,7 +103,7 @@ export function SupportTicketDetail({ ticket, user, onClose, onRespond, onOpenAc
   </div></Modal>;
 }
 
-export function SupportPage({ user, data, query, reload, notify, moreTickets = false, loadMoreTickets }) {
+function ClassicSupportPage({ user, data, query, reload, notify, moreTickets = false, loadMoreTickets }) {
   const [tab, setTab] = useState('all');
   const [loadingMore, setLoadingMore] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -153,5 +156,82 @@ export function SupportPage({ user, data, query, reload, notify, moreTickets = f
     {selected && <SupportTicketDetail ticket={selected} user={user} onClose={() => setSelected(null)} onRespond={() => {setResponding(selected);setSelected(null);}} onOpenAccount={(requester) => {setAccount(requester);setSelected(null);}} />}
     {responding && <SupportResponseModal ticket={responding} onClose={() => setResponding(null)} onSaved={saved} notify={notify} />}
     {account && <SupportViewModal account={account} onClose={() => setAccount(null)} notify={notify} />}
+  </div>;
+}
+
+export function SupportPage(props) {
+  return props.user.role === 'student' ? <StudentSupport {...props} /> : <ClassicSupportPage {...props} />;
+}
+
+// The student's page (blue design): own tickets on the left, the open thread or a new-ticket form on the right.
+// Same data and requests as the classic page (the tickets already loaded, one create, one "viewed" mark).
+function StudentSupport({ data, reload, notify, moreTickets = false, loadMoreTickets }) {
+  const tickets = data.supportTickets;
+  const [openId, setOpenId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const current = tickets.find((ticket) => ticket.id === openId) || null;
+  const unread = tickets.filter((ticket) => ticket.has_unread_response).length;
+  const replies = current ? repliesOf(current) : [];
+
+  async function openTicket(ticket) {
+    setOpenId(ticket.id);
+    if (ticket.has_unread_response) {
+      try { await api.markSupportViewed(ticket.id); await reload(); } catch (error) { notify(error.message, 'error'); }
+    }
+  }
+  async function submit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const subject = String(values.get('subject') || '').trim();
+    const message = String(values.get('message') || '').trim();
+    if (!subject || !message) { notify(t('Write a subject and a message.'), 'error'); return; }
+    setSaving(true);
+    try {
+      const created = await api.create('support-tickets', { category: values.get('category'), subject, message });
+      notify(t('Support request sent.'));
+      form.reset();
+      if (created?.id) setOpenId(created.id);
+      await reload();
+    } catch (error) {
+      notify(error.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+  const form = <form className="nb-sp-form" onSubmit={submit}>
+    <label className="nb-fld"><span>{t('Category')}</span><select name="category" defaultValue="technical" required>{SUPPORT_CATEGORIES.map((category) => <option key={category} value={category}>{label(category)}</option>)}</select></label>
+    <label className="nb-fld"><span>{t('Subject')}</span><input name="subject" maxLength="180" autoComplete="off" placeholder={t('Briefly describe the issue')} required /></label>
+    <label className="nb-fld"><span>{t('Message')}</span><textarea name="message" maxLength="5000" rows="6" placeholder={t('What happened, where did it happen, and what did you expect?')} required /></label>
+    <p className="nb-sp-note"><ShieldCheck size={16} aria-hidden="true" />{t('Do not include passwords, payment details, passport numbers, or other sensitive credentials.')}</p>
+    <div className="nb-sp-acts"><BlueButton type="submit" icon={Send} disabled={saving} aria-busy={saving}>{saving ? t('Sending…') : t('Send request')}</BlueButton></div>
+  </form>;
+  return <div className="nb-sp">
+    <PageHeader title={t('Support')} subtitle={t('Help from the Naseeb team.')} actions={tickets.length > 0 && current ? <BlueButton size="sm" icon={Plus} onClick={() => setOpenId(null)}>{t('New request')}</BlueButton> : null} />
+    <div className="nb-sp-grid">
+      <GlassCard className="nb-sp-list" title={t('Your requests')} icon={Inbox} action={<Chip variant={unread ? 'new' : 'default'} icon={Bell}>{t('{n} unread', { n: unread })}</Chip>}>
+        {tickets.length ? <ul className="nb-sp-tickets">{tickets.map((ticket) => <li key={ticket.id}>
+          <button type="button" className={ticket.id === openId ? 'is-on' : ''} aria-current={ticket.id === openId ? 'true' : undefined} onClick={() => openTicket(ticket)}>
+            <span className="nb-sp-ti" aria-hidden="true"><MessageSquareText size={18} /></span>
+            <span className="nb-sp-tt"><b>{ticket.subject}</b><small>{dateText(ticket.updated_at || ticket.created_at)}</small></span>
+            {ticket.has_unread_response ? <Chip variant="new">{t('New response')}</Chip> : <Chip variant={repliesOf(ticket).length ? 'ok' : 'warn'}>{repliesOf(ticket).length ? t('Answered') : t('Waiting for a reply')}</Chip>}
+          </button>
+        </li>)}</ul>
+          : <EmptyState icon={Inbox} title={t('No requests yet')} text={t('Write to the Naseeb team. The reply arrives here, in the same thread.')} />}
+        {moreTickets && <div className="nb-sp-more"><BlueButton variant="ghost" size="sm" disabled={loadingMore} aria-busy={loadingMore} onClick={() => { setLoadingMore(true); loadMoreTickets().catch((err) => notify(err.message, 'error')).finally(() => setLoadingMore(false)); }}>{loadingMore ? t('Loading…') : t('Load more')}</BlueButton></div>}
+      </GlassCard>
+      <GlassCard tone="solid" className="nb-sp-main" title={current ? current.subject : t('New request')} icon={current ? MessageSquareText : Plus} headingLevel="h2">
+        {current ? <div className="nb-sp-thread" aria-live="polite">
+          <div className="nb-sp-meta"><Chip variant="default">{label(current.category)}</Chip><Chip variant={replies.length ? 'ok' : 'warn'} icon={replies.length ? undefined : Clock3}>{replies.length ? t('Answered') : t('Waiting for a reply')}</Chip><small>{dateTimeText(current.created_at)}</small></div>
+          <div className="nb-sp-msg is-mine"><p>{current.message}</p><time>{dateTimeText(current.created_at)}</time></div>
+          {replies.map((item) => <div className="nb-sp-msg" key={item.id}><b>{item.author_name || t('Naseeb Edu Support')}</b><p>{item.body}</p><time>{dateTimeText(item.created_at)}</time></div>)}
+          {!replies.length && <p className="nb-sp-wait"><Clock3 size={16} aria-hidden="true" />{t('The Naseeb team replies here. New replies show a count next to Support in the menu.')}</p>}
+        </div> : form}
+      </GlassCard>
+    </div>
+    <GlassCard className="nb-sp-how" title={t('How support works')} icon={HelpIcon}>
+      <ol className="nb-sp-steps">{['You write a request: a subject and a few lines.', 'The reply arrives in the same thread. Your history stays.', 'New replies show a count next to Support in the menu.'].map((text, index) => <li key={text}><b aria-hidden="true">{index + 1}</b><span>{t(text)}</span></li>)}</ol>
+    </GlassCard>
   </div>;
 }

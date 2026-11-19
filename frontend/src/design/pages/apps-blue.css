@@ -408,3 +408,207 @@
     transition: none;
   }
 }
+
+/* Deadline radar: urgency cards, type tabs, grouped rows and the student's own deadlines. */
+.nb-blue .apps-radar .nb-radar {
+  display: grid;
+  gap: 14px;
+}
+
+.nb-blue .nb-radar-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nb-blue .nb-radar-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card-soft);
+  color: var(--nb-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-radar-card:hover,
+.nb-blue .nb-radar-card.is-on {
+  border-color: var(--nb-blue);
+  background: var(--nb-tint);
+}
+
+.nb-blue .nb-radar-card-title {
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-radar-card.is-over .nb-radar-card-title {
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-radar-card-n {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.nb-blue .nb-radar-card-n b {
+  font-size: var(--nb-text-2xl);
+  line-height: 1;
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-radar-card.is-zero .nb-radar-card-n b {
+  color: var(--nb-faint);
+}
+
+.nb-blue .nb-radar-card-n small,
+.nb-blue .nb-radar-card-next small {
+  font-size: var(--nb-text-xs);
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-radar-card-next {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nb-blue .nb-radar-card-next b {
+  overflow: hidden;
+  font-size: var(--nb-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-blue .nb-radar-card-next em {
+  font-size: var(--nb-text-xs);
+  font-style: normal;
+  font-weight: 700;
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-radar-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.nb-blue .nb-radar-add {
+  margin-left: auto;
+}
+
+.nb-blue .nb-radar-showing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--nb-blue);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-tint);
+  color: var(--nb-link);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-blue .nb-radar-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card-soft);
+}
+
+.nb-blue .nb-radar-form label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-radar-form input,
+.nb-blue .nb-radar-form select {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-card);
+  color: var(--nb-ink);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-radar-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--nb-text-sm);
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-radar-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.nb-blue .nb-radar-form-actions span {
+  flex: 1;
+}
+
+.nb-blue .nb-radar-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-radar-group.g-over h3 {
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-radar-group h3 i {
+  padding: 1px 8px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+  font-style: normal;
+}
+
+.nb-blue .apps-radar-list li.is-over button {
+  border-color: var(--nb-late-line);
+  background: var(--nb-late-bg);
+}
+
+.nb-blue .apps-radar-list button:focus-visible,
+.nb-blue .nb-radar-card:focus-visible {
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-radar-cards,
+  .nb-blue .nb-radar-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { api } from '../api';
-import { ArrowLeft, ArrowRight, Check, Circle, Eye, EyeOff, Lock, LogOut, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Circle, Eye, EyeOff, Lock, LogOut, Mail, User } from 'lucide-react';
 import { t } from '../i18n';
 import { Field, PasswordInput } from '../components/forms';
 import { LanguagePicker, LoginThemeToggle } from '../design/blue/controls';
@@ -17,8 +17,8 @@ export { forgetRememberedUsername };
 
 function greeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return `${t('Good morning')}!`;
-  if (hour < 18) return `${t('Good afternoon')}!`;
+  if (hour >= 5 && hour < 12) return `${t('Good morning')}!`;
+  if (hour >= 12 && hour < 17) return `${t('Good afternoon')}!`;
   return `${t('Good evening')}!`;
 }
 
@@ -63,6 +63,8 @@ export function Login({ onLogin, onBack, language, changeLanguage }) {
   const [firstTime, setFirstTime] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // The card lifts away once the server accepts the sign-in, while the workspace loads.
+  const [leaving, setLeaving] = useState(false);
   const [welcome] = useState(greeting);
   const ids = { user: useId(), pass: useId(), help: useId(), first: useId() };
 
@@ -73,8 +75,10 @@ export function Login({ onLogin, onBack, language, changeLanguage }) {
     try {
       await api.login(form.username, form.password);
       rememberUsername(remember ? form.username : '');
+      setLeaving(true);
       await onLogin();
     } catch (err) {
+      setLeaving(false);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -85,7 +89,7 @@ export function Login({ onLogin, onBack, language, changeLanguage }) {
   return (
     <LoginFrame {...{ language, changeLanguage }} onBrand={onBack} brandLabel={t('Home')} leave={onBack ? <button type="button" className="nb-login-leave" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" /> {t('Home')}</button> : null}>
       <section className="nb-login-panel" aria-label={t('Sign in')}>
-        <form className="nb-login-card" onSubmit={submit}>
+        <form className={`nb-login-card${leaving ? ' is-leaving' : ''}`} onSubmit={submit}>
           <LoginHead title={welcome}>
             <p className="nb-login-tagline">{t('Connecting Students to the World Through Education')}</p>
           </LoginHead>
@@ -101,23 +105,23 @@ export function Login({ onLogin, onBack, language, changeLanguage }) {
             <span className="nb-login-input">
               <Lock size={18} aria-hidden="true" />
               <input id={ids.pass} type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="current-password" required />
-              <button type="button" className="nb-login-eye" onClick={() => setShowPassword(!showPassword)} aria-label={passwordLabel} title={passwordLabel} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>
+              <button type="button" className="nb-login-eye" onClick={() => {setShowPassword(!showPassword);document.getElementById(ids.pass)?.focus();}} aria-label={passwordLabel} title={passwordLabel} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>
             </span>
           </div>
           <div className="nb-login-row">
-            <label className="nb-login-check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span>{t('Remember me')}</span></label>
+            <label className="nb-login-check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span className="nb-login-box" aria-hidden="true"><Check size={13} strokeWidth={3} /></span><span>{t('Remember me')}</span></label>
             <button type="button" className="nb-login-link" aria-expanded={forgot} aria-controls={ids.help} onClick={() => setForgot(!forgot)}>{t('Forgot password?')}</button>
           </div>
           {/* There is no self-service reset: accounts are issued by the school. */}
-          <p id={ids.help} className="nb-login-help" hidden={!forgot}>{t("Forgot your username or password? Ask your school counselor or administrator to reset your login.")}</p>
+          <p id={ids.help} className="nb-login-help is-info" hidden={!forgot}><Mail size={18} aria-hidden="true" /><span>{t("Forgot your username or password? Ask your school counselor or administrator to reset your login.")}</span></p>
           {error && <div className="nb-login-error" role="alert">{error}</div>}
           <button className="nb-login-submit" disabled={loading} aria-busy={loading}>
             {loading ? t("Signing in…") : t("Sign in")}
-            <ArrowRight size={18} aria-hidden="true" />
+            {loading ? <span className="nb-login-spin" aria-hidden="true" /> : <ArrowRight size={18} aria-hidden="true" />}
           </button>
-          <button type="button" className="nb-login-link nb-login-first" aria-expanded={firstTime} aria-controls={ids.first} onClick={() => { const open = !firstTime; setFirstTime(open); if (open) document.getElementById(ids.user)?.focus(); }}>{t('First sign-in with a temporary password')}</button>
+          <button type="button" className="nb-login-link nb-login-first" aria-expanded={firstTime} aria-controls={ids.first} onClick={() => { const open = !firstTime; setFirstTime(open); if (open) document.getElementById(ids.user)?.focus(); }}><Lock size={18} aria-hidden="true" /><span>{t('First sign-in with a temporary password')}</span><ArrowRight size={18} aria-hidden="true" className="nb-login-first-go" /></button>
           {/* The same sign-in form: after it, the app asks for a new password. */}
-          <p id={ids.first} className="nb-login-help" hidden={!firstTime}>{t('Enter your username and the temporary password from your counselor, then press Sign in. You will choose your own password next.')}</p>
+          <p id={ids.first} className="nb-login-help is-info" hidden={!firstTime}><span>{t('Enter your username and the temporary password from your counselor, then press Sign in. You will choose your own password next.')}</span></p>
           {SHOW_DEMO_ACCOUNTS && (
             <div className="nb-login-demo">{t("Demo: counselor / admin12345")}</div>
           )}
@@ -177,7 +181,7 @@ export function ForcedPasswordChange({ user, onChanged, onSignOut, language, cha
         <LoginHead eyebrow={false} titleId="password-change-title" title={t('Welcome, {name}', { name: user.first_name || fullName(user) })}>
           <p className="nb-login-tagline">{t('Set your own password to open your cabinet. From now on you sign in with it.')}</p>
         </LoginHead>
-        {asksClass && <Field label={t('Your class')}><select value={grade} onChange={(event) => setGrade(event.target.value)} required><option value="">{t('Select')}</option>{GRADES.map((value) => <option key={value} value={value}>{gradeText(value)}</option>)}</select></Field>}
+        {asksClass && <fieldset className="nb-login-classes"><legend>{t('Your class')}</legend><div className="nb-login-class-grid">{GRADES.map((value, index) => <label key={value} className="nb-login-class" title={gradeText(value)}><input type="radio" name="student-class" value={value} checked={grade === value} onChange={() => setGrade(value)} required={index === 0} /><span aria-hidden="true">{value}</span><span className="sr-only">{gradeText(value)}</span></label>)}</div></fieldset>}
         <Field label={t('New password')}><PasswordInput value={password} onChange={setPassword} autoComplete="new-password" minLength="8" /></Field>
         <Field label={t('Confirm password')}><PasswordInput value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" minLength="8" /></Field>
         <ul className="password-checks" aria-label={t('Password requirements')}>

@@ -8,7 +8,7 @@ import { institutionStatus } from '../lib/qs';
 import { AidTags, DeadlineCard, InfoCard, PriceMeter, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { dateText, money } from '../lib/format';
 import { initials, label, ownStudent } from '../lib/labels';
-import { afterAidText, daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, priceInfo, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
+import { afterAidText, daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, priceInfo, rankText, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 
 function FitError({ onRetry }) {
@@ -50,6 +50,9 @@ function UniversityOverview({ university, result, fitStatus, onRetryFit, researc
     </div>
     <div className="stack-16">
       <DeadlineCard university={university} application={application} />
+      <InfoCard title="People from this university"><p className="note">{t("See who studies here, where they come from and what they do next.")}</p>
+        <div className="nb-up-people">{[[t("Students and alumni"), university.name], [t("From Uzbekistan"), `${university.name} Uzbekistan`], ...(student?.target_major ? [[t("In your major"), `${university.name} ${student.target_major}`]] : [])].map(([title, query]) => <a key={title} href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}`} target="_blank" rel="noreferrer"><span className="nb-up-in" aria-hidden="true">in</span><span><b>{title}</b><small>“{query}”</small></span><ExternalLink size={14} aria-hidden="true" /></a>)}</div>
+        <small className="note">{t("Opens LinkedIn search in a new tab · you may need to sign in")}</small></InfoCard>
       {application && <InfoCard title="Your application">
         <div className="kv"><span>{t("Stage")}</span><b>{label(application.status)}</b></div>
         <div className="kv"><span>{t("Essays")}</span><span className={`tag ${essay.tone}`.trim()}><PenLine size={12} aria-hidden="true" /> {essay.text}</span></div>
@@ -154,6 +157,12 @@ export function UniversityPage({ data, university, result, fitStatus, onRetryFit
         {application && <button type="button" className="link-button push-end" disabled={busy} aria-busy={busy} onClick={onRemove}>{t("Remove from my list")}</button>}
       </div>
     </section>
+    <ul className="nb-up-stats" aria-label={t("Key facts")}>
+      <li><b>{rankText(university)}</b><span>{t("QS World University Rankings")}</span></li>
+      {result && <li><b>{formatNumberLocale(result.match_score)}/100</b><span>{t("Fit")}</span></li>}
+      <li><b>{percentText(university.acceptance_rate)}</b><span>{t("Acceptance")}</span></li>
+      <li><b>{money(priceInfo(university).amount)}</b><span>{priceInfo(university).label}</span></li>
+    </ul>
     <PortalTabs active={tab} onChange={setTab} items={[['overview', 'Overview'], ['aid', 'Scholarships & Aid', scholarships.length], ['needs', 'What you need', needs.total]]} />
     {tab === 'overview' && <UniversityOverview {...{ university, result, fitStatus, onRetryFit, research, researchLoading, student, application, essays, setPage }} onCompleteProfile={onCompleteProfile} />}
     {tab === 'aid' && <UniversityAid {...{ university, scholarships, student }} />}

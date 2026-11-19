@@ -2,7 +2,7 @@ import { t, tp, locale, formatDateLocale, formatNumberLocale } from '../i18n';
 import { InlineLoadError } from '../components/states';
 import { dateText, localDateKey, money } from '../lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, CalendarDays, CalendarSearch, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, X, Check, Bookmark, Monitor, Award, Globe2, Heart, Star, Clock3 } from 'lucide-react';
+import { MapPin, CalendarDays, CalendarSearch, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, ChevronRight, ArrowLeft, ArrowUpRight, ListChecks, X, Check, Bookmark, Monitor, Award, Globe2, Heart, Star, Clock3, TriangleAlert } from 'lucide-react';
 import { request } from '../api';
 import './catalog.css';
 import './programs-redesign.css';
@@ -141,6 +141,78 @@ function ProgramRow({ item, closed, due, today, saved, busy, onToggle, countdown
   </article>;
 }
 
+// LinkedIn people search for the program's core name: "Yale Young Global Scholars (YYGS) 2027" -> "Yale Young Global Scholars".
+const programCore = (title) => String(title || '').split(' – ')[0].replace(/\s*\(.*?\)/g, '').replace(/\b20\d\d\b/g, '').replace(/\s+/g, ' ').trim();
+const linkedInSearch = (query) => `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}`;
+
+function DetailFact({ icon: Icon, title, children }) {
+  if (!children) return null;
+  return <div className="nb-pd-fact"><span className="nb-pd-fact-icon" aria-hidden="true"><Icon size={18} /></span><span><small>{title}</small><b>{children}</b></span></div>;
+}
+
+// A whole program page inside Programs: everything the catalog row holds, the date state, people
+// links and a few other open programs. It only reads data the page already has.
+function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBack, onOpen }) {
+  const { item, closed, due } = entry;
+  const headingRef = useRef(null);
+  useEffect(() => { headingRef.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }, [item.id]);
+  const kind = item.program_type === 'national' ? 'National' : item.program_type === 'international' ? 'International' : 'To verify';
+  const grades = compactGrades(programGrades(item)).map((grade) => (grade === 'gap' ? t('Gap year') : grade));
+  const place = [item.city, item.country].filter(Boolean).join(', ');
+  const delivery = item.delivery_mode && item.delivery_mode !== 'unspecified' ? t(DELIVERY_LABELS[item.delivery_mode] || 'To verify') : '';
+  const who = [grades.length ? `${t('Grades')} ${grades.join(', ')}` : '', item.eligible_ages ? `${t('Ages')} ${item.eligible_ages}` : ''].filter(Boolean).join(' · ');
+  const cost = [item.fee_usd != null ? (Number(item.fee_usd) === 0 ? t('Free') : money(item.fee_usd)) : '', item.scholarship_available ? t('Financial aid available') : ''].filter(Boolean).join(' · ');
+  const days = due && !closed ? daysUntil(countdownDay(due, today)) : null;
+  const tone = days != null ? dueTone(days) : '';
+  const core = programCore(item.title);
+  const logo = programLogo(item);
+  const state = closed ? 'Closed' : due?.exact ? 'Date confirmed' : due ? 'Expected · based on last year' : 'Date not announced yet';
+  const url = item.application_url;
+  const deadline = <section className={`nb-pd-deadline ${closed ? 'is-over' : tone === 'hot' ? 'is-hot' : ''}`.trim()} aria-label={t('Deadline')}>
+    {due ? <span className="nb-pd-cal" aria-hidden="true">{due.day && <b>{formatNumberLocale(due.day)}</b>}<small>{formatDateLocale(due.date, { month: 'short' })}</small></span> : <span className="nb-pd-cal is-none" aria-hidden="true"><CalendarSearch size={22} /></span>}
+    <div><small>{t('Deadline')}</small><b><ProgramDeadline item={item} closed={closed} /></b><span className={`nb-pd-state ${due?.exact && !closed ? 'is-ok' : ''}`.trim()}>{t(state)}</span></div>
+    {days != null && days >= 0 && <em className={`nb-pd-left ${tone}`.trim()}>{dueLabel(days)}</em>}
+  </section>;
+  return <div className="section-stack student-portal programs-page nb-bridge nb-programs nb-pd">
+    <PageHeader title={t('Programs')} subtitle={t('National and international opportunity catalog')} />
+    <button type="button" className="nb-pd-back" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />{t('All programs')}</button>
+    <GlassCard tone="hero" as="header" className="nb-pd-hero">
+      <span className="nb-pd-gem" aria-hidden="true">{logo ? <img src={logo} alt="" /> : <Award size={26} />}</span>
+      <div><p className="nb-prog-eyebrow">{[t(item.category), t(kind)].filter(Boolean).join(' · ')}</p><h2 ref={headingRef} tabIndex={-1}>{item.title}</h2>{item.provider && <small>{item.provider}</small>}</div>
+    </GlassCard>
+    <div className="nb-pd-grid">
+      <div className="nb-pd-main">
+        {!due?.exact && !closed && <p className="nb-pd-warn" role="note"><TriangleAlert size={18} aria-hidden="true" /><span>{t("We haven't confirmed this year's dates. Check the official site before you apply.")}</span></p>}
+        {item.description && <GlassCard tone="solid" title={t('About the program')} headingLevel="h3"><p className="nb-pd-about">{t(item.description)}</p></GlassCard>}
+        <div className="nb-pd-facts">
+          <DetailFact icon={UsersRound} title={t('Who can apply')}>{who}</DetailFact>
+          <DetailFact icon={MapPin} title={t('Format and place')}>{[delivery, place].filter(Boolean).join(' · ')}</DetailFact>
+          <DetailFact icon={DollarSign} title={t('Cost')}>{cost}</DetailFact>
+          <DetailFact icon={HandCoins} title={t('Financial aid')}>{item.aid_details ? t(item.aid_details) : ''}</DetailFact>
+          <DetailFact icon={ListChecks} title={t('Requirements')}>{item.requirements ? t(item.requirements) : ''}</DetailFact>
+        </div>
+        <GlassCard tone="solid" title={t('Past participants and winners')} headingLevel="h3">
+          <p className="nb-pd-sub">{t('See how past participants and winners describe this program on LinkedIn and what they did next.')}</p>
+          <div className="nb-pd-people">{[[t('Participants on LinkedIn'), core], [t('Winners on LinkedIn'), `${core} winner`]].map(([title, query]) => <a key={title} href={linkedInSearch(query)} target="_blank" rel="noreferrer"><span className="nb-pd-in" aria-hidden="true">in</span><span><b>{title}</b><small>“{query}”</small></span><ArrowUpRight size={16} aria-hidden="true" /></a>)}</div>
+          <p className="nb-pd-note">{t('Opens LinkedIn search in a new tab · you may need to sign in')}</p>
+        </GlassCard>
+      </div>
+      <aside className="nb-pd-side">
+        {deadline}
+        <GlassCard tone="solid" title={t('Ready to apply?')} headingLevel="h3" className="nb-pd-cta">
+          <p className="nb-pd-sub">{t('Read the full rules and apply on the official website.')}</p>
+          <BlueButton variant="ghost" icon={Bookmark} aria-pressed={saved} disabled={saveBusy} onClick={onToggle}>{saved ? t('In My List') : t('Add to My List')}</BlueButton>
+          {url ? <BlueButton href={url} target="_blank" rel="noreferrer" iconRight={ExternalLink}>{t('Go to the official website')}</BlueButton> : <span className="nb-pd-nosite">{t('No official website listed')}</span>}
+        </GlassCard>
+        {similar.length > 0 && <GlassCard tone="solid" title={t('Similar open programs')} headingLevel="h3" className="nb-pd-rec">
+          <p className="nb-pd-sub">{t('Other programs you can still apply to.')}</p>
+          <ul>{similar.map(({ item: other, due: otherDue }) => <li key={other.id}><button type="button" onClick={() => onOpen(other.id)}><span className="nb-pd-rd" aria-hidden="true"><b>{otherDue.day ? formatNumberLocale(otherDue.day) : ''}</b><small>{formatDateLocale(otherDue.date, { month: 'short' })}</small></span><span className="nb-pd-rt"><b>{other.title}</b><small>{t(other.category)} · {dueLabel(daysUntil(otherDue.date))}</small></span><ChevronRight size={16} aria-hidden="true" /></button></li>)}</ul>
+        </GlassCard>}
+      </aside>
+    </div>
+  </div>;
+}
+
 // A filter pill that opens a small menu under itself. `children(close)`
 // renders the options; picking one closes the menu.
 function FilterMenu({ label, value, children }) {
@@ -173,6 +245,10 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   const [savedAttempt, setSavedAttempt] = useState(0);
   const [savingId, setSavingId] = useState(null);
   const [onlySaved, setOnlySaved] = useState(false);
+  // Extra list narrowing from the top tiles and the Free pill; the URL filters stay as they are.
+  const [onlyOpen, setOnlyOpen] = useState(false);
+  const [onlyFree, setOnlyFree] = useState(false);
+  const [detailId, setDetailId] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetRef = useRef(null);
   const toggleRef = useRef(null);
@@ -193,7 +269,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   const activeCount = activeProgramFilterCount(filters);
   const filtered = hasProgramFilters(filters);
   const update = (patch) => setFilters((current) => ({ ...current, ...patch }));
-  const reset = () => setFilters({ ...PROGRAM_FILTER_DEFAULTS });
+  const reset = () => { setFilters({ ...PROGRAM_FILTER_DEFAULTS }); setOnlyOpen(false); setOnlyFree(false); };
   // A category that the new type does not have would only empty the list.
   const chooseType = (type) => setFilters((current) => ({
     ...current, type,
@@ -215,7 +291,6 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   }, [sheetOpen]);
 
   const count = (value) => formatNumberLocale(value || 0);
-  const resultText = tp('{count} program|{count} programs', programs.length, { count: programs.length });
 
   useEffect(() => {
     let active = true;
@@ -244,7 +319,17 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     finally { setSavingId(null); }
   }
 
-  const shownPrograms = onlySaved ? programs.filter(({ item }) => savedIds.has(item.id)) : programs;
+  const isFree = (item) => item.fee_usd != null && Number(item.fee_usd) === 0;
+  const freeCount = programs.filter(({ item }) => isFree(item)).length;
+  const shownPrograms = programs.filter(({ item, closed, due }) => (!onlySaved || savedIds.has(item.id)) && (!onlyOpen || (!closed && due?.exact)) && (!onlyFree || isFree(item)));
+  const resultText = tp('{count} program|{count} programs', shownPrograms.length, { count: shownPrograms.length });
+  const narrowed = filtered || onlyOpen || onlyFree;
+  const detail = detailId != null ? overall.programs.find(({ item }) => item.id === detailId) : null;
+  if (detail) {
+    const similar = overall.programs.filter(({ item, closed, due }) => item.id !== detail.item.id && !closed && due?.exact);
+    const near = [...similar.filter(({ item }) => item.category === detail.item.category), ...similar.filter(({ item }) => item.category !== detail.item.category)].slice(0, 4);
+    return <ProgramDetail entry={detail} similar={near} today={today} saved={savedIds.has(detail.item.id)} saveBusy={savedLoading || !savedKnown || savingId === detail.item.id} onToggle={() => toggleSaved(detail.item)} onBack={() => setDetailId(null)} onOpen={setDetailId} />;
+  }
 
   const typeLabel = { all: 'All programs', national: 'National', international: 'International' };
   const rail = <aside id="program-filters" ref={sheetRef} className={`program-rail ${sheetOpen ? 'is-open' : ''}`.trim()} aria-label={t('Filters')}>
@@ -269,8 +354,9 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     <FilterMenu label={t('Delivery')} value={filters.delivery === 'all' ? '' : t(DELIVERY_LABELS[filters.delivery])}>{(close) => ['all', ...PROGRAM_DELIVERY].map((mode) => <FilterOption key={mode} type="radio" name="program-delivery-menu" checked={filters.delivery === mode} disabled={mode !== 'all' && !counts.delivery[mode] && filters.delivery !== mode} onChange={() => { update({ delivery: mode }); close(); }} count={mode === 'all' ? null : counts.delivery[mode] || 0}>{mode === 'all' ? t('All formats') : t(DELIVERY_LABELS[mode])}</FilterOption>)}</FilterMenu>
     <FilterMenu label={t('Category')} value={filters.category === 'all' ? '' : t(filters.category)}>{(close) => <><FilterOption type="radio" name="program-category-menu" checked={filters.category === 'all'} onChange={() => { update({ category: 'all' }); close(); }}>{t('All categories')}</FilterOption>{categoryOptions.map((category) => <FilterOption key={category} type="radio" name="program-category-menu" checked={filters.category === category} disabled={!counts.category[category] && filters.category !== category} onChange={() => { update({ category }); close(); }} count={counts.category[category] || 0}>{t(category)}</FilterOption>)}</>}</FilterMenu>
     <button type="button" className="program-pill-toggle" aria-pressed={filters.aid} onClick={() => update({ aid: !filters.aid })}>{filters.aid && <Check size={15} aria-hidden="true" />}{t('Scholarship available')}<span>{count(counts.aid)}</span></button>
+    {(freeCount > 0 || onlyFree) && <button type="button" className="program-pill-toggle" aria-pressed={onlyFree} onClick={() => setOnlyFree((value) => !value)}>{onlyFree && <Check size={15} aria-hidden="true" />}{t('Free')}<span>{count(freeCount)}</span></button>}
     {(counts.closed > 0 || !filters.open) && <button type="button" className="program-pill-toggle" aria-pressed={filters.open} onClick={() => update({ open: !filters.open })}>{filters.open && <Check size={15} aria-hidden="true" />}{t('Hide closed')}<span>{count(counts.closed)}</span></button>}
-    {filtered && <button type="button" className="link-button program-filterbar-clear" onClick={reset}>{t('Clear')}</button>}
+    {narrowed && <button type="button" className="link-button program-filterbar-clear" onClick={reset}>{t('Clear')}</button>}
   </div>;
 
   const featuredDays = featured ? daysUntil(featured.due.date) : null;
@@ -290,6 +376,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
           </div>
           <DaysChip days={featuredDays} />
           <div className="nb-prog-featured-actions">
+            <BlueButton size="sm" arrow onClick={() => setDetailId(featured.item.id)}>{t('Details')}</BlueButton>
             {featured.item.application_url && <BlueButton variant="ghost" size="sm" href={featured.item.application_url} target="_blank" rel="noreferrer" iconRight={ExternalLink}>{t('View program')}</BlueButton>}
             <BlueButton variant="ghost" size="sm" icon={Bookmark} aria-pressed={featuredSaved} disabled={savedLoading || !savedKnown || savingId === featured.item.id} onClick={() => toggleSaved(featured.item)}>{featuredSaved ? t('In My List') : t('Add to My List')}</BlueButton>
           </div>
@@ -297,8 +384,8 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
         {nextUp.length > 0 && <div className="nb-prog-nextup"><span className="nb-prog-eyebrow"><Clock3 size={14} aria-hidden="true" />{t('Next up')}</span><ul>{nextUp.map(({ item, due }) => <li key={item.id}><span className="nb-prog-nextup-date" aria-hidden="true"><b>{due.day ? formatNumberLocale(due.day) : ''}</b><small>{formatDateLocale(due.date, { month: 'short' })}</small></span><span className="nb-prog-nextup-copy"><b>{item.title}</b><small>{tp('{n} day left|{n} days left', daysUntil(due.date), { n: formatNumberLocale(daysUntil(due.date)) })}</small></span></li>)}</ul></div>}
       </GlassCard>}
       <KpiRow columns={4} className="nb-prog-kpis">
-        <KpiTile tone={0} icon={Award} value={count(openNow)} label={t('Open for applications')} />
-        <KpiTile tone={1} icon={Globe2} value={count(overall.programs.length)} label={t('Open programs in the catalog')} />
+        <KpiTile tone={0} icon={Award} value={count(openNow)} label={t('Open for applications')} onClick={() => setOnlyOpen((value) => !value)} actionLabel={`${t('Open for applications')}: ${openNow}`} />
+        <KpiTile tone={1} icon={Globe2} value={count(overall.programs.length)} label={t('Open programs in the catalog')} onClick={() => { reset(); setOnlySaved(false); }} actionLabel={`${t('Open programs in the catalog')}: ${overall.programs.length}`} />
         <KpiTile tone={2} icon={Bookmark} value={savedKnown ? count(savedIds.size) : '—'} label={t('My List')} onClick={() => setOnlySaved((value) => !value)} actionLabel={`${t('My List')}: ${savedKnown ? savedIds.size : '—'}`} />
         <KpiTile tone={3} icon={Heart} value={count(overall.counts.aid)} label={t('Scholarship available')} onClick={() => update({ aid: !filters.aid })} actionLabel={`${t('Scholarship available')}: ${overall.counts.aid}`} />
       </KpiRow>
@@ -318,7 +405,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     <div className="program-timeline">{groupProgramsByDeadline(shownPrograms).map(({ key, entries }) => <section className="program-month" key={key} aria-labelledby={`program-month-${key}`}>
       <h2 className="program-month-head" id={`program-month-${key}`}><span>{key === 'closed' ? t('Closed') : key === 'undated' ? t('Deadline on the official page') : formatDateLocale(`${key}-01`, { month: 'long', year: 'numeric' })}</span><small>{tp('{count} program|{count} programs', entries.length, { count: entries.length })}</small></h2>
       {entries.map(({ item, closed, due }) => <ProgramRow key={item.id} item={item} closed={closed} due={due} today={today} saved={savedIds.has(item.id)} busy={savedLoading || !savedKnown || savingId === item.id} onToggle={() => toggleSaved(item)} countdown={onlySaved} />)}
-    </section>)}{!shownPrograms.length && (!onlySaved || savedKnown) && <div className="program-empty"><Empty text={onlySaved ? t('No saved programs match these filters.') : t('No programs match these filters.')} />{onlySaved ? <button type="button" className="button primary small" onClick={() => setOnlySaved(false)}>{t('Browse programs')}</button> : filtered && <><p>{t('Try another search or remove a filter.')}</p><button type="button" className="button primary small" onClick={reset}>{t('Reset filters')}</button></>}</div>}</div>
+    </section>)}{!shownPrograms.length && (!onlySaved || savedKnown) && <div className="program-empty"><Empty text={onlySaved ? t('No saved programs match these filters.') : t('No programs match these filters.')} />{onlySaved ? <button type="button" className="button primary small" onClick={() => setOnlySaved(false)}>{t('Browse programs')}</button> : narrowed && <><p>{t('Try another search or remove a filter.')}</p><button type="button" className="button primary small" onClick={reset}>{t('Reset filters')}</button></>}</div>}</div>
     </div>
     {sheetOpen && <div className="program-sheet-backdrop" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
     {rail}
