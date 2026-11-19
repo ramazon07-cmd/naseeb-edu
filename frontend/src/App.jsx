@@ -19,7 +19,7 @@ import { Empty, Modal } from './components/ui';
 import { NotificationPanel } from './components/NotificationPanel';
 import { COUNSELOR_SELF_HEADED, CounselorLayout, counselorPageDescription, counselorPageLabel } from './components/CounselorShell';
 import { CxHead } from './components/counselorUi';
-import { formatNumberLocale, getLanguage, locale, setLanguage, siteTitle, t, tx } from './i18n';
+import { formatNumberLocale, getLanguage, loadLanguage, locale, setLanguage, siteTitle, t, tx } from './i18n';
 import { exportNodePdf } from './lib/exportPdf';
 import { fullName, initials, label, ownStudent } from './lib/labels';
 import { isCounselor, isPlatformAdmin, isTaskManager, usesCounselorLayout } from './lib/roles';
@@ -565,7 +565,10 @@ export default function App() {
   const { data, stats, loading, error, resourceStatus, loadData, loadInitial, ensureLoaded, revalidate, reset: resetWorkspace, refreshStats, updateStats, more, loadMore } = useWorkspaceData(user, handleUnauthorized, { statsRequest: workspaceStatsRequest, statsKey: workspaceStatsKey });
   useEffect(() => (user ? api.onSessionEnded(handleUnauthorized) : undefined), [user, handleUnauthorized]);
 
-  const changeLanguage = useCallback((nextLanguage) => setLanguageState(setLanguage(nextLanguage)), []);
+  // The dictionary is fetched first so the switch renders translated in one go.
+  const changeLanguage = useCallback(async (nextLanguage) => {
+    if (await loadLanguage(nextLanguage)) setLanguageState(setLanguage(nextLanguage));
+  }, []);
 
   // The URL is the source of truth for where the user is: a refresh, a
   // reopened tab, a bookmark or back/forward lands on the same page.

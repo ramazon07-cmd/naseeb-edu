@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { checkBuildApiConfig } from './scripts/api-config.mjs'
 import { injectSessionKey } from './src/sessionKeys.js'
+import { i18nDictionaries } from './scripts/i18n-plugin.mjs'
 
 // /api goes to Django from the same origin as the app, so the HttpOnly refresh
 // cookie (Path=/api/auth/) is first-party in development. The Host header is
@@ -19,12 +20,13 @@ export default defineConfig(({ command, mode }) => {
 })
 
 const config = {
-  plugins: [react(), sessionKey],
+  plugins: [react(), sessionKey, i18nDictionaries()],
   build: {
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('/src/translations/')) return 'translations'
+          // One chunk per language dictionary (see scripts/i18n-plugin.mjs).
+          if (id.startsWith('\0virtual:i18n/')) return `i18n-${id.slice('\0virtual:i18n/'.length)}`
           if (id.includes('/node_modules/lucide-react/')) return 'icons'
           if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/')) return 'react-vendor'
           // The Essay Lab editor engine: only the lazy editor chunk imports it.

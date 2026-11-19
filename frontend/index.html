@@ -67,7 +67,7 @@
           document.documentElement.style.colorScheme = 'light'
         }
         // The hero is only preloaded for visitors who will see the landing
-        // page: not for a signed-in browser (the workspace opens) or #/login.
+        // page: not for a signed-in browser (the workspace opens) or any other path.
         // The session key (src/sessionKeys.js, filled in at build time) holds no
         // secret; tokens are never in storage.
         let signedIn = false
@@ -86,8 +86,11 @@
           mona.crossOrigin = ''
           document.head.appendChild(mona)
         }
+        // Only the landing page shows the hero: /login (and any other path, which opens
+        // the workspace or sign-in) must not spend ~1 MB on an image it never draws.
+        const onLanding = (location.pathname || '/') === '/' && !location.hash
         const hero = document.querySelector('link[data-theme-hero]')
-        if (hero && (signedIn || location.hash === '#/login')) hero.remove()
+        if (hero && (signedIn || !onLanding)) hero.remove()
         else if (hero) {
           // Match the rendered hero, including the storage-disabled fallback.
           const variant = 'light'
