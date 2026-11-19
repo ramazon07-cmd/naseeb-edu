@@ -100,7 +100,7 @@ export default function Folders({ folders, selected, onSelect, onReorder, onDrop
       onDrop={(event) => onDrop(event, folder)} onDragEnd={endDrag}>
       <span className={`el-grip${reordering ? ' is-active' : ''}`} aria-hidden="true"><GripVertical size={14} /></span>
       <button type="button" className="el-folder-name" aria-current={isSelected ? 'true' : undefined} onClick={() => onSelect({ kind: 'folder', id: folder.id })}>
-        <Folder size={16} aria-hidden="true" /><span>{folder.name}</span>
+        <span className="el-mini-ic" aria-hidden="true"><Folder size={15} /></span><span>{folder.name}</span>
       </button>
       {reordering
         ? <span className="el-move-btns">
@@ -121,7 +121,7 @@ export default function Folders({ folders, selected, onSelect, onReorder, onDrop
 
   return <div className="el-folders">
     <div className="el-folders-head">
-      <h2 className="el-folders-title">{t('Folders')}</h2>
+      <h2 className="el-folders-title"><span className="el-mini-ic is-lg" aria-hidden="true"><Folder size={17} /></span>{t('Folders')}</h2>
       {folders.length > 1 && <button type="button" className={`el-chip-btn${reordering ? ' is-on' : ''}`} aria-pressed={reordering} onClick={() => setReordering((value) => !value)}>
         {reordering ? t('Done') : t('Reorder')}
       </button>}
