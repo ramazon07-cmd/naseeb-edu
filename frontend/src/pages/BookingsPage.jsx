@@ -185,7 +185,7 @@ const OVERVIEW_SLOTS = 20;
 // loads once when the page opens, `onSent` runs after a request is sent (the page reloads its meetings), and
 // `locked` (Telegram not connected yet) lets a student look and pick but sends nothing: Request opens
 // `onNeedTelegram` instead, and the chosen time, topic and notes wait for the next press.
-export function BookingForm({ staff = false, defaultStudentId = null, defaultStudentName = '', defaultTopic = '', initialParticipantId = null, onUnavailable, onClose, onSaved, notify, inline = false, locked = false, onNeedTelegram, onSent, onZone, zoneId }) {
+export function BookingForm({ staff = false, defaultStudentId = null, defaultStudentName = '', defaultTopic = '', initialParticipantId = null, onUnavailable, onClose, onSaved, notify, inline = false, locked = false, onNeedTelegram, onSent, onZone, zoneId, availabilityVersion = 0 }) {
   const [student, setStudent] = useState(defaultStudentId ? { id: defaultStudentId, name: defaultStudentName } : null);
   const [participants, setParticipants] = useState([]);
   const [participantId, setParticipantId] = useState('');
@@ -201,6 +201,13 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
   const [peopleAttempt, setPeopleAttempt] = useState(0);
   const [slotStates, setSlotStates] = useState({});
   const [slotAttempt, setSlotAttempt] = useState(0);
+  // The page cancelled or moved a meeting: the inline picker's cached times are stale, so ask once more.
+  const seenVersion = useRef(availabilityVersion);
+  useEffect(() => {
+    if (seenVersion.current === availabilityVersion) return;
+    seenVersion.current = availabilityVersion;
+    setSlotAttempt((value) => value + 1);
+  }, [availabilityVersion]);
   const [saving, setSaving] = useState(false);
   // After a student's request is sent: a short confirmation, then the usual onSaved (close and reload).
   const [sent, setSent] = useState(null);
@@ -1142,7 +1149,7 @@ export function BookingsPage({ user, data, reload, notify, updateUser, setPage, 
       window.history.replaceState(window.history.state, '', `${window.location.pathname}${withQuery(window.location.search, { book: null })}${window.location.hash}`);
     }
   }, []);
-  const props = { user, data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, retryResources };
+  const props = { user, data, reload, notify, guard, banner, picker, bookId, locked, telegramOpen: locked && telegramOpen, setPage, resourceStatus, retryResources };
   // key: a new zone redraws every time on the page.
   // No key for students: a new zone redraws with the times already loaded instead of loading them again.
   if (user.role === 'student') return <StudentBookingsPage zoneId={zoneId} changeZone={changeZone} {...props} />;
@@ -1161,8 +1168,10 @@ function useStudentTeam(data, resourceStatus) {
   };
 }
 
-function StudentBookingsPage({ data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, zoneId, changeZone }) {
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker, bookId, locked, telegramOpen, setPage, resourceStatus, zoneId, changeZone }) {
   const [tab, setTab] = useState('upcoming');
+  const [availabilityVersion, setAvailabilityVersion] = useState(0);
+  const freeTimesChanged = () => setAvailabilityVersion((value) => value + 1);
   // The picker sits on the page and loads once when it opens; the header buttons bring it to the screen.
   function focusBooking() {
     const card = document.getElementById('meetings-book');
@@ -1171,11 +1180,13 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
     window.setTimeout(() => (card.querySelector('.booking-cal-person[aria-pressed="true"]') || card.querySelector('button:not(:disabled)'))?.focus({ preventScroll: true }), 250);
   }
   // A shared booking link (/meetings?book=<id>) preselects that person and brings the picker into view.
+  // While the Telegram dialog is open it keeps the focus; the picker gets it once the dialog closes (or links).
+  const linkFocused = useRef(false);
   useEffect(() => {
-    if (!bookId) return undefined;
-    const timer = window.setTimeout(focusBooking, 400);
+    if (!bookId || linkFocused.current || telegramOpen) return undefined;
+    const timer = window.setTimeout(() => { linkFocused.current = true; focusBooking(); }, 400);
     return () => window.clearTimeout(timer);
-  }, [bookId]);
+  }, [bookId, telegramOpen]);
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const teamRef = useRef(null);
@@ -1213,6 +1224,7 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
       await methods[action](item.id);
       notify({ cancel: t("Meeting cancelled."), approve: t("Meeting confirmed."), reject: t("Meeting declined.") }[action]);
       reload();
+      if (action !== 'approve') freeTimesChanged();
     } catch (err) {
       notify(err.message, 'error');
     } finally {
@@ -1238,7 +1250,7 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
       <KpiTile tone={2} icon={Timer} value={minutes} unit={t("min")} label={t("Minutes in meetings")} />
       {team.known && <KpiTile tone={3} icon={UsersRound} value={team.items.length} label={t("My Naseeb team")} onClick={() => teamRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} actionLabel={t("My Naseeb team")} />}
     </KpiRow>
-    <BookingForm inline locked={locked} onNeedTelegram={guard(() => {})} initialParticipantId={bookId} zoneId={zoneId} onZone={changeZone} onSent={reload}
+    <BookingForm inline locked={locked} onNeedTelegram={guard(() => {})} initialParticipantId={bookId} zoneId={zoneId} onZone={changeZone} onSent={reload} availabilityVersion={availabilityVersion}
       onUnavailable={() => notify(t("This booking link isn't available for your account."), 'error')} onSaved={reload} notify={notify} />
     <div className="nb-meet-bar">
       <PillTabs tabs={tabs} value={tab} onChange={setTab} label={t("Meetings")} idPrefix="nb-meet" />
@@ -1276,7 +1288,7 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
       </GlassCard>
       {teamCard}
     </div>
-    {rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
+    {rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();freeTimesChanged();}} notify={notify} />}
   </div>;
 }
 
