@@ -730,6 +730,8 @@
 
 .nb-blue .nb-task-rows {
   display: grid;
+  /* One shrinkable column: long titles ellipsize instead of widening the page on phones. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin: 0 0 var(--nb-gap);
   padding: 0;
@@ -740,6 +742,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   min-height: 56px;
   padding: 8px 12px;
   border: 1px solid var(--nb-line);
