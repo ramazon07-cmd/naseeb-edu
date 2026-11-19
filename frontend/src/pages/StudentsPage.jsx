@@ -10,6 +10,7 @@ import { countTotal } from '../lib/metrics';
 import { Record, StudentAvatar, Stat, LevelProgress, ProfileCard, Detail, StudentTable } from '../components/records';
 import { FILTER_GRADES, contactEmail, dateText, gradeText, joinParts, money } from '../lib/format';
 import { label, fullName, initials } from '../lib/labels';
+import { Chip, DateTile } from '../design/blue/ui';
 import { Eye, ExternalLink, Fingerprint, UsersRound, ShieldCheck, Search, Plus, LifeBuoy } from 'lucide-react';
 import { api } from '../api';
 import { Field, CheckboxControl } from '../components/forms';
@@ -46,19 +47,47 @@ export function StudentOverviewList({ title, resource, items, data }) {
   return <><Panel title={title} ><div className="record-list">{items.map((item) => <RecordRow key={item.id} resource={resource} item={item} data={data} showStudent={false} actions={<GoogleDocsActions item={item} onPreview={() => setViewingGoogleDoc(item)} />} />)}{!items.length && <Empty />}</div></Panel>{viewingGoogleDoc && <GoogleDocsRecordModal item={viewingGoogleDoc} onClose={() => setViewingGoogleDoc(null)} />}</>;
 }
 
-export function StudentTaskList({ items, onView }) {
+const countChip = (n) => <span className="nb-ov-count">{formatNumberLocale(n)}</span>;
+const PRIORITY_VARIANT = { high: 'overdue', urgent: 'overdue', medium: 'warn', low: 'default' };
+const dayParts = (value) => {
+  const d = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : null;
+  return d && !Number.isNaN(d.getTime()) ? { day: String(d.getDate()), month: d.toLocaleDateString(undefined, { month: 'short' }) } : null;
+};
+
+// `studentView`: the student's own Student Center (date tiles, priority chips, count in the header).
+// Counselors see the classic rows below.
+export function StudentTaskList({ items, onView, studentView = false }) {
+  if (studentView) return <Panel title={t("Assigned tasks & responses")} action={countChip(items.length)}><ul className="nb-ov-list">{items.map((task) => {
+    const parts = dayParts(task.due_date);
+    return <li key={task.id}>
+      {parts ? <DateTile hot={task.priority === 'high'} {...parts} /> : <span className="nb-ov-nodate" aria-hidden="true" />}
+      <span className="nb-ov-copy"><b>{task.title}</b><small>{joinParts(task.due_date && tx`Due ${dateText(task.due_date)}`, task.submitted_at && tx`Submitted ${dateText(task.submitted_at)}`)}</small></span>
+      {task.priority && <Chip variant={PRIORITY_VARIANT[task.priority] || 'default'}>{label(task.priority)}</Chip>}
+      {task.status && <Badge>{task.status}</Badge>}
+      <button className="button quiet small" onClick={() => onView(task)}><Eye size={14} /> {t("View response")}</button>
+    </li>;
+  })}</ul>{!items.length && <Empty text={t("No assigned tasks found.")} />}</Panel>;
   return <Panel title={t("Assigned tasks & responses")} ><div className="record-list">{items.map((task) => <Record key={task.id} title={task.title} meta={joinParts(task.due_date && tx`Due ${dateText(task.due_date)}`, task.priority && tx`Priority: ${label(task.priority)}`, task.submitted_at && tx`Submitted ${dateText(task.submitted_at)}`)} description={task.student_response || task.description} badge={task.status} actions={<button className="button quiet small" onClick={() => onView(task)}><Eye size={14} /> {t("View response")}</button>} />)}{!items.length && <Empty text={t("No assigned tasks found.")} />}</div></Panel>;
 }
 
-export function StudentCollegeList({ items }) {
+export function StudentCollegeList({ items, studentView = false }) {
+  if (studentView) return <Panel title={t("College list")} action={countChip(items.length)}><ul className="nb-ov-list">{items.map((application) => {
+    const name = application.university_detail?.name || t("University");
+    return <li key={application.id}>
+      <span className="nb-ov-ini" aria-hidden="true">{initials(name)}</span>
+      <span className="nb-ov-copy"><b>{name}</b><small>{joinParts(application.program, label(application.tier), application.deadline && tx`Deadline: ${dateText(application.deadline)}`)}</small></span>
+      {application.status && <Badge>{application.status}</Badge>}
+      {application.application_portal_url && <a className="button quiet small" href={application.application_portal_url} target="_blank" rel="noreferrer">{t("Application portal")} <ExternalLink size={14} /></a>}
+    </li>;
+  })}</ul>{!items.length && <Empty text={t("The student has not added any universities to the college list yet.")} />}</Panel>;
   return <Panel title={t("College list")} ><div className="record-list">{items.map((application) => <Record key={application.id} title={application.university_detail?.name || t("University")} meta={joinParts(application.program, label(application.tier), application.deadline && tx`Deadline: ${dateText(application.deadline)}`)} description={application.notes} badge={application.status} actions={application.application_portal_url && <a className="button quiet small" href={application.application_portal_url} target="_blank" rel="noreferrer">{t("Application portal")} <ExternalLink size={14} /></a>} />)}{!items.length && <Empty text={t("The student has not added any universities to the college list yet.")} />}</div></Panel>;
 }
 
 // Staff see only the essays a student chose to share.
 export const NO_SHARED_ESSAYS = 'This student hasn’t shared any essays yet.';
 
-export function StudentEssayList({ items, onView }) {
-  return <Panel title={t("Essays & Google Docs")} className="print-private" ><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={joinParts(tx`Version ${essay.version}`, essay.university_name || t("General essay"))} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={NO_SHARED_ESSAYS} />}</div></Panel>;
+export function StudentEssayList({ items, onView, studentView = false }) {
+  return <Panel title={t("Essays & Google Docs")} className="print-private" action={studentView ? countChip(items.length) : undefined}><div className="record-list">{items.map((essay) => <Record key={essay.id} title={essay.title} meta={joinParts(tx`Version ${essay.version}`, essay.university_name || t("General essay"))} description={essay.counselor_comment || essay.prompt} badge={essay.status} actions={<><button className="button quiet small" onClick={() => onView(essay)}><Eye size={14} /> {t("Essay details")}</button><GoogleDocsActions item={essay} /></>} />)}{!items.length && <Empty text={NO_SHARED_ESSAYS} />}</div></Panel>;
 }
 
 export function StudentDocumentList({ title, items, onPreview, notify, hideStatus = false }) {
@@ -160,7 +189,7 @@ export function StudentOverview({ student, data: workspaceData, onBack, user, no
       <div className="split-grid wide-left"><ProfileCard student={student} /><Panel title={t("Contact & planning")} className="print-private" ><div className="detail-grid"><Detail label={t("Phone")} value={student.user_detail?.phone} /><Detail label={t("Parent contact")} value={student.parent_contact} /><Detail label={t("Budget")} value={student.budget_usd == null ? null : money(student.budget_usd)} /><Detail label={t("Target countries")} value={student.target_countries} /><Detail label={t("Scholarship")} value={student.scholarship_needed ? t("Needed") : t("Not needed")} /><Detail label={t("Counselor")} value={student.counselor_name} /></div>{student.notes && <div className="student-notes"><span>{t("Internal notes")}</span><p>{student.notes}</p></div>}</Panel></div>
       <Panel title={t("Guardian")} className="print-private" ><div className="detail-grid"><Detail label={t("Guardian name")} value={student.guardian_name} /><Detail label={t("Relationship")} value={student.guardian_relation ? label(student.guardian_relation) : ''} /><Detail label={t("Contact")} value={student.parent_contact} /></div></Panel>
     </>}
-    <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} /><StudentCollegeList items={applications} /><StudentEssayList items={essays} onView={setSelectedEssay} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} /></div>
+    <div className="overview-grid student-workspace-grid"><StudentTaskList items={tasks} onView={setSelectedTask} studentView={user?.role === 'student'} /><StudentCollegeList items={applications} studentView={user?.role === 'student'} /><StudentEssayList items={essays} onView={setSelectedEssay} studentView={user?.role === 'student'} /><StudentDocumentList title={t("Documents")} items={regularDocuments} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} /></div>
     <div className="overview-grid">
       {STUDENT_RESOURCE_GROUPS.filter(([, resource]) => studentRecordEndpoints(user).includes(resource) && (!profile || !PROFILE_SUMMARY_RESOURCES.includes(resource))).map(([title, resource]) => <StudentOverviewList key={resource} title={title} resource={resource} items={studentItems(data, resource, student.id)} data={data} />)}
       <StudentDocumentList title={t("Certificates")} items={certificates} onPreview={setSelectedDocument} notify={notify} hideStatus={Boolean(profile)} />

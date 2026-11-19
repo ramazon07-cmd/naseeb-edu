@@ -282,6 +282,15 @@ Rules kept in all sections: no backend or bot change, no new requests or polling
 | Dashboard deadline rows: application | skipped: the dashboard deadline list has no application items | CompactDashboard.jsx |
 | Page tips for Meetings (`#meetings-book`, KPI row) and Essay Lab (`.el-library`, `.el-folders`) | built now; targets that are absent are dropped; no edits to those pages | design/blue/pageTips.js |
 
+## Audit follow-up (round 4)
+
+| mockup element | app status | file |
+| --- | --- | --- |
+| Program detail closes when `?program=` is removed (Programs nav item, back) | built now | pages/ProgramsPage.jsx |
+| Programs "Next up" rows open the program detail | built now (buttons) | pages/ProgramsPage.jsx, design/pages/programs-blue.css |
+| College Search deadline rows open Applications | built now (buttons) | pages/CollegeSearchPage.jsx, design/pages/colleges-blue.css |
+| Student Center overview: task rows with date tiles and priority chips, university rows with initials, list-header counts (tasks, colleges, essays) | built now for the student viewer only (`studentView` is set from `user.role === 'student'`; counselor Student 360 keeps the classic rows); values already loaded | pages/StudentsPage.jsx, design/pages/center-blue.css |
+
 ## Out of scope (other branches)
 
 | mockup element | app status | file |

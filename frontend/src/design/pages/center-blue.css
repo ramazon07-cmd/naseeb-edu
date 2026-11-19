@@ -665,3 +665,56 @@
   border-radius: inherit;
   background: var(--nb-blue);
 }
+
+/* Student-only overview lists (task rows with date tiles and priority chips, universities with initials). */
+.nb-blue .nb-ov-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-tint);
+  color: var(--nb-blue);
+  font-size: var(--nb-text-sm);
+  font-weight: 800;
+}
+
+.nb-blue .nb-ov-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-ov-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.nb-blue .nb-ov-copy {
+  display: grid;
+  flex: 1 1 160px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nb-blue .nb-ov-copy small {
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-ov-ini,
+.nb-blue .nb-ov-nodate {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-tint);
+  color: var(--nb-blue);
+  font-weight: 800;
+}

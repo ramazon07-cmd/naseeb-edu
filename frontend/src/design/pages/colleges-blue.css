@@ -1037,3 +1037,32 @@
   font-size: var(--nb-text-sm);
   font-weight: 800;
 }
+
+.nb-blue .nb-match-deadline-open {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-match-deadline-open:hover b {
+  text-decoration: underline;
+}
+
+.nb-blue .nb-match-deadline-open:focus-visible {
+  outline: 3px solid var(--nb-focus, var(--nb-blue));
+  outline-offset: 4px;
+  border-radius: var(--nb-r-xs);
+}
+
+.nb-blue .nb-match-deadline-open > span:last-child {
+  display: grid;
+  min-width: 0;
+}

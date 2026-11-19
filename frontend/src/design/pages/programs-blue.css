@@ -818,3 +818,27 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.nb-blue .nb-prog-nextup-open {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-prog-nextup-open:hover b {
+  text-decoration: underline;
+}
+
+.nb-blue .nb-prog-nextup-open:focus-visible {
+  outline: 3px solid var(--nb-focus, var(--nb-blue));
+  outline-offset: 4px;
+  border-radius: var(--nb-r-xs);
+}

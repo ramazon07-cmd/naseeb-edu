@@ -252,7 +252,13 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [onlyFree, setOnlyFree] = useState(false);
   const [detailId, setDetailId] = useState(programId ?? null);
-  useEffect(() => { if (programId != null) setDetailId(programId); }, [programId]);
+  // `?program=` opens that program; the URL losing it (the Programs nav item, back) closes the detail.
+  const lastProgramId = useRef(programId);
+  useEffect(() => {
+    if (programId != null) setDetailId(programId);
+    else if (lastProgramId.current != null) setDetailId(null);
+    lastProgramId.current = programId;
+  }, [programId]);
   const [radarOpen, setRadarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetRef = useRef(null);
@@ -393,7 +399,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
             <BlueButton variant="ghost" size="sm" icon={Bookmark} aria-pressed={featuredSaved} disabled={savedLoading || !savedKnown || savingId === featured.item.id} onClick={() => toggleSaved(featured.item)}>{featuredSaved ? t('In My List') : t('Add to My List')}</BlueButton>
           </div>
         </div>
-        {nextUp.length > 0 && <div className="nb-prog-nextup"><span className="nb-prog-eyebrow"><Clock3 size={14} aria-hidden="true" />{t('Next up')}</span><ul>{nextUp.map(({ item, due }) => <li key={item.id}><span className="nb-prog-nextup-date" aria-hidden="true"><b>{due.day ? formatNumberLocale(due.day) : ''}</b><small>{formatDateLocale(due.date, { month: 'short' })}</small></span><span className="nb-prog-nextup-copy"><b>{item.title}</b><small>{tp('{n} day left|{n} days left', daysUntil(due.date), { n: formatNumberLocale(daysUntil(due.date)) })}</small></span></li>)}</ul><DeadlineRadarButton onClick={() => setRadarOpen(true)} /></div>}
+        {nextUp.length > 0 && <div className="nb-prog-nextup"><span className="nb-prog-eyebrow"><Clock3 size={14} aria-hidden="true" />{t('Next up')}</span><ul>{nextUp.map(({ item, due }) => <li key={item.id}><button type="button" className="nb-prog-nextup-open" onClick={() => setDetailId(item.id)}><span className="nb-prog-nextup-date" aria-hidden="true"><b>{due.day ? formatNumberLocale(due.day) : ''}</b><small>{formatDateLocale(due.date, { month: 'short' })}</small></span><span className="nb-prog-nextup-copy"><b>{item.title}</b><small>{tp('{n} day left|{n} days left', daysUntil(due.date), { n: formatNumberLocale(daysUntil(due.date)) })}</small></span></button></li>)}</ul><DeadlineRadarButton onClick={() => setRadarOpen(true)} /></div>}
       </GlassCard>}
       <KpiRow columns={4} className="nb-prog-kpis">
         <KpiTile tone={0} icon={Award} value={count(openNow)} label={t('Open for applications')} onClick={() => setOnlyOpen((value) => !value)} actionLabel={`${t('Open for applications')}: ${openNow}`} />

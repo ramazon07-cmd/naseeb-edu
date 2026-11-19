@@ -580,10 +580,10 @@ function CollegeMatchSummary({ research, applications = [], setPage, activeTier,
         <span className="nb-match-eyebrow">{t('University deadlines')}</span>
         {deadlines.length > 0 ? <ul>{deadlines.map(({ application, kind, date, days }) => {
           const when = parseDateValue(date);
-          return <li key={`${application.id}-${kind}`}>
+          return <li key={`${application.id}-${kind}`}><button type="button" className="nb-match-deadline-open" onClick={() => setPage('applications')}>
             <DateTile hot={days <= 3} day={String(when.getDate())} month={formatDateLocale(date, { month: 'short' })} />
             <span><b>{application.university_detail?.name}</b><small>{kind === 'aid' ? t('Scholarship') : t('Apply')} · {dueLabel(days)}</small></span>
-          </li>;
+          </button></li>;
         })}</ul> : <p>{t('No upcoming deadlines yet.')}</p>}
         {onRadar && <DeadlineRadarButton onClick={onRadar} />}
       </div>
