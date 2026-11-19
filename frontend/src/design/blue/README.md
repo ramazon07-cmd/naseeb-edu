@@ -52,11 +52,10 @@ yourself. Light cards over the mountain backdrop use `GlassCard` (frosted) or
 * `.nb-main` is the content column (left padding 0, the sidebar column has the gap).
   The top-right controls (search, export PDF, language, theme and anything you add with
   `HeaderTools`) are an absolutely positioned overlay in the first ~72px of the column:
-  `.nb-main` has `padding-top: 80px` so a normal `PageHeader` starts below them.
-  A page whose header should share the controls' row (the dashboard greeting) can pull
-  itself up with `.nb-page-dashboard .nb-page-header { margin-top: -56px; }`
-  (`nb-page-<page key>` is on `.nb-main`, `data-nb-page` on the shell). On mobile (<=820px)
-  the controls are a normal row above the content: no negative margin there.
+  `.nb-main` has `padding-top: 24px` on desktop and every `PageHeader` (the dashboard greeting
+  too) shares the controls' row: the shell measures the controls into `--nb-topw` and the
+  header keeps that much padding on its right. On mobile (<=820px) the controls are a normal
+  row above the content.
 * Page content is a `div.page-content.nb-content` (the PDF export and old code still use `.page-content`).
 * Bottom dock on mobile is 68px + 12px offset; `.nb-main` already pads the bottom for it.
 * Un-ported pages: while no `PageHeader` is mounted, the shell shows a fallback title and

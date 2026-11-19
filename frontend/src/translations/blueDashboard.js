@@ -5,6 +5,7 @@ export const BLUE_DASHBOARD_TRANSLATIONS = {
   'Review now': ['Hozir ko\u2018rish', 'Посмотреть'],
   'No deadlines coming up.': ['Yaqin muddatlar yo\u2018q.', 'Ближайших дедлайнов нет.'],
   '{n} task open|{n} tasks open': ['{n} ta ochiq vazifa', '{n} открытое задание|{n} открытых задания|{n} открытых заданий'],
+  'Open Screen Time': ['Ekran vaqtini ochish', 'Открыть экранное время'],
   'My activity': ['Mening faoliyatim', 'Моя активность'],
   'avg {value}': ['o\u2018rtacha {value}', 'в среднем {value}'],
   'Unread alerts': ['O\u2018qilmagan bildirishnomalar', 'Непрочитанные уведомления'],

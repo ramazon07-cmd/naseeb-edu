@@ -17,6 +17,6 @@ export function StorePage({ data, query, setPage }) {
       <Chip variant={item.is_featured ? 'gold' : 'default'}>{t(item.category)}</Chip>
       <p>{t(item.description)}</p>
     </GlassCard>)}</div>
-    {!items.length && <EmptyState icon={ShoppingCart} title={t('No information available yet.')} />}
+    {!items.length && <GlassCard tone="solid"><EmptyState icon={ShoppingCart} title={t('No information available yet.')} /></GlassCard>}
   </div>;
 }

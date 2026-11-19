@@ -1,0 +1,5 @@
+/* Student Notifications (blue design): four summary tiles that wrap to two columns on narrow
+   content widths instead of squeezing their labels. */
+.nb-blue .nb-notif .nb-kpi-row {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+}

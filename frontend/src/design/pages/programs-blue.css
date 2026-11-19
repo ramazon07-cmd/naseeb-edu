@@ -14,7 +14,7 @@
 
 .nb-blue .nb-prog-top {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--nb-gap);
   align-items: stretch;
 }
@@ -24,7 +24,7 @@
 }
 
 .nb-blue .nb-prog-top .nb-prog-kpis {
-  --nb-kpi-cols: 2;
+  --nb-kpi-cols: 4;
 }
 
 .nb-blue .nb-prog-featured {
@@ -99,7 +99,8 @@
   gap: 14px;
 }
 
-.nb-blue .nb-prog-featured .nb-card-body > .nb-chip {
+.nb-blue .nb-prog-featured .nb-card-body > .nb-chip,
+.nb-blue .nb-prog-featured-main > .nb-chip {
   justify-self: start;
   background: var(--nb-gold);
   color: var(--nb-gold-fg);
@@ -307,5 +308,98 @@
   .nb-blue .nb-programs .program-search,
   .nb-blue .nb-programs .program-search:focus-within {
     animation: none;
+  }
+}
+
+/* Featured card: the next deadline on the left, the following ones on the right. */
+.nb-blue .nb-prog-featured.has-next > .nb-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  column-gap: 24px;
+}
+
+.nb-blue .nb-prog-featured-main {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.nb-blue .nb-prog-nextup {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-left: 24px;
+  border-left: 1px solid var(--nb-hero-line);
+}
+
+.nb-blue .nb-prog-nextup ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-prog-nextup li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--nb-hero-line);
+  border-radius: var(--nb-r-sm);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nb-blue .nb-prog-nextup-date {
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-content: center;
+  width: 40px;
+  height: 44px;
+  border-radius: 12px;
+  background: #fff;
+  color: #04163f;
+  line-height: 1.05;
+}
+
+.nb-blue .nb-prog-nextup-date b {
+  font-size: var(--nb-text-md);
+}
+
+.nb-blue .nb-prog-nextup-date small {
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.nb-blue .nb-prog-nextup-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.nb-blue .nb-prog-nextup-copy b,
+.nb-blue .nb-prog-nextup-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-blue .nb-prog-nextup-copy small {
+  color: var(--nb-hero-soft);
+  font-size: var(--nb-text-xs);
+}
+
+@media (max-width: 820px) {
+  .nb-blue .nb-prog-featured.has-next > .nb-card-body {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 14px;
+  }
+
+  .nb-blue .nb-prog-nextup {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid var(--nb-hero-line);
+    border-left: 0;
   }
 }

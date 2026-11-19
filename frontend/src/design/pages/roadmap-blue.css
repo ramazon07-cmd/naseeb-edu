@@ -171,3 +171,546 @@
     top: 40px;
   }
 }
+
+/* ---- Flight route hero (the plane flies from the start to the current mission) ---------------- */
+.nb-blue .nb-roadmap .nb-rm-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 22px 24px 20px;
+}
+
+.nb-blue .nb-roadmap .nb-rm-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.nb-blue .nb-roadmap .nb-rm-lv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.nb-blue .nb-roadmap .nb-rm-chip {
+  padding: 6px 14px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-tint-strong);
+  color: var(--nb-link);
+  font-weight: 800;
+}
+
+.nb-blue .nb-roadmap .nb-rm-top .roadmap-star-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+}
+
+.nb-blue .nb-roadmap .nb-rm-top .roadmap-progress-meter {
+  display: flex;
+  flex: 1 1 360px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  min-width: 0;
+}
+
+.nb-blue .nb-roadmap .nb-rm-top .roadmap-progress-meter .progress {
+  flex: 0 1 240px;
+  order: 1;
+}
+
+.nb-blue .nb-roadmap .nb-rm-top .roadmap-progress-meter > b {
+  order: 2;
+  font-size: var(--nb-text-lg);
+}
+
+.nb-blue .nb-roadmap .nb-rm-note {
+  margin: 0;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-roadmap .nb-rm-sky {
+  position: relative;
+  padding: 22px 24px 16px;
+  border: 1px solid var(--nb-kpi-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-kpi-0);
+  box-shadow: var(--nb-kpi-shadow);
+  color: var(--nb-kpi-fg);
+  container-type: inline-size;
+  width: 100%;
+  box-sizing: border-box;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.nb-blue .nb-roadmap .nb-rm-sky::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.14) 1.2px, transparent 1.6px) 0 0 / 22px 22px;
+  mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
+}
+
+.nb-blue .nb-roadmap .nb-rm-fp-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.nb-blue .nb-roadmap .fp-area {
+  fill: url('#nbFpA');
+}
+
+.nb-blue .nb-roadmap .fp-gr {
+  stroke: rgba(255, 255, 255, 0.24);
+  stroke-width: 1;
+}
+
+.nb-blue .nb-roadmap .fp-drop {
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1.4;
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+
+.nb-blue .nb-roadmap .fp-trk {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.6);
+  stroke-width: 3;
+  stroke-dasharray: 0.1 10;
+  stroke-linecap: round;
+}
+
+.nb-blue .nb-roadmap .fp-glow {
+  fill: none;
+  stroke: #99caff;
+  stroke-width: 14;
+  stroke-linecap: round;
+  opacity: 0.5;
+  filter: blur(6px);
+}
+
+.nb-blue .nb-roadmap .fp-done {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.nb-blue .nb-roadmap .fp-n {
+  cursor: pointer;
+  outline: none;
+}
+
+.nb-blue .nb-roadmap .fp-n .d {
+  transition: transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.nb-blue .nb-roadmap .fp-n:hover .d,
+.nb-blue .nb-roadmap .fp-n:focus-visible .d {
+  transform: scale(1.15);
+}
+
+.nb-blue .nb-roadmap .fp-n .hit {
+  fill: transparent;
+}
+
+.nb-blue .nb-roadmap .fp-n:focus-visible .hit {
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+.nb-blue .nb-roadmap .fp-n.ok .d {
+  fill: #fff;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 7;
+  paint-order: stroke;
+}
+
+.nb-blue .nb-roadmap .fp-n.ok .ck {
+  fill: none;
+  stroke: #0a3fa8;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.nb-blue .nb-roadmap .fp-n.cur .d {
+  fill: #0a3fa8;
+  stroke: #fff;
+  stroke-width: 5;
+}
+
+.nb-blue .nb-roadmap .fp-n.cur .core {
+  fill: #fff;
+  pointer-events: none;
+}
+
+.nb-blue .nb-roadmap .fp-n .halo,
+.nb-blue .nb-roadmap .fp-end .halo {
+  fill: #fff;
+  opacity: 0.2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nb-rm-pulse 2.4s ease-in-out infinite;
+}
+
+.nb-blue .nb-roadmap .fp-n.lk .d {
+  fill: rgba(4, 30, 90, 0.55);
+  stroke: rgba(190, 220, 255, 0.75);
+  stroke-width: 2;
+}
+
+.nb-blue .nb-roadmap .fp-n.lk text {
+  fill: #e3f2ff;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.nb-blue .nb-roadmap .fp-end .d {
+  fill: rgba(4, 30, 90, 0.6);
+  stroke: #f2c14e;
+  stroke-width: 3.5;
+}
+
+.nb-blue .nb-roadmap .fp-end .halo {
+  fill: #f2c14e;
+  opacity: 0.22;
+}
+
+.nb-blue .nb-roadmap .fp-end path {
+  fill: none;
+  stroke: #f2c14e;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nb-blue .nb-roadmap .fp-pl path {
+  fill: #fff;
+  stroke: #0a3fa8;
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+.nb-blue .nb-roadmap .nb-rm-bob {
+  animation: nb-rm-bob 3.2s ease-in-out infinite;
+}
+
+.nb-blue .nb-roadmap .nb-rm-fp-row {
+  position: relative;
+  height: 64px;
+  margin-top: 8px;
+}
+
+.nb-blue .nb-roadmap .fp-l {
+  position: absolute;
+  top: 0;
+  left: var(--x);
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 2px;
+  width: 10.6%;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: #fff;
+  font: inherit;
+  text-align: center;
+  transform: translateX(-50%);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.nb-blue .nb-roadmap .fp-l:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.nb-blue .nb-roadmap .fp-l:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.nb-blue .nb-roadmap .fp-l b {
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.nb-blue .nb-roadmap .fp-l small {
+  color: rgba(227, 242, 255, 0.82);
+  font-size: var(--nb-text-xs);
+  font-weight: 650;
+}
+
+.nb-blue .nb-roadmap .fp-l.lk b {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 700;
+}
+
+.nb-blue .nb-roadmap .fp-l.cur {
+  background: #fff;
+  color: #0a1f44;
+  box-shadow: 0 14px 26px -14px rgba(2, 11, 36, 0.7);
+}
+
+.nb-blue .nb-roadmap .fp-l.cur small {
+  color: #0a3fa8;
+  font-weight: 800;
+}
+
+.nb-blue .nb-roadmap .fp-l.end {
+  cursor: default;
+}
+
+.nb-blue .nb-roadmap .fp-l.end:hover {
+  background: none;
+}
+
+.nb-blue .nb-roadmap .fp-l.end b {
+  color: #ffd98a;
+}
+
+.nb-blue .nb-roadmap .nb-rm-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--nb-muted);
+  font-weight: 600;
+}
+
+.nb-blue .nb-roadmap .nb-rm-foot b {
+  color: var(--nb-ink-strong);
+  font-weight: 800;
+}
+
+/* ---- Level path and tasks, side by side ---------------------------------------------------------- */
+.nb-blue .nb-roadmap .nb-rm-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nb-gap);
+  align-items: start;
+}
+
+.nb-blue .nb-roadmap .nb-rm-path {
+  display: grid;
+  gap: 12px;
+  padding: var(--nb-pad);
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-xl);
+  background: var(--nb-glass);
+  box-shadow: var(--nb-shadow);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+}
+
+.nb-blue .nb-roadmap .nb-rm-path .roadmap-steps {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.nb-blue .nb-roadmap .nb-rm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nb-blue .nb-roadmap .nb-rm-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--nb-ink-strong);
+  font-size: var(--nb-text-lg);
+  font-weight: 800;
+}
+
+.nb-blue .nb-roadmap .nb-rm-head span {
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+}
+
+.nb-blue .nb-roadmap .nb-rm-guide {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 4px;
+  color: var(--nb-ink-2);
+  font-size: var(--nb-text-sm);
+  font-style: normal;
+}
+
+.nb-blue .nb-roadmap .nb-rm-guide small {
+  color: var(--nb-link);
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+@media (min-width: 1101px) {
+  .nb-blue .nb-roadmap .nb-rm-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 900px) {
+  .nb-blue .nb-roadmap .nb-rm-fp-row {
+    height: 100px;
+  }
+
+  .nb-blue .nb-roadmap .fp-l {
+    width: 20%;
+  }
+
+  .nb-blue .nb-roadmap .fp-l:nth-child(even) {
+    top: 42px;
+  }
+
+  .nb-blue .nb-roadmap .fp-l small {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-roadmap .nb-rm-sky {
+    padding: 14px 8px 10px;
+  }
+
+  .nb-blue .nb-roadmap .nb-rm-fp-row {
+    display: none;
+  }
+}
+
+@keyframes nb-rm-pulse {
+  50% {
+    transform: scale(1.18);
+    opacity: 0.08;
+  }
+}
+
+@keyframes nb-rm-bob {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-blue .nb-roadmap .fp-n .halo,
+  .nb-blue .nb-roadmap .fp-end .halo,
+  .nb-blue .nb-roadmap .nb-rm-bob {
+    animation: none;
+  }
+}
+
+/* ---- Task list lead (shared by the roadmap and the Tasks page) -------------------------------- */
+.nb-blue .nb-task-lead {
+  display: grid;
+  gap: 12px;
+  margin-bottom: var(--nb-gap);
+  padding: 16px var(--nb-pad);
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-xl);
+  background: var(--nb-card);
+  box-shadow: var(--nb-shadow);
+  color: var(--nb-card-fg);
+}
+
+.nb-blue .nb-task-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--nb-muted);
+  font-weight: 700;
+}
+
+.nb-blue .nb-task-count svg {
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-task-count b {
+  color: var(--nb-ink-strong);
+  font-size: var(--nb-text-lg);
+}
+
+.nb-blue .nb-task-first {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--nb-warn);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-warn-bg);
+}
+
+.nb-blue .nb-task-first > div {
+  display: grid;
+  min-width: 0;
+}
+
+.nb-blue .nb-task-first small {
+  color: var(--nb-warn);
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.nb-blue .nb-task-first b {
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-task-first p {
+  margin: 2px 0 0;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-task-date {
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-content: center;
+  width: 44px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #0a3fa8, #04163f);
+  color: #fff;
+  line-height: 1.05;
+}
+
+.nb-blue .nb-task-date b {
+  color: inherit;
+  font-size: var(--nb-text-md);
+}
+
+.nb-blue .nb-task-date small {
+  color: inherit;
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}

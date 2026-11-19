@@ -3,6 +3,12 @@
 export const BLUE_CATALOG_TRANSLATIONS = {
   'Featured · next deadline': ['Tanlangan · eng yaqin muddat', 'Рекомендуем · ближайший срок'],
   'Open programs in the catalog': ['Katalogdagi ochiq dasturlar', 'Открытые программы в каталоге'],
+  'List': ['Ro\u2018yxat', 'Список'],
+  'Board': ['Doska', 'Доска'],
+  'View as': ['Ko\u2018rinish', 'Вид'],
+  'Matched to you': ['Sizga mos', 'Подобрано для вас'],
+  'University deadlines': ['Universitet muddatlari', 'Сроки университетов'],
+  'No upcoming deadlines yet.': ['Yaqin muddatlar hali yo\u2018q.', 'Ближайших сроков пока нет.'],
   'Essay summary': ['Esselar xulosasi', 'Сводка по эссе'],
 };
 

@@ -107,19 +107,24 @@
 
 .nb-blue .messaging-page .channel-folders {
   margin: 4px 14px 10px;
-  padding: 4px;
-  gap: 4px;
-  border-radius: var(--nb-r-pill);
-  background: var(--nb-glass-hover);
-  box-shadow: inset 0 0 0 1px var(--nb-line-soft);
+  padding: 0 4px;
+  gap: 18px;
+  border-radius: 0;
+  background: none;
+  box-shadow: inset 0 -1px 0 var(--nb-line-soft);
 }
 
 .nb-blue .messaging-page .channel-folder {
   margin: 0;
-  min-height: 34px;
-  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 2px;
   border: 0;
-  border-radius: var(--nb-r-pill);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
   color: var(--nb-ink-2);
   font-size: var(--nb-text-sm);
   font-weight: 700;
@@ -134,18 +139,28 @@
 }
 
 .nb-blue .messaging-page .channel-folder.active {
-  background: var(--nb-btn);
-  color: var(--nb-btn-fg);
-  box-shadow: var(--nb-btn-shadow);
+  border-bottom-color: var(--nb-blue);
+  background: none;
+  color: var(--nb-link);
+  box-shadow: none;
 }
 
 .nb-blue .messaging-page .folder-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--nb-r-pill);
   background: var(--nb-tint-strong);
   color: var(--nb-blue);
+  font-size: var(--nb-text-xs);
+  font-style: normal;
+  font-weight: 800;
 }
 
 .nb-blue .messaging-page .channel-folder.active .folder-count {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--nb-blue);
   color: var(--nb-btn-fg);
 }
 

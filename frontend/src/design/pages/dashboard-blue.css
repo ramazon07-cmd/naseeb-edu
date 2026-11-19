@@ -1122,3 +1122,10 @@
   border-color: rgba(151, 161, 182, 0.18);
   background: rgba(126, 164, 255, 0.08);
 }
+
+.nb-blue .nb-dash-screen-day {
+  margin: 2px 0 0;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  font-weight: 600;
+}

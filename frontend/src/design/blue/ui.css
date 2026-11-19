@@ -169,6 +169,7 @@
   font-size: var(--nb-text-md);
   font-weight: 600;
   opacity: 0.92;
+  overflow-wrap: anywhere;
 }
 
 .nb-kpi-go {

@@ -1,6 +1,7 @@
 // Blue student shell, sign-in page and shared primitives (design/blue/*, pages/Login.jsx): English key -> [Uzbek (Latin), Russian].
 // One module per area, so parallel work never edits the same file.
 export const BLUE_SHELL_TRANSLATIONS = {
+  'Help': ['Yordam', 'Помощь'],
   'Naseeb Mind': ['Naseeb Mind', 'Naseeb Mind'],
   'MENU': ['MENYU', 'МЕНЮ'],
   'Menu': ['Menyu', 'Меню'],

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Bell, Brain, CalendarClock, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck, Clock3, Compass, Download, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageSquareText, PenLine, School, Search, Settings, ShoppingCart, UsersRound, X } from 'lucide-react';
+import { Bell, Brain, CalendarClock, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck, Clock3, Compass, Download, Globe2, GraduationCap, LayoutDashboard, CircleHelp, LifeBuoy, Lock, LogOut, Menu, MessageSquareText, PenLine, School, Search, Settings, ShoppingCart, UsersRound, X } from 'lucide-react';
 import { StudentAvatar } from '../../components/records';
 import { exportNodePdf } from '../../lib/exportPdf';
 import { label as roleLabel, fullName, ownStudent } from '../../lib/labels';
@@ -36,6 +36,7 @@ function studentNav(user) {
     { key: 'applications', label: t('Applications'), icon: GraduationCap },
     { key: 'college_search', label: t('College Search'), icon: School },
     { key: 'store', label: t('Naseeb Store'), icon: ShoppingCart },
+    { key: 'screen_time', label: t('Screen Time'), icon: Clock3 },
   ];
   return items.filter((item) => offered.has(item.key) || canOpenPage(item.key, user));
 }
@@ -72,14 +73,14 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
   }, []);
 
   // Desktop inner pages: the page title sits on the top-button line, so the header keeps clear of
-  // the buttons by their measured width (--nb-topw). The dashboard and phones keep the full width.
+  // the buttons by their measured width (--nb-topw). Phones keep the full width.
   useLayoutEffect(() => {
     const main = mainRef.current;
     const tools = toolsRef.current;
     if (!main || !tools) return undefined;
     const desktop = window.matchMedia('(min-width: 821px)');
     const fit = () => {
-      if (!desktop.matches || page === 'dashboard') { main.style.removeProperty('--nb-topw'); return; }
+      if (!desktop.matches) { main.style.removeProperty('--nb-topw'); return; }
       main.style.setProperty('--nb-topw', `${Math.ceil(tools.getBoundingClientRect().width + 18)}px`);
     };
     fit();
@@ -136,6 +137,9 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
             </button>;
           })}
         </nav>
+        {navigationFor(user).includes('support') && <button type="button" className={`nb-nav-item nb-help${page === 'support' ? ' is-active' : ''}`} aria-current={page === 'support' ? 'page' : undefined} title={collapsed ? t('Help') : undefined} aria-label={t('Help')} onClick={() => go('support')}>
+          <CircleHelp size={20} aria-hidden="true" /><span>{t('Help')}</span>{supportBadge > 0 && <i className="nb-dot nb-nav-end" aria-hidden="true" />}
+        </button>}
         <div className="nb-account" ref={accountRef}>
           {profileOpen && <div className="nb-menu nb-account-menu" role="menu" aria-label={t('Account menu')}>
             {canOpenPage('account_settings', user) && <button type="button" role="menuitem" onClick={() => go('account_settings')}><Settings size={17} aria-hidden="true" />{t('Account settings')}</button>}

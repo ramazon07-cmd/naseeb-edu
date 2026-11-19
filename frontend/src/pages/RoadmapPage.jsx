@@ -1,20 +1,22 @@
 import { initials, fullName, label, ownStudent } from '../lib/labels';
 import { Search, UsersRound, Clock3, Target, Compass, Star, Lock, Award, CalendarDays, ChevronRight, Filter, ShieldCheck, MessageSquareText, CheckCircle2, Eye, Pencil, Trash2, Plus } from 'lucide-react';
 import { t, tp, tx, formatPercentLocale } from '../i18n';
-import { isMissionLocked, nextLevel as levelAfter, studentProgress } from '../lib/metrics';
+import { isMissionLocked, nextLevel as levelAfter, nextPriorities, studentProgress } from '../lib/metrics';
 import { roadmapTab } from '../lib/routes';
 import { Field, PortalTabs } from '../components/forms';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isTaskManager } from '../lib/roles';
 import { api } from '../api';
 import { Modal, Empty, Badge, Panel } from '../components/ui';
-import { dateText, gradeText, joinParts } from '../lib/format';
+import { dateText, dayMonthText, gradeText, joinParts } from '../lib/format';
+import { daysUntil } from '../lib/college';
 import { ResourceSection } from './ResourceSection';
 import { matchesQuery } from '../lib/searchIndex';
 import { usePagedList } from '../hooks/usePagedList';
 import { useRecordList } from '../hooks/useRecordList';
 import { LoadMore, PagedListError, StudentPicker } from '../components/paged';
-import { PageHeader, PillTabs, tabId } from '../design/blue/ui';
+import { PageHeader } from '../design/blue/ui';
+import { listText } from '../lib/profileSections';
 import '../design/pages/center-blue.css';
 import '../design/pages/roadmap-blue.css';
 
@@ -64,7 +66,137 @@ export function LevelOneSetupModal({ defaultStudentId = null, onClose, onSaved, 
   return <Modal title={t("Extend Level 1 roadmap")} onClose={onClose}><form className="form-grid" onSubmit={submit}><StudentPicker required value={defaultStudentId || ''} /><div className="form-wide roadmap-setup-note"><Compass size={19} /><div><b>{t("8-step Level 1 path")}</b><p>{t("Missing missions will be added in the correct order. Existing statuses, reflections and approvals stay unchanged.")}</p></div></div><div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Extending…") : t("Extend Level 1")}</button></div></form></Modal>;
 }
 
-export function StudentRoadmapPath({ student, missions, onOpen }) {
+
+const PLANE = 'M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z';
+const FLAG = 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7';
+let flightPlayed = false;
+
+// The route as a flight profile: one stop per mission of the level, the plane at the current one, the flag at
+// the next level. `stops` are { item, state } in path order; `onOpen` opens a mission that can still be worked on.
+function RoadmapFlight({ stops, currentIndex, nextLevel, left, approved, onOpen }) {
+  const n = stops.length;
+  const W = 1000;
+  const H = 200;
+  const X0 = 58;
+  const X1 = 942;
+  const ci = Math.min(currentIndex, n);
+  const P = Array.from({ length: n + 1 }, (_, i) => { const u = i / n; return [X0 + (X1 - X0) * u, 168 - 122 * (1 - (1 - u) ** 1.6)]; });
+  const f = (value) => value.toFixed(1);
+  const seg = (a, b) => {
+    let d = `M${f(P[a][0])} ${f(P[a][1])}`;
+    for (let i = a; i < b; i += 1) {
+      const p0 = P[Math.max(0, i - 1)];
+      const p1 = P[i];
+      const p2 = P[i + 1];
+      const p3 = P[Math.min(n, i + 2)];
+      d += ` C${f(p1[0] + (p2[0] - p0[0]) / 6)} ${f(p1[1] + (p2[1] - p0[1]) / 6)} ${f(p2[0] - (p3[0] - p1[0]) / 6)} ${f(p2[1] - (p3[1] - p1[1]) / 6)} ${f(p2[0])} ${f(p2[1])}`;
+    }
+    return d;
+  };
+  const all = seg(0, n);
+  const done = ci > 0 ? seg(0, ci) : '';
+  const planeAt = ci < n || n === 0 ? ci : n;
+  const angle = (i) => { const a = P[Math.max(0, i - 1)]; const b = P[Math.min(n, i + 1)]; return Math.atan2(b[1] - a[1], b[0] - a[0]); };
+  const kind = (i) => (i === n ? 'end' : stops[i].state === 'complete' ? 'ok' : stops[i].index === currentIndex && ['current', 'approval'].includes(stops[i].state) ? 'cur' : 'lk');
+  const stateText = (state) => (state === 'complete' ? t('Approved') : state === 'approval' ? t('Awaiting approval') : state === 'locked' ? t('Locked') : state === 'current' ? t('You are here') : t('Upcoming'));
+  const open = (stop) => { if (stop.state !== 'complete' && stop.state !== 'locked') onOpen(stop.item); };
+  const sky = useRef(null);
+  const donePath = useRef(null);
+  const glowPath = useRef(null);
+  const plane = useRef(null);
+  const rot = useRef(null);
+  const place = (a, q) => ({ x: q.x + Math.sin(a) * 36, y: q.y - Math.cos(a) * 36 });
+  useEffect(() => {
+    const dn = donePath.current;
+    const pl = plane.current;
+    const ro = rot.current;
+    if (flightPlayed || !dn || !pl || !ro || !sky.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { flightPlayed = true; return undefined; }
+    const length = dn.getTotalLength();
+    const finalMove = pl.getAttribute('transform');
+    const finalRot = ro.getAttribute('transform');
+    let frame = 0;
+    let delay = 0;
+    const set = (p) => {
+      const l = length * p;
+      const a = dn.getPointAtLength(Math.max(0, l - 2));
+      const b = dn.getPointAtLength(Math.min(length, l + 2));
+      const q = dn.getPointAtLength(l);
+      const an = Math.atan2(b.y - a.y, b.x - a.x);
+      const at = place(an, q);
+      pl.setAttribute('transform', `translate(${f(at.x)} ${f(at.y)})`);
+      ro.setAttribute('transform', `rotate(${f(an * 180 / Math.PI + 45)}) scale(1.6) translate(-12 -12)`);
+      [dn, glowPath.current].forEach((el) => el && (el.style.strokeDasharray = `${l.toFixed(1)} ${(length + 20).toFixed(0)}`));
+    };
+    set(0);
+    const go = () => {
+      const t0 = performance.now();
+      const step = (now) => {
+        const q = Math.min(1, (now - t0) / 1800);
+        set(q < 0.5 ? 4 * q * q * q : 1 - ((-2 * q + 2) ** 3) / 2);
+        if (q < 1) { frame = requestAnimationFrame(step); return; }
+        pl.setAttribute('transform', finalMove);
+        ro.setAttribute('transform', finalRot);
+        [dn, glowPath.current].forEach((el) => el && (el.style.strokeDasharray = ''));
+      };
+      frame = requestAnimationFrame(step);
+    };
+    const io = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) { io.disconnect(); flightPlayed = true; delay = window.setTimeout(go, 150); } }, { threshold: 0.3 });
+    io.observe(sky.current);
+    return () => { io.disconnect(); window.clearTimeout(delay); cancelAnimationFrame(frame); };
+  }, []);
+  const pa = angle(planeAt);
+  const pp = place(pa, { x: P[planeAt][0], y: P[planeAt][1] });
+  return <div className="nb-rm-sky" ref={sky}>
+    <div className="nb-rm-fp">
+      <svg className="nb-rm-fp-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={tp('Roadmap: {done} of {n} mission approved|Roadmap: {done} of {n} missions approved', n, { done: approved, n })}>
+        <defs>
+          <linearGradient id="nbFpA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".18" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
+          <filter id="nbFpS" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#020B24" floodOpacity=".45" /></filter>
+        </defs>
+        <path className="fp-area" d={`${all} L${X1} ${H} L${X0} ${H}Z`} />
+        <line className="fp-gr" x1="0" x2={W} y1={H - 0.5} y2={H - 0.5} />
+        {P.map(([x, y]) => <line key={x} className="fp-drop" x1={f(x)} x2={f(x)} y1={f(y + 20)} y2={H} />)}
+        <path className="fp-trk" d={all} />
+        {done && <><path className="fp-glow" ref={glowPath} d={done} /><path className="fp-done" ref={donePath} d={done} /></>}
+        {P.map(([x, y], i) => {
+          const k = kind(i);
+          if (k === 'end') return <g key="end" className="fp-end"><circle className="halo" cx={f(x)} cy={f(y)} r="27" /><circle className="d" cx={f(x)} cy={f(y)} r="19" /><g transform={`translate(${f(x - 9.6)} ${f(y - 10)}) scale(.8)`}><path d={FLAG} /></g></g>;
+          const stop = stops[i];
+          const text = `${i + 1}. ${t(stop.item.title)} · ${stateText(stop.state)}`;
+          const press = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(stop); } };
+          return <g key={stop.item.id} className={`fp-n ${k}`} role="button" tabIndex={0} aria-label={text} onClick={() => open(stop)} onKeyDown={press}>
+            <title>{text}</title>
+            <circle className="hit" cx={f(x)} cy={f(y)} r="24" />
+            {k === 'cur' && <circle className="halo" cx={f(x)} cy={f(y)} r="26" />}
+            <circle className="d" cx={f(x)} cy={f(y)} r={k === 'cur' ? 15 : k === 'ok' ? 13 : 12} />
+            {k === 'ok' ? <path className="ck" d={`M${f(x - 5)} ${f(y + 0.5)}l3.6 3.6 6.6-7.2`} /> : k === 'cur' ? <circle className="core" cx={f(x)} cy={f(y)} r="5.5" /> : <text x={f(x)} y={f(y + 0.5)} fontSize="12">{i + 1}</text>}
+          </g>;
+        })}
+        {n > 0 && <g className="fp-pl" ref={plane} transform={`translate(${f(pp.x)} ${f(pp.y)})`}><g className="nb-rm-bob"><g ref={rot} className="fp-rot" filter="url(#nbFpS)" transform={`rotate(${f(pa * 180 / Math.PI + 45)}) scale(1.6) translate(-12 -12)`}><path d={PLANE} /></g></g></g>}
+      </svg>
+      <div className="nb-rm-fp-row">{P.map(([x], i) => {
+        const k = kind(i);
+        const pos = { '--x': `${(x / W * 100).toFixed(2)}%` };
+        if (k === 'end') return <div key="end" className="fp-l end" style={pos}><b>{tx`Level ${nextLevel}`}</b><small>{tp('{n} mission left|{n} missions left', left)}</small></div>;
+        const stop = stops[i];
+        return <button key={stop.item.id} type="button" className={`fp-l ${k}`} style={pos} title={t(stop.item.title)} onClick={() => open(stop)}><b>{t(stop.item.category) || t('Roadmap')}</b><small>{k === 'cur' ? t('You are here') : stateText(stop.state)}</small></button>;
+      })}</div>
+    </div>
+  </div>;
+}
+
+// The head of the student's task list: how many are open and, when one is already late, which to start with.
+function TasksLead({ tasks }) {
+  const open = nextPriorities(tasks || []);
+  const late = open.find((task) => task.due_date && daysUntil(task.due_date) < 0);
+  const [day, month] = late ? dayMonthText(late.due_date).split(' ') : [];
+  return <div className="nb-task-lead">
+    <p className="nb-task-count" role="status"><CheckCircle2 size={17} aria-hidden="true" /><b>{t('Tasks')}</b><span>{tp('{n} open task|{n} open tasks', open.length, { n: open.length })}</span></p>
+    {late && <div className="nb-task-first"><span className="nb-task-date" aria-hidden="true"><b>{day}</b><small>{month}</small></span><div><small>{t('Start with')}</small><b>{late.title}</b><p>{t('This task is overdue. Send your response or ask your counselor for a new date.')}</p></div></div>}
+  </div>;
+}
+
+export function StudentRoadmapPath({ student, missions, onOpen, aside = null }) {
   const level = student?.level ?? 1;
   const orderedMissions = [...missions].sort((a, b) => (a.level || 1) - (b.level || 1) || (a.sequence || 1) - (b.sequence || 1) || a.id - b.id);
   const currentLevelMissions = orderedMissions.filter((item) => (item.level || 1) === level);
@@ -86,35 +218,51 @@ export function StudentRoadmapPath({ student, missions, onOpen }) {
   const percent = numbers.roadmapPercent;
   // Matches the steps shown: this level's, or every mission when the level has none.
   const levelLeft = numbers.levelTotal ? Math.max(0, numbers.levelTotal - numbers.levelApproved) : Math.max(0, numbers.missionsTotal - numbers.missionsApproved);
+  const stops = levelMissions.map((item, index) => ({ item, index, state: missionState(item, index) }));
+  const target = listText(student?.target_countries);
+  const stepNote = (stop) => {
+    if (stop.state === 'complete') return t('Approved by your counselor');
+    if (stop.state === 'approval') return t('Awaiting approval');
+    if (stop.state === 'locked') { const before = stops[stop.index - 1]; return before ? t('Unlocks after mission {n} is approved', { n: before.item.sequence || stop.index }) : t('Locked'); }
+    return stop.item.due_date ? tx`Due ${dateText(stop.item.due_date)}` : t('Upcoming');
+  };
   return <section className="roadmap-track">
-    <header className="roadmap-progress-card">
-      <span className="eyebrow">{t("YOUR PROGRESS")}</span>
-      <h2>{tx`Level ${level}`}</h2>
-      {student?.level_up_pending && <p>{tx`Level ${student.eligible_level} is waiting for staff approval.`}</p>}
-      <div className="roadmap-star-count"><Star size={19} /><strong>{numbers.missionsApproved}</strong><small>{tp('star earned|stars earned', numbers.missionsApproved)}</small></div>
-      <div className="roadmap-progress-meter">
-        <span>{tp('Roadmap: {done} of {n} mission approved|Roadmap: {done} of {n} missions approved', numbers.missionsTotal, { done: numbers.missionsApproved, n: numbers.missionsTotal })}</span>
-        <b aria-label={t('Roadmap progress')}>{formatPercentLocale(percent)}</b>
-        <div className="progress"><span style={{ width: `${percent}%` }} /></div>
-        {numbers.levelTotal > 0 && <small>{t('This level: {done} of {n}', { done: numbers.levelApproved, n: numbers.levelTotal })}</small>}
+    <header className="roadmap-progress-card nb-rm-hero">
+      <div className="nb-rm-top">
+        <div className="nb-rm-lv"><span className="nb-rm-chip">{tx`Level ${level}`}</span><span className="roadmap-star-count"><Star size={17} aria-hidden="true" /><strong>{numbers.missionsApproved}</strong><small>{tp('star earned|stars earned', numbers.missionsApproved)}</small></span></div>
+        <div className="roadmap-progress-meter">
+          <span>{tp('Roadmap: {done} of {n} mission approved|Roadmap: {done} of {n} missions approved', numbers.missionsTotal, { done: numbers.missionsApproved, n: numbers.missionsTotal })}</span>
+          <div className="progress"><span style={{ width: `${percent}%` }} /></div>
+          <b aria-label={t('Roadmap progress')}>{formatPercentLocale(percent)}</b>
+        </div>
       </div>
+      {student?.level_up_pending && <p className="nb-rm-note">{tx`Level ${student.eligible_level} is waiting for staff approval.`}</p>}
+      {stops.length > 0 && <RoadmapFlight stops={stops} currentIndex={currentIndex} nextLevel={nextLevel} left={levelLeft} approved={numbers.missionsApproved} onOpen={onOpen} />}
+      <p className="nb-rm-foot"><Award size={19} aria-hidden="true" /><b>{t('Next checkpoint')}</b><span>{student?.level_up_pending ? t('Ready for staff approval') : tp('Level {level} · {n} mission left|Level {level} · {n} missions left', levelLeft, { level: nextLevel, n: levelLeft })}</span></p>
     </header>
-    {levelMissions.length ? <ol className="roadmap-steps">{levelMissions.map((item, index) => {
-        const state = missionState(item, index);
-        const done = state === 'complete' || state === 'locked';
-        return <li className={`roadmap-step ${state}`} key={item.id}>
-        <span className="roadmap-step-badge" aria-hidden="true">{state === 'complete' ? <Star size={16} /> : state === 'locked' ? <Lock size={15} /> : state === 'approval' ? <Clock3 size={16} /> : item.sequence || index + 1}</span>
-        {/* aria-disabled (not disabled) keeps completed/locked steps in the tab order so keyboard and screen-reader users can still read them. */}
-        <button type="button" className="roadmap-step-card" onClick={() => {if (!done) onOpen(item);}} aria-disabled={done || undefined} aria-label={`${t(item.title)}, ${state === 'locked' ? t("locked") : label(item.status)}`}>
-          <span>{t(item.category) || t("Roadmap")}</span>
-          <h3>{t(item.title)}</h3>
-          <p>{state === 'complete' ? t("Approved") : state === 'approval' ? t("Awaiting approval") : state === 'locked' ? t("Locked") : state === 'current' ? t("Next up") : item.due_date ? tx`Due ${dateText(item.due_date)}` : t("Upcoming")}</p>
-        </button>
-      </li>;
-      })}<li className="roadmap-step checkpoint">
-        <span className="roadmap-step-badge" aria-hidden="true"><Award size={17} /></span>
-        <div className="roadmap-step-card"><span>{t("NEXT CHECKPOINT")}</span><h3>{tx`Level ${nextLevel}`}</h3><p>{student?.level_up_pending ? t("Ready for staff approval") : tp('{n} mission left|{n} missions left', levelLeft, { n: levelLeft })}</p></div>
-      </li></ol> : <Empty text={t("Your counselor has not assigned any roadmap missions yet.")} />}
+    <div className="nb-rm-split">
+      <section className="nb-rm-path" aria-labelledby="nb-rm-path-h">
+        <div className="nb-rm-head"><h2 id="nb-rm-path-h"><Compass size={18} aria-hidden="true" />{t('Level path')}</h2><span>{t('{done} of {total} approved', { done: numbers.levelApproved || numbers.missionsApproved, total: numbers.levelTotal || numbers.missionsTotal })}</span></div>
+        {levelMissions.length ? <ol className="roadmap-steps">{stops.map((stop) => {
+            const { item, index, state } = stop;
+            const done = state === 'complete' || state === 'locked';
+            return <li className={`roadmap-step ${state}`} key={item.id}>
+            <span className="roadmap-step-badge" aria-hidden="true">{state === 'complete' ? <Star size={16} /> : state === 'locked' ? <Lock size={15} /> : state === 'approval' ? <Clock3 size={16} /> : item.sequence || index + 1}</span>
+            {/* aria-disabled (not disabled) keeps completed/locked steps in the tab order so keyboard and screen-reader users can still read them. */}
+            <button type="button" className="roadmap-step-card" onClick={() => {if (!done) onOpen(item);}} aria-disabled={done || undefined} aria-label={`${t(item.title)}, ${state === 'locked' ? t("locked") : label(item.status)}`}>
+              <span>{state === 'current' ? t('You are here') : t(item.category) || t("Roadmap")}</span>
+              <h3>{t(item.title)}</h3>
+              {state === 'current' && item.description && <em className="nb-rm-guide"><small>{t('What to do')}</small>{t(item.description)}</em>}
+              <p>{state === 'current' ? t("Next up") : stepNote(stop)}</p>
+            </button>
+          </li>;
+          })}{target && <li className="roadmap-step checkpoint">
+            <span className="roadmap-step-badge" aria-hidden="true"><Compass size={17} /></span>
+            <div className="roadmap-step-card"><span>{t('Arrival')}</span><h3>{target}</h3>{student?.target_major && <p>{student.target_major}</p>}</div>
+          </li>}</ol> : <Empty text={t("Your counselor has not assigned any roadmap missions yet.")} />}
+      </section>
+      {aside}
+    </div>
   </section>;
 }
 
@@ -203,17 +351,12 @@ export function RoadmapPage({ user, data, query, reload, notify, tab: requestedT
   ...scopedData.tasks.map((item) => ({ id: `task-${item.id}`, title: item.title, date: item.due_date, status: item.status, kind: t('Task'), student: item.student_name })),
   ...scopedData.roadmapMissions.map((item) => ({ id: `mission-${item.id}`, title: item.title, date: item.due_date, status: item.status, kind: t('Mission'), student: item.student_name }))].
   filter((item) => item.date).sort((a, b) => new Date(a.date) - new Date(b.date));
-  const studentTabs = [['path', 'Level path'], ['tasks', 'Tasks']].map(([key, text]) => ({ key, label: t(text) }));
   return <div className={`section-stack student-portal${manager ? '' : ' nb-roadmap'}`}>
     {!manager && <PageHeader title={t('Roadmap')} subtitle={t('Level-linked missions, milestones, and reflections')} />}
     {manager && <section className="portal-hero roadmap-hero"><div><span className="eyebrow">{t("STUDENT ROADMAPS")}</span><h2>{t("Roadmap")}</h2><p>{t("Assign missions, review student submissions, and approve the work that earns XP.")}</p></div><div className="roadmap-hero-actions"><button className="button light" onClick={() => setSetupOpen(true)}><Compass size={17} /> {t("Extend Level 1")}</button><button className="button light" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Assign mission")}</button></div></section>}
     {manager && <StudentWorkspaceSelector value={selectedStudentId} selected={selectedStudent} onChange={chooseStudent} metrics={[[t("Missions"), countText(missionList)], [t("Tasks"), countText(taskList)], [t("Awaiting approval"), `${scopedData.roadmapMissions.filter((item) => item.status === 'submitted').length + scopedData.tasks.filter((item) => item.status === 'submitted').length}${missionList.hasMore || taskList.hasMore ? '+' : ''}`]]} />}
     {manager && <PortalTabs active={tab} onChange={setTab} items={[["missions", "Missions"], ["tasks", "Tasks"], ["timeline", "Timeline"], ["reflections", "Reflections"]]} />}
-    {!manager && <PillTabs tabs={studentTabs} value={tab} onChange={setTab} label={t('Roadmap')} idPrefix="roadmap" />}
-    {!manager && <div role="tabpanel" aria-labelledby={tabId('roadmap', tab)} className="section-stack">
-    {tab === 'path' && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} />}
-    {tab === 'tasks' && <ResourceSection title={t("Tasks")} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} />}
-    </div>}
+    {!manager && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} aside={<section className="nb-rm-tasks" aria-label={t('Tasks')}><TasksLead tasks={data.tasks} /><ResourceSection title={t("Tasks")} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} /></section>} />}
     {manager && tab === 'tasks' && <ResourceSection title={selectedName ? tx`Tasks · ${selectedName}` : t("All tasks")} resource="tasks" data={data} user={user} query={query} reload={reload} notify={notify} defaultStudentId={selectedStudentNumericId} filters={studentFilter} />}
     {manager && tab === 'missions' && <><MissionList user={user} data={scopedData} query="" onOpen={(item) => {setEditing(item);setOpen(true);}} onApprove={approve} onRemove={remove} /><PagedListError list={missionList} /><LoadMore list={missionList} /></>}
     {manager && tab === 'timeline' && <Panel title={selectedName ? tx`Timeline · ${selectedName}` : t("Timeline for all students")}><div className="timeline-list">{timeline.map((item) => <div key={item.id}><span className="timeline-dot" /><time>{dateText(item.date)}</time><div><b>{t(item.title)}</b><small>{joinParts(item.kind, !selectedName && item.student)}</small></div><Badge>{item.status}</Badge></div>)}{!timeline.length && <Empty text={t("No dated tasks or missions for this student.")} />}</div></Panel>}
@@ -227,6 +370,7 @@ export function RoadmapPage({ user, data, query, reload, notify, tab: requestedT
 export function StudentTasksPage({ user, data, query, reload, notify }) {
   return <div className="section-stack student-portal nb-tasks">
     <PageHeader title={t('Tasks')} subtitle={t('Assignments and deadline tracking')} />
+    <TasksLead tasks={data.tasks} />
     <ResourceSection title={t('Tasks')} resource="tasks" {...{ user, data, query, reload, notify }} />
   </div>;
 }

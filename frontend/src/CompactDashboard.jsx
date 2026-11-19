@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ArrowUpRight, CalendarClock, Check, Clock3, Fingerprint, Globe2, GraduationCap, Lock, MessageCircle, PenLine, Plus, School, SlidersHorizontal, Star, Target, Telescope, Upload, UsersRound, Map as MapIcon } from 'lucide-react';
-import { t, tp, tx, formatDateLocale, formatNumberLocale, parseDateValue } from './i18n';
+import { t, tp, tx, formatDateLocale, formatNumberLocale } from './i18n';
 import { clockText, dateTimeText, dayMonthText, joinParts } from './lib/format';
 import { daysUntil } from './lib/college';
 import { isOpenTask, nextPriorities, studentProgress } from './lib/metrics';
@@ -11,11 +11,11 @@ import './design/pages/dashboard-blue.css';
 import DashboardScreenTime from './DashboardScreenTime';
 import { createPoller } from './lib/poller';
 import { listText } from './lib/profileSections';
-import { isPageLocked } from './lib/routes';
+import { canOpenPage, isPageLocked } from './lib/routes';
 import DashboardCustomizer from './DashboardCustomizer';
 import { ResourceContent } from './components/ResourceContent';
 import { cachedDashboardLayout, loadAccountDashboardLayout, saveAccountDashboardLayout, subscribeDashboardLayout, pendingDashboardLayout } from './dashboardLayout';
-import { Avatar, BlueButton, CardLink, Chip, DateTile, DaysChip, GlassCard, HeaderTools, KpiRow, KpiTile, PageHeader, SectionTitle } from './design/blue/ui';
+import { Avatar, BlueButton, CardLink, Chip, DateTile, DaysChip, GlassCard, HeaderTools, KpiRow, KpiTile, PageHeader, SectionTitle, tileParts } from './design/blue/ui';
 
 const widgetMeta = {
   screen_time: ['Screen Time', Clock3],
@@ -56,13 +56,6 @@ function useCountUp(value, duration = 900) {
 // A leaf, so only the number re-renders on every animation frame.
 function CountUp({ value, format = String }) {
   return format(useCountUp(value));
-}
-
-// The day / month a DateTile shows ("Sep", never "Sept").
-function tileParts(value) {
-  const date = parseDateValue(value);
-  if (Number.isNaN(date.getTime())) return { day: '', month: '' };
-  return { day: String(date.getDate()), month: formatDateLocale(value, { month: 'short' }).replace(/\bSept\b/, 'Sep').replace(/\.$/, '') };
 }
 
 const STOP_WORDS = new Set(['the', 'of', 'and', 'at', 'in', 'for', 'de', 'la']);
@@ -264,7 +257,7 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
       </>);
     },
     programs: () => <ProgramsCard programs={data.opportunityPrograms} status={programsStatus} load={loadPrograms} retry={retryPrograms} setPage={setPage} locked={locked.programs} />,
-    screen_time: () => card('screen_time', {}, <DashboardScreenTime userId={user.id} />),
+    screen_time: () => card('screen_time', canOpenPage('screen_time', user) ? { footer: <><span />{link('screen_time', 'Open Screen Time')}</> } : {}, <DashboardScreenTime userId={user.id} />),
     discovery: () => card('discovery', {}, <div className="nb-dash-tools">
       {[[Fingerprint, 'Profile Assessment', 'Discover your strengths and study interests.', 'find_personality'], [School, 'College Search', 'Compare universities with your goals.', 'college_search']].map(([Icon, title, text, page]) => <button key={page} type="button" onClick={() => setPage(page)}>
         <span className="nb-dash-tool-icon"><Icon size={22} aria-hidden="true" /></span><span className="nb-dash-row-copy"><b>{t(title)}</b><small>{t(text)}</small></span><ArrowUpRight size={16} aria-hidden="true" />

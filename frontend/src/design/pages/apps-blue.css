@@ -208,3 +208,56 @@
 .nb-blue .nb-apps .summary-card .tier-band::before {
   background: #fff;
 }
+
+/* List / Board switch (the list is the default, like the design). */
+.nb-blue .nb-apps .apps-view {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-glass);
+}
+
+.nb-blue .nb-apps .apps-view button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--nb-r-pill);
+  background: none;
+  color: var(--nb-ink);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .apps-view button[aria-pressed='true'] {
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+}
+
+.nb-blue .nb-apps .apps-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--nb-gap);
+  align-items: start;
+}
+
+.nb-blue .nb-apps .apps-row {
+  display: grid;
+  gap: 8px;
+}
+
+.nb-blue .nb-apps .apps-stage {
+  justify-self: start;
+  padding: 4px 12px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-tint);
+  color: var(--nb-link);
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+}

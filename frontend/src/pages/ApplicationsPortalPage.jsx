@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDownWideNarrow, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3, GripVertical, Hourglass, Link2, Lock, MapPin, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3, GripVertical, Hourglass, Link2, Lock, MapPin, MoreHorizontal, Pencil, Plus, Rows3, Search, Trash2, X, Columns3 } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, parseDateValue, t, tx } from '../i18n';
 import { FilterChip } from '../components/forms';
@@ -173,6 +173,7 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
 export function ApplicationsPortalPage({ data, query, reload, notify, setPage }) {
   const [tier, setTier] = useState('all');
   const [sort, setSort] = useState('deadline');
+  const [view, setView] = useState('list');
   const [pageWindow, setPageWindow] = useState({ key: '', limit: 10 });
   const [menuId, setMenuId] = useState(null);
   const [briefId, setBriefId] = useState(null);
@@ -240,6 +241,9 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
   const header = <PageHeader title={t('Applications')} subtitle={t('University application pipeline')} />;
   if (!data.applications.length) return <div className="section-stack student-portal nb-bridge nb-apps">{header}<EmptyState icon={Search} title={t("Your application list is empty")} text={t("Add universities from College Search and they will appear here as cards you can move through each stage.")} action={<BlueButton icon={Search} onClick={() => setPage('college_search')}>{t("Find universities")}</BlueButton>} /></div>;
 
+  const renderCard = (application) => <ApplicationCard key={application.id} application={application} university={application.university_detail} essays={data.essays.filter((essay) => essay.application === application.id)} menuOpen={menuId === application.id} briefOpen={briefId === application.id} dragging={dragId === application.id} busy={removingId === application.id || application.id in moves}
+            onMenu={() => {setBriefId(null);setMenuId(menuId === application.id ? null : application.id);}} onBrief={() => {setMenuId(null);setBriefId(briefId === application.id ? null : application.id);}} onBriefClose={() => setBriefId(null)} onDragStart={(event) => {event.dataTransfer.setData('text/plain', String(application.id));event.dataTransfer.effectAllowed = 'move';setBriefId(null);setDragId(application.id);}} onDragEnd={() => {setDragId(null);setOverStage(null);}}
+            onMove={(status) => moveTo(data.applications.find((item) => item.id === application.id), status)} onOpen={() => openUniversity(application.university)} onEdit={() => {setMenuId(null);setBriefId(null);setEditing(data.applications.find((item) => item.id === application.id));}} onRemove={() => removeApplication(application)} />;
   return <div className="section-stack student-portal applications-page nb-bridge nb-apps">
     {header}
     <ApplicationSummary applications={applications} essays={data.essays} letters={data.recommendations} openApplication={setEditing} />
@@ -249,11 +253,16 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
         {['dream', 'target', 'safety'].map((value) => <FilterChip key={value} active={tier === value} onClick={() => setTier(value)}><TierBand value={value} /> <span className="chip-count">{formatNumberLocale(applications.filter((application) => application.tier === value).length)}</span></FilterChip>)}
       </div>
       <div className="board-toolbar-actions">
+        <div className="apps-view" role="group" aria-label={t("View as")}>
+          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}><Rows3 size={15} aria-hidden="true" /> {t("List")}</button>
+          <button type="button" aria-pressed={view === 'board'} onClick={() => setView('board')}><Columns3 size={15} aria-hidden="true" /> {t("Board")}</button>
+        </div>
         <label className="sort-control application-sort"><ArrowDownWideNarrow size={15} aria-hidden="true" /><span className="sr-only">{t("Sort by")}</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="deadline">{t("Deadline")}</option><option value="name">{t("University")}</option></select></label>
         <button type="button" className="button primary" onClick={() => setPage('college_search')}><Plus size={16} aria-hidden="true" /> {t("Add university")}</button>
       </div>
     </div>
-    <div className="board">{APPLICATION_STAGES.map((stage) => {
+    {view === 'list' && <div className="apps-list">{shown.map((application) => <div className="apps-row" key={application.id}><span className="apps-stage">{t(APPLICATION_STAGES.find((stage) => stage.key === stageOf(application.status))?.title || '')}</span>{renderCard(application)}</div>)}{!shown.length && <p className="board-empty">{t("Nothing here yet.")}</p>}</div>}
+    {view === 'board' && <div className="board">{APPLICATION_STAGES.map((stage) => {
         const stageCards = visible.filter((application) => stageOf(application.status) === stage.key);
         const cards = shown.filter((application) => stageOf(application.status) === stage.key);
         return <section key={stage.key} className={`board-column ${overStage === stage.key ? 'is-over' : ''}`.trim()} aria-label={t(stage.title)}
@@ -267,13 +276,11 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
         }}>
           <header><div><h3>{t(stage.title)}</h3><span className="count-pill neutral">{formatNumberLocale(stageCards.length)}</span>{stage.locked && <span className="board-lock" role="img" aria-label={t("Set by your counselor")}><Lock size={14} /></span>}</div><p>{t(stage.description)}</p></header>
           <div className="board-stack">
-            {cards.map((application) => <ApplicationCard key={application.id} application={application} university={application.university_detail} essays={data.essays.filter((essay) => essay.application === application.id)} menuOpen={menuId === application.id} briefOpen={briefId === application.id} dragging={dragId === application.id} busy={removingId === application.id || application.id in moves}
-            onMenu={() => {setBriefId(null);setMenuId(menuId === application.id ? null : application.id);}} onBrief={() => {setMenuId(null);setBriefId(briefId === application.id ? null : application.id);}} onBriefClose={() => setBriefId(null)} onDragStart={(event) => {event.dataTransfer.setData('text/plain', String(application.id));event.dataTransfer.effectAllowed = 'move';setBriefId(null);setDragId(application.id);}} onDragEnd={() => {setDragId(null);setOverStage(null);}}
-            onMove={(status) => moveTo(data.applications.find((item) => item.id === application.id), status)} onOpen={() => openUniversity(application.university)} onEdit={() => {setMenuId(null);setBriefId(null);setEditing(data.applications.find((item) => item.id === application.id));}} onRemove={() => removeApplication(application)} />)}
+            {cards.map(renderCard)}
             {!stageCards.length && <p className="board-empty">{stage.locked ? t("No decisions yet.") : t("Nothing here yet.")}</p>}
           </div>
         </section>;
-      })}</div>
+      })}</div>}
     <div className="paged-list-footer">
       <span role="status" aria-live="polite">{tx`${formatNumberLocale(shown.length)} shown`}</span>
       {remaining > 0 && <button type="button" className="button quiet" onClick={() => setPageWindow({ key: windowKey, limit: limit + 10 })}>{t('Show {n} more', { n: formatNumberLocale(remaining) })}</button>}

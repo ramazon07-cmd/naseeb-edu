@@ -1,7 +1,7 @@
 import { createContext, isValidElement, useContext, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowRight, ChevronRight } from 'lucide-react';
-import { t, tp } from '../../i18n';
+import { formatDateLocale, getLanguage, parseDateValue, t, tp } from '../../i18n';
 
 // Shared building blocks of the blue (student) design. Class names are prefixed
 // `nb-` and styled in ui.css under `.nb-blue`. See README.md for the contract.
@@ -144,6 +144,20 @@ export function EmptyState({ icon, title, text, action, className = '' }) {
 }
 
 // Day / month tile used by deadline and notification rows. `hot` fills it navy.
+// Three-letter months for the date tile (the Uzbek and Russian names are too long for it).
+const TILE_MONTHS = {
+  uz: ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'],
+  ru: ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
+};
+
+// The day / month a DateTile shows ("Sep", never "Sept").
+export function tileParts(value) {
+  const date = parseDateValue(value);
+  if (Number.isNaN(date.getTime())) return { day: '', month: '' };
+  const short = TILE_MONTHS[getLanguage()];
+  return { day: String(date.getDate()), month: short ? short[date.getMonth()] : formatDateLocale(value, { month: 'short' }).replace(/\bSept\b/, 'Sep').replace(/\.$/, '') };
+}
+
 export function DateTile({ day, month, hot = false, className = '' }) {
   return <span className={cx('nb-date', hot && 'is-hot', className)}><b>{day}</b><small>{month}</small></span>;
 }

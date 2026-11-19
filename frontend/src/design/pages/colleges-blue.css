@@ -188,3 +188,143 @@
 .nb-blue .nb-colleges .crumb {
   color: var(--nb-muted);
 }
+
+/* "Matched to you": profile numbers and the nearest university deadlines. */
+.nb-blue .nb-college-match .nb-card-body {
+  padding: var(--nb-pad);
+}
+
+.nb-blue .nb-college-match-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.nb-blue .nb-college-match-profile,
+.nb-blue .nb-college-match-deadlines {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nb-blue .nb-college-match-deadlines {
+  padding-left: 24px;
+  border-left: 1px solid var(--nb-hero-line);
+}
+
+.nb-blue .nb-match-eyebrow {
+  color: var(--nb-hero-soft);
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.nb-blue .nb-match-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-match-scores li {
+  display: grid;
+  min-width: 76px;
+  padding: 10px 14px;
+  border: 1px solid var(--nb-hero-line);
+  border-radius: var(--nb-r-sm);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nb-blue .nb-match-scores b {
+  font-size: var(--nb-text-xl);
+  line-height: 1.1;
+}
+
+.nb-blue .nb-match-scores small {
+  color: var(--nb-hero-soft);
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+}
+
+.nb-blue .nb-match-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.nb-blue .nb-match-facts div {
+  display: grid;
+}
+
+.nb-blue .nb-match-facts dt {
+  color: var(--nb-hero-soft);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-match-facts dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.nb-blue .nb-college-match-deadlines ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-college-match-deadlines li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--nb-hero-line);
+  border-radius: var(--nb-r-sm);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nb-blue .nb-college-match-deadlines li > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.nb-blue .nb-college-match-deadlines small {
+  color: var(--nb-hero-soft);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-college-match-deadlines p {
+  margin: 0;
+  color: var(--nb-hero-soft);
+}
+
+@media (max-width: 820px) {
+  .nb-blue .nb-college-match-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nb-blue .nb-college-match-deadlines {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid var(--nb-hero-line);
+    border-left: 0;
+  }
+}
+
+.nb-blue .nb-college-match .nb-date {
+  background: #fff;
+  color: #04163f;
+}
+
+.nb-blue .nb-college-match .nb-date small {
+  color: var(--nb-blue-d);
+}
+
+.nb-blue .nb-college-match .nb-college-match-profile .nb-btn {
+  justify-self: start;
+}

@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { Bell, CheckCheck, ChevronRight, Clock3, MessageCircle } from 'lucide-react';
+import { Bell, CalendarClock, CheckCheck, ChevronRight, Clock3, MessageCircle, PenLine, Target } from 'lucide-react';
 import { api } from '../api';
 import { formatDateLocale, formatNumberLocale, t } from '../i18n';
 import { dateTimeText, joinParts } from '../lib/format';
@@ -10,8 +10,9 @@ import { LoadMore, PagedListError, firstPageLoading } from '../components/paged'
 import { CxHead } from '../components/counselorUi';
 import { invalidatePagedLists } from '../hooks/usePagedList';
 import { BellSummaryContext } from '../hooks/useNotificationBell';
-import { BlueButton, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader } from '../design/blue/ui';
+import { BlueButton, Chip, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader } from '../design/blue/ui';
 import '../design/pages/dashboard-blue.css';
+import '../design/pages/notifications-blue.css';
 
 // The counselor's full notification list ("What happened since your last
 // visit"): unread chats first, then the notices addressed to them, newest
@@ -58,12 +59,15 @@ function StudentNotifications({ notify, setPage }) {
   }
   const unreadNotices = summary?.unread ?? list.items.filter((item) => !item.is_read).length;
   const hasUnread = unreadNotices > 0 || chats.length > 0 || list.items.some((item) => !item.is_read);
+  const kindCount = (kind) => list.items.filter((item) => item.kind === kind).length;
   return <div className="nb-notif">
     <PageHeader title={t('Notifications')} subtitle={t('Alerts about your work and unread conversations.')}
-      actions={hasUnread ? <BlueButton variant="ghost" size="sm" icon={CheckCheck} onClick={markAll} disabled={markingAll} aria-busy={markingAll}>{t('Mark all as read')}</BlueButton> : null} />
-    <KpiRow columns={2} label={t('Summary')}>
+      actions={hasUnread ? <BlueButton variant="ghost" size="sm" icon={CheckCheck} onClick={markAll} disabled={markingAll} aria-busy={markingAll}>{t('Mark all as read')}</BlueButton> : (list.items.length > 0 ? <Chip variant="ok" icon={CheckCheck}>{t('You are all caught up.')}</Chip> : null)} />
+    <KpiRow label={t('Summary')}>
       <KpiTile tone={0} icon={Bell} value={formatNumberLocale(unreadNotices)} label={t('Unread alerts')} />
-      <KpiTile tone={1} icon={MessageCircle} value={formatNumberLocale(summary?.chats_unread ?? chats.length)} label={t('Unread chats')} />
+      <KpiTile tone={1} icon={CalendarClock} value={formatNumberLocale(kindCount('meeting'))} label={t('Meeting updates')} onClick={() => setPage('bookings')} actionLabel={t('Meeting updates')} />
+      <KpiTile tone={2} icon={PenLine} value={formatNumberLocale(kindCount('essay'))} label={t('Essay updates')} onClick={() => setPage('essay_lab')} actionLabel={t('Essay updates')} />
+      <KpiTile tone={3} icon={Target} value={formatNumberLocale(kindCount('deadline'))} label={t('Deadline alerts')} />
     </KpiRow>
     <GlassCard tone="solid" className="nb-notif-card" title={t('Notifications')} icon={Bell}>
       {(chats.length > 0 || list.items.length > 0) && <ul className="nb-notif-list">

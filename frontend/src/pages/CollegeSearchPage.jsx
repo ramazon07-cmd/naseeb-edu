@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Filter, GraduationCap, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
-import { formatNumberLocale, parseDateValue, t, tp, tx } from '../i18n';
+import { formatDateLocale, formatNumberLocale, parseDateValue, t, tp, tx } from '../i18n';
 import { Empty, Modal } from '../components/ui';
 import { FilterOption, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
@@ -19,7 +19,7 @@ import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
 import './college-redesign.css';
 import './college-toolbar.css';
-import { PageHeader } from '../design/blue/ui';
+import { BlueButton, DateTile, GlassCard, PageHeader } from '../design/blue/ui';
 import '../design/pages/catalog-blue-base.css';
 import '../design/pages/colleges-blue.css';
 
@@ -391,6 +391,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const priceNotes = priceFilterNotes(filters.price, search.unpricedCount);
   return <div className="section-stack student-portal college-page nb-bridge nb-colleges">
     {header}
+    {ready && <CollegeMatchSummary research={research} applications={data.applications} setPage={setPage} />}
     <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
@@ -440,4 +441,40 @@ export function CollegeProfileQuestions({ research, saving, onComplete, sectionR
     onComplete(answers);
   }
   return <section ref={sectionRef} tabIndex={-1} className="college-profile-questions"><div className="research-question-copy"><span><ClipboardCheck size={20} /></span><div><span className="eyebrow">{t("PROFILE DATA REQUIRED")}</span><h2>{t("A few details are missing from your research profile")}</h2><p>{t("Your answers will be saved to your student profile and used to rank universities for you.")}</p></div></div><form onSubmit={submit}><div className="research-question-grid">{research.questions.map((question) => <label key={question.field}><span>{question.label}</span><input type={question.type} min={question.min} max={question.max} step={question.step || (question.type === 'number' ? '1' : undefined)} placeholder={question.placeholder} value={answers[question.field] ?? ''} onChange={(event) => setAnswers((current) => ({ ...current, [question.field]: event.target.value }))} required /></label>)}</div><footer><small>{tp('{n} answer required|{n} answers required', research.questions.length, { n: research.questions.length })}</small><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? <><RefreshCw className="spin" size={16} /> {t("Researching…")}</> : <><Search size={16} /> {t("Save & research")}</>}</button></footer></form></section>;
+}
+
+// "Matched to you": the scores and goals the research profile holds, and the nearest deadlines of the
+// universities already on the list. Everything comes from data the page already has.
+function CollegeMatchSummary({ research, applications = [], setPage }) {
+  const profile = research?.profile_snapshot || {};
+  const scores = [['SAT', profile.sat_score], ['GPA', profile.gpa], ['IELTS', profile.ielts_score]].filter(([, value]) => value != null && value !== '');
+  const deadlines = applications.
+  filter((application) => ['researching', 'shortlisted', 'applying'].includes(application.status)).
+  flatMap((application) => [['aid', application.scholarship_deadline], ['apply', application.deadline]].map(([kind, date]) => ({ application, kind, date, days: daysUntil(date) }))).
+  filter((item) => item.days != null && item.days >= 0).
+  sort((a, b) => a.days - b.days).slice(0, 3);
+  if (!scores.length && !profile.target_major && !deadlines.length) return null;
+  return <GlassCard tone="hero" as="section" className="nb-college-match" aria-label={t('Matched to you')}>
+    <div className="nb-college-match-grid">
+      <div className="nb-college-match-profile">
+        <span className="nb-match-eyebrow">{t('Matched to you')}</span>
+        {scores.length > 0 && <ul className="nb-match-scores">{scores.map(([label, value]) => <li key={label}><b>{formatNumberLocale(value, { maximumFractionDigits: 1 })}</b><small>{t(label)}</small></li>)}</ul>}
+        <dl className="nb-match-facts">
+          {profile.target_major && <div><dt>{t('Major')}</dt><dd>{profile.target_major}</dd></div>}
+          {profile.budget_usd != null && profile.budget_usd !== '' && <div><dt>{t('Budget')}</dt><dd>{money(profile.budget_usd)}</dd></div>}
+        </dl>
+        {setPage && <BlueButton variant="ghost" size="sm" onClick={() => setPage('student_center')}>{t('Edit profile')}</BlueButton>}
+      </div>
+      <div className="nb-college-match-deadlines">
+        <span className="nb-match-eyebrow">{t('University deadlines')}</span>
+        {deadlines.length > 0 ? <ul>{deadlines.map(({ application, kind, date, days }) => {
+          const when = parseDateValue(date);
+          return <li key={`${application.id}-${kind}`}>
+            <DateTile hot={days <= 3} day={String(when.getDate())} month={formatDateLocale(date, { month: 'short' })} />
+            <span><b>{application.university_detail?.name}</b><small>{kind === 'aid' ? t('Scholarship') : t('Apply')} · {dueLabel(days)}</small></span>
+          </li>;
+        })}</ul> : <p>{t('No upcoming deadlines yet.')}</p>}
+      </div>
+    </div>
+  </GlassCard>;
 }

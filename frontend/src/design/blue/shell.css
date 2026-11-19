@@ -447,12 +447,12 @@
 /* Desktop inner pages: the title shares the line of the top buttons (the shell sets
    --nb-topw to the buttons' width, so a header never runs underneath them). */
 @media (min-width: 821px) {
-  .nb-main:not(.nb-page-dashboard) {
+  .nb-blue .nb-main {
     padding-top: 24px;
   }
 
-  .nb-main:not(.nb-page-dashboard) .nb-page-header,
-  .nb-main:not(.nb-page-dashboard) .nb-fallback-header {
+  .nb-main .nb-page-header,
+  .nb-main .nb-fallback-header {
     align-items: flex-start;
     padding-right: var(--nb-topw, 0);
   }
