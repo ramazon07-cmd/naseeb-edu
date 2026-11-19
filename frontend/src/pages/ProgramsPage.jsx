@@ -403,7 +403,10 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
           </div>
         </div>
         {nextUp.length > 0 && <div className="nb-prog-nextup"><span className="nb-prog-eyebrow"><Clock3 size={14} aria-hidden="true" />{t('Next up')}</span><ul>{nextUp.map(({ item, due }) => <li key={item.id}><button type="button" className="nb-prog-nextup-open" onClick={() => setDetailId(item.id)}><span className="nb-prog-nextup-date" aria-hidden="true"><b>{due.day ? formatNumberLocale(due.day) : ''}</b><small>{formatDateLocale(due.date, { month: 'short' })}</small></span><span className="nb-prog-nextup-copy"><b>{item.title}</b><small>{tp('{n} day left|{n} days left', daysUntil(due.date), { n: formatNumberLocale(daysUntil(due.date)) })}</small></span></button></li>)}</ul><DeadlineRadarButton onClick={() => setRadarOpen(true)} /></div>}
+        {/* No other upcoming deadline to list: the radar stays reachable for this one and any saved program. */}
+        {nextUp.length === 0 && <div className="nb-prog-nextup is-radar-only"><DeadlineRadarButton onClick={() => setRadarOpen(true)} /></div>}
       </GlassCard>}
+      {!featured && radarPrograms.length > 0 && <div className="nb-prog-radar-only"><DeadlineRadarButton onClick={() => setRadarOpen(true)} /></div>}
       <KpiRow columns={4} className="nb-prog-kpis">
         <KpiTile tone={0} icon={Award} value={count(openNow)} label={t('Open for applications')} onClick={() => setOnlyOpen((value) => !value)} actionLabel={`${t('Open for applications')}: ${openNow}`} />
         <KpiTile tone={1} icon={Globe2} value={count(overall.programs.length)} label={t('Open programs in the catalog')} onClick={() => { reset(); setOnlySaved(false); }} actionLabel={`${t('Open programs in the catalog')}: ${overall.programs.length}`} />

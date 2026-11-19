@@ -842,3 +842,18 @@
   outline-offset: 4px;
   border-radius: var(--nb-r-xs);
 }
+
+/* Only the radar button (no other upcoming deadline to list): a slim row under the featured card. */
+.nb-blue .nb-prog-nextup.is-radar-only {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0;
+  border: 0;
+  background: none;
+}
+
+.nb-blue .nb-prog-radar-only {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 var(--nb-gap);
+}
