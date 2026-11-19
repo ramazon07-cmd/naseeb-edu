@@ -53,3 +53,39 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* "Coming soon" lock page. */
+.nb-blue .nb-store .nb-store-lock {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.nb-blue .nb-store .nb-store-lock h2,
+.nb-blue .nb-store .nb-store-lock p {
+  margin: 0;
+}
+
+.nb-blue .nb-store .nb-store-lock p {
+  max-width: 46ch;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-store .nb-store-lock-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--nb-tint);
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-store .nb-store-lock .nb-card-body {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}

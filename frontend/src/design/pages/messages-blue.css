@@ -552,3 +552,51 @@
     max-width: 82%;
   }
 }
+
+/* Saved Messages is a pinned row: tinted, with a pin mark. */
+.nb-blue .messaging-page .channel-item.saved-messages:not(.active) {
+  background: var(--nb-tint);
+  box-shadow: inset 3px 0 0 var(--nb-blue);
+}
+
+.nb-blue .messaging-page .channel-item.saved-messages .pinned-mark {
+  flex: none;
+  margin-left: auto;
+  color: var(--nb-blue);
+}
+
+/* Phones: the conversation list keeps its header, folders and search rows instead of
+   squeezing them into a short box. */
+@media (max-width: 820px) {
+  .nb-blue .messaging-page .messages-shell {
+    height: auto;
+    min-height: calc(100dvh - 220px);
+  }
+
+  .nb-blue .messaging-page .channel-sidebar {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    height: auto;
+    max-height: none;
+    min-height: calc(100dvh - 220px);
+  }
+
+  .nb-blue .messaging-page .chat-sidebar-header {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .nb-blue .messaging-page .chat-sidebar-header > div {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .nb-blue .messaging-page .chat-new-button {
+    flex: none;
+    border-radius: 14px;
+  }
+
+  .nb-blue .messaging-page .channel-list {
+    max-height: none;
+  }
+}

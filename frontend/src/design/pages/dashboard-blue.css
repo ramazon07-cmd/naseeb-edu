@@ -801,10 +801,22 @@
   gap: 3px;
 }
 
+.nb-blue .nb-dash-bar-cell {
+  min-width: 0;
+  height: 100%;
+}
+
 .nb-blue .nb-dash-bar {
   display: grid;
   grid-template-rows: minmax(0, 1fr) 22px;
+  width: 100%;
   height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
   border-radius: var(--nb-r-xs);
   outline-offset: 2px;
 }

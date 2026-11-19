@@ -5,7 +5,7 @@ import { Modal, Empty, Panel } from '../components/ui';
 import { Field, PortalTabs } from '../components/forms';
 import { fullName, label } from '../lib/labels';
 import { Record } from '../components/records';
-import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil, Send, Eye, Link2, User, Timer, History, UsersRound, MessageCircle } from 'lucide-react';
+import { Plus, Clock3, Check, X, CheckCircle2, CalendarClock, Calendar, CalendarDays, Ban, ArrowLeft, ChevronLeft, ChevronRight, Globe, Trash2, Pencil, Send, Eye, Link2, Timer, History, UsersRound, MessageCircle } from 'lucide-react';
 import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, joinParts, relativeDayText, shortDayText } from '../lib/format';
 import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
@@ -175,23 +175,41 @@ function SlotCalendar({ slots, selectedDate, onDate, selectedSlot, onSlot, onNex
 // Matches OVERVIEW_SLOTS_PER_PARTICIPANT in backend meetings.py.
 const OVERVIEW_SLOTS = 20;
 
-// The people a student may book and their free times, loaded once `enabled`: the list of people plus every
-// person's next times (one request each), then the chosen person's full list. Shared by the request dialog and
-// the booking panel, so both make exactly these requests. `initialParticipantId` (a shared link) picks the person;
-// when the student may not book them, `onUnavailable` is called.
-function useBookableStaff({ enabled, initialParticipantId = null, onUnavailable }) {
+// `staff`: a counselor/teacher/org member booking with one of their students —
+// they pick the student, not a participant (the API sets participant = them).
+// `defaultStudentId`/`defaultTopic`: pre-fill for "Rebook" on an expired or declined request.
+// `initialParticipantId` (a shared booking link): open on that staff member's date & time step; when the
+// student may not book them, `onUnavailable` is called and nothing about that person is loaded.
+export function BookingForm({ staff = false, defaultStudentId = null, defaultStudentName = '', defaultTopic = '', initialParticipantId = null, onUnavailable, onClose, onSaved, notify }) {
+  const [student, setStudent] = useState(defaultStudentId ? { id: defaultStudentId, name: defaultStudentName } : null);
   const [participants, setParticipants] = useState([]);
   const [participantId, setParticipantId] = useState('');
   const [slots, setSlots] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
-  const [loading, setLoading] = useState(enabled);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [step, setStep] = useState('pick');
+  const [topic, setTopic] = useState(defaultTopic);
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(!staff);
   const [peopleError, setPeopleError] = useState('');
   const [overviewKnown, setOverviewKnown] = useState(false);
   const [peopleAttempt, setPeopleAttempt] = useState(0);
   const [slotStates, setSlotStates] = useState({});
   const [slotAttempt, setSlotAttempt] = useState(0);
+  const [saving, setSaving] = useState(false);
+  // After a student's request is sent: a short confirmation, then the usual onSaved (close and reload).
+  const [sent, setSent] = useState(null);
+  const savedRef = useRef(onSaved);
+  savedRef.current = onSaved;
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!sent) return undefined;
+    const timer = window.setTimeout(() => savedRef.current(), 4000);
+    return () => window.clearTimeout(timer);
+  }, [sent]);
+  const [zoneTick, setZoneTick] = useState(0);
+  useZoneSync();
+  useEffect(() => {
+    if (staff) return undefined;
     let active = true;
     setLoading(true); setPeopleError('');
     Promise.allSettled([api.bookingParticipants(), api.bookingAvailability()]).then(([people, times]) => {
@@ -214,10 +232,10 @@ function useBookableStaff({ enabled, initialParticipantId = null, onUnavailable 
       if (active) setLoading(false);
     });
     return () => {active = false;};
-  }, [enabled, peopleAttempt]); // eslint-disable-line react-hooks/exhaustive-deps -- the link's person is read once, on load
+  }, [staff, peopleAttempt]); // eslint-disable-line react-hooks/exhaustive-deps -- the link's person is read once, on load
   // The overview holds only each person's next few times; the chosen person's full list replaces them.
   useEffect(() => {
-    if (!enabled || !participantId) return undefined;
+    if (staff || !participantId) return undefined;
     let active = true;
     const id = Number(participantId);
     setSlotStates((current) => ({ ...current, [id]: { loading: true, error: '' } }));
@@ -230,27 +248,7 @@ function useBookableStaff({ enabled, initialParticipantId = null, onUnavailable 
       setSelectedDate((day) => theirs.some((slot) => slot.available && meetingDay(slot.starts_at) === day) ? day : first ? meetingDay(first.starts_at) : '');
     }).catch((err) => { if (active) setSlotStates((current) => ({ ...current, [id]: { loading: false, error: err.message } })); });
     return () => { active = false; };
-  }, [enabled, participantId, slotAttempt]);
-  const retryPeople = () => setPeopleAttempt((value) => value + 1);
-  const retrySlots = () => setSlotAttempt((value) => value + 1);
-  return { participants, participantId, setParticipantId, slots, selectedDate, setSelectedDate, loading, peopleError, overviewKnown, slotStates, setSlotStates, retryPeople, retrySlots };
-}
-
-// `staff`: a counselor/teacher/org member booking with one of their students —
-// they pick the student, not a participant (the API sets participant = them).
-// `defaultStudentId`/`defaultTopic`: pre-fill for "Rebook" on an expired or declined request.
-// `initialParticipantId` (a shared booking link): open on that staff member's date & time step; when the
-// student may not book them, `onUnavailable` is called and nothing about that person is loaded.
-export function BookingForm({ staff = false, defaultStudentId = null, defaultStudentName = '', defaultTopic = '', initialParticipantId = null, onUnavailable, onClose, onSaved, notify }) {
-  const [student, setStudent] = useState(defaultStudentId ? { id: defaultStudentId, name: defaultStudentName } : null);
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [step, setStep] = useState('pick');
-  const [topic, setTopic] = useState(defaultTopic);
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [zoneTick, setZoneTick] = useState(0);
-  useZoneSync();
-  const { participants, participantId, setParticipantId, slots, selectedDate, setSelectedDate, loading, peopleError, overviewKnown, slotStates, setSlotStates, retryPeople, retrySlots } = useBookableStaff({ enabled: !staff, initialParticipantId, onUnavailable });
+  }, [staff, participantId, slotAttempt]);
   const slotsByPerson = useMemo(() => groupByParticipant(slots), [slots]);
   const personSlots = slotsByPerson.get(Number(participantId)) || NO_SLOTS;
   const person = participants.find((item) => String(item.id) === participantId);
@@ -295,7 +293,8 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
         topic, starts_at: selectedSlot.starts_at, duration_minutes: selectedSlot.duration_minutes, notes
       });
       notify(staff ? (values.get('ask_student') === 'on' ? t("Invitation sent. Waiting for the student to confirm.") : t("Meeting confirmed.")) : t("Meeting request sent for approval."));
-      onSaved();
+      if (staff) onSaved();
+      else setSent({ name: personName, slot: selectedSlot });
     } catch (err) {
       notify(err.message, 'error');
     } finally {
@@ -308,15 +307,23 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Booking…") : t("Book meeting")}</button></div>
   </form></Modal>;
   const details = step === 'details' && selectedSlot;
+  if (sent) return <Modal title={t("Request a meeting")} onClose={onSaved} className="booking-scheduler-modal"><div className="nb-meet-sent" role="status">
+    <span className="nb-meet-sent-ok"><Check size={30} aria-hidden="true" /></span>
+    <h3>{t("Request sent")}</h3>
+    <ul><li><CalendarDays size={16} aria-hidden="true" />{slotRange(sent.slot)}</li>{sent.name && <li><Clock3 size={16} aria-hidden="true" />{sent.name}</li>}</ul>
+    <p>{t("Your counselor confirms the request.")}</p>
+    <button type="button" className="button primary" autoFocus onClick={onSaved}>{t("Done")}</button>
+  </div></Modal>;
   return <Modal title={t("Request a meeting")} onClose={onClose} className="booking-scheduler-modal"><form className="booking-cal" onSubmit={submit}>
     <aside className="booking-cal-side">
+      <div className="booking-cal-step" key={details ? 'side-details' : 'side-pick'}>
       {details ? <>
         <button type="button" className="booking-cal-back" onClick={() => setStep('pick')} aria-label={t("Back")}><ArrowLeft size={20} /></button>
         <small className="booking-cal-role">{joinParts(label(person?.role), person?.position)}</small>
         <h3 className="booking-cal-host">{personName}</h3>
       </> : <section className="booking-cal-people" aria-label={t("Meet with")}>
         <h3>{t("Meet with")}</h3>
-        {loading ? <p className="booking-cal-note">{t("Loading available staff…")}</p> : peopleError ? <InlineLoadError message={peopleError} onRetry={retryPeople} /> : participants.length ? participants.map((item) => {
+        {loading ? <div className="nb-meet-skel" role="status" aria-busy="true"><span className="sr-only">{t("Loading available staff…")}</span><i /><i /><i /></div> : peopleError ? <InlineLoadError message={peopleError} onRetry={() => setPeopleAttempt((value) => value + 1)} /> : participants.length ? participants.map((item) => {
           const free = (slotsByPerson.get(item.id) || NO_SLOTS).filter((slot) => slot.available).length;
           // Until a person is picked only their next OVERVIEW_SLOTS times are loaded: a full page means "or more".
           const partial = participantId !== String(item.id) && free >= OVERVIEW_SLOTS;
@@ -331,8 +338,10 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
         {details && <li><CalendarDays size={18} aria-hidden="true" /> {slotRange(selectedSlot)}</li>}
         {details && <li><Globe size={18} aria-hidden="true" /> {timeZoneName()}</li>}
       </ul>
+      </div>
     </aside>
     <section className="booking-cal-main">
+      <div className="booking-cal-step" key={details ? 'main-details' : 'main-pick'}>
       {details ? <>
         <h3>{t("Enter details")}</h3>
         <div className="booking-cal-fields">
@@ -342,10 +351,11 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
         </div>
       </> : <>
         <h3>{t("Choose a date and time")}</h3>
-        {loading || loadingSlots ? <p className="booking-cal-note">{t("Loading available times…")}</p> : !participantId ? null : slotError ? <InlineLoadError message={slotError} onRetry={() => {setSelectedSlot(null);retrySlots();}} /> : noTimes
+        {loading || loadingSlots ? <div className="nb-meet-skel is-calendar" role="status" aria-busy="true"><span className="sr-only">{t("Loading available times…")}</span>{Array.from({ length: 29 }, (_, index) => <i key={index} />)}</div> : !participantId ? null : slotError ? <InlineLoadError message={slotError} onRetry={() => {setSelectedSlot(null);setSlotAttempt((value) => value + 1);}} /> : noTimes
           ? <p className="booking-cal-note" role="status">{t("{name} hasn't published available times yet. Message them or check back later.", { name: personName || t("Meeting participant") })}</p>
           : <SlotCalendar key={`${participantId}-${zoneTick}`} onZone={changeZone} slots={personSlots} selectedDate={selectedDate} onDate={(key) => { setSelectedDate(key); setSelectedSlot(null); }} selectedSlot={selectedSlot} onSlot={setSelectedSlot} onNext={() => setStep('details')} />}
       </>}
+      </div>
     </section>
   </form></Modal>;
 }
@@ -1105,265 +1115,9 @@ export function BookingsPage({ user, data, reload, notify, updateUser, setPage, 
   }, []);
   const props = { user, data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, retryResources };
   // key: a new zone redraws every time on the page.
-  // No key for students: a new zone redraws with the times already loaded instead of asking the server again.
-  if (user.role === 'student') return <StudentBookingsPage zoneId={zoneId} {...props} />;
+  if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
   if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
   return <StaffMeetingsPage key={zoneId} {...props} />;
-}
-
-const weekdayShorts = () => WEEKDAYS.map((name, index) => (uzbek() ? t(name).slice(0, 2) : formatDateLocale(new Date(2024, 0, 1 + index), { weekday: 'short' })));
-const reducedMotion = () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const slotEndText = (slot) => clockText(new Date(new Date(slot.starts_at).getTime() + slot.duration_minutes * 60000));
-const slotSpan = (slot) => `${clockText(slot.starts_at)}–${slotEndText(slot)} · ${tx`${slot.duration_minutes} min`}`;
-
-// "Book a meeting": the three-step panel at the top of the student's Meetings page (Time, Details, Done), then the
-// requests still waiting for the counselor. It makes the requests the request dialog made, once the student acts
-// (the header button, "See free times" or a booking link): the people and their times, then the chosen
-// person's full list; a booking, a new time (`reschedule`) and a cancel are one request each.
-function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId, onUnavailable, requests, notify, reload, focusTick }) {
-  const root = useRef(null);
-  const [armed, setArmed] = useState(false);
-  const enabled = armed && !locked;
-  const bookable = useBookableStaff({ enabled, initialParticipantId, onUnavailable });
-  const { participants, participantId, setParticipantId, slots, loading, peopleError, overviewKnown, slotStates, setSlotStates, retryPeople, retrySlots } = bookable;
-  const [step, setStep] = useState(1);
-  const [pick, setPick] = useState(null);
-  const [topic, setTopic] = useState('');
-  const [notes, setNotes] = useState('');
-  const [view, setView] = useState(null);
-  const [edit, setEdit] = useState(null);
-  const [editSlots, setEditSlots] = useState({ items: [], loading: false, error: '' });
-  const [editAttempt, setEditAttempt] = useState(0);
-  const [editDate, setEditDate] = useState('');
-  const [last, setLast] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [confirmId, setConfirmId] = useState(null);
-  const [cancellingId, setCancellingId] = useState(null);
-  const wantFocus = useRef(false);
-  // Nothing is requested until the student acts: the header button, the start button below, or a booking link.
-  useEffect(() => { if (initialParticipantId && !hidden) setArmed(true); }, [initialParticipantId, hidden]);
-  // A new time for a waiting request: the same request the reschedule dialog makes.
-  useEffect(() => {
-    if (!edit) return undefined;
-    let active = true;
-    setEditSlots({ items: [], loading: true, error: '' });
-    const current = new Date(edit.starts_at).getTime();
-    request(`/bookings/availability/?${new URLSearchParams({ reschedule: edit.id, participant: edit.participant })}`).then((items) => {
-      if (!active) return;
-      const next = (items || [])
-        .map((slot) => (slot.id === edit.availability_slot || new Date(slot.starts_at).getTime() === current ? { ...slot, available: false } : slot))
-        .sort(byStart);
-      setEditSlots({ items: next, loading: false, error: '' });
-      const first = next.find((slot) => slot.available);
-      setEditDate(first ? meetingDay(first.starts_at) : '');
-    }).catch((err) => { if (active) setEditSlots({ items: [], loading: false, error: err.message }); });
-    return () => { active = false; };
-  }, [edit, editAttempt]);
-  const slotsByPerson = useMemo(() => groupByParticipant(slots), [slots]);
-  const person = participants.find((item) => String(item.id) === participantId);
-  const personName = edit ? edit.participant_name || t("Meeting participant") : person ? fullName(person) || person.username : '';
-  const slotState = slotStates[Number(participantId)];
-  const loadingSlots = edit ? editSlots.loading : Boolean(participantId) && (!slotState || slotState.loading);
-  const slotError = edit ? editSlots.error : slotState?.error;
-  const shown = edit ? editSlots.items : slotsByPerson.get(Number(participantId)) || NO_SLOTS;
-  const date = edit ? editDate : bookable.selectedDate;
-  const setDate = edit ? setEditDate : bookable.setSelectedDate;
-  const openDays = useMemo(() => {
-    const days = new Map();
-    for (const slot of shown) if (slot.available) days.set(meetingDay(slot.starts_at), (days.get(meetingDay(slot.starts_at)) || 0) + 1);
-    return days;
-  }, [shown, zone.id]); // eslint-disable-line react-hooks/exhaustive-deps -- the day of a time depends on the chosen zone
-  const lastOpen = [...openDays.keys()].sort().at(-1);
-  const month = view || monthStart(date ? `${date}T00:00` : new Date());
-  const daySlots = shown.filter((slot) => slot.available && meetingDay(slot.starts_at) === date);
-  const today = meetingDay();
-  const ready = enabled && !loading && !peopleError && !loadingSlots;
-  // A new time zone moves the days: keep the chosen time's day (or the first open day) in the new zone,
-  // from the times already loaded (no request).
-  const zoneSeen = useRef(zone.id);
-  useEffect(() => {
-    if (zoneSeen.current === zone.id) return;
-    zoneSeen.current = zone.id;
-    const first = shown.find((slot) => slot.available);
-    const next = pick ? meetingDay(pick.starts_at) : first ? meetingDay(first.starts_at) : '';
-    setDate(next);
-    setView(null);
-  }, [zone.id]); // eslint-disable-line react-hooks/exhaustive-deps -- reacts to the zone only
-  // The header button (and a booking link) bring the panel to the screen and put focus on its first control.
-  useEffect(() => {
-    if (!focusTick) return;
-    wantFocus.current = true;
-    setArmed(true);
-    root.current?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
-  }, [focusTick]);
-  useEffect(() => {
-    if (!wantFocus.current || hidden) return;
-    const target = locked ? root.current?.querySelector('.bk-locked button') : ready ? (root.current?.querySelector('.bk-day.sel') || root.current?.querySelector('.bk-host[aria-checked="true"]')) : null;
-    if (target) { wantFocus.current = false; target.focus({ preventScroll: true }); }
-  }, [ready, locked, hidden, focusTick, step, date]);
-  const reset = () => { setPick(null); setStep(1); };
-  function chooseHost(id) {
-    if (String(id) === participantId) return;
-    setSlotStates((current) => ({ ...current, [id]: { loading: true, error: '' } }));
-    const next = (slotsByPerson.get(id) || NO_SLOTS).find((slot) => slot.available);
-    setParticipantId(String(id));
-    bookable.setSelectedDate(next ? meetingDay(next.starts_at) : '');
-    setView(null); reset();
-  }
-  function changeTime(item) { setConfirmId(null); setEdit(item); setEditDate(''); setView(null); setPick(null); setTopic(item.topic || ''); setStep(1); setLast(null); wantFocus.current = true; root.current?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }); }
-  function stopEdit() { setEdit(null); setView(null); setTopic(''); reset(); }
-  const stepTo = (index) => setStep(index);
-  async function send(event) {
-    event.preventDefault();
-    if (!pick || saving) return;
-    setSaving(true);
-    try {
-      if (edit) {
-        await api.rescheduleBooking(edit.id, { starts_at: pick.starts_at, duration_minutes: pick.duration_minutes, availability_slot: pick.id });
-        notify(t("New time sent for confirmation."));
-        setLast({ host: personName, slot: pick, topic: edit.topic, moved: true });
-        setEdit(null);
-      } else {
-        await api.create('bookings', { participant: Number(participantId), availability_slot: pick.id, topic: topic.trim(), starts_at: pick.starts_at, duration_minutes: pick.duration_minutes, notes: notes.trim() });
-        notify(t("Meeting request sent for approval."));
-        setLast({ host: personName, slot: pick, topic: topic.trim(), moved: false });
-        retrySlots();
-      }
-      setTopic(''); setNotes(''); setPick(null); setStep(3);
-      reload();
-    } catch (err) {
-      notify(err.message, 'error');
-      if (!edit) retrySlots();
-      reset();
-    } finally {
-      setSaving(false);
-    }
-  }
-  async function cancelRequest(item) {
-    setCancellingId(item.id);
-    try {
-      await api.cancelBooking(item.id);
-      notify(t("Request cancelled."));
-      if (edit?.id === item.id) stopEdit();
-      setConfirmId(null);
-      reload();
-    } catch (err) {
-      notify(err.message, 'error');
-    } finally {
-      setCancellingId(null);
-    }
-  }
-  // Arrow keys move over the days (a week for Up and Down), skipping days with no times.
-  function dayKeys(event) {
-    const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[event.key];
-    if (!delta) return;
-    const all = [...event.currentTarget.querySelectorAll('.bk-day')];
-    const at = all.indexOf(event.target);
-    if (at < 0) return;
-    event.preventDefault();
-    for (let index = at + delta; index >= 0 && index < all.length; index += Math.sign(delta)) {
-      if (!all[index].disabled) { all[index].focus(); break; }
-    }
-  }
-  const stepNames = [t("Time"), t("Details"), t("Done")];
-  const hasTimes = shown.some((slot) => slot.available);
-  const offset = (month.getDay() + 6) % 7;
-  const length = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-  const duration = pick?.duration_minutes || shown[0]?.duration_minutes;
-  let body;
-  if (locked) body = <div className="bk-wide"><div className="bk-locked" role="status"><Send size={22} aria-hidden="true" /><p>{t("Connect Telegram to request meetings")}</p><BlueButton size="sm" onClick={onLocked}>{t("Connect")}</BlueButton></div></div>;
-  else if (!armed) body = <div className="bk-wide"><div className="bk-empty"><CalendarDays size={26} aria-hidden="true" /><p>{t("Pick a counselor and a free time to request a meeting.")}</p><BlueButton icon={CalendarDays} onClick={() => { wantFocus.current = true; setArmed(true); }}>{t("See free times")}</BlueButton></div></div>;
-  else if (loading) body = <div className="bk-wide"><p className="bk-note" role="status">{t("Loading available times…")}</p></div>;
-  else if (peopleError) body = <div className="bk-wide"><InlineLoadError message={peopleError} onRetry={retryPeople} /></div>;
-  else if (!participants.length) body = <div className="bk-wide"><p className="bk-note">{t("No counselor, teacher, or school representative is available for your account.")}</p></div>;
-  else if (step === 3 && last) body = <div className="bk-wide"><div className="bk-done" role="status">
-    <span className="bk-ok"><Check size={26} aria-hidden="true" /></span>
-    <h3>{last.moved ? t("New time saved") : t("Request sent")}</h3>
-    <div className="bk-sum"><p><User size={16} aria-hidden="true" /><b>{last.host}</b></p><p><CalendarDays size={16} aria-hidden="true" />{dayTitle(meetingDay(last.slot.starts_at))}</p><p><Clock3 size={16} aria-hidden="true" />{slotSpan(last.slot)}</p>{last.topic && <p><MessageCircle size={16} aria-hidden="true" />{last.topic}</p>}</div>
-    <p className="bk-note">{t("Your counselor confirms the request.")}</p>
-    <BlueButton icon={Plus} onClick={() => { setStep(1); setLast(null); wantFocus.current = true; }}>{t("Book another")}</BlueButton>
-  </div></div>;
-  else if (slotError) body = <div className="bk-wide"><InlineLoadError message={slotError} onRetry={() => { setPick(null); if (edit) setEditAttempt((value) => value + 1); else retrySlots(); }} /></div>;
-  else if (loadingSlots) body = <div className="bk-wide"><p className="bk-note" role="status">{t("Loading available times…")}</p></div>;
-  else if (!hasTimes) body = <div className="bk-wide"><div className="bk-empty"><CalendarDays size={26} aria-hidden="true" /><p>{t("{name} hasn't published available times yet. Message them or check back later.", { name: personName || t("Meeting participant") })}</p></div></div>;
-  else if (step === 2 && pick) body = <div className="bk-wide"><form className="bk-f" onSubmit={send}>
-    <div className="bk-sum"><p><User size={16} aria-hidden="true" /><b>{personName}</b></p><p><CalendarDays size={16} aria-hidden="true" />{dayTitle(meetingDay(pick.starts_at))}</p><p><Clock3 size={16} aria-hidden="true" />{joinParts(slotSpan(pick), viewerTimeHint(pick.starts_at))}</p><p><Globe size={16} aria-hidden="true" />{timeZoneName()}</p></div>
-    {!edit && <label className="bk-fld"><span>{t("Topic")}</span><textarea rows={3} required value={topic} onChange={(event) => setTopic(event.target.value)} placeholder={t("Essay review, university list...")} /></label>}
-    {!edit && <label className="bk-fld"><span>{t("Notes")}</span><textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t("What would you like to discuss?")} /></label>}
-    <p className="bk-note">{edit ? t("The new time goes back to {name} to confirm.", { name: personName }) : t("Your counselor confirms the request.")}</p>
-    <div className="bk-act"><BlueButton variant="ghost" icon={ChevronLeft} onClick={() => stepTo(1)}>{t("Back")}</BlueButton><BlueButton type="submit" icon={Send} disabled={saving} aria-busy={saving}>{saving ? t("Requesting…") : edit ? t("Save new time") : t("Request meeting")}</BlueButton></div>
-  </form></div>;
-  else body = <>
-    <div className="bk-c">
-      <div className="bk-calh">
-        <button type="button" className="bk-nav" disabled={month <= monthStart(new Date())} onClick={() => setView(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label={t("Previous month")}><ChevronLeft size={18} aria-hidden="true" /></button>
-        <b aria-live="polite">{formatDateLocale(month, { month: 'long', year: 'numeric' })}</b>
-        <button type="button" className="bk-nav" disabled={!lastOpen || monthStart(`${lastOpen}T00:00`) <= month} onClick={() => setView(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label={t("Next month")}><ChevronRight size={18} aria-hidden="true" /></button>
-      </div>
-      <div className="bk-cal" role="group" aria-label={t("Available dates")} onKeyDown={dayKeys}>
-        {weekdayShorts().map((name) => <span key={name} className="wd" aria-hidden="true">{name}</span>)}
-        {Array.from({ length }, (_, index) => {
-          const key = dayKey(new Date(month.getFullYear(), month.getMonth(), index + 1));
-          const count = openDays.get(key) || 0;
-          return <button key={key} type="button" style={index === 0 ? { gridColumnStart: offset + 1 } : undefined} className={['bk-day', count && 'has', key === date && 'sel', key === today && 'tod'].filter(Boolean).join(' ')} disabled={!count} aria-pressed={key === date} aria-label={`${dayTitle(key)}, ${count ? t("{n} free times", { n: count }) : t("No free times on this day.")}`} onClick={() => { setDate(key); setPick(null); }}>{index + 1}</button>;
-        })}
-      </div>
-    </div>
-    <div className="bk-s" role="group" aria-label={t("Available times")}>
-      {date && openDays.has(date) ? <><b>{dayTitle(date)}</b><small>{t("Pick a free time.")}</small></> : <b>{t("No free day yet")}</b>}
-      <div className="bk-sl">
-        {daySlots.map((slot) => (pick?.id === slot.id
-          ? <div key={slot.id} className="bk-srow"><span className="bk-st">{clockText(slot.starts_at)}</span><button type="button" className="bk-go" onClick={() => setStep(2)}>{t("Next")}</button></div>
-          : <button key={slot.id} type="button" className="bk-slot" aria-label={`${clockText(slot.starts_at)}, ${tx`${slot.duration_minutes} min`}`} onClick={() => setPick(slot)}>{clockText(slot.starts_at)}</button>))}
-        {date && !daySlots.length && <p className="bk-note">{t("No free times on this day.")}</p>}
-      </div>
-    </div>
-  </>;
-  const side = !locked && enabled && !loading && !peopleError && participants.length > 0;
-  return <><section className="nb-card nb-card-solid bk" id="bk" ref={root} hidden={hidden} aria-labelledby="bk-title">
-    <div className="bk-h">
-      <div><h2 id="bk-title"><CalendarDays size={20} aria-hidden="true" />{t("Book a meeting")}</h2><p>{t("Pick who and when. Your counselor confirms the request.")}</p></div>
-      <ol className="bk-steps" aria-label={t("Book a meeting")}>{stepNames.map((name, index) => <li key={name} className={step === index + 1 ? 'on' : step > index + 1 ? 'ok' : ''} aria-current={step === index + 1 ? 'step' : undefined}><i>{step > index + 1 ? '✓' : index + 1}</i>{name}</li>)}</ol>
-    </div>
-    {edit && <p className="bk-edit"><Clock3 size={16} aria-hidden="true" /><span>{t("Changing the time of “{topic}” ({date}). Pick a new time.", { topic: edit.topic || t("No topic"), date: `${formatDateLocale(zoned(edit.starts_at), { day: 'numeric', month: 'short' })}, ${clockText(edit.starts_at)}` })}</span><button type="button" className="bk-lnk" onClick={stopEdit}>{t("Keep the old time")}</button></p>}
-    <div className="bk-b">
-      <div className="bk-l">
-        {side ? <>
-          <p className="bk-eyebrow" id="bk-who">{t("Meet with")}</p>
-          <div className="bk-hosts" role="radiogroup" aria-labelledby="bk-who">
-            {(edit ? participants.filter((item) => String(item.id) === participantId || item.id === edit.participant) : participants).map((item) => {
-              const free = (slotsByPerson.get(item.id) || NO_SLOTS).filter((slot) => slot.available).length;
-              const partial = participantId !== String(item.id) && free >= OVERVIEW_SLOTS;
-              const name = fullName(item) || item.username;
-              const state = slotStates[item.id];
-              const known = state ? !state.loading && !state.error : overviewKnown;
-              const selected = edit ? item.id === edit.participant : participantId === String(item.id);
-              return <button key={item.id} type="button" role="radio" aria-checked={selected} className="bk-host" disabled={Boolean(edit) && !selected} onClick={() => chooseHost(item.id)}><span className="av" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span><span><b>{name}</b><small className={known && free ? 'yes' : ''}>{state?.loading ? t('Loading…') : !known ? '—' : free ? t(partial ? "{n}+ available times" : "{n} available times", { n: free }) : t("No available times")}</small></span></button>;
-            })}
-            {edit && !participants.some((item) => item.id === edit.participant) && <span className="bk-host" role="radio" aria-checked="true"><span className="av" aria-hidden="true">{personName.slice(0, 1).toUpperCase()}</span><span><b>{personName}</b></span></span>}
-          </div>
-          {duration && <><p className="bk-eyebrow">{t("Meeting length")}</p><p className="bk-len"><Clock3 size={15} aria-hidden="true" />{tx`${duration} min`}</p></>}
-          <ul className="bk-info"><li><Globe size={14} aria-hidden="true" /><span>{timeZoneName()}</span></li></ul>
-        </> : <p className="bk-eyebrow">{t("Meet with")}</p>}
-      </div>
-      {body}
-    </div>
-  </section>
-  <div className="bk-row" hidden={hidden}><BookingRequests items={requests} confirmId={confirmId} setConfirmId={setConfirmId} cancellingId={cancellingId} onChange={changeTime} onCancel={cancelRequest} />{children}</div></>;
-}
-
-// "Your requests": what still waits for the counselor, with a new time or a cancel (asked once more first).
-function BookingRequests({ items, confirmId, setConfirmId, cancellingId, onChange, onCancel }) {
-  return <GlassCard tone="solid" className="bk-rq" title={t("Your requests")} icon={Clock3} action={items.length ? <Chip>{items.length}</Chip> : undefined}>
-    {items.length ? <ul className="bk-rql">{items.map((item) => <li key={item.id}>
-      <span className="bk-rqd"><b>{zoned(item.starts_at).getDate()}</b><small>{formatDateLocale(zoned(item.starts_at), { month: 'short' })}</small></span>
-      <span className="bk-rqt"><b>{item.topic || t("No topic")}</b><small>{joinParts(`${clockText(item.starts_at)}–${slotEndText({ starts_at: item.starts_at, duration_minutes: item.duration_minutes || 0 })}`, item.participant_name || t("Meeting participant"), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)}</small></span>
-      <Chip variant="warn">{t("Pending")}</Chip>
-      <span className="bk-rqa">{confirmId === item.id
-        ? <><span className="bk-q" role="alert">{t("Cancel this request?")}</span><BlueButton size="sm" disabled={cancellingId === item.id} aria-busy={cancellingId === item.id} onClick={() => onCancel(item)}>{t("Yes, cancel")}</BlueButton><BlueButton size="sm" variant="ghost" onClick={() => setConfirmId(null)}>{t("No")}</BlueButton></>
-        : <>{item.participant && <button type="button" className="bk-lnk" onClick={() => onChange(item)}>{t("Change time")}</button>}<button type="button" className="bk-lnk del" onClick={() => setConfirmId(item.id)}>{t("Cancel request")}</button></>}</span>
-    </li>)}</ul> : <div className="bk-none"><CalendarDays size={20} aria-hidden="true" /><span>{t("No requests yet. Pick a free time above to send your first one.")}</span></div>}
-  </GlassCard>;
 }
 
 const statusChip = (status) => ({ confirmed: 'ok', completed: 'ok', pending: 'warn', cancelled: 'overdue', rejected: 'overdue', expired_unconfirmed: 'overdue' }[status] || 'default');
@@ -1377,12 +1131,14 @@ function useStudentTeam(data, resourceStatus) {
   };
 }
 
-function StudentBookingsPage({ zoneId, data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, retryResources }) {
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus }) {
   const [tab, setTab] = useState('upcoming');
-  // The staff member a shared link names: the booking panel opens on them (while Telegram is not connected the
-  // dialog shows first, and the panel loads as soon as the link is confirmed).
+  const [open, setOpen] = useState(false);
+  // The staff member a shared link names, until the dialog closes (then Request meeting opens it as usual).
   const [linked, setLinked] = useState(bookId);
-  const [focusTick, setFocusTick] = useState(bookId ? 1 : 0);
+  // A booking link opens the picker for that person; while Telegram is not connected the dialog shows first,
+  // and the picker follows as soon as the link is confirmed.
+  useEffect(() => { if (bookId && !locked) setOpen(true); }, [bookId, locked]);
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const teamRef = useRef(null);
@@ -1406,9 +1162,8 @@ function StudentBookingsPage({ zoneId, data, reload, notify, guard, banner, pick
   const upcoming = studentMeetingsForTab(data.bookings, 'upcoming', now);
   const past = studentMeetingsForTab(data.bookings, 'history', now);
   const items = tab === 'upcoming' ? upcoming : past;
-  const waiting = pendingMeetings(data.bookings, now).sort(byStart);
-  // A request waiting for the counselor is listed under "Your requests", not among the meetings.
-  const rows = tab === 'upcoming' ? items.filter((item) => !waiting.some((request) => request.id === item.id)) : items;
+  const waiting = pendingMeetings(data.bookings, now);
+  const rows = items;
   // Minutes spent in meetings that took place (confirmed and past, or marked completed).
   const minutes = past.reduce((total, item) => (['completed', 'past_unmarked'].includes(meetingStatus(item, now, { student: true })) ? total + (Number(item.duration_minutes) || 0) : total), 0);
   const tabs = [{ key: 'upcoming', label: t('Upcoming') }, { key: 'history', label: t('Past'), count: past.length }];
@@ -1427,7 +1182,7 @@ function StudentBookingsPage({ zoneId, data, reload, notify, guard, banner, pick
       setSavingId(null);
     }
   }
-  const requestButton = <BlueButton icon={Plus} onClick={guard(() => { setTab('upcoming'); setFocusTick((value) => value + 1); })}>{t("Request meeting")}</BlueButton>;
+  const requestButton = <BlueButton icon={Plus} onClick={guard(() => setOpen(true))}>{t("Request meeting")}</BlueButton>;
   const teamCard = !team.known ? null : (
 <GlassCard tone="solid" className="nb-meet-team" title={t("My Naseeb team")} icon={UsersRound} ref={teamRef}>
         {team.items.length ? <ul className="nb-meet-people">{team.items.map((member) => <li key={`${member.kind}-${member.id}`}>
@@ -1450,8 +1205,7 @@ function StudentBookingsPage({ zoneId, data, reload, notify, guard, banner, pick
       <PillTabs tabs={tabs} value={tab} onChange={setTab} label={t("Meetings")} idPrefix="nb-meet" />
       <div className="nb-meet-zone">{picker}<p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p></div>
     </div>
-    <BookingPanel hidden={tab !== 'upcoming'} locked={locked} onLocked={guard(() => {})} initialParticipantId={linked} onUnavailable={() => { setLinked(null); notify(t("This booking link isn't available for your account."), 'error'); }} requests={waiting} notify={notify} reload={reload} focusTick={focusTick}>{teamCard}</BookingPanel>
-    {(tab === 'history' || rows.length > 0) && <div className="nb-meet-grid">
+    <div className="nb-meet-grid">
       <GlassCard tone="solid" className="nb-meet-list" role="tabpanel" aria-labelledby={tabId('nb-meet', tab)}>
         {rows.length ? <div className="nb-meet-rows">{rows.map((item) => {
           const status = meetingBadgeStatus(meetingStatus(item, now, { student: true }));
@@ -1481,8 +1235,9 @@ function StudentBookingsPage({ zoneId, data, reload, notify, guard, banner, pick
           </article>;
         })}</div> : <EmptyState icon={CalendarClock} title={tab === 'upcoming' ? t("No upcoming meetings.") : t("No past meetings yet.")} text={tab === 'upcoming' ? t("Make time for your next step.") : undefined} action={tab === 'upcoming' ? requestButton : undefined} />}
       </GlassCard>
-      {tab === 'history' && teamCard}
-    </div>}
+      {teamCard}
+    </div>
+    {open && <BookingForm initialParticipantId={linked} onUnavailable={() => {setOpen(false);setLinked(null);notify(t("This booking link isn't available for your account."), 'error');}} onClose={() => {setOpen(false);setLinked(null);}} onSaved={() => {setOpen(false);setLinked(null);reload();}} notify={notify} />}
     {rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
   </div>;
 }

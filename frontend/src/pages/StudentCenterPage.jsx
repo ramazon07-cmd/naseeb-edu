@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Award, Briefcase, ClipboardCheck, FolderGit2, Globe2, GraduationCap, Mail, MapPin, Sparkles, Star, Target, Trophy } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Award, Camera, Briefcase, ClipboardCheck, FolderGit2, Globe2, GraduationCap, Mail, MapPin, Sparkles, Star, Target, Trophy } from 'lucide-react';
 import { t, tx } from '../i18n';
+import { api } from '../api';
 import { StudentAvatar } from '../components/records';
 import { BrandLogo } from '../components/brand';
 import { fullName } from '../lib/labels';
@@ -49,8 +50,23 @@ function ResourceTab({ tab, user, data, query, reload, notify }) {
 }
 
 // The student ID card and a row of contact and goal chips, from the profile the student already has.
-function StudentIdCard({ student, user }) {
+function StudentIdCard({ student, user, reload, notify }) {
+  const fileInput = useRef(null);
+  const [uploading, setUploading] = useState(false);
   if (!student) return null;
+  // The photo is saved at once with the request the profile's own photo field makes (students/<id>/photo/).
+  async function choosePhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || uploading) return;
+    setUploading(true);
+    try { await api.uploadStudentPhoto(student.id, file); notify?.(t('Photo updated.')); reload?.(); }
+    catch (err) { notify?.(err.message, 'error'); }
+    finally { setUploading(false); }
+  }
+  const readyDone = Number(student.readiness_items_done) || 0;
+  const readyTotal = Number(student.readiness_items_total) || 0;
+  const readyPercent = readyTotal ? Math.round((readyDone / readyTotal) * 100) : null;
   const answers = student.application_profile || {};
   const name = fullName(student.user_detail) || fullName(user);
   const countries = listText(student.target_countries);
@@ -60,7 +76,11 @@ function StudentIdCard({ student, user }) {
     <article className="nb-id-card">
       <p className="nb-id-head"><BrandLogo className="nb-id-logo" />{t('Naseeb Edu')} · {t('Student')}</p>
       <div className="nb-id-body">
-        <StudentAvatar student={student} className="nb-id-photo" />
+        <span className="nb-id-photo-wrap">
+          <StudentAvatar student={student} className="nb-id-photo" />
+          <button type="button" className="nb-id-photo-edit" onClick={() => fileInput.current?.click()} disabled={uploading} aria-busy={uploading} aria-label={t('Change photo')} title={t('Change photo')}><Camera size={16} aria-hidden="true" /></button>
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
+        </span>
         <div className="nb-id-text">
           <h2>{name}</h2>
           <dl>
@@ -69,7 +89,8 @@ function StudentIdCard({ student, user }) {
           </dl>
         </div>
       </div>
-      <p className="nb-id-foot"><span>{answers.graduation_year ? tx`Class of ${answers.graduation_year}` : ''}</span><span>{countries}</span></p>
+      {readyPercent != null && <div className="nb-id-ready" role="img" aria-label={`${t('Profile ready')}: ${readyPercent}%`}><span className="nb-id-ring" style={{ '--pct': `${readyPercent}%` }} aria-hidden="true" /><span>{t('Profile ready')} · {readyPercent}%</span></div>}
+      <p className="nb-id-foot"><span>{answers.graduation_year ? tx`Class of ${String(answers.graduation_year)}` : ''}</span><span>{countries}</span></p>
     </article>
     {chips.length > 0 && <div className="nb-id-chips"><p className="eyebrow">{t('Contact and goal')}</p><div>{chips.map(([Icon, value]) => <span key={value}><Icon size={16} aria-hidden="true" />{value}</span>)}</div></div>}
   </section>;
@@ -97,7 +118,7 @@ export function StudentCenterPage({ user, data, query, reload, notify, tab = 'ov
       <KpiTile tone={2} icon={ClipboardCheck} value={taskCount} label={t('Assigned tasks')} />
       <KpiTile tone={3} icon={GraduationCap} value={applicationCount} label={t('Applications')} />
     </KpiRow>}
-    {tab === 'overview' && <StudentIdCard student={student} user={user} />}
+    {tab === 'overview' && <StudentIdCard student={student} user={user} reload={reload} notify={notify} />}
     <div className="student-center-head">
       <PillTabs tabs={tabs} value={tab} onChange={onTab} label={t('Student Center')} idPrefix="center" />
     </div>

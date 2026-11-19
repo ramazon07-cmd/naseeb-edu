@@ -1,5 +1,5 @@
 import { initials, fullName, label, ownStudent } from '../lib/labels';
-import { Search, UsersRound, Clock3, Target, Compass, Star, Lock, Award, CalendarDays, ChevronRight, Filter, ShieldCheck, MessageSquareText, CheckCircle2, Eye, Pencil, Trash2, Plus } from 'lucide-react';
+import { Search, UsersRound, Clock3, Target, Compass, Star, Lock, Award, CalendarDays, ChevronRight, Filter, ShieldCheck, MessageSquareText, CheckCircle2, Eye, Pencil, Trash2, Plus, MapPin } from 'lucide-react';
 import { t, tp, tx, formatPercentLocale } from '../i18n';
 import { isMissionLocked, nextLevel as levelAfter, nextPriorities, studentProgress } from '../lib/metrics';
 import { roadmapTab } from '../lib/routes';
@@ -11,6 +11,7 @@ import { Modal, Empty, Badge, Panel } from '../components/ui';
 import { dateText, dayMonthText, gradeText, joinParts } from '../lib/format';
 import { daysUntil } from '../lib/college';
 import { ResourceSection } from './ResourceSection';
+import { StudentTaskRows } from '../components/StudentTaskRows';
 import { matchesQuery } from '../lib/searchIndex';
 import { usePagedList } from '../hooks/usePagedList';
 import { useRecordList } from '../hooks/useRecordList';
@@ -196,7 +197,18 @@ function TasksLead({ tasks }) {
   </div>;
 }
 
-export function StudentRoadmapPath({ student, missions, onOpen, aside = null }) {
+// Where a mission usually continues, by its category or title; the counselor chat is always offered.
+function missionShortcuts(item) {
+  const text = `${item.category || ''} ${item.title || ''}`.toLowerCase();
+  const list = [];
+  if (/essay|statement|writing/.test(text)) list.push(['essay_lab', 'Open Essay Lab']);
+  if (/universit|college|application|shortlist/.test(text)) list.push(['college_search', 'Open College Search']);
+  if (/program|olympiad|competition|summer/.test(text)) list.push(['programs', 'Open Programs']);
+  list.push(['messages', 'Message your counselor']);
+  return list.slice(0, 3);
+}
+
+export function StudentRoadmapPath({ student, missions, onOpen, aside = null, setPage = null }) {
   const level = student?.level ?? 1;
   const orderedMissions = [...missions].sort((a, b) => (a.level || 1) - (b.level || 1) || (a.sequence || 1) - (b.sequence || 1) || a.id - b.id);
   const currentLevelMissions = orderedMissions.filter((item) => (item.level || 1) === level);
@@ -220,6 +232,9 @@ export function StudentRoadmapPath({ student, missions, onOpen, aside = null }) 
   const levelLeft = numbers.levelTotal ? Math.max(0, numbers.levelTotal - numbers.levelApproved) : Math.max(0, numbers.missionsTotal - numbers.missionsApproved);
   const stops = levelMissions.map((item, index) => ({ item, index, state: missionState(item, index) }));
   const target = listText(student?.target_countries);
+  // Where the student starts from: the city and country they gave in their profile (when they did).
+  const answers = student?.application_profile || {};
+  const origin = [answers.city, answers.country].filter(Boolean).join(', ');
   const stepNote = (stop) => {
     if (stop.state === 'complete') return t('Approved by your counselor');
     if (stop.state === 'approval') return t('Awaiting approval');
@@ -243,7 +258,7 @@ export function StudentRoadmapPath({ student, missions, onOpen, aside = null }) 
     <div className="nb-rm-split">
       <section className="nb-rm-path" aria-labelledby="nb-rm-path-h">
         <div className="nb-rm-head"><h2 id="nb-rm-path-h"><Compass size={18} aria-hidden="true" />{t('Level path')}</h2><span>{t('{done} of {total} approved', { done: numbers.levelApproved || numbers.missionsApproved, total: numbers.levelTotal || numbers.missionsTotal })}</span></div>
-        {levelMissions.length ? <ol className="roadmap-steps">{stops.map((stop) => {
+        {levelMissions.length ? <ol className="roadmap-steps">{origin && <li className="roadmap-step departure"><span className="roadmap-step-badge" aria-hidden="true"><MapPin size={16} /></span><div className="roadmap-step-card"><span>{t('Departure')}</span><h3>{origin}</h3></div></li>}{stops.map((stop) => {
             const { item, index, state } = stop;
             const done = state === 'complete' || state === 'locked';
             return <li className={`roadmap-step ${state}`} key={item.id}>
@@ -255,6 +270,7 @@ export function StudentRoadmapPath({ student, missions, onOpen, aside = null }) 
               {state === 'current' && item.description && <em className="nb-rm-guide"><small>{t('What to do')}</small>{t(item.description)}</em>}
               <p>{state === 'current' ? t("Next up") : stepNote(stop)}</p>
             </button>
+            {state === 'current' && setPage && <div className="nb-rm-shortcuts">{missionShortcuts(item).map(([page, text]) => <button key={page} type="button" className="nb-btn nb-btn-ghost nb-btn-sm" onClick={() => setPage(page)}>{t(text)}</button>)}</div>}
           </li>;
           })}{target && <li className="roadmap-step checkpoint">
             <span className="roadmap-step-badge" aria-hidden="true"><Compass size={17} /></span>
@@ -323,7 +339,7 @@ export function MissionList({ user, data, query, onOpen, onApprove, onRemove }) 
   </div>;
 }
 
-export function RoadmapPage({ user, data, query, reload, notify, tab: requestedTab, onTab }) {
+export function RoadmapPage({ user, data, query, reload, notify, setPage, tab: requestedTab, onTab }) {
   const manager = isTaskManager(user);
   // The tab lives in the URL (/roadmap/tasks) so links can open it directly.
   const [localTab, setLocalTab] = useState(requestedTab);
@@ -356,7 +372,7 @@ export function RoadmapPage({ user, data, query, reload, notify, tab: requestedT
     {manager && <section className="portal-hero roadmap-hero"><div><span className="eyebrow">{t("STUDENT ROADMAPS")}</span><h2>{t("Roadmap")}</h2><p>{t("Assign missions, review student submissions, and approve the work that earns XP.")}</p></div><div className="roadmap-hero-actions"><button className="button light" onClick={() => setSetupOpen(true)}><Compass size={17} /> {t("Extend Level 1")}</button><button className="button light" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Assign mission")}</button></div></section>}
     {manager && <StudentWorkspaceSelector value={selectedStudentId} selected={selectedStudent} onChange={chooseStudent} metrics={[[t("Missions"), countText(missionList)], [t("Tasks"), countText(taskList)], [t("Awaiting approval"), `${scopedData.roadmapMissions.filter((item) => item.status === 'submitted').length + scopedData.tasks.filter((item) => item.status === 'submitted').length}${missionList.hasMore || taskList.hasMore ? '+' : ''}`]]} />}
     {manager && <PortalTabs active={tab} onChange={setTab} items={[["missions", "Missions"], ["tasks", "Tasks"], ["timeline", "Timeline"], ["reflections", "Reflections"]]} />}
-    {!manager && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} aside={<section className="nb-rm-tasks" aria-label={t('Tasks')}><TasksLead tasks={data.tasks} /><ResourceSection title={t("Tasks")} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} /></section>} />}
+    {!manager && <StudentRoadmapPath student={student} setPage={setPage} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} aside={<section className="nb-rm-tasks" aria-label={t('Tasks')}><TasksLead tasks={data.tasks} /><StudentTaskRows tasks={data.tasks} /><ResourceSection title={t("Tasks")} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} /></section>} />}
     {manager && tab === 'tasks' && <ResourceSection title={selectedName ? tx`Tasks · ${selectedName}` : t("All tasks")} resource="tasks" data={data} user={user} query={query} reload={reload} notify={notify} defaultStudentId={selectedStudentNumericId} filters={studentFilter} />}
     {manager && tab === 'missions' && <><MissionList user={user} data={scopedData} query="" onOpen={(item) => {setEditing(item);setOpen(true);}} onApprove={approve} onRemove={remove} /><PagedListError list={missionList} /><LoadMore list={missionList} /></>}
     {manager && tab === 'timeline' && <Panel title={selectedName ? tx`Timeline · ${selectedName}` : t("Timeline for all students")}><div className="timeline-list">{timeline.map((item) => <div key={item.id}><span className="timeline-dot" /><time>{dateText(item.date)}</time><div><b>{t(item.title)}</b><small>{joinParts(item.kind, !selectedName && item.student)}</small></div><Badge>{item.status}</Badge></div>)}{!timeline.length && <Empty text={t("No dated tasks or missions for this student.")} />}</div></Panel>}
@@ -371,6 +387,7 @@ export function StudentTasksPage({ user, data, query, reload, notify }) {
   return <div className="section-stack student-portal nb-tasks">
     <PageHeader title={t('Tasks')} subtitle={t('Assignments and deadline tracking')} />
     <TasksLead tasks={data.tasks} />
+    <StudentTaskRows tasks={data.tasks} />
     <ResourceSection title={t('Tasks')} resource="tasks" {...{ user, data, query, reload, notify }} />
   </div>;
 }

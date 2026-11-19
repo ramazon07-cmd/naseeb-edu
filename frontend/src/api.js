@@ -12,7 +12,6 @@ import { requestRetryDelay, retryAfterMs } from './lib/backoff.js'
 import { protectedFileUrl, readProtectedFile } from './lib/protectedFile.js'
 import { sendWithProgress } from './lib/fileUpload.js'
 import { hasUserDrafts, removeUserDrafts } from './essayLab/drafts.js'
-import { forgetRememberedUsername } from './lib/rememberedUsername.js'
 
 // Same origin by default: the Vite dev server, the nginx image (API_UPSTREAM)
 // and Vercel (NASEEB_API_ORIGIN, middleware.js) proxy /api to Django, so the
@@ -246,8 +245,6 @@ migrateLegacyTokens(() => window.localStorage, (token) => cookieAuth.revokeLegac
 function logout({ server = true } = {}) {
   // The user's own sign-out is in progress: it decides when the counter goes.
   if (userSignOut) return userSignOut
-  // Expired, revoked or forced out: the next person on a shared computer must not find the username either.
-  forgetRememberedUsername()
   const signInId = session.endHere()
   if (!server) {
     session.clear(signInId)
@@ -283,7 +280,6 @@ function retrySignOut() {
 
 // Gives up on the server: the session ends on this device only.
 function forgetSession() {
-  forgetRememberedUsername()
   session.clear(pendingSignInId)
   userSignOut = null
 }

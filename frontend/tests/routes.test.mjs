@@ -184,9 +184,11 @@ test('the store is shown locked to students and cannot be opened', () => {
 });
 
 test('roadmap pages stay locked for students and counselors, including direct tab links', () => {
-  assert.ok(!navigationFor(student).includes('roadmap'));
+  // Students see Roadmap in the menu as a locked "Coming soon" item (like Store) but cannot open it.
+  assert.ok(navigationFor(student).includes('roadmap'));
+  assert.ok(!reachablePages(student).has('roadmap'));
   assert.ok(!navigationFor(counselor).includes('counselor_roadmap'));
-  for (const user of [student, counselor, { role: 'assistant' }]) {
+  for (const user of [counselor, { role: 'assistant' }]) {
     assert.ok(!navigationFor(user).includes('roadmap'));
     assert.ok(!navigationFor(user).includes('counselor_roadmap'));
     assert.equal(isPageLocked('roadmap', user), true);

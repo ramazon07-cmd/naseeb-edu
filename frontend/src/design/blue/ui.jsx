@@ -2,6 +2,8 @@ import { createContext, isValidElement, useContext, useId, useLayoutEffect, useR
 import { createPortal } from 'react-dom';
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import { formatDateLocale, getLanguage, parseDateValue, t, tp } from '../../i18n';
+import './tokens.css';
+import './ui.css';
 
 // Shared building blocks of the blue (student) design. Class names are prefixed
 // `nb-` and styled in ui.css under `.nb-blue`. See README.md for the contract.

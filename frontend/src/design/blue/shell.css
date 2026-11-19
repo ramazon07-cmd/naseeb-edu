@@ -913,3 +913,63 @@
     min-width: 44px;
   }
 }
+
+.nb-nav-text {
+  display: grid;
+  line-height: 1.15;
+}
+
+.nb-nav-text small {
+  color: var(--nb-faint);
+  font-size: var(--nb-text-xs);
+  font-weight: 600;
+}
+
+.nb-reading-toggle[aria-pressed='true'] {
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+}
+
+/* Floating back-to-top button. */
+.nb-to-top {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  z-index: 44;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--nb-control-line);
+  border-radius: 50%;
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+  box-shadow: var(--nb-btn-shadow);
+  cursor: pointer;
+  animation: nb-to-top-in 0.2s ease-out;
+}
+
+.nb-to-top:focus-visible {
+  outline: 2px solid var(--nb-blue-l);
+  outline-offset: 3px;
+}
+
+@keyframes nb-to-top-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (max-width: 820px) {
+  .nb-to-top {
+    bottom: calc(var(--nb-dock-h) + 28px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-to-top {
+    animation: none;
+  }
+}

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Bell, Brain, CalendarClock, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck, Clock3, Compass, Download, Globe2, GraduationCap, LayoutDashboard, CircleHelp, LifeBuoy, Lock, LogOut, Menu, MessageSquareText, PenLine, School, Search, Settings, ShoppingCart, UsersRound, X } from 'lucide-react';
+import { ArrowUp, BookOpen, Bell, Brain, CalendarClock, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck, Clock3, Compass, Download, Globe2, GraduationCap, LayoutDashboard, CircleHelp, LifeBuoy, Lock, LogOut, Menu, MessageSquareText, PenLine, School, Search, Settings, ShoppingCart, UsersRound, X } from 'lucide-react';
 import { StudentAvatar } from '../../components/records';
 import { exportNodePdf } from '../../lib/exportPdf';
 import { label as roleLabel, fullName, ownStudent } from '../../lib/labels';
 import { canOpenPage, isPageLocked, navigationFor } from '../../lib/routes';
 import { t } from '../../i18n';
 import { LanguagePicker, ThemePicker } from './controls';
-import { useBlueTheme } from './theme';
+import { SIDEBAR_KEY, useBlueTheme } from './theme';
+import './shell.css';
 import { ShellContext } from './ui';
 
-const SIDEBAR_KEY = 'naseeb-edu-sidebar';
 
 // Pages that draw their own blue PageHeader. While their lazy chunk or data is
 // still loading the shell does not know that yet, and it used to show a
@@ -23,12 +23,12 @@ const BLUE_HEADER_PAGES = new Set(['dashboard', 'find_personality', 'student_cen
 // today (lib/routes.js); until it opens, its slot keeps the Tasks page reachable.
 function studentNav(user) {
   const offered = new Set(navigationFor(user));
-  const slot = canOpenPage('roadmap', user) ? 'roadmap' : 'tasks';
   const items = [
     { key: 'dashboard', label: t('Dashboard'), icon: LayoutDashboard },
     { key: 'find_personality', label: t('Naseeb Mind'), icon: Brain, isNew: true },
     { key: 'student_center', label: t('Student Center'), icon: UsersRound },
-    slot === 'roadmap' ? { key: 'roadmap', label: t('Roadmap'), icon: Compass } : { key: 'tasks', label: t('Tasks'), icon: ClipboardCheck },
+    { key: 'roadmap', label: t('Roadmap'), icon: Compass },
+    { key: 'tasks', label: t('Tasks'), icon: ClipboardCheck },
     { key: 'bookings', label: t('Meetings'), icon: CalendarClock },
     { key: 'messages', label: t('Messages'), icon: MessageSquareText },
     { key: 'programs', label: t('Programs'), icon: Globe2 },
@@ -50,6 +50,7 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
   const mainRef = useRef(null);
   const toolsRef = useRef(null);
   const [headers, setHeaders] = useState(0);
+  const [showTop, setShowTop] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === 'collapsed'; } catch { return false; }
   });
@@ -90,6 +91,14 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
     return () => { observer?.disconnect(); desktop.removeEventListener('change', fit); };
   }, [page]);
 
+  // The floating back-to-top button shows once the page has been scrolled a screen or so.
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 600);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const toggleSidebar = useCallback(() => {
     setCollapsed((current) => {
       const next = !current;
@@ -103,7 +112,7 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
   const searchLabel = t('Search pages and records');
   const dock = [
     { key: 'dashboard', label: t('Home'), icon: LayoutDashboard },
-    nav.find((item) => item.key === 'roadmap' || item.key === 'tasks'),
+    nav.find((item) => item.key === 'tasks'),
     nav.find((item) => item.key === 'messages'),
     nav.find((item) => item.key === 'programs'),
   ].filter(Boolean);
@@ -129,7 +138,7 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
         <nav className="nb-nav" aria-label={t('Main navigation')}>
           {nav.map((item) => {
             const Icon = item.icon;
-            if (isPageLocked(item.key, user)) return <button key={item.key} type="button" className="nb-nav-item is-locked" disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${item.label} — ${t('Coming soon')}`}><Icon size={20} aria-hidden="true" /><span>{item.label}</span><Lock size={14} className="nb-nav-end" aria-hidden="true" /></button>;
+            if (isPageLocked(item.key, user)) return <button key={item.key} type="button" className="nb-nav-item is-locked" disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${item.label} — ${t('Coming soon')}`}><Icon size={20} aria-hidden="true" /><span className="nb-nav-text">{item.label}<small>{t('Coming soon')}</small></span><Lock size={14} className="nb-nav-end" aria-hidden="true" /></button>;
             const active = page === item.key;
             return <button key={item.key} type="button" className={`nb-nav-item${active ? ' is-active' : ''}`} aria-current={active ? 'page' : undefined} title={collapsed ? item.label : undefined} aria-label={item.label} onClick={() => go(item.key)}>
               <Icon size={20} aria-hidden="true" /><span>{item.label}</span>{item.isNew && <em className="nb-new">{t('New')}</em>}
@@ -160,6 +169,7 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
           <button type="button" className="nb-control nb-icon-control nb-mobile-only nb-menu-button" onClick={() => setMobileOpen(true)} aria-label={openDrawerLabel} aria-controls="nb-sidebar" aria-expanded={mobileOpen}><Menu size={20} aria-hidden="true" /></button>
           <div className="nb-top-tools" ref={toolsRef}>
             <div id="nb-header-tools" className="nb-header-tools" />
+            <button type="button" className="nb-control nb-icon-control nb-reading-toggle" onClick={() => theme.setReading(!theme.reading)} aria-pressed={theme.reading} title={t('Reading mode')} aria-label={t('Reading mode')}><BookOpen size={18} aria-hidden="true" /></button>
             {page !== 'essay_lab' && <button type="button" className="nb-control nb-icon-control" onClick={openSearch} title={searchLabel + ' (Ctrl+K)'} aria-label={searchLabel} aria-keyshortcuts="Control+K Meta+K"><Search size={18} aria-hidden="true" /></button>}
             {canExport && <button type="button" className="nb-control nb-icon-control" onClick={() => exportNodePdf(document.querySelector('.page-content'))} title={t('Export PDF')} aria-label={t('Export PDF')}><Download size={18} aria-hidden="true" /></button>}
             <LanguagePicker language={language} onChange={changeLanguage} />
@@ -172,6 +182,7 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
         </header>}
         <div className={`page-content nb-content${showFallbackTitle ? ' is-legacy' : ''}`}>{children}</div>
       </main>
+      {showTop && <button type="button" className="nb-to-top" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })} aria-label={t('Back to top')} title={t('Back to top')}><ArrowUp size={20} aria-hidden="true" /></button>}
       <nav className="nb-dock" aria-label={t('Quick navigation')}>
         {dock.map((item) => {
           const Icon = item.icon;

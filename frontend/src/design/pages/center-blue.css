@@ -422,3 +422,59 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Student ID: change the photo in place, and the profile-ready ring. */
+.nb-blue .nb-center .nb-id-photo-wrap {
+  position: relative;
+  display: block;
+  width: 112px;
+}
+
+.nb-blue .nb-center .nb-id-photo-edit {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  background: rgba(4, 22, 63, 0.62);
+  color: #fff;
+  cursor: pointer;
+}
+
+.nb-blue .nb-center .nb-id-photo-edit:hover:not(:disabled) {
+  background: rgba(4, 22, 63, 0.82);
+}
+
+.nb-blue .nb-center .nb-id-photo-edit:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.nb-blue .nb-center .nb-id-photo-edit:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.nb-blue .nb-center .nb-id-ready {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+}
+
+.nb-blue .nb-center .nb-id-ring {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: conic-gradient(#99caff var(--pct, 0%), rgba(255, 255, 255, 0.25) 0);
+  -webkit-mask: radial-gradient(circle, transparent 0 12px, #000 13px);
+  mask: radial-gradient(circle, transparent 0 12px, #000 13px);
+}

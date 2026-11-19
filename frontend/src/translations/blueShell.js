@@ -1,6 +1,9 @@
 // Blue student shell, sign-in page and shared primitives (design/blue/*, pages/Login.jsx): English key -> [Uzbek (Latin), Russian].
 // One module per area, so parallel work never edits the same file.
 export const BLUE_SHELL_TRANSLATIONS = {
+  'Back to top': ['Tepaga', 'Наверх'],
+  'First sign-in with a temporary password': ['Vaqtinchalik parol bilan birinchi kirish', 'Первый вход с временным паролем'],
+  'Enter your username and the temporary password from your counselor, then press Sign in. You will choose your own password next.': ['Login va maslahatchingiz bergan vaqtinchalik parolni kiriting, so‘ng “Kirish” tugmasini bosing. Keyingi qadamda o‘z parolingizni tanlaysiz.', 'Введите логин и временный пароль от консультанта и нажмите «Войти». Дальше вы выберете свой пароль.'],
   'Help': ['Yordam', 'Помощь'],
   'Naseeb Mind': ['Naseeb Mind', 'Naseeb Mind'],
   'MENU': ['MENYU', 'МЕНЮ'],

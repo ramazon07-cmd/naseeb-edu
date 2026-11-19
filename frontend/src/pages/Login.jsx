@@ -1,10 +1,11 @@
 import { useId, useState } from 'react';
 import { api } from '../api';
-import { ArrowRight, Check, Circle, Eye, EyeOff, Lock, LogOut, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Circle, Eye, EyeOff, Lock, LogOut, User } from 'lucide-react';
 import { t } from '../i18n';
 import { Field, PasswordInput } from '../components/forms';
 import { LanguagePicker, LoginThemeToggle } from '../design/blue/controls';
 import { useLoginTheme } from '../design/blue/theme';
+import '../design/blue/tokens.css';
 import '../design/blue/login.css';
 import { GRADES, gradeText } from '../lib/format';
 import { fullName } from '../lib/labels';
@@ -59,10 +60,11 @@ export function Login({ onLogin, onBack, language, changeLanguage }) {
   const [remember, setRemember] = useState(() => !SHOW_DEMO_ACCOUNTS && Boolean(rememberedUsername()));
   const [showPassword, setShowPassword] = useState(false);
   const [forgot, setForgot] = useState(false);
+  const [firstTime, setFirstTime] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [welcome] = useState(greeting);
-  const ids = { user: useId(), pass: useId(), help: useId() };
+  const ids = { user: useId(), pass: useId(), help: useId(), first: useId() };
 
   async function submit(event) {
     event.preventDefault();
@@ -81,7 +83,7 @@ export function Login({ onLogin, onBack, language, changeLanguage }) {
 
   const passwordLabel = showPassword ? t('Hide password') : t('Show password');
   return (
-    <LoginFrame {...{ language, changeLanguage }} onBrand={onBack} brandLabel={t('Home')}>
+    <LoginFrame {...{ language, changeLanguage }} onBrand={onBack} brandLabel={t('Home')} leave={onBack ? <button type="button" className="nb-login-leave" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" /> {t('Home')}</button> : null}>
       <section className="nb-login-panel" aria-label={t('Sign in')}>
         <form className="nb-login-card" onSubmit={submit}>
           <LoginHead title={welcome}>
@@ -113,6 +115,9 @@ export function Login({ onLogin, onBack, language, changeLanguage }) {
             {loading ? t("Signing in…") : t("Sign in")}
             <ArrowRight size={18} aria-hidden="true" />
           </button>
+          <button type="button" className="nb-login-link nb-login-first" aria-expanded={firstTime} aria-controls={ids.first} onClick={() => { const open = !firstTime; setFirstTime(open); if (open) document.getElementById(ids.user)?.focus(); }}>{t('First sign-in with a temporary password')}</button>
+          {/* The same sign-in form: after it, the app asks for a new password. */}
+          <p id={ids.first} className="nb-login-help" hidden={!firstTime}>{t('Enter your username and the temporary password from your counselor, then press Sign in. You will choose your own password next.')}</p>
           {SHOW_DEMO_ACCOUNTS && (
             <div className="nb-login-demo">{t("Demo: counselor / admin12345")}</div>
           )}

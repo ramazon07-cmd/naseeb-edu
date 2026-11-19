@@ -34,7 +34,7 @@ const dayParts = (value) => {
 // here from coming back unread from the page cache (Back, the bell).
 // `sharedSummary`: the summary the shell's bell already polls (students). The page then asks the
 // server for nothing extra and follows the bell instead.
-function useNotificationsPageData({ staff, notify, sharedSummary }) {
+function useNotificationsPageData({ staff, notify, sharedSummary, bellFailed = false }) {
   const [ownSummary, setSummary] = useState(null);
   const summary = sharedSummary ?? ownSummary;
   const fellBack = useRef(false);
@@ -45,22 +45,21 @@ function useNotificationsPageData({ staff, notify, sharedSummary }) {
     window.addEventListener(NOTIFICATIONS_CHANGED, loadSummary);
     return () => window.removeEventListener(NOTIFICATIONS_CHANGED, loadSummary);
   }, [loadSummary, sharedSummary]);
-  // The bell answers at sign-in, so normally nothing is fetched here. If it has not (or failed), ask once
-  // after a short wait so the page never waits for it forever.
-  const missing = sharedSummary === null;
+  // Normally nothing is fetched here: the bell answers at sign-in. Only when the bell's own request
+  // has failed, ask once (never while it is still in flight) so the page does not wait on it.
   useEffect(() => {
-    if (!missing || fellBack.current) return undefined;
-    const timer = window.setTimeout(() => { fellBack.current = true; loadSummary(); }, 3000);
-    return () => window.clearTimeout(timer);
-  }, [missing, loadSummary]);
+    if (!bellFailed || ownSummary || fellBack.current) return;
+    fellBack.current = true;
+    loadSummary();
+  }, [bellFailed, ownSummary, loadSummary]);
   const feed = useNotificationFeed({ summary, notify, staff });
   useEffect(() => () => invalidatePagedLists(['notifications']), []);
   return { summary, feed };
 }
 
 function StudentNotifications({ notify, setPage }) {
-  const bellSummary = useContext(BellSummaryContext);
-  const { summary, feed } = useNotificationsPageData({ staff: false, notify, sharedSummary: bellSummary ?? null });
+  const bell = useContext(BellSummaryContext);
+  const { summary, feed } = useNotificationsPageData({ staff: false, notify, sharedSummary: bell?.summary ?? null, bellFailed: Boolean(bell?.failed) });
   const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
   function open(notification) {
     const target = feed.read(notification);
@@ -74,9 +73,9 @@ function StudentNotifications({ notify, setPage }) {
       actions={hasUnread ? <BlueButton variant="ghost" size="sm" icon={CheckCheck} onClick={markAll} disabled={markingAll} aria-busy={markingAll}>{t('Mark all as read')}</BlueButton> : (list.items.length > 0 ? <Chip variant="ok" icon={CheckCheck}>{t('You are all caught up.')}</Chip> : null)} />
     <KpiRow label={t('Summary')}>
       <KpiTile tone={0} icon={Bell} value={formatNumberLocale(unreadNotices)} label={t('Unread alerts')} />
-      <KpiTile tone={1} icon={CalendarClock} value={formatNumberLocale(kindCount('meeting'))} label={t('Meeting updates')} onClick={() => setPage('bookings')} actionLabel={t('Meeting updates')} />
-      <KpiTile tone={2} icon={PenLine} value={formatNumberLocale(kindCount('essay'))} label={t('Essay updates')} onClick={() => setPage('essay_lab')} actionLabel={t('Essay updates')} />
-      <KpiTile tone={3} icon={Target} value={formatNumberLocale(kindCount('deadline'))} label={t('Deadline alerts')} />
+      <KpiTile tone={1} icon={CalendarClock} value={formatNumberLocale(kindCount('meeting'))} label={t('Recent meeting updates')} onClick={() => setPage('bookings')} actionLabel={t('Meetings')} />
+      <KpiTile tone={2} icon={PenLine} value={formatNumberLocale(kindCount('essay'))} label={t('Recent essay updates')} onClick={() => setPage('essay_lab')} actionLabel={t('Essay Lab')} />
+      <KpiTile tone={3} icon={Target} value={formatNumberLocale(kindCount('deadline'))} label={t('Recent deadline alerts')} />
     </KpiRow>
     <GlassCard tone="solid" className="nb-notif-card" title={t('Notifications')} icon={Bell}>
       {(chats.length > 0 || list.items.length > 0) && <ul className="nb-notif-list">

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDownWideNarrow, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3, GripVertical, Hourglass, Link2, Lock, MapPin, MoreHorizontal, Pencil, Plus, Rows3, Search, Trash2, X, Columns3 } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3, GripVertical, Hourglass, Link2, Lock, MapPin, MoreHorizontal, Pencil, Plus, Rows3, Search, Trash2, X, Columns3, Radar } from 'lucide-react';
 import { api } from '../api';
-import { formatNumberLocale, parseDateValue, t, tx } from '../i18n';
+import { formatDateLocale, formatNumberLocale, parseDateValue, t, tx } from '../i18n';
 import { FilterChip } from '../components/forms';
 import { DeadlineChip, TierBand } from '../components/college';
 import { money } from '../lib/format';
@@ -11,6 +11,7 @@ import { matchesQuery } from '../lib/searchIndex';
 import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, priceInfo, satLabel, scalePercent, shortDate, stageOf } from '../lib/college';
 import { ApplicationPlan } from '../components/ApplicationPlan';
 import { planNextStep } from '../lib/applicationPlan';
+import { Modal } from '../components/ui';
 import { BlueButton, EmptyState, PageHeader } from '../design/blue/ui';
 import '../design/pages/catalog-blue-base.css';
 import '../design/pages/apps-blue.css';
@@ -118,6 +119,28 @@ function ApplicationBrief({ id, briefRef, application, info, essays, name, onOpe
   </div>;
 }
 
+// The five stages with the current one marked, from the application's status (no history needed).
+function StageStepper({ status }) {
+  const current = APPLICATION_STAGES.findIndex((stage) => stage.key === stageOf(status));
+  return <ol className="apps-stepper" aria-label={t("Application stage")}>{APPLICATION_STAGES.map((stage, index) => <li key={stage.key} className={index < current ? 'is-done' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}><i aria-hidden="true">{index < current ? <Check size={11} /> : index + 1}</i><span>{t(stage.title)}</span></li>)}</ol>;
+}
+
+// Every application and scholarship deadline already on the page, soonest first.
+function DeadlineRadar({ applications, onOpen, onClose }) {
+  const items = applications.flatMap((application) => [['application', application.deadline], ['aid', application.scholarship_deadline]]
+    .filter(([, date]) => daysUntil(date) != null && !['accepted', 'rejected', 'waitlisted'].includes(application.status))
+    .map(([kind, date]) => ({ application, kind, date, days: daysUntil(date) }))).sort((a, b) => a.days - b.days);
+  return <Modal title={t("Deadline radar")} onClose={onClose} className="apps-radar">
+    {items.length ? <ul className="apps-radar-list">{items.map(({ application, kind, date, days }) => <li key={`${application.id}-${kind}`}>
+      <button type="button" onClick={() => onOpen(application)}>
+        <span className="apps-radar-date"><b>{parseDateValue(date).getDate()}</b><small>{formatDateLocale(date, { month: 'short' }).replace(/\.$/, '')}</small></span>
+        <span className="apps-radar-copy"><b>{application.university_detail?.name || t("University")}</b><small>{kind === 'aid' ? t("Scholarship") : t("Application")} · {longDate(date)}</small></span>
+        <span className={`due ${dueTone(days)}`.trim()}>{dueLabel(days)}</span>
+      </button>
+    </li>)}</ul> : <p className="board-empty">{t("No upcoming deadlines yet.")}</p>}
+  </Modal>;
+}
+
 function ApplicationCard({ application, university, essays, menuOpen, briefOpen, dragging, busy, onMenu, onBrief, onBriefClose, onDragStart, onDragEnd, onMove, onOpen, onEdit, onRemove }) {
   const stage = stageOf(application.status);
   const decided = stage === 'decision';
@@ -160,7 +183,7 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
         </div>
       </div>
       <p className="board-card-program">{application.program}</p>
-      <p className="board-card-next">{t(planNextStep(application, essays))}</p>
+      <p className="board-card-next"><small>{t("Next step")}</small>{t(planNextStep(application, essays))}</p>
       <TierBand value={application.tier} />
       {(decided || deadlines.length > 0) && <div className="tag-row application-card-details">
         {decided ? <DecisionTag application={application} decidedAt={decidedAt} /> : deadlines.map(([kind, date]) => <DeadlineChip key={kind} kind={kind} date={date} />)}
@@ -182,6 +205,7 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
   const [moves, setMoves] = useState({});
   const [editing, setEditing] = useState(null);
   const [removingId, setRemovingId] = useState(null);
+  const [radarOpen, setRadarOpen] = useState(false);
   const openUniversity = (id) => setPage('college_search', { universityId: id });
   const applications = data.applications.map((application) => moves[application.id] ? { ...application, status: moves[application.id] } : application);
   const visible = applications.filter((application) => (tier === 'all' || application.tier === tier) && matchesQuery(application, query));
@@ -258,10 +282,11 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
           <button type="button" aria-pressed={view === 'board'} onClick={() => setView('board')}><Columns3 size={15} aria-hidden="true" /> {t("Board")}</button>
         </div>
         <label className="sort-control application-sort"><ArrowDownWideNarrow size={15} aria-hidden="true" /><span className="sr-only">{t("Sort by")}</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="deadline">{t("Deadline")}</option><option value="name">{t("University")}</option></select></label>
+        <button type="button" className="button quiet apps-radar-button" onClick={() => setRadarOpen(true)}><Radar size={16} aria-hidden="true" /> {t("Deadline radar")}</button>
         <button type="button" className="button primary" onClick={() => setPage('college_search')}><Plus size={16} aria-hidden="true" /> {t("Add university")}</button>
       </div>
     </div>
-    {view === 'list' && <div className="apps-list">{shown.map((application) => <div className="apps-row" key={application.id}><span className="apps-stage">{t(APPLICATION_STAGES.find((stage) => stage.key === stageOf(application.status))?.title || '')}</span>{renderCard(application)}</div>)}{!shown.length && <p className="board-empty">{t("Nothing here yet.")}</p>}</div>}
+    {view === 'list' && <div className="apps-list">{shown.map((application) => <div className="apps-row" key={application.id}><StageStepper status={application.status} />{renderCard(application)}</div>)}{!shown.length && <p className="board-empty">{t("Nothing here yet.")}</p>}</div>}
     {view === 'board' && <div className="board">{APPLICATION_STAGES.map((stage) => {
         const stageCards = visible.filter((application) => stageOf(application.status) === stage.key);
         const cards = shown.filter((application) => stageOf(application.status) === stage.key);
@@ -285,6 +310,7 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
       <span role="status" aria-live="polite">{tx`${formatNumberLocale(shown.length)} shown`}</span>
       {remaining > 0 && <button type="button" className="button quiet" onClick={() => setPageWindow({ key: windowKey, limit: limit + 10 })}>{t('Show {n} more', { n: formatNumberLocale(remaining) })}</button>}
     </div>
+    {radarOpen && <DeadlineRadar applications={applications} onOpen={(application) => { setRadarOpen(false); setEditing(data.applications.find((item) => item.id === application.id)); }} onClose={() => setRadarOpen(false)} />}
     {editing && <ApplicationPlan key={editing.id} application={editing} data={data} setPage={setPage} onClose={() => setEditing(null)} onSaved={reload} notify={notify} />}
   </div>;
 }

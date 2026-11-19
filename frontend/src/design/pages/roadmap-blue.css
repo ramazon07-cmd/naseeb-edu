@@ -714,3 +714,59 @@
   font-weight: 700;
   text-transform: uppercase;
 }
+
+/* Departure step, shortcut buttons on the current step, and the one-line task rows. */
+.nb-blue .nb-roadmap .nb-rm-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2;
+  gap: 8px;
+  margin: 0;
+}
+
+.nb-blue .nb-roadmap .nb-rm-shortcuts .nb-btn {
+  white-space: nowrap;
+}
+
+.nb-blue .nb-task-rows {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 var(--nb-gap);
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-task-rows li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+}
+
+.nb-blue .nb-task-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-blue .nb-task-rows .nb-chip {
+  flex: none;
+}
+
+.nb-blue .nb-task-rows .nb-date-none {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--nb-tint);
+  color: var(--nb-muted);
+}

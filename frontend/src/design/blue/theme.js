@@ -7,6 +7,8 @@ import { useCallback, useSyncExternalStore } from 'react';
 // There are two independent stores: the in-app student appearance, and the
 // sign-in page's own. The sign-in page is shared by every role, so what a
 // counselor picks there must never become the next student's in-app look.
+// The collapsed-sidebar choice (per browser). One constant for the staff and student shells; the value never changes.
+export const SIDEBAR_KEY = 'naseeb-edu-sidebar';
 export const BLUE_THEME_KEY = 'naseeb-edu-blue-theme-v1';
 export const LOGIN_THEME_KEY = 'naseeb-edu-login-theme-v1';
 export const BLUE_MODES = ['light', 'tinted', 'night'];

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Filter, GraduationCap, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Columns3, Clock3, Filter, GraduationCap, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import { formatDateLocale, formatNumberLocale, parseDateValue, t, tp, tx } from '../i18n';
 import { Empty, Modal } from '../components/ui';
@@ -79,7 +79,7 @@ function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
 
 // One row of results. `university.fit` is the student's fit, sent with the row
 // once their research profile is complete.
-function CollegeRow({ university, detail, detailError, view, application, expanded, busy, onToggle, onOpen, onAdd }) {
+function CollegeRow({ university, detail, detailError, view, application, expanded, busy, compared, compareFull, onCompare, onToggle, onOpen, onAdd }) {
   const fit = university.fit;
   const panelId = `college-details-${university.id}`;
   const days = daysUntil(university.application_deadline);
@@ -98,7 +98,7 @@ function CollegeRow({ university, detail, detailError, view, application, expand
       <div className="uni-value" role="cell" data-label={t("Deadline")}><span className="v">{university.application_deadline ? shortDate(university.application_deadline) : '—'}</span>{days != null && days >= 0 && <small className="uni-due">{dueLabel(days)}</small>}</div>
       </>}
     </div>
-    <div className="uni-action" role="cell">{application ? <span className="uni-added"><Check size={14} aria-hidden="true" /> {t("Added")}</span> : <button type="button" className="button quiet small" aria-label={t("Add to my list")} disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={14} aria-hidden="true" /> {t("Add")}</button>}</div>
+    <div className="uni-action" role="cell"><button type="button" className={`uni-compare${compared ? ' is-on' : ''}`} aria-pressed={compared} disabled={!compared && compareFull} title={!compared && compareFull ? t("Compare up to 3 universities") : undefined} aria-label={tx`Compare ${university.name}`} onClick={onCompare}>{compared ? <Check size={14} aria-hidden="true" /> : <Columns3 size={14} aria-hidden="true" />}</button>{application ? <span className="uni-added"><Check size={14} aria-hidden="true" /> {t("Added")}</span> : <button type="button" className="button quiet small" aria-label={t("Add to my list")} disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={14} aria-hidden="true" /> {t("Add")}</button>}</div>
     <div className="uni-chevron" role="cell"><button type="button" aria-expanded={expanded} aria-controls={panelId} aria-label={view === 'qs' ? t("Show QS details") : t("Show why this result")} onClick={onToggle}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button></div>
     {expanded && <div className="uni-expand" id={panelId} role="cell">
       {view === 'qs' ? detail ? <QsUniversityDetails university={detail} /> : <p role="status">{detailError || t('Loading…')}</p> : fit && <div className="uni-expand-grid">
@@ -179,6 +179,10 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [searchTerm, setSearchTerm] = useState(query || '');
   const [filters, setFilters] = useState(DEFAULT_COLLEGE_FILTERS);
   const [sort, setSort] = useState('ranking');
+  // Up to three loaded universities to compare side by side (kept in memory, no requests).
+  const [compareMap, setCompareMap] = useState(() => new Map());
+  const [compareOpen, setCompareOpen] = useState(false);
+  const toggleCompare = (item) => setCompareMap((current) => { const next = new Map(current); if (next.has(item.id)) next.delete(item.id); else if (next.size < 3) next.set(item.id, item); return next; });
   const [view, setView] = useState('qs');
   const [qsFilters, setQsFilters] = useState({});
   const [pageSize, setPageSize] = useState(storedPageSize);
@@ -400,6 +404,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       <div className="college-main">
       <section className="college-toolbar" aria-label={t('University data view')} ref={resultsRef}>
         <header className="college-toolbar-header">
+          {ready && <MatchTabs filters={filters} sort={sort} onPick={(tab) => { setFilters((current) => ({ ...current, bands: tab === 'matches' ? MATCH_BANDS : COLLEGE_BANDS })); setSort(tab === 'matches' ? 'fit' : 'ranking'); }} />}
           <div className="college-data-views" role="group" aria-label={t('University data view')}>{[['qs', 'QS rankings'], ['admissions', 'Admissions & costs']].map(([key, title]) => <button type="button" key={key} aria-pressed={view === key} onClick={() => { setView(key); setExpandedId(null); setSort(key === 'qs' ? 'ranking' : 'fit'); }}>{t(title)}{key === 'qs' && <span className="college-edition">2027</span>}</button>)}</div>
           <button type="button" className="college-saved-button" onClick={() => setListOpen(true)} aria-label={t('My college list')}><Bookmark size={17} aria-hidden="true" /><span>{t('My List')}</span><b>{formatNumberLocale(data.applications.length)}</b></button>
         </header>
@@ -420,7 +425,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       </section>
       <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''} ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} role="table" aria-label={t("Universities")} aria-busy={search.loading}>
         <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Cost per year")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
-        {rows.map((item) => <CollegeRow key={item.id} view={view} university={item} detail={details[item.id]} detailError={detailError} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
+        {rows.map((item) => <CollegeRow key={item.id} view={view} university={item} detail={details[item.id]} detailError={detailError} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} compared={compareMap.has(item.id)} compareFull={compareMap.size >= 3} onCompare={() => toggleCompare(item)} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
         {search.loading && !rows.length && <p className="uni-loading" role="status">{t("Loading universities…")}</p>}
         {!search.loading && !search.error && !rows.length && <Empty text={t("No universities match these filters.")} />}
       </div>
@@ -429,6 +434,13 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       <p className="uni-note">{t(view === 'qs' ? "Published QS scores out of 100." : "Fit is not an admission probability.")} {t("Rankings: QS World University Rankings 2027.")}</p>
       </div>
     </div>}
+    {compareMap.size > 0 && <div className="nb-compare-tray" role="region" aria-label={t("Compare universities")}>
+      <ul>{[...compareMap.values()].map((item) => <li key={item.id}><span>{item.name}</span><button type="button" aria-label={tx`Remove ${item.name} from comparison`} onClick={() => toggleCompare(item)}><X size={13} aria-hidden="true" /></button></li>)}</ul>
+      <span className="nb-compare-count">{compareMap.size}/3</span>
+      <BlueButton size="sm" disabled={compareMap.size < 2} onClick={() => setCompareOpen(true)}>{t("Compare")}</BlueButton>
+      <button type="button" className="nb-compare-clear" onClick={() => setCompareMap(new Map())}>{t("Clear")}</button>
+    </div>}
+    {compareOpen && compareMap.size > 1 && <CompareDialog items={[...compareMap.values()]} onClose={() => setCompareOpen(false)} />}
     {tierPicker}
     {listOpen && <CollegeListDrawer applications={data.applications} fits={listFits} fitsError={listFitsError} onRetryFits={() => setListFitsAttempt((value) => value + 1)} busyId={busyId} onClose={() => setListOpen(false)} onOpen={(id) => {setListOpen(false);openUniversity(id);}} onRemove={removeFromList} onDeadline={saveDeadline} onApplications={() => setPage('applications')} />}
   </div>;
@@ -443,6 +455,36 @@ export function CollegeProfileQuestions({ research, saving, onComplete, sectionR
   return <section ref={sectionRef} tabIndex={-1} className="college-profile-questions"><div className="research-question-copy"><span><ClipboardCheck size={20} /></span><div><span className="eyebrow">{t("PROFILE DATA REQUIRED")}</span><h2>{t("A few details are missing from your research profile")}</h2><p>{t("Your answers will be saved to your student profile and used to rank universities for you.")}</p></div></div><form onSubmit={submit}><div className="research-question-grid">{research.questions.map((question) => <label key={question.field}><span>{question.label}</span><input type={question.type} min={question.min} max={question.max} step={question.step || (question.type === 'number' ? '1' : undefined)} placeholder={question.placeholder} value={answers[question.field] ?? ''} onChange={(event) => setAnswers((current) => ({ ...current, [question.field]: event.target.value }))} required /></label>)}</div><footer><small>{tp('{n} answer required|{n} answers required', research.questions.length, { n: research.questions.length })}</small><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? <><RefreshCw className="spin" size={16} /> {t("Researching…")}</> : <><Search size={16} /> {t("Save & research")}</>}</button></footer></form></section>;
 }
 
+const MATCH_BANDS = ['reach', 'target', 'safety'];
+
+// "Matches for you" narrows the existing band filter to reach, target and safety and sorts by fit;
+// "All universities" is the default view. Both only set the filters the page already has.
+function MatchTabs({ filters, sort, onPick }) {
+  const same = (bands) => bands.length === filters.bands.length && bands.every((band) => filters.bands.includes(band));
+  const tab = same(COLLEGE_BANDS) ? 'all' : same(MATCH_BANDS) ? 'matches' : '';
+  return <div className="college-match-tabs" role="group" aria-label={t("University list")}>
+    {[['matches', 'Matches for you'], ['all', 'All universities']].map(([key, title]) => <button type="button" key={key} aria-pressed={tab === key} onClick={() => onPick(key)}>{t(title)}</button>)}
+  </div>;
+}
+
+// Side-by-side facts of the (up to three) universities picked in the results: only fields the rows carry.
+function CompareDialog({ items, onClose }) {
+  const rowsDef = [
+    [t("Rank"), (u) => rankText(u)],
+    [t("Location"), (u) => [u.city, u.country].filter(Boolean).join(', ') || '—'],
+    [t("Fit"), (u) => u.fit ? `${formatNumberLocale(u.fit.match_score)}/100` : '—'],
+    [t("Band"), (u) => u.fit?.admission_band ? <TierBand value={u.fit.admission_band} /> : '—'],
+    [t("Acceptance"), (u) => percentText(u.acceptance_rate)],
+    [t("SAT"), (u) => satLabel(u)],
+    [t("Cost"), (u) => { const price = priceInfo(u); return money(price.amount); }],
+    [t("Deadline"), (u) => u.application_deadline ? shortDate(u.application_deadline) : '—'],
+  ];
+  return <Modal title={t("Compare universities")} onClose={onClose} className="nb-compare-modal">
+    <div className="nb-compare-scroll"><table className="nb-compare-table"><thead><tr><th scope="col"><span className="sr-only">{t("Field")}</span></th>{items.map((u) => <th scope="col" key={u.id}>{u.name}</th>)}</tr></thead>
+      <tbody>{rowsDef.map(([title, get]) => <tr key={title}><th scope="row">{title}</th>{items.map((u) => <td key={u.id}>{get(u)}</td>)}</tr>)}</tbody></table></div>
+  </Modal>;
+}
+
 // "Matched to you": the scores and goals the research profile holds, and the nearest deadlines of the
 // universities already on the list. Everything comes from data the page already has.
 function CollegeMatchSummary({ research, applications = [], setPage }) {
@@ -453,7 +495,12 @@ function CollegeMatchSummary({ research, applications = [], setPage }) {
   flatMap((application) => [['aid', application.scholarship_deadline], ['apply', application.deadline]].map(([kind, date]) => ({ application, kind, date, days: daysUntil(date) }))).
   filter((item) => item.days != null && item.days >= 0).
   sort((a, b) => a.days - b.days).slice(0, 3);
-  if (!scores.length && !profile.target_major && !deadlines.length) return null;
+  const tiers = { dream: 0, target: 0, safety: 0 };
+  applications.forEach((application) => { if (tiers[application.tier] != null) tiers[application.tier] += 1; });
+  const listed = tiers.dream + tiers.target + tiers.safety;
+  const rates = applications.map((application) => Number(application.university_detail?.acceptance_rate)).filter((value) => Number.isFinite(value) && value > 0);
+  const averageRate = rates.length ? rates.reduce((sum, value) => sum + value, 0) / rates.length : null;
+  if (!scores.length && !profile.target_major && !deadlines.length && !listed) return null;
   return <GlassCard tone="hero" as="section" className="nb-college-match" aria-label={t('Matched to you')}>
     <div className="nb-college-match-grid">
       <div className="nb-college-match-profile">
@@ -476,5 +523,10 @@ function CollegeMatchSummary({ research, applications = [], setPage }) {
         })}</ul> : <p>{t('No upcoming deadlines yet.')}</p>}
       </div>
     </div>
+    {listed > 0 && <div className="nb-list-balance">
+      <span className="nb-match-eyebrow">{t('Your list balance')}</span>
+      <div className="nb-balance-bar" role="img" aria-label={tx`${tiers.dream} dream, ${tiers.target} target, ${tiers.safety} safety`}>{['dream', 'target', 'safety'].map((tier) => tiers[tier] > 0 && <i key={tier} className={`is-${tier}`} style={{ flexGrow: tiers[tier] }} />)}</div>
+      <ul>{['dream', 'target', 'safety'].map((tier) => <li key={tier}><b>{formatNumberLocale(tiers[tier])}</b><TierBand value={tier} /></li>)}{averageRate != null && <li><b>{percentText(averageRate)}</b><span>{t('Average acceptance rate')}</span></li>}</ul>
+    </div>}
   </GlassCard>;
 }

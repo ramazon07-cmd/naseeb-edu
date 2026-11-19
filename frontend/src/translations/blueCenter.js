@@ -22,6 +22,19 @@ export const BLUE_CENTER_TRANSLATIONS = {
   'Essay updates': ['Esse yangiliklari', 'Обновления эссе'],
   'Deadline alerts': ['Muddat ogohlantirishlari', 'Напоминания о сроках'],
   'Arrival': ['Manzil', 'Прибытие'],
+  'Change photo': ['Rasmni almashtirish', 'Сменить фото'],
+  'Photo updated.': ['Rasm yangilandi.', 'Фото обновлено.'],
+  'The Roadmap opens soon. Your level path and missions will appear here.': ['Yo‘l xaritasi tez orada ochiladi. Daraja yo‘lingiz va topshiriqlaringiz shu yerda ko‘rinadi.', 'Дорожная карта скоро откроется. Здесь появятся ваш путь по уровням и миссии.'],
+  'The Naseeb Store opens soon. Rewards for approved missions and services will appear here.': ['Naseeb Store tez kunda ochiladi. Tasdiqlangan missiyalar uchun mukofotlar va xizmatlar shu yerda bo‘ladi.', 'Naseeb Store скоро откроется. Здесь появятся награды за миссии и услуги.'],
+  'Departure': ['Yo‘lga chiqish', 'Отправление'],
+  'Open Essay Lab': ['Essay Lab’ni ochish', 'Открыть Essay Lab'],
+  'Open College Search': ['College Search’ni ochish', 'Открыть College Search'],
+  'Open Programs': ['Dasturlarni ochish', 'Открыть программы'],
+  'Message your counselor': ['Maslahatchiga yozish', 'Написать консультанту'],
+  'Overdue': ['Muddati o‘tgan', 'Просрочено'],
+  'Recent meeting updates': ['So‘nggi uchrashuv yangiliklari', 'Недавние обновления встреч'],
+  'Recent essay updates': ['So‘nggi esse yangiliklari', 'Недавние обновления эссе'],
+  'Recent deadline alerts': ['So‘nggi muddat eslatmalari', 'Недавние напоминания о сроках'],
 };
 
 export function blueCenterMessages(language) {

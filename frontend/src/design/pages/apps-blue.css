@@ -261,3 +261,150 @@
   font-size: var(--nb-text-xs);
   font-weight: 800;
 }
+
+/* Five-step stage stepper on each list row. */
+.nb-blue .nb-apps .apps-stepper {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-apps .apps-stepper li {
+  display: grid;
+  flex: 1;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--nb-faint);
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  text-align: center;
+}
+
+.nb-blue .nb-apps .apps-stepper i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--nb-line);
+  border-radius: 50%;
+  font-style: normal;
+  transition: background 0.3s, color 0.3s, border-color 0.3s;
+}
+
+.nb-blue .nb-apps .apps-stepper span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-blue .nb-apps .apps-stepper .is-done {
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-apps .apps-stepper .is-done i {
+  border-color: transparent;
+  background: var(--nb-tint-strong);
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-apps .apps-stepper .is-current {
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-apps .apps-stepper .is-current i {
+  border-color: var(--nb-blue);
+  background: var(--nb-blue);
+  color: #fff;
+}
+
+/* The "next step" note reads as its own box. */
+.nb-blue .nb-apps .apps-list .board-card-next {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-tint);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-apps .apps-list .board-card-next small {
+  color: var(--nb-link);
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nb-blue .nb-apps .board .board-card-next small {
+  display: none;
+}
+
+.nb-blue .nb-apps .apps-radar-button {
+  gap: 6px;
+}
+
+/* Deadline radar dialog. */
+.apps-radar-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.apps-radar-list button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line, rgba(4, 46, 123, 0.14));
+  border-radius: 16px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.apps-radar-list button:hover {
+  background: rgba(0, 78, 224, 0.08);
+}
+
+.apps-radar-date {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 46px;
+  height: 50px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #0a3fa8, #04163f);
+  color: #fff;
+  line-height: 1.1;
+}
+
+.apps-radar-date small {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.apps-radar-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.apps-radar-copy small {
+  color: var(--muted, #3d5479);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-blue .nb-apps .apps-stepper i {
+    transition: none;
+  }
+}

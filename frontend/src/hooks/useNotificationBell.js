@@ -4,7 +4,8 @@ import { createPoller } from '../lib/poller';
 import { nextPollDelay } from '../lib/pollDelay';
 import { BELL_POLL, NOTIFICATIONS_CHANGED, summaryChanged } from '../lib/notifications';
 
-// The bell's latest summary for pages inside the student shell (they read it instead of asking again).
+// The bell's latest summary and whether its request failed, for pages inside the student shell
+// (they read it instead of asking again).
 export const BellSummaryContext = createContext(undefined);
 
 const nextBellDelay = (delay, changed) => nextPollDelay(delay, changed, BELL_POLL);
@@ -13,6 +14,8 @@ const nextBellDelay = (delay, changed) => nextPollDelay(delay, changed, BELL_POL
 // visible (see lib/poller.js). `refresh()` asks for a fresh count now.
 export function useNotificationBell(enabled) {
   const [summary, setSummary] = useState(null);
+  // True while the last summary request failed (the poller retries on its own back-off).
+  const [failed, setFailed] = useState(false);
   const loopRef = useRef(null);
 
   useEffect(() => {
@@ -27,8 +30,10 @@ export function useNotificationBell(enabled) {
       max: BELL_POLL.max,
       nextDelay: nextBellDelay,
       run: async () => {
-        const next = await api.notificationSummary();
+        let next;
+        try { next = await api.notificationSummary(); } catch (error) { if (active) setFailed(true); throw error; }
         if (!active) return false;
+        setFailed(false);
         const changed = summaryChanged(last, next);
         last = next;
         if (changed) setSummary(next);
@@ -48,5 +53,5 @@ export function useNotificationBell(enabled) {
   }, [enabled]);
 
   const refresh = useCallback(() => loopRef.current?.poke(), []);
-  return { summary, refresh };
+  return { summary, failed, refresh };
 }

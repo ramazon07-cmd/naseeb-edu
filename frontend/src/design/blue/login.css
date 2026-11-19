@@ -413,3 +413,8 @@ span.nb-login-brand {
 .nb-login[data-nb-theme='night'] .nb-login-input input {
   color: var(--nb-ink);
 }
+
+.nb-login-first {
+  justify-self: center;
+  margin-top: 4px;
+}

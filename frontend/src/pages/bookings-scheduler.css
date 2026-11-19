@@ -1429,3 +1429,16 @@ a.meet-tg {
 .meet-tg.is-none {
   opacity: 0.65;
 }
+
+/* A step wrapper keeps the side and main columns laid out exactly as before. */
+.booking-cal-side > .booking-cal-step {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.booking-cal-main > .booking-cal-step {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+}
