@@ -149,3 +149,11 @@ Mona Sans comes from `@fontsource-variable/mona-sans` (self-hosted by Vite; CSP 
 It has no Cyrillic glyphs: Russian falls back to the system UI font in the stack.
 The backdrop is `assets/backdrop.webp` (hashed by Vite, `img-src 'self'`). The brand logo is
 `/brand/naseeb-logo-navy.png` (light) / `naseeb-logo-white.png` (dark looks).
+
+## Site tour, urgent pop-up, shell polish
+
+`SiteTour.jsx` (+ `tour.css`) is the first-visit guided tour, mounted by `StudentShell`. Steps target the real UI
+(`data-tour="nav-<page key>"` on sidebar items, `.nb-dash-kpis`, `.nb-reading-toggle`, `.nb-account-trigger`).
+It makes no requests. "Seen" lives in `naseeb-site-tour-v1:<userId>` (`tourSeen.js`, outside `USER_STORAGE` so it survives sign-out);
+the account menu's "Take the tour" replays it. `UrgentPopup.jsx` shows once a day (`naseeb-urgent-day-v1:<userId>`) when a real
+overdue task exists. `polish.css` holds the sidebar entrance (`.nb-intro`) and the pointer flashlight.

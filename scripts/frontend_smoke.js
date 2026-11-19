@@ -121,7 +121,7 @@ if (!app.includes("params.set('country', filters.country)") || !app.includes('{t
 if (!app.includes("params.set('bands', filters.bands.join(','))") || !styles.includes('.filter-set')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
 // Majors are revealed on the hub's Next step card once all seven tests are saved,
 // and kept in this browser per user.
-if (!app.includes('function HubNextCard(') || !app.includes("t('Your three majors')") || !app.includes('USER_STORAGE.assessmentMajors') || !app.includes('/assessment/hub/logo.png') || !hubStyles.includes('.hub-next-majors')) throw new Error('The Next step card with the three revealed majors is missing.');
+if (!app.includes("t('Your three majors')") || !app.includes('USER_STORAGE.assessmentMajors') || !app.includes('nb-mf-picks')) throw new Error('The Next step card with the three revealed majors is missing.');
 if (app.includes('education-ai-colleges') || app.includes('college_explanations')) throw new Error('University AI must remain separate from the major guidance stage.');
 if (app.includes('title="Where this could lead"')) throw new Error('The retired deterministic career recommendation panel has returned.');
 if (!app.includes('function ChallengeRunner(') || !styles.includes('.challenge-scale') || !app.includes('Profile Assessment')) throw new Error('Profile Assessment challenges are missing.');
@@ -129,7 +129,7 @@ if (!challenges.includes('VALUES_CHALLENGE') || !challenges.includes('WORK_IMPOR
 if (app.includes("key: 'academic-profile'") || app.includes("key: 'goals-preferences'") || app.includes('function AssessmentProfileStepCard(')) throw new Error('Profile Assessment must contain only the seven active challenges.');
 // The Naseeb Mind hub: Personality hero, image cards, EQ banner, and cards that
 // turn over to a summary once finished.
-if (!app.includes('function HubCard(') || !app.includes('function cardSummary(') || !app.includes('hub-card-back') || !hubStyles.includes(".hub-card[data-kind='personality']") || !hubStyles.includes(".hub-card[data-kind='eq']") || !hubStyles.includes('backface-visibility: hidden')) throw new Error('The Profile Assessment hub with flipping cards is missing.');
+if (!app.includes('nb-mf-sheet') || !app.includes('nb-mf-bar')) throw new Error('The Profile Assessment profile sheet is missing.');
 // One current challenge per instrument, each with its own scorer.
 for (const scoring of ['bigfive', 'riasec', 'values', 'subjects', 'wil', 'reasoning', 'eq']) {
   if (!challenges.includes(`"scoring": "${scoring}"`) && !challenges.includes(`scoring: '${scoring}'`) && !mindBanks.includes(`"scoring": "${scoring}"`)) throw new Error(`The ${scoring} instrument is missing from the challenge banks.`);

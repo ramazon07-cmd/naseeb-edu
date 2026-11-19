@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, BookOpen, Bell, Brain, CalendarClock, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck, Clock3, Compass, Download, Globe2, GraduationCap, LayoutDashboard, CircleHelp, LifeBuoy, Lock, LogOut, Menu, MessageSquareText, PenLine, School, Search, Settings, ShoppingCart, UsersRound, X } from 'lucide-react';
+import { ArrowUp, BookOpen, Sparkles, Bell, Brain, CalendarClock, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck, Clock3, Compass, Download, Globe2, GraduationCap, LayoutDashboard, CircleHelp, LifeBuoy, Lock, LogOut, Menu, MessageSquareText, PenLine, School, Search, Settings, ShoppingCart, UsersRound, X } from 'lucide-react';
 import { StudentAvatar } from '../../components/records';
 import { exportNodePdf } from '../../lib/exportPdf';
 import { label as roleLabel, fullName, ownStudent } from '../../lib/labels';
@@ -9,6 +9,10 @@ import { LanguagePicker, ThemePicker } from './controls';
 import { SIDEBAR_KEY, useBlueTheme } from './theme';
 import './shell.css';
 import { ShellContext } from './ui';
+import { SiteTour } from './SiteTour';
+import { siteTourSeen } from './tourSeen';
+import { UrgentPopup } from './UrgentPopup';
+import './polish.css';
 
 
 // Pages that draw their own blue PageHeader. While their lazy chunk or data is
@@ -51,10 +55,14 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
   const toolsRef = useRef(null);
   const [headers, setHeaders] = useState(0);
   const [showTop, setShowTop] = useState(false);
+  const [tourActive, setTourActive] = useState(false);
+  // Sidebar entrance: only for the first moments after the shell appears.
+  const [intro, setIntro] = useState(true);
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === 'collapsed'; } catch { return false; }
   });
   const nav = studentNav(user);
+  const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const navLabels = Object.fromEntries(nav.map((item) => [item.key, item.label]));
   const shellContext = useMemo(() => ({
     // A page that draws its own PageHeader hides the shell's fallback heading.
@@ -72,6 +80,37 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
     document.addEventListener('keydown', keys);
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', keys); };
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setIntro(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  // First visit: the tour starts by itself once, on the dashboard, when nothing else is open.
+  // The shell is only rendered after the forced password change and onboarding are done.
+  useEffect(() => {
+    if (tourActive || page !== 'dashboard' || siteTourSeen(user.id)) return undefined;
+    let tries = 0;
+    let timer = window.setTimeout(function attempt() {
+      if (document.querySelector('.nb-blue [role="dialog"], .nb-blue [aria-modal="true"]')) {
+        if (++tries < 40) timer = window.setTimeout(attempt, 1000);
+        return;
+      }
+      setTourActive(true);
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [page, tourActive, user.id]);
+
+  // Pointer "flashlight" on the dashboard cards and the sidebar: sets --mx / --my, no layout work.
+  const spotlight = useCallback((event) => {
+    if (reduceMotion || event.pointerType === 'touch') return;
+    const card = event.target.closest?.('.nb-dash .nb-card, .nb-side');
+    if (!card) return;
+    const box = card.getBoundingClientRect();
+    card.style.setProperty('--mx', `${event.clientX - box.left}px`);
+    card.style.setProperty('--my', `${event.clientY - box.top}px`);
+  }, [reduceMotion]);
+  const closeTour = useCallback(() => setTourActive(false), []);
 
   // Desktop inner pages: the page title sits on the top-button line, so the header keeps clear of
   // the buttons by their measured width (--nb-topw). Phones keep the full width.
@@ -121,7 +160,7 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
   const title = pageMeta ? (navLabels[page] || t(pageMeta.label)) : '';
 
   return <ShellContext.Provider value={shellContext}>
-    <div className={`app-shell role-student nb-blue${collapsed ? ' nb-collapsed' : ''}`} data-nb-theme={theme.mode} data-nb-read={theme.reading ? 'true' : 'false'} data-nb-page={page}>
+    <div className={`app-shell role-student nb-blue${collapsed ? ' nb-collapsed' : ''}${intro ? ' nb-intro' : ''}`} onPointerMove={spotlight} data-nb-theme={theme.mode} data-nb-read={theme.reading ? 'true' : 'false'} data-nb-page={page}>
       <div className="nb-backdrop" aria-hidden="true" />
       <aside className={`nb-side${mobileOpen ? ' is-open' : ''}`} id="nb-sidebar" aria-label={t('Main navigation')}>
         <div className="nb-side-top">
@@ -136,11 +175,11 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
         </button>
         <div className="nb-side-label" aria-hidden="true">{t('MENU')}</div>
         <nav className="nb-nav" aria-label={t('Main navigation')}>
-          {nav.map((item) => {
+          {nav.map((item, position) => {
             const Icon = item.icon;
-            if (isPageLocked(item.key, user)) return <button key={item.key} type="button" className="nb-nav-item is-locked" disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${item.label} — ${t('Coming soon')}`}><Icon size={20} aria-hidden="true" /><span className="nb-nav-text">{item.label}<small>{t('Coming soon')}</small></span><Lock size={14} className="nb-nav-end" aria-hidden="true" /></button>;
+            if (isPageLocked(item.key, user)) return <button key={item.key} data-tour={`nav-${item.key}`} style={{ '--nb-i': position }} type="button" className="nb-nav-item is-locked" disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${item.label} — ${t('Coming soon')}`}><Icon size={20} aria-hidden="true" /><span className="nb-nav-text">{item.label}<small>{t('Coming soon')}</small></span><Lock size={14} className="nb-nav-end" aria-hidden="true" /></button>;
             const active = page === item.key;
-            return <button key={item.key} type="button" className={`nb-nav-item${active ? ' is-active' : ''}`} aria-current={active ? 'page' : undefined} title={collapsed ? item.label : undefined} aria-label={item.label} onClick={() => go(item.key)}>
+            return <button key={item.key} data-tour={`nav-${item.key}`} style={{ '--nb-i': position }} type="button" className={`nb-nav-item${active ? ' is-active' : ''}`} aria-current={active ? 'page' : undefined} title={collapsed ? item.label : undefined} aria-label={item.label} onClick={() => go(item.key)}>
               <Icon size={20} aria-hidden="true" /><span>{item.label}</span>{item.isNew && <em className="nb-new">{t('New')}</em>}
               {item.key === 'messages' && unreadChats > 0 && <i className="nb-dot nb-nav-end" aria-hidden="true" />}
             </button>;
@@ -154,6 +193,7 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
             {canOpenPage('account_settings', user) && <button type="button" role="menuitem" onClick={() => go('account_settings')}><Settings size={17} aria-hidden="true" />{t('Account settings')}</button>}
             {canOpenPage('screen_time', user) && <button type="button" role="menuitem" onClick={() => go('screen_time')}><Clock3 size={17} aria-hidden="true" />{t('Screen Time')}</button>}
             {navigationFor(user).includes('support') && <button type="button" role="menuitem" onClick={() => go('support')}><LifeBuoy size={17} aria-hidden="true" />{t('Support')}{supportBadge > 0 && <b>{supportBadge}</b>}</button>}
+            <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); setMobileOpen(false); setTourActive(true); }}><Sparkles size={17} aria-hidden="true" />{t('Take the tour')}</button>
             <button type="button" role="menuitem" onClick={logout}><LogOut size={17} aria-hidden="true" />{t('Logout')}</button>
           </div>}
           <button type="button" className="nb-account-trigger" aria-haspopup="menu" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>
@@ -195,6 +235,8 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
         <button type="button" className={`nb-dock-item${mobileOpen ? ' is-active' : ''}`} onClick={() => setMobileOpen(true)} aria-controls="nb-sidebar" aria-expanded={mobileOpen}><Menu size={20} aria-hidden="true" /><span>{t('Menu')}</span></button>
       </nav>
       {overlays}
+      <SiteTour userId={user.id} active={tourActive} onClose={closeTour} setPage={setPage} openDrawer={setMobileOpen} />
+      <UrgentPopup userId={user.id} tasks={data?.tasks} suspended={tourActive} canOpenTasks={canOpenPage('tasks', user) && !isPageLocked('tasks', user)} openTasks={() => go('tasks')} />
     </div>
   </ShellContext.Provider>;
 }
