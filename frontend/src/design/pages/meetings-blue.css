@@ -646,3 +646,63 @@
     transform: none;
   }
 }
+
+/* The booking picker on the page (the same BookingForm as the dialog, drawn in a card). */
+.nb-blue .nb-meet-inline {
+  scroll-margin-top: 16px;
+  padding: 18px 20px 20px;
+  animation: nb-meet-rise 0.22s ease-out both;
+}
+
+.nb-blue .nb-meet-inline-head {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--nb-line);
+}
+
+.nb-blue .nb-meet-inline-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--nb-text-xl);
+  font-weight: 800;
+}
+
+.nb-blue .nb-meet-inline-head h2 svg {
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-meet-inline-head p {
+  margin: 0;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-meet-inline .booking-cal {
+  margin: 0;
+}
+
+@media (max-width: 820px) {
+  .nb-blue .nb-meet-inline .booking-cal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nb-blue .nb-meet-inline .booking-cal-side {
+    padding: 0 0 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--nb-line);
+  }
+
+  .nb-blue .nb-meet-inline .booking-cal-main {
+    padding: 14px 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-blue .nb-meet-inline {
+    animation: none;
+  }
+}

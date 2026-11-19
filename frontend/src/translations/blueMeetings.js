@@ -13,6 +13,8 @@ export const BLUE_MEETINGS_TRANSLATIONS = {
   'Request sent': ['So‘rov yuborildi', 'Запрос отправлен'],
   'Your requests': ['So‘rovlaringiz', 'Ваши запросы'],
   'Open meetings': ['Uchrashuvlarni ochish', 'Открыть встречи'],
+  'Pick who and when. Your counselor confirms the request.': ['Kim bilan va qachon ekanini tanlang. So‘rovni maslahatchi tasdiqlaydi.', 'Выберите, с кем и когда. Консультант подтвердит запрос.'],
+  'Book another': ['Yana band qilish', 'Записаться ещё'],
   'Pending': ['Kutilmoqda', 'Ожидает'],
   'No topic': ['Mavzusiz', 'Без темы'],
   '{n} waiting for confirmation': ['{n} ta tasdiq kutilmoqda', 'ждут подтверждения: {n}'],

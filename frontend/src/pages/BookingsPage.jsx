@@ -44,6 +44,7 @@ function useZoneSync() {
     return () => { if (zone.id !== opened) window.dispatchEvent(new Event(ZONE_EVENT)); };
   }, []);
 }
+const reducedMotion = () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const zoned = (value) => inServerZone(value, zone.id);
 const clockText = (value) => viewerClockText(zoned(value));
 const dateTimeText = (value) => viewerDateTimeText(zoned(value));
@@ -180,7 +181,11 @@ const OVERVIEW_SLOTS = 20;
 // `defaultStudentId`/`defaultTopic`: pre-fill for "Rebook" on an expired or declined request.
 // `initialParticipantId` (a shared booking link): open on that staff member's date & time step; when the
 // student may not book them, `onUnavailable` is called and nothing about that person is loaded.
-export function BookingForm({ staff = false, defaultStudentId = null, defaultStudentName = '', defaultTopic = '', initialParticipantId = null, onUnavailable, onClose, onSaved, notify }) {
+// `inline`: the student's Meetings page draws the same picker in a card on the page instead of a dialog. It
+// loads once when the page opens, `onSent` runs after a request is sent (the page reloads its meetings), and
+// `locked` (Telegram not connected yet) lets a student look and pick but sends nothing: Request opens
+// `onNeedTelegram` instead, and the chosen time, topic and notes wait for the next press.
+export function BookingForm({ staff = false, defaultStudentId = null, defaultStudentName = '', defaultTopic = '', initialParticipantId = null, onUnavailable, onClose, onSaved, notify, inline = false, locked = false, onNeedTelegram, onSent, onZone, zoneId }) {
   const [student, setStudent] = useState(defaultStudentId ? { id: defaultStudentId, name: defaultStudentName } : null);
   const [participants, setParticipants] = useState([]);
   const [participantId, setParticipantId] = useState('');
@@ -202,10 +207,10 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
   const savedRef = useRef(onSaved);
   savedRef.current = onSaved;
   useEffect(() => {
-    if (!sent) return undefined;
+    if (!sent || inline) return undefined;
     const timer = window.setTimeout(() => savedRef.current(), 4000);
     return () => window.clearTimeout(timer);
-  }, [sent]);
+  }, [sent, inline]);
   const [zoneTick, setZoneTick] = useState(0);
   useZoneSync();
   useEffect(() => {
@@ -269,15 +274,29 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
   }
   // A new zone moves every time to another clock (and maybe another day): start the pick over.
   function changeZone(id) {
+    // Inline, the page owns the zone (its picker redraws the meeting list too) and sends it back as `zoneId`.
+    if (inline && onZone) { onZone(id); return; }
     setMeetingZone(id);
     const next = [...personSlots].sort(byStart).find((slot) => slot.available);
     setSelectedDate(next ? meetingDay(next.starts_at) : '');
     setSelectedSlot(null);
     setZoneTick((value) => value + 1);
   }
+  // The page's zone picker changed the zone: start the pick over from the times already loaded (no request).
+  const zoneSeen = useRef(zoneId);
+  useEffect(() => {
+    if (!inline || zoneSeen.current === zoneId) return;
+    zoneSeen.current = zoneId;
+    const next = [...personSlots].sort(byStart).find((slot) => slot.available);
+    setSelectedDate(next ? meetingDay(next.starts_at) : '');
+    setSelectedSlot(null);
+    setZoneTick((value) => value + 1);
+  }, [zoneId]); // eslint-disable-line react-hooks/exhaustive-deps -- reacts to the zone only
   async function submit(event) {
     event.preventDefault();
     if (!staff && !selectedSlot) return;
+    // Telegram first: nothing is sent while it is not connected; the pick stays for the next press.
+    if (!staff && locked) { onNeedTelegram?.(); return; }
     setSaving(true);
     const values = new FormData(event.currentTarget);
     try {
@@ -294,7 +313,10 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
       });
       notify(staff ? (values.get('ask_student') === 'on' ? t("Invitation sent. Waiting for the student to confirm.") : t("Meeting confirmed.")) : t("Meeting request sent for approval."));
       if (staff) onSaved();
-      else setSent({ name: personName, slot: selectedSlot });
+      else {
+        setSent({ name: personName, slot: selectedSlot });
+        if (inline) { onSent?.(); setSlotAttempt((value) => value + 1); }
+      }
     } catch (err) {
       notify(err.message, 'error');
     } finally {
@@ -307,14 +329,21 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
     <div className="form-actions"><button type="button" className="button quiet" onClick={onClose}>{t("Cancel")}</button><button className="button primary" disabled={saving} aria-busy={saving}>{saving ? t("Booking…") : t("Book meeting")}</button></div>
   </form></Modal>;
   const details = step === 'details' && selectedSlot;
-  if (sent) return <Modal title={t("Request a meeting")} onClose={onSaved} className="booking-scheduler-modal"><div className="nb-meet-sent" role="status">
+  const shell = (children, close) => (inline
+    ? <section className="nb-card nb-card-solid nb-meet-inline" id="meetings-book" aria-labelledby="meetings-book-title">
+      <header className="nb-meet-inline-head"><h2 id="meetings-book-title"><CalendarDays size={20} aria-hidden="true" />{t("Book a meeting")}</h2><p>{t("Pick who and when. Your counselor confirms the request.")}</p></header>
+      {children}
+    </section>
+    : <Modal title={t("Request a meeting")} onClose={close} className="booking-scheduler-modal">{children}</Modal>);
+  const bookAnother = () => { setSent(null); setSelectedSlot(null); setStep('pick'); setTopic(''); setNotes(''); };
+  if (sent) return shell(<div className="nb-meet-sent" role="status">
     <span className="nb-meet-sent-ok"><Check size={30} aria-hidden="true" /></span>
     <h3>{t("Request sent")}</h3>
     <ul><li><CalendarDays size={16} aria-hidden="true" />{slotRange(sent.slot)}</li>{sent.name && <li><Clock3 size={16} aria-hidden="true" />{sent.name}</li>}</ul>
     <p>{t("Your counselor confirms the request.")}</p>
-    <button type="button" className="button primary" autoFocus onClick={onSaved}>{t("Done")}</button>
-  </div></Modal>;
-  return <Modal title={t("Request a meeting")} onClose={onClose} className="booking-scheduler-modal"><form className="booking-cal" onSubmit={submit}>
+    <button type="button" className="button primary" autoFocus onClick={inline ? bookAnother : onSaved}>{inline ? t("Book another") : t("Done")}</button>
+  </div>, onSaved);
+  return shell(<form className="booking-cal" onSubmit={submit}>
     <aside className="booking-cal-side">
       <div className="booking-cal-step" key={details ? 'side-details' : 'side-pick'}>
       {details ? <>
@@ -357,7 +386,7 @@ export function BookingForm({ staff = false, defaultStudentId = null, defaultStu
       </>}
       </div>
     </section>
-  </form></Modal>;
+  </form>, onClose);
 }
 
 // A past slot, or one any meeting points at (`editable` from the API), stays as it is; the server refuses to move it.
@@ -1115,7 +1144,8 @@ export function BookingsPage({ user, data, reload, notify, updateUser, setPage, 
   }, []);
   const props = { user, data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, retryResources };
   // key: a new zone redraws every time on the page.
-  if (user.role === 'student') return <StudentBookingsPage key={zoneId} {...props} />;
+  // No key for students: a new zone redraws with the times already loaded instead of loading them again.
+  if (user.role === 'student') return <StudentBookingsPage zoneId={zoneId} changeZone={changeZone} {...props} />;
   if (usesCounselorLayout(user)) return <CounselorMeetingsPage key={zoneId} {...props} />;
   return <StaffMeetingsPage key={zoneId} {...props} />;
 }
@@ -1131,14 +1161,21 @@ function useStudentTeam(data, resourceStatus) {
   };
 }
 
-function StudentBookingsPage({ data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus }) {
+function StudentBookingsPage({ data, reload, notify, guard, banner, picker, bookId, locked, setPage, resourceStatus, zoneId, changeZone }) {
   const [tab, setTab] = useState('upcoming');
-  const [open, setOpen] = useState(false);
-  // The staff member a shared link names, until the dialog closes (then Request meeting opens it as usual).
-  const [linked, setLinked] = useState(bookId);
-  // A booking link opens the picker for that person; while Telegram is not connected the dialog shows first,
-  // and the picker follows as soon as the link is confirmed.
-  useEffect(() => { if (bookId && !locked) setOpen(true); }, [bookId, locked]);
+  // The picker sits on the page and loads once when it opens; the header buttons bring it to the screen.
+  function focusBooking() {
+    const card = document.getElementById('meetings-book');
+    if (!card) return;
+    card.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    window.setTimeout(() => (card.querySelector('.booking-cal-person[aria-pressed="true"]') || card.querySelector('button:not(:disabled)'))?.focus({ preventScroll: true }), 250);
+  }
+  // A shared booking link (/meetings?book=<id>) preselects that person and brings the picker into view.
+  useEffect(() => {
+    if (!bookId) return undefined;
+    const timer = window.setTimeout(focusBooking, 400);
+    return () => window.clearTimeout(timer);
+  }, [bookId]);
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const teamRef = useRef(null);
@@ -1182,7 +1219,7 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
       setSavingId(null);
     }
   }
-  const requestButton = <BlueButton icon={Plus} onClick={guard(() => setOpen(true))}>{t("Request meeting")}</BlueButton>;
+  const requestButton = <BlueButton icon={Plus} onClick={focusBooking}>{t("Request meeting")}</BlueButton>;
   const teamCard = !team.known ? null : (
 <GlassCard tone="solid" className="nb-meet-team" title={t("My Naseeb team")} icon={UsersRound} ref={teamRef}>
         {team.items.length ? <ul className="nb-meet-people">{team.items.map((member) => <li key={`${member.kind}-${member.id}`}>
@@ -1201,6 +1238,8 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
       <KpiTile tone={2} icon={Timer} value={minutes} unit={t("min")} label={t("Minutes in meetings")} />
       {team.known && <KpiTile tone={3} icon={UsersRound} value={team.items.length} label={t("My Naseeb team")} onClick={() => teamRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} actionLabel={t("My Naseeb team")} />}
     </KpiRow>
+    <BookingForm inline locked={locked} onNeedTelegram={guard(() => {})} initialParticipantId={bookId} zoneId={zoneId} onZone={changeZone} onSent={reload}
+      onUnavailable={() => notify(t("This booking link isn't available for your account."), 'error')} onSaved={reload} notify={notify} />
     <div className="nb-meet-bar">
       <PillTabs tabs={tabs} value={tab} onChange={setTab} label={t("Meetings")} idPrefix="nb-meet" />
       <div className="nb-meet-zone">{picker}<p className="booking-cal-zone"><Globe size={15} aria-hidden="true" /> {timeZoneName()}</p></div>
@@ -1237,7 +1276,6 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
       </GlassCard>
       {teamCard}
     </div>
-    {open && <BookingForm initialParticipantId={linked} onUnavailable={() => {setOpen(false);setLinked(null);notify(t("This booking link isn't available for your account."), 'error');}} onClose={() => {setOpen(false);setLinked(null);}} onSaved={() => {setOpen(false);setLinked(null);reload();}} notify={notify} />}
     {rescheduling && <RescheduleForm booking={rescheduling} onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
   </div>;
 }
