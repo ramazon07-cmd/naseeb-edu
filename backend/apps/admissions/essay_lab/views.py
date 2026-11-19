@@ -64,7 +64,7 @@ from .tabs import (
     tree_order,
 )
 from .streak import build_streak, own_words_delta, parse_month, record_words
-from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, spend_coach_budget
+from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, refund_coach_budget, spend_coach_budget
 from .writes import CHECKPOINT_CAP, TEXT_FIELDS, make_checkpoint, set_text  # noqa: F401 (CHECKPOINT_CAP: tests)
 
 LIST_LIMIT = 500
@@ -816,20 +816,37 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
         if not throttle.allow_request(request, self):
             self.throttled(request, throttle.wait())
 
+        try:
+            coach.load_rubric(essay.essay_type)  # an unmapped type has no rubric and never falls back
+        except coach.RubricError:
+            raise EssayLabError('The Coach cannot check this kind of essay yet.', 'unsupported_essay_type')
+
         # The AI call runs outside any transaction so no row lock is held while waiting on it.
+        cached = False
         if coach.gateway_configured():
-            if not spend_coach_budget(request.user):
-                ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
-                raise EssayLabError('The Coach is resting for today. Please try again tomorrow.', 'coach_resting', 503)
-            release_db_connection()  # don't hold a pooled connection during the AI call
-            ai_usage.begin()
-            try:
-                result, model = coach.run_ai_check(essay, tab.content)
-            except coach.CoachUnavailable:
-                ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.FAILED)
-                raise EssayLabError('The Coach is unavailable right now. Please try again soon.',
-                                    'coach_unavailable', 503)
-            ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.OK)
+            hit = coach.lookup_cached(essay, tab.content)
+            if hit:
+                # Unchanged essay: same result, no provider call, no credit, no usage row.
+                result, model = hit
+                result = {**result, 'cached': True}
+                cached = True
+            else:
+                if not spend_coach_budget(request.user):
+                    ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
+                    raise EssayLabError('The Coach is resting for today. Please try again tomorrow.',
+                                        'coach_resting', 503)
+                release_db_connection()  # don't hold a pooled connection during the AI call
+                ai_usage.begin()
+                try:
+                    result, model = coach.run_ai_check(essay, tab.content)
+                except coach.CoachUnavailable:
+                    refund_coach_budget(request.user)
+                    ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.FAILED)
+                    raise EssayLabError('The Coach is unavailable right now. Please try again soon.',
+                                        'coach_unavailable', 503)
+                if result.get('mode') == coach.MODE_SAFETY:
+                    refund_coach_budget(request.user)  # a distress reply is not a charged check
+                ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.OK)
         else:
             result, model = coach.run_local_check(essay, tab.content)
             ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.LOCAL_FALLBACK)
@@ -848,6 +865,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             if stale_ids:
                 EssayDepthCheck.objects.filter(id__in=stale_ids).delete()
             _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Coach check', author=request.user)
+        check.cached = cached
         return Response(DepthCheckSerializer(check).data)
 
     @action(detail=True, methods=['get'], url_path='depth-check/latest')

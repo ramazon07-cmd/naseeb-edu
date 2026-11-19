@@ -212,6 +212,29 @@ def shared_cache_enabled():
     return not settings.CACHES.get('default', {}).get('BACKEND', '').endswith('LocMemCache')
 
 
+AI_HEALTH_CACHE_KEY = 'admin-health-ai:v1'
+AI_HEALTH_WINDOW = timedelta(hours=24)
+
+
+def ai_health():
+    """Last 24 hours of AI calls per feature (counts, error rate, latency, tokens, cost) and
+    whether outbound AI is on. Counters only; cached for a minute."""
+    from .. import ai_usage
+    from core.ai_policy import outbound_ai_allowed
+
+    features = cache_get(AI_HEALTH_CACHE_KEY)
+    if features is None:
+        features = ai_usage.monitoring(timezone.now() - AI_HEALTH_WINDOW)
+        cache_set(AI_HEALTH_CACHE_KEY, features, AI_TOKENS_CACHE_SECONDS)
+    return {
+        'outbound_enabled': bool(outbound_ai_allowed()),
+        'gateway_key_set': bool(settings.AI_GATEWAY_API_KEY),
+        'window_hours': 24,
+        'cost_estimated': ai_usage.prices() is not None,
+        'features': features,
+    }
+
+
 class AdminHealthView(APIView):
     """Readiness, the last run of every scheduled job, file storage and error tracking.
 
@@ -253,4 +276,5 @@ class AdminHealthView(APIView):
             'email': {'enabled': email_delivery_enabled()},
             # Off means throttles, login lockouts and the AI budget are counted per worker.
             'shared_cache': {'enabled': shared_cache_enabled()},
+            'ai': ai_health(),
         })

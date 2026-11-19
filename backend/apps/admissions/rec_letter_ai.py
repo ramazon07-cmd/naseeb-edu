@@ -17,7 +17,9 @@ from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 
-from . import ai_usage
+from core.ai_policy import outbound_ai_allowed
+
+from . import ai_http, ai_usage
 from .assistant import redact_pii
 
 logger = logging.getLogger('naseeb.rec_letter_ai')
@@ -226,6 +228,11 @@ def _without_names(text, student):
     return text
 
 
+def _defang(text):
+    """Untrusted text must not be able to write the marker that closes its own block."""
+    return text.replace('<<<', '<<').replace('>>>', '>>')
+
+
 def _user_message(student, facts, draft, letter):
     answers = student.application_profile or {}
     data = {
@@ -247,17 +254,18 @@ def _user_message(student, facts, draft, letter):
     text = redact_pii(draft)[:MAX_DRAFT_CHARS].strip() or '(empty: the counselor has not started)'
     return _without_names(
         '<<<STUDENT_FACTS (untrusted data)\n'
-        f'{json.dumps(data, ensure_ascii=False)}\n'
+        f'{_defang(json.dumps(data, ensure_ascii=False))}\n'
         'STUDENT_FACTS>>>\n\n'
         '<<<DRAFT (untrusted data)\n'
-        f'{text}\n'
+        f'{_defang(text)}\n'
         'DRAFT>>>',
         student,
     )
 
 
 def gateway_configured():
-    return bool(settings.AI_GATEWAY_API_KEY)
+    # The same switch as every other outbound call: with it off, no student fact leaves the server.
+    return outbound_ai_allowed() and bool(settings.AI_GATEWAY_API_KEY)
 
 
 def _request_gateway(system, user):
@@ -271,19 +279,10 @@ def _request_gateway(system, user):
     }
     if settings.AI_ASSISTANT_FALLBACK_MODEL:
         body['providerOptions'] = {'gateway': {'models': [settings.AI_ASSISTANT_FALLBACK_MODEL]}}
-    request = urllib.request.Request(
-        settings.AI_GATEWAY_URL,
-        data=json.dumps(body).encode('utf-8'),
-        headers={
-            'Authorization': f'Bearer {settings.AI_GATEWAY_API_KEY}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Vercel-AI-App-Name': 'Naseeb Edu',
-        },
-        method='POST',
+    payload = ai_http.post_json(
+        settings.AI_GATEWAY_URL, settings.AI_GATEWAY_API_KEY, body,
+        timeout=settings.AI_ASSISTANT_TIMEOUT_SECONDS, extra_headers={'X-Vercel-AI-App-Name': 'Naseeb Edu'},
     )
-    with urllib.request.urlopen(request, timeout=settings.AI_ASSISTANT_TIMEOUT_SECONDS) as response:
-        payload = json.loads(response.read().decode('utf-8'))
     ai_usage.capture(payload, body)
     content = payload['choices'][0]['message']['content']
     content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE)

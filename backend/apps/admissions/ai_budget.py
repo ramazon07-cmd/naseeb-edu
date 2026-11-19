@@ -45,6 +45,13 @@ def _limits(feature):
             settings.REC_LETTER_AI_SCHOOL_DAILY_BUDGET or None,
             settings.REC_LETTER_AI_USER_DAILY_LIMIT or None,
         )
+    if feature == 'education_match':
+        # Results are cached per profile, so this counts only real provider calls.
+        return (
+            settings.EDUCATION_MATCH_AI_DAILY_BUDGET,
+            settings.EDUCATION_MATCH_AI_SCHOOL_DAILY_BUDGET or None,
+            settings.EDUCATION_MATCH_AI_USER_DAILY_LIMIT or None,
+        )
     raise ValueError(f'Unknown AI feature: {feature}')
 
 
@@ -70,7 +77,7 @@ class _ProcessFallback:
 _fallback = _ProcessFallback()
 
 
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter')
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'education_match')
 TOP_SCHOOLS = 5
 
 

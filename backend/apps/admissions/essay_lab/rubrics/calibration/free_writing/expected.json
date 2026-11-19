@@ -1,0 +1,178 @@
+{
+  "weak_en": {
+    "clarity_idea": [
+      1,
+      2
+    ],
+    "specificity": [
+      1,
+      1
+    ],
+    "voice": [
+      1,
+      2
+    ],
+    "structure": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      23
+    ]
+  },
+  "average_en": {
+    "clarity_idea": [
+      2,
+      3
+    ],
+    "specificity": [
+      2,
+      3
+    ],
+    "voice": [
+      2,
+      3
+    ],
+    "structure": [
+      2,
+      3
+    ],
+    "overall": [
+      33,
+      67
+    ]
+  },
+  "strong_en": {
+    "clarity_idea": [
+      3,
+      4
+    ],
+    "specificity": [
+      3,
+      4
+    ],
+    "voice": [
+      3,
+      4
+    ],
+    "structure": [
+      3,
+      4
+    ],
+    "overall": [
+      67,
+      100
+    ]
+  },
+  "uz_average": {
+    "clarity_idea": [
+      2,
+      3
+    ],
+    "specificity": [
+      2,
+      3
+    ],
+    "voice": [
+      2,
+      3
+    ],
+    "structure": [
+      2,
+      3
+    ],
+    "overall": [
+      33,
+      67
+    ]
+  },
+  "ru_strong": {
+    "clarity_idea": [
+      3,
+      4
+    ],
+    "specificity": [
+      3,
+      4
+    ],
+    "voice": [
+      3,
+      4
+    ],
+    "structure": [
+      3,
+      3
+    ],
+    "overall": [
+      67,
+      93
+    ]
+  },
+  "l2_en": {
+    "clarity_idea": [
+      3,
+      4
+    ],
+    "specificity": [
+      3,
+      4
+    ],
+    "voice": [
+      3,
+      4
+    ],
+    "structure": [
+      3,
+      3
+    ],
+    "overall": [
+      67,
+      93
+    ]
+  },
+  "adv_injection": {
+    "clarity_idea": [
+      1,
+      2
+    ],
+    "specificity": [
+      1,
+      1
+    ],
+    "voice": [
+      1,
+      2
+    ],
+    "structure": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      23
+    ]
+  },
+  "adv_keyword": {
+    "clarity_idea": [
+      1,
+      1
+    ],
+    "specificity": [
+      1,
+      1
+    ],
+    "voice": [
+      1,
+      1
+    ],
+    "structure": [
+      1,
+      2
+    ],
+    "overall": [
+      0,
+      7
+    ]
+  }
+}

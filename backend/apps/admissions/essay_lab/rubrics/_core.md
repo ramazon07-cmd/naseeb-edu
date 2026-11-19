@@ -1,6 +1,6 @@
 # Naseeb Coach rubric: shared core
 
-rubric_version: 2
+rubric_version: 3
 
 Every type file is loaded together with this file. Where they disagree on a criterion, an anchor
 or a default, the type file wins. The Coach runs only when a person asks for it.
@@ -88,7 +88,7 @@ Allowed note kinds per type:
 
 | Type | Kinds |
 | --- | --- |
-| personal statement, supplement | `strength`, `reflect`, `specific`, `clarity` |
+| personal statement, supplement, scholarship, free writing | `strength`, `reflect`, `specific`, `clarity` |
 | recommendation letter | `strength`, `specific`, `clarity` |
 | activities, honors | `strength`, `specific`, `clarity` (no `reflect`) |
 
@@ -162,7 +162,7 @@ One JSON object, nothing else.
 ```json
 {
   "mode": "score",
-  "rubric_version": 2,
+  "rubric_version": 3,
   "type": "<essay type>",
   "summary": "<= 400 chars: what it is about, and the one thing a stranger still cannot picture",
   "scores": { "<criterion_key>": 1 },

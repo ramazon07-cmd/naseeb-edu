@@ -13,6 +13,9 @@ import re
 import threading
 import time
 from collections import defaultdict
+from decimal import Decimal, InvalidOperation
+
+from django.conf import settings
 
 from django.utils import timezone, translation
 
@@ -161,8 +164,24 @@ def _percentile(sorted_values, pct):
     return sorted_values[index]
 
 
+def prices():
+    """(input, output) USD per 1M tokens from settings, or ``None`` when not both set."""
+    try:
+        low, high = (Decimal(str(getattr(settings, name, '') or '')) for name in ('AI_PRICE_INPUT_USD_PER_1M', 'AI_PRICE_OUTPUT_USD_PER_1M'))
+    except InvalidOperation:
+        return None
+    return (low, high) if low >= 0 and high >= 0 and (low or high) else None
+
+
+def cost_usd(input_tokens, output_tokens, price=None):
+    price = price or prices()
+    if price is None:
+        return None
+    return float(round((Decimal(input_tokens) * price[0] + Decimal(output_tokens) * price[1]) / Decimal(1_000_000), 6))
+
+
 def _summarize(rows):
-    """Rows are (input, output, cached, reasoning, total, status, fallback_used, estimated)."""
+    """Rows are (input, output, cached, reasoning, total, status, fallback_used, estimated, latency_ms)."""
     calls = len(rows)
     paid = [row for row in rows if row[5] in ('ok', 'provider_error', 'invalid_output')]
     ok = [row for row in rows if row[5] == 'ok']
@@ -176,6 +195,12 @@ def _summarize(rows):
         'local_fallback': sum(1 for row in rows if row[5] == 'local_fallback'),
         'estimated_calls': sum(1 for row in paid if row[7]),
     }
+    latencies = sorted(row[8] for row in paid if row[8] > 0)
+    result['latency_ms'] = {
+        'avg': round(sum(latencies) / len(latencies)) if latencies else 0,
+        'p50': _percentile(latencies, 50), 'p95': _percentile(latencies, 95),
+        'max': latencies[-1] if latencies else 0,
+    }
     for name, index in (('input', 0), ('output', 1), ('cached_input', 2), ('reasoning', 3), ('total', 4)):
         values = sorted(row[index] for row in paid)
         result[f'{name}_tokens'] = {
@@ -184,6 +209,7 @@ def _summarize(rows):
             'max': values[-1] if values else 0,
             **{f'p{pct}': _percentile(values, pct) for pct in PERCENTILES},
         }
+    result['cost_usd'] = cost_usd(result['input_tokens']['sum'], result['output_tokens']['sum'])
     return result
 
 
@@ -195,7 +221,7 @@ def summary(since, feature=None):
     by_feature, by_school, by_day = defaultdict(list), defaultdict(list), defaultdict(list)
     rows = queryset.values_list(
         'feature', 'school_id', 'created_at', 'input_tokens', 'output_tokens', 'cached_input_tokens',
-        'reasoning_tokens', 'total_tokens', 'status', 'fallback_used', 'usage_estimated',
+        'reasoning_tokens', 'total_tokens', 'status', 'fallback_used', 'usage_estimated', 'latency_ms',
     ).iterator(chunk_size=2000)
     for name, school_id, created_at, *rest in rows:
         rest = tuple(rest)
@@ -214,6 +240,27 @@ def summary(since, feature=None):
             for (name, day), rows in sorted(by_day.items())
         ],
     }
+
+
+MONITOR_FIELDS = ('calls', 'paid_calls', 'ok_calls', 'error_rate', 'fallback_rate', 'budget_refused', 'local_fallback')
+
+
+def monitoring(since):
+    """Compact per-feature health figures for the admin Health page: counts, error rate,
+    latency p50/p95, tokens and estimated cost. Every feature is listed, even with no calls."""
+    data = summary(since)
+    features = {}
+    for name in FEATURES:
+        row = data['features'].get(name) or _summarize([])
+        features[name] = {
+            **{field: row[field] for field in MONITOR_FIELDS},
+            'latency_p50_ms': row['latency_ms']['p50'],
+            'latency_p95_ms': row['latency_ms']['p95'],
+            'input_tokens': row['input_tokens']['sum'],
+            'output_tokens': row['output_tokens']['sum'],
+            'cost_usd': row['cost_usd'],
+        }
+    return features
 
 
 def purge(older_than):

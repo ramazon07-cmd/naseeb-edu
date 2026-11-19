@@ -41,3 +41,20 @@ class EssayDepthCheckThrottle(EssayThrottle):
 def spend_coach_budget(user):
     """Count one AI depth check against the daily budgets. False when one is spent."""
     return ai_budget.consume('essay_coach', user)
+
+
+def refund_coach_budget(user):
+    """Undo one `spend_coach_budget` (a safety reply or a failed check is not a charged check).
+
+    Mirrors the counters `ai_budget.consume` bumps; best effort, a missing key stays missing.
+    """
+    from django.utils import timezone
+    from apps.users.cache_safety import cache_decrement
+
+    prefix = f'ai-budget:essay_coach:{timezone.localdate().isoformat()}'
+    keys = [prefix]
+    if user.school_id:
+        keys.append(f'{prefix}:school:{user.school_id}')
+    keys.append(f'{prefix}:user:{user.pk}')
+    for key in keys:
+        cache_decrement(key)

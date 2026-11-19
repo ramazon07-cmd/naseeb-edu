@@ -37,15 +37,22 @@ class Command(BaseCommand):
             raise CommandError('Give both --price-input and --price-output, or neither.')
         data = ai_usage.summary(timezone.now() - timedelta(days=options['days']), options['feature'])
         rows = self.rows(data, options['by'])
+        if options['price_input'] is None:
+            # Fall back to the prices configured for the Health page (AI_PRICE_*_USD_PER_1M).
+            configured = ai_usage.prices()
+            if configured:
+                options['price_input'], options['price_output'] = configured
         priced = options['price_input'] is not None
         header = ['group', *COLUMNS]
         header += [f'{part}_{stat}' for part in TOKEN_PARTS for stat in STATS]
+        header += ['latency_p50_ms', 'latency_p95_ms', 'error_rate_pct']
         if priced:
             header += ['cost_usd', 'cost_per_paid_call_usd']
         table = []
         for name, row in rows:
             line = [name, *(row[column] for column in COLUMNS)]
             line += [row[part][stat] for part in TOKEN_PARTS for stat in STATS]
+            line += [row['latency_ms']['p50'], row['latency_ms']['p95'], round(row['error_rate'] * 100, 2)]
             if priced:
                 cost = (
                     Decimal(row['input_tokens']['sum']) * options['price_input']

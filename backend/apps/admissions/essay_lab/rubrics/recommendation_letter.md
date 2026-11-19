@@ -1,6 +1,6 @@
 # Rubric: recommendation letter
 
-rubric_version: 2 · essay_type: `recommendation_letter` (to be added; a separate feature, `recommendation_letter` in `ai_budget.py`) · loaded with `_core.md`
+rubric_version: 3 · essay_type: `recommendation_letter` (to be added; a separate feature, `recommendation_letter` in `ai_budget.py`) · loaded with `_core.md`
 
 The author is a counselor or teacher. Only the author may run the Coach on a letter, and only the author
 sees its scores and notes. The server enforces this by role: the student's account can never request or

@@ -130,7 +130,7 @@ class StudentLetterWriteTests(LetterFixture, APITestCase):
         self.assertEqual(self.client.delete(f'/api/recommendations/{tracked.id}/').status_code, 204)
 
 
-@override_settings(REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS=0, AI_GATEWAY_API_KEY='')
+@override_settings(REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS=0, AI_GATEWAY_API_KEY='', OUTBOUND_AI_ENABLED=True)
 class LetterSuggestionTests(LetterFixture, APITestCase):
     def setUp(self):
         super().setUp()

@@ -1,6 +1,6 @@
 # Rubric: personal statement
 
-rubric_version: 2 · essay_type: `personal_statement` (also used for `free_writing`) · loaded with `_core.md`
+rubric_version: 3 · essay_type: `personal_statement` · loaded with `_core.md`
 
 A personal statement answers one question for a reader who spends a few minutes on it: *who is this
 person, and how do they think?* It is not a résumé in prose and not a contest of impressive events.
@@ -81,8 +81,18 @@ Judge whether a particular person is speaking. Never count vocabulary, grammar o
 5. Heavy personal experience (trauma, loss, illness, abuse). Never push for more disclosure. Ask only craft
    questions. Remind the student they choose what to share.
 
+## Uzbek and Russian writers
+
+Follow `_core.md` (Language fairness). Judge ideas, events and details, never grammar, spelling or vocabulary.
+A second-language English essay must not lose points in `voice` or `reflection` for plain wording, short
+sentences or literal phrasing; a plain sentence that only this person would write can earn a 3 or 4. A formal
+register, proverbs, a collective "we" and respect for elders are cultural rhetoric, not genericness. Essays in
+Uzbek or Russian use the same scale and the same criteria, and the reply is in the essay's language. Family
+work, caring duties and tutoring count as evidence the same as clubs. Never ask a student to start a new
+activity.
+
 ## Calibration
 
-`calibration/personal_statement/` needs at least ten texts with expected score ranges, including
-Uzbek and Russian essays, essays by second-language writers, and two adversarial texts (one that asks
+`calibration/personal_statement/` holds the texts and expected score ranges, including Uzbek and
+Russian essays, essays by second-language writers, and two adversarial texts (one that asks
 for top scores, one stuffed with confession words). Do not use this rubric in production before then.

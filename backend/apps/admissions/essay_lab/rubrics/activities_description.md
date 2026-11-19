@@ -1,6 +1,6 @@
 # Rubric: activities description
 
-rubric_version: 2 · essay_type: `activity` (to be added to `Essay.EssayType`) · loaded with `_core.md`
+rubric_version: 3 · essay_type: `activity` (to be added to `Essay.EssayType`) · loaded with `_core.md`
 
 Common App activity entries are tiny: position title (about 50 characters), organization (about 100)
 and description (about 150). Use the character limit the server passes. Each entry is scored on its own.
