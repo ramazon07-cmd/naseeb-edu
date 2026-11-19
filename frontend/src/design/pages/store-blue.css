@@ -1,0 +1,91 @@
+/* Naseeb Store (student, blue design). */
+
+.nb-blue .nb-store {
+  display: grid;
+  gap: var(--nb-gap);
+  max-width: none;
+  margin: 0;
+}
+
+.nb-blue .nb-store > * {
+  margin: 0;
+}
+
+.nb-blue .nb-store .store-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nb-gap);
+}
+
+.nb-blue .nb-store .nb-store-item {
+  display: flex;
+  flex-direction: column;
+  min-height: 230px;
+}
+
+.nb-blue .nb-store .nb-store-item .nb-card-body {
+  flex: 1;
+}
+
+.nb-blue .nb-store .nb-store-item p {
+  margin: 12px 0 0;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  line-height: 1.55;
+}
+
+.nb-blue .nb-store .nb-store-item.is-featured {
+  border-color: var(--nb-blue);
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-blue .nb-store .nb-store-item b {
+  color: var(--nb-ink-strong);
+}
+
+@media (max-width: 1100px) {
+  .nb-blue .nb-store .store-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-store .store-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* "Coming soon" lock page. */
+.nb-blue .nb-store .nb-store-lock {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.nb-blue .nb-store .nb-store-lock h2,
+.nb-blue .nb-store .nb-store-lock p {
+  margin: 0;
+}
+
+.nb-blue .nb-store .nb-store-lock p {
+  max-width: 46ch;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-store .nb-store-lock-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--nb-tint);
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-store .nb-store-lock .nb-card-body {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}

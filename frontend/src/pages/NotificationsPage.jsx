@@ -1,30 +1,125 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Bell, CheckCheck, MessageCircle } from 'lucide-react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Bell, CalendarClock, CheckCheck, ChevronRight, Clock3, MessageCircle, PenLine, Target } from 'lucide-react';
 import { api } from '../api';
-import { formatNumberLocale, t } from '../i18n';
+import { formatDateLocale, formatNumberLocale, t } from '../i18n';
 import { dateTimeText, joinParts } from '../lib/format';
 import { NOTIFICATIONS_CHANGED, reviewItemForNotice } from '../lib/notifications';
 import { notificationTitle } from '../lib/notificationText';
 import { KIND_ICONS, noticeMessage, useNotificationFeed } from '../components/NotificationPanel';
 import { LoadMore, PagedListError, firstPageLoading } from '../components/paged';
+import { InlineLoadError } from '../components/states';
 import { CxHead } from '../components/counselorUi';
 import { invalidatePagedLists } from '../hooks/usePagedList';
+import { BellSummaryContext } from '../hooks/useNotificationBell';
+import { BlueButton, Chip, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader } from '../design/blue/ui';
+import '../design/pages/dashboard-blue.css';
+import '../design/pages/notifications-blue.css';
 
 // The counselor's full notification list ("What happened since your last
 // visit"): unread chats first, then the notices addressed to them, newest
 // first, a page at a time. The bell's panel is the short version of this.
-export function NotificationsPage({ notify, setPage }) {
-  const [summary, setSummary] = useState(null);
+// `user` is passed for students, who get the blue design and their own notices
+// (not the staff `mine` filter); staff callers omit it.
+export function NotificationsPage({ notify, setPage, user }) {
+  return user?.role === 'student' ? <StudentNotifications {...{ notify, setPage }} /> : <StaffNotifications {...{ notify, setPage }} />;
+}
+
+const dayParts = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { day: '', month: '' };
+  return { day: String(date.getDate()), month: formatDateLocale(value, { month: 'short' }).replace(/\bSept\b/, 'Sep').replace(/\.$/, '') };
+};
+
+// Everything both lists share: the unread summary (kept fresh by the bell's
+// change event), the notice + chat feed, and the cleanup that stops notices read
+// here from coming back unread from the page cache (Back, the bell).
+// `sharedSummary`: the summary the shell's bell already polls (students). The page then asks the
+// server for nothing extra and follows the bell instead.
+function useNotificationsPageData({ staff, notify, sharedSummary, bellFailed = false }) {
+  const [ownSummary, setSummary] = useState(null);
+  const summary = sharedSummary ?? ownSummary;
+  const fellBack = useRef(false);
   const loadSummary = useCallback(() => api.notificationSummary().then(setSummary).catch(() => {}), []);
   useEffect(() => {
+    if (sharedSummary !== undefined) return undefined;
     loadSummary();
     window.addEventListener(NOTIFICATIONS_CHANGED, loadSummary);
     return () => window.removeEventListener(NOTIFICATIONS_CHANGED, loadSummary);
-  }, [loadSummary]);
-  const feed = useNotificationFeed({ summary, notify, staff: true });
-  const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
-  // Notices read here must not come back unread from the page cache (Back, the bell).
+  }, [loadSummary, sharedSummary]);
+  // Normally nothing is fetched here: the bell answers at sign-in. Only when the bell's own request
+  // has failed, ask once (never while it is still in flight) so the page does not wait on it.
+  useEffect(() => {
+    if (!bellFailed || ownSummary || fellBack.current) return;
+    fellBack.current = true;
+    loadSummary();
+  }, [bellFailed, ownSummary, loadSummary]);
+  const feed = useNotificationFeed({ summary, notify, staff });
   useEffect(() => () => invalidatePagedLists(['notifications']), []);
+  return { summary, feed };
+}
+
+function StudentNotifications({ notify, setPage }) {
+  const bell = useContext(BellSummaryContext);
+  const { summary, feed } = useNotificationsPageData({ staff: false, notify, sharedSummary: bell?.summary ?? null, bellFailed: Boolean(bell?.failed) });
+  const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty, chatsError, chatHeadLoading, retryChats } = feed;
+  function open(notification) {
+    const target = feed.read(notification);
+    if (target) setPage(target.page, target.params);
+  }
+  const unreadNotices = summary?.unread ?? list.items.filter((item) => !item.is_read).length;
+  const hasUnread = unreadNotices > 0 || chats.length > 0 || list.items.some((item) => !item.is_read);
+  const kindCount = (kind) => list.items.filter((item) => item.kind === kind).length;
+  return <div className="nb-notif">
+    <PageHeader title={t('Notifications')} subtitle={t('Alerts about your work and unread conversations.')}
+      actions={hasUnread ? <BlueButton variant="ghost" size="sm" icon={CheckCheck} onClick={markAll} disabled={markingAll} aria-busy={markingAll}>{t('Mark all as read')}</BlueButton> : (list.items.length > 0 ? <Chip variant="ok" icon={CheckCheck}>{t('You are all caught up.')}</Chip> : null)} />
+    <KpiRow label={t('Summary')}>
+      <KpiTile tone={0} icon={Bell} value={formatNumberLocale(unreadNotices)} label={t('Unread alerts')} />
+      <KpiTile tone={1} icon={CalendarClock} value={formatNumberLocale(kindCount('meeting'))} label={t('Recent meeting updates')} onClick={() => setPage('bookings')} actionLabel={t('Meetings')} />
+      <KpiTile tone={2} icon={PenLine} value={formatNumberLocale(kindCount('essay'))} label={t('Recent essay updates')} onClick={() => setPage('essay_lab')} actionLabel={t('Essay Lab')} />
+      <KpiTile tone={3} icon={Target} value={formatNumberLocale(kindCount('deadline'))} label={t('Recent deadline alerts')} />
+    </KpiRow>
+    <GlassCard tone="solid" className="nb-notif-card" title={t('Notifications')} icon={Bell}>
+      {/* Unread chats failed to load: say so and offer a retry (the bell summary alone would not refetch them). */}
+      {chatsError && <InlineLoadError message={chatsError} onRetry={retryChats} />}
+      {chatHeadLoading && <p className="nb-dash-note" role="status">{t('Loading…')}</p>}
+      {(chats.length > 0 || list.items.length > 0) && <ul className="nb-notif-list">
+        {chats.map((chat) => <li key={`chat-${chat.id}`}>
+          <button type="button" className="nb-notif-row is-unread" onClick={() => setPage('messages', { channelId: chat.id })}>
+            <span className="nb-notif-icon" aria-hidden="true"><MessageCircle size={20} /></span>
+            <span className="nb-notif-copy"><b>{chat.display_name}</b><small>{t('{n} unread', { n: formatNumberLocale(chat.unread_count) })}</small></span>
+            <em className="nb-notif-go">{t('Open chat')}</em>
+          </button>
+        </li>)}
+        {list.items.map((item) => {
+          const Icon = KIND_ICONS[item.kind] || Bell;
+          const target = feed.targetOf(item);
+          return <li key={item.id}>
+            <button type="button" className={`nb-notif-row${item.is_read ? '' : ' is-unread'}`} onClick={() => open(item)}>
+              <DateTile {...dayParts(item.created_at)} hot={!item.is_read} />
+              <span className="nb-notif-copy">
+                <b><Icon size={16} aria-hidden="true" />{notificationTitle(item)}{!item.is_read && <em className="sr-only">{t('Unread')}</em>}</b>
+                {noticeMessage(item) && <span>{noticeMessage(item)}</span>}
+                <small><Clock3 size={13} aria-hidden="true" />{dateTimeText(item.created_at)}</small>
+              </span>
+              {!item.is_read && <i className="nb-notif-dot" aria-hidden="true" />}
+              {target && <ChevronRight size={18} className="nb-notif-chevron" aria-hidden="true" />}
+            </button>
+          </li>;
+        })}
+      </ul>}
+      {chatsNext && <div className="nb-notif-more"><BlueButton variant="ghost" size="sm" onClick={moreChats} disabled={loadingChats} aria-busy={loadingChats}>{loadingChats ? t('Loading…') : t('Load more')}</BlueButton></div>}
+      {firstPageLoading(list) && <p className="nb-dash-note" role="status">{t('Loading…')}</p>}
+      <PagedListError list={list} />
+      <LoadMore list={list} />
+      {empty && <EmptyState icon={Bell} title={t('You are all caught up.')} />}
+    </GlassCard>
+  </div>;
+}
+
+function StaffNotifications({ notify, setPage }) {
+  // staff: only notices addressed to this counselor (`mine`), never their students' own bell.
+  const { summary, feed } = useNotificationsPageData({ staff: true, notify });
+  const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
 
   function open(notification) {
     const item = reviewItemForNotice(notification);

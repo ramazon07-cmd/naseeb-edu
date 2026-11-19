@@ -1,0 +1,88 @@
+/* Naseeb Mind (blue design, students only). The hub keeps its own artwork,
+   card colours and order; only radius, shadow, spacing, type and buttons are
+   brought in line with the blue shell. */
+
+.nb-blue .profile-assessment-page {
+  gap: var(--nb-gap);
+  font-family: var(--nb-font);
+}
+
+.nb-blue .hub-layout {
+  gap: var(--nb-gap);
+}
+
+.nb-blue .hub-card,
+.nb-blue .hub-card-face,
+.nb-blue .hub-next {
+  border-radius: var(--nb-r-lg);
+}
+
+.nb-blue .hub-card {
+  box-shadow: var(--nb-kpi-shadow, 0 18px 40px -22px rgba(4, 46, 123, 0.5));
+}
+
+.nb-blue .hub-card[data-kind='personality'] .hub-card-front {
+  box-shadow: inset 0 0 0 1px var(--nb-kpi-line, rgba(125, 170, 220, 0.32));
+}
+
+.nb-blue .hub-card-body,
+.nb-blue .hub-next h2,
+.nb-blue .hub-next p,
+.nb-blue .hub-card-body h2,
+.nb-blue .hub-card-body h3,
+.nb-blue .hub-card-side {
+  font-family: var(--nb-font);
+}
+
+.nb-blue .hub-card-body {
+  padding: var(--nb-pad);
+}
+
+/* Pill buttons, the same shape as the shell's. */
+.nb-blue .hub-card-go,
+.nb-blue .hub-next-button,
+.nb-blue .hub-card-review {
+  border-radius: var(--nb-r-pill);
+  font-family: var(--nb-font);
+  font-weight: 650;
+}
+
+.nb-blue .hub-next-button:not(:disabled) {
+  box-shadow: var(--nb-btn-shadow, none);
+}
+
+.nb-blue .assessment-load-error {
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-card-fg, var(--nb-ink));
+}
+
+/* Result sections sit on a solid surface so they read over the backdrop and in the dark looks. */
+.nb-blue .assessment-results-stack {
+  padding: var(--nb-pad);
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-card);
+  box-shadow: var(--nb-shadow);
+  color: var(--nb-card-fg, var(--nb-ink));
+}
+
+.nb-blue .assessment-number-summary,
+.nb-blue .assessment-number-breakdown {
+  font-family: var(--nb-font);
+}
+
+/* Runner screens (questions) */
+.nb-blue .reasoning-runner {
+  font-family: var(--nb-font);
+}
+
+.nb-blue .portal-hero {
+  border-radius: var(--nb-r-lg);
+}
+
+@media (max-width: 1100px) {
+  .nb-blue .hub-layout {
+    gap: 12px;
+  }
+}

@@ -1,7 +1,12 @@
-import { useState } from 'react';
-import { PortalTabs } from '../components/forms';
-import { Award, Briefcase, FolderGit2, Mail, Sparkles, Trophy } from 'lucide-react';
-import { t } from '../i18n';
+import { useRef, useState } from 'react';
+import { Award, Camera, Briefcase, ClipboardCheck, FolderGit2, Globe2, GraduationCap, Mail, MapPin, Sparkles, Star, Target, Trophy } from 'lucide-react';
+import { t, tx } from '../i18n';
+import { api } from '../api';
+import { StudentAvatar } from '../components/records';
+import { BrandLogo } from '../components/brand';
+import { fullName } from '../lib/labels';
+import { gradeText, contactEmail } from '../lib/format';
+import { listText } from '../lib/profileSections';
 import { StudentOverview } from './StudentsPage';
 import { ownStudent } from '../lib/labels';
 import { isPageLocked } from '../lib/routes';
@@ -10,6 +15,8 @@ import { AddMenu } from '../components/AddMenu';
 import { ResourceForm, ResourceSection } from './ResourceSection';
 import { DocumentsPage } from './DocumentsPage';
 import { DownloadCvButton } from '../components/CvDocument';
+import { KpiRow, KpiTile, PageHeader, PillTabs, tabId } from '../design/blue/ui';
+import '../design/pages/center-blue.css';
 
 // Each tab with several record types gets one "Add" chooser instead of an
 // Add button per card. [resource, card title, menu label, hint, form title, empty text, empty link, icon]
@@ -42,6 +49,53 @@ function ResourceTab({ tab, user, data, query, reload, notify }) {
   </div>;
 }
 
+// The student ID card and a row of contact and goal chips, from the profile the student already has.
+function StudentIdCard({ student, user, reload, notify }) {
+  const fileInput = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  if (!student) return null;
+  // The photo is saved at once with the request the profile's own photo field makes (students/<id>/photo/).
+  async function choosePhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || uploading) return;
+    setUploading(true);
+    try { await api.uploadStudentPhoto(student.id, file); notify?.(t('Photo updated.')); reload?.(); }
+    catch (err) { notify?.(err.message, 'error'); }
+    finally { setUploading(false); }
+  }
+  const readyDone = Number(student.readiness_items_done) || 0;
+  const readyTotal = Number(student.readiness_items_total) || 0;
+  const readyPercent = readyTotal ? Math.round((readyDone / readyTotal) * 100) : null;
+  const answers = student.application_profile || {};
+  const name = fullName(student.user_detail) || fullName(user);
+  const countries = listText(student.target_countries);
+  const email = contactEmail(student.user_detail?.email);
+  const chips = [[Mail, email], [Target, student.target_major], [Globe2, countries], [MapPin, student.school_name]].filter(([, value]) => value);
+  return <section className="nb-id-wrap" aria-label={t('Student ID')}>
+    <article className="nb-id-card">
+      <p className="nb-id-head"><BrandLogo className="nb-id-logo" />{t('Naseeb Edu')} · {t('Student')}</p>
+      <div className="nb-id-body">
+        <span className="nb-id-photo-wrap">
+          <StudentAvatar student={student} className="nb-id-photo" />
+          <button type="button" className="nb-id-photo-edit" onClick={() => fileInput.current?.click()} disabled={uploading} aria-busy={uploading} aria-label={t('Change photo')} title={t('Change photo')}><Camera size={16} aria-hidden="true" /></button>
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
+        </span>
+        <div className="nb-id-text">
+          <h2>{name}</h2>
+          <dl>
+            {student.grade != null && student.grade !== '' && <div><dt>{t('Grade')}</dt><dd>{gradeText(student.grade)}</dd></div>}
+            {student.school_name && <div><dt>{t('School')}</dt><dd>{student.school_name}</dd></div>}
+          </dl>
+        </div>
+      </div>
+      {readyPercent != null && <div className="nb-id-ready" role="img" aria-label={`${t('Profile ready')}: ${readyPercent}%`}><span className="nb-id-ring" style={{ '--pct': `${readyPercent}%` }} aria-hidden="true" /><span>{t('Profile ready')} · {readyPercent}%</span></div>}
+      <p className="nb-id-foot"><span>{answers.graduation_year ? tx`Class of ${String(answers.graduation_year)}` : ''}</span><span>{countries}</span></p>
+    </article>
+    {chips.length > 0 && <div className="nb-id-chips"><p className="eyebrow">{t('Contact and goal')}</p><div>{chips.map(([Icon, value]) => <span key={value}><Icon size={16} aria-hidden="true" />{value}</span>)}</div></div>}
+  </section>;
+}
+
 const CV_RECORDS = ['activities', 'internships', 'researches', 'projects', 'honors', 'achievements'];
 
 // The open tab lives in the URL (/student-center/documents), so it survives a
@@ -52,14 +106,27 @@ export function StudentCenterPage({ user, data, query, reload, notify, tab = 'ov
   const sections = { reload, notify, onEditDone, student, data };
   // Changes when the profile or a CV record is saved, so the prefetched CV is loaded again.
   const cvKey = [student?.updated_at, ...CV_RECORDS.map((kind) => (data?.[kind] || []).map((item) => `${item.id}:${item.updated_at}`).join(','))].join('|');
-  return <div className="section-stack student-portal">
+  const roadmapLocked = isPageLocked('roadmap', user);
+  const taskCount = Object.values(student?.task_status_counts || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const applicationCount = (data?.applications || []).filter((item) => !student || Number(item.student) === Number(student.id)).length;
+  const tabs = [['overview', 'Overview'], ['academics', 'Academics'], ['portfolio', 'Portfolio'], ['activities', 'Activities & honors'], ['documents', 'Documents']].map(([key, text]) => ({ key, label: t(text) }));
+  return <div className="section-stack student-portal nb-center">
+    <PageHeader title={t('Student Center')} subtitle={t('Academic profile, portfolio, activities, and documents')} actions={<DownloadCvButton refreshKey={cvKey} notify={notify} className="nb-btn nb-btn-ghost nb-btn-sm" />} />
+    {tab === 'overview' && student && <KpiRow label={t('Student Center')} columns={roadmapLocked ? 2 : 4}>
+      {!roadmapLocked && <KpiTile tone={0} icon={Trophy} value={student.level ?? 1} label={<>{t('Level')}<small className="nb-kpi-note">{t('Approved by staff')}</small></>} />}
+      {!roadmapLocked && <KpiTile tone={1} icon={Star} value={student.roadmap_stars ?? 0} label={<>{t('Stars')}<small className="nb-kpi-note">{t('One per approved roadmap mission')}</small></>} />}
+      <KpiTile tone={2} icon={ClipboardCheck} value={taskCount} label={t('Assigned tasks')} />
+      <KpiTile tone={3} icon={GraduationCap} value={applicationCount} label={t('Applications')} />
+    </KpiRow>}
+    {tab === 'overview' && <StudentIdCard student={student} user={user} reload={reload} notify={notify} />}
     <div className="student-center-head">
-      <PortalTabs active={tab} onChange={onTab} items={[["overview", "Overview"], ["academics", "Academics"], ["portfolio", "Portfolio"], ["activities", "Activities & honors"], ["documents", "Documents"]]} />
-      <DownloadCvButton refreshKey={cvKey} notify={notify} />
+      <PillTabs tabs={tabs} value={tab} onChange={onTab} label={t('Student Center')} idPrefix="center" />
     </div>
-    {tab === 'overview' && <StudentOverview student={student} data={data} user={user} notify={notify} roadmapLocked={isPageLocked('roadmap', user)} profile={<ProfileSections {...sections} editSection={editSection} onOpenRecords={() => { onTab('activities'); window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }} />} />}
-    {tab === 'academics' && <div className="section-stack"><ProfileSections {...sections} sections={['academics', 'tests']} showReadiness={false} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}
-    {TAB_RESOURCES[tab] && <ResourceTab key={tab} tab={tab} {...{ user, data, query, reload, notify }} />}
-    {tab === 'documents' && <DocumentsPage {...{ user, data, query, reload, notify }} />}
+    <div role="tabpanel" aria-labelledby={tabId('center', tab)} className="section-stack nb-center-panel">
+      {tab === 'overview' && <StudentOverview student={student} data={data} user={user} notify={notify} roadmapLocked={roadmapLocked} profile={<ProfileSections {...sections} editSection={editSection} onOpenRecords={() => { onTab('activities'); window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }} />} />}
+      {tab === 'academics' && <div className="section-stack"><ProfileSections {...sections} sections={['academics', 'tests']} showReadiness={false} /><ResourceSection title={t("Research & academic work")} resource="researches" {...{ user, data, query, reload, notify }} /></div>}
+      {TAB_RESOURCES[tab] && <ResourceTab key={tab} tab={tab} {...{ user, data, query, reload, notify }} />}
+      {tab === 'documents' && <DocumentsPage {...{ user, data, query, reload, notify }} />}
+    </div>
   </div>;
 }
