@@ -1,5 +1,13 @@
 // Student design parity (Tour): English key -> [Uzbek (Latin), Russian].
 export const PARITY_TOUR_TRANSLATIONS = {
+  'Book a meeting': ['Uchrashuv band qilish', 'Запись на встречу'],
+  'Pick who, how long and a free time, then send. Your counselor confirms it.': ['Kim bilan, qancha vaqt va bo‘sh vaqtni tanlab, yuboring. Maslahatchingiz tasdiqlaydi.', 'Выберите, с кем, на сколько и свободное время, затем отправьте. Консультант подтвердит.'],
+  'Your meetings': ['Uchrashuvlaringiz', 'Ваши встречи'],
+  'Upcoming and past meetings and the time you have spent with your team.': ['Kelgusi va o‘tgan uchrashuvlar hamda jamoangiz bilan o‘tkazgan vaqtingiz.', 'Предстоящие и прошедшие встречи и время с вашей командой.'],
+  'All your essays': ['Barcha esselaringiz', 'Все ваши эссе'],
+  'Drafts, essays shared with your counselor and approved ones. Everything saves automatically.': ['Qoralamalar, maslahatchiga yuborilgan va tasdiqlangan esselar. Hammasi avtomatik saqlanadi.', 'Черновики, отправленные консультанту и одобренные эссе. Всё сохраняется автоматически.'],
+  'Folders': ['Papkalar', 'Папки'],
+  'Group your essays in folders to keep each application together.': ['Har bir ariza esselarini bir joyda saqlash uchun papkalardan foydalaning.', 'Группируйте эссе по папкам, чтобы каждая заявка была в одном месте.'],
   'Your profile': ['Profilingiz', 'Ваш профиль'],
   'Each test fills one part of this profile. The bar shows how many of the 7 tests are done.': ['Har bir test shu profilning bir qismini to‘ldiradi. Chiziq 7 ta testdan nechtasi tugaganini ko‘rsatadi.', 'Каждый тест заполняет часть профиля. Полоса показывает, сколько из 7 тестов пройдено.'],
   'What we know so far': ['Hozircha ma’lum bo‘lgani', 'Что уже известно'],

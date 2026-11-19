@@ -12,6 +12,7 @@ import { BlueButton, DaysChip, GlassCard, KpiRow, KpiTile, PageHeader } from '..
 import { FilterOption } from '../components/college';
 import { Empty } from '../components/ui';
 import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
+import { PAGE_PATHS } from '../lib/routes';
 import { daysUntil, dueLabel, dueTone } from '../lib/college';
 import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline, hasProgramFilters, programFilterState, programFilterWrite, programGrades, selectedGrades, toggleGrade } from '../lib/programFilters';
 
@@ -238,6 +239,7 @@ function FilterMenu({ label, value, children }) {
 }
 
 export function ProgramsPage({ data, query, search, navigate, notify }) {
+  const programId = useMemo(() => { const id = Number(new URLSearchParams(search || '').get('program')); return Number.isInteger(id) && id > 0 ? id : null; }, [search]);
   const [filters, setFilters] = useUrlFilters(search, navigate);
   const [savedIds, setSavedIds] = useState(new Set());
   const [savedLoading, setSavedLoading] = useState(true);
@@ -249,7 +251,8 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   // Extra list narrowing from the top tiles and the Free pill; the URL filters stay as they are.
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [onlyFree, setOnlyFree] = useState(false);
-  const [detailId, setDetailId] = useState(null);
+  const [detailId, setDetailId] = useState(programId ?? null);
+  useEffect(() => { if (programId != null) setDetailId(programId); }, [programId]);
   const [radarOpen, setRadarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetRef = useRef(null);
@@ -264,6 +267,8 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   );
   // Catalog-wide numbers for the tiles and the featured card: they ignore the filters below.
   const overall = useMemo(() => filterPrograms(catalog, PROGRAM_FILTER_DEFAULTS, { today, translate: t, localeTag }), [catalog, today, localeTag]);
+  // Every loaded program, closed ones included, so a closed row's title still opens its details.
+  const everyProgram = useMemo(() => filterPrograms(catalog, { ...PROGRAM_FILTER_DEFAULTS, open: false }, { today, translate: t, localeTag }).programs, [catalog, today, localeTag]);
   const openNow = useMemo(() => overall.programs.filter(({ due }) => due?.exact).length, [overall]);
   const featured = useMemo(() => overall.programs.find(({ closed, due }) => !closed && due?.exact) || null, [overall]);
   const nextUp = useMemo(() => overall.programs.filter(({ closed, due }) => !closed && due?.exact).slice(1, 5), [overall]);
@@ -326,7 +331,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   const shownPrograms = programs.filter(({ item, closed, due }) => (!onlySaved || savedIds.has(item.id)) && (!onlyOpen || (!closed && due?.exact)) && (!onlyFree || isFree(item)));
   const resultText = tp('{count} program|{count} programs', shownPrograms.length, { count: shownPrograms.length });
   const narrowed = filtered || onlyOpen || onlyFree;
-  const detail = detailId != null ? overall.programs.find(({ item }) => item.id === detailId) : null;
+  const detail = detailId != null ? everyProgram.find(({ item }) => item.id === detailId) : null;
   if (detail) {
     const similar = overall.programs.filter(({ item, closed, due }) => item.id !== detail.item.id && !closed && due?.exact);
     const near = [...similar.filter(({ item }) => item.category === detail.item.category), ...similar.filter(({ item }) => item.category !== detail.item.category)].slice(0, 4);
@@ -349,7 +354,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
       {(freeCount > 0 || onlyFree) && <FilterOption checked={onlyFree} onChange={(event) => setOnlyFree(event.target.checked)} count={freeCount}>{t('Free')}</FilterOption>}
       {(counts.closed > 0 || !filters.open) && <FilterOption checked={filters.open} onChange={(event) => update({ open: event.target.checked })} count={counts.closed}>{t('Hide closed')}</FilterOption>}
     </fieldset>
-    <footer className="program-rail-foot"><button type="button" className="button primary" onClick={() => setSheetOpen(false)}>{tp('Show {count} program|Show {count} programs', programs.length, { count: programs.length })}</button></footer>
+    <footer className="program-rail-foot"><button type="button" className="button primary" onClick={() => setSheetOpen(false)}>{tp('Show {count} program|Show {count} programs', shownPrograms.length, { count: shownPrograms.length })}</button></footer>
   </aside>;
 
   // Wide screens: filter pills under the search box (the bottom-right corner
@@ -417,6 +422,6 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     {sheetOpen && <div className="program-sheet-backdrop" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
     {rail}
     </div>
-    <DeadlineRadar open={radarOpen} onClose={() => setRadarOpen(false)} applications={data.applications || []} />
+    <DeadlineRadar open={radarOpen} onClose={() => setRadarOpen(false)} applications={data.applications || []} applicationsLoaded={(data.applications || []).length > 0} onOpenApplications={() => { setRadarOpen(false); navigate(PAGE_PATHS.applications); }} onOpen={() => { setRadarOpen(false); navigate(PAGE_PATHS.applications); }} />
   </div>;
 }

@@ -22,7 +22,7 @@ const lateLabel = (days) => days < 0 ? tp('{n} day late|{n} days late', -days, {
 
 // Every application and scholarship deadline on the page plus the student's own, in four views:
 // what is overdue, what is due in two weeks, what comes in four months, and by type.
-function RadarDialog({ applications, onOpen, onClose }) {
+function RadarDialog({ applications, applicationsLoaded, onOpenApplications, onOpen, onClose }) {
   const [mine, setMine] = useState(readMyDeadlines);
   const [type, setType] = useState('all');
   const [win, setWin] = useState('all');
@@ -62,6 +62,7 @@ function RadarDialog({ applications, onOpen, onClose }) {
   const edit = (item) => setForm({ index: item.index, name: mine[item.index].t, date: mine[item.index].d, kind: mine[item.index].k || 'task', error: false });
   return <Modal title={t("Deadline radar")} onClose={onClose} className="apps-radar">
     <div className="nb-radar">
+      {!applicationsLoaded && <p className="nb-radar-notice" role="note"><span>{t("Open Applications to include university deadlines")}</span>{onOpenApplications && <button type="button" className="button quiet small" onClick={onOpenApplications}>{t("Go to Applications")}</button>}</p>}
       <div className="nb-radar-cards">{cards.map(([key, tone, title, hint, entries, okText]) => <button type="button" key={key} className={`nb-radar-card ${tone} ${win === key ? 'is-on' : ''} ${entries.length ? '' : 'is-zero'}`.trim()} aria-pressed={win === key} onClick={() => setWin(win === key ? 'all' : key)}>
         <span className="nb-radar-card-title">{title}</span>
         <span className="nb-radar-card-n"><b>{formatNumberLocale(entries.length)}</b><small>{entries.length ? hint : okText}</small></span>
@@ -98,9 +99,9 @@ function RadarDialog({ applications, onOpen, onClose }) {
 
 // Reusable radar: the caller passes the applications it already has and decides what opening one does.
 // The student's own deadlines are read from and written to this browser only.
-export function DeadlineRadar({ open, onClose, applications = [], onOpen }) {
+export function DeadlineRadar({ open, onClose, applications = [], applicationsLoaded = true, onOpenApplications, onOpen }) {
   if (!open) return null;
-  return <RadarDialog applications={applications} onOpen={onOpen || (() => {})} onClose={onClose} />;
+  return <RadarDialog applications={applications} applicationsLoaded={applicationsLoaded} onOpenApplications={onOpenApplications} onOpen={onOpen || (() => {})} onClose={onClose} />;
 }
 
 export function DeadlineRadarButton({ onClick, className = '', size = 16 }) {

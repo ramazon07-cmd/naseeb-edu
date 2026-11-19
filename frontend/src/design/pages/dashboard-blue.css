@@ -286,6 +286,7 @@
 }
 
 .nb-blue .nb-dash-priorities button,
+.nb-blue .nb-dash-deadline-list button,
 .nb-blue .nb-dash-meeting-list button {
   display: flex;
   align-items: center;
@@ -302,6 +303,7 @@
 }
 
 .nb-blue .nb-dash-priorities button:hover:not(:disabled),
+.nb-blue .nb-dash-deadline-list button:hover:not(:disabled),
 .nb-blue .nb-dash-meeting-list button:hover:not(:disabled) {
   background: var(--nb-tint);
 }
@@ -385,12 +387,21 @@
   font-weight: 800;
 }
 
-.nb-blue .nb-dash-deadline-list li,
 .nb-blue .nb-dash-team-list li {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 7px 0;
+  padding: 8px 0;
+}
+
+.nb-blue .nb-dash-deadline-list button {
+  gap: 12px;
+  padding: 7px 4px;
+}
+
+.nb-blue .nb-dash-deadline-list button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .nb-blue .nb-dash-deadline-list .nb-date {
@@ -545,7 +556,30 @@
   background: var(--nb-kpi-0);
   color: var(--nb-kpi-fg);
   box-shadow: var(--nb-kpi-shadow);
+  font: inherit;
   font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.nb-blue .nb-dash-apptile:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.nb-blue .nb-dash-apptile:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-blue .nb-dash-apptile {
+    transition: none;
+  }
+
+  .nb-blue .nb-dash-apptile:hover:not(:disabled) {
+    transform: none;
+  }
 }
 
 .nb-blue .nb-dash-apptile.nb-kpi-tone-1 {
@@ -900,10 +934,6 @@
   border-radius: 14px;
   background: var(--nb-card);
   color: var(--nb-blue);
-}
-
-.nb-blue .nb-dash-team-list li {
-  padding: 8px 0;
 }
 
 .nb-blue .nb-dash-icon-btn {

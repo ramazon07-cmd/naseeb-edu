@@ -51,6 +51,8 @@ export const PARITY_CAT_TRANSLATIONS = {
   "Date confirmed": ["Sana tasdiqlangan", "Дата подтверждена"],
   "Expected · based on last year": ["Taxminiy · o‘tgan yilga ko‘ra", "Ожидается · по прошлому году"],
   "Date not announced yet": ["Sana hali e’lon qilinmagan", "Дата ещё не объявлена"],
+  "Open Applications to include university deadlines": ["Universitet muddatlarini qo‘shish uchun Arizalarni oching", "Откройте «Заявки», чтобы добавить сроки вузов"],
+  "Go to Applications": ["Arizalarga o‘tish", "Перейти к заявкам"],
 };
 
 export function parityCatMessages(language) {

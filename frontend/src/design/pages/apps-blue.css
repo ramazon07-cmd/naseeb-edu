@@ -746,3 +746,17 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Shown while the applications are not loaded yet, so the radar does not look empty. */
+.nb-blue .nb-radar-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--nb-line, currentColor);
+  border-radius: 12px;
+  font-size: var(--nb-text-sm);
+}

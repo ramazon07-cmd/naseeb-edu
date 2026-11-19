@@ -266,6 +266,22 @@ Rules kept in all sections: no backend or bot change, no new requests or polling
 | PDF export | no mockup equivalent: the mockup has no export button (only proto CV/card downloads in Student Center); app behaviour left unchanged | lib/exportPdf.js |
 | Notifications drawer (bell) | skipped: students never see the popup panel, the bell opens the Notifications page (existing behaviour, other owner) | components/NotificationPanel.jsx |
 
+## Audit follow-up (round 3)
+
+| mockup element | app status | file |
+| --- | --- | --- |
+| Programs: titles of closed programs open details | built now (lookup uses every loaded program, not only open ones) | pages/ProgramsPage.jsx |
+| Programs radar: university row opens Applications, "Open Applications to include university deadlines" notice with link when applications are not loaded (no new request) | built now | pages/ProgramsPage.jsx, components/DeadlineRadar.jsx |
+| Programs radar: program row opens its detail, task row opens Tasks | skipped: the radar only holds university deadlines and the student's own entries; programs and tasks are not in its data, adding them means the saved-programs request | components/DeadlineRadar.jsx |
+| College Search radar notice | no change needed: that page already loads applications | pages/CollegeSearchPage.jsx |
+| Mobile filter sheet "Show N programs" counts every filter (Free, My List, open, grades) | built now | pages/ProgramsPage.jsx |
+| Dashboard: each card, the KPI row and the goal card render as components inside their own error boundary, calculations moved inside | built now | CompactDashboard.jsx, components/CardBoundary.jsx |
+| Dashboard Applications card: four tiles are real buttons to Applications (disabled when locked) | built now | CompactDashboard.jsx, design/pages/dashboard-blue.css |
+| Dashboard Applications card: initials stack | partial: shown only when applications are already loaded (the dashboard never requests them, so no request added); the big count stays visible | CompactDashboard.jsx |
+| Dashboard deadline rows are buttons: task to Tasks, program to its detail page (`/programs?program=<id>`) | built now | CompactDashboard.jsx, lib/routes.js, pages/ProgramsPage.jsx |
+| Dashboard deadline rows: application | skipped: the dashboard deadline list has no application items | CompactDashboard.jsx |
+| Page tips for Meetings (`#meetings-book`, KPI row) and Essay Lab (`.el-library`, `.el-folders`) | built now; targets that are absent are dropped; no edits to those pages | design/blue/pageTips.js |
+
 ## Out of scope (other branches)
 
 | mockup element | app status | file |

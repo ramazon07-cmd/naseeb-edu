@@ -21,7 +21,7 @@ export function pageTipsSeen(userId, page) { return seenMap(userId)[page] === 1;
 export function markPageTipsSeen(userId, page) { write(`${PAGE_TIPS_KEY}:${userId}`, JSON.stringify({ ...seenMap(userId), [page]: 1 })); }
 
 // Tips per page key. `target` may list several selectors; a tip whose target is not on screen is
-// left out. The locked Roadmap, Meetings and Essay Lab are not covered here.
+// left out. The locked Roadmap is not covered. Meetings and Essay Lab targets come from their own pages; a tip whose target is absent is dropped.
 export function pageTips(page) {
   const list = {
     find_personality: [
@@ -50,6 +50,14 @@ export function pageTips(page) {
     college_search: [
       { id: 'match', target: '.nb-college-match-profile', title: t('Matched to you'), text: t('Universities are matched to your SAT, GPA, IELTS, major and budget. Update your profile to improve the matches.') },
       { id: 'bal', target: '.nb-list-balance', title: t('Balance your list'), text: t('Aim for about 2 Dream, 3 Target and 2 Safety universities. Tap a type to see only those.') },
+    ],
+    bookings: [
+      { id: 'book', target: '#meetings-book, .nb-meet-inline', title: t('Book a meeting'), text: t('Pick who, how long and a free time, then send. Your counselor confirms it.') },
+      { id: 'kpis', target: '.nb-kpi-row, .nb-kpis', title: t('Your meetings'), text: t('Upcoming and past meetings and the time you have spent with your team.') },
+    ],
+    essay_lab: [
+      { id: 'lib', target: '.el-library, .el-page', title: t('All your essays'), text: t('Drafts, essays shared with your counselor and approved ones. Everything saves automatically.') },
+      { id: 'folders', target: '.el-folders', title: t('Folders'), text: t('Group your essays in folders to keep each application together.') },
     ],
     notifications: [
       { id: 'list', target: '.nb-notif-card, .nb-notif', title: t('Everything new in one place'), text: t('Click an alert to jump to the meeting, essay or deadline it is about. Use Mark all as read when you are done.') },

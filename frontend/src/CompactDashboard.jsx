@@ -113,12 +113,13 @@ function buildDeadlines(tasks, programs) {
     if (days == null) continue;
     items.push({ key: `task-${task.id}`, title: task.title, sub: joinParts(t('Task'), task.assigned_by_name), date: task.due_date, days, page: 'tasks' });
   }
-  for (const { item, days } of openProgramsOf(programs)) items.push({ key: `program-${item.id}`, title: item.title, sub: item.provider, date: item.deadline, days, page: 'programs' });
+  for (const { item, days } of openProgramsOf(programs)) items.push({ key: `program-${item.id}`, title: item.title, sub: item.provider, date: item.deadline, days, page: 'programs', params: { programId: item.id } });
   items.sort((a, b) => a.days - b.days);
   return items;
 }
 
-function DeadlinesCard({ items, openPage, locked }) {
+function DeadlinesCard({ tasks, programs, openPage, locked }) {
+  const items = buildDeadlines(tasks, programs);
   const overdue = items.filter((item) => item.days < 0);
   const upcoming = items.filter((item) => item.days >= 0);
   const first = overdue[0];
@@ -131,12 +132,56 @@ function DeadlinesCard({ items, openPage, locked }) {
       <em>{t('Review now')}</em>
     </button>}
     {upcoming.length > 0 && <ul className="nb-dash-deadline-list">{upcoming.slice(0, 4).map((item) => <li key={item.key}>
-      <DateTile hot={item.days <= 3} {...tileParts(item.date)} />
-      <span className="nb-dash-row-copy"><b>{item.title}</b><small>{item.sub}</small></span>
-      <DaysChip days={item.days} />
+      <button type="button" onClick={() => openPage(item.page, item.params)} disabled={locked[item.page]} title={locked[item.page] ? t('Coming soon') : undefined}>
+        <DateTile hot={item.days <= 3} {...tileParts(item.date)} />
+        <span className="nb-dash-row-copy"><b>{item.title}</b><small>{item.sub}</small></span>
+        <DaysChip days={item.days} />
+      </button>
     </li>)}</ul>}
     {!items.length && <p className="nb-dash-note">{t('No deadlines coming up.')}</p>}
   </GlassCard>;
+}
+
+function PrioritiesCard({ tasks, openPage, locked, link }) {
+  const pending = nextPriorities(tasks);
+  return <GlassCard className="nb-dash-card nb-dash-card-tasks" title={t('Next priorities')} icon={Target} footer={<><span>{tp('{n} open task|{n} open tasks', pending.length, { n: pending.length })}</span>{link('tasks', 'View all')}</>}>
+    <ol className="nb-dash-priorities">{pending.slice(0, 3).map((task, index) => <li key={task.id}>
+      <button type="button" onClick={() => openPage('tasks')} disabled={locked.tasks}><i>{String(index + 1).padStart(2, '0')}</i><span><b>{task.title}</b><small>{task.due_date ? formatDateLocale(task.due_date) : t('No deadline')}</small></span></button>
+    </li>)}</ol>
+    {!pending.length && <p className="nb-dash-note">{t('All tasks are complete.')}</p>}
+  </GlassCard>;
+}
+
+// The summary row; it works out its own numbers so a bad record only breaks this row.
+function DashboardKpis({ data, student, resourceStatus, locked, setPage }) {
+  const pending = nextPriorities(data.tasks);
+  const numbers = studentProgress(student);
+  const tasksReady = Boolean(resourceStatus?.tasks?.loaded);
+  const studentReady = Boolean(resourceStatus?.students?.loaded);
+  const kpis = [
+    { icon: Target, value: <CountUp value={pending.length} format={formatNumberLocale} />, label: t('Open tasks'), page: 'tasks', go: () => setPage('tasks'), ready: tasksReady },
+    { icon: GraduationCap, value: <CountUp value={numbers.applicationsTotal} format={formatNumberLocale} />, label: t('Universities on your list'), page: 'applications', go: () => setPage('applications'), ready: studentReady },
+    { icon: MapIcon, value: <CountUp value={numbers.roadmapPercent} format={(n) => `${formatNumberLocale(n)}%`} />, label: t('Roadmap'), page: 'roadmap', go: () => setPage('roadmap', {}), ready: studentReady },
+  ].filter((kpi) => kpi.page !== 'roadmap' || !locked.roadmap);
+  return <KpiRow label={t('Summary')} columns={kpis.length} className="nb-dash-kpis">
+    {kpis.map((kpi, index) => <KpiTile key={kpi.page} tone={index} icon={kpi.icon} value={kpi.value} label={kpi.label} loading={!kpi.ready}
+      onClick={locked[kpi.page] ? undefined : kpi.go} actionLabel={locked[kpi.page] ? undefined : kpi.label} />)}
+  </KpiRow>;
+}
+
+// Runs one card's render function as a component, so a throw lands in the CardBoundary around it.
+function CardSlot({ render, rail }) {
+  return render(rail);
+}
+
+// The header line must not take the page down if the task list is malformed.
+function openTaskCount(tasks) {
+  try {
+    const n = nextPriorities(tasks).length;
+    return tp('{n} task open|{n} tasks open', n, { n });
+  } catch {
+    return '';
+  }
 }
 
 function DeadlineLink({ locked, onClick, children }) {
@@ -168,21 +213,10 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
     loop.start();
     return () => { loop.stop(); window.removeEventListener('online', online); };
   }, [saveError, user.id]);
-  const pending = nextPriorities(data.tasks);
-  const numbers = studentProgress(student);
-  const stars = numbers.missionsApproved;
-  // Meeting times use the zone chosen on the Meetings page (Tashkent unless changed), not the browser's.
-  const meetingZone = storedMeetingZoneId();
-  const zonedAt = (value) => inServerZone(value, meetingZone);
-  const meetings = upcomingMeetings(data.bookings);
-  const confirmedMeetings = meetings.filter((meeting) => meeting.status !== 'pending');
-  // Requests still waiting for the counselor (or for the student's answer to a counselor's proposal): at most three.
-  const waitingMeetings = meetings.filter((meeting) => meeting.status === 'pending');
   const name = user.first_name || user.username;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const tasksReady = Boolean(resourceStatus?.tasks?.loaded);
-  const studentReady = Boolean(resourceStatus?.students?.loaded);
   const locked = { tasks: isPageLocked('tasks', user), applications: isPageLocked('applications', user), roadmap: isPageLocked('roadmap', user), bookings: isPageLocked('bookings', user), programs: isPageLocked('programs', user), student_center: isPageLocked('student_center', user), messages: isPageLocked('messages', user) };
   const openPage = (page, params) => { if (!isPageLocked(page, user)) setPage(page, params); };
   function save() {
@@ -199,7 +233,6 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
     : <CardLink onClick={() => setPage(page, params)}>{t(text)}</CardLink>;
   const empty = (text) => <p className="nb-dash-note">{t(text)}</p>;
   const programsLoaded = Boolean(programsStatus?.loaded);
-  const deadlines = buildDeadlines(data.tasks, programsLoaded ? data.opportunityPrograms : []);
   const dependencies = { journey: ['students'], tasks: ['tasks'], meetings: ['bookings'], applications: ['students', 'essays'], team: ['team'] };
   const wrap = (id, children) => (dependencies[id] ? <ResourceContent keys={dependencies[id]} statuses={resourceStatus} retry={retryResources}>{children}</ResourceContent> : children);
   const card = (id, props, children) => {
@@ -209,7 +242,9 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   };
 
   const widgets = {
-    journey: () => <section className="nb-card nb-dash-goal" aria-label={t('Study goal')}>
+    journey: () => {
+      const stars = studentProgress(student).missionsApproved;
+      return <section className="nb-card nb-dash-goal" aria-label={t('Study goal')}>
       {wrap('journey', <>
         <button type="button" className="nb-dash-goal-icon" onClick={() => openPage('student_center', { edit: 'goal' })} aria-label={t('Edit study goal')} disabled={locked.student_center}>{student?.target_major ? <GraduationCap size={26} aria-hidden="true" /> : <Plus size={26} aria-hidden="true" />}</button>
         <div className="nb-dash-goal-copy">
@@ -223,19 +258,23 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
           {!locked.student_center && <BlueButton variant="ghost" size="sm" className="nb-dash-edit-goal" arrow onClick={() => setPage('student_center', { edit: 'goal' })}>{t('Edit study goal')}</BlueButton>}
         </div>
       </>)}
-    </section>,
+    </section>;
+    },
     tasks: (rail) => <div className={`nb-dash-pair${rail ? ' is-stacked' : ''}`}>
       {wrap('tasks', <>
-        <GlassCard className="nb-dash-card nb-dash-card-tasks" title={t('Next priorities')} icon={Target} footer={<><span>{tp('{n} open task|{n} open tasks', pending.length, { n: pending.length })}</span>{link('tasks', 'View all')}</>}>
-          <ol className="nb-dash-priorities">{pending.slice(0, 3).map((task, index) => <li key={task.id}>
-            <button type="button" onClick={() => openPage('tasks')} disabled={locked.tasks}><i>{String(index + 1).padStart(2, '0')}</i><span><b>{task.title}</b><small>{task.due_date ? formatDateLocale(task.due_date) : t('No deadline')}</small></span></button>
-          </li>)}</ol>
-          {!pending.length && empty('All tasks are complete.')}
-        </GlassCard>
-        <DeadlinesCard items={deadlines} openPage={openPage} locked={locked} />
+        <CardBoundary><PrioritiesCard tasks={data.tasks} openPage={openPage} locked={locked} link={link} /></CardBoundary>
+        <CardBoundary><DeadlinesCard tasks={data.tasks} programs={programsLoaded ? data.opportunityPrograms : []} openPage={openPage} locked={locked} /></CardBoundary>
       </>)}
     </div>,
-    meetings: () => card('meetings', { footer: <><span />{link('bookings', waitingMeetings.length ? 'Open meetings' : meetings.length ? 'View all' : 'Request a meeting')}</> }, <>
+    meetings: () => {
+      // Meeting times use the zone chosen on the Meetings page (Tashkent unless changed), not the browser's.
+      const meetingZone = storedMeetingZoneId();
+      const zonedAt = (value) => inServerZone(value, meetingZone);
+      const meetings = upcomingMeetings(data.bookings);
+      const confirmedMeetings = meetings.filter((meeting) => meeting.status !== 'pending');
+      // Requests still waiting for the counselor (or for the student's answer to a counselor's proposal): at most three.
+      const waitingMeetings = meetings.filter((meeting) => meeting.status === 'pending');
+      return card('meetings', { footer: <><span />{link('bookings', waitingMeetings.length ? 'Open meetings' : meetings.length ? 'View all' : 'Request a meeting')}</> }, <>
       {confirmedMeetings.length > 0 && <ul className="nb-dash-meeting-list">{confirmedMeetings.slice(0, 2).map((meeting) => <li key={meeting.id}>
         <button type="button" onClick={() => openPage('bookings')} disabled={locked.bookings}><DateTile {...tileParts(zonedAt(meeting.starts_at))} /><span className="nb-dash-row-copy"><b>{meeting.topic || t('Meeting')}</b><small>{dateTimeText(zonedAt(meeting.starts_at))}</small></span></button>
       </li>)}</ul>}
@@ -244,18 +283,22 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
         <span className="nb-dash-row-copy"><b>{meeting.topic || t('No topic')}</b><small>{joinParts(clockText(zonedAt(meeting.starts_at)), meeting.participant_name)}</small><em className="nb-dash-rq-state">{isAwaitingStudent(meeting) ? t('Waiting for your confirmation') : t('Pending')}</em></span>
       </li>)}</ul>}
       {!meetings.length && <div className="nb-dash-meeting-empty"><CalendarClock size={34} strokeWidth={1.4} aria-hidden="true" />{empty('No upcoming meetings.')}<p className="nb-dash-note">{t('Make time for your next step.')}</p></div>}
-    </>),
+      </>);
+    },
     applications: (rail) => {
-      const universities = (data.applications || []).map((application) => application.university_detail?.name).filter(Boolean);
+      const numbers = studentProgress(student);
+      // The dashboard never requests applications, so the initials stack only shows when another page has already loaded them.
+      const universities = (Array.isArray(data.applications) ? data.applications : []).map((application) => application.university_detail?.name).filter(Boolean);
       return card('applications', { className: rail ? 'is-rail' : '' }, <>
         <div className="nb-dash-apps-top">
           <div className="nb-dash-big"><b><CountUp value={numbers.applicationsTotal} format={formatNumberLocale} /></b><span>{t('Universities on your list')}</span></div>
           {universities.length > 0 && <ul className="nb-dash-uni-stack" aria-label={universities.join(', ')}>{universities.slice(0, 4).map((university, index) => <li key={`${university}-${index}`} aria-hidden="true">{universityInitials(university)}</li>)}</ul>}
         </div>
         <div className="nb-dash-apptiles">
-          {[[Upload, numbers.applicationsSubmitted, 'Submitted'], [PenLine, data.essays.length, 'Essays'], [Check, numbers.applicationsAccepted, 'Accepted'], [Star, numbers.achievementsTotal, 'Achievements']].map(([Icon, value, text], index) => <div key={text} className={`nb-dash-apptile nb-kpi-tone-${index}`}>
+          {[[Upload, numbers.applicationsSubmitted, 'Submitted'], [PenLine, (data.essays || []).length, 'Essays'], [Check, numbers.applicationsAccepted, 'Accepted'], [Star, numbers.achievementsTotal, 'Achievements']].map(([Icon, value, text], index) => <button key={text} type="button" className={`nb-dash-apptile nb-kpi-tone-${index}`} onClick={() => openPage('applications')} disabled={locked.applications}
+            title={locked.applications ? t('Coming soon') : undefined} aria-label={locked.applications ? `${t(text)}: ${formatNumberLocale(value)} — ${t('Coming soon')}` : `${t(text)}: ${formatNumberLocale(value)}`}>
             <span className="nb-dash-apptile-icon"><Icon size={18} aria-hidden="true" /></span><b>{formatNumberLocale(value)}</b><span>{t(text)}</span>
-          </div>)}
+          </button>)}
         </div>
         {locked.applications
           ? <button type="button" className="nb-dash-wide-btn" disabled aria-disabled="true" title={t('Coming soon')} aria-label={`${t('View applications')} — ${t('Coming soon')}`}>{t('Coming soon')}<Lock size={16} aria-hidden="true" /></button>
@@ -284,24 +327,16 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   const untouched = JSON.stringify(preferences) === JSON.stringify(normalizeDashboardPreferences());
   const order = untouched ? DEFAULT_BOARD_ORDER.filter((id) => preferences.order.includes(id)) : preferences.order;
   const shown = order.filter((id) => !hidden.includes(id) && widgets[id]);
-  const kpis = [
-    { icon: Target, value: <CountUp value={pending.length} format={formatNumberLocale} />, label: t('Open tasks'), page: 'tasks', go: () => setPage('tasks'), ready: tasksReady },
-    { icon: GraduationCap, value: <CountUp value={numbers.applicationsTotal} format={formatNumberLocale} />, label: t('Universities on your list'), page: 'applications', go: () => setPage('applications'), ready: studentReady },
-    { icon: MapIcon, value: <CountUp value={numbers.roadmapPercent} format={(n) => `${formatNumberLocale(n)}%`} />, label: t('Roadmap'), page: 'roadmap', go: () => setPage('roadmap', {}), ready: studentReady },
-  ].filter((kpi) => kpi.page !== 'roadmap' || !locked.roadmap);
-  const subtitle = joinParts(formatDateLocale(new Date(), { weekday: 'long', day: 'numeric', month: 'long' }), tasksReady ? tp('{n} task open|{n} tasks open', pending.length, { n: pending.length }) : '');
+  const subtitle = joinParts(formatDateLocale(new Date(), { weekday: 'long', day: 'numeric', month: 'long' }), tasksReady ? openTaskCount(data.tasks) : '');
 
   return <section className="nb-dash">
     <PageHeader title={<>{t(greeting)}, <b>{name}</b></>} subtitle={subtitle} />
     <HeaderTools><button type="button" className="nb-control" onClick={() => { setDraft(preferences); setCustomizing(true); }}><SlidersHorizontal size={17} aria-hidden="true" /><span className="nb-control-label">{t('Customize')}</span></button></HeaderTools>
     {saveError && <p role="status" className="nb-dash-save-error">{t('Your layout is not saved to your account yet. We will keep trying while this page is open.')}</p>}
-    <KpiRow label={t('Summary')} columns={kpis.length} className="nb-dash-kpis">
-      {kpis.map((kpi, index) => <KpiTile key={kpi.page} tone={index} icon={kpi.icon} value={kpi.value} label={kpi.label} loading={!kpi.ready}
-        onClick={locked[kpi.page] ? undefined : kpi.go} actionLabel={locked[kpi.page] ? undefined : kpi.label} />)}
-    </KpiRow>
+    <CardBoundary><DashboardKpis {...{ data, student, resourceStatus, locked, setPage }} /></CardBoundary>
     <SectionTitle className="nb-dash-activity">{t('My activity')}</SectionTitle>
     <div className="nb-dash-board">
-      {shown.map((id) => <div key={id} className={`nb-dash-w nb-dash-w-${id}${rail.includes(id) ? ' is-rail' : ''}`} data-widget={id}><CardBoundary>{widgets[id](rail.includes(id))}</CardBoundary></div>)}
+      {shown.map((id) => <div key={id} className={`nb-dash-w nb-dash-w-${id}${rail.includes(id) ? ' is-rail' : ''}`} data-widget={id}><CardBoundary><CardSlot render={widgets[id]} rail={rail.includes(id)} /></CardBoundary></div>)}
     </div>
     {usageOpen && <Modal title={t('Program usage')} onClose={() => setUsageOpen(false)}><ResourceContent keys={['programServices']} statuses={resourceStatus} retry={retryResources}>{data.programServices.length ? programUsage : <p className="dashboard-empty">{t('No program services have been assigned yet.')}</p>}</ResourceContent></Modal>}
     {customizing && <DashboardCustomizer draft={draft} setDraft={setDraft} metadata={widgetMeta} Modal={Modal} onClose={() => setCustomizing(false)} onSave={save} />}
