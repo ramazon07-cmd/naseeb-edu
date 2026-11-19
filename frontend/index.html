@@ -88,7 +88,7 @@
         }
         // Only the landing page shows the hero: /login (and any other path, which opens
         // the workspace or sign-in) must not spend ~1 MB on an image it never draws.
-        const onLanding = (location.pathname === '/' || location.pathname === '') && !location.hash
+        const onLanding = (location.pathname || '/') === '/' && !location.hash
         const hero = document.querySelector('link[data-theme-hero]')
         if (hero && (signedIn || !onLanding)) hero.remove()
         else if (hero) {
