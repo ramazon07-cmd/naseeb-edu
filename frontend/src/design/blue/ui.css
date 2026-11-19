@@ -218,8 +218,16 @@
 
 .nb-card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+/* In a narrow card the action (a count chip, a link) moves under the title instead of covering it:
+   the title keeps room for a word or two before the row wraps. */
+.nb-card-head > .nb-card-title {
+  flex: 1 1 8rem;
+  min-width: 0;
 }
 
 .nb-chip-icon {
