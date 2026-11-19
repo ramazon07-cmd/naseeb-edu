@@ -174,7 +174,7 @@ export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
 // Pages opened from the account menu (or, for counselors, the shell's
 // Notifications item) rather than the sidebar list.
-const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings', 'notifications'] };
+const ACCOUNT_MENU_PAGES = { student: ['account_settings', 'notifications'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings', 'notifications'] };
 
 export function reachablePages(user) {
   if (!user) return new Set();

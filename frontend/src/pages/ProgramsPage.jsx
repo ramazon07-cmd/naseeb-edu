@@ -2,10 +2,13 @@ import { t, tp, locale, formatDateLocale, formatNumberLocale } from '../i18n';
 import { InlineLoadError } from '../components/states';
 import { dateText, localDateKey, money } from '../lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, CalendarDays, CalendarSearch, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, X, Check, Bookmark, Monitor } from 'lucide-react';
+import { MapPin, CalendarDays, CalendarSearch, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, X, Check, Bookmark, Monitor, Award, Globe2, Heart, Star } from 'lucide-react';
 import { request } from '../api';
 import './catalog.css';
 import './programs-redesign.css';
+import '../design/pages/catalog-blue-base.css';
+import '../design/pages/programs-blue.css';
+import { BlueButton, DaysChip, GlassCard, KpiRow, KpiTile, PageHeader } from '../design/blue/ui';
 import { FilterOption } from '../components/college';
 import { Empty } from '../components/ui';
 import { daysUntil, dueLabel, dueTone } from '../lib/college';
@@ -181,6 +184,10 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     () => filterPrograms(catalog, filters, { today, query, translate: t, localeTag }),
     [catalog, filters, today, query, localeTag],
   );
+  // Catalog-wide numbers for the tiles and the featured card: they ignore the filters below.
+  const overall = useMemo(() => filterPrograms(catalog, PROGRAM_FILTER_DEFAULTS, { today, translate: t, localeTag }), [catalog, today, localeTag]);
+  const openNow = useMemo(() => overall.programs.filter(({ due }) => due?.exact).length, [overall]);
+  const featured = useMemo(() => overall.programs.find(({ closed, due }) => !closed && due?.exact) || null, [overall]);
   const categories = useMemo(() => [...new Set(catalog.map((item) => item.category).filter(Boolean))].sort(), [catalog]);
   const activeCount = activeProgramFilterCount(filters);
   const filtered = hasProgramFilters(filters);
@@ -265,7 +272,33 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     {filtered && <button type="button" className="link-button program-filterbar-clear" onClick={reset}>{t('Clear')}</button>}
   </div>;
 
-  return <div className="section-stack student-portal programs-page catalog-programs program-database">
+  const featuredDays = featured ? daysUntil(featured.due.date) : null;
+  const featuredSaved = featured ? savedIds.has(featured.item.id) : false;
+  return <div className="section-stack student-portal programs-page catalog-programs program-database nb-bridge nb-programs">
+    <PageHeader title={t('Programs')} subtitle={t('National and international opportunity catalog')} />
+    <div className={`nb-prog-top${featured ? '' : ' is-plain'}`}>
+      {featured && <GlassCard tone="hero" as="section" className="nb-prog-featured" aria-label={t('Next deadline')}>
+        <span className="nb-prog-eyebrow"><Star size={14} aria-hidden="true" />{t('Featured · next deadline')}</span>
+        <div className="nb-prog-featured-card">
+          <span className="nb-prog-featured-date" aria-hidden="true"><b>{featured.due.day ? formatNumberLocale(featured.due.day) : ''}</b><small>{formatDateLocale(featured.due.date, { month: 'short' })}</small></span>
+          <div>
+            <h2>{featured.item.title}</h2>
+            <p>{[featured.item.provider, t(featured.item.category), t(featured.item.program_type === 'national' ? 'National' : 'International')].filter(Boolean).join(' · ')}</p>
+          </div>
+        </div>
+        <DaysChip days={featuredDays} />
+        <div className="nb-prog-featured-actions">
+          {featured.item.application_url && <BlueButton variant="ghost" size="sm" href={featured.item.application_url} target="_blank" rel="noreferrer" iconRight={ExternalLink}>{t('View program')}</BlueButton>}
+          <BlueButton variant="ghost" size="sm" icon={Bookmark} aria-pressed={featuredSaved} disabled={savedLoading || !savedKnown || savingId === featured.item.id} onClick={() => toggleSaved(featured.item)}>{featuredSaved ? t('In My List') : t('Add to My List')}</BlueButton>
+        </div>
+      </GlassCard>}
+      <KpiRow columns={2} className="nb-prog-kpis">
+        <KpiTile tone={0} icon={Award} value={count(openNow)} label={t('Open for applications')} />
+        <KpiTile tone={1} icon={Globe2} value={count(overall.programs.length)} label={t('Open programs in the catalog')} />
+        <KpiTile tone={2} icon={Bookmark} value={savedKnown ? count(savedIds.size) : '—'} label={t('My List')} onClick={() => setOnlySaved((value) => !value)} actionLabel={`${t('My List')}: ${savedKnown ? savedIds.size : '—'}`} />
+        <KpiTile tone={3} icon={Heart} value={count(overall.counts.aid)} label={t('Scholarship available')} onClick={() => update({ aid: !filters.aid })} actionLabel={`${t('Scholarship available')}: ${overall.counts.aid}`} />
+      </KpiRow>
+    </div>
     <div className="program-layout">
     <div className="program-main">
     <div className="program-topbar">

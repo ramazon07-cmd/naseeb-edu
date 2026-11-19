@@ -14,6 +14,9 @@ import { matchesQuery } from '../lib/searchIndex';
 import { usePagedList } from '../hooks/usePagedList';
 import { useRecordList } from '../hooks/useRecordList';
 import { LoadMore, PagedListError, StudentPicker } from '../components/paged';
+import { PageHeader, PillTabs, tabId } from '../design/blue/ui';
+import '../design/pages/center-blue.css';
+import '../design/pages/roadmap-blue.css';
 
 export function StudentWorkspaceSelector({ value, selected, onChange, metrics = [] }) {
   const [search, setSearch] = useState('');
@@ -200,18 +203,30 @@ export function RoadmapPage({ user, data, query, reload, notify, tab: requestedT
   ...scopedData.tasks.map((item) => ({ id: `task-${item.id}`, title: item.title, date: item.due_date, status: item.status, kind: t('Task'), student: item.student_name })),
   ...scopedData.roadmapMissions.map((item) => ({ id: `mission-${item.id}`, title: item.title, date: item.due_date, status: item.status, kind: t('Mission'), student: item.student_name }))].
   filter((item) => item.date).sort((a, b) => new Date(a.date) - new Date(b.date));
-  return <div className="section-stack student-portal">
+  const studentTabs = [['path', 'Level path'], ['tasks', 'Tasks']].map(([key, text]) => ({ key, label: t(text) }));
+  return <div className={`section-stack student-portal${manager ? '' : ' nb-roadmap'}`}>
+    {!manager && <PageHeader title={t('Roadmap')} subtitle={t('Level-linked missions, milestones, and reflections')} />}
     {manager && <section className="portal-hero roadmap-hero"><div><span className="eyebrow">{t("STUDENT ROADMAPS")}</span><h2>{t("Roadmap")}</h2><p>{t("Assign missions, review student submissions, and approve the work that earns XP.")}</p></div><div className="roadmap-hero-actions"><button className="button light" onClick={() => setSetupOpen(true)}><Compass size={17} /> {t("Extend Level 1")}</button><button className="button light" onClick={() => {setEditing(null);setOpen(true);}}><Plus size={17} /> {t("Assign mission")}</button></div></section>}
     {manager && <StudentWorkspaceSelector value={selectedStudentId} selected={selectedStudent} onChange={chooseStudent} metrics={[[t("Missions"), countText(missionList)], [t("Tasks"), countText(taskList)], [t("Awaiting approval"), `${scopedData.roadmapMissions.filter((item) => item.status === 'submitted').length + scopedData.tasks.filter((item) => item.status === 'submitted').length}${missionList.hasMore || taskList.hasMore ? '+' : ''}`]]} />}
     {manager && <PortalTabs active={tab} onChange={setTab} items={[["missions", "Missions"], ["tasks", "Tasks"], ["timeline", "Timeline"], ["reflections", "Reflections"]]} />}
-    {!manager && <PortalTabs active={tab} onChange={setTab} items={[["path", "Level path"], ["tasks", "Tasks"]]} />}
-    {!manager && tab === 'path' && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} />}
-    {!manager && tab === 'tasks' && <ResourceSection title={t("Tasks")} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} />}
+    {!manager && <PillTabs tabs={studentTabs} value={tab} onChange={setTab} label={t('Roadmap')} idPrefix="roadmap" />}
+    {!manager && <div role="tabpanel" aria-labelledby={tabId('roadmap', tab)} className="section-stack">
+    {tab === 'path' && <StudentRoadmapPath student={student} missions={data.roadmapMissions} onOpen={(item) => {setEditing(item);setOpen(true);}} />}
+    {tab === 'tasks' && <ResourceSection title={t("Tasks")} resource="tasks" data={scopedData} user={user} query={query} reload={reload} notify={notify} />}
+    </div>}
     {manager && tab === 'tasks' && <ResourceSection title={selectedName ? tx`Tasks · ${selectedName}` : t("All tasks")} resource="tasks" data={data} user={user} query={query} reload={reload} notify={notify} defaultStudentId={selectedStudentNumericId} filters={studentFilter} />}
     {manager && tab === 'missions' && <><MissionList user={user} data={scopedData} query="" onOpen={(item) => {setEditing(item);setOpen(true);}} onApprove={approve} onRemove={remove} /><PagedListError list={missionList} /><LoadMore list={missionList} /></>}
     {manager && tab === 'timeline' && <Panel title={selectedName ? tx`Timeline · ${selectedName}` : t("Timeline for all students")}><div className="timeline-list">{timeline.map((item) => <div key={item.id}><span className="timeline-dot" /><time>{dateText(item.date)}</time><div><b>{t(item.title)}</b><small>{joinParts(item.kind, !selectedName && item.student)}</small></div><Badge>{item.status}</Badge></div>)}{!timeline.length && <Empty text={t("No dated tasks or missions for this student.")} />}</div></Panel>}
     {manager && tab === 'reflections' && <div className="reflection-grid">{scopedData.roadmapMissions.map((item) => <article key={item.id}><MessageSquareText size={20} /><div><span>{t(item.category) || t("Mission")}</span><h3>{t(item.title)}</h3>{manager && <small>{item.student_name}</small>}<p>{item.reflection || t("No reflection has been written for this mission yet.")}</p></div>{!manager && item.status !== 'completed' && <button className="button quiet small" onClick={() => {setEditing(item);setOpen(true);}}>{item.status === 'submitted' ? t("View submission") : t("Write reflection")}</button>}</article>)}{!scopedData.roadmapMissions.length && <Empty text={t("No roadmap reflections for this student.")} />}</div>}
     {open && <MissionForm mission={editing} user={user} data={data} defaultStudentId={selectedStudentNumericId} onClose={() => setOpen(false)} onSaved={() => {setOpen(false);reload();}} notify={notify} />}
     {setupOpen && <LevelOneSetupModal defaultStudentId={selectedStudentNumericId} onClose={() => setSetupOpen(false)} onSaved={() => {setSetupOpen(false);reload();}} notify={notify} />}
+  </div>;
+}
+
+// The student Tasks page (the nav slot while the roadmap is locked): the same task list, on its own blue page.
+export function StudentTasksPage({ user, data, query, reload, notify }) {
+  return <div className="section-stack student-portal nb-tasks">
+    <PageHeader title={t('Tasks')} subtitle={t('Assignments and deadline tracking')} />
+    <ResourceSection title={t('Tasks')} resource="tasks" {...{ user, data, query, reload, notify }} />
   </div>;
 }

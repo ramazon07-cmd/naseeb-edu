@@ -1,0 +1,210 @@
+/* Applications (student, blue design). The classic board, cards and plan keep their markup;
+   colours and shapes come from the blue tokens (see catalog-blue-base.css). */
+
+.nb-blue .nb-apps {
+  display: grid;
+  gap: var(--nb-gap);
+  max-width: none;
+  margin: 0;
+}
+
+.nb-blue .nb-apps > * {
+  margin: 0;
+}
+
+/* Summary: the four blue gradient tiles. */
+.nb-blue .nb-apps .summary-grid {
+  gap: var(--nb-gap);
+}
+
+.nb-blue .nb-apps .summary-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 150px;
+  padding: 20px 22px;
+  border: 1px solid var(--nb-kpi-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-kpi-0);
+  color: var(--nb-kpi-fg);
+  box-shadow: var(--nb-kpi-shadow);
+}
+
+.nb-blue .nb-apps .summary-card:nth-child(2) {
+  background: var(--nb-kpi-1);
+}
+
+.nb-blue .nb-apps .summary-card:nth-child(3) {
+  background: var(--nb-kpi-2);
+}
+
+.nb-blue .nb-apps .summary-card:nth-child(4) {
+  background: var(--nb-kpi-3);
+}
+
+.nb-blue .nb-apps .summary-card.hot {
+  border-color: var(--nb-late-line);
+}
+
+.nb-blue .nb-apps .summary-card h3 {
+  margin: 0;
+  color: var(--nb-kpi-fg);
+  font-size: var(--nb-text-sm);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.nb-blue .nb-apps .summary-card .summary-big b,
+.nb-blue .nb-apps .summary-card.hot .summary-big b {
+  color: var(--nb-kpi-fg);
+  font-size: 2.5rem;
+}
+
+.nb-blue .nb-apps .summary-card .summary-big span,
+.nb-blue .nb-apps .summary-card p,
+.nb-blue .nb-apps .summary-card.hot p,
+.nb-blue .nb-apps .summary-card p b,
+.nb-blue .nb-apps .tier-counts .tier-band {
+  color: var(--nb-kpi-fg);
+}
+
+.nb-blue .nb-apps .summary-card p {
+  opacity: 0.92;
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-apps .summary-card .button.quiet {
+  border-color: var(--nb-kpi-chip-line);
+  background: var(--nb-kpi-chip);
+  color: var(--nb-kpi-fg);
+}
+
+.nb-blue .nb-apps .summary-card .score-bar {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.nb-blue .nb-apps .summary-card .score-bar i {
+  background: #fff;
+}
+
+.nb-blue .nb-apps .summary-card .tier-mix i {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+/* Toolbar */
+.nb-blue .nb-apps .board-toolbar {
+  padding: 10px 14px;
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-glass);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+  box-shadow: var(--nb-glass-hi);
+}
+
+.nb-blue .nb-apps .filter-chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-btn-ghost);
+  color: var(--nb-btn-ghost-fg);
+  font-weight: 700;
+}
+
+.nb-blue .nb-apps .filter-chip[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+  box-shadow: var(--nb-btn-shadow);
+}
+
+.nb-blue .nb-apps .application-sort select {
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-card);
+  color: var(--nb-ink);
+}
+
+/* Board */
+.nb-blue .nb-apps .board-column {
+  padding: 14px;
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-glass);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+  box-shadow: var(--nb-glass-hi);
+}
+
+.nb-blue .nb-apps .board-column.is-over {
+  background: var(--nb-tint);
+  outline-color: var(--nb-blue);
+}
+
+.nb-blue .nb-apps .board-column h3 {
+  color: var(--nb-ink-strong);
+  font-weight: 800;
+}
+
+.nb-blue .nb-apps .board-column > header p,
+.nb-blue .nb-apps .board-empty {
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-apps .board-card {
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+  box-shadow: var(--nb-shadow-soft);
+}
+
+.nb-blue .nb-apps .board-card:hover {
+  border-color: var(--nb-blue);
+}
+
+.nb-blue .nb-apps .board-card-title {
+  color: var(--nb-ink-strong);
+  font-weight: 800;
+}
+
+.nb-blue .nb-apps .count-pill {
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+}
+
+.nb-blue .nb-apps .app-brief {
+  border: 1px solid var(--nb-menu-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-menu-bg);
+  color: var(--nb-ink);
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-blue .nb-apps .card-menu-list {
+  border: 1px solid var(--nb-menu-line);
+  background: var(--nb-menu-bg);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-apps .paged-list-footer {
+  color: var(--nb-ink);
+}
+
+@media (max-width: 1100px) {
+  .nb-blue .nb-apps .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-apps .summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.nb-blue .nb-apps .summary-card .tier-band::before {
+  background: #fff;
+}

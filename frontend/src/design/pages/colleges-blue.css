@@ -1,0 +1,190 @@
+/* College Search (student, blue design): the search box, toolbar and result rows sit on frosted
+   cards; the table markup, filters, paging and the fit details are unchanged. */
+
+.nb-blue .nb-colleges {
+  display: grid;
+  gap: var(--nb-gap);
+  max-width: none;
+  margin: 0;
+}
+
+.nb-blue .nb-colleges > * {
+  margin: 0;
+}
+
+/* The classic hero becomes the page's search bar. */
+.nb-blue .nb-colleges .catalog-college-hero {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.nb-blue .nb-colleges .catalog-college-hero::before,
+.nb-blue .nb-colleges .catalog-college-hero::after,
+.nb-blue .nb-colleges .college-skyline {
+  display: none;
+}
+
+.nb-blue .nb-colleges .college-hero-content {
+  width: 100%;
+}
+
+.nb-blue .nb-colleges .catalog-hero-search {
+  width: 100%;
+  margin: 0;
+  border: 1px solid var(--nb-glass-line);
+  background: var(--nb-glass);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+  box-shadow: var(--nb-glass-hi);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-colleges .catalog-hero-search input {
+  color: var(--nb-ink);
+  background: transparent;
+}
+
+.nb-blue .nb-colleges .college-search-icon {
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+  box-shadow: var(--nb-btn-shadow);
+}
+
+/* Toolbar */
+.nb-blue .nb-colleges.college-page .college-toolbar {
+  margin-bottom: var(--nb-gap);
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-glass);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-blue .nb-colleges .college-toolbar-header {
+  border-bottom-color: var(--nb-line);
+}
+
+.nb-blue .nb-colleges .college-data-views button {
+  color: var(--nb-muted);
+  font-weight: 700;
+}
+
+.nb-blue .nb-colleges .college-data-views button::after {
+  background: var(--nb-blue);
+}
+
+.nb-blue .nb-colleges .college-data-views button[aria-pressed='true'] {
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-colleges .college-saved-button,
+.nb-blue .nb-colleges .college-filters-toggle {
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-btn-ghost);
+  color: var(--nb-btn-ghost-fg);
+  font-weight: 700;
+}
+
+.nb-blue .nb-colleges .college-saved-button b {
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-blue);
+  color: var(--nb-on-blue);
+}
+
+.nb-blue .nb-colleges .sort-control select,
+.nb-blue .nb-colleges .filter-country {
+  border-color: var(--nb-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-card);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-colleges .filter-token {
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+}
+
+.nb-blue .nb-colleges .profile-strip {
+  border-color: var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card-soft);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-colleges .college-advanced-filters {
+  border-color: var(--nb-line);
+  background: var(--nb-card-soft);
+}
+
+/* Result rows */
+.nb-blue .nb-colleges .uni-table {
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+  box-shadow: var(--nb-shadow);
+  overflow: hidden;
+}
+
+.nb-blue .nb-colleges .uni-head {
+  background: var(--nb-card-soft);
+  color: var(--nb-muted);
+  font-weight: 800;
+}
+
+.nb-blue .nb-colleges .uni-row:hover:not(.uni-head) {
+  background: var(--nb-card-hover);
+}
+
+.nb-blue .nb-colleges .uni-name button {
+  color: var(--nb-ink-strong);
+  font-weight: 800;
+}
+
+.nb-blue .nb-colleges .uni-name button:hover {
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-colleges .catalog-university-logo {
+  border-radius: var(--nb-r-xs);
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+}
+
+.nb-blue .nb-colleges .catalog-university-logo:has(img) {
+  background: #fff;
+}
+
+.nb-blue .nb-colleges .uni-added {
+  background: var(--nb-ok-bg);
+  color: var(--nb-ok);
+  font-weight: 700;
+}
+
+.nb-blue .nb-colleges .uni-more {
+  justify-self: center;
+}
+
+.nb-blue .nb-colleges .college-research-state,
+.nb-blue .nb-colleges .college-profile-questions {
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-card);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-colleges .uni-note {
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-colleges .crumb {
+  color: var(--nb-muted);
+}

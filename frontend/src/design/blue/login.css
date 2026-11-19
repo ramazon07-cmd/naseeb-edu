@@ -1,0 +1,415 @@
+/* Sign-in page and first-password step (pages/Login.jsx). Scoped to .nb-login so
+   it never touches the workspace; tokens come from tokens.css. */
+
+.nb-login {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100dvh;
+  background: var(--nb-bg);
+  color: var(--nb-ink);
+  font-family: var(--nb-font);
+}
+
+.nb-login :where(button, input, select) {
+  font-family: inherit;
+}
+
+.nb-login :where(a, button, input, select):focus-visible {
+  outline: 3px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+.nb-login-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px clamp(16px, 4vw, 40px);
+}
+
+.nb-login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-ink-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+span.nb-login-brand {
+  cursor: default;
+}
+
+.nb-login-brand b {
+  font-size: var(--nb-text-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.nb-login-logo {
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 32px;
+  background: url('/brand/naseeb-logo-navy.png') center / contain no-repeat;
+}
+
+.nb-login:is([data-nb-theme='tinted'], [data-nb-theme='night']) .nb-login-logo {
+  background-image: url('/brand/naseeb-logo-white.png');
+}
+
+.nb-login-prefs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nb-login .nb-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--nb-control-line);
+  border-radius: 50%;
+  background: var(--nb-control-bg);
+  box-shadow: var(--nb-glass-hi), var(--nb-shadow-soft);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+  color: var(--nb-ink-strong);
+  cursor: pointer;
+}
+
+.nb-login .nb-lang-seg {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--nb-control-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-control-bg);
+  box-shadow: var(--nb-glass-hi), var(--nb-shadow-soft);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+}
+
+.nb-login .nb-lang-seg button {
+  min-width: 44px;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--nb-r-pill);
+  background: none;
+  color: var(--nb-ink-strong);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.nb-login .nb-lang-seg button[aria-pressed='true'] {
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+  box-shadow: var(--nb-btn-shadow);
+}
+
+.nb-login-leave {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--nb-control-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-control-bg);
+  color: var(--nb-ink-strong);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-login-panel {
+  display: grid;
+  place-items: center;
+  padding: 12px clamp(16px, 4vw, 40px) 32px;
+}
+
+.nb-login-card {
+  display: grid;
+  gap: 16px;
+  width: min(440px, 100%);
+  padding: clamp(24px, 4vw, 34px);
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-xl);
+  background: var(--nb-glass);
+  box-shadow: var(--nb-shadow);
+  -webkit-backdrop-filter: var(--nb-blur);
+  backdrop-filter: var(--nb-blur);
+}
+
+.nb-login-head {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.nb-login-emblem {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  margin-bottom: 4px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 12px 26px -14px rgba(4, 22, 63, 0.45);
+}
+
+.nb-login-emblem .nb-login-logo {
+  width: 30px;
+  height: 40px;
+  background-image: url('/brand/naseeb-logo-navy.png');
+}
+
+.nb-login-eyebrow {
+  color: var(--nb-link);
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.nb-login-head h1 {
+  margin: 0;
+  color: var(--nb-ink-strong);
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.nb-login-tagline {
+  max-width: 26ch;
+  margin: 0;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-md);
+  line-height: 1.45;
+}
+
+.nb-login-field {
+  display: grid;
+  gap: 8px;
+}
+
+.nb-login-field > label,
+.nb-login .field > span {
+  color: var(--nb-ink-2);
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+}
+
+.nb-login-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-md);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--nb-faint);
+}
+
+.nb-login-input:focus-within {
+  border-color: var(--nb-blue);
+  box-shadow: 0 0 0 3px var(--nb-tint-strong);
+}
+
+.nb-login-input input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  min-height: 50px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #0a1f44;
+  font-size: var(--nb-text-lg);
+  outline: 0;
+}
+
+.nb-login .nb-login-input input:focus-visible {
+  outline: 0;
+}
+
+.nb-login-eye {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--nb-faint);
+  cursor: pointer;
+}
+
+.nb-login-eye:hover {
+  color: var(--nb-blue);
+}
+
+.nb-login-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.nb-login-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-md);
+  cursor: pointer;
+}
+
+.nb-login-check input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--nb-blue);
+}
+
+.nb-login-link {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--nb-link);
+  font-size: var(--nb-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-login-help {
+  margin: 0;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.nb-login-help[hidden] {
+  display: none;
+}
+
+.nb-login-error {
+  padding: 12px 14px;
+  border: 1px solid var(--nb-late-line);
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-late-bg);
+  color: var(--nb-late);
+  font-size: var(--nb-text-md);
+  font-weight: 600;
+}
+
+.nb-login-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 54px;
+  border: 0;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-btn);
+  box-shadow: var(--nb-btn-shadow);
+  color: var(--nb-btn-fg);
+  font-size: var(--nb-text-lg);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-login-submit:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.nb-login-demo {
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  text-align: center;
+}
+
+.nb-login-footer {
+  padding: 8px 16px 28px;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* First-password step reuses the shared Field / PasswordInput components. */
+.nb-login .field {
+  display: grid;
+  gap: 8px;
+}
+
+.nb-login .field input,
+.nb-login .field select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--nb-line-soft);
+  border-radius: var(--nb-r-md);
+  background: rgba(255, 255, 255, 0.82);
+  color: #0a1f44;
+  font-size: var(--nb-text-lg);
+}
+
+.nb-login .account-password-input {
+  position: relative;
+  display: block;
+}
+
+.nb-login .account-password-input input {
+  padding-right: 52px;
+}
+
+.nb-login .account-password-input .icon-button {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--nb-faint);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.nb-login .password-checks {
+  color: var(--nb-muted);
+}
+
+.nb-login .password-checks li.is-met {
+  color: var(--nb-ok);
+}
+
+.nb-login[data-nb-theme='tinted'] :is(.nb-login-input, .field input, .field select),
+.nb-login[data-nb-theme='night'] :is(.nb-login-input, .field input, .field select) {
+  background: var(--nb-card-soft);
+  color: var(--nb-ink);
+}
+
+.nb-login[data-nb-theme='tinted'] .nb-login-input input,
+.nb-login[data-nb-theme='night'] .nb-login-input input {
+  color: var(--nb-ink);
+}

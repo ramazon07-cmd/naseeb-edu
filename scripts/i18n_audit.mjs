@@ -13,7 +13,7 @@ const i18nPath = path.join(root, 'frontend/src/i18n.js')
 // App.jsx plus every module split out of it (see frontend_smoke.js's own
 // workspaceDirs) — most t()/tx calls live in pages/components/hooks/lib now,
 // not App.jsx, so the audit has to parse all of them, not just the shell.
-const workspaceDirs = ['frontend/src/pages', 'frontend/src/components', 'frontend/src/hooks', 'frontend/src/lib']
+const workspaceDirs = ['frontend/src/pages', 'frontend/src/components', 'frontend/src/hooks', 'frontend/src/lib', 'frontend/src/design/blue']
 const workspaceFiles = [
   path.join(root, 'frontend/src/App.jsx'),
   ...workspaceDirs.filter((dir) => fs.existsSync(path.join(root, dir))).flatMap((dir) =>
