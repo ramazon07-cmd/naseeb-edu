@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Brain, CalendarClock, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck, Clock3, Compass, Download, Globe2, GraduationCap, LayoutDashboard, LifeBuoy, Lock, LogOut, Menu, MessageSquareText, PenLine, School, Search, Settings, ShoppingCart, UsersRound, X } from 'lucide-react';
 import { StudentAvatar } from '../../components/records';
 import { exportNodePdf } from '../../lib/exportPdf';
@@ -46,6 +46,8 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const accountRef = useRef(null);
+  const mainRef = useRef(null);
+  const toolsRef = useRef(null);
   const [headers, setHeaders] = useState(0);
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === 'collapsed'; } catch { return false; }
@@ -68,6 +70,24 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
     document.addEventListener('keydown', keys);
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', keys); };
   }, []);
+
+  // Desktop inner pages: the page title sits on the top-button line, so the header keeps clear of
+  // the buttons by their measured width (--nb-topw). The dashboard and phones keep the full width.
+  useLayoutEffect(() => {
+    const main = mainRef.current;
+    const tools = toolsRef.current;
+    if (!main || !tools) return undefined;
+    const desktop = window.matchMedia('(min-width: 821px)');
+    const fit = () => {
+      if (!desktop.matches || page === 'dashboard') { main.style.removeProperty('--nb-topw'); return; }
+      main.style.setProperty('--nb-topw', `${Math.ceil(tools.getBoundingClientRect().width + 18)}px`);
+    };
+    fit();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit);
+    observer?.observe(tools);
+    desktop.addEventListener('change', fit);
+    return () => { observer?.disconnect(); desktop.removeEventListener('change', fit); };
+  }, [page]);
 
   const toggleSidebar = useCallback(() => {
     setCollapsed((current) => {
@@ -131,10 +151,10 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
         </div>
       </aside>
       {mobileOpen && <div className="nb-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
-      <main className={`nb-main nb-page-${page}`}>
+      <main className={`nb-main nb-page-${page}`} ref={mainRef}>
         <div className="nb-topbar">
           <button type="button" className="nb-control nb-icon-control nb-mobile-only nb-menu-button" onClick={() => setMobileOpen(true)} aria-label={openDrawerLabel} aria-controls="nb-sidebar" aria-expanded={mobileOpen}><Menu size={20} aria-hidden="true" /></button>
-          <div className="nb-top-tools">
+          <div className="nb-top-tools" ref={toolsRef}>
             <div id="nb-header-tools" className="nb-header-tools" />
             {page !== 'essay_lab' && <button type="button" className="nb-control nb-icon-control" onClick={openSearch} title={searchLabel + ' (Ctrl+K)'} aria-label={searchLabel} aria-keyshortcuts="Control+K Meta+K"><Search size={18} aria-hidden="true" /></button>}
             {canExport && <button type="button" className="nb-control nb-icon-control" onClick={() => exportNodePdf(document.querySelector('.page-content'))} title={t('Export PDF')} aria-label={t('Export PDF')}><Download size={18} aria-hidden="true" /></button>}

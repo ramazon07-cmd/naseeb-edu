@@ -545,3 +545,32 @@
     font-size: 1.5rem;
   }
 }
+
+/* Phones and tablets (coarse pointers): small controls grow to a 44px touch target. */
+@media (pointer: coarse) {
+  .nb-btn,
+  .nb-btn-sm,
+  .nb-tab,
+  .nb-card-link,
+  .nb-blue .nb-dash-level,
+  .nb-blue .nb-dash-screen-time .nb-tab,
+  .nb-blue .nb-apps .filter-chip,
+  .nb-blue .nb-bridge .button,
+  .nb-blue .messaging-page .chat-new-button,
+  .nb-blue .messaging-page .channel-folder,
+  .nb-blue .nb-meet-zone .meeting-zone {
+    min-height: 44px;
+  }
+
+  .nb-kpi-go,
+  .nb-blue .nb-dash-icon-btn,
+  .nb-blue .nb-meet-msg {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .nb-blue .nb-roadmap .btn,
+  .nb-blue .nb-roadmap .button {
+    min-height: 44px;
+  }
+}

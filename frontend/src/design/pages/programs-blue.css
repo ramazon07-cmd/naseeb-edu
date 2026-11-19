@@ -271,3 +271,41 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Programs search: a gradient ring in the date-tile blues that turns slowly, faster while typing. */
+@property --nb-sbang {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.nb-blue .nb-programs .program-search {
+  --nb-sb-ring: conic-gradient(from var(--nb-sbang), #04163f, #0a3fa8, #1883ff, #99caff, #1883ff, #0a3fa8, #04163f);
+
+  border: 2px solid transparent;
+  background: linear-gradient(var(--nb-card), var(--nb-card)) padding-box, var(--nb-sb-ring) border-box;
+  animation: nb-search-turn 9s linear infinite;
+}
+
+.nb-blue .nb-programs .program-search:focus-within {
+  box-shadow: 0 0 0 4px rgba(24, 131, 255, 0.18), 0 12px 26px -16px rgba(10, 63, 168, 0.8);
+  animation-duration: 2.6s;
+}
+
+:is(.nb-blue)[data-nb-theme='tinted'] .nb-programs .program-search,
+:is(.nb-blue)[data-nb-theme='night'] .nb-programs .program-search {
+  --nb-sb-ring: conic-gradient(from var(--nb-sbang), #0b1120, #2a4a8f, #7ea4ff, #c9d8ff, #7ea4ff, #2a4a8f, #0b1120);
+}
+
+@keyframes nb-search-turn {
+  to {
+    --nb-sbang: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-blue .nb-programs .program-search,
+  .nb-blue .nb-programs .program-search:focus-within {
+    animation: none;
+  }
+}

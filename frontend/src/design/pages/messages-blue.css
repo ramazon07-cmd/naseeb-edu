@@ -517,3 +517,23 @@
     padding: 0 10px;
   }
 }
+
+/* Telegram-like message column: the thread uses the full width, the messages sit in a
+   centred column (mine right, theirs left) instead of a narrow strip. */
+.nb-blue .messaging-page .message-list {
+  padding-inline: max(clamp(12px, 2.4vw, 26px), calc((100% - 880px) / 2));
+}
+
+.nb-blue .messaging-page .message-bubble {
+  max-width: min(520px, 72%);
+}
+
+@media (max-width: 560px) {
+  .nb-blue .messaging-page .message-list {
+    padding-inline: 10px;
+  }
+
+  .nb-blue .messaging-page .message-bubble {
+    max-width: 82%;
+  }
+}

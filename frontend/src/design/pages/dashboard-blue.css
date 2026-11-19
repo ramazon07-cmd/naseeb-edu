@@ -412,6 +412,48 @@
   padding: 10px 4px;
 }
 
+.nb-blue .nb-dash-meeting-rq {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-dash-meeting-rq li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--nb-line);
+  border-radius: 16px;
+  background: var(--nb-tint);
+}
+
+.nb-blue .nb-dash-meeting-rq .nb-dash-row-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.nb-blue .nb-dash-meeting-rq b,
+.nb-blue .nb-dash-meeting-rq small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-blue .nb-dash-rq-state {
+  justify-self: start;
+  margin-top: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(24, 131, 255, 0.12);
+  color: var(--nb-blue-d);
+  font-size: var(--nb-text-xs);
+  font-style: normal;
+  font-weight: 750;
+}
+
 .nb-blue .nb-dash-meeting-empty {
   display: grid;
   justify-items: center;
@@ -1067,4 +1109,16 @@
   .nb-blue .nb-notif-go {
     display: none;
   }
+}
+
+:is(.nb-blue)[data-nb-theme='tinted'] .nb-dash-rq-state,
+:is(.nb-blue)[data-nb-theme='night'] .nb-dash-rq-state {
+  background: rgba(126, 164, 255, 0.18);
+  color: #c9d8ff;
+}
+
+:is(.nb-blue)[data-nb-theme='tinted'] .nb-dash-meeting-rq li,
+:is(.nb-blue)[data-nb-theme='night'] .nb-dash-meeting-rq li {
+  border-color: rgba(151, 161, 182, 0.18);
+  background: rgba(126, 164, 255, 0.08);
 }

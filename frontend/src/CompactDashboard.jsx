@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ArrowUpRight, CalendarClock, Check, Clock3, Fingerprint, Globe2, GraduationCap, Lock, MessageCircle, PenLine, Plus, School, SlidersHorizontal, Star, Target, Telescope, Upload, UsersRound, Map as MapIcon } from 'lucide-react';
 import { t, tp, tx, formatDateLocale, formatNumberLocale, parseDateValue } from './i18n';
-import { dateTimeText, dayMonthText, joinParts } from './lib/format';
+import { clockText, dateTimeText, dayMonthText, joinParts } from './lib/format';
 import { daysUntil } from './lib/college';
 import { isOpenTask, nextPriorities, studentProgress } from './lib/metrics';
-import { upcomingMeetings } from './lib/meetings';
+import { isAwaitingStudent, upcomingMeetings } from './lib/meetings';
 import { normalizeDashboardPreferences } from './dashboardPreferences';
 import './dashboard.css';
 import './design/pages/dashboard-blue.css';
@@ -176,6 +176,9 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
   const numbers = studentProgress(student);
   const stars = numbers.missionsApproved;
   const meetings = upcomingMeetings(data.bookings);
+  const confirmedMeetings = meetings.filter((meeting) => meeting.status !== 'pending');
+  // Requests still waiting for the counselor (or for the student's answer to a counselor's proposal): at most three.
+  const waitingMeetings = meetings.filter((meeting) => meeting.status === 'pending');
   const name = user.first_name || user.username;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -233,9 +236,13 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
         <DeadlinesCard items={deadlines} openPage={openPage} locked={locked} />
       </>)}
     </div>,
-    meetings: () => card('meetings', { footer: <><span />{link('bookings', meetings.length ? 'View all' : 'Request a meeting')}</> }, <>
-      {meetings.length > 0 && <ul className="nb-dash-meeting-list">{meetings.slice(0, 2).map((meeting) => <li key={meeting.id}>
+    meetings: () => card('meetings', { footer: <><span />{link('bookings', waitingMeetings.length ? 'Open meetings' : meetings.length ? 'View all' : 'Request a meeting')}</> }, <>
+      {confirmedMeetings.length > 0 && <ul className="nb-dash-meeting-list">{confirmedMeetings.slice(0, 2).map((meeting) => <li key={meeting.id}>
         <button type="button" onClick={() => openPage('bookings')} disabled={locked.bookings}><DateTile {...tileParts(meeting.starts_at)} /><span className="nb-dash-row-copy"><b>{meeting.topic || t('Meeting')}</b><small>{dateTimeText(meeting.starts_at)}</small></span></button>
+      </li>)}</ul>}
+      {waitingMeetings.length > 0 && <ul className="nb-dash-meeting-rq" aria-label={t('Your requests')}>{waitingMeetings.slice(0, 3).map((meeting) => <li key={meeting.id}>
+        <DateTile {...tileParts(meeting.starts_at)} />
+        <span className="nb-dash-row-copy"><b>{meeting.topic || t('No topic')}</b><small>{joinParts(clockText(meeting.starts_at), meeting.participant_name)}</small><em className="nb-dash-rq-state">{isAwaitingStudent(meeting) ? t('Waiting for your confirmation') : t('Pending')}</em></span>
       </li>)}</ul>}
       {!meetings.length && <div className="nb-dash-meeting-empty"><CalendarClock size={34} strokeWidth={1.4} aria-hidden="true" />{empty('No upcoming meetings.')}<p className="nb-dash-note">{t('Make time for your next step.')}</p></div>}
     </>),

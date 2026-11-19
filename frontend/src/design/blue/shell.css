@@ -282,6 +282,8 @@
   background: var(--nb-menu-bg);
   color: var(--nb-card-fg);
   box-shadow: 0 18px 40px -16px rgba(4, 22, 63, 0.45);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .nb-menu hr {
@@ -440,6 +442,20 @@
 
 .nb-header-tools {
   display: contents;
+}
+
+/* Desktop inner pages: the title shares the line of the top buttons (the shell sets
+   --nb-topw to the buttons' width, so a header never runs underneath them). */
+@media (min-width: 821px) {
+  .nb-main:not(.nb-page-dashboard) {
+    padding-top: 24px;
+  }
+
+  .nb-main:not(.nb-page-dashboard) .nb-page-header,
+  .nb-main:not(.nb-page-dashboard) .nb-fallback-header {
+    align-items: flex-start;
+    padding-right: var(--nb-topw, 0);
+  }
 }
 
 /* ---- Main column ----------------------------------------------------------- */
@@ -879,5 +895,21 @@
 
   .nb-icon-control {
     width: 40px;
+  }
+}
+
+/* Phones and tablets (coarse pointers): every control is at least 44px. */
+@media (pointer: coarse) {
+  .nb-nav-item,
+  .nb-control,
+  .nb-menu button,
+  .nb-lang-seg button,
+  .nb-side-collapse {
+    min-height: 44px;
+  }
+
+  .nb-control,
+  .nb-side-collapse {
+    min-width: 44px;
   }
 }
