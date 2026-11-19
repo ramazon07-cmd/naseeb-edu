@@ -10,7 +10,7 @@ import { countTotal } from '../lib/metrics';
 import { Record, StudentAvatar, Stat, LevelProgress, ProfileCard, Detail, StudentTable } from '../components/records';
 import { FILTER_GRADES, contactEmail, dateText, gradeText, joinParts, money } from '../lib/format';
 import { label, fullName, initials } from '../lib/labels';
-import { Chip, DateTile } from '../design/blue/ui';
+import { Chip, DateTile, tileParts } from '../design/blue/ui';
 import { Eye, ExternalLink, Fingerprint, UsersRound, ShieldCheck, Search, Plus, LifeBuoy } from 'lucide-react';
 import { api } from '../api';
 import { Field, CheckboxControl } from '../components/forms';
@@ -49,9 +49,11 @@ export function StudentOverviewList({ title, resource, items, data }) {
 
 const countChip = (n) => <span className="nb-ov-count">{formatNumberLocale(n)}</span>;
 const PRIORITY_VARIANT = { high: 'overdue', urgent: 'overdue', medium: 'warn', low: 'default' };
+// The shared tile format (three-letter uz/ru months), as on every other student page.
 const dayParts = (value) => {
-  const d = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : null;
-  return d && !Number.isNaN(d.getTime()) ? { day: String(d.getDate()), month: d.toLocaleDateString(undefined, { month: 'short' }) } : null;
+  if (!value) return null;
+  const parts = tileParts(String(value).slice(0, 10));
+  return parts.day ? parts : null;
 };
 
 // `studentView`: the student's own Student Center (date tiles, priority chips, count in the header).
