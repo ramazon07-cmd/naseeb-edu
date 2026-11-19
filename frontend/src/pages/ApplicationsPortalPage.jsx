@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDownWideNarrow, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3, GripVertical, Hourglass, Link2, Lock, MapPin, MoreHorizontal, Pencil, Plus, Rows3, Search, Trash2, X, Columns3, Radar } from 'lucide-react';
+import { ArrowRight, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, GripVertical, Hourglass, Link2, Lock, MapPin, MoreHorizontal, Pencil, Plus, Rows3, Search, SlidersHorizontal, Trash2, X, Columns3 } from 'lucide-react';
 import { api } from '../api';
-import { formatDateLocale, formatNumberLocale, parseDateValue, t, tx } from '../i18n';
-import { FilterChip } from '../components/forms';
+import { formatNumberLocale, parseDateValue, t, tx } from '../i18n';
 import { DeadlineChip, TierBand } from '../components/college';
 import { money } from '../lib/format';
 import { label } from '../lib/labels';
@@ -11,12 +10,12 @@ import { matchesQuery } from '../lib/searchIndex';
 import { APPLICATION_STAGES, daysUntil, dueLabel, dueTone, historyDate, longDate, nextDeadline, percentText, priceInfo, satLabel, scalePercent, shortDate, stageOf } from '../lib/college';
 import { ApplicationPlan } from '../components/ApplicationPlan';
 import { planNextStep } from '../lib/applicationPlan';
-import { Modal } from '../components/ui';
+import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { BlueButton, EmptyState, PageHeader } from '../design/blue/ui';
 import '../design/pages/catalog-blue-base.css';
 import '../design/pages/apps-blue.css';
 
-function ApplicationSummary({ applications, essays, letters, openApplication }) {
+function ApplicationSummary({ applications, essays, letters, openApplication, setPage }) {
   const next = nextDeadline(applications);
   const tiers = { dream: 0, target: 0, safety: 0 };
   applications.forEach((application) => {tiers[application.tier] = (tiers[application.tier] || 0) + 1;});
@@ -49,6 +48,7 @@ function ApplicationSummary({ applications, essays, letters, openApplication }) 
       <div className="summary-big"><b>{tx`${approvedEssays} of ${essays.length}`}</b><span>{t("approved")}</span></div>
       <span className="score-bar wide" aria-hidden="true"><i style={{ '--fill': scalePercent(approvedEssays, 0, essays.length || 1) }} /></span>
       <p>{essays.length ? essayNote || t("All essays are approved.") : t("No essays yet")}</p>
+      <button type="button" className="button quiet small" onClick={() => setPage('essay_lab')}>{t("Open Essay Lab")} <ArrowRight size={14} aria-hidden="true" /></button>
     </section>
     <section className="info-card summary-card" aria-label={t("Recommendation letters")}>
       <h3>{t("Recommendation letters")}</h3>
@@ -125,22 +125,6 @@ function StageStepper({ status }) {
   return <ol className="apps-stepper" aria-label={t("Application stage")}>{APPLICATION_STAGES.map((stage, index) => <li key={stage.key} className={index < current ? 'is-done' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}><i aria-hidden="true">{index < current ? <Check size={11} /> : index + 1}</i><span>{t(stage.title)}</span></li>)}</ol>;
 }
 
-// Every application and scholarship deadline already on the page, soonest first.
-function DeadlineRadar({ applications, onOpen, onClose }) {
-  const items = applications.flatMap((application) => [['application', application.deadline], ['aid', application.scholarship_deadline]]
-    .filter(([, date]) => daysUntil(date) != null && !['accepted', 'rejected', 'waitlisted'].includes(application.status))
-    .map(([kind, date]) => ({ application, kind, date, days: daysUntil(date) }))).sort((a, b) => a.days - b.days);
-  return <Modal title={t("Deadline radar")} onClose={onClose} className="apps-radar">
-    {items.length ? <ul className="apps-radar-list">{items.map(({ application, kind, date, days }) => <li key={`${application.id}-${kind}`}>
-      <button type="button" onClick={() => onOpen(application)}>
-        <span className="apps-radar-date"><b>{parseDateValue(date).getDate()}</b><small>{formatDateLocale(date, { month: 'short' }).replace(/\.$/, '')}</small></span>
-        <span className="apps-radar-copy"><b>{application.university_detail?.name || t("University")}</b><small>{kind === 'aid' ? t("Scholarship") : t("Application")} · {longDate(date)}</small></span>
-        <span className={`due ${dueTone(days)}`.trim()}>{dueLabel(days)}</span>
-      </button>
-    </li>)}</ul> : <p className="board-empty">{t("No upcoming deadlines yet.")}</p>}
-  </Modal>;
-}
-
 function ApplicationCard({ application, university, essays, menuOpen, briefOpen, dragging, busy, onMenu, onBrief, onBriefClose, onDragStart, onDragEnd, onMove, onOpen, onEdit, onRemove }) {
   const stage = stageOf(application.status);
   const decided = stage === 'decision';
@@ -191,6 +175,52 @@ function ApplicationCard({ application, university, essays, menuOpen, briefOpen,
     </article>
     {briefOpen && <ApplicationBrief id={briefId} briefRef={briefRef} application={application} info={info} essays={essays} name={name} onOpen={onOpen} onEdit={onEdit} onClose={onBriefClose} />}
   </>;
+}
+
+const TIER_FILTERS = ['dream', 'target', 'safety'];
+
+// One Filter button instead of loose chips and a select: tier and sort live in a popover, the
+// active choices sit beside it as removable chips, and Reset clears both.
+function ApplicationsFilter({ applications, tier, sort, onTier, onSort, onReset }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const buttonRef = useRef(null);
+  const count = (tier !== 'all' ? 1 : 0) + (sort !== 'deadline' ? 1 : 0);
+  const sortTitle = { deadline: t("Nearest deadline"), name: t("University name (A–Z)") };
+  useEffect(() => {
+    if (!open) return undefined;
+    const outside = (event) => {if (!wrapRef.current?.contains(event.target)) setOpen(false);};
+    const escape = (event) => {if (event.key === 'Escape') {setOpen(false);buttonRef.current?.focus();}};
+    document.addEventListener('pointerdown', outside);document.addEventListener('keydown', escape);
+    wrapRef.current?.querySelector('[aria-checked="true"]')?.focus();
+    return () => {document.removeEventListener('pointerdown', outside);document.removeEventListener('keydown', escape);};
+  }, [open]);
+  const arrows = (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const items = [...event.currentTarget.querySelectorAll('[role="menuitemradio"], .nb-filter-reset')];
+    const at = items.indexOf(document.activeElement);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    event.preventDefault();items[next]?.focus();
+  };
+  const option = (checked, title, onPick, total) => <button type="button" role="menuitemradio" aria-checked={checked} className="nb-filter-option" onClick={onPick}><i aria-hidden="true" /><span>{title}</span>{total != null && <em>{formatNumberLocale(total)}</em>}</button>;
+  return <div className="nb-filter">
+    <div className="nb-filter-wrap" ref={wrapRef}>
+      <button type="button" ref={buttonRef} className={`nb-filter-button ${count ? 'is-on' : ''}`.trim()} aria-haspopup="menu" aria-expanded={open} aria-controls="applications-filter-menu" onClick={() => setOpen(!open)}>
+        <SlidersHorizontal size={16} aria-hidden="true" /><span>{t("Filter")}</span>{count > 0 && <b>{formatNumberLocale(count)}</b>}<ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open && <div id="applications-filter-menu" className="nb-filter-pop" role="menu" aria-label={t("Filter")} onKeyDown={arrows}>
+        <p className="nb-filter-head">{t("Filter by tier")}</p>
+        {option(tier === 'all', t("All"), () => onTier('all'), applications.length)}
+        {TIER_FILTERS.map((value) => <span key={value} role="none">{option(tier === value, label(value), () => onTier(value), applications.filter((application) => application.tier === value).length)}</span>)}
+        <p className="nb-filter-head">{t("Sort by")}</p>
+        {option(sort === 'deadline', sortTitle.deadline, () => onSort('deadline'))}
+        {option(sort === 'name', sortTitle.name, () => onSort('name'))}
+        {count > 0 && <button type="button" className="nb-filter-reset" onClick={() => {onReset();setOpen(false);buttonRef.current?.focus();}}>{t("Reset")}</button>}
+      </div>}
+    </div>
+    {tier !== 'all' && <button type="button" className="nb-filter-chip" aria-label={tx`Remove ${label(tier)} filter`} onClick={() => onTier('all')}>{label(tier)}<X size={13} aria-hidden="true" /></button>}
+    {sort !== 'deadline' && <button type="button" className="nb-filter-chip" aria-label={tx`Remove ${sortTitle[sort]} filter`} onClick={() => onSort('deadline')}>{sortTitle[sort]}<X size={13} aria-hidden="true" /></button>}
+  </div>;
 }
 
 export function ApplicationsPortalPage({ data, query, reload, notify, setPage }) {
@@ -263,26 +293,26 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
   }
 
   const header = <PageHeader title={t('Applications')} subtitle={t('University application pipeline')} />;
-  if (!data.applications.length) return <div className="section-stack student-portal nb-bridge nb-apps">{header}<EmptyState icon={Search} title={t("Your application list is empty")} text={t("Add universities from College Search and they will appear here as cards you can move through each stage.")} action={<BlueButton icon={Search} onClick={() => setPage('college_search')}>{t("Find universities")}</BlueButton>} /></div>;
+  if (!data.applications.length) return <div className="section-stack student-portal nb-bridge nb-apps">{header}
+    <div className="board-toolbar"><span /><div className="board-toolbar-actions"><DeadlineRadarButton onClick={() => setRadarOpen(true)} /></div></div>
+    <EmptyState icon={Search} title={t("Your application list is empty")} text={t("Add universities from College Search and they will appear here as cards you can move through each stage.")} action={<BlueButton icon={Search} onClick={() => setPage('college_search')}>{t("Find universities")}</BlueButton>} />
+    <DeadlineRadar open={radarOpen} applications={[]} onClose={() => setRadarOpen(false)} />
+  </div>;
 
   const renderCard = (application) => <ApplicationCard key={application.id} application={application} university={application.university_detail} essays={data.essays.filter((essay) => essay.application === application.id)} menuOpen={menuId === application.id} briefOpen={briefId === application.id} dragging={dragId === application.id} busy={removingId === application.id || application.id in moves}
             onMenu={() => {setBriefId(null);setMenuId(menuId === application.id ? null : application.id);}} onBrief={() => {setMenuId(null);setBriefId(briefId === application.id ? null : application.id);}} onBriefClose={() => setBriefId(null)} onDragStart={(event) => {event.dataTransfer.setData('text/plain', String(application.id));event.dataTransfer.effectAllowed = 'move';setBriefId(null);setDragId(application.id);}} onDragEnd={() => {setDragId(null);setOverStage(null);}}
             onMove={(status) => moveTo(data.applications.find((item) => item.id === application.id), status)} onOpen={() => openUniversity(application.university)} onEdit={() => {setMenuId(null);setBriefId(null);setEditing(data.applications.find((item) => item.id === application.id));}} onRemove={() => removeApplication(application)} />;
   return <div className="section-stack student-portal applications-page nb-bridge nb-apps">
     {header}
-    <ApplicationSummary applications={applications} essays={data.essays} letters={data.recommendations} openApplication={setEditing} />
+    <ApplicationSummary applications={applications} essays={data.essays} letters={data.recommendations} openApplication={setEditing} setPage={setPage} />
     <div className="board-toolbar">
-      <div className="chip-row" role="group" aria-label={t("Filter by tier")}>
-        <FilterChip active={tier === 'all'} onClick={() => setTier('all')}>{t("All")} <span className="chip-count">{formatNumberLocale(applications.length)}</span></FilterChip>
-        {['dream', 'target', 'safety'].map((value) => <FilterChip key={value} active={tier === value} onClick={() => setTier(value)}><TierBand value={value} /> <span className="chip-count">{formatNumberLocale(applications.filter((application) => application.tier === value).length)}</span></FilterChip>)}
-      </div>
+      <ApplicationsFilter applications={applications} tier={tier} sort={sort} onTier={setTier} onSort={setSort} onReset={() => {setTier('all');setSort('deadline');}} />
       <div className="board-toolbar-actions">
         <div className="apps-view" role="group" aria-label={t("View as")}>
           <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}><Rows3 size={15} aria-hidden="true" /> {t("List")}</button>
           <button type="button" aria-pressed={view === 'board'} onClick={() => setView('board')}><Columns3 size={15} aria-hidden="true" /> {t("Board")}</button>
         </div>
-        <label className="sort-control application-sort"><ArrowDownWideNarrow size={15} aria-hidden="true" /><span className="sr-only">{t("Sort by")}</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="deadline">{t("Deadline")}</option><option value="name">{t("University")}</option></select></label>
-        <button type="button" className="button quiet apps-radar-button" onClick={() => setRadarOpen(true)}><Radar size={16} aria-hidden="true" /> {t("Deadline radar")}</button>
+        <DeadlineRadarButton onClick={() => setRadarOpen(true)} />
         <button type="button" className="button primary" onClick={() => setPage('college_search')}><Plus size={16} aria-hidden="true" /> {t("Add university")}</button>
       </div>
     </div>
@@ -310,7 +340,7 @@ export function ApplicationsPortalPage({ data, query, reload, notify, setPage })
       <span role="status" aria-live="polite">{tx`${formatNumberLocale(shown.length)} shown`}</span>
       {remaining > 0 && <button type="button" className="button quiet" onClick={() => setPageWindow({ key: windowKey, limit: limit + 10 })}>{t('Show {n} more', { n: formatNumberLocale(remaining) })}</button>}
     </div>
-    {radarOpen && <DeadlineRadar applications={applications} onOpen={(application) => { setRadarOpen(false); setEditing(data.applications.find((item) => item.id === application.id)); }} onClose={() => setRadarOpen(false)} />}
+    <DeadlineRadar open={radarOpen} applications={applications} onOpen={(application) => { setRadarOpen(false); setEditing(data.applications.find((item) => item.id === application.id)); }} onClose={() => setRadarOpen(false)} />
     {editing && <ApplicationPlan key={editing.id} application={editing} data={data} setPage={setPage} onClose={() => setEditing(null)} onSaved={reload} notify={notify} />}
   </div>;
 }

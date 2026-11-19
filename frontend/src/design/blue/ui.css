@@ -218,8 +218,16 @@
 
 .nb-card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+/* In a narrow card the action (a count chip, a link) moves under the title instead of covering it:
+   the title keeps room for a word or two before the row wraps. */
+.nb-card-head > .nb-card-title {
+  flex: 1 1 8rem;
+  min-width: 0;
 }
 
 .nb-chip-icon {
@@ -573,5 +581,17 @@
   .nb-blue .nb-roadmap .btn,
   .nb-blue .nb-roadmap .button {
     min-height: 44px;
+  }
+}
+
+/* The tiles follow the content width, not the window: beside the sidebar on a laptop or tablet the
+   content column can be narrow while the window is wide, and four tiles then squeeze their labels. */
+.nb-main {
+  container: nb-main / inline-size;
+}
+
+@container nb-main (max-width: 760px) {
+  .nb-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

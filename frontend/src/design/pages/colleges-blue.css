@@ -536,3 +536,533 @@
     transition: none;
   }
 }
+
+/* List balance: a goal of 2 Dream, 3 Target and 2 Safety, each tier a filter button. */
+.nb-blue .nb-balance-title {
+  margin: 0;
+  font-size: var(--nb-text-lg);
+  line-height: 1.25;
+  color: var(--nb-hero-fg);
+}
+
+.nb-blue .nb-balance-tiers {
+  display: grid;
+  gap: 6px;
+}
+
+.nb-blue .nb-balance-tiers button {
+  display: grid;
+  grid-template-columns: 5.75rem minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 10px 6px 14px;
+  border: 1px solid var(--nb-hero-line);
+  border-radius: var(--nb-r-sm);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--nb-hero-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-balance-tiers button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.nb-blue .nb-balance-tiers button[aria-pressed="true"] {
+  border-color: #fff;
+  background: #fff;
+  color: #0a1f44;
+}
+
+.nb-blue .nb-balance-tiers button:focus-visible {
+  outline: 3px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+.nb-blue .nb-balance-name {
+  font-size: var(--nb-text-sm);
+  font-weight: 800;
+}
+
+.nb-blue .nb-balance-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.nb-blue .nb-balance-slots i {
+  display: inline-grid;
+  place-items: center;
+  min-width: 48px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--nb-r-pill);
+  font-size: var(--nb-text-xs);
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+}
+
+.nb-blue .nb-balance-slots .is-filled {
+  background: #fff;
+  color: #0a3fa8;
+}
+
+.nb-blue .nb-balance-slots .is-empty {
+  border: 1.5px dashed rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.nb-blue .nb-balance-tiers button[aria-pressed="true"] .is-filled {
+  background: #0a3fa8;
+  color: #fff;
+}
+
+.nb-blue .nb-balance-tiers button[aria-pressed="true"] .is-empty {
+  border-color: rgba(10, 63, 168, 0.5);
+  color: #0a3fa8;
+}
+
+.nb-blue .nb-balance-ok {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f2c14e;
+  color: #2b1c00;
+}
+
+.nb-blue .nb-college-match-deadlines .apps-radar-button {
+  align-self: flex-start;
+  margin-top: 10px;
+}
+
+.nb-blue .nb-balance-hint {
+  margin: 0;
+  font-size: var(--nb-text-xs);
+  color: var(--nb-hero-soft);
+}
+
+/* Match cards (Admissions & costs view). */
+.nb-blue .nb-cc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nb-gap);
+}
+
+.nb-blue .nb-cc-grid.is-refreshing {
+  opacity: 0.6;
+}
+
+.nb-blue .nb-cc-grid > .empty,
+.nb-blue .nb-cc-grid > .uni-loading {
+  grid-column: 1 / -1;
+}
+
+.nb-blue .nb-cc {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: var(--nb-pad);
+  border: 1px solid var(--nb-line);
+  border-left: 4px solid var(--nb-line);
+  border-radius: var(--nb-r-lg);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-blue .nb-cc.is-dream {
+  border-left-color: #8b6cff;
+}
+
+.nb-blue .nb-cc.is-target {
+  border-left-color: #4da3ff;
+}
+
+.nb-blue .nb-cc.is-safety {
+  border-left-color: #17a36b;
+}
+
+.nb-blue .nb-cc > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.nb-blue .nb-cc-title h3 {
+  margin: 0;
+  font-size: var(--nb-text-md);
+  line-height: 1.25;
+}
+
+.nb-blue .nb-cc-title h3 button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-ink-strong);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-cc-title h3 button:hover {
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-cc-title p {
+  margin: 2px 0 0;
+  font-size: var(--nb-text-sm);
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-cc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.nb-blue .nb-cc-chip {
+  padding: 2px 10px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+}
+
+.nb-blue .nb-cc-ring {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: conic-gradient(var(--nb-blue) calc(var(--v) * 1%), var(--nb-tint-strong) 0);
+  position: relative;
+  line-height: 1;
+}
+
+.nb-blue .nb-cc-ring::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--nb-card);
+}
+
+.nb-blue .nb-cc-ring b,
+.nb-blue .nb-cc-ring small {
+  position: relative;
+}
+
+.nb-blue .nb-cc-ring b {
+  font-size: var(--nb-text-lg);
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-cc-ring small {
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-cc-sat {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--nb-r-md);
+  background: var(--nb-tint);
+}
+
+.nb-blue .nb-cc-sat > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nb-blue .nb-cc-sat small,
+.nb-blue .nb-cc-facts small {
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-cc-sat p {
+  margin: 0;
+  font-size: var(--nb-text-xs);
+  color: var(--nb-link);
+  font-weight: 700;
+}
+
+.nb-blue .nb-cc-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nb-blue .nb-cc-facts > div {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nb-blue .nb-cc-facts b {
+  font-size: var(--nb-text-md);
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-cc-facts span {
+  font-size: var(--nb-text-xs);
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-cc-cost.is-ok span {
+  color: var(--nb-ok);
+}
+
+.nb-blue .nb-cc-cost.is-over span {
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-cc-why > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-link);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-blue .nb-cc-why > div {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.nb-blue .nb-cc > footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--nb-line-soft);
+}
+
+.nb-blue .nb-cc > footer > span:empty {
+  flex: 1;
+}
+
+.nb-blue .nb-cc-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-ink-2);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-blue .nb-cc-compare:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nb-blue .nb-cc-compare i {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--nb-faint);
+  border-radius: var(--nb-r-xs);
+}
+
+.nb-blue .nb-cc-compare.is-on i {
+  border-color: var(--nb-blue);
+  background: var(--nb-blue);
+  color: var(--nb-btn-fg);
+}
+
+.nb-blue .nb-cc button:focus-visible {
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  .nb-blue .nb-cc-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-cc-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nb-blue .nb-cc > header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .nb-blue .nb-cc-ring {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+/* University page: navy hero, key-facts strip and the people links. */
+.nb-blue .nb-colleges .university-head {
+  border: 1px solid var(--nb-hero-line);
+  border-radius: var(--nb-r-xl);
+  background: var(--nb-hero);
+  color: var(--nb-hero-fg);
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-blue .nb-colleges .university-head h2,
+.nb-blue .nb-colleges .university-head .university-facts,
+.nb-blue .nb-colleges .university-head .university-facts span {
+  color: var(--nb-hero-fg);
+}
+
+.nb-blue .nb-colleges .university-head .monogram {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--nb-blue-d);
+}
+
+.nb-blue .nb-colleges .university-head .link-button {
+  color: var(--nb-hero-soft);
+}
+
+.nb-blue .nb-up-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-up-stats li {
+  display: grid;
+  gap: 2px;
+  padding: 14px 16px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+}
+
+.nb-blue .nb-up-stats b {
+  font-size: var(--nb-text-xl);
+  line-height: 1.15;
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-up-stats span {
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-up-people {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.nb-blue .nb-up-people a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  color: var(--nb-ink);
+  text-decoration: none;
+}
+
+.nb-blue .nb-up-people a:hover {
+  background: var(--nb-tint);
+}
+
+.nb-blue .nb-up-people a:focus-visible {
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+.nb-blue .nb-up-people a > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.nb-blue .nb-up-people small {
+  overflow: hidden;
+  font-size: var(--nb-text-xs);
+  color: var(--nb-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-blue .nb-up-in {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--nb-r-xs);
+  background: var(--nb-blue);
+  color: var(--nb-btn-fg);
+  font-size: var(--nb-text-sm);
+  font-weight: 800;
+}
+
+.nb-blue .nb-match-deadline-open {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-match-deadline-open:hover b {
+  text-decoration: underline;
+}
+
+.nb-blue .nb-match-deadline-open:focus-visible {
+  outline: 3px solid var(--nb-focus, var(--nb-blue));
+  outline-offset: 4px;
+  border-radius: var(--nb-r-xs);
+}
+
+.nb-blue .nb-match-deadline-open > span:last-child {
+  display: grid;
+  min-width: 0;
+}

@@ -3,3 +3,10 @@
 .nb-blue .nb-notif .nb-kpi-row {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
 }
+
+.nb-blue .nb-notif-shown {
+  margin: 12px 0 0;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  text-align: center;
+}

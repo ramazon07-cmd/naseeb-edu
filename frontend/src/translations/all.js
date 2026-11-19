@@ -24,6 +24,13 @@ import { blueDashboardMessages } from "./blueDashboard.js";
 import { blueCenterMessages } from "./blueCenter.js";
 import { blueMeetingsMessages } from "./blueMeetings.js";
 import { blueCatalogMessages } from "./blueCatalog.js";
+import { parityTourMessages } from "./parityTour.js";
+import { parityDashMessages } from "./parityDash.js";
+import { parityMindMessages } from "./parityMind.js";
+import { parityCenterMessages } from "./parityCenter.js";
+import { parityMsgMessages } from "./parityMsg.js";
+import { parityCatMessages } from "./parityCat.js";
+import { parityMiscMessages } from "./parityMisc.js";
 import { ASSESSMENT_TRANSLATIONS } from "./assessment.js";
 
 
@@ -57,6 +64,13 @@ export const TRANSLATIONS = {
     ...blueCenterMessages("uz"),
     ...blueMeetingsMessages("uz"),
     ...blueCatalogMessages("uz"),
+    ...parityTourMessages("uz"),
+    ...parityDashMessages("uz"),
+    ...parityMindMessages("uz"),
+    ...parityCenterMessages("uz"),
+    ...parityMsgMessages("uz"),
+    ...parityCatMessages("uz"),
+    ...parityMiscMessages("uz"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
     "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
     Dashboard: "Bosh sahifa",
@@ -279,6 +293,13 @@ export const TRANSLATIONS = {
     ...blueCenterMessages("ru"),
     ...blueMeetingsMessages("ru"),
     ...blueCatalogMessages("ru"),
+    ...parityTourMessages("ru"),
+    ...parityDashMessages("ru"),
+    ...parityMindMessages("ru"),
+    ...parityCenterMessages("ru"),
+    ...parityMsgMessages("ru"),
+    ...parityCatMessages("ru"),
+    ...parityMiscMessages("ru"),
     ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
     "Education Counseling Platform": "Консультации по образованию",
     Dashboard: "Главная",

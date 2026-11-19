@@ -217,6 +217,28 @@
   color: var(--nb-ink-strong);
 }
 
+.nb-blue .nb-programs .program-row-open {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  border-radius: var(--nb-r-xs, 0.25rem);
+}
+
+.nb-blue .nb-programs .program-row-open:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.nb-blue .nb-programs .program-row-open:focus-visible {
+  outline: 2px solid var(--nb-focus, currentColor);
+  outline-offset: 2px;
+}
+
 .nb-blue .nb-programs .program-tile {
   border-radius: var(--nb-r-sm);
 }
@@ -402,4 +424,436 @@
     border-top: 1px solid var(--nb-hero-line);
     border-left: 0;
   }
+}
+
+/* Program page: hero, facts, people links, deadline box, apply card, similar programs. */
+.nb-blue .nb-pd-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--nb-glass-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-glass);
+  color: var(--nb-ink-strong);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-blue .nb-pd-back:hover {
+  background: var(--nb-glass-hover);
+}
+
+.nb-blue .nb-pd-hero .nb-card-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.nb-blue .nb-pd-hero h2 {
+  margin: 4px 0;
+  font-size: var(--nb-text-2xl);
+  line-height: 1.15;
+  color: var(--nb-hero-fg);
+}
+
+.nb-blue .nb-pd-hero h2:focus-visible {
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 4px;
+}
+
+.nb-blue .nb-pd-hero small {
+  font-size: var(--nb-text-sm);
+  color: var(--nb-hero-soft);
+}
+
+.nb-blue .nb-pd-gem {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: var(--nb-r-md);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-pd-gem img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+}
+
+.nb-blue .nb-pd-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+  gap: var(--nb-gap);
+  align-items: start;
+}
+
+.nb-blue .nb-pd-main,
+.nb-blue .nb-pd-side {
+  display: grid;
+  gap: var(--nb-gap);
+  min-width: 0;
+}
+
+.nb-blue .nb-pd-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--nb-late-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-warn-bg);
+  color: var(--nb-ink);
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-pd-warn svg {
+  flex: none;
+  color: var(--nb-warn);
+}
+
+.nb-blue .nb-pd-about,
+.nb-blue .nb-pd-sub,
+.nb-blue .nb-pd-note {
+  margin: 0;
+  color: var(--nb-ink-2);
+  font-size: var(--nb-text-sm);
+  line-height: 1.55;
+}
+
+.nb-blue .nb-pd-note {
+  margin-top: 10px;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-pd-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nb-blue .nb-pd-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+}
+
+.nb-blue .nb-pd-fact-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-tint);
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-pd-fact > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nb-blue .nb-pd-fact small {
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-pd-fact b {
+  font-size: var(--nb-text-sm);
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.nb-blue .nb-pd-people {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.nb-blue .nb-pd-people a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  color: var(--nb-ink);
+  text-decoration: none;
+}
+
+.nb-blue .nb-pd-people a:hover {
+  background: var(--nb-tint);
+}
+
+.nb-blue .nb-pd-people a > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.nb-blue .nb-pd-people small {
+  overflow: hidden;
+  font-size: var(--nb-text-xs);
+  color: var(--nb-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-blue .nb-pd-in {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--nb-r-xs);
+  background: var(--nb-blue);
+  color: var(--nb-btn-fg);
+  font-size: var(--nb-text-sm);
+  font-weight: 800;
+}
+
+.nb-blue .nb-pd-deadline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+}
+
+.nb-blue .nb-pd-deadline.is-hot {
+  border-color: var(--nb-gold);
+}
+
+.nb-blue .nb-pd-deadline.is-over {
+  border-color: var(--nb-late-line);
+  background: var(--nb-late-bg);
+}
+
+.nb-blue .nb-pd-deadline > div {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nb-blue .nb-pd-deadline small {
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-pd-deadline b {
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-pd-cal {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 54px;
+  height: 58px;
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-hero);
+  color: var(--nb-hero-fg);
+  line-height: 1.1;
+}
+
+.nb-blue .nb-pd-cal.is-none {
+  background: var(--nb-tint);
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-pd-cal b {
+  font-size: var(--nb-text-lg);
+  color: inherit;
+}
+
+.nb-blue .nb-pd-cal small {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.nb-blue .nb-pd-state {
+  justify-self: start;
+  padding: 2px 10px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-warn-bg);
+  color: var(--nb-warn);
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+}
+
+.nb-blue .nb-pd-state.is-ok {
+  background: var(--nb-ok-bg);
+  color: var(--nb-ok);
+}
+
+.nb-blue .nb-pd-left {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-gold);
+  color: var(--nb-gold-fg);
+  font-size: var(--nb-text-xs);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.nb-blue .nb-pd-cta .nb-card-body {
+  display: grid;
+  gap: 10px;
+}
+
+.nb-blue .nb-pd-nosite {
+  font-size: var(--nb-text-sm);
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-pd-rec ul {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-pd-rec button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: none;
+  color: var(--nb-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-pd-rec button:hover {
+  background: var(--nb-tint);
+}
+
+.nb-blue .nb-pd-rd {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 46px;
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-tint);
+  color: var(--nb-link);
+  line-height: 1.1;
+}
+
+.nb-blue .nb-pd-rd small {
+  font-size: var(--nb-text-xs);
+  text-transform: uppercase;
+}
+
+.nb-blue .nb-pd-rt {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.nb-blue .nb-pd-rt b {
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-pd-rt small {
+  font-size: var(--nb-text-xs);
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-pd-back:focus-visible,
+.nb-blue .nb-pd-people a:focus-visible,
+.nb-blue .nb-pd-rec button:focus-visible {
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  .nb-blue .nb-pd-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-pd-facts,
+  .nb-blue .nb-pd-people {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nb-blue .nb-pd-hero .nb-card-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.nb-blue .nb-prog-nextup-open {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-prog-nextup-open:hover b {
+  text-decoration: underline;
+}
+
+.nb-blue .nb-prog-nextup-open:focus-visible {
+  outline: 3px solid var(--nb-focus, var(--nb-blue));
+  outline-offset: 4px;
+  border-radius: var(--nb-r-xs);
+}
+
+/* Only the radar button (no other upcoming deadline to list): a slim row under the featured card. */
+.nb-blue .nb-prog-nextup.is-radar-only {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0;
+  border: 0;
+  background: none;
+}
+
+.nb-blue .nb-prog-radar-only {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 var(--nb-gap);
 }

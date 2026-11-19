@@ -103,27 +103,161 @@
   box-shadow: var(--nb-glass-hi);
 }
 
-.nb-blue .nb-apps .filter-chip {
-  min-height: 36px;
+/* Filter popover: one button, removable chips, Reset. */
+.nb-blue .nb-apps .nb-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nb-blue .nb-apps .nb-filter-wrap {
+  position: relative;
+}
+
+.nb-blue .nb-apps .nb-filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1px solid var(--nb-line);
-  border-radius: var(--nb-r-pill);
-  background: var(--nb-btn-ghost);
-  color: var(--nb-btn-ghost-fg);
-  font-weight: 700;
-}
-
-.nb-blue .nb-apps .filter-chip[aria-pressed='true'] {
-  border-color: transparent;
-  background: var(--nb-btn);
-  color: var(--nb-btn-fg);
-  box-shadow: var(--nb-btn-shadow);
-}
-
-.nb-blue .nb-apps .application-sort select {
-  border-radius: var(--nb-r-pill);
+  border-radius: var(--nb-r-sm);
   background: var(--nb-card);
   color: var(--nb-ink);
+  font: inherit;
+  font-size: var(--nb-text-md);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .nb-filter-button.is-on {
+  border-color: var(--nb-chip-fg);
+  color: var(--nb-chip-fg);
+}
+
+.nb-blue .nb-apps .nb-filter-button b {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-fg);
+  color: var(--nb-card);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-apps .nb-filter-button svg:last-child {
+  opacity: 0.6;
+}
+
+.nb-blue .nb-apps .nb-filter-pop {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 2px;
+  width: min(17.5rem, calc(100vw - 3rem));
+  padding: 8px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  box-shadow: 0 24px 44px -18px rgba(2, 14, 43, 0.45);
+}
+
+.nb-blue .nb-apps .nb-filter-head {
+  margin: 8px 10px 4px;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-xs);
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nb-blue .nb-apps .nb-filter-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--nb-r-xs);
+  background: transparent;
+  color: var(--nb-ink);
+  font: inherit;
+  font-size: var(--nb-text-md);
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .nb-filter-option i {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--nb-line);
+  border-radius: 50%;
+}
+
+.nb-blue .nb-apps .nb-filter-option em {
+  color: var(--nb-muted);
+  font-size: var(--nb-text-xs);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.nb-blue .nb-apps .nb-filter-option:hover {
+  background: var(--nb-chip-bg);
+}
+
+.nb-blue .nb-apps .nb-filter-option[aria-checked='true'] {
+  color: var(--nb-chip-fg);
+}
+
+.nb-blue .nb-apps .nb-filter-option[aria-checked='true'] i {
+  border: 5px solid var(--nb-chip-fg);
+}
+
+.nb-blue .nb-apps .nb-filter-reset {
+  margin: 6px 10px 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-chip-fg);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .nb-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .nb-filter-button:focus-visible,
+.nb-blue .nb-apps .nb-filter-option:focus-visible,
+.nb-blue .nb-apps .nb-filter-reset:focus-visible,
+.nb-blue .nb-apps .nb-filter-chip:focus-visible {
+  outline: 3px solid var(--nb-focus);
+  outline-offset: 2px;
 }
 
 /* Board */
@@ -407,4 +541,222 @@
   .nb-blue .nb-apps .apps-stepper i {
     transition: none;
   }
+}
+
+/* Deadline radar: urgency cards, type tabs, grouped rows and the student's own deadlines. */
+.nb-blue .apps-radar .nb-radar {
+  display: grid;
+  gap: 14px;
+}
+
+.nb-blue .nb-radar-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nb-blue .nb-radar-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card-soft);
+  color: var(--nb-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-radar-card:hover,
+.nb-blue .nb-radar-card.is-on {
+  border-color: var(--nb-blue);
+  background: var(--nb-tint);
+}
+
+.nb-blue .nb-radar-card-title {
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-radar-card.is-over .nb-radar-card-title {
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-radar-card-n {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.nb-blue .nb-radar-card-n b {
+  font-size: var(--nb-text-2xl);
+  line-height: 1;
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-radar-card.is-zero .nb-radar-card-n b {
+  color: var(--nb-faint);
+}
+
+.nb-blue .nb-radar-card-n small,
+.nb-blue .nb-radar-card-next small {
+  font-size: var(--nb-text-xs);
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-radar-card-next {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nb-blue .nb-radar-card-next b {
+  overflow: hidden;
+  font-size: var(--nb-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-blue .nb-radar-card-next em {
+  font-size: var(--nb-text-xs);
+  font-style: normal;
+  font-weight: 700;
+  color: var(--nb-link);
+}
+
+.nb-blue .nb-radar-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.nb-blue .nb-radar-add {
+  margin-left: auto;
+}
+
+.nb-blue .nb-radar-showing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--nb-blue);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-tint);
+  color: var(--nb-link);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nb-blue .nb-radar-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card-soft);
+}
+
+.nb-blue .nb-radar-form label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-radar-form input,
+.nb-blue .nb-radar-form select {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-card);
+  color: var(--nb-ink);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-radar-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--nb-text-sm);
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-radar-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.nb-blue .nb-radar-form-actions span {
+  flex: 1;
+}
+
+.nb-blue .nb-radar-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  font-size: var(--nb-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-radar-group.g-over h3 {
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-radar-group h3 i {
+  padding: 1px 8px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+  font-style: normal;
+}
+
+.nb-blue .apps-radar-list li.is-over button {
+  border-color: var(--nb-late-line);
+  background: var(--nb-late-bg);
+}
+
+.nb-blue .apps-radar-list button:focus-visible,
+.nb-blue .nb-radar-card:focus-visible {
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-radar-cards,
+  .nb-blue .nb-radar-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Shown while the applications are not loaded yet, so the radar does not look empty. */
+.nb-blue .nb-radar-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--nb-line, currentColor);
+  border-radius: 12px;
+  font-size: var(--nb-text-sm);
 }

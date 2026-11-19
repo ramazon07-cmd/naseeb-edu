@@ -15,8 +15,9 @@ import { ProfileCard, StudentAvatar } from './components/records';
 import { LazyBoundary, PageSkeleton } from './components/states';
 import { lazyWithRetry } from './lib/retryableLazy';
 import { pageLoadState } from './lib/pageLoadState';
-import { Empty, Modal } from './components/ui';
+import { Modal } from './components/ui';
 import { NotificationPanel } from './components/NotificationPanel';
+import { SearchPalette } from './components/SearchPalette';
 import { COUNSELOR_SELF_HEADED, CounselorLayout, counselorPageDescription, counselorPageLabel } from './components/CounselorShell';
 import { CxHead } from './components/counselorUi';
 import { formatNumberLocale, getLanguage, loadLanguage, locale, setLanguage, siteTitle, t, tx } from './i18n';
@@ -162,6 +163,8 @@ const PAGE_META = {
   admin_health: { label: 'Health', icon: HeartPulse, description: 'Readiness, scheduled jobs and file storage' },
   notifications: { label: 'Notifications', icon: Bell, description: 'What happened since your last visit' }
 };
+// The Ctrl+K palette's row icons, by destination page.
+const PAGE_ICONS = Object.fromEntries(Object.entries(PAGE_META).map(([key, meta]) => [key, meta.icon]));
 
 const GLOBAL_SEARCH_RESOURCES = {
   schools: 'schools', students: 'students', tasks: 'tasks', applications: 'applications', documents: 'documents',
@@ -328,6 +331,10 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     globalSearchResults(searchIndexData, paletteQuery),
     remoteSearchEntries(remoteSearch.results, remoteSearchDestinations(user)).map((entry) => ({ ...entry, subtitle: entry.subtitle || t(PAGE_META[entry.destination].label) })),
   ), [searchIndexData, paletteQuery, remoteSearch.results, user]);
+  const studentPalette = user.role === 'student';
+  const paletteRows = useMemo(() => paletteQuery.trim() ? searchResults : navigation.filter((destination) => !isPageLocked(destination, user)).map((destination) => ({ id: destination, destination, title: t((usesCounselorLayout(user) && counselorPageLabel(destination)) || PAGE_META[destination].label), kind: 'page' })),
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- navigation is derived from user; language changes the labels
+  [paletteQuery, searchResults, user, language]);
   const adminSupport = useSupportCounts(isPlatformAdmin(user), stats);
   // Staff load only the first page of their tickets: the server counts unread
   // answers (stats.support_unread); students hold their whole (short) list.
@@ -385,16 +392,18 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
       event.currentTarget.blur();
       return;
     }
-    if (!searchResults.length) return;
+    // The student palette also walks the page list shown before anything is typed.
+    const rows = studentPalette ? paletteRows : searchResults;
+    if (!rows.length) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setActiveSearchIndex((current) => (current + 1) % searchResults.length);
+      setActiveSearchIndex((current) => (current + 1) % rows.length);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setActiveSearchIndex((current) => (current - 1 + searchResults.length) % searchResults.length);
+      setActiveSearchIndex((current) => (current - 1 + rows.length) % rows.length);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      openSearchResult(searchResults[activeSearchIndex]);
+      openSearchResult(rows[activeSearchIndex]);
     }
   }
   const collapseLabel = collapsed ? t("Expand navigation") : t("Collapse navigation");
@@ -405,7 +414,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
     {error && <div className="alert error workspace-alert">{error}</div>}
   </>;
   const overlays = <>
-    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} onClose={() => {setUtility(null);setQuery('');setPaletteQuery('');}}>{utility === 'search' ? <div className="sidebar-utility-panel"><label className="search"><Search size={18} /><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder={t('Search pages and records…')} aria-label={t('Search pages and records')} onKeyDown={handleSearchKeyDown} /></label><div className="sidebar-search-results">{(paletteQuery.trim() ? searchResults : navigation.filter((destination) => !isPageLocked(destination, user)).map((destination) => ({id:destination,destination,title:t((counselorShell && counselorPageLabel(destination)) || PAGE_META[destination].label),kind:'page'}))).map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.title}{result.kind === 'record' && result.subtitle && <small>{result.subtitle}</small>}</span><ChevronRight size={16} /></button>)}{paletteQuery.trim() && !searchResults.length && <Empty text={t('No information available yet.')} />}</div></div> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} onSeeAll={canOpenPage('notifications', user) ? () => {invalidatePagedLists(['notifications']);openFromNotification('notifications', {});} : undefined} />}</Modal>}
+    {utility && <Modal title={t(utility === 'search' ? 'Search' : 'Notifications')} className={utility === 'search' && studentPalette ? 'nb-pal-modal' : ''} backdropClassName={utility === 'search' && studentPalette ? 'nb-pal-backdrop' : ''} onClose={() => {setUtility(null);setQuery('');setPaletteQuery('');}}>{utility === 'search' ? <SearchPalette look={studentPalette ? 'student' : 'classic'} query={paletteQuery} onQuery={setPaletteQuery} items={paletteRows} active={Math.min(activeSearchIndex, Math.max(0, paletteRows.length - 1))} onPick={openSearchResult} onKeyDown={handleSearchKeyDown} onHover={setActiveSearchIndex} icons={PAGE_ICONS} searching={remoteSearch.loading} /> : <NotificationPanel user={user} data={data} summary={bell.summary} onOpen={openFromNotification} notify={notify} onSeeAll={canOpenPage('notifications', user) ? () => {invalidatePagedLists(['notifications']);openFromNotification('notifications', {});} : undefined} />}</Modal>}
     {canOpenPage('screen_time', user) && <ScreenTimeTracker page={page} userId={user.id} />}
     {canUseAssistant(user) && <AssistantCenter user={user} onOpenScreenTime={() => setPage('screen_time')} launcher={!counselorShell} openRequest={assistantRequest} onUnavailable={(message) => {updateUser({ assistant_enabled: false });notify(message, 'error');}} />}
   </>;

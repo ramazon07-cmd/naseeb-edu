@@ -3,15 +3,16 @@ import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, C
 import { api } from '../api';
 import { formatDateLocale, formatNumberLocale, parseDateValue, t, tp, tx } from '../i18n';
 import { Empty, Modal } from '../components/ui';
-import { FilterOption, ScoreBreakdown, TierBand } from '../components/college';
+import { FilterOption, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { BAND_TIERS, COLLEGE_AID_FLAGS, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
+import { BAND_TIERS, COLLEGE_AID_FLAGS, bandLabel, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 import { useCollegeSearch } from '../hooks/useCollegeSearch';
 import { PageSkeleton } from '../components/states';
 import { UniversityPage } from './UniversityPage';
+import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
 import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
@@ -109,6 +110,48 @@ function CollegeRow({ university, detail, detailError, view, application, expand
       <button type="button" className="button quiet small uni-open" onClick={onOpen}>{t("Open university")} <ArrowRight size={13} aria-hidden="true" /></button>
     </div>}
   </div>;
+}
+
+// One university as a match card (Admissions & costs view): fit ring, the SAT range against the
+// student's own score, cost against their budget, acceptance and the deadline.
+function CollegeCard({ university, profile, application, busy, compared, compareFull, onCompare, onOpen, onAdd }) {
+  const fit = university.fit;
+  const status = institutionStatus(university, t);
+  const price = priceInfo(university);
+  const days = daysUntil(university.application_deadline);
+  const me = Number(profile?.sat_score) || 0;
+  const budget = Number(profile?.budget_usd) || 0;
+  const lo = Number(university.sat_min) || 0;
+  const hi = Number(university.sat_max) || lo;
+  const satNote = !me || !lo ? '' : me > hi ? t('Your {s} is above their range', { s: formatNumberLocale(me, { useGrouping: false }) }) : me < lo ? t('Your {s} is below their range', { s: formatNumberLocale(me, { useGrouping: false }) }) : t('Your {s} is inside their range', { s: formatNumberLocale(me, { useGrouping: false }) });
+  const cost = Number(price.amount);
+  const costNote = !cost || !budget ? '' : cost <= budget * 1.1 ? t('Within your budget') : t('{x} over your budget', { x: money(cost - budget) });
+  const panelId = `college-card-${university.id}`;
+  const [open, setOpen] = useState(false);
+  return <article className={`nb-cc ${fit?.admission_band ? `is-${BAND_TIERS[fit.admission_band] || 'unknown'}` : ''}`.trim()}>
+    <header>
+      <UniversityLogo university={university} />
+      <div className="nb-cc-title"><h3><button type="button" onClick={onOpen}>{university.name}</button></h3><p>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</p>
+        <div className="nb-cc-chips">{fit?.admission_band && <TierBand value={fit.admission_band} />}<span className="nb-cc-chip">{rankText(university)}</span></div></div>
+      {fit && <span className="nb-cc-ring" style={{ '--v': Math.max(0, Math.min(100, Number(fit.match_score) || 0)) }} role="img" aria-label={`${t('Fit')}: ${formatNumberLocale(fit.match_score)}/100`}><b>{formatNumberLocale(fit.match_score)}</b><small>{t('fit')}</small></span>}
+    </header>
+    {lo > 0 && <div className="nb-cc-sat"><div><small>{t('SAT middle 50%')}</small><b>{satLabel(university)}</b></div><SatRange min={lo} max={hi} score={me} />{satNote && <p>{satNote}</p>}</div>}
+    <div className="nb-cc-facts">
+      <div className={`nb-cc-cost ${costNote && cost > budget * 1.1 ? 'is-over' : costNote ? 'is-ok' : ''}`.trim()}><small>{price.label}</small><b>{cost ? money(cost) : '—'}</b>{costNote && <span>{costNote}</span>}</div>
+      <div><small>{t('Acceptance')}</small><b>{percentText(university.acceptance_rate)}</b></div>
+      <div><small>{t('Deadline')}</small><b>{university.application_deadline ? shortDate(university.application_deadline) : '—'}</b><span>{days != null && days >= 0 ? dueLabel(days) : t('Check the official site')}</span></div>
+    </div>
+    {fit && <div className="nb-cc-why"><button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>{open ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}{t('Show why this result')}</button>
+      {open && <div id={panelId}><ScoreBreakdown breakdown={fit.score_breakdown} />
+        <ul className="note-list ok" aria-label={t('Why it fits')}>{fit.reasons.map((reason) => <li key={fitReasonText(reason)}><CheckCircle2 size={14} aria-hidden="true" /><span>{fitReasonText(reason)}</span></li>)}</ul>
+        <ul className="note-list gap" aria-label={t('Watch-outs')}>{fit.gaps.map((gap) => <li key={fitReasonText(gap)}><Clock3 size={14} aria-hidden="true" /><span>{fitReasonText(gap)}</span></li>)}</ul></div>}</div>}
+    <footer>
+      <button type="button" className={`nb-cc-compare${compared ? ' is-on' : ''}`} aria-pressed={compared} disabled={!compared && compareFull} title={!compared && compareFull ? t('Compare up to 3 universities') : undefined} aria-label={tx`Compare ${university.name}`} onClick={onCompare}><i aria-hidden="true">{compared && <Check size={12} />}</i>{t('Compare')}</button>
+      <span />
+      <button type="button" className="button quiet small" onClick={onOpen}>{t('Details')}</button>
+      {application ? <span className="uni-added"><Check size={14} aria-hidden="true" /> {t('Added')}</span> : <button type="button" className="button primary small" aria-label={t('Add to my list')} disabled={busy} aria-busy={busy} onClick={onAdd}><Plus size={14} aria-hidden="true" /> {t('Add to list')}</button>}
+    </footer>
+  </article>;
 }
 
 // A date picked here becomes the application's own deadline. Only today or later
@@ -211,6 +254,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   // Bumped when the profile changes: the fit of every row has to be fetched again.
   const [researchVersion, setResearchVersion] = useState(0);
   const previousQuery = useRef(query);
+  const [radarOpen, setRadarOpen] = useState(false);
   const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
   const closeUniversity = useCallback(() => setPage('college_search'), [setPage]);
   const student = ownStudent(data);
@@ -393,9 +437,18 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const filtersPanel = <CollegeFilters {...{ filters, setFilters, facets, chips }} showBands={ready} />;
   const remaining = Math.min(pageSize, search.count - rows.length);
   const priceNotes = priceFilterNotes(filters.price, search.unpricedCount);
+  const sameBands = (bands) => bands.length === filters.bands.length && bands.every((band) => filters.bands.includes(band));
+  const activeTier = Object.keys(TIER_BANDS).find((tier) => sameBands(TIER_BANDS[tier])) || 'all';
+  // A tier button narrows the results to that band; the fit only shows in the Admissions & costs view.
+  const pickTier = (tier) => {
+    setFilters((current) => ({ ...current, bands: tier === 'all' ? COLLEGE_BANDS : TIER_BANDS[tier] }));
+    if (tier !== 'all' && view === 'qs') { setView('admissions'); setExpandedId(null); setSort('fit'); }
+  };
+  const showCards = ready && view === 'admissions';
   return <div className="section-stack student-portal college-page nb-bridge nb-colleges">
     {header}
-    {ready && <CollegeMatchSummary research={research} applications={data.applications} setPage={setPage} />}
+    {ready && <CollegeMatchSummary research={research} applications={data.applications} setPage={setPage} activeTier={activeTier} onTier={pickTier} onRadar={() => setRadarOpen(true)} />}
+    <DeadlineRadar open={radarOpen} applications={data.applications} onOpen={(application) => { setRadarOpen(false); openUniversity(application.university); }} onClose={() => setRadarOpen(false)} />
     <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
@@ -404,7 +457,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       <div className="college-main">
       <section className="college-toolbar" aria-label={t('University data view')} ref={resultsRef}>
         <header className="college-toolbar-header">
-          {ready && <MatchTabs filters={filters} sort={sort} onPick={(tab) => { setFilters((current) => ({ ...current, bands: tab === 'matches' ? MATCH_BANDS : COLLEGE_BANDS })); setSort(tab === 'matches' ? 'fit' : 'ranking'); }} />}
+          {ready && <MatchTabs filters={filters} sort={sort} onPick={(tab) => { setFilters((current) => ({ ...current, bands: tab === 'matches' ? MATCH_BANDS : COLLEGE_BANDS })); setSort(tab === 'matches' ? 'fit' : 'ranking'); if (tab === 'matches' && view === 'qs') { setView('admissions'); setExpandedId(null); } }} />}
           <div className="college-data-views" role="group" aria-label={t('University data view')}>{[['qs', 'QS rankings'], ['admissions', 'Admissions & costs']].map(([key, title]) => <button type="button" key={key} aria-pressed={view === key} onClick={() => { setView(key); setExpandedId(null); setSort(key === 'qs' ? 'ranking' : 'fit'); }}>{t(title)}{key === 'qs' && <span className="college-edition">2027</span>}</button>)}</div>
           <button type="button" className="college-saved-button" onClick={() => setListOpen(true)} aria-label={t('My college list')}><Bookmark size={17} aria-hidden="true" /><span>{t('My List')}</span><b>{formatNumberLocale(data.applications.length)}</b></button>
         </header>
@@ -423,12 +476,17 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
         {priceNotes.unpriced && <p className="college-price-notes" role="status">{priceNotes.unpriced}</p>}
         {ready && <CollegeProfileStrip research={research} refreshing={researchLoading} onRefresh={refreshResearch} onEdit={() => setPage('student_center')} />}
       </section>
-      <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''} ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} role="table" aria-label={t("Universities")} aria-busy={search.loading}>
+      {showCards && <div className={`nb-cc-grid ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} aria-label={t("Universities")} aria-busy={search.loading}>
+        {rows.map((item) => <CollegeCard key={item.id} university={item} profile={research?.profile_snapshot} application={listed.get(item.id)} busy={busyId === item.id} compared={compareMap.has(item.id)} compareFull={compareMap.size >= 3} onCompare={() => toggleCompare(item)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
+        {search.loading && !rows.length && <p className="uni-loading" role="status">{t("Loading universities…")}</p>}
+        {!search.loading && !search.error && !rows.length && <Empty text={t("No universities match these filters.")} />}
+      </div>}
+      {!showCards && <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''} ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} role="table" aria-label={t("Universities")} aria-busy={search.loading}>
         <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Cost per year")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
         {rows.map((item) => <CollegeRow key={item.id} view={view} university={item} detail={details[item.id]} detailError={detailError} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} compared={compareMap.has(item.id)} compareFull={compareMap.size >= 3} onCompare={() => toggleCompare(item)} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
         {search.loading && !rows.length && <p className="uni-loading" role="status">{t("Loading universities…")}</p>}
         {!search.loading && !search.error && !rows.length && <Empty text={t("No universities match these filters.")} />}
-      </div>
+      </div>}
       {search.error && <div className="college-research-state error" role="alert"><X size={22} /><div><b>{t("Universities could not be loaded")}</b><p>{search.error}</p></div><button className="button quiet small" onClick={search.retry}>{t("Retry")}</button></div>}
       {search.next && remaining > 0 && <button type="button" className="button quiet uni-more" onClick={search.loadMore} disabled={search.loadingMore} aria-busy={search.loadingMore}>{search.loadingMore ? t('Loading…') : t('Show {n} more', { n: formatNumberLocale(remaining) })}</button>}
       <p className="uni-note">{t(view === 'qs' ? "Published QS scores out of 100." : "Fit is not an admission probability.")} {t("Rankings: QS World University Rankings 2027.")}</p>
@@ -456,6 +514,7 @@ export function CollegeProfileQuestions({ research, saving, onComplete, sectionR
 }
 
 const MATCH_BANDS = ['reach', 'target', 'safety'];
+const TIER_BANDS = { dream: ['far_reach', 'reach'], target: ['target'], safety: ['safety'] };
 
 // "Matches for you" narrows the existing band filter to reach, target and safety and sorts by fit;
 // "All universities" is the default view. Both only set the filters the page already has.
@@ -487,7 +546,10 @@ function CompareDialog({ items, onClose }) {
 
 // "Matched to you": the scores and goals the research profile holds, and the nearest deadlines of the
 // universities already on the list. Everything comes from data the page already has.
-function CollegeMatchSummary({ research, applications = [], setPage }) {
+const initialsOf = (name) => String(name || t('University')).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+const TIER_GOALS = { dream: 2, target: 3, safety: 2 };
+// Counselor advice is about 2 Dream, 3 Target and 2 Safety; a tier button narrows the results to it.
+function CollegeMatchSummary({ research, applications = [], setPage, activeTier, onTier, onRadar }) {
   const profile = research?.profile_snapshot || {};
   const scores = [['SAT', profile.sat_score], ['GPA', profile.gpa], ['IELTS', profile.ielts_score]].filter(([, value]) => value != null && value !== '');
   const deadlines = applications.
@@ -496,8 +558,10 @@ function CollegeMatchSummary({ research, applications = [], setPage }) {
   filter((item) => item.days != null && item.days >= 0).
   sort((a, b) => a.days - b.days).slice(0, 3);
   const tiers = { dream: 0, target: 0, safety: 0 };
-  applications.forEach((application) => { if (tiers[application.tier] != null) tiers[application.tier] += 1; });
+  const slots = { dream: [], target: [], safety: [] };
+  applications.forEach((application) => { if (tiers[application.tier] != null) { tiers[application.tier] += 1; slots[application.tier].push(initialsOf(application.university_detail?.name)); } });
   const listed = tiers.dream + tiers.target + tiers.safety;
+  const need = ['target', 'safety', 'dream'].map((tier) => [tier, TIER_GOALS[tier] - tiers[tier]]).filter(([, count]) => count > 0);
   const rates = applications.map((application) => Number(application.university_detail?.acceptance_rate)).filter((value) => Number.isFinite(value) && value > 0);
   const averageRate = rates.length ? rates.reduce((sum, value) => sum + value, 0) / rates.length : null;
   if (!scores.length && !profile.target_major && !deadlines.length && !listed) return null;
@@ -516,17 +580,27 @@ function CollegeMatchSummary({ research, applications = [], setPage }) {
         <span className="nb-match-eyebrow">{t('University deadlines')}</span>
         {deadlines.length > 0 ? <ul>{deadlines.map(({ application, kind, date, days }) => {
           const when = parseDateValue(date);
-          return <li key={`${application.id}-${kind}`}>
+          return <li key={`${application.id}-${kind}`}><button type="button" className="nb-match-deadline-open" onClick={() => setPage('applications')}>
             <DateTile hot={days <= 3} day={String(when.getDate())} month={formatDateLocale(date, { month: 'short' })} />
             <span><b>{application.university_detail?.name}</b><small>{kind === 'aid' ? t('Scholarship') : t('Apply')} · {dueLabel(days)}</small></span>
-          </li>;
+          </button></li>;
         })}</ul> : <p>{t('No upcoming deadlines yet.')}</p>}
+        {onRadar && <DeadlineRadarButton onClick={onRadar} />}
       </div>
     </div>
-    {listed > 0 && <div className="nb-list-balance">
+    <div className="nb-list-balance">
       <span className="nb-match-eyebrow">{t('Your list balance')}</span>
-      <div className="nb-balance-bar" role="img" aria-label={tx`${tiers.dream} dream, ${tiers.target} target, ${tiers.safety} safety`}>{['dream', 'target', 'safety'].map((tier) => tiers[tier] > 0 && <i key={tier} className={`is-${tier}`} style={{ flexGrow: tiers[tier] }} />)}</div>
-      <ul>{['dream', 'target', 'safety'].map((tier) => <li key={tier}><b>{formatNumberLocale(tiers[tier])}</b><TierBand value={tier} /></li>)}{averageRate != null && <li><b>{percentText(averageRate)}</b><span>{t('Average acceptance rate')}</span></li>}</ul>
-    </div>}
+      <h3 className="nb-balance-title">{need.length ? t('Add {n} more {band}', { n: formatNumberLocale(need[0][1]), band: bandLabel(need[0][0]) }) : t('Your list is well balanced')}</h3>
+      <div className="nb-balance-tiers" role="group" aria-label={t('Filter by tier')}>{['dream', 'target', 'safety'].map((tier) => {
+        const missing = Math.max(0, TIER_GOALS[tier] - slots[tier].length);
+        const on = activeTier === tier;
+        return <button type="button" key={tier} className={`is-${tier}`} aria-pressed={on} title={tx`${bandLabel(tier)}: ${tiers[tier]} on your list, about ${TIER_GOALS[tier]} recommended. Select to show only these.`} onClick={() => onTier(on ? 'all' : tier)}>
+          <span className="nb-balance-name">{bandLabel(tier)}</span>
+          <span className="nb-balance-slots">{slots[tier].map((initials, index) => <i key={index} className="is-filled">{initials}</i>)}{Array.from({ length: missing }, (_, index) => <i key={`e${index}`} className="is-empty" title={t('Room for one more')}><Plus size={13} aria-hidden="true" /></i>)}</span>
+          {missing ? <span /> : <span className="nb-balance-ok" title={t('Enough here')}><Check size={14} aria-hidden="true" /></span>}
+        </button>;
+      })}</div>
+      <p className="nb-balance-hint">{t('Counselors recommend about 2 Dream, 3 Target and 2 Safety universities.')}{averageRate != null && <> · {t('Average acceptance rate')} {percentText(averageRate)}</>}</p>
+    </div>
   </GlassCard>;
 }

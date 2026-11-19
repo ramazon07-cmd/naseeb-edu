@@ -68,6 +68,7 @@ function StudentNotifications({ notify, setPage }) {
   }
   const unreadNotices = summary?.unread ?? list.items.filter((item) => !item.is_read).length;
   const hasUnread = unreadNotices > 0 || chats.length > 0 || list.items.some((item) => !item.is_read);
+  const shownCount = chats.length + list.items.length;
   const kindCount = (kind) => list.items.filter((item) => item.kind === kind).length;
   return <div className="nb-notif">
     <PageHeader title={t('Notifications')} subtitle={t('Alerts about your work and unread conversations.')}
@@ -78,7 +79,7 @@ function StudentNotifications({ notify, setPage }) {
       <KpiTile tone={2} icon={PenLine} value={formatNumberLocale(kindCount('essay'))} label={t('Recent essay updates')} onClick={() => setPage('essay_lab')} actionLabel={t('Essay Lab')} />
       <KpiTile tone={3} icon={Target} value={formatNumberLocale(kindCount('deadline'))} label={t('Recent deadline alerts')} />
     </KpiRow>
-    <GlassCard tone="solid" className="nb-notif-card" title={t('Notifications')} icon={Bell}>
+    <GlassCard tone="solid" className="nb-notif-card" title={t('Notifications')} icon={Bell} action={shownCount > 0 ? <span className="nb-dash-count">{formatNumberLocale(shownCount)}</span> : null}>
       {/* Unread chats failed to load: say so and offer a retry (the bell summary alone would not refetch them). */}
       {chatsError && <InlineLoadError message={chatsError} onRetry={retryChats} />}
       {chatHeadLoading && <p className="nb-dash-note" role="status">{t('Loading…')}</p>}
@@ -112,6 +113,7 @@ function StudentNotifications({ notify, setPage }) {
       <PagedListError list={list} />
       <LoadMore list={list} />
       {empty && <EmptyState icon={Bell} title={t('You are all caught up.')} />}
+      {shownCount > 0 && !list.hasMore && <p className="nb-notif-shown">{t('{n} shown', { n: formatNumberLocale(shownCount) })}</p>}
     </GlassCard>
   </div>;
 }

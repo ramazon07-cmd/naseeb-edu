@@ -123,6 +123,8 @@ export function buildPath({ page, params = {} } = {}) {
   const tabs = TAB_PAGES[page];
   // Every section card is on the overview tab.
   if (page === 'student_center' && STUDENT_CENTER_EDIT_SECTIONS.includes(params.edit)) return `${base}?edit=${params.edit}`;
+  // A program opened from a deadline row (?program=12).
+  if (page === 'programs' && ID_PATTERN.test(String(params.programId ?? ''))) return `${base}?program=${params.programId}`;
   // One queue item opened from Home (?item=document-12).
   if (page === 'review' && REVIEW_ITEM_PATTERN.test(String(params.item ?? ''))) return `${base}?item=${params.item}`;
   if (tabs && tabs.includes(params.tab) && params.tab !== DEFAULT_TAB[page]) return `${base}/${params.tab}`;

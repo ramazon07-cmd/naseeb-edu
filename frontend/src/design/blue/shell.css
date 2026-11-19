@@ -193,6 +193,21 @@
   display: none;
 }
 
+.nb-nav[data-more-down='true'] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+
+.nb-nav[data-more-up='true'] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28px);
+  mask-image: linear-gradient(to bottom, transparent, #000 28px);
+}
+
+.nb-nav[data-more-up='true'][data-more-down='true'] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+
 .nb-account {
   position: relative;
   margin-top: 10px;
