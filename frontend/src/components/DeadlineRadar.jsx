@@ -22,7 +22,7 @@ const lateLabel = (days) => days < 0 ? tp('{n} day late|{n} days late', -days, {
 
 // Every application and scholarship deadline on the page plus the student's own, in four views:
 // what is overdue, what is due in two weeks, what comes in four months, and by type.
-function RadarDialog({ applications, applicationsLoaded, onOpenApplications, onOpen, onClose }) {
+function RadarDialog({ programs = [], onOpenProgram, applications, applicationsLoaded, onOpenApplications, onOpen, onClose }) {
   const [mine, setMine] = useState(readMyDeadlines);
   const [type, setType] = useState('all');
   const [win, setWin] = useState('all');
@@ -32,6 +32,7 @@ function RadarDialog({ applications, applicationsLoaded, onOpenApplications, onO
     ...applications.flatMap((application) => [['application', application.deadline], ['aid', application.scholarship_deadline]]
       .filter(([, date]) => daysUntil(date) != null && !['accepted', 'rejected', 'waitlisted'].includes(application.status))
       .map(([kind, date]) => ({ key: `${application.id}-${kind}`, group: 'uni', application, kind, date, days: daysUntil(date), title: application.university_detail?.name || t("University"), sub: `${kind === 'aid' ? t("Scholarship") : t("Application")} · ${longDate(date)}` }))),
+    ...programs.map((program) => ({ key: `prog-${program.id}`, group: 'prog', programId: program.id, date: program.date, days: daysUntil(program.date), title: program.title, sub: program.exact ? t('Program') : `${t('My List')} · ≈` })),
     ...mine.map((entry, index) => ({ key: `mine-${index}`, group: 'mine', index, date: entry.d, days: daysUntil(entry.d), title: entry.t, sub: `${t(MY_KINDS.find(([kind]) => kind === entry.k)?.[1] || 'Task')} · ${longDate(entry.d)}` })),
   ].filter((item) => item.days != null).sort((a, b) => a.days - b.days);
   const over = items.filter((item) => item.days < 0);
@@ -69,7 +70,7 @@ function RadarDialog({ applications, applicationsLoaded, onOpenApplications, onO
         {entries[0] && <span className="nb-radar-card-next"><small>{t("Next")}</small><b>{entries[0].title}</b><em>{lateLabel(entries[0].days)}</em></span>}
       </button>)}</div>
       <div className="nb-radar-bar">
-        <div className="apps-view" role="group" aria-label={t("Deadline type")}>{[['all', t("All types")], ['uni', t("University")], ['mine', t("Mine")]].map(([key, title]) => <button type="button" key={key} aria-pressed={type === key} onClick={() => setType(key)}>{title}</button>)}</div>
+        <div className="apps-view" role="group" aria-label={t("Deadline type")}>{[['all', t("All types")], ['uni', t("University")], ...(programs.length ? [['prog', t("Programs")]] : []), ['mine', t("Mine")]].map(([key, title]) => <button type="button" key={key} aria-pressed={type === key} onClick={() => setType(key)}>{title}</button>)}</div>
         {win !== 'all' && <button type="button" className="nb-radar-showing" onClick={() => setWin('all')}>{t("Showing")}: {cards.find(([key]) => key === win)[2]}<X size={13} aria-hidden="true" /></button>}
         <button type="button" className="button quiet small nb-radar-add" onClick={() => setForm({ index: null, name: '', date: '', kind: 'task', error: false })}><Plus size={14} aria-hidden="true" /> {t("Add your own")}</button>
       </div>
@@ -87,7 +88,7 @@ function RadarDialog({ applications, applicationsLoaded, onOpenApplications, onO
       </form>}
       {groups.length ? groups.map((group) => <section className={`nb-radar-group g-${group.key.length === 7 ? 'later' : group.key}`} key={group.key}><h3><span>{group.title}</span><i>{formatNumberLocale(group.entries.length)}</i></h3>
         <ul className="apps-radar-list">{group.entries.map((item) => <li key={item.key} className={item.days < 0 ? 'is-over' : item.days <= 7 ? 'is-hot' : ''}>
-          <button type="button" onClick={() => item.group === 'mine' ? edit(item) : onOpen(item.application)}>
+          <button type="button" onClick={() => item.group === 'mine' ? edit(item) : item.group === 'prog' ? onOpenProgram?.(item.programId) : onOpen(item.application)}>
             <span className="apps-radar-date"><b>{parseDateValue(item.date).getDate()}</b><small>{formatDateLocale(item.date, { month: 'short' }).replace(/\.$/, '')}</small></span>
             <span className="apps-radar-copy"><b>{item.title}</b><small>{item.sub}</small></span>
             <span className={`due ${item.days < 0 ? 'hot' : dueTone(item.days)}`.trim()}>{lateLabel(item.days)}</span>
@@ -99,9 +100,9 @@ function RadarDialog({ applications, applicationsLoaded, onOpenApplications, onO
 
 // Reusable radar: the caller passes the applications it already has and decides what opening one does.
 // The student's own deadlines are read from and written to this browser only.
-export function DeadlineRadar({ open, onClose, applications = [], applicationsLoaded = true, onOpenApplications, onOpen }) {
+export function DeadlineRadar({ open, onClose, programs = [], onOpenProgram, applications = [], applicationsLoaded = true, onOpenApplications, onOpen }) {
   if (!open) return null;
-  return <RadarDialog applications={applications} applicationsLoaded={applicationsLoaded} onOpenApplications={onOpenApplications} onOpen={onOpen || (() => {})} onClose={onClose} />;
+  return <RadarDialog programs={programs} onOpenProgram={onOpenProgram} applications={applications} applicationsLoaded={applicationsLoaded} onOpenApplications={onOpenApplications} onOpen={onOpen || (() => {})} onClose={onClose} />;
 }
 
 export function DeadlineRadarButton({ onClick, className = '', size = 16 }) {

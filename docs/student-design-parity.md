@@ -291,6 +291,13 @@ Rules kept in all sections: no backend or bot change, no new requests or polling
 | College Search deadline rows open Applications | built now (buttons) | pages/CollegeSearchPage.jsx, design/pages/colleges-blue.css |
 | Student Center overview: task rows with date tiles and priority chips, university rows with initials, list-header counts (tasks, colleges, essays) | built now for the student viewer only (`studentView` is set from `user.role === 'student'`; counselor Student 360 keeps the classic rows); values already loaded | pages/StudentsPage.jsx, design/pages/center-blue.css |
 
+## Audit follow-up (round 5)
+
+| mockup element | app status | file |
+| --- | --- | --- |
+| Programs: every in-page detail open (Details, Next up, title, radar) writes `?program=<id>`, so Back and the Programs nav item close it | built now | pages/ProgramsPage.jsx |
+| Programs radar: program deadlines (open programs with a confirmed date, plus saved programs with a usual date), counted in the cards, a "Programs" type tab, rows open the program detail; no new request | built now (mockup `deadlines()`, line 4804) | pages/ProgramsPage.jsx, components/DeadlineRadar.jsx |
+
 ## Out of scope (other branches)
 
 | mockup element | app status | file |

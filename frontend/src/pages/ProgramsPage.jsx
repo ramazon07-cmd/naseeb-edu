@@ -11,6 +11,7 @@ import '../design/pages/programs-blue.css';
 import { BlueButton, DaysChip, GlassCard, KpiRow, KpiTile, PageHeader } from '../design/blue/ui';
 import { FilterOption } from '../components/college';
 import { Empty } from '../components/ui';
+import { withQuery } from '../lib/routes';
 import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { PAGE_PATHS } from '../lib/routes';
 import { daysUntil, dueLabel, dueTone } from '../lib/college';
@@ -251,14 +252,12 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   // Extra list narrowing from the top tiles and the Free pill; the URL filters stay as they are.
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [onlyFree, setOnlyFree] = useState(false);
-  const [detailId, setDetailId] = useState(programId ?? null);
-  // `?program=` opens that program; the URL losing it (the Programs nav item, back) closes the detail.
-  const lastProgramId = useRef(programId);
-  useEffect(() => {
-    if (programId != null) setDetailId(programId);
-    else if (lastProgramId.current != null) setDetailId(null);
-    lastProgramId.current = programId;
-  }, [programId]);
+  // The open program lives in the URL (`?program=<id>`), so Back and the Programs nav item close it.
+  const detailId = programId;
+  const setDetailId = useCallback((id) => {
+    const next = withQuery(search, { program: id });
+    navigate(`${window.location.pathname}${next}${window.location.hash}`);
+  }, [search, navigate]);
   const [radarOpen, setRadarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetRef = useRef(null);
@@ -334,6 +333,10 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
 
   const isFree = (item) => item.fee_usd != null && Number(item.fee_usd) === 0;
   const freeCount = programs.filter(({ item }) => isFree(item)).length;
+  // Program deadlines for the radar, from what this page already holds: programs with a confirmed
+  // date that are still open, plus saved programs that only have a usual (approximate) date.
+  const radarPrograms = useMemo(() => everyProgram.filter(({ item, closed, due }) => due && !closed && (due.exact || savedIds.has(item.id)))
+    .map(({ item, due }) => ({ id: item.id, title: item.title, date: due.date, exact: due.exact, saved: savedIds.has(item.id) })), [everyProgram, savedIds]);
   const shownPrograms = programs.filter(({ item, closed, due }) => (!onlySaved || savedIds.has(item.id)) && (!onlyOpen || (!closed && due?.exact)) && (!onlyFree || isFree(item)));
   const resultText = tp('{count} program|{count} programs', shownPrograms.length, { count: shownPrograms.length });
   const narrowed = filtered || onlyOpen || onlyFree;
@@ -428,6 +431,6 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     {sheetOpen && <div className="program-sheet-backdrop" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
     {rail}
     </div>
-    <DeadlineRadar open={radarOpen} onClose={() => setRadarOpen(false)} applications={data.applications || []} applicationsLoaded={(data.applications || []).length > 0} onOpenApplications={() => { setRadarOpen(false); navigate(PAGE_PATHS.applications); }} onOpen={() => { setRadarOpen(false); navigate(PAGE_PATHS.applications); }} />
+    <DeadlineRadar open={radarOpen} onClose={() => setRadarOpen(false)} applications={data.applications || []} applicationsLoaded={(data.applications || []).length > 0} onOpenApplications={() => { setRadarOpen(false); navigate(PAGE_PATHS.applications); }} programs={radarPrograms} onOpenProgram={(id) => { setRadarOpen(false); setDetailId(id); }} onOpen={() => { setRadarOpen(false); navigate(PAGE_PATHS.applications); }} />
   </div>;
 }
