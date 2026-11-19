@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  CheckCircle2, ChevronRight, Cloud, Copy, FileText, Folder, FolderInput, History, Inbox, LayoutGrid, List,
-  MoreHorizontal, PenLine, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, UsersRound, X,
+  CheckCircle2, ChevronRight, Clock, Copy, FileText, Folder, FolderInput, History, IdCard, Inbox, LayoutGrid, List,
+  MoreHorizontal, PenLine, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, UsersRound, X, Zap,
 } from 'lucide-react'
 import { t, tp } from '../i18n.js'
 import Folders, { ESSAY_DRAG_TYPE } from './Folders.jsx'
@@ -200,12 +200,11 @@ export default function Library({ user, essays, folders, loading, error, setEssa
       <KpiTile tone={2} icon={UsersRound} value={countBy('counselor')} label={t('With counselor')} onClick={() => showStatus('counselor')} actionLabel={`${t('With counselor')}: ${countBy('counselor')}`} loading={loading && !essays.length} />
       <KpiTile tone={3} icon={ShieldCheck} value={countBy('approved')} label={t('Approved')} onClick={() => showStatus('approved')} actionLabel={`${t('Approved')}: ${countBy('approved')}`} loading={loading && !essays.length} />
     </KpiRow>
+    {pickup && <PickupCard essay={pickup} onOpen={onOpen} />}
+    {/* Holds the pick-up card's place while essays load, so the list below does not jump down when it arrives. */}
+    {!pickup && loading && !essays.length && selected.kind !== 'trash' && <div className="el-pickup is-skeleton" aria-hidden="true" />}
     <main className="el-main">
       {error && <div className="el-alert is-error" role="alert"><span>{error}</span><button type="button" className="el-btn is-small" onClick={refresh}>{t('Retry')}</button></div>}
-
-      {pickup && <PickupCard essay={pickup} onOpen={onOpen} />}
-      {/* Holds the pick-up card's place while essays load, so the list below does not jump down when it arrives. */}
-      {!pickup && loading && !essays.length && selected.kind !== 'trash' && <div className="el-pickup is-skeleton" aria-hidden="true" />}
 
       {selected.kind === 'trash'
         ? <TrashList trash={trash} onRestore={restoreEssay} onDelete={(essay) => setDialog({ kind: 'delete-forever', essay })} onBack={() => select({ kind: 'all' })} />
@@ -248,17 +247,15 @@ export default function Library({ user, essays, folders, loading, error, setEssa
           onDropEssay={(essayId, folderId) => { const essay = essays.find((item) => item.id === essayId); if (essay && essay.folder !== folderId) moveEssay(essay, folderId) }}
           onCreate={createFolder} onRename={(folder) => setDialog({ kind: 'rename-folder', folder })} onDelete={(folder) => setDialog({ kind: 'delete-folder', folder })}>
           <button type="button" className={`el-nav-item${selected.kind === 'all' ? ' is-selected' : ''}`} aria-current={selected.kind === 'all' ? 'page' : undefined} onClick={() => select({ kind: 'all' })}>
-            <FileText size={17} aria-hidden="true" />{t('All essays')}<span className="el-count">{essays.length}</span>
+            <span className="el-mini-ic" aria-hidden="true"><FileText size={15} /></span>{t('All essays')}<span className="el-count">{essays.length}</span>
           </button>
         </Folders>
-      </div>
-      <div className="el-panel-card is-compact">
         <button type="button" className={`el-nav-item${selected.kind === 'trash' ? ' is-selected' : ''}`} aria-current={selected.kind === 'trash' ? 'page' : undefined} onClick={() => select({ kind: 'trash' })}>
-          <Trash2 size={17} aria-hidden="true" />{t('Trash')}
+          <span className="el-mini-ic" aria-hidden="true"><Trash2 size={15} /></span>{t('Trash')}
         </button>
+        <div className="el-autosave-note"><CheckCircle2 size={15} aria-hidden="true" /><span>{t('Everything is saved automatically')}</span></div>
       </div>
       <StreakCard user={user} signal={loading ? null : latestEdit(essays)} />
-      <div className="el-autosave-note"><Cloud size={16} aria-hidden="true" /><span>{t('Everything is saved automatically')}</span></div>
     </aside>
 
     {dialog?.kind === 'rename' && <TextDialog title={t('Rename essay')} label={t('Title')} initial={dialog.essay.title} max={220} onClose={() => setDialog(null)}
@@ -294,17 +291,19 @@ function PickupCard({ essay, onOpen }) {
     <div className="el-pickup-main">
       <span className="el-eyebrow is-accent">{t('PICK UP WHERE YOU LEFT OFF')}</span>
       <h2 id="el-pickup-title">{essay.title}</h2>
-      {essay.preview && <p className="el-pickup-text">{essay.preview}{(essay.word_count ?? 0) > 30 ? '…' : ''}<span className="el-caret" aria-hidden="true" /></p>}
       <div className="el-pickup-meta">
-        <span>{t('Last edited {when}', { when: relativeTime(essay.last_edited_at) })}</span>
+        <span className="el-pickup-when"><Clock size={15} aria-hidden="true" />{t('Last edited {when}', { when: relativeTime(essay.last_edited_at) })}</span>
         <span className="el-pickup-words">{limit ? tp('{count} / {limit} words', limit, { count: words, limit }) : tp('{count} words', words, { count: words })}
           {limit ? <ProgressBar ratio={words / limit} over={words > limit} /> : null}</span>
       </div>
       <div className="el-pickup-actions">
-        <button type="button" className="el-btn is-primary is-large" onClick={() => onOpen(essay.id)}><PenLine size={17} aria-hidden="true" />{t('Continue writing')}</button>
-        <button type="button" className="el-btn is-large" onClick={() => onOpen(essay.id, { focus: true })}>{t('Just write (focus mode)')}</button>
+        <button type="button" className="el-btn is-primary is-large" onClick={() => onOpen(essay.id)}><PenLine size={16} aria-hidden="true" />{t('Continue writing')}</button>
+        <button type="button" className="el-btn is-large" onClick={() => onOpen(essay.id, { focus: true })}><Zap size={16} aria-hidden="true" />{t('Just write (focus mode)')}</button>
       </div>
     </div>
+    {essay.preview && <button type="button" className="el-pickup-paper" onClick={() => onOpen(essay.id)} aria-label={t('Open {title}', { title: essay.title })}>
+      <i aria-hidden="true" /><p>{essay.preview}{(essay.word_count ?? 0) > 30 ? '…' : ''}</p>
+    </button>}
     {check && check.result?.scores && <div className="el-pickup-check">
       <div className="el-pickup-check-title"><Sparkles size={16} aria-hidden="true" />{t('Last depth check · {when}', { when: relativeTime(check.created_at) })}</div>
       <dl>
@@ -339,7 +338,7 @@ function EssayCard({ essay, onOpen, menu }) {
       <div className="el-paper" aria-hidden="true">{essay.preview || <em>{t('Empty page')}</em>}</div>
       <div className="el-card-body">
         <strong>{essay.title}</strong>
-        <span className="el-card-subrow"><span className="el-card-sub">{essay.university_name || t(essayTypeName(essay.essay_type))}</span><SharedBadge essay={essay} /></span>
+        <span className="el-card-subrow"><span className="el-type-ic" aria-hidden="true">{essay.essay_type === 'personal_statement' ? <IdCard size={14} /> : <PenLine size={14} />}</span><span className="el-card-sub">{essay.university_name || t(essayTypeName(essay.essay_type))}</span><SharedBadge essay={essay} /></span>
         <div className="el-card-meta"><span>{wordsMeta(essay)} · {relativeTime(essay.last_edited_at || essay.updated_at)}</span>{statusBadge(essay.status)}</div>
       </div>
     </button>
