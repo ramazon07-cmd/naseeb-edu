@@ -18,9 +18,10 @@ import '../design/pages/catalog-blue-base.css'
 const LAYOUT_KEY = 'naseeb-essay-lab-layout'
 const STATUS_FILTERS = [
   { id: 'all', label: 'All' },
-  { id: 'draft', label: 'Drafts', match: (status) => status === 'draft' || !status },
-  { id: 'counselor', label: 'With counselor', match: (status) => status === 'reviewing' || status === 'needs_revision' },
-  { id: 'approved', label: 'Approved', match: (status) => status === 'approved' },
+  { id: 'draft', label: 'Drafts', match: (essay) => essay.status === 'draft' || !essay.status },
+  // "With counselor" follows sharing, as in the design: a shared draft counts, an unshared one does not.
+  { id: 'counselor', label: 'With counselor', match: (essay) => Boolean(essay.shared_with_counselor) },
+  { id: 'approved', label: 'Approved', match: (essay) => essay.status === 'approved' },
 ]
 
 function readLayout() {
@@ -61,7 +62,7 @@ export default function Library({ user, essays, folders, loading, error, setEssa
     const status = STATUS_FILTERS.find((item) => item.id === statusFilter)
     return essays
       .filter((essay) => !folderIds || folderIds.has(essay.folder))
-      .filter((essay) => !status?.match || status.match(essay.status))
+      .filter((essay) => !status?.match || status.match(essay))
       .sort(byRecent)
   }, [essays, folderIds, statusFilter])
 
@@ -188,7 +189,7 @@ export default function Library({ user, essays, folders, loading, error, setEssa
   const title = selected.kind === 'trash' ? t('Trash') : selected.kind === 'folder' ? folderPath(folders, selected.id) : t('My essays')
   const newEssayFolder = selected.kind === 'folder' ? selected.id : null
 
-  const countBy = (id) => essays.filter((essay) => STATUS_FILTERS.find((item) => item.id === id).match?.(essay.status) ?? true).length
+  const countBy = (id) => essays.filter((essay) => STATUS_FILTERS.find((item) => item.id === id).match?.(essay) ?? true).length
   const showStatus = (id) => { setSelected({ kind: 'all' }); setStatusFilter(id); document.getElementById('el-essays-heading')?.scrollIntoView({ block: 'start' }) }
 
   return <div className="el-library nb-bridge nb-essay">
