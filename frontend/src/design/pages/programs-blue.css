@@ -217,6 +217,28 @@
   color: var(--nb-ink-strong);
 }
 
+.nb-blue .nb-programs .program-row-open {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  border-radius: var(--nb-r-xs, 0.25rem);
+}
+
+.nb-blue .nb-programs .program-row-open:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.nb-blue .nb-programs .program-row-open:focus-visible {
+  outline: 2px solid var(--nb-focus, currentColor);
+  outline-offset: 2px;
+}
+
 .nb-blue .nb-programs .program-tile {
   border-radius: var(--nb-r-sm);
 }

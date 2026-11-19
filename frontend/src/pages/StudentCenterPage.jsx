@@ -156,7 +156,19 @@ function StudentIdCard({ student, user, reload, notify }) {
   const fileInput = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [picked, setPicked] = useState(null);
+  const [opening, setOpening] = useState(false);
   if (!student) return null;
+  // With a saved photo the camera reopens it in the editor (recrop or remove); with none it opens the file picker.
+  async function openPhoto() {
+    if (!student.has_photo) { fileInput.current?.click(); return; }
+    if (opening) return;
+    setOpening(true);
+    try {
+      const { blob } = await api.studentPhoto(student.id, student.photo_version);
+      setPicked(new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+    } catch { fileInput.current?.click(); }
+    finally { setOpening(false); }
+  }
   function choosePhoto(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -194,7 +206,7 @@ function StudentIdCard({ student, user, reload, notify }) {
       <div className="nb-id-body">
         <span className="nb-id-photo-wrap">
           <StudentAvatar student={student} className="nb-id-photo" />
-          <button type="button" className="nb-id-photo-edit" onClick={() => fileInput.current?.click()} disabled={uploading} aria-busy={uploading} aria-label={t('Change photo')} title={t('Change photo')}><Camera size={16} aria-hidden="true" /></button>
+          <button type="button" className="nb-id-photo-edit" onClick={openPhoto} disabled={uploading || opening} aria-busy={uploading || opening} aria-label={t('Change photo')} title={t('Change photo')}><Camera size={16} aria-hidden="true" /></button>
           <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
         </span>
         <div className="nb-id-text">
@@ -239,7 +251,7 @@ export function StudentCenterPage({ user, data, query, reload, notify, tab = 'ov
     {tab === 'overview' && student && <KpiRow label={t('Student Center')} columns={roadmapLocked ? 2 : 4}>
       {!roadmapLocked && <KpiTile tone={0} icon={Trophy} value={student.level ?? 1} label={<>{t('Level')}<small className="nb-kpi-note">{t('Approved by staff')}</small></>} />}
       {!roadmapLocked && <KpiTile tone={1} icon={Star} value={student.roadmap_stars ?? 0} label={<>{t('Stars')}<small className="nb-kpi-note">{t('One per approved roadmap mission')}</small></>} />}
-      <KpiTile tone={2} icon={ClipboardCheck} value={taskCount} label={t('Assigned tasks')} onClick={setPage ? () => setPage('roadmap', roadmapLocked ? undefined : { tab: 'tasks' }) : undefined} actionLabel={setPage ? `${t('Assigned tasks')}: ${taskCount}` : undefined} />
+      <KpiTile tone={2} icon={ClipboardCheck} value={taskCount} label={t('Assigned tasks')} onClick={setPage ? () => setPage('tasks') : undefined} actionLabel={setPage ? `${t('Assigned tasks')}: ${taskCount}` : undefined} />
       <KpiTile tone={3} icon={GraduationCap} value={applicationCount} label={t('Applications')} onClick={setPage ? () => setPage('applications') : undefined} actionLabel={setPage ? `${t('Applications')}: ${applicationCount}` : undefined} />
     </KpiRow>}
     {tab === 'overview' && <StudentIdCard student={student} user={user} reload={reload} notify={notify} />}

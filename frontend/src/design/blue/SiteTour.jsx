@@ -36,7 +36,9 @@ const focusables = (root) => [...root.querySelectorAll('button:not([disabled])')
 // The guided tour. Mounted by the student shell only, so it can never sit on top of the
 // forced password change or the onboarding (those render instead of the shell). It makes
 // no requests: it only reads the DOM and local storage.
-export function SiteTour({ userId, active, onClose, setPage, openDrawer }) {
+// `pageSteps` turns it into a page tip walk-through (no welcome/finish cards, no navigation, the
+// caller records "seen" through `onFinish`).
+export function SiteTour({ userId, active, onClose, setPage, openDrawer, pageSteps, onFinish }) {
   const [index, setIndex] = useState(0);
   const [steps, setSteps] = useState([]);
   const [box, setBox] = useState(null);
@@ -48,12 +50,12 @@ export function SiteTour({ userId, active, onClose, setPage, openDrawer }) {
   const finish = useCallback(() => {
     if (closing.current) return;
     closing.current = true;
-    markSiteTourSeen(userId);
+    if (onFinish) onFinish(); else markSiteTourSeen(userId);
     openDrawer(false);
     onClose();
     const back = returnFocus.current;
     if (back?.isConnected) requestAnimationFrame(() => back.focus({ preventScroll: true }));
-  }, [userId, onClose, openDrawer]);
+  }, [userId, onClose, openDrawer, onFinish]);
 
   // Opening: remember what had focus, go to the dashboard (the first stop), then collect the
   // steps whose targets exist.
@@ -61,24 +63,26 @@ export function SiteTour({ userId, active, onClose, setPage, openDrawer }) {
     if (!active) return undefined;
     closing.current = false;
     returnFocus.current = document.activeElement;
-    setPage('dashboard');
+    if (!pageSteps) setPage('dashboard');
     setIndex(0);
     let tries = 0;
     let timer = 0;
     const collect = () => {
       const phone = window.innerWidth <= DRAWER;
-      const list = tourSteps().filter((step) => {
+      const list = (pageSteps || tourSteps()).filter((step) => {
         if (!step.target) return true;
         if (step.side && phone) return true; // the drawer is closed until the step opens it
         return Boolean(visible(document.querySelector(step.target)));
       });
       // The dashboard may still be loading; give its cards a moment before settling.
-      if (!list.some((step) => step.id === 'kpis') && tries++ < 12) { timer = window.setTimeout(collect, 250); return; }
+      const settled = pageSteps ? list.length > 0 : list.some((step) => step.id === 'kpis');
+      if (!settled && tries++ < 12) { timer = window.setTimeout(collect, 250); return; }
+      if (pageSteps && !list.length) { onClose(); return; } // targets never appeared: no tip, tried again next visit
       setSteps(list);
     };
     timer = window.setTimeout(collect, 150);
     return () => { window.clearTimeout(timer); setSteps([]); };
-  }, [active, setPage]);
+  }, [active, setPage, pageSteps, onClose]);
 
   const step = steps[index];
 

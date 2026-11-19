@@ -547,76 +547,98 @@
 
 .nb-blue .nb-balance-tiers {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 6px;
 }
 
 .nb-blue .nb-balance-tiers button {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  gap: 2px 8px;
-  padding: 10px 12px;
+  grid-template-columns: 5.75rem minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 10px 6px 14px;
   border: 1px solid var(--nb-hero-line);
   border-radius: var(--nb-r-sm);
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--nb-hero-fg);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.nb-blue .nb-balance-tiers button:hover,
+.nb-blue .nb-balance-tiers button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .nb-blue .nb-balance-tiers button[aria-pressed="true"] {
-  border-color: var(--nb-hero-fg);
-  background: rgba(255, 255, 255, 0.16);
+  border-color: #fff;
+  background: #fff;
+  color: #0a1f44;
 }
 
 .nb-blue .nb-balance-tiers button:focus-visible {
-  outline: 2px solid var(--nb-focus);
+  outline: 3px solid var(--nb-focus);
   outline-offset: 2px;
 }
 
-.nb-blue .nb-balance-tiers b {
-  font-size: var(--nb-text-xl);
-  line-height: 1;
+.nb-blue .nb-balance-name {
+  font-size: var(--nb-text-sm);
+  font-weight: 800;
 }
 
-.nb-blue .nb-balance-tiers span,
-.nb-blue .nb-balance-tiers em {
+.nb-blue .nb-balance-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.nb-blue .nb-balance-slots i {
+  display: inline-grid;
+  place-items: center;
+  min-width: 48px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--nb-r-pill);
   font-size: var(--nb-text-xs);
   font-style: normal;
-  font-weight: 700;
-  color: var(--nb-hero-soft);
+  font-weight: 850;
+  letter-spacing: 0.03em;
 }
 
-.nb-blue .nb-balance-tiers i {
-  grid-column: 1 / -1;
-  display: block;
-  height: 6px;
-  overflow: hidden;
-  border-radius: var(--nb-r-pill);
-  background: rgba(255, 255, 255, 0.18);
+.nb-blue .nb-balance-slots .is-filled {
+  background: #fff;
+  color: #0a3fa8;
 }
 
-.nb-blue .nb-balance-tiers u {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  text-decoration: none;
-  background: var(--nb-hero-soft);
+.nb-blue .nb-balance-slots .is-empty {
+  border: 1.5px dashed rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.nb-blue .nb-balance-tiers .is-dream u {
-  background: #8b6cff;
+.nb-blue .nb-balance-tiers button[aria-pressed="true"] .is-filled {
+  background: #0a3fa8;
+  color: #fff;
 }
 
-.nb-blue .nb-balance-tiers .is-target u {
-  background: #4da3ff;
+.nb-blue .nb-balance-tiers button[aria-pressed="true"] .is-empty {
+  border-color: rgba(10, 63, 168, 0.5);
+  color: #0a3fa8;
 }
 
-.nb-blue .nb-balance-tiers .is-safety u {
-  background: #17a36b;
+.nb-blue .nb-balance-ok {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f2c14e;
+  color: #2b1c00;
+}
+
+.nb-blue .nb-college-match-deadlines .apps-radar-button {
+  align-self: flex-start;
+  margin-top: 10px;
 }
 
 .nb-blue .nb-balance-hint {
@@ -894,10 +916,6 @@
 }
 
 @media (max-width: 560px) {
-  .nb-blue .nb-balance-tiers {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .nb-blue .nb-cc-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

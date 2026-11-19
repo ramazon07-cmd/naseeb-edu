@@ -103,27 +103,161 @@
   box-shadow: var(--nb-glass-hi);
 }
 
-.nb-blue .nb-apps .filter-chip {
-  min-height: 36px;
+/* Filter popover: one button, removable chips, Reset. */
+.nb-blue .nb-apps .nb-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nb-blue .nb-apps .nb-filter-wrap {
+  position: relative;
+}
+
+.nb-blue .nb-apps .nb-filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1px solid var(--nb-line);
-  border-radius: var(--nb-r-pill);
-  background: var(--nb-btn-ghost);
-  color: var(--nb-btn-ghost-fg);
-  font-weight: 700;
-}
-
-.nb-blue .nb-apps .filter-chip[aria-pressed='true'] {
-  border-color: transparent;
-  background: var(--nb-btn);
-  color: var(--nb-btn-fg);
-  box-shadow: var(--nb-btn-shadow);
-}
-
-.nb-blue .nb-apps .application-sort select {
-  border-radius: var(--nb-r-pill);
+  border-radius: var(--nb-r-sm);
   background: var(--nb-card);
   color: var(--nb-ink);
+  font: inherit;
+  font-size: var(--nb-text-md);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .nb-filter-button.is-on {
+  border-color: var(--nb-chip-fg);
+  color: var(--nb-chip-fg);
+}
+
+.nb-blue .nb-apps .nb-filter-button b {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-fg);
+  color: var(--nb-card);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-apps .nb-filter-button svg:last-child {
+  opacity: 0.6;
+}
+
+.nb-blue .nb-apps .nb-filter-pop {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 2px;
+  width: min(17.5rem, calc(100vw - 3rem));
+  padding: 8px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  box-shadow: 0 24px 44px -18px rgba(2, 14, 43, 0.45);
+}
+
+.nb-blue .nb-apps .nb-filter-head {
+  margin: 8px 10px 4px;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-xs);
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nb-blue .nb-apps .nb-filter-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--nb-r-xs);
+  background: transparent;
+  color: var(--nb-ink);
+  font: inherit;
+  font-size: var(--nb-text-md);
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .nb-filter-option i {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--nb-line);
+  border-radius: 50%;
+}
+
+.nb-blue .nb-apps .nb-filter-option em {
+  color: var(--nb-muted);
+  font-size: var(--nb-text-xs);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.nb-blue .nb-apps .nb-filter-option:hover {
+  background: var(--nb-chip-bg);
+}
+
+.nb-blue .nb-apps .nb-filter-option[aria-checked='true'] {
+  color: var(--nb-chip-fg);
+}
+
+.nb-blue .nb-apps .nb-filter-option[aria-checked='true'] i {
+  border: 5px solid var(--nb-chip-fg);
+}
+
+.nb-blue .nb-apps .nb-filter-reset {
+  margin: 6px 10px 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-chip-fg);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .nb-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+  font: inherit;
+  font-size: var(--nb-text-sm);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.nb-blue .nb-apps .nb-filter-button:focus-visible,
+.nb-blue .nb-apps .nb-filter-option:focus-visible,
+.nb-blue .nb-apps .nb-filter-reset:focus-visible,
+.nb-blue .nb-apps .nb-filter-chip:focus-visible {
+  outline: 3px solid var(--nb-focus);
+  outline-offset: 2px;
 }
 
 /* Board */

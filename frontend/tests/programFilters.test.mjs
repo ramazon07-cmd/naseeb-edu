@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PROGRAM_FILTER_DEFAULTS, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline,
-  hasProgramFilters, programFilterState, programFilterWrite, programFiltersQuery, readProgramFilters, usualDeadline,
+  hasProgramFilters, programFilterState, programFilterWrite, programFiltersQuery, readProgramFilters, selectedGrades, toggleGrade, usualDeadline,
 } from '../src/lib/programFilters.js';
 
 const today = '2026-09-25';
@@ -162,4 +162,35 @@ test('a countdown runs to the deadline, or to the first day of a bare month', ()
   assert.equal(countdownDay(usualDeadline('Typically in March', today), today), '2027-03-01');
   // This month's first day has passed: count to the month's end instead.
   assert.equal(countdownDay(usualDeadline('Usually in September', today), today), '2026-09-30');
+});
+
+test('several grades match a program that fits any of them', () => {
+  assert.deepEqual(ids(run({ grade: '8,gap' })), [4, 1]);
+  assert.deepEqual(ids(run({ grade: '8' })), [1]);
+  assert.deepEqual(ids(run({ grade: '8,9,10,11,gap' })), [2, 4, 1]);
+});
+
+test('grade counts with several grades stay what choosing that option shows', () => {
+  const { counts } = run({ grade: '8,gap' });
+  assert.equal(counts.grade['9'], 3);
+  assert.equal(counts.grade.gap, 1);
+});
+
+test('toggleGrade adds and removes in catalog order and falls back to all', () => {
+  assert.equal(toggleGrade('all', '10'), '10');
+  assert.equal(toggleGrade('10', 'gap'), '10,gap');
+  assert.equal(toggleGrade('10,gap', '9'), '9,10,gap');
+  assert.equal(toggleGrade('9,10', '9'), '10');
+  assert.equal(toggleGrade('10', '10'), 'all');
+  assert.deepEqual(selectedGrades('all'), []);
+  assert.deepEqual(selectedGrades('9,10'), ['9', '10']);
+});
+
+test('the grade URL param takes one grade or a list and drops unknown ones', () => {
+  assert.equal(readProgramFilters('?grade=10').grade, '10');
+  assert.equal(readProgramFilters('?grade=gap,9,10').grade, '9,10,gap');
+  assert.equal(readProgramFilters('?grade=9,99,9').grade, '9');
+  assert.equal(readProgramFilters('?grade=99,x').grade, 'all');
+  assert.equal(programFiltersQuery('', readProgramFilters('?grade=10,9')), '?grade=9%2C10');
+  assert.equal(activeProgramFilterCount({ ...PROGRAM_FILTER_DEFAULTS, grade: '9,10' }), 1);
 });

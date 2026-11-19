@@ -11,8 +11,9 @@ import '../design/pages/programs-blue.css';
 import { BlueButton, DaysChip, GlassCard, KpiRow, KpiTile, PageHeader } from '../design/blue/ui';
 import { FilterOption } from '../components/college';
 import { Empty } from '../components/ui';
+import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { daysUntil, dueLabel, dueTone } from '../lib/college';
-import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline, hasProgramFilters, programFilterState, programFilterWrite, programGrades } from '../lib/programFilters';
+import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline, hasProgramFilters, programFilterState, programFilterWrite, programGrades, selectedGrades, toggleGrade } from '../lib/programFilters';
 
 // The catalog is a yearly list: only a few rows carry a real date, the rest keep the
 // counselor sheet's own deadline text and have to be confirmed on the official page.
@@ -106,7 +107,7 @@ function CountdownRing({ days, exact, tone }) {
   </span>;
 }
 
-function ProgramRow({ item, closed, due, today, saved, busy, onToggle, countdown }) {
+function ProgramRow({ item, closed, due, today, saved, busy, onToggle, onOpen, countdown }) {
   const grades = compactGrades(programGrades(item)).map((grade) => (grade === 'gap' ? t('Gap year') : grade));
   const place = [item.city, item.country].filter(Boolean).join(', ') || (item.delivery_mode === 'online' ? t('Online') : '');
   const kind = item.program_type === 'national' ? 'National' : item.program_type === 'international' ? 'International' : 'To verify';
@@ -119,7 +120,7 @@ function ProgramRow({ item, closed, due, today, saved, busy, onToggle, countdown
   return <article className={`program-row ${closed ? 'is-closed' : ''}`.trim()}>
     {ring ? <CountdownRing days={days} exact={due.exact} tone={tone} /> : <DueTile due={due} closed={closed} tone={tone} />}
     <div className="program-row-body">
-      <h3>{item.title}</h3>
+      <h3><button type="button" className="program-row-open" onClick={() => onOpen(item.id)}>{item.title}</button></h3>
       {due && <span className="sr-only">{ring ? `${due.exact ? '' : '≈ '}${dueLabel(days)}` : <ProgramDeadline item={item} closed={closed} />}</span>}
       <p className="program-row-byline">{logo && <img src={logo} alt="" loading="lazy" />}{item.provider && <><span className="program-row-provider">{item.provider}</span>{' '}</>}<span>{t(item.category)}</span>{' '}<span>{t(kind)}</span></p>
       <div className="program-row-facts">
@@ -249,6 +250,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [onlyFree, setOnlyFree] = useState(false);
   const [detailId, setDetailId] = useState(null);
+  const [radarOpen, setRadarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetRef = useRef(null);
   const toggleRef = useRef(null);
@@ -331,15 +333,20 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     return <ProgramDetail entry={detail} similar={near} today={today} saved={savedIds.has(detail.item.id)} saveBusy={savedLoading || !savedKnown || savingId === detail.item.id} onToggle={() => toggleSaved(detail.item)} onBack={() => setDetailId(null)} onOpen={setDetailId} />;
   }
 
+  const pickedGrades = selectedGrades(filters.grade);
+  const gradeLabel = (grade) => (grade === 'gap' ? t('Gap year') : grade);
+  // Several grades can be on at once; the pills toggle without closing their menu.
+  const gradeChips = <div className="program-grade-chips">{PROGRAM_GRADES.map((grade) => <button key={grade} type="button" aria-pressed={pickedGrades.includes(grade)} disabled={!counts.grade[grade] && !pickedGrades.includes(grade)} onClick={() => update({ grade: toggleGrade(filters.grade, grade) })}>{gradeLabel(grade)}</button>)}</div>;
   const typeLabel = { all: 'All programs', national: 'National', international: 'International' };
   const rail = <aside id="program-filters" ref={sheetRef} className={`program-rail ${sheetOpen ? 'is-open' : ''}`.trim()} aria-label={t('Filters')}>
     <header className="program-rail-head"><b>{t('Filters')}</b>{filtered && <button type="button" className="link-button" onClick={reset}>{t('Clear')}</button>}<button type="button" className="icon-button program-rail-close" onClick={() => setSheetOpen(false)} aria-label={t('Close filters')}><X size={18} /></button></header>
     <fieldset className="filter-set"><legend>{t('Program type')}</legend>{['all', 'national', 'international'].map((type) => <FilterOption key={type} type="radio" name="program-type" checked={filters.type === type} onChange={() => chooseType(type)} count={counts.type[type] || 0}>{t(typeLabel[type])}</FilterOption>)}</fieldset>
-    <fieldset className="filter-set"><legend>{t('Grade')}</legend><div className="program-grade-chips">{PROGRAM_GRADES.map((grade) => <button key={grade} type="button" aria-pressed={filters.grade === grade} disabled={!counts.grade[grade] && filters.grade !== grade} onClick={() => update({ grade: filters.grade === grade ? 'all' : grade })}>{grade === 'gap' ? t('Gap year') : grade}</button>)}</div></fieldset>
+    <fieldset className="filter-set"><legend>{t('Grade')}</legend>{gradeChips}</fieldset>
     <fieldset className="filter-set"><legend>{t('Delivery')}</legend>{['all', ...PROGRAM_DELIVERY].map((mode) => <FilterOption key={mode} type="radio" name="program-delivery" checked={filters.delivery === mode} disabled={mode !== 'all' && !counts.delivery[mode] && filters.delivery !== mode} onChange={() => update({ delivery: mode })} count={mode === 'all' ? null : counts.delivery[mode] || 0}>{mode === 'all' ? t('All formats') : t(DELIVERY_LABELS[mode])}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend>{t('Category')}</legend><FilterOption type="radio" name="program-category" checked={filters.category === 'all'} onChange={() => update({ category: 'all' })}>{t('All categories')}</FilterOption>{[...new Set([...categories, ...(filters.category === 'all' ? [] : [filters.category])])].map((category) => <FilterOption key={category} type="radio" name="program-category" checked={filters.category === category} disabled={!counts.category[category] && filters.category !== category} onChange={() => update({ category })} count={counts.category[category] || 0}>{t(category)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="sr-only">{t('More filters')}</legend>
       <FilterOption checked={filters.aid} onChange={(event) => update({ aid: event.target.checked })} count={counts.aid}>{t('Scholarship available')}</FilterOption>
+      {(freeCount > 0 || onlyFree) && <FilterOption checked={onlyFree} onChange={(event) => setOnlyFree(event.target.checked)} count={freeCount}>{t('Free')}</FilterOption>}
       {(counts.closed > 0 || !filters.open) && <FilterOption checked={filters.open} onChange={(event) => update({ open: event.target.checked })} count={counts.closed}>{t('Hide closed')}</FilterOption>}
     </fieldset>
     <footer className="program-rail-foot"><button type="button" className="button primary" onClick={() => setSheetOpen(false)}>{tp('Show {count} program|Show {count} programs', programs.length, { count: programs.length })}</button></footer>
@@ -350,7 +357,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
   const categoryOptions = [...new Set([...categories, ...(filters.category === 'all' ? [] : [filters.category])])];
   const filterBar = <div className="program-filterbar" role="group" aria-label={t('Filters')}>
     <FilterMenu label={t('Program type')} value={filters.type === 'all' ? '' : t(typeLabel[filters.type])}>{(close) => ['all', 'national', 'international'].map((type) => <FilterOption key={type} type="radio" name="program-type-menu" checked={filters.type === type} onChange={() => { chooseType(type); close(); }} count={counts.type[type] || 0}>{t(typeLabel[type])}</FilterOption>)}</FilterMenu>
-    <FilterMenu label={t('Grade')} value={filters.grade === 'all' ? '' : filters.grade === 'gap' ? t('Gap year') : filters.grade}>{(close) => <div className="program-grade-chips">{PROGRAM_GRADES.map((grade) => <button key={grade} type="button" aria-pressed={filters.grade === grade} disabled={!counts.grade[grade] && filters.grade !== grade} onClick={() => { update({ grade: filters.grade === grade ? 'all' : grade }); close(); }}>{grade === 'gap' ? t('Gap year') : grade}</button>)}</div>}</FilterMenu>
+    <FilterMenu label={t('Grade')} value={pickedGrades.map(gradeLabel).join(', ')}>{() => gradeChips}</FilterMenu>
     <FilterMenu label={t('Delivery')} value={filters.delivery === 'all' ? '' : t(DELIVERY_LABELS[filters.delivery])}>{(close) => ['all', ...PROGRAM_DELIVERY].map((mode) => <FilterOption key={mode} type="radio" name="program-delivery-menu" checked={filters.delivery === mode} disabled={mode !== 'all' && !counts.delivery[mode] && filters.delivery !== mode} onChange={() => { update({ delivery: mode }); close(); }} count={mode === 'all' ? null : counts.delivery[mode] || 0}>{mode === 'all' ? t('All formats') : t(DELIVERY_LABELS[mode])}</FilterOption>)}</FilterMenu>
     <FilterMenu label={t('Category')} value={filters.category === 'all' ? '' : t(filters.category)}>{(close) => <><FilterOption type="radio" name="program-category-menu" checked={filters.category === 'all'} onChange={() => { update({ category: 'all' }); close(); }}>{t('All categories')}</FilterOption>{categoryOptions.map((category) => <FilterOption key={category} type="radio" name="program-category-menu" checked={filters.category === category} disabled={!counts.category[category] && filters.category !== category} onChange={() => { update({ category }); close(); }} count={counts.category[category] || 0}>{t(category)}</FilterOption>)}</>}</FilterMenu>
     <button type="button" className="program-pill-toggle" aria-pressed={filters.aid} onClick={() => update({ aid: !filters.aid })}>{filters.aid && <Check size={15} aria-hidden="true" />}{t('Scholarship available')}<span>{count(counts.aid)}</span></button>
@@ -381,7 +388,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
             <BlueButton variant="ghost" size="sm" icon={Bookmark} aria-pressed={featuredSaved} disabled={savedLoading || !savedKnown || savingId === featured.item.id} onClick={() => toggleSaved(featured.item)}>{featuredSaved ? t('In My List') : t('Add to My List')}</BlueButton>
           </div>
         </div>
-        {nextUp.length > 0 && <div className="nb-prog-nextup"><span className="nb-prog-eyebrow"><Clock3 size={14} aria-hidden="true" />{t('Next up')}</span><ul>{nextUp.map(({ item, due }) => <li key={item.id}><span className="nb-prog-nextup-date" aria-hidden="true"><b>{due.day ? formatNumberLocale(due.day) : ''}</b><small>{formatDateLocale(due.date, { month: 'short' })}</small></span><span className="nb-prog-nextup-copy"><b>{item.title}</b><small>{tp('{n} day left|{n} days left', daysUntil(due.date), { n: formatNumberLocale(daysUntil(due.date)) })}</small></span></li>)}</ul></div>}
+        {nextUp.length > 0 && <div className="nb-prog-nextup"><span className="nb-prog-eyebrow"><Clock3 size={14} aria-hidden="true" />{t('Next up')}</span><ul>{nextUp.map(({ item, due }) => <li key={item.id}><span className="nb-prog-nextup-date" aria-hidden="true"><b>{due.day ? formatNumberLocale(due.day) : ''}</b><small>{formatDateLocale(due.date, { month: 'short' })}</small></span><span className="nb-prog-nextup-copy"><b>{item.title}</b><small>{tp('{n} day left|{n} days left', daysUntil(due.date), { n: formatNumberLocale(daysUntil(due.date)) })}</small></span></li>)}</ul><DeadlineRadarButton onClick={() => setRadarOpen(true)} /></div>}
       </GlassCard>}
       <KpiRow columns={4} className="nb-prog-kpis">
         <KpiTile tone={0} icon={Award} value={count(openNow)} label={t('Open for applications')} onClick={() => setOnlyOpen((value) => !value)} actionLabel={`${t('Open for applications')}: ${openNow}`} />
@@ -404,11 +411,12 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     {savedLoading && onlySaved && <p role="status">{t('Loading…')}</p>}
     <div className="program-timeline">{groupProgramsByDeadline(shownPrograms).map(({ key, entries }) => <section className="program-month" key={key} aria-labelledby={`program-month-${key}`}>
       <h2 className="program-month-head" id={`program-month-${key}`}><span>{key === 'closed' ? t('Closed') : key === 'undated' ? t('Deadline on the official page') : formatDateLocale(`${key}-01`, { month: 'long', year: 'numeric' })}</span><small>{tp('{count} program|{count} programs', entries.length, { count: entries.length })}</small></h2>
-      {entries.map(({ item, closed, due }) => <ProgramRow key={item.id} item={item} closed={closed} due={due} today={today} saved={savedIds.has(item.id)} busy={savedLoading || !savedKnown || savingId === item.id} onToggle={() => toggleSaved(item)} countdown={onlySaved} />)}
+      {entries.map(({ item, closed, due }) => <ProgramRow key={item.id} item={item} closed={closed} due={due} today={today} saved={savedIds.has(item.id)} busy={savedLoading || !savedKnown || savingId === item.id} onToggle={() => toggleSaved(item)} onOpen={setDetailId} countdown={onlySaved} />)}
     </section>)}{!shownPrograms.length && (!onlySaved || savedKnown) && <div className="program-empty"><Empty text={onlySaved ? t('No saved programs match these filters.') : t('No programs match these filters.')} />{onlySaved ? <button type="button" className="button primary small" onClick={() => setOnlySaved(false)}>{t('Browse programs')}</button> : narrowed && <><p>{t('Try another search or remove a filter.')}</p><button type="button" className="button primary small" onClick={reset}>{t('Reset filters')}</button></>}</div>}</div>
     </div>
     {sheetOpen && <div className="program-sheet-backdrop" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
     {rail}
     </div>
+    <DeadlineRadar open={radarOpen} onClose={() => setRadarOpen(false)} applications={data.applications || []} />
   </div>;
 }

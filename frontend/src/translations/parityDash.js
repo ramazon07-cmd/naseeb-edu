@@ -1,5 +1,7 @@
 // Student design parity (Dash): English key -> [Uzbek (Latin), Russian].
 export const PARITY_DASH_TRANSLATIONS = {
+  // Dashboard card recovery
+  'This card did not load.': ['Bu karta yuklanmadi.', 'Эта карточка не загрузилась.'],
   // Notifications
   '{n} shown': ['{n} ta ko‘rsatildi', 'Показано: {n}'],
   // Screen Time

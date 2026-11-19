@@ -12,6 +12,7 @@ import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 import { useCollegeSearch } from '../hooks/useCollegeSearch';
 import { PageSkeleton } from '../components/states';
 import { UniversityPage } from './UniversityPage';
+import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
 import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
@@ -253,6 +254,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   // Bumped when the profile changes: the fit of every row has to be fetched again.
   const [researchVersion, setResearchVersion] = useState(0);
   const previousQuery = useRef(query);
+  const [radarOpen, setRadarOpen] = useState(false);
   const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
   const closeUniversity = useCallback(() => setPage('college_search'), [setPage]);
   const student = ownStudent(data);
@@ -445,7 +447,8 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const showCards = ready && view === 'admissions';
   return <div className="section-stack student-portal college-page nb-bridge nb-colleges">
     {header}
-    {ready && <CollegeMatchSummary research={research} applications={data.applications} setPage={setPage} activeTier={activeTier} onTier={pickTier} />}
+    {ready && <CollegeMatchSummary research={research} applications={data.applications} setPage={setPage} activeTier={activeTier} onTier={pickTier} onRadar={() => setRadarOpen(true)} />}
+    <DeadlineRadar open={radarOpen} applications={data.applications} onOpen={(application) => { setRadarOpen(false); openUniversity(application.university); }} onClose={() => setRadarOpen(false)} />
     <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
@@ -543,9 +546,10 @@ function CompareDialog({ items, onClose }) {
 
 // "Matched to you": the scores and goals the research profile holds, and the nearest deadlines of the
 // universities already on the list. Everything comes from data the page already has.
+const initialsOf = (name) => String(name || t('University')).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 const TIER_GOALS = { dream: 2, target: 3, safety: 2 };
 // Counselor advice is about 2 Dream, 3 Target and 2 Safety; a tier button narrows the results to it.
-function CollegeMatchSummary({ research, applications = [], setPage, activeTier, onTier }) {
+function CollegeMatchSummary({ research, applications = [], setPage, activeTier, onTier, onRadar }) {
   const profile = research?.profile_snapshot || {};
   const scores = [['SAT', profile.sat_score], ['GPA', profile.gpa], ['IELTS', profile.ielts_score]].filter(([, value]) => value != null && value !== '');
   const deadlines = applications.
@@ -554,7 +558,8 @@ function CollegeMatchSummary({ research, applications = [], setPage, activeTier,
   filter((item) => item.days != null && item.days >= 0).
   sort((a, b) => a.days - b.days).slice(0, 3);
   const tiers = { dream: 0, target: 0, safety: 0 };
-  applications.forEach((application) => { if (tiers[application.tier] != null) tiers[application.tier] += 1; });
+  const slots = { dream: [], target: [], safety: [] };
+  applications.forEach((application) => { if (tiers[application.tier] != null) { tiers[application.tier] += 1; slots[application.tier].push(initialsOf(application.university_detail?.name)); } });
   const listed = tiers.dream + tiers.target + tiers.safety;
   const need = ['target', 'safety', 'dream'].map((tier) => [tier, TIER_GOALS[tier] - tiers[tier]]).filter(([, count]) => count > 0);
   const rates = applications.map((application) => Number(application.university_detail?.acceptance_rate)).filter((value) => Number.isFinite(value) && value > 0);
@@ -580,12 +585,21 @@ function CollegeMatchSummary({ research, applications = [], setPage, activeTier,
             <span><b>{application.university_detail?.name}</b><small>{kind === 'aid' ? t('Scholarship') : t('Apply')} · {dueLabel(days)}</small></span>
           </li>;
         })}</ul> : <p>{t('No upcoming deadlines yet.')}</p>}
+        {onRadar && <DeadlineRadarButton onClick={onRadar} />}
       </div>
     </div>
     <div className="nb-list-balance">
       <span className="nb-match-eyebrow">{t('Your list balance')}</span>
       <h3 className="nb-balance-title">{need.length ? t('Add {n} more {band}', { n: formatNumberLocale(need[0][1]), band: bandLabel(need[0][0]) }) : t('Your list is well balanced')}</h3>
-      <div className="nb-balance-tiers" role="group" aria-label={t('Filter by tier')}>{['dream', 'target', 'safety'].map((tier) => <button type="button" key={tier} className={`is-${tier}`} aria-pressed={activeTier === tier} onClick={() => onTier(activeTier === tier ? 'all' : tier)}><b>{formatNumberLocale(tiers[tier])}</b><span>{bandLabel(tier)}</span><i><u style={{ width: `${Math.min(100, tiers[tier] / TIER_GOALS[tier] * 100)}%` }} /></i><em>{t('of {n}', { n: formatNumberLocale(TIER_GOALS[tier]) })}</em></button>)}</div>
+      <div className="nb-balance-tiers" role="group" aria-label={t('Filter by tier')}>{['dream', 'target', 'safety'].map((tier) => {
+        const missing = Math.max(0, TIER_GOALS[tier] - slots[tier].length);
+        const on = activeTier === tier;
+        return <button type="button" key={tier} className={`is-${tier}`} aria-pressed={on} title={tx`${bandLabel(tier)}: ${tiers[tier]} on your list, about ${TIER_GOALS[tier]} recommended. Select to show only these.`} onClick={() => onTier(on ? 'all' : tier)}>
+          <span className="nb-balance-name">{bandLabel(tier)}</span>
+          <span className="nb-balance-slots">{slots[tier].map((initials, index) => <i key={index} className="is-filled">{initials}</i>)}{Array.from({ length: missing }, (_, index) => <i key={`e${index}`} className="is-empty" title={t('Room for one more')}><Plus size={13} aria-hidden="true" /></i>)}</span>
+          {missing ? <span /> : <span className="nb-balance-ok" title={t('Enough here')}><Check size={14} aria-hidden="true" /></span>}
+        </button>;
+      })}</div>
       <p className="nb-balance-hint">{t('Counselors recommend about 2 Dream, 3 Target and 2 Safety universities.')}{averageRate != null && <> · {t('Average acceptance rate')} {percentText(averageRate)}</>}</p>
     </div>
   </GlassCard>;

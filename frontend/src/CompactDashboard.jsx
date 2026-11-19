@@ -14,6 +14,7 @@ import DashboardScreenTime from './DashboardScreenTime';
 import { createPoller } from './lib/poller';
 import { listText } from './lib/profileSections';
 import { canOpenPage, isPageLocked } from './lib/routes';
+import { CardBoundary } from './components/CardBoundary';
 import DashboardCustomizer from './DashboardCustomizer';
 import { ResourceContent } from './components/ResourceContent';
 import { cachedDashboardLayout, loadAccountDashboardLayout, saveAccountDashboardLayout, subscribeDashboardLayout, pendingDashboardLayout } from './dashboardLayout';
@@ -300,7 +301,7 @@ export default function CompactDashboard({ user, student, data, setPage, onDirec
     </KpiRow>
     <SectionTitle className="nb-dash-activity">{t('My activity')}</SectionTitle>
     <div className="nb-dash-board">
-      {shown.map((id) => <div key={id} className={`nb-dash-w nb-dash-w-${id}${rail.includes(id) ? ' is-rail' : ''}`} data-widget={id}>{widgets[id](rail.includes(id))}</div>)}
+      {shown.map((id) => <div key={id} className={`nb-dash-w nb-dash-w-${id}${rail.includes(id) ? ' is-rail' : ''}`} data-widget={id}><CardBoundary>{widgets[id](rail.includes(id))}</CardBoundary></div>)}
     </div>
     {usageOpen && <Modal title={t('Program usage')} onClose={() => setUsageOpen(false)}><ResourceContent keys={['programServices']} statuses={resourceStatus} retry={retryResources}>{data.programServices.length ? programUsage : <p className="dashboard-empty">{t('No program services have been assigned yet.')}</p>}</ResourceContent></Modal>}
     {customizing && <DashboardCustomizer draft={draft} setDraft={setDraft} metadata={widgetMeta} Modal={Modal} onClose={() => setCustomizing(false)} onSave={save} />}

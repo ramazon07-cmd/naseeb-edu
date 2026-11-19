@@ -1141,3 +1141,24 @@
   font-size: var(--nb-text-sm);
   font-weight: 600;
 }
+
+/* One failing card shows a short notice and a Retry button, the rest of the page stays. */
+.nb-blue .nb-card-err {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 8rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--nb-warn);
+  border-radius: var(--nb-radius, 1rem);
+  background: var(--nb-warn-bg);
+  color: var(--nb-warn);
+}
+
+.nb-blue .nb-card-err b {
+  font-size: 0.95rem;
+  font-weight: 600;
+}

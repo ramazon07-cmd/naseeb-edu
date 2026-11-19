@@ -50,6 +50,14 @@ export function SupportTicketForm({ onClose, onSaved, notify }) {
 }
 
 // Each support answer, oldest first; earlier tickets fall back to their single answer.
+// The chip follows the real ticket status; a ticket that is still open falls back to whether the team has replied.
+function statusChip(ticket) {
+  const replied = repliesOf(ticket).length > 0;
+  if (ticket.status === 'closed') return { variant: 'default', text: t('Closed') };
+  if (ticket.status === 'resolved') return { variant: 'ok', text: t('Resolved') };
+  if (ticket.status === 'in_progress') return { variant: replied ? 'ok' : 'default', text: replied ? t('Answered') : t('In progress') };
+  return replied ? { variant: 'ok', text: t('Answered') } : { variant: 'warn', text: t('Waiting for a reply') };
+}
 const repliesOf = (ticket) => ticket.replies?.length ? ticket.replies : ticket.admin_response ? [{ id: 'latest', body: ticket.admin_response, author_name: ticket.responded_by_name, created_at: ticket.responded_at }] : [];
 
 // The requester's account, opened in the audited read-only support view.
@@ -215,7 +223,7 @@ function StudentSupport({ data, reload, notify, moreTickets = false, loadMoreTic
           <button type="button" className={ticket.id === openId ? 'is-on' : ''} aria-current={ticket.id === openId ? 'true' : undefined} onClick={() => openTicket(ticket)}>
             <span className="nb-sp-ti" aria-hidden="true"><MessageSquareText size={18} /></span>
             <span className="nb-sp-tt"><b>{ticket.subject}</b><small>{dateText(ticket.updated_at || ticket.created_at)}</small></span>
-            {ticket.has_unread_response ? <Chip variant="new">{t('New response')}</Chip> : <Chip variant={repliesOf(ticket).length ? 'ok' : 'warn'}>{repliesOf(ticket).length ? t('Answered') : t('Waiting for a reply')}</Chip>}
+            {ticket.has_unread_response ? <Chip variant="new">{t('New response')}</Chip> : <Chip variant={statusChip(ticket).variant}>{statusChip(ticket).text}</Chip>}
           </button>
         </li>)}</ul>
           : <EmptyState icon={Inbox} title={t('No requests yet')} text={t('Write to the Naseeb team. The reply arrives here, in the same thread.')} />}
@@ -223,10 +231,10 @@ function StudentSupport({ data, reload, notify, moreTickets = false, loadMoreTic
       </GlassCard>
       <GlassCard tone="solid" className="nb-sp-main" title={current ? current.subject : t('New request')} icon={current ? MessageSquareText : Plus} headingLevel="h2">
         {current ? <div className="nb-sp-thread" aria-live="polite">
-          <div className="nb-sp-meta"><Chip variant="default">{label(current.category)}</Chip><Chip variant={replies.length ? 'ok' : 'warn'} icon={replies.length ? undefined : Clock3}>{replies.length ? t('Answered') : t('Waiting for a reply')}</Chip><small>{dateTimeText(current.created_at)}</small></div>
+          <div className="nb-sp-meta"><Chip variant="default">{label(current.category)}</Chip><Chip variant={statusChip(current).variant} icon={statusChip(current).variant === 'warn' ? Clock3 : undefined}>{statusChip(current).text}</Chip><small>{dateTimeText(current.created_at)}</small></div>
           <div className="nb-sp-msg is-mine"><p>{current.message}</p><time>{dateTimeText(current.created_at)}</time></div>
           {replies.map((item) => <div className="nb-sp-msg" key={item.id}><b>{item.author_name || t('Naseeb Edu Support')}</b><p>{item.body}</p><time>{dateTimeText(item.created_at)}</time></div>)}
-          {!replies.length && <p className="nb-sp-wait"><Clock3 size={16} aria-hidden="true" />{t('The Naseeb team replies here. New replies show a count next to Support in the menu.')}</p>}
+          {!replies.length && ['open', 'in_progress'].includes(current.status) && <p className="nb-sp-wait"><Clock3 size={16} aria-hidden="true" />{t('The Naseeb team replies here. New replies show a count next to Support in the menu.')}</p>}
         </div> : form}
       </GlassCard>
     </div>
