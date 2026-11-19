@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { createPoller } from '../lib/poller';
 import { nextPollDelay } from '../lib/pollDelay';
 import { BELL_POLL, NOTIFICATIONS_CHANGED, summaryChanged } from '../lib/notifications';
+
+// The bell's latest summary for pages inside the student shell (they read it instead of asking again).
+export const BellSummaryContext = createContext(undefined);
 
 const nextBellDelay = (delay, changed) => nextPollDelay(delay, changed, BELL_POLL);
 

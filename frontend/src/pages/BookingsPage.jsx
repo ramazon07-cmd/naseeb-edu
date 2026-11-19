@@ -20,7 +20,6 @@ import './bookings-scheduler.css';
 import '../design/pages/meetings-blue.css';
 import { Avatar, BlueButton, Chip, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader, PillTabs, tabId } from '../design/blue/ui';
 import { InlineLoadError } from '../components/states';
-import { resourceDisplayState } from '../lib/resourceState';
 import { closeWindow, createLinkWatch, navigateWindow, openBlankWindow } from '../lib/telegramLink';
 
 // Meetings are shown and entered in one chosen zone: Tashkent by default, or
@@ -1365,15 +1364,12 @@ function BookingRequests({ items, confirmId, setConfirmId, cancellingId, onChang
 
 const statusChip = (status) => ({ confirmed: 'ok', completed: 'ok', pending: 'warn', cancelled: 'overdue', rejected: 'overdue', expired_unconfirmed: 'overdue' }[status] || 'default');
 
-// "My Naseeb team" (counselor, school contact): the same list the dashboard shows. The workspace loader
-// fetches it with this page (data.team), so loading and error come from its resource status.
-function useStudentTeam(data, resourceStatus, retryResources) {
-  const state = resourceDisplayState(resourceStatus?.team);
+// "My Naseeb team" (counselor, school contact): the list the dashboard already loaded. This page asks the
+// server for nothing extra, so the card and its summary tile appear once the dashboard has fetched it.
+function useStudentTeam(data, resourceStatus) {
   return {
+    known: Boolean(resourceStatus?.team?.loaded) && Array.isArray(data.team),
     items: Array.isArray(data.team) ? data.team : [],
-    loading: state === 'loading',
-    error: state === 'error' ? resourceStatus.team.error : '',
-    retry: () => retryResources?.(['team']),
   };
 }
 
@@ -1386,7 +1382,7 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
   const [savingId, setSavingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(null);
   const teamRef = useRef(null);
-  const team = useStudentTeam(data, resourceStatus, retryResources);
+  const team = useStudentTeam(data, resourceStatus);
   const [openingId, setOpeningId] = useState(null);
   // A direct chat with a team member: open (or find) it, then land on it in Messages by its id.
   async function messageMember(member) {
@@ -1428,9 +1424,9 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
     }
   }
   const requestButton = <BlueButton icon={Plus} onClick={guard(() => { setTab('upcoming'); setFocusTick((value) => value + 1); })}>{t("Request meeting")}</BlueButton>;
-  const teamCard = (
+  const teamCard = !team.known ? null : (
 <GlassCard tone="solid" className="nb-meet-team" title={t("My Naseeb team")} icon={UsersRound} ref={teamRef}>
-        {team.loading ? <p className="nb-meet-note" role="status">{t("Loading…")}</p> : team.error ? <InlineLoadError message={team.error} onRetry={team.retry} /> : team.items.length ? <ul className="nb-meet-people">{team.items.map((member) => <li key={`${member.kind}-${member.id}`}>
+        {team.items.length ? <ul className="nb-meet-people">{team.items.map((member) => <li key={`${member.kind}-${member.id}`}>
           <Avatar name={member.name} size={44} />
           <span><b>{member.name}</b><small>{t(member.role)}</small></span>
           {setPage && <button type="button" className="nb-meet-msg" disabled={Boolean(openingId)} onClick={() => messageMember(member)} aria-label={tx`Message ${member.name}`} title={t("Message")}><MessageCircle size={18} aria-hidden="true" /></button>}
@@ -1440,11 +1436,11 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
   return <div className="nb-meet student-portal">
     <PageHeader title={t("Meetings")} subtitle={t("Schedule and manage meetings")} actions={requestButton} />
     {banner}
-    <KpiRow label={t("Meetings summary")}>
+    <KpiRow label={t("Meetings summary")} columns={team.known ? undefined : 3}>
       <KpiTile tone={0} icon={CalendarClock} value={upcoming.length} label={<>{t("Upcoming")}{waiting.length > 0 && <small className="nb-meet-kpi-sub">{t("{n} waiting for confirmation", { n: waiting.length })}</small>}</>} onClick={() => setTab('upcoming')} actionLabel={tx`Upcoming · ${upcoming.length}`} />
       <KpiTile tone={1} icon={History} value={past.length} label={t("Past meetings")} onClick={() => setTab('history')} actionLabel={tx`Past meetings · ${past.length}`} />
       <KpiTile tone={2} icon={Timer} value={minutes} unit={t("min")} label={t("Minutes in meetings")} />
-      <KpiTile tone={3} icon={UsersRound} value={team.items.length} loading={team.loading} label={t("My Naseeb team")} onClick={() => teamRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} actionLabel={t("My Naseeb team")} />
+      {team.known && <KpiTile tone={3} icon={UsersRound} value={team.items.length} label={t("My Naseeb team")} onClick={() => teamRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} actionLabel={t("My Naseeb team")} />}
     </KpiRow>
     <div className="nb-meet-bar">
       <PillTabs tabs={tabs} value={tab} onChange={setTab} label={t("Meetings")} idPrefix="nb-meet" />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { Bell, CheckCheck, ChevronRight, Clock3, MessageCircle } from 'lucide-react';
 import { api } from '../api';
 import { formatDateLocale, formatNumberLocale, t } from '../i18n';
@@ -9,6 +9,7 @@ import { KIND_ICONS, noticeMessage, useNotificationFeed } from '../components/No
 import { LoadMore, PagedListError, firstPageLoading } from '../components/paged';
 import { CxHead } from '../components/counselorUi';
 import { invalidatePagedLists } from '../hooks/usePagedList';
+import { BellSummaryContext } from '../hooks/useNotificationBell';
 import { BlueButton, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader } from '../design/blue/ui';
 import '../design/pages/dashboard-blue.css';
 
@@ -30,21 +31,26 @@ const dayParts = (value) => {
 // Everything both lists share: the unread summary (kept fresh by the bell's
 // change event), the notice + chat feed, and the cleanup that stops notices read
 // here from coming back unread from the page cache (Back, the bell).
-function useNotificationsPageData({ staff, notify }) {
-  const [summary, setSummary] = useState(null);
+// `sharedSummary`: the summary the shell's bell already polls (students). The page then asks the
+// server for nothing extra and follows the bell instead.
+function useNotificationsPageData({ staff, notify, sharedSummary }) {
+  const [ownSummary, setSummary] = useState(null);
+  const summary = sharedSummary === undefined ? ownSummary : sharedSummary;
   const loadSummary = useCallback(() => api.notificationSummary().then(setSummary).catch(() => {}), []);
   useEffect(() => {
+    if (sharedSummary !== undefined) return undefined;
     loadSummary();
     window.addEventListener(NOTIFICATIONS_CHANGED, loadSummary);
     return () => window.removeEventListener(NOTIFICATIONS_CHANGED, loadSummary);
-  }, [loadSummary]);
+  }, [loadSummary, sharedSummary]);
   const feed = useNotificationFeed({ summary, notify, staff });
   useEffect(() => () => invalidatePagedLists(['notifications']), []);
   return { summary, feed };
 }
 
 function StudentNotifications({ notify, setPage }) {
-  const { summary, feed } = useNotificationsPageData({ staff: false, notify });
+  const bellSummary = useContext(BellSummaryContext);
+  const { summary, feed } = useNotificationsPageData({ staff: false, notify, sharedSummary: bellSummary ?? null });
   const { list, chats, chatsNext, loadingChats, moreChats, markAll, markingAll, empty } = feed;
   function open(notification) {
     const target = feed.read(notification);

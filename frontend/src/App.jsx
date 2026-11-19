@@ -32,7 +32,7 @@ import { ASSESSMENT_DESCRIPTION } from './lib/assessmentMeta';
 import { STUDENT_SHELL_KEYS, loadsLazily, resourcesFor, studentPageKeys, usesPagedLists } from './lib/workspaceResources';
 import { useRemoteSearch } from './hooks/useRemoteSearch';
 import { useSupportCounts } from './hooks/useSupportCounts';
-import { useNotificationBell } from './hooks/useNotificationBell';
+import { BellSummaryContext, useNotificationBell } from './hooks/useNotificationBell';
 import { STUDENT_REFRESH_MS } from './lib/workspaceFreshness';
 import { studentPrimaryKeys } from './lib/resourceState';
 import { invalidatePagedLists } from './hooks/usePagedList';
@@ -426,7 +426,7 @@ function AppShell({ user, updateUser, data, stats, page, setPage, query, setQuer
   if (user.role === 'student' && !isPlatformAdmin(user)) {
     return <StudentShell {...{ user, data, page, setPage, setQuery, language, changeLanguage, bellCount, bellLabel, unreadChats, supportBadge, logout, banners, overlays }}
       pageMeta={meta} notificationsOpen={page === 'notifications'} openNotifications={openNotifications} openSearch={() => setUtility('search')} canExport={PDF_EXPORT_PAGES.has(page)}>
-      <PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} lazy={loadsLazily(user)} retry={retryResources}>{children}</PageDataBoundary>
+      <PageDataBoundary {...{ page, data, stats, loading, resourceStatus }} lazy={loadsLazily(user)} retry={retryResources}><BellSummaryContext.Provider value={bell.summary}>{children}</BellSummaryContext.Provider></PageDataBoundary>
     </StudentShell>;
   }
   return <div className={`app-shell role-${user.role} ${collapsed ? 'nav-collapsed' : ''}`.trim()}>
