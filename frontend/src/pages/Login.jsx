@@ -9,25 +9,10 @@ import '../design/blue/login.css';
 import { GRADES, gradeText } from '../lib/format';
 import { fullName } from '../lib/labels';
 
+import { forgetRememberedUsername, rememberUsername, rememberedUsername } from '../lib/rememberedUsername';
 export const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
 
-// "Remember me" keeps the username (never the password) on this browser.
-const REMEMBER_KEY = 'naseeb-edu-remember-username-v1';
-const rememberedUsername = () => {
-  try { return window.localStorage.getItem(REMEMBER_KEY) || ''; } catch { return ''; }
-};
-// Called on an explicit sign-out: on a shared school computer the next person
-// must not find the previous username in the form. Remembering is opt-in again
-// (the box is ticked per sign-in).
-export const forgetRememberedUsername = () => {
-  try { window.localStorage.removeItem(REMEMBER_KEY); } catch { /* A convenience only. */ }
-};
-const rememberUsername = (username) => {
-  try {
-    if (username) window.localStorage.setItem(REMEMBER_KEY, username);
-    else window.localStorage.removeItem(REMEMBER_KEY);
-  } catch { /* A convenience only. */ }
-};
+export { forgetRememberedUsername };
 
 function greeting() {
   const hour = new Date().getHours();

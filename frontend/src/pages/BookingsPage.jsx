@@ -20,21 +20,16 @@ import './bookings-scheduler.css';
 import '../design/pages/meetings-blue.css';
 import { Avatar, BlueButton, Chip, DateTile, EmptyState, GlassCard, KpiRow, KpiTile, PageHeader, PillTabs, tabId } from '../design/blue/ui';
 import { InlineLoadError } from '../components/states';
+import { MEETING_ZONES, MEETING_ZONE_KEY, storedMeetingZoneId, zoneById } from '../lib/meetingZone';
 import { closeWindow, createLinkWatch, navigateWindow, openBlankWindow } from '../lib/telegramLink';
 
 // Meetings are shown and entered in one chosen zone: Tashkent by default, or
 // China for people there. Neither has daylight saving, so each is a fixed offset.
 // The choice is the viewer's own and is remembered in this browser. A viewer whose
 // clock is in yet another zone also sees their own time.
-export const MEETING_ZONES = [
-  { id: 'Asia/Tashkent', label: 'Tashkent time', offset: '+05:00', minutes: 300 },
-  { id: 'Asia/Shanghai', label: 'China time', offset: '+08:00', minutes: 480 },
-];
-const ZONE_KEY = 'naseeb.meetingZone';
-const zoneById = (id) => MEETING_ZONES.find((zone) => zone.id === id) || MEETING_ZONES[0];
-function storedZoneId() {
-  try { return zoneById(window.localStorage.getItem(ZONE_KEY)).id; } catch { return MEETING_ZONES[0].id; }
-}
+export { MEETING_ZONES };
+const ZONE_KEY = MEETING_ZONE_KEY;
+const storedZoneId = storedMeetingZoneId;
 let zone = zoneById(storedZoneId());
 function setMeetingZone(id) {
   zone = zoneById(id);
@@ -1122,8 +1117,8 @@ const slotEndText = (slot) => clockText(new Date(new Date(slot.starts_at).getTim
 const slotSpan = (slot) => `${clockText(slot.starts_at)}–${slotEndText(slot)} · ${tx`${slot.duration_minutes} min`}`;
 
 // "Book a meeting": the three-step panel at the top of the student's Meetings page (Time, Details, Done), then the
-// requests still waiting for the counselor. It makes the requests the request dialog made, once the panel is near
-// the screen (or opened by the header button or a booking link): the people and their times, then the chosen
+// requests still waiting for the counselor. It makes the requests the request dialog made, once the student acts
+// (the header button, "See free times" or a booking link): the people and their times, then the chosen
 // person's full list; a booking, a new time (`reschedule`) and a cancel are one request each.
 function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId, onUnavailable, requests, notify, reload, focusTick }) {
   const root = useRef(null);
@@ -1134,6 +1129,7 @@ function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId
   const [step, setStep] = useState(1);
   const [pick, setPick] = useState(null);
   const [topic, setTopic] = useState('');
+  const [notes, setNotes] = useState('');
   const [view, setView] = useState(null);
   const [edit, setEdit] = useState(null);
   const [editSlots, setEditSlots] = useState({ items: [], loading: false, error: '' });
@@ -1144,14 +1140,8 @@ function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId
   const [confirmId, setConfirmId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
   const wantFocus = useRef(false);
-  // Arm on first sight of the panel (or at once without IntersectionObserver).
-  useEffect(() => {
-    if (armed || hidden) return undefined;
-    if (initialParticipantId || typeof IntersectionObserver === 'undefined') { setArmed(true); return undefined; }
-    const observer = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) setArmed(true); }, { rootMargin: '200px' });
-    if (root.current) observer.observe(root.current);
-    return () => observer.disconnect();
-  }, [armed, hidden, initialParticipantId]);
+  // Nothing is requested until the student acts: the header button, the start button below, or a booking link.
+  useEffect(() => { if (initialParticipantId && !hidden) setArmed(true); }, [initialParticipantId, hidden]);
   // A new time for a waiting request: the same request the reschedule dialog makes.
   useEffect(() => {
     if (!edit) return undefined;
@@ -1188,6 +1178,17 @@ function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId
   const daySlots = shown.filter((slot) => slot.available && meetingDay(slot.starts_at) === date);
   const today = meetingDay();
   const ready = enabled && !loading && !peopleError && !loadingSlots;
+  // A new time zone moves the days: keep the chosen time's day (or the first open day) in the new zone,
+  // from the times already loaded (no request).
+  const zoneSeen = useRef(zone.id);
+  useEffect(() => {
+    if (zoneSeen.current === zone.id) return;
+    zoneSeen.current = zone.id;
+    const first = shown.find((slot) => slot.available);
+    const next = pick ? meetingDay(pick.starts_at) : first ? meetingDay(first.starts_at) : '';
+    setDate(next);
+    setView(null);
+  }, [zone.id]); // eslint-disable-line react-hooks/exhaustive-deps -- reacts to the zone only
   // The header button (and a booking link) bring the panel to the screen and put focus on its first control.
   useEffect(() => {
     if (!focusTick) return;
@@ -1223,12 +1224,12 @@ function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId
         setLast({ host: personName, slot: pick, topic: edit.topic, moved: true });
         setEdit(null);
       } else {
-        await api.create('bookings', { participant: Number(participantId), availability_slot: pick.id, topic: topic.trim(), starts_at: pick.starts_at, duration_minutes: pick.duration_minutes, notes: '' });
+        await api.create('bookings', { participant: Number(participantId), availability_slot: pick.id, topic: topic.trim(), starts_at: pick.starts_at, duration_minutes: pick.duration_minutes, notes: notes.trim() });
         notify(t("Meeting request sent for approval."));
         setLast({ host: personName, slot: pick, topic: topic.trim(), moved: false });
         retrySlots();
       }
-      setTopic(''); setPick(null); setStep(3);
+      setTopic(''); setNotes(''); setPick(null); setStep(3);
       reload();
     } catch (err) {
       notify(err.message, 'error');
@@ -1271,7 +1272,8 @@ function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId
   const duration = pick?.duration_minutes || shown[0]?.duration_minutes;
   let body;
   if (locked) body = <div className="bk-wide"><div className="bk-locked" role="status"><Send size={22} aria-hidden="true" /><p>{t("Connect Telegram to request meetings")}</p><BlueButton size="sm" onClick={onLocked}>{t("Connect")}</BlueButton></div></div>;
-  else if (!enabled || loading) body = <div className="bk-wide"><p className="bk-note" role="status">{t("Loading available times…")}</p></div>;
+  else if (!armed) body = <div className="bk-wide"><div className="bk-empty"><CalendarDays size={26} aria-hidden="true" /><p>{t("Pick a counselor and a free time to request a meeting.")}</p><BlueButton icon={CalendarDays} onClick={() => { wantFocus.current = true; setArmed(true); }}>{t("See free times")}</BlueButton></div></div>;
+  else if (loading) body = <div className="bk-wide"><p className="bk-note" role="status">{t("Loading available times…")}</p></div>;
   else if (peopleError) body = <div className="bk-wide"><InlineLoadError message={peopleError} onRetry={retryPeople} /></div>;
   else if (!participants.length) body = <div className="bk-wide"><p className="bk-note">{t("No counselor, teacher, or school representative is available for your account.")}</p></div>;
   else if (step === 3 && last) body = <div className="bk-wide"><div className="bk-done" role="status">
@@ -1287,6 +1289,7 @@ function BookingPanel({ children, hidden, locked, onLocked, initialParticipantId
   else if (step === 2 && pick) body = <div className="bk-wide"><form className="bk-f" onSubmit={send}>
     <div className="bk-sum"><p><User size={16} aria-hidden="true" /><b>{personName}</b></p><p><CalendarDays size={16} aria-hidden="true" />{dayTitle(meetingDay(pick.starts_at))}</p><p><Clock3 size={16} aria-hidden="true" />{joinParts(slotSpan(pick), viewerTimeHint(pick.starts_at))}</p><p><Globe size={16} aria-hidden="true" />{timeZoneName()}</p></div>
     {!edit && <label className="bk-fld"><span>{t("Topic")}</span><textarea rows={3} required value={topic} onChange={(event) => setTopic(event.target.value)} placeholder={t("Essay review, university list...")} /></label>}
+    {!edit && <label className="bk-fld"><span>{t("Notes")}</span><textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t("What would you like to discuss?")} /></label>}
     <p className="bk-note">{edit ? t("The new time goes back to {name} to confirm.", { name: personName }) : t("Your counselor confirms the request.")}</p>
     <div className="bk-act"><BlueButton variant="ghost" icon={ChevronLeft} onClick={() => stepTo(1)}>{t("Back")}</BlueButton><BlueButton type="submit" icon={Send} disabled={saving} aria-busy={saving}>{saving ? t("Requesting…") : edit ? t("Save new time") : t("Request meeting")}</BlueButton></div>
   </form></div>;

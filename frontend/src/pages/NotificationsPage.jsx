@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Bell, CalendarClock, CheckCheck, ChevronRight, Clock3, MessageCircle, PenLine, Target } from 'lucide-react';
 import { api } from '../api';
 import { formatDateLocale, formatNumberLocale, t } from '../i18n';
@@ -36,7 +36,8 @@ const dayParts = (value) => {
 // server for nothing extra and follows the bell instead.
 function useNotificationsPageData({ staff, notify, sharedSummary }) {
   const [ownSummary, setSummary] = useState(null);
-  const summary = sharedSummary === undefined ? ownSummary : sharedSummary;
+  const summary = sharedSummary ?? ownSummary;
+  const fellBack = useRef(false);
   const loadSummary = useCallback(() => api.notificationSummary().then(setSummary).catch(() => {}), []);
   useEffect(() => {
     if (sharedSummary !== undefined) return undefined;
@@ -44,6 +45,14 @@ function useNotificationsPageData({ staff, notify, sharedSummary }) {
     window.addEventListener(NOTIFICATIONS_CHANGED, loadSummary);
     return () => window.removeEventListener(NOTIFICATIONS_CHANGED, loadSummary);
   }, [loadSummary, sharedSummary]);
+  // The bell answers at sign-in, so normally nothing is fetched here. If it has not (or failed), ask once
+  // after a short wait so the page never waits for it forever.
+  const missing = sharedSummary === null;
+  useEffect(() => {
+    if (!missing || fellBack.current) return undefined;
+    const timer = window.setTimeout(() => { fellBack.current = true; loadSummary(); }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [missing, loadSummary]);
   const feed = useNotificationFeed({ summary, notify, staff });
   useEffect(() => () => invalidatePagedLists(['notifications']), []);
   return { summary, feed };

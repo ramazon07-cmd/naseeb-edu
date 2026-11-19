@@ -74,10 +74,10 @@
         try {
           signedIn = localStorage.getItem('__SESSION_HINT_KEY__') !== null
         } catch { /* storage disabled: treat as a visitor */ }
-        // The student app and the sign-in page set their text in Mona Sans (Latin
-        // subset): fetch it early for those visitors only, so the swap from the
-        // metric-matched fallback happens before first paint and does not shift.
-        if (signedIn || (location.pathname || '').startsWith('/login') || location.hash === '#/login') {
+        // The sign-in page sets its text in Mona Sans (Latin subset): fetch it early
+        // there only. The session hint holds no role, so a signed-in browser (staff
+        // included) does not preload it; the student app loads it with its styles.
+        if ((location.pathname || '').startsWith('/login') || location.hash === '#/login') {
           const mona = document.createElement('link')
           mona.rel = 'preload'
           mona.as = 'font'

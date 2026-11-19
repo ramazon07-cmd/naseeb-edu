@@ -21,6 +21,8 @@ export const BLUE_MEETINGS_TRANSLATIONS = {
   'New time saved': ['Yangi vaqt saqlandi', 'Новое время сохранено'],
   'Book another': ['Yana band qilish', 'Записаться ещё'],
   'Your requests': ['So‘rovlaringiz', 'Ваши запросы'],
+  'See free times': ['Bo‘sh vaqtlarni ko‘rish', 'Показать свободное время'],
+  'Pick a counselor and a free time to request a meeting.': ['Maslahatchi va bo‘sh vaqtni tanlab, uchrashuv so‘rang.', 'Выберите консультанта и свободное время, чтобы запросить встречу.'],
   'Open meetings': ['Uchrashuvlarni ochish', 'Открыть встречи'],
   'Pending': ['Kutilmoqda', 'Ожидает'],
   'No topic': ['Mavzusiz', 'Без темы'],
