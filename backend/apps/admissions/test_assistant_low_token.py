@@ -406,6 +406,32 @@ class EndpointTests(Fixture, APITestCase):
         response, text = self.ask('Explain the SAT format', 'Whole')
         self.assertEqual((response['X-Assistant-Source'], text), ('gateway', 'Whole'))
 
+    def test_answers_without_an_explicit_finish_are_not_cached(self):
+        self.ask('Explain the SAT format', 'Maybe cut off', times=3, finish=None)
+        response, text = self.ask('Explain the SAT format', 'Whole')
+        self.assertEqual((response['X-Assistant-Source'], text), ('gateway', 'Whole'))
+
+    def test_counselor_caseload_question_gets_aggregate_context(self):
+        self.client.force_authenticate(self.counselor)
+        with mock.patch('urllib.request.urlopen', return_value=self.stream(*self.answer_events())) as urlopen:
+            self.chat('How many students do I have?')
+        system = self.sent(urlopen)['messages'][0]['content']
+        self.assertIn('students 1; at risk', system)
+        self.assertNotIn('Zebulon', system)
+
+    def test_students_never_get_the_caseload_topic(self):
+        self.assertEqual(assistant.classify_topics(['How many students apply to MIT?']), {'workload'})
+        with mock.patch('urllib.request.urlopen', return_value=self.stream(*self.answer_events())) as urlopen:
+            self.chat('How many students apply to MIT?')
+        self.assertNotIn('Context', self.sent(urlopen)['messages'][0]['content'])
+
+    def test_next_roadmap_step_skips_missions_waiting_for_approval(self):
+        RoadmapMission.objects.filter(student=self.student).update(status=RoadmapMission.Status.SUBMITTED)
+        RoadmapMission.objects.create(student=self.student, title='Draft an essay', level=1, sequence=2)
+        answer = answer_locally(self.student_user, 'What’s my next roadmap step?', 'en')
+        self.assertIn('Draft an essay', answer)
+        self.assertNotIn('Pick a major', answer)
+
     @override_settings(AI_ASSISTANT_ANSWER_CACHE_SECONDS=0)
     def test_cache_can_be_disabled(self):
         self.ask('Explain the SAT format', 'One', times=3)

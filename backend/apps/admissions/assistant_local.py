@@ -287,9 +287,10 @@ def _student_answer(student, intent, lang):
         lines = [f'- {title} ({_when(due, today, lang)})' for title, due in rows.order_by('due_date').values_list('title', 'due_date')[:3]]
         return head + '\n' + '\n'.join(lines)
     if intent == 'roadmap':
+        # Only missions the student can act on: submitted ones are waiting for approval.
         mission = (
             RoadmapMission.objects.filter(student=student)
-            .exclude(status=RoadmapMission.Status.COMPLETED)
+            .exclude(status__in=(RoadmapMission.Status.COMPLETED, RoadmapMission.Status.SUBMITTED))
             .order_by('level', 'sequence', 'due_date').values('title', 'due_date').first()
         )
         if not mission:

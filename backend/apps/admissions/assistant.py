@@ -164,6 +164,8 @@ TOPIC_PATTERNS = {
         r"\bmy (?:major|grade|gpa|profile|countries|scholarship|progress)|major|scholarship|profil|progress|"
         r"stipendiya|taraqqiyot|yo'nalish|mening (?:sinf|mutaxassis)|стипенд|профил|специальност|прогресс"
     ),
+    # Counselor caseload questions ("how many students do I have?"); students never get this topic.
+    'workload': re.compile(r"student|o'quvchi|oquvchi|talaba|учени|студент|at risk|xavf|риск|caseload|workload"),
 }
 _APOSTROPHES = str.maketrans({c: "'" for c in '‘’ʻʼ`´′ʹ'})
 # Essay, planning and long questions need the stronger model.
@@ -523,6 +525,8 @@ class AssistantChatView(APIView):
         request_started = time.monotonic()
         tier = model_tier(question)
         topics = classify_topics([m['content'] for m in messages if m['role'] == 'user'][-2:])
+        if user.role == User.Role.STUDENT:
+            topics.discard('workload')
 
         local_answer = None
         if not blocked and language:
@@ -665,7 +669,7 @@ class AssistantChatView(APIView):
                     # Local answers embed record titles written by others: never replayed as history.
                     remember_assistant_turn(user.id, answer)
                 if (cache_key and source == 'gateway'
-                        and usage_sink.get('finish_reason', 'stop') == 'stop'):
+                        and usage_sink.get('finish_reason') == 'stop'):
                     _store_answer(cache_key, answer)
             except PROVIDER_ERRORS:
                 logger.warning(
