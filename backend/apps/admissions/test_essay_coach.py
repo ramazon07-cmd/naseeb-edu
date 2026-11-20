@@ -439,17 +439,10 @@ class RecheckRuleTests(CoachApiTestCase):
         self.assertEqual(latest.data['result']['notes'][0]['kind'], 'reflect')
         # No fingerprint and no checkpoint: v1 notes do not block, nothing to compare words with.
         self.assertEqual(self.check()[0].status_code, status.HTTP_200_OK)
-        # A v1 check whose checkpoint holds the same text is reused through the checkpoint's text.
-        old.delete()
-        EssayDepthCheck.objects.all().delete()
-        old = EssayDepthCheck.objects.create(essay=self.essay, tab=tab, save_seq=tab.save_seq, model='local',
-                                             result={'summary': '', 'strengths': [], 'scores': {}, 'notes': []})
-        EssayCheckpoint.objects.create(essay=self.essay, tab=tab, doc=make_doc(LONG_TEXT), content=LONG_TEXT,
-                                       reason='depth_check')
-        response, gateway = self.check()
-        self.assertEqual((response.status_code, response.data['reused'], response.data['id'], response.data['source']),
-                         (status.HTTP_200_OK, True, old.pk, 'rules'))
-        self.assertEqual(gateway.bodies, [])
+        # A check from before fingerprints is never reused: same text, new input, a new check.
+        old.refresh_from_db()
+        self.assertEqual(old.input_hash, '')
+        self.assertEqual(EssayDepthCheck.objects.count(), 2)
 
     @override_settings(OUTBOUND_AI_ENABLED=False)
     def test_rules_also_apply_to_the_local_reader(self):
@@ -598,3 +591,133 @@ class MigrationTests(EssayLabTestCase):
                                              result={'summary': 'old'})
         row.refresh_from_db()
         self.assertEqual((row.text_fingerprint, row.overall, row.note_states), ('', None, {}))
+
+
+FINGERPRINT_FIXTURES = Path(__file__).resolve().parents[3] / 'docs' / 'essay-coach-fingerprint-fixtures.json'
+
+
+class FingerprintFixtureTests(EssayLabTestCase):
+    def test_shared_vectors(self):
+        cases = json.loads(FINGERPRINT_FIXTURES.read_text(encoding='utf-8'))
+        self.assertGreaterEqual(len(cases), 10)
+        for case in cases:
+            self.assertEqual(coach.text_fingerprint(case['text']), case['sha256'], case['name'])
+        digests = {case['name']: case['sha256'] for case in cases}
+        # the BOM, \x85 and case/spacing variants all equal the plain text
+        self.assertEqual(digests['plain'], digests['bom'])
+        self.assertEqual(digests['plain'], digests['next line x85'])
+        self.assertEqual(digests['plain'], digests['case and spacing'])
+
+
+class SentenceSplitTests(EssayLabTestCase):
+    def test_decimals_and_abbreviations_do_not_end_a_sentence(self):
+        text = 'Dr. Smith paid 3.5 dollars, e.g. for bread, vs. cake. Next sentence here. Mrs. Lee left St. Paul at 5 p.m. today.'
+        spans = [text[start:end].strip() for start, end in coach.sentence_spans(text)]
+        self.assertEqual(spans, ['Dr. Smith paid 3.5 dollars, e.g. for bread, vs. cake.', 'Next sentence here.',
+                                 'Mrs. Lee left St. Paul at 5 p.m. today.'])
+        notes = coach.validate_notes([
+            {'criterion': 'reflection', 'quote': 'Dr. Smith paid', 'question': 'Who was he to you at the time?'},
+            {'criterion': 'voice', 'quote': 'paid 3.5 dollars', 'question': 'Which coin did you hold, and where?'},
+            {'criterion': 'voice', 'quote': 'vs. cake', 'question': 'Why did bread win over the cake for you?'},
+            {'criterion': 'voice', 'quote': 'Next sentence here.', 'question': 'What came right before that scene?'},
+        ], text, 'personal_statement', 12)
+        self.assertEqual([note['quote'] for note in notes], ['Dr. Smith paid', 'Next sentence here.'])
+
+
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
+class CostGuardTests(CoachApiTestCase):
+    def failing_gateway(self, fail_step):
+        good = FakeGateway()
+
+        def urlopen(request, timeout=None):
+            body = json.loads(request.data.decode('utf-8'))
+            step = 'notes' if 'TASK: NOTES' in body['messages'][-1]['content'] else 'score'
+            if step == fail_step:
+                raise OSError('down')
+            return good(request, timeout)
+
+        return urlopen
+
+    def test_a_failed_check_is_free(self):
+        left = ai_budget.user_remaining('essay_coach', self.student_user)
+        day = ai_budget.timezone.localdate().isoformat()
+        for step in ('notes', 'score'):
+            with mock.patch('urllib.request.urlopen', side_effect=self.failing_gateway(step)):
+                response = self.client.post(f'{BASE}/essays/{self.essay.pk}/depth-check/', {'base_seq': 0},
+                                            format='json')
+            self.assertEqual((response.status_code, response.data['code']),
+                             (status.HTTP_503_SERVICE_UNAVAILABLE, 'coach_unavailable'), step)
+            self.assertEqual(ai_budget.user_remaining('essay_coach', self.student_user), left, step)
+            self.assertEqual(cache.get(f'ai-budget:essay_coach:{day}'), 0, step)
+            self.assertEqual(cache.get(f'ai-budget:essay_coach:{day}:school:{self.school.pk}'), 0, step)
+        self.assertEqual(EssayDepthCheck.objects.count(), 0)
+        # the paid first call of the notes failure is still recorded
+        self.assertEqual(AiUsageLog.objects.filter(status='ok').count(), 1)
+
+    def test_a_check_makes_at_most_two_paid_calls(self):
+        _, gateway = self.check(FakeGateway(score={'scores': {}}))
+        self.assertEqual(len(gateway.bodies), 1)
+        _, gateway = self.check()
+        self.assertLessEqual(len(gateway.bodies), 2)
+
+    @override_settings(ESSAY_COACH_RECHECK_PER_MINUTE=2)
+    def test_the_guard_runs_before_the_rules(self):
+        self.check()
+        for _ in range(1):
+            self.assertTrue(self.check()[0].data['reused'])
+        response, gateway = self.check()
+        self.assertEqual((response.status_code, response.data['code']), (status.HTTP_429_TOO_MANY_REQUESTS, 'slow_down'))
+
+    def test_refused_rechecks_do_not_use_the_budget_and_open_notes_come_first(self):
+        notes = {'notes': [{'criterion': 'reflection', 'quote': 'I learned that patience matters.',
+                            'question': 'When did you first notice this?', 'context': ''}]}
+        self.check(FakeGateway(notes=notes))
+        left = ai_budget.user_remaining('essay_coach', self.student_user)
+        self.set_text(LONG_TEXT.replace('grandmother never', 'aunt always'))
+        with mock.patch.object(coach, 'changed_words') as words:
+            response, gateway = self.check()
+        self.assertEqual(response.data['code'], 'notes_open')
+        words.assert_not_called()
+        self.assertEqual(gateway.bodies, [])
+        self.assertEqual(ai_budget.user_remaining('essay_coach', self.student_user), left)
+
+    def test_word_comparison_is_capped_and_short_circuits(self):
+        self.assertEqual(coach.changed_words('a b c', 'a b c d e f g', threshold=3), 4)
+        self.assertEqual(coach.changed_words('a b c', 'a b x', threshold=3), 1)
+        # only the first `limit` characters are compared
+        self.assertEqual(coach.changed_words('same words here ' + 'old ' * 50, 'same words here ' + 'new ' * 50, limit=16), 0)
+        with mock.patch('difflib.SequenceMatcher') as matcher:
+            coach.changed_words('a ' * 10, 'a ' * 3, threshold=3)
+        matcher.assert_not_called()
+
+    def test_reuse_needs_the_same_prompt_type_and_model(self):
+        self.check()
+        self.assertTrue(self.check()[0].data['reused'])
+        type(self.essay).objects.filter(pk=self.essay.pk).update(prompt='A different question.')
+        self.essay.refresh_from_db()
+        response, gateway = self.check()
+        self.assertEqual((response.status_code, response.data['reused']), (status.HTTP_200_OK, False))
+        self.assertEqual(len(gateway.bodies), 2)
+        self.assertTrue(self.check()[0].data['reused'])
+        type(self.essay).objects.filter(pk=self.essay.pk).update(essay_type='supplement')
+        self.essay.refresh_from_db()
+        supplement = {'scores': {'fit_specificity': 2, 'reflection': 2, 'evidence': 2, 'voice': 2, 'concision': 2},
+                      'summary': 's', 'strengths': [], 'suggestions': []}
+        self.assertFalse(self.check(FakeGateway(score=supplement))[0].data['reused'])
+        with override_settings(ESSAY_COACH_MODEL='other/model'):
+            response, gateway = self.check(FakeGateway(score=supplement))
+        self.assertFalse(response.data['reused'])
+        self.assertGreaterEqual(len(gateway.bodies), 1)
+
+    def test_missing_checkpoint_falls_back_to_the_fingerprint_and_logs_no_text(self):
+        self.check()
+        EssayCheckpoint.objects.filter(reason='depth_check').delete()
+        self.assertTrue(self.check()[0].data['reused'])
+        self.set_text(LONG_TEXT.replace('grandmother', 'aunt'))
+        with self.assertLogs('naseeb.essay_coach', level='INFO') as logs:
+            response, _ = self.check()
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        joined = '\n'.join(logs.output)
+        self.assertIn('essay_coach_recheck_unmeasured', joined)
+        self.assertNotIn('grandmother', joined)
+        self.assertNotIn('aunt', joined)

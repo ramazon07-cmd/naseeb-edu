@@ -56,6 +56,13 @@ class _ProcessFallback:
         self.day = None
         self.counts = {}
 
+    def refund(self, day, keys):
+        with self.lock:
+            if day == self.day:
+                for key in keys:
+                    if self.counts.get(key, 0) > 0:
+                        self.counts[key] -= 1
+
     def consume(self, day, caps):
         with self.lock:
             if day != self.day:
@@ -116,6 +123,21 @@ def consume(feature, user):
         cache_decrement(key)
     _note([f'{prefix}:refused'])
     return False
+
+
+def refund(feature, user):
+    """Give back the unit :func:`consume` took for a call that failed (best effort, every counter it touched)."""
+    day = timezone.localdate().isoformat()
+    _, _, user_cap = _limits(feature)
+    prefix = f'ai-budget:{feature}:{day}'
+    keys = [prefix]
+    if user.school_id:
+        keys.append(f'{prefix}:school:{user.school_id}')
+    if user_cap is not None:
+        keys.append(f'{prefix}:user:{user.pk}')
+    for key in keys:
+        cache_decrement(key)
+    _fallback.refund(day, [f'{feature}:process'] + ([f'{feature}:user:{user.pk}'] if user_cap is not None else []))
 
 
 def user_remaining(feature, user):

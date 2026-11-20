@@ -1058,7 +1058,8 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
     @override_settings(ESSAY_COACH_HOURLY_LIMIT=2, ESSAY_COACH_MIN_INTERVAL_SECONDS=1)
     def test_hourly_limit(self):
         self.essay = self.make_essay(content='Plain words about bread and butter.')
-        clock = mock.Mock(time=mock.Mock(side_effect=[1000.0, 1002.0, 1004.0]))
+        # Every request reads the clock for the re-check guard and for the check's own throttle.
+        clock = mock.Mock(time=mock.Mock(side_effect=iter([1000.0, 1000.0, 1002.0, 1002.0, 1004.0, 1004.0])))
         with mock.patch('apps.users.throttles.time', clock):
             self.assertEqual(self.check().status_code, status.HTTP_200_OK)
             self.rewrite('Entirely different words about tea and jam.')
@@ -1090,22 +1091,22 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertFalse(EssayDepthCheck.objects.exists())
 
         cache.clear()
-        # Unusable scores: retried once (two billed calls), then the check fails.
+        # Unusable scores: one billed call, no retry, the check fails.
         garbage = {'summary': 42, 'scores': {'voice': 9, 'reflection': True, 'structure': 2.0}, 'strengths': [1]}
         gateway = FakeGateway(score=f'```json\n{json.dumps(garbage)}\n```')
         with mock.patch('urllib.request.urlopen', side_effect=gateway):
             response = self.check()
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        self.assertEqual(gateway.steps, ['score', 'score'])
+        self.assertEqual(gateway.steps, ['score'])
         self.assertFalse(EssayDepthCheck.objects.exists())
 
     @override_settings(AI_GATEWAY_API_KEY='test-key')
-    def test_a_bad_first_answer_is_retried_once(self):
+    def test_a_bad_answer_is_never_retried(self):
         gateway = FakeGateway(score=[{'scores': {'voice': 9}}, SCORE_REPLY])
         with mock.patch('urllib.request.urlopen', side_effect=gateway):
             response = self.check()
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertEqual(response.data['overall'], 62)
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(gateway.steps, ['score'])
 
     @override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='test-key')
     def test_ai_switch_off_uses_the_local_coach(self):
@@ -1199,9 +1200,9 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
     def test_ai_check_logs_gateway_fallback_and_unusable_output(self):
         with mock.patch('urllib.request.urlopen', return_value=self.usage_response('not json', 'openai/gpt-5.4-nano')):
             self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        # The unusable score answer is retried once: two billed calls, both recorded.
+        # The unusable score answer is not retried: one billed call, recorded.
         rows = list(AiUsageLog.objects.filter(feature='essay_coach'))
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)
         for row in rows:
             self.assertEqual((row.status, row.model, row.fallback_used, row.input_tokens), ('invalid_output', 'openai/gpt-5.4-nano', True, 1200))
 

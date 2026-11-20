@@ -24,7 +24,7 @@ from rest_framework.settings import api_settings
 from apps.users.audit import audit_product_action
 from apps.users.entitlements import require_feature
 from apps.users.models import User
-from .. import ai_usage
+from .. import ai_budget, ai_usage
 from ..models import (
     ActivityLog, Essay, EssayCheckpoint, EssayDepthCheck, EssayFolder, EssayRevision, EssayTab, EssayTabEdit,
     Notification, StudentProfile,
@@ -66,7 +66,7 @@ from .tabs import (
     tree_order,
 )
 from .streak import build_streak, own_words_delta, parse_month, record_words
-from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, spend_coach_budget
+from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, EssayDepthGateThrottle, spend_coach_budget
 from .writes import CHECKPOINT_CAP, TEXT_FIELDS, make_checkpoint, set_text  # noqa: F401 (CHECKPOINT_CAP: tests)
 
 LIST_LIMIT = 500
@@ -814,11 +814,17 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
         if not tab.content.strip():
             raise EssayLabError('Write something first, then ask the Coach.', 'empty_essay')
         require_feature(request, 'essay_coach')
+        # Cheap guard first: the re-check rules below read the database and compare texts.
+        gate_throttle = EssayDepthGateThrottle()
+        if not gate_throttle.allow_request(request, self):
+            self.throttled(request, gate_throttle.wait())
         fingerprint = coach.text_fingerprint(tab.content)
+        model_now = coach.current_model()
+        input_hash = coach.input_hash(essay, model_now)
         latest = EssayDepthCheck.objects.filter(tab_id=tab.pk).order_by('-created_at', '-id').first()
         if latest is not None:
-            # Re-check rules: answered before the throttle slot, any AI call or the budget.
-            blocked = self._recheck_gate(request, tab, latest, fingerprint)
+            # Re-check rules: answered before the check's own throttle slot, any AI call or the budget.
+            blocked = self._recheck_gate(request, tab, latest, fingerprint, input_hash)
             if blocked is not None:
                 return blocked
         throttle = EssayDepthCheckThrottle()
@@ -835,6 +841,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
                 # Both calls of the check are recorded in ai_usage inside run_ai_check.
                 result, model = coach.run_ai_check(essay, tab.content, request.user)
             except coach.CoachUnavailable:
+                ai_budget.refund('essay_coach', request.user)  # a failed check is free
                 raise EssayLabError('The Coach is unavailable right now. Please try again soon.',
                                     'coach_unavailable', 503)
         else:
@@ -848,7 +855,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
                 raise exceptions.NotFound('Tab not found.')
             check = EssayDepthCheck.objects.create(
                 essay_id=essay.pk, tab=tab, save_seq=tab.save_seq, result=result, model=model,
-                text_fingerprint=fingerprint, overall=result.get('overall'),
+                text_fingerprint=fingerprint, input_hash=coach.input_hash(essay, model), overall=result.get('overall'),
             )
             stale_ids = list(
                 EssayDepthCheck.objects.filter(tab_id=tab.pk).order_by('-created_at', '-id')
@@ -859,31 +866,36 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Coach check', author=request.user)
         return Response(DepthCheckSerializer(check, context={'request': request}).data)
 
-    def _recheck_gate(self, request, tab, latest, fingerprint):
+    def _recheck_gate(self, request, tab, latest, fingerprint, input_hash):
         """The response that refuses or answers a re-check without the AI, or None to go ahead.
 
-        Same text: the latest check comes back unchanged. Otherwise every open note must be
-        resolved and enough words must have changed since the checked text.
+        Same text and same input (type, prompt, rubric, model): the latest check comes back unchanged.
+        Same text but another input (or a check from before fingerprints): a new check, no rules, as
+        there is nothing for the student to resolve or change. Otherwise every open note must be
+        resolved (cheap, checked first) and enough words must have changed since the checked text.
+        Without the checkpoint holding that text the word rule cannot be measured and is skipped.
         """
-        checked_text = None
-        checkpoint = EssayCheckpoint.objects.filter(tab_id=tab.pk, reason=EssayCheckpoint.Reason.DEPTH_CHECK)
-        stored = latest.text_fingerprint
-        if not stored:
-            # A check from before fingerprints: take the text from its checkpoint, if it is still there.
-            checked_text = checkpoint.order_by('-created_at', '-id').values_list('content', flat=True).first()
-            stored = coach.text_fingerprint(checked_text) if checked_text is not None else ''
-        if stored == fingerprint:
+        same_text = bool(latest.text_fingerprint) and latest.text_fingerprint == fingerprint
+        if same_text and latest.input_hash == input_hash:
             return Response(DepthCheckSerializer(latest, context={'request': request, 'reused': True}).data)
+        if same_text or not latest.text_fingerprint:
+            return None
         open_notes = coach.open_note_count(latest.result, latest.note_states, tab.content)
         if open_notes:
             return error('Resolve all notes first.', 'notes_open', status.HTTP_409_CONFLICT, open=open_notes)
+        checked_text = (
+            EssayCheckpoint.objects.filter(tab_id=tab.pk, reason=EssayCheckpoint.Reason.DEPTH_CHECK)
+            .order_by('-created_at', '-id').values_list('content', flat=True).first()
+        )
         if checked_text is None:
-            checked_text = checkpoint.order_by('-created_at', '-id').values_list('content', flat=True).first()
-        if checked_text is not None:
-            changed = coach.changed_words(checked_text, tab.content)
-            if changed < settings.ESSAY_COACH_MIN_CHANGED_WORDS:
-                return error('Change your essay first.', 'too_small_change', status.HTTP_409_CONFLICT,
-                             changed=changed, min_words=settings.ESSAY_COACH_MIN_CHANGED_WORDS)
+            coach.logger.info('essay_coach_recheck_unmeasured essay_id=%s tab_id=%s', tab.essay_id, tab.pk)
+            return None
+        needed = settings.ESSAY_COACH_MIN_CHANGED_WORDS
+        changed = coach.changed_words(checked_text, tab.content, limit=settings.ESSAY_COACH_MAX_INPUT_CHARS,
+                                      threshold=needed)
+        if changed < needed:
+            return error('Change your essay first.', 'too_small_change', status.HTTP_409_CONFLICT,
+                         changed=changed, min_words=needed)
         return None
 
     @action(detail=True, methods=['patch'], url_path=r'depth-check/(?P<check_id>[0-9]+)/notes')

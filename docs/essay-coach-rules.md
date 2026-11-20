@@ -42,7 +42,8 @@ gets at most 6 notes whatever its score.
 - At most one note per sentence. If two notes quote overlapping text, keep the higher-priority one.
 - A note whose question is nearly the same as another note's is dropped.
 - A note's context line may not repeat its own question, nor an earlier note's context line; if it adds nothing new it is left out.
-- Notes come back ordered by importance; the first three open notes carry a "Priority" flag.
+- Notes come back ordered by importance; the first three notes of a check carry the "Priority" flag. It is set once, when the check is made, and does not move as notes are resolved.
+- "Sentence" does not split on decimals (3.5) or common abbreviations (Dr., Mr., Mrs., Ms., St., Prof., e.g., i.e., vs.).
 Fewer, distinct notes also mean fewer output tokens.
 
 ## Interaction
@@ -99,8 +100,15 @@ English feedback). The surrounding app text stays in the site language.
    (the depth-check checkpoint). Whitespace, case and punctuation-only edits do not count.
 
 The server enforces both; the button is disabled in the UI with the reason as its tooltip
-("Resolve all notes first" / "Change your essay first"). Same text never reaches the AI: the
-latest check is returned unchanged and nothing is charged.
+("Resolve all notes first" / "Change your essay first"). Same text (and same type, prompt, rubric and model) never reaches the AI: the
+latest check is returned unchanged and nothing is charged. Rule 1 is tested before rule 2, and rule 2
+compares at most the first `ESSAY_COACH_MAX_INPUT_CHARS` characters. If the checkpoint holding the checked
+text is gone, rule 2 cannot be measured: only the stored fingerprint is compared (unchanged: reuse, else the check
+is allowed) and an info line without text is logged.
+
+A check that fails (provider error, timeout, unusable answer) is free: its budget unit is refunded and
+the answer is 503. A check makes at most two paid calls and no call is retried, except one retry without
+`reasoning_effort` when the gateway rejects it.
 
 ## Criteria colours
 
@@ -139,7 +147,7 @@ the frontend: kind reflect→reflection, specific→specificity, clarity→struc
   `overall` null) for types without a rubric yet and for the built-in rules fallback.
 - Headline from `overall`: 0-50 "Early depth", 51-70 "Developing depth", 71-80 "Solid depth",
   81-100 "Strong depth". Criterion levels 1-4: Emerging, Developing, Solid, Strong.
-- `notes` are ordered by importance; the first three have `priority: true`.
+- `notes` are ordered by importance; the first three have `priority: true` (static: set at check time).
 
 `DepthCheckSerializer` adds: `source` ("ai" | "rules"), `text_fingerprint`, `note_states`
 (`{note_id: "done" | "dismissed" | "gone"}`), `previous_overall` (the tab's previous check, for "+10 since
@@ -153,9 +161,25 @@ Endpoints (under `/api/essay-lab/essays/<id>/`):
   the check. Only the essay's owner.
 - `GET depth-check/latest/?tab=` unchanged, now with the fields above.
 
-Fingerprint: NFKC, lower-case, curly quotes to straight, drop every character that is not a
-letter, digit or whitespace, collapse whitespace, trim, then sha256 hex. The frontend computes the
-same with `crypto.subtle` to show "Text changed".
+Fingerprint (the Python `coach.text_fingerprint` is the reference), in this order:
+1. Unicode NFKC.
+2. Lower-case (`str.lower()`).
+3. Curly quotes to straight (U+2018 U+2019 U+201A U+201B U+2032 to `'`; U+201C U+201D U+201E U+201F U+2033 to `"`).
+4. Keep a character only if Python `str.isalnum()` or `str.isspace()` is true. Letters and digits are
+   the Unicode categories L* and N* (so also fullwidth and other-script digits and letters). Whitespace
+   is the Python `str.isspace()` set: space, tab, line breaks, U+001C to U+001F, U+0085, U+00A0, U+1680,
+   U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000. Everything else is dropped: punctuation,
+   symbols, emoji, combining marks that NFKC did not compose into a letter, and format characters
+   such as U+FEFF and U+200B (U+FEFF is not whitespace).
+5. Split on whitespace and join with one space (this trims).
+6. sha256 of the UTF-8 bytes, lower-case hex. Empty text hashes the empty string.
+
+Shared test vectors: `docs/essay-coach-fingerprint-fixtures.json` (`name`, `text`, `sha256`); the backend and
+the frontend both test against it. The frontend computes the same with `crypto.subtle` to show "Text changed".
+
+Reuse needs more than the same text: the saved check is returned as `reused` only when the essay type,
+the prompt, the rubric text and the model also match those of the check (`input_hash`). If only the input
+changed, a new check runs without the re-check rules.
 
 ## Settings (backend)
 
@@ -163,6 +187,7 @@ same with `crypto.subtle` to show "Text changed".
 | --- | --- | --- |
 | `ESSAY_COACH_USER_DAILY_LIMIT` | 5 | Checks per student per day. One check is one unit although it makes two AI calls; unchanged-text re-checks and refused checks are free. |
 | `ESSAY_COACH_MIN_CHANGED_WORDS` | 3 | Re-check rule 2 threshold. |
+| `ESSAY_COACH_RECHECK_PER_MINUTE` | 20 | Cheap per-user limit on depth-check requests, applied before the re-check rules (reused and refused re-checks use it, not the 15-second slot or the budget). |
 | `ESSAY_COACH_REASONING_EFFORT` | minimal | Sent as `reasoning_effort`; empty = not sent; dropped for one retry if the gateway answers 400 about it. |
 | `ESSAY_COACH_MAX_OUTPUT_TOKENS` | 2200 | Ceiling for one call (step 1 asks for 500, step 2 for 70 per note + 150). |
 | `ESSAY_COACH_MODEL` | `AI_ASSISTANT_MODEL` | Pinned scoring model; no fallback model is sent. |

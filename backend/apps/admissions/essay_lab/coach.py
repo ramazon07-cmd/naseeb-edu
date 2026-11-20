@@ -62,7 +62,7 @@ QUOTE_TRANSLATION = str.maketrans({
 })
 WHITESPACE = re.compile(r'\s+')
 PARAGRAPH_SPLIT = re.compile(r'\n\s*\n')
-SENTENCE = re.compile(r'[^.!?\n]+[.!?]?')
+ABBREVIATIONS = frozenset({'dr', 'mr', 'mrs', 'ms', 'st', 'vs', 'e.g', 'i.e', 'prof', 'a.m', 'p.m'})
 
 
 class CoachUnavailable(Exception):
@@ -76,6 +76,31 @@ def normalize(text):
     """NFKC, curly quotes to straight, whitespace runs to one space."""
     text = unicodedata.normalize('NFKC', str(text or '')).translate(QUOTE_TRANSLATION)
     return WHITESPACE.sub(' ', text).strip()
+
+
+def _inner_dot(text, index):
+    """A '.' that does not end a sentence: a decimal or dotted token (3.5, e.g), or an abbreviation (Dr.)."""
+    if index + 1 < len(text) and text[index + 1].isalnum():
+        return True
+    start = index
+    while start > 0 and not text[start - 1].isspace():
+        start -= 1
+    return text[start:index].lstrip('("\'').lower() in ABBREVIATIONS
+
+
+def sentence_spans(text):
+    """(start, end) of each sentence of one paragraph. Not split on decimals or common abbreviations."""
+    spans = []
+    start = 0
+    for index, char in enumerate(text):
+        if char == '\n' or (char in '.!?' and not (char == '.' and _inner_dot(text, index))):
+            end = index if char == '\n' else index + 1
+            if end > start:
+                spans.append((start, end))
+            start = index + 1
+    if start < len(text):
+        spans.append((start, len(text)))
+    return spans
 
 
 def paragraphs(content):
@@ -103,9 +128,17 @@ def text_fingerprint(text):
     return hashlib.sha256(fold(text).encode('utf-8')).hexdigest()
 
 
-def changed_words(old_text, new_text):
-    """How many words differ between two texts, ignoring case, punctuation and whitespace."""
+def changed_words(old_text, new_text, *, limit=None, threshold=None):
+    """How many words differ between two texts, ignoring case, punctuation and whitespace.
+
+    Only the first `limit` characters of each text are compared. With a `threshold`, a length
+    difference that alone reaches it answers at once (the count is at least that difference).
+    """
+    if limit:
+        old_text, new_text = str(old_text or '')[:limit], str(new_text or '')[:limit]
     old, new = fold(old_text).split(), fold(new_text).split()
+    if threshold and abs(len(old) - len(new)) >= threshold:
+        return abs(len(old) - len(new))
     matcher = difflib.SequenceMatcher(None, old, new, autojunk=False)
     return sum(
         max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in matcher.get_opcodes() if tag != 'equal'
@@ -171,6 +204,21 @@ def compute_overall(rubric, scores):
     """Integer 0-100 from criterion scores 1-4: `(2*sum(w*(s-1)) + 3) // 6`, weights summing to 100."""
     weights = CRITERIA[rubric]
     return (2 * sum(weight * (scores[key] - 1) for key, weight in weights.items()) + 3) // 6
+
+
+def current_model():
+    """The model a check made now would carry."""
+    return settings.ESSAY_COACH_MODEL if gateway_configured() else LOCAL_MODEL
+
+
+def input_hash(essay, model=None):
+    """Everything but the text that makes a saved check valid for this essay: type, prompt, rubric text, model."""
+    rubric = rubric_for(essay.essay_type)
+    parts = [
+        str(essay.essay_type), hashlib.sha256(normalize(essay.prompt).encode('utf-8')).hexdigest(),
+        hashlib.sha256(_rubric_text(rubric).encode('utf-8')).hexdigest(), model or current_model(),
+    ]
+    return hashlib.sha256('\n'.join(parts).encode('utf-8')).hexdigest()
 
 
 def notes_cap(overall, words):
@@ -294,8 +342,8 @@ def _sentence_keys(paragraph_texts, position):
     """The (paragraph, sentence) pairs a quote touches."""
     index, start, end = position
     keys = set()
-    for number, match in enumerate(SENTENCE.finditer(paragraph_texts[index])):
-        if start < match.end() and end > match.start():
+    for number, (sentence_start, sentence_end) in enumerate(sentence_spans(paragraph_texts[index])):
+        if start < sentence_end and end > sentence_start:
             keys.add((index, number))
     return keys or {(index, -start)}
 
@@ -502,21 +550,17 @@ def gateway_configured():
 _PROVIDER_ERRORS = (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError)
 
 
-def _run_step(essay, user, messages, max_tokens, validate, attempts=1):
-    """One billed call, recorded in ai_usage; validation failures retry up to `attempts` times."""
-    for attempt in range(attempts):
-        ai_usage.begin()
-        try:
-            validated = validate(_request_gateway(messages, max_tokens))
-        except _PROVIDER_ERRORS as exc:
-            ai_usage.record('essay_coach', user, provider='gateway', status=ai_usage.FAILED)
-            # Only an answer that could not be read or validated is worth another call.
-            if isinstance(exc, ValueError) and attempt + 1 < attempts:
-                continue
-            logger.warning('essay_coach_provider_failure essay_id=%s', essay.pk)
-            raise CoachUnavailable()
-        ai_usage.record('essay_coach', user, provider='gateway', status=ai_usage.OK)
-        return validated
+def _run_step(essay, user, messages, max_tokens, validate):
+    """One billed call, recorded in ai_usage. Never retried (the only retry is the reasoning_effort 400)."""
+    ai_usage.begin()
+    try:
+        validated = validate(_request_gateway(messages, max_tokens))
+    except _PROVIDER_ERRORS:
+        ai_usage.record('essay_coach', user, provider='gateway', status=ai_usage.FAILED)
+        logger.warning('essay_coach_provider_failure essay_id=%s', essay.pk)
+        raise CoachUnavailable()
+    ai_usage.record('essay_coach', user, provider='gateway', status=ai_usage.OK)
+    return validated
 
 
 def run_ai_check(essay, content, user):
@@ -534,7 +578,7 @@ def run_ai_check(essay, content, user):
 
     step1 = _run_step(
         essay, user, [system, user_message(_step1_instruction(rubric))], STEP1_MAX_TOKENS,
-        lambda raw: validate_score_step(raw, content, rubric), attempts=2,
+        lambda raw: validate_score_step(raw, content, rubric),
     )
     if 'safety' in step1:
         empty = {'scores': {}, 'summary': step1['safety'], 'suggestions': [], 'strengths': []}
@@ -567,7 +611,7 @@ LOCAL_CRITERIA = {'reflect': 'reflection', 'specific': 'specificity', 'clarity':
 
 
 def _sentences(block):
-    return [match.group(0).strip() for match in SENTENCE.finditer(block) if match.group(0).strip()]
+    return [block[start:end].strip() for start, end in sentence_spans(block) if block[start:end].strip()]
 
 
 def _anchor(sentence):
