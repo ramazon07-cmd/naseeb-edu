@@ -7,6 +7,7 @@ import { CalendarDays, ChevronRight, Clock3, Eye, Gauge, Hourglass, LayoutGrid, 
 import { Stat } from '../components/records';
 import { Panel, Empty } from '../components/ui';
 import { dateText } from '../lib/format';
+import { averageSide, averageText } from '../lib/screenTimeAverage';
 import { label, initials } from '../lib/labels';
 import { isPlatformAdmin } from '../lib/roles';
 import { EmptyState, GlassCard, KpiRow, KpiTile, PageHeader, PillTabs, tabId } from '../design/blue/ui';
@@ -92,7 +93,7 @@ function StudentScreenTime({ days, setDays, summary, loading, error, load, pageL
         <div role="tabpanel" aria-labelledby={tabId('nb-st-days', String(days))} aria-busy={loading}>
           {current && <p className="nb-dash-screen-day" aria-live="polite">{dayText(current, { weekday: 'long', day: 'numeric', month: 'long' })} · {formatDuration(current.seconds)}</p>}
           {!ready ? <p role="status" className="nb-dash-note">{t('Loading…')}</p> : <div className="nb-dash-bars-wrap">
-            {period > 0 && <span className="nb-dash-avg" style={{ bottom: `calc(22px + (100% - 22px) * ${(average / maximum).toFixed(4)})` }}><em>{t('avg {value}', { value: formatDuration(average) })}</em></span>}
+            {period > 0 && <span className={`nb-dash-avg${averageSide(rows, average) === 'start' ? ' is-start' : ''}`} style={{ bottom: `calc(22px + (100% - 22px) * ${(average / maximum).toFixed(4)})` }}><em>{t('avg {value}', { value: averageText(average, formatDuration, t('min')) })}</em></span>}
             <div className={`nb-dash-bars${days === 30 ? ' is-month' : days === 14 ? ' is-fortnight' : ''}`} role="list" aria-label={t('Daily active time chart')}>{rows.map((row, index) => <div key={row.key} role="listitem" className="nb-dash-bar-cell">
               <button type="button" className={`nb-dash-bar${index === rows.length - 1 ? ' is-today' : ''}`} onClick={() => setPicked(row.key)} onFocus={() => setPicked(row.key)} title={`${dayText(row, { weekday: 'short', day: 'numeric', month: 'short' })}: ${formatDuration(row.seconds)}`} aria-label={`${dayText(row, { weekday: 'long', day: 'numeric', month: 'long' })}: ${formatDuration(row.seconds)}`}>
                 <span><i style={{ height: `${Math.max(row.seconds ? 6 : 0, row.seconds / maximum * 100)}%` }} /></span>

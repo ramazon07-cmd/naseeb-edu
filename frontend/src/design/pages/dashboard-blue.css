@@ -822,6 +822,11 @@
   font-weight: 800;
 }
 
+.nb-blue .nb-dash-avg.is-start em {
+  right: auto;
+  left: 0;
+}
+
 .nb-blue .nb-dash-bars {
   display: grid;
   grid-auto-flow: column;
