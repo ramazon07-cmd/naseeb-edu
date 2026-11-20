@@ -2660,7 +2660,7 @@ export const UI_TRANSLATIONS = {
   "Create login": ["Login yaratish", "Создать вход"],
   "{0} (retired)": ["{0} (eskirgan)", "{0} (снят с продажи)"],
   "AI assistant": ["AI yordamchi", "ИИ-помощник"],
-  "Essay coach": ["Esse murabbiyi", "Помощник по эссе"],
+  "Naseeb AI essay feedback": ["Naseeb AI insho tahlili", "Naseeb AI: разбор эссе"],
   "Letter suggestions": ["Tavsiyanoma takliflari", "Подсказки для писем"],
   "Parent portal": ["Ota-onalar portali", "Портал для родителей"],
   "Reports": ["Hisobotlar", "Отчёты"],
