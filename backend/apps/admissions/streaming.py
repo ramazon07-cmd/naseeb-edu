@@ -47,10 +47,19 @@ class StreamSlot:
         self._semaphore.release()
 
 
-def acquire_stream_slot(user):
-    """Return ``(slot, None)``, or ``(None, 'busy' | 'user_limit')`` when a cap is reached."""
+def acquire_stream_slot(user, wait_seconds=None):
+    """Return ``(slot, None)``, or ``(None, 'busy' | 'user_limit')`` when a cap is reached.
+
+    A full process waits up to ``wait_seconds`` (default AI_STREAM_SLOT_WAIT_SECONDS)
+    for a slot to free before reporting ``busy``.
+    """
     semaphore = _process_semaphore()
-    if semaphore is None or not semaphore.acquire(blocking=False):
+    if wait_seconds is None:
+        wait_seconds = settings.AI_STREAM_SLOT_WAIT_SECONDS
+    if semaphore is None:
+        return None, 'busy'
+    acquired = semaphore.acquire(timeout=wait_seconds) if wait_seconds > 0 else semaphore.acquire(blocking=False)
+    if not acquired:
         return None, 'busy'
     user_key = None
     limit = settings.AI_USER_MAX_CONCURRENT_STREAMS

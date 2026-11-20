@@ -151,3 +151,31 @@ def cache_increment(key, timeout):
     """Increment a counter (creating it with ``timeout``); ``None`` if the cache is down."""
     result = count_hit(key, timeout)
     return None if result is None else result[0]
+
+
+def cache_add_amount(key, amount, timeout):
+    """Add ``amount`` to the counter ``key`` (created with ``timeout`` seconds to live).
+
+    Returns the new total, or ``None`` if the cache is down. Used for token
+    counters; like :func:`count_hit` the expiry is set on the first write only.
+    """
+    timeout = max(1, int(timeout))
+    amount = max(0, int(amount))
+    try:
+        backend = _redis_backend()
+        if backend is not None:
+            full_key = backend.make_and_validate_key(key)
+            pipe = backend._cache.get_client(full_key, write=True).pipeline(transaction=True)
+            pipe.set(full_key, 0, ex=timeout, nx=True)
+            pipe.incrby(full_key, amount)
+            return int(pipe.execute()[1])
+        if cache.add(key, amount, timeout):
+            return amount
+        try:
+            return cache.incr(key, amount)
+        except ValueError:  # expired between add() and incr()
+            cache.set(key, amount, timeout)
+            return amount
+    except CACHE_ERRORS as exc:
+        _warn('increment', exc)
+        return None

@@ -66,7 +66,15 @@ AI_ASSISTANT_MODEL = config('AI_ASSISTANT_MODEL', default='openai/gpt-5.4-mini')
 AI_ASSISTANT_FALLBACK_MODEL = config('AI_ASSISTANT_FALLBACK_MODEL', default='openai/gpt-5.4-nano').strip()
 AI_ASSISTANT_MAX_MESSAGES = config('AI_ASSISTANT_MAX_MESSAGES', default=12, cast=int)
 AI_ASSISTANT_MAX_INPUT_CHARS = config('AI_ASSISTANT_MAX_INPUT_CHARS', default=6000, cast=int)
-AI_ASSISTANT_MAX_OUTPUT_TOKENS = config('AI_ASSISTANT_MAX_OUTPUT_TOKENS', default=450, cast=int)
+AI_ASSISTANT_MAX_OUTPUT_TOKENS = config('AI_ASSISTANT_MAX_OUTPUT_TOKENS', default=350, cast=int)
+# Cheaper calls: short questions go to the small model; reasoning is kept minimal
+# (empty = do not send reasoning_effort); only the last few messages are resent.
+AI_ASSISTANT_SIMPLE_MODEL = config('AI_ASSISTANT_SIMPLE_MODEL', default='openai/gpt-5.4-nano').strip()
+AI_ASSISTANT_REASONING_EFFORT = config('AI_ASSISTANT_REASONING_EFFORT', default='minimal').strip()
+AI_ASSISTANT_HISTORY_MESSAGES = config('AI_ASSISTANT_HISTORY_MESSAGES', default=4, cast=int)
+AI_ASSISTANT_HISTORY_CHARS = config('AI_ASSISTANT_HISTORY_CHARS', default=3000, cast=int)
+# Shared cache of answers to general (no personal context, first-turn) questions; 0 = off.
+AI_ASSISTANT_ANSWER_CACHE_SECONDS = config('AI_ASSISTANT_ANSWER_CACHE_SECONDS', default=24 * 3600, cast=int)
 AI_ASSISTANT_TIMEOUT_SECONDS = config('AI_ASSISTANT_TIMEOUT_SECONDS', default=35, cast=int)
 # Long-lived assistant streams: a total time limit per reply (on top of the
 # per-read timeout above), streams per gunicorn process (keep it below
@@ -74,11 +82,17 @@ AI_ASSISTANT_TIMEOUT_SECONDS = config('AI_ASSISTANT_TIMEOUT_SECONDS', default=35
 AI_STREAM_MAX_SECONDS = config('AI_STREAM_MAX_SECONDS', default=60, cast=int)
 AI_MAX_STREAMS_PER_PROCESS = config('AI_MAX_STREAMS_PER_PROCESS', default=4, cast=int)
 AI_USER_MAX_CONCURRENT_STREAMS = config('AI_USER_MAX_CONCURRENT_STREAMS', default=2, cast=int)
+# How long a chat waits for a free stream slot before getting the local answer instead.
+AI_STREAM_SLOT_WAIT_SECONDS = config('AI_STREAM_SLOT_WAIT_SECONDS', default=1.0, cast=float)
 # Daily cost caps for paid provider calls (0 = no cap): platform-wide, per school
 # and per user. They need REDIS_URL to be shared by processes.
 AI_ASSISTANT_DAILY_BUDGET = config('AI_ASSISTANT_DAILY_BUDGET', default=5000, cast=int)
 AI_ASSISTANT_SCHOOL_DAILY_BUDGET = config('AI_ASSISTANT_SCHOOL_DAILY_BUDGET', default=1000, cast=int)
 AI_ASSISTANT_USER_DAILY_LIMIT = config('AI_ASSISTANT_USER_DAILY_LIMIT', default=60, cast=int)
+# Daily token caps (0 = no cap): per user and platform-wide, counted from the
+# provider's reported usage after each reply. They need REDIS_URL to be shared.
+AI_ASSISTANT_USER_DAILY_TOKENS = config('AI_ASSISTANT_USER_DAILY_TOKENS', default=20000, cast=int)
+AI_ASSISTANT_DAILY_TOKENS = config('AI_ASSISTANT_DAILY_TOKENS', default=2000000, cast=int)
 # Paid calls each process may still make per day while Redis is unreachable.
 AI_FALLBACK_PROCESS_DAILY_BUDGET = config('AI_FALLBACK_PROCESS_DAILY_BUDGET', default=20, cast=int)
 GROQ_API_KEY = config('GROQ_API_KEY', default='').strip()
