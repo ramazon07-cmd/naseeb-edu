@@ -1,5 +1,7 @@
 # Essay Coach rules (Check depth)
 
+User-facing name: Naseeb AI (internally 'essay coach').
+
 Status: agreed with the product owner on 2026-11-20. Backend built (coach.py, views.py); see Settings below.
 
 ## What the student sees
@@ -12,7 +14,7 @@ yellow, strengths green.
 Phone: the score shrinks to a one-line bar at the top (tap to expand the bars). Notes show one at a
 time under their sentence, with Dismiss and Next.
 
-The coach asks questions and points at directions. It never writes or rewrites the essay.
+Naseeb AI (the coach) asks questions and points at directions. It never writes or rewrites the essay.
 
 ## Two steps: measure first, then notes
 
