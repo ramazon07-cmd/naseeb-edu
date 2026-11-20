@@ -9,6 +9,12 @@
   font-family: inherit;
 }
 
+/* styles.css sets h1-h3 in Montserrat for the older screens; the blue design
+   uses Mona Sans for headings too. */
+:is(.nb-blue, .nb-login) :where(h1, h2, h3, h4, h5, h6) {
+  font-family: inherit;
+}
+
 .nb-blue :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid var(--nb-focus);
   outline-offset: 2px;
@@ -595,3 +601,13 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---- Display widths ----------------------------------------------------------
+   The design sets big headings and numbers in the wider cut of Mona Sans
+   (variable width axis, 75-125%). Body text stays at the normal width. */
+.nb-blue .nb-page-title h1,
+.nb-blue .nb-section-title h2,
+.nb-blue .nb-dash-screen-total strong { font-stretch: 108%; }
+.nb-blue .nb-kpi-value,
+.nb-blue .nb-empty h3 { font-stretch: 110%; }
+.nb-blue .nb-brand b { font-stretch: 112%; }
