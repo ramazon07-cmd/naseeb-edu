@@ -639,7 +639,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
                              'details': {'ai_available': False}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if not ai_budget.consume('recommendation_letter_check', request.user):
             ai_usage.record(letter_coach.FEATURE, request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
-            raise CodedError('The Coach is resting for today. Please try again tomorrow.', 'coach_resting',
+            raise CodedError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting',
                              status.HTTP_503_SERVICE_UNAVAILABLE)
         spec = letter_coach.build_spec(letter, letter.student, body)
         try:
@@ -647,7 +647,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             result, model = coach.run_check(spec, request.user, release_db_connection)
         except coach.CoachUnavailable:
             ai_budget.refund('recommendation_letter_check', request.user)  # a failed check is free
-            return Response({'detail': 'The Coach is unavailable right now. Please try again soon.',
+            return Response({'detail': 'Naseeb AI is unavailable right now. Please try again soon.',
                              'code': 'coach_unavailable', 'details': {'ai_available': True}},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
