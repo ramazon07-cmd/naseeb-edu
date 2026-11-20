@@ -791,7 +791,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  streamAssistant: (messages, signal) => streamRequest('/assistant/chat/', { messages }, signal),
+  streamAssistant: (payload, signal) => streamRequest('/assistant/chat/', payload, signal),
   markSupportViewed: (id) => request(`/support-tickets/${id}/mark-viewed/`, { method: 'POST' }),
   extendLevelOneRoadmap: (student) => request('/roadmap-missions/extend-level-one/', {
     method: 'POST',

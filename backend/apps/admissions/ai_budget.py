@@ -16,7 +16,7 @@ import threading
 from django.conf import settings
 from django.utils import timezone
 
-from apps.users.cache_safety import cache_decrement, cache_get_many, count_hits
+from apps.users.cache_safety import cache_add_amount, cache_decrement, cache_get_many, count_hits
 
 logger = logging.getLogger('naseeb.ai_budget')
 TTL_SECONDS = 26 * 60 * 60
@@ -118,6 +118,28 @@ def consume(feature, user):
     return False
 
 
+def refund(feature, user):
+    """Undo one :func:`consume` for a call that was never made (e.g. no stream slot).
+
+    Best effort and never raises: a failed refund only costs the user one unit.
+    """
+    day = timezone.localdate().isoformat()
+    global_cap, school_cap, user_cap = _limits(feature)
+    prefix = f'ai-budget:{feature}:{day}'
+    keys = [prefix]
+    if user.school_id:
+        keys.append(f'{prefix}:school:{user.school_id}')
+    if user_cap is not None:
+        keys.append(f'{prefix}:user:{user.pk}')
+    for key in keys:
+        cache_decrement(key)
+    with _fallback.lock:
+        if _fallback.day == day:
+            for key in (f'{feature}:process', f'{feature}:user:{user.pk}'):
+                if _fallback.counts.get(key, 0) > 0:
+                    _fallback.counts[key] -= 1
+
+
 def usage_today(school_ids):
     """Today's calls, caps and refusals per feature, plus the busiest schools.
 
@@ -150,3 +172,74 @@ def usage_today(school_ids):
 def fallback_active():
     """Whether this process fell back to its own allowance today (cache unreachable)."""
     return _fallback.day == timezone.localdate().isoformat() and bool(_fallback.counts)
+
+
+# -- Daily token caps for the assistant (no database: cache counters only) -----
+
+class _TokenFallback:
+    """Per-process daily token counters used only while the shared cache is down."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.day = None
+        self.counts = {}
+
+    def used(self, day, key):
+        with self.lock:
+            if day != self.day:
+                self.day, self.counts = day, {}
+            return self.counts.get(key, 0)
+
+    def add(self, day, keys, tokens):
+        with self.lock:
+            if day != self.day:
+                self.day, self.counts = day, {}
+            for key in keys:
+                self.counts[key] = self.counts.get(key, 0) + tokens
+
+
+_token_fallback = _TokenFallback()
+
+
+def _token_keys(user):
+    day = timezone.localdate().isoformat()
+    prefix = f'ai-tokens:assistant:{day}'
+    return day, prefix, f'{prefix}:user:{user.pk}'
+
+
+def tokens_available(user):
+    """False when today's per-user or platform token cap is already used up.
+
+    Read-only. ``0`` for a cap means no cap. A cache outage falls back to this
+    process's own counters, so spend stays bounded per process.
+    """
+    user_cap = settings.AI_ASSISTANT_USER_DAILY_TOKENS
+    global_cap = settings.AI_ASSISTANT_DAILY_TOKENS
+    if not user_cap and not global_cap:
+        return True
+    day, global_key, user_key = _token_keys(user)
+    values = cache_get_many([global_key, user_key])
+    if values is None:
+        used_global = _token_fallback.used(day, global_key)
+        used_user = _token_fallback.used(day, user_key)
+    else:
+        used_global = int(values.get(global_key) or 0)
+        used_user = int(values.get(user_key) or 0)
+    if global_cap and used_global >= global_cap:
+        _note([f'ai-budget:assistant:{day}:refused'])
+        return False
+    if user_cap and used_user >= user_cap:
+        _note([f'ai-budget:assistant:{day}:refused'])
+        return False
+    return True
+
+
+def add_tokens(user, tokens):
+    """Add the tokens a finished call actually used. Never raises."""
+    tokens = int(tokens or 0)
+    if tokens <= 0 or not (settings.AI_ASSISTANT_USER_DAILY_TOKENS or settings.AI_ASSISTANT_DAILY_TOKENS):
+        return
+    day, global_key, user_key = _token_keys(user)
+    results = [cache_add_amount(key, tokens, TTL_SECONDS) for key in (global_key, user_key)]
+    if any(result is None for result in results):
+        _token_fallback.add(day, (global_key, user_key), tokens)

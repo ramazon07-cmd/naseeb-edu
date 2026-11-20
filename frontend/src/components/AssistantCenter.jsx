@@ -1,9 +1,10 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { api } from '../api';
-import { t } from '../i18n';
+import { t, getLanguage } from '../i18n';
 import { Trash2, X, ShieldCheck, WifiOff, ChevronRight, Square, Send, Info } from 'lucide-react';
 import { initials, fullName } from '../lib/labels';
 import { assistantSource } from '../lib/assistantSource';
+import { buildAssistantPayload, assistantSuggestions, MAX_MESSAGE_LENGTH } from '../lib/assistantChat';
 import { assistantFailureReason, failedSend } from '../lib/assistantAccess';
 
 // `launcher`: false drops the floating button (the counselor workspace opens the
@@ -59,9 +60,7 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
     const stamp = Date.now();
     const userMessage = { id: `user-${stamp}`, role: 'user', content };
     const assistantId = `assistant-${stamp}`;
-    const outbound = [...messages.filter((message) => !message.local && message.content), userMessage].
-    slice(-12).
-    map(({ role, content: text }) => ({ role, content: text }));
+    const outbound = buildAssistantPayload([...messages, userMessage], getLanguage());
     setMessages((current) => [...current, userMessage, { id: assistantId, role: 'assistant', content: '' }]);
     setInput('');
     setError('');
@@ -111,9 +110,7 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
     }
   }
 
-  const suggestions = user.role === 'counselor' ?
-  ['Plan student check-ins', 'Review overdue tasks', 'Plan a meeting'] :
-  ['Plan my essay', 'Plan a meeting'];
+  const suggestions = assistantSuggestions(user.role);
 
   return <div className={`assistant-center ${open ? 'open' : ''}`}>
     {open && <section className="assistant-drawer" role="dialog" aria-label={t("Naseeb AI assistant")}>
@@ -126,8 +123,9 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
       </div>
       {messages.length === 1 && <div className="assistant-suggestions" aria-label={t("Suggested questions")}>{suggestions.map((suggestion) => <button type="button" key={suggestion} onClick={() => sendMessage(t(suggestion))}>{t(suggestion)}<ChevronRight size={14} /></button>)}</div>}
       <form className="assistant-compose" onSubmit={(event) => {event.preventDefault();sendMessage();}}>
-        <textarea ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey) {event.preventDefault();sendMessage();}}} maxLength="2000" rows="2" placeholder={t("Ask a question…")} disabled={busy} aria-label={t("Message Naseeb AI")} />
+        <textarea ref={inputRef} value={input} onChange={(event) => setInput(event.target.value.slice(0, MAX_MESSAGE_LENGTH))} onKeyDown={(event) => {if (event.key === 'Enter' && !event.shiftKey) {event.preventDefault();sendMessage();}}} maxLength={MAX_MESSAGE_LENGTH} rows="2" placeholder={t("Ask a question…")} disabled={busy} aria-label={t("Message Naseeb AI")} />
         <button type={busy ? "button" : "submit"} className="assistant-send" onClick={busy ? () => abortRef.current?.abort() : undefined} disabled={!busy && !input.trim()} aria-label={busy ? t("Stop response") : t("Send message")}>{busy ? <Square size={16} fill="currentColor" /> : <Send size={17} />}</button>
+        <small className={`assistant-counter${input.length >= MAX_MESSAGE_LENGTH * 0.9 ? ' near' : ''}`} aria-live="off">{input.length}/{MAX_MESSAGE_LENGTH}</small>
         <details className="assistant-info"><summary>{t("AI can make mistakes.")}</summary><p>{t("Role-scoped context only. Do not share contact, passport, password, or payment details.")}</p><p>{t("AI can make mistakes. Verify important deadlines with your counselor. History is kept only while this page is open.")}</p></details>
       </form>
     </section>}
