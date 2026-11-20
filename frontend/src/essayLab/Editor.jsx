@@ -389,7 +389,7 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
   const saveBadge = elsewhere.length
     ? <UnsavedTabsBadge count={unsaved.length} name={titleOf(elsewhere[0].id)} onOpen={() => openTab(elsewhere[0].id)} compact={phone} />
     : <SaveBadge state={sessionState} onRetry={() => session?.queue.retryNow()} compact={phone} iconOnly={phone} />
-  const coachLabel = panel === 'coach' ? t('Hide coach') : coach.checked ? t('Coach') : t('Check depth')
+  const coachLabel = panel === 'coach' ? t('Hide Naseeb AI') : coach.checked ? t('Naseeb AI') : t('Check depth')
   const coachIdeas = panel !== 'coach' && coach.count > 0 ? (coach.count === 1 ? t('1 idea') : tp('{n} ideas', coach.count, { n: coach.count })) : null
   const commentsLabel = panel === 'comments' ? t('Hide comments') : t('Comments')
   const moreItems = [

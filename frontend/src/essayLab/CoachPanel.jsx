@@ -7,9 +7,9 @@ import {
 
 const ERROR_TEXT = {
   slow_down: 'Give it a few seconds, then check again.',
-  coach_resting: 'Coach is resting for today. Your essay is saved — try again tomorrow.',
-  coach_unavailable: 'Coach can’t be reached right now. Try again in a minute.',
-  empty_essay: 'Write a few sentences first, then ask Coach.',
+  coach_resting: 'Naseeb AI is resting for today. Your essay is saved — try again tomorrow.',
+  coach_unavailable: 'Naseeb AI can’t be reached right now. Try again in a minute.',
+  empty_essay: 'Write a few sentences first, then ask Naseeb AI.',
   stale: 'Your latest words were still saving. Check again.',
   notes_open: 'Resolve all notes first',
   too_small_change: 'Change a few more words before checking again',
@@ -131,15 +131,15 @@ function CoachPanel({
   const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: model?.version2 ? open.length : 0, changed, inputChanged })
   const blockText = block ? t(BLOCK_TEXT[block]) : ''
   const errorCode = status.error?.code
-  const errorText = status.error ? t(ERROR_TEXT[errorCode] || status.error.message || 'Coach couldn’t check this essay.') : ''
+  const errorText = status.error ? t(ERROR_TEXT[errorCode] || status.error.message || 'Naseeb AI couldn’t check this essay.') : ''
   const footerError = errorCode === 'notes_open' || errorCode === 'too_small_change'
   const dailyLimit = Number(check?.daily_limit) > 0 ? Math.round(Number(check.daily_limit)) : DAILY_CHECKS
   const checksLeft = Number.isFinite(Number(check?.checks_left)) && check?.checks_left !== null ? Math.max(0, Number(check.checks_left)) : null
   const hint = status.loading ? '' : footerError ? errorText : notice === 'reused' ? t('Already checked — nothing changed') : blockText
   const hintId = 'el-coach-hint'
 
-  return <aside className={`el-side-panel el-coach${expanded ? ' is-expanded' : ' is-collapsed'}`} aria-label={t('Naseeb Coach')}>
-    <button type="button" className="el-sheet-handle" aria-label={expanded ? t('Collapse coach') : t('Expand coach')} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+  return <aside className={`el-side-panel el-coach${expanded ? ' is-expanded' : ' is-collapsed'}`} aria-label={t('Naseeb AI')}>
+    <button type="button" className="el-sheet-handle" aria-label={expanded ? t('Collapse Naseeb AI') : t('Expand Naseeb AI')} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
       <span aria-hidden="true" />
     </button>
     <div className="el-coach-head">
@@ -147,18 +147,18 @@ function CoachPanel({
         ? <ScoreRing percent={model.overall} label={t('Depth score {n} of 100', { n: model.overall })} />
         : <span className="el-coach-icon" aria-hidden="true"><Sparkles size={22} /></span>}
       <div className="el-coach-title">
-        <strong>{scored ? t(headline(model.overall)) : check ? t('Quick check') : t('Naseeb Coach')}</strong>
+        <strong>{scored ? t(headline(model.overall)) : check ? t('Quick check') : t('Naseeb AI')}</strong>
         {delta !== null && <span className="el-co-delta">{t('+{n} since last check', { n: delta })}</span>}
       </div>
       <div className="el-coach-actions">
-        <button type="button" className="el-icon-btn el-hide-sm" aria-label={t('Hide coach')} title={t('Hide coach')} onClick={onClose}><X size={18} /></button>
-        <button type="button" className="el-icon-btn el-show-sm" aria-label={expanded ? t('Collapse coach') : t('Expand coach')} onClick={() => setExpanded((value) => !value)}>
+        <button type="button" className="el-icon-btn el-hide-sm" aria-label={t('Hide Naseeb AI')} title={t('Hide Naseeb AI')} onClick={onClose}><X size={18} /></button>
+        <button type="button" className="el-icon-btn el-show-sm" aria-label={expanded ? t('Collapse Naseeb AI') : t('Expand Naseeb AI')} onClick={() => setExpanded((value) => !value)}>
           {expanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
         </button>
       </div>
     </div>
 
-    {model && !status.loading && <div role="tablist" aria-label={t('Coach')} className="el-tabs">
+    {model && !status.loading && <div role="tablist" aria-label={t('Naseeb AI')} className="el-tabs">
       {tabs.map((item, index) => <button key={item.id} type="button" role="tab" data-tab={item.id} id={`el-tab-${item.id}`}
         aria-selected={tab === item.id} aria-controls="el-coach-panel" tabIndex={tab === item.id ? 0 : -1}
         className={`el-tab${tab === item.id ? ' is-on' : ''}`} onClick={() => setTab(item.id)} onKeyDown={(event) => onTabKey(event, index)}>
@@ -169,15 +169,15 @@ function CoachPanel({
     <div className="el-coach-body" ref={bodyRef} id="el-coach-panel" role={model ? 'tabpanel' : undefined} aria-labelledby={model ? `el-tab-${tab}` : undefined}>
       {status.loading && <div className="el-coach-loading" role="status">
         <span className="el-shimmer is-big" /><span className="el-shimmer" /><span className="el-shimmer is-short" />
-        <p>{t('Coach is reading your essay. This can take up to a minute or two.')}</p>
+        <p>{t('Naseeb AI is reading your essay. This can take up to a minute or two.')}</p>
       </div>}
       {errorText && !footerError && !status.loading && <div className="el-alert is-error" role="alert">{errorText}</div>}
 
       {!check && !status.loading && <div className="el-coach-empty">
         <MessageCircleQuestion size={28} aria-hidden="true" />
         <strong>{t('How deep does your essay go?')}</strong>
-        <p>{t('Coach reads your draft and asks questions where a reader will want more: reflection, specific details, your voice and how well you answer the question.')}</p>
-        <p className="el-co-never">{t('Coach asks questions. It never writes your essay for you.')}</p>
+        <p>{t('Naseeb AI reads your draft and asks questions where a reader will want more: reflection, specific details, your voice and how well you answer the question.')}</p>
+        <p className="el-co-never">{t('Naseeb AI asks questions. It never writes your essay for you.')}</p>
         {words < 80 && <p className="el-small">{t('Tip: it works best once you have a paragraph or two.')}</p>}
       </div>}
 

@@ -394,7 +394,7 @@ function AuditRecord({ event }) {
   </article>;
 }
 
-const AI_FEATURES = [['assistant', 'AI assistant'], ['essay_coach', 'Essay coach'], ['recommendation_letter', 'Letter suggestions']];
+const AI_FEATURES = [['assistant', 'AI assistant'], ['essay_coach', 'Naseeb AI essay feedback'], ['recommendation_letter', 'Letter suggestions']];
 
 // Paid AI calls today against the daily caps (#39); counters only, no student content.
 function AiUsagePanel() {

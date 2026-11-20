@@ -812,7 +812,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             return error('Save your latest changes before the check.', 'stale', status.HTTP_409_CONFLICT,
                          save_seq=tab.save_seq)
         if not tab.content.strip():
-            raise EssayLabError('Write something first, then ask the Coach.', 'empty_essay')
+            raise EssayLabError('Write something first, then ask Naseeb AI.', 'empty_essay')
         require_feature(request, 'essay_coach')
         # Cheap guard first: the re-check rules below read the database and compare texts.
         gate_throttle = EssayDepthGateThrottle()
@@ -835,14 +835,14 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
         if coach.gateway_configured():
             if not spend_coach_budget(request.user):
                 ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
-                raise EssayLabError('The Coach is resting for today. Please try again tomorrow.', 'coach_resting', 503)
+                raise EssayLabError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting', 503)
             try:
                 # Both calls of the check are recorded in ai_usage inside run_ai_check.
                 # release_db_connection runs before each provider call (the transaction guard is inside it).
                 result, model = coach.run_ai_check(essay, tab.content, request.user, release_db_connection)
             except coach.CoachUnavailable:
                 ai_budget.refund('essay_coach', request.user)  # a failed check is free
-                raise EssayLabError('The Coach is unavailable right now. Please try again soon.',
+                raise EssayLabError('Naseeb AI is unavailable right now. Please try again soon.',
                                     'coach_unavailable', 503)
         else:
             result, model = coach.run_local_check(essay, tab.content)
@@ -863,7 +863,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             )
             if stale_ids:
                 EssayDepthCheck.objects.filter(id__in=stale_ids).delete()
-            _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Coach check', author=request.user)
+            _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Naseeb AI check', author=request.user)
         return Response(DepthCheckSerializer(check, context=self._check_context(request, essay)).data)
 
     @staticmethod
