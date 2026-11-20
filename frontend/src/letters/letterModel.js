@@ -106,6 +106,19 @@ export function factLine(item) {
   return `${title}${title && detail ? ': ' : ''}${detail}.`
 }
 
+// Check text may carry "[Student]"; show the first name instead.
+export function fillCheckText(model, name) {
+  if (!model) return model
+  const fill = (text) => fillStudent(text, name)
+  return {
+    ...model,
+    summary: fill(model.summary),
+    suggestions: model.suggestions.map(fill),
+    strengths: model.strengths.map((item) => ({ ...item, text: fill(item.text) })),
+    notes: model.notes.map((note) => ({ ...note, question: fill(note.question), context: fill(note.context) })),
+  }
+}
+
 export const factsOf = (items) => (items || []).filter((item) => item?.kind === 'fact')
 export const aiIdeasOf = (items) => (items || []).filter((item) => (item?.kind === 'sentence' || item?.kind === 'idea') && item.text)
 

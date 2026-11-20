@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from 'react'
 import { Check, ChevronDown, Info, Lock, MessageCircleQuestion, Plus, RefreshCw, Sparkles, Undo2, X } from 'lucide-react'
 import { t, tp } from '../i18n.js'
 import { coachSource, deltaSince, doneNotes, goneNotes, headline, levelWord, openNotes, recheckBlock } from '../essayLab/coachModel.js'
-import { LETTER_CRITERIA, aiIdeasOf, fillStudent, letterCriterionLabel } from './letterModel.js'
+import { LETTER_CRITERIA, aiIdeasOf, fillCheckText, fillStudent, letterCriterionLabel } from './letterModel.js'
 
 const SOURCE_LABELS = { academics: 'Academics', honor: 'Honor', activity: 'Activity', achievement: 'Achievement', research: 'Research', internship: 'Internship', project: 'Project' }
 const DAILY_CHECKS = 5
@@ -10,7 +10,8 @@ const DAILY_CHECKS = 5
 const ERROR_TEXT = {
   slow_down: 'Give it a few seconds, then check again.',
   coach_resting: 'Check is resting for today. Your letter is saved. Try again tomorrow.',
-  coach_unavailable: 'Check can’t be reached right now. Try again in a minute.',
+  coach_unavailable: 'Check depth isn’t available right now.',
+  counselors_only: 'Only counselors can use Check.',
   empty_essay: 'Write a few sentences first, then check.',
   stale: 'Your latest words were still saving. Check again.',
   notes_open: 'Resolve all notes first',
@@ -66,7 +67,8 @@ function IdeasTab({ ideas, name, onInsertFact, onInsertIdea }) {
   </div>
 }
 
-function CheckTab({ check, model, status, anchored, activeId, states, onJump, onSetState, words }) {
+function CheckTab({ check, model: rawModel, name, status, anchored, activeId, states, onJump, onSetState, words }) {
+  const model = useMemo(() => fillCheckText(rawModel, name), [rawModel, name])
   const [filter, setFilter] = useState('all')
   const [openCriterion, setOpenCriterion] = useState(null)
   const [showDone, setShowDone] = useState(false)
@@ -176,15 +178,16 @@ function CheckFooter({ check, model, status, anchored, states, changed, inputCha
   else if (block === 'unchanged') line = t('Change the letter to check again')
   else if (check) line = inputChanged ? t('Details changed') : changed ? t('Letter changed') : t('Up to date')
   else if (empty) line = t('Write the letter first')
+  const unavailable = errorCode === 'coach_unavailable' || errorCode === 'counselors_only'
   const disabled = status.loading || Boolean(block) || empty
   return <div className="lw-foot-row">
     <div className="lw-foot-info">
       <b className={footerError ? 'is-error' : ''} role={footerError ? 'alert' : 'status'}>{line}</b>
       {left !== null && <small>{t('{n} left today', { n: Math.min(left, dailyLimit) })}</small>}
     </div>
-    <button type="button" className="cx-btn primary" disabled={disabled} aria-busy={status.loading} onClick={onCheck}>
+    {!unavailable && <button type="button" className="cx-btn primary" disabled={disabled} aria-busy={status.loading} onClick={onCheck}>
       <RefreshCw size={14} aria-hidden="true" className={status.loading ? 'spin' : ''} />{check ? t('Check again') : t('Check depth')}
-    </button>
+    </button>}
     {errorText && !footerError && !status.loading && <p className="lw-foot-error" role="alert">{errorText}</p>}
   </div>
 }
@@ -222,7 +225,7 @@ function LetterPanel({ tab, onTab, ideas, onInsertFact, onInsertIdea, onAskAi, n
     <div className="lw-pbody" id="lw-tabpanel" role="tabpanel" aria-labelledby={`lw-tab-${tab}`}>
       {tab === 'ideas'
         ? <IdeasTab ideas={ideas} name={name} onInsertFact={onInsertFact} onInsertIdea={onInsertIdea} />
-        : <CheckTab {...{ check, model, status, anchored, activeId, onJump, onSetState, words }} states={noteStates} />}
+        : <CheckTab {...{ check, model, name, status, anchored, activeId, onJump, onSetState, words }} states={noteStates} />}
     </div>
     <div className="lw-foot">
       {tab === 'ideas'

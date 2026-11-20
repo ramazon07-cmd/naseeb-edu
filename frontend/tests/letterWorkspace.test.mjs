@@ -4,7 +4,7 @@ import { applyNoteState, doneNotes, goneNotes, noteStateUpdates, openNotes, rech
 import { buildPath, parsePath, resolveRoute } from '../src/lib/routes.js';
 import { createIdeasController } from '../src/letters/ideasController.js';
 import {
-  LETTER_KEYS, aiIdeasOf, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
+  LETTER_KEYS, aiIdeasOf, fillCheckText, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
 } from '../src/letters/letterModel.js';
 
 const LETTER = 'I have known Ramazon for two years.\n\nHe is a hardworking student. He leads the robotics club.\n\nHe is a hardworking student.';
@@ -223,4 +223,15 @@ test('letter workspace routes round-trip and stay inside the students page', () 
   }
   const counselor = { id: 2, role: 'counselor' };
   assert.deepEqual(resolveRoute(parsePath('/students/15/letters/8'), counselor), { page: 'students', params: { studentId: 15, letterId: 8 } });
+});
+
+test('check text shows the first name instead of [Student]', () => {
+  const model = normalizeLetterCheck({ result: { version: 2, scored: true, overall: 40, summary: '[Student] helps.', suggestions: ['Show [Student] leading.'], strengths: [{ id: 's1', text: '[Student] is kind.' }], notes: [{ id: 'n', criterion: 'voice', question: 'What did [Student] do?', context: 'About [Student].' }] } });
+  const filled = fillCheckText(model, 'Ramazon');
+  assert.equal(filled.summary, 'Ramazon helps.');
+  assert.deepEqual(filled.suggestions, ['Show Ramazon leading.']);
+  assert.equal(filled.strengths[0].text, 'Ramazon is kind.');
+  assert.equal(filled.notes[0].question, 'What did Ramazon do?');
+  assert.equal(filled.notes[0].context, 'About Ramazon.');
+  assert.equal(fillCheckText(null, 'R'), null);
 });
