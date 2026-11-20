@@ -89,6 +89,8 @@ AI_RECOMMENDATION_TIMEOUT_SECONDS = config('AI_RECOMMENDATION_TIMEOUT_SECONDS', 
 ESSAY_COACH_MODEL = config('ESSAY_COACH_MODEL', default=AI_ASSISTANT_MODEL).strip()
 ESSAY_COACH_TIMEOUT_SECONDS = config('ESSAY_COACH_TIMEOUT_SECONDS', default=40, cast=int)
 # Ceiling for one call; step 1 asks for about 500 and step 2 for about 70 per note + 150.
+# Both calls of one check together; step 2 gets only the time left. Set the client timeout above it.
+ESSAY_COACH_TOTAL_SECONDS = config('ESSAY_COACH_TOTAL_SECONDS', default=90, cast=int)
 ESSAY_COACH_MAX_OUTPUT_TOKENS = config('ESSAY_COACH_MAX_OUTPUT_TOKENS', default=2200, cast=int)
 # Sent as `reasoning_effort` (empty = not sent). Dropped for one retry if the gateway rejects it.
 ESSAY_COACH_REASONING_EFFORT = config('ESSAY_COACH_REASONING_EFFORT', default='minimal').strip()

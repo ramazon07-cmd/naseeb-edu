@@ -257,11 +257,12 @@ class DepthCheckSerializer(serializers.ModelSerializer):
     previous_overall = serializers.SerializerMethodField()
     checks_left = serializers.SerializerMethodField()
     reused = serializers.SerializerMethodField()
+    current_input_hash = serializers.SerializerMethodField()
 
     class Meta:
         model = EssayDepthCheck
         fields = ('id', 'tab', 'save_seq', 'created_at', 'model', 'result', 'source', 'text_fingerprint',
-                  'note_states', 'overall', 'previous_overall', 'checks_left', 'reused')
+                  'note_states', 'overall', 'previous_overall', 'checks_left', 'reused', 'input_hash', 'current_input_hash')
         read_only_fields = fields
 
     def get_source(self, obj):
@@ -280,6 +281,9 @@ class DepthCheckSerializer(serializers.ModelSerializer):
         if user is None or not user.is_authenticated:
             return None
         return ai_budget.user_remaining('essay_coach', user)
+
+    def get_current_input_hash(self, obj):
+        return self.context.get('current_input_hash')
 
     def get_reused(self, obj):
         return bool(self.context.get('reused'))

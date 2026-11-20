@@ -721,3 +721,90 @@ class CostGuardTests(CoachApiTestCase):
         self.assertIn('essay_coach_recheck_unmeasured', joined)
         self.assertNotIn('grandmother', joined)
         self.assertNotIn('aunt', joined)
+
+
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
+class InputHashAndDeadlineTests(CoachApiTestCase):
+    def test_word_limit_is_part_of_the_input(self):
+        self.check()
+        self.assertTrue(self.check()[0].data['reused'])
+        type(self.essay).objects.filter(pk=self.essay.pk).update(word_limit=250)
+        response, gateway = self.check()
+        self.assertEqual((response.status_code, response.data['reused']), (status.HTTP_200_OK, False))
+        self.assertEqual(len(gateway.bodies), 2)
+
+    def test_the_stored_hash_is_the_one_from_before_the_provider_call(self):
+        before = coach.input_hash(type(self.essay).objects.get(pk=self.essay.pk), coach.current_model())
+        inner = FakeGateway()
+
+        def urlopen(request, timeout=None):
+            type(self.essay).objects.filter(pk=self.essay.pk).update(prompt='Changed while generating.')
+            return inner(request, timeout)
+
+        with mock.patch('urllib.request.urlopen', side_effect=urlopen):
+            response = self.client.post(f'{BASE}/essays/{self.essay.pk}/depth-check/', {'base_seq': 0}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(EssayDepthCheck.objects.get().input_hash, before)
+        self.assertEqual(response.data['input_hash'], before)
+        # the client can tell the prompt changed since: the current hash differs from the check's
+        self.assertNotEqual(response.data['current_input_hash'], response.data['input_hash'])
+
+    def test_current_input_hash_on_post_reuse_and_latest(self):
+        first, _ = self.check()
+        current = coach.input_hash(type(self.essay).objects.get(pk=self.essay.pk), coach.current_model())
+        self.assertEqual((first.data['input_hash'], first.data['current_input_hash']), (current, current))
+        reused, _ = self.check()
+        self.assertTrue(reused.data['reused'])
+        self.assertEqual(reused.data['current_input_hash'], current)
+        latest = self.client.get(f'{BASE}/essays/{self.essay.pk}/depth-check/latest/')
+        self.assertEqual((latest.data['input_hash'], latest.data['current_input_hash']), (current, current))
+        type(self.essay).objects.filter(pk=self.essay.pk).update(prompt='Another question.')
+        latest = self.client.get(f'{BASE}/essays/{self.essay.pk}/depth-check/latest/')
+        self.assertEqual(latest.data['input_hash'], current)
+        self.assertNotEqual(latest.data['current_input_hash'], current)
+
+    def test_the_connection_is_released_before_each_provider_call(self):
+        events = []
+        inner = FakeGateway()
+
+        def urlopen(request, timeout=None):
+            events.append('call')
+            return inner(request, timeout)
+
+        with mock.patch('apps.admissions.essay_lab.views.release_db_connection',
+                        side_effect=lambda: events.append('release')), \
+                mock.patch('urllib.request.urlopen', side_effect=urlopen):
+            response = self.client.post(f'{BASE}/essays/{self.essay.pk}/depth-check/', {'base_seq': 0}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(events, ['release', 'call', 'release', 'call'])
+
+    @override_settings(ESSAY_COACH_TOTAL_SECONDS=90, ESSAY_COACH_TIMEOUT_SECONDS=40)
+    def test_step_two_gets_only_the_time_left_and_an_overrun_is_a_free_failure(self):
+        for elapsed_after_step_one, expect_timeout in ((70, 20), (88, None)):
+            cache.clear()
+            EssayDepthCheck.objects.all().delete()
+            clock = {'now': 0.0}
+            timeouts = []
+            inner = FakeGateway()
+
+            def urlopen(request, timeout=None):
+                timeouts.append(timeout)
+                reply = inner(request, timeout)
+                clock['now'] = elapsed_after_step_one if len(timeouts) == 1 else clock['now']
+                return reply
+
+            left = ai_budget.user_remaining('essay_coach', self.student_user)
+            fake_time = SimpleNamespace(monotonic=lambda: clock['now'])
+            with mock.patch.object(coach, 'time', fake_time), mock.patch('urllib.request.urlopen', side_effect=urlopen):
+                response = self.client.post(f'{BASE}/essays/{self.essay.pk}/depth-check/', {'base_seq': 0},
+                                            format='json')
+            self.assertEqual(timeouts[0], 40)
+            if expect_timeout:
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+                self.assertEqual(timeouts, [40, expect_timeout])
+            else:
+                self.assertEqual((response.status_code, response.data['code']),
+                                 (status.HTTP_503_SERVICE_UNAVAILABLE, 'coach_unavailable'))
+                self.assertEqual(len(timeouts), 1)  # no second paid call
+                self.assertEqual(ai_budget.user_remaining('essay_coach', self.student_user), left)
+                self.assertEqual(EssayDepthCheck.objects.count(), 0)

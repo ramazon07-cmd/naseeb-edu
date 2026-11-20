@@ -149,7 +149,10 @@ the frontend: kind reflect→reflection, specific→specificity, clarity→struc
   81-100 "Strong depth". Criterion levels 1-4: Emerging, Developing, Solid, Strong.
 - `notes` are ordered by importance; the first three have `priority: true` (static: set at check time).
 
-`DepthCheckSerializer` adds: `source` ("ai" | "rules"), `text_fingerprint`, `note_states`
+`DepthCheckSerializer` adds `input_hash` (what the check was made for: essay type, prompt, word limit, rubric text
+and model, hashed at the start of the check) and `current_input_hash` (what a check made now would carry; on POST, PATCH
+and `latest`). When they differ the prompt, type or word limit changed since the check, so the client may offer a new
+check even for unchanged text. It also adds: `source` ("ai" | "rules"), `text_fingerprint`, `note_states`
 (`{note_id: "done" | "dismissed" | "gone"}`), `previous_overall` (the tab's previous check, for "+10 since
 last check"), `checks_left` (today) and `reused` (true when same text returned the latest check).
 
@@ -178,7 +181,7 @@ Shared test vectors: `docs/essay-coach-fingerprint-fixtures.json` (`name`, `text
 the frontend both test against it. The frontend computes the same with `crypto.subtle` to show "Text changed".
 
 Reuse needs more than the same text: the saved check is returned as `reused` only when the essay type,
-the prompt, the rubric text and the model also match those of the check (`input_hash`). If only the input
+the prompt, the word limit, the rubric text and the model also match those of the check (`input_hash`). If only the input
 changed, a new check runs without the re-check rules.
 
 ## Settings (backend)
@@ -187,10 +190,13 @@ changed, a new check runs without the re-check rules.
 | --- | --- | --- |
 | `ESSAY_COACH_USER_DAILY_LIMIT` | 5 | Checks per student per day. One check is one unit although it makes two AI calls; unchanged-text re-checks and refused checks are free. |
 | `ESSAY_COACH_MIN_CHANGED_WORDS` | 3 | Re-check rule 2 threshold. |
+| `ESSAY_COACH_TOTAL_SECONDS` | 90 | Deadline for both calls of one check together; step 2 gets only the time left (at least 5 s, else the check fails and is refunded). Per-call timeout stays `ESSAY_COACH_TIMEOUT_SECONDS` (40). The client timeout must be above 90. |
 | `ESSAY_COACH_RECHECK_PER_MINUTE` | 20 | Cheap per-user limit on depth-check requests, applied before the re-check rules (reused and refused re-checks use it, not the 15-second slot or the budget). |
 | `ESSAY_COACH_REASONING_EFFORT` | minimal | Sent as `reasoning_effort`; empty = not sent; dropped for one retry if the gateway answers 400 about it. |
 | `ESSAY_COACH_MAX_OUTPUT_TOKENS` | 2200 | Ceiling for one call (step 1 asks for 500, step 2 for 70 per note + 150). |
 | `ESSAY_COACH_MODEL` | `AI_ASSISTANT_MODEL` | Pinned scoring model; no fallback model is sent. |
+
+The database connection is released before each provider call.
 
 Backend notes: the supplement rubric's criteria are stored under the API keys
 (`fit_specificity` = `prompt_fit`, `evidence` = `specificity`, `concision` = `structure`).

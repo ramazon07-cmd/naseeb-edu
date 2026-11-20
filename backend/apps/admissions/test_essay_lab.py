@@ -982,7 +982,7 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertEqual(response.data['save_seq'], self.tab_of(self.essay).save_seq)
         self.assertEqual(set(response.data), {
             'id', 'tab', 'save_seq', 'created_at', 'model', 'result', 'source', 'text_fingerprint', 'note_states',
-            'overall', 'previous_overall', 'checks_left', 'reused'})
+            'overall', 'previous_overall', 'checks_left', 'reused', 'input_hash', 'current_input_hash'})
         self.assertEqual((response.data['source'], response.data['overall'], response.data['reused'],
                           response.data['previous_overall'], response.data['note_states']),
                          ('ai', 62, False, None, {}))

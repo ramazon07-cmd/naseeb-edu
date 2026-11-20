@@ -20,6 +20,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 import unicodedata
 import urllib.error
 import urllib.request
@@ -55,6 +56,8 @@ NOTES_BASE_TOKENS = 150
 BANDS = ((81, 25), (71, 12), (61, 8), (51, 5))
 UNSCORED_NOTE_CAP = 8
 NOTES_MIN_OVERALL = 51
+# A call that would get less than this many seconds of the total deadline is not made.
+MIN_CALL_SECONDS = 5
 
 QUOTE_TRANSLATION = str.maketrans({
     '‘': "'", '’': "'", '‚': "'", '‛': "'", '′': "'",
@@ -211,12 +214,18 @@ def current_model():
     return settings.ESSAY_COACH_MODEL if gateway_configured() else LOCAL_MODEL
 
 
+@lru_cache(maxsize=None)
+def _rubric_hash(rubric):
+    return hashlib.sha256(_rubric_text(rubric).encode('utf-8')).hexdigest()
+
+
 def input_hash(essay, model=None):
-    """Everything but the text that makes a saved check valid for this essay: type, prompt, rubric text, model."""
+    """Everything but the text that makes a saved check valid for this essay: type, prompt, word limit
+    (the provider sees it and the rubrics score length against it), rubric text and model."""
     rubric = rubric_for(essay.essay_type)
     parts = [
         str(essay.essay_type), hashlib.sha256(normalize(essay.prompt).encode('utf-8')).hexdigest(),
-        hashlib.sha256(_rubric_text(rubric).encode('utf-8')).hexdigest(), model or current_model(),
+        str(essay.word_limit or ''), _rubric_hash(rubric), model or current_model(),
     ]
     return hashlib.sha256('\n'.join(parts).encode('utf-8')).hexdigest()
 
@@ -491,7 +500,7 @@ def open_note_count(result, note_states, content):
 # ---------------------------------------------------------------------------
 # Gateway
 
-def _post(body):
+def _post(body, timeout):
     request = urllib.request.Request(
         settings.AI_GATEWAY_URL,
         data=json.dumps(body).encode('utf-8'),
@@ -503,7 +512,7 @@ def _post(body):
         },
         method='POST',
     )
-    with urllib.request.urlopen(request, timeout=settings.ESSAY_COACH_TIMEOUT_SECONDS) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode('utf-8'))
 
 
@@ -517,7 +526,15 @@ def _rejects_reasoning(exc):
         return False
 
 
-def _request_gateway(messages, max_tokens):
+def _call_timeout(deadline):
+    """Seconds this call may take: the per-call timeout, or what is left of the total deadline."""
+    remaining = deadline - time.monotonic()
+    if remaining < MIN_CALL_SECONDS:
+        raise TimeoutError('Coach deadline reached.')
+    return min(settings.ESSAY_COACH_TIMEOUT_SECONDS, remaining)
+
+
+def _request_gateway(messages, max_tokens, deadline):
     """One non-streaming JSON-mode call. Pinned model, temperature 0, no fallback model."""
     body = {
         'model': settings.ESSAY_COACH_MODEL,
@@ -531,12 +548,12 @@ def _request_gateway(messages, max_tokens):
     if effort:
         body['reasoning_effort'] = effort
     try:
-        payload = _post(body)
+        payload = _post(body, _call_timeout(deadline))
     except urllib.error.HTTPError as exc:
         if not (effort and _rejects_reasoning(exc)):
             raise
         body.pop('reasoning_effort')
-        payload = _post(body)
+        payload = _post(body, _call_timeout(deadline))
     ai_usage.capture(payload, body)
     content_text = payload['choices'][0]['message']['content']
     content_text = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content_text).strip(), flags=re.IGNORECASE)
@@ -550,11 +567,12 @@ def gateway_configured():
 _PROVIDER_ERRORS = (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError)
 
 
-def _run_step(essay, user, messages, max_tokens, validate):
+def _run_step(essay, user, messages, max_tokens, validate, deadline, before_call):
     """One billed call, recorded in ai_usage. Never retried (the only retry is the reasoning_effort 400)."""
+    before_call()  # hand the database connection back for the length of the provider call
     ai_usage.begin()
     try:
-        validated = validate(_request_gateway(messages, max_tokens))
+        validated = validate(_request_gateway(messages, max_tokens, deadline))
     except _PROVIDER_ERRORS:
         ai_usage.record('essay_coach', user, provider='gateway', status=ai_usage.FAILED)
         logger.warning('essay_coach_provider_failure essay_id=%s', essay.pk)
@@ -563,11 +581,14 @@ def _run_step(essay, user, messages, max_tokens, validate):
     return validated
 
 
-def run_ai_check(essay, content, user):
-    """Return (v2 result, model). Raises CoachUnavailable on any provider failure.
+def run_ai_check(essay, content, user, before_call=lambda: None):
+    """Return (v2 result, model). Raises CoachUnavailable on any provider failure or a missed deadline.
 
-    Every call is recorded in ai_usage here, so both steps' tokens are counted.
+    Every call is recorded in ai_usage here, so both steps' tokens are counted. `before_call` runs before
+    each provider call (the view releases its database connection there). Both steps together must
+    finish within ESSAY_COACH_TOTAL_SECONDS: step 2 gets only the time left.
     """
+    deadline = time.monotonic() + settings.ESSAY_COACH_TOTAL_SECONDS
     rubric = rubric_for(essay.essay_type)
     words = len(content.split())
     system = {'role': 'system', 'content': _system_message(rubric)}
@@ -578,7 +599,7 @@ def run_ai_check(essay, content, user):
 
     step1 = _run_step(
         essay, user, [system, user_message(_step1_instruction(rubric))], STEP1_MAX_TOKENS,
-        lambda raw: validate_score_step(raw, content, rubric),
+        lambda raw: validate_score_step(raw, content, rubric), deadline, before_call,
     )
     if 'safety' in step1:
         empty = {'scores': {}, 'summary': step1['safety'], 'suggestions': [], 'strengths': []}
@@ -594,6 +615,7 @@ def run_ai_check(essay, content, user):
         notes = _run_step(
             essay, user, [system, user_message(instruction)], NOTE_TOKENS * cap + NOTES_BASE_TOKENS,
             lambda raw: validate_notes(raw.get('notes') if isinstance(raw, dict) else None, content, rubric, cap),
+            deadline, before_call,
         )
     return build_result(step1, notes, rubric=rubric, overall=overall), settings.ESSAY_COACH_MODEL
 

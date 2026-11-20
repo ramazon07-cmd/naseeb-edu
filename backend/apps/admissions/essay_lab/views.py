@@ -836,10 +836,10 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             if not spend_coach_budget(request.user):
                 ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
                 raise EssayLabError('The Coach is resting for today. Please try again tomorrow.', 'coach_resting', 503)
-            release_db_connection()  # don't hold a pooled connection during the AI call
             try:
                 # Both calls of the check are recorded in ai_usage inside run_ai_check.
-                result, model = coach.run_ai_check(essay, tab.content, request.user)
+                # release_db_connection runs before each provider call (the transaction guard is inside it).
+                result, model = coach.run_ai_check(essay, tab.content, request.user, release_db_connection)
             except coach.CoachUnavailable:
                 ai_budget.refund('essay_coach', request.user)  # a failed check is free
                 raise EssayLabError('The Coach is unavailable right now. Please try again soon.',
@@ -855,7 +855,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
                 raise exceptions.NotFound('Tab not found.')
             check = EssayDepthCheck.objects.create(
                 essay_id=essay.pk, tab=tab, save_seq=tab.save_seq, result=result, model=model,
-                text_fingerprint=fingerprint, input_hash=coach.input_hash(essay, model), overall=result.get('overall'),
+                text_fingerprint=fingerprint, input_hash=input_hash, overall=result.get('overall'),
             )
             stale_ids = list(
                 EssayDepthCheck.objects.filter(tab_id=tab.pk).order_by('-created_at', '-id')
@@ -864,7 +864,12 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             if stale_ids:
                 EssayDepthCheck.objects.filter(id__in=stale_ids).delete()
             _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Coach check', author=request.user)
-        return Response(DepthCheckSerializer(check, context={'request': request}).data)
+        return Response(DepthCheckSerializer(check, context=self._check_context(request, essay)).data)
+
+    @staticmethod
+    def _check_context(request, essay):
+        """Serializer context; `current_input_hash` is what a check made now would carry (loaded fields only)."""
+        return {'request': request, 'current_input_hash': coach.input_hash(essay, coach.current_model())}
 
     def _recheck_gate(self, request, tab, latest, fingerprint, input_hash):
         """The response that refuses or answers a re-check without the AI, or None to go ahead.
@@ -877,7 +882,8 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
         """
         same_text = bool(latest.text_fingerprint) and latest.text_fingerprint == fingerprint
         if same_text and latest.input_hash == input_hash:
-            return Response(DepthCheckSerializer(latest, context={'request': request, 'reused': True}).data)
+            return Response(DepthCheckSerializer(
+                latest, context={'request': request, 'reused': True, 'current_input_hash': input_hash}).data)
         if same_text or not latest.text_fingerprint:
             return None
         open_notes = coach.open_note_count(latest.result, latest.note_states, tab.content)
@@ -919,7 +925,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
                 states[note_id] = state
             check.note_states = states
             check.save(update_fields=['note_states'])
-        return Response(DepthCheckSerializer(check, context={'request': request}).data)
+        return Response(DepthCheckSerializer(check, context=self._check_context(request, essay)).data)
 
     @action(detail=True, methods=['get'], url_path='depth-check/latest')
     def depth_check_latest(self, request, pk=None):
@@ -933,7 +939,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
         check = checks.order_by('-created_at', '-id').first()
         if check is None:
             return Response(status=status.HTTP_204_NO_CONTENT)
-        return Response(DepthCheckSerializer(check, context={'request': request}).data)
+        return Response(DepthCheckSerializer(check, context=self._check_context(request, essay)).data)
 
 
 def _copy_tabs(essay, originals, now, *, position=None, first_title=None):
