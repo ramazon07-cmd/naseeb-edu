@@ -41,7 +41,7 @@ import { createPoller } from '../lib/poller.js'
 import { loadFontsIn } from './fonts.js'
 import { errorCode, essayLabApi, essayTypeName } from './essayLabApi.js'
 import { deriveText, docFromText } from './docText.js'
-import { STRENGTHS, applyNoteState, normalizeCheck, openNotes, serverNotice, textFingerprint } from './coachModel.js'
+import { STRENGTHS, applyNoteState, mergeNoteStates, normalizeCheck, openNotes, serverNotice, textFingerprint } from './coachModel.js'
 import { checkpointDate, relativeTime, whenWritten } from './format.js'
 import {
   createSessionRegistry, createTabSession, discardLocalDraft, keepLocalDraft, saveProblem, syncTabs, unsavedTabs,
@@ -633,7 +633,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     if (!editor) return
     const marks = []
     for (const note of coachModel?.notes || []) {
-      if (note.quote && !noteStates[note.id]) marks.push({ id: note.id, quote: note.quote, criterion: note.criterion })
+      if (note.quote && noteStates[note.id] !== 'done' && noteStates[note.id] !== 'dismissed') marks.push({ id: note.id, quote: note.quote, criterion: note.criterion })
     }
     for (const item of coachModel?.strengths || []) {
       if (item.quote) marks.push({ id: item.id, quote: item.quote, criterion: STRENGTHS })
@@ -662,23 +662,48 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   }, [liveFingerprint, noteStates])
 
   // A note whose sentence can't be found (changed, or inside a tracked suggestion) is resolved:
-  // tell the server once per check+note so "Check again" is not blocked by it.
-  const goneSent = useRef(new Set())
+  // tell the server once per check+note so "Check again" is not blocked by it. A 'gone' note whose
+  // sentence is back (undo, restore) is reopened once. Only while the live doc is shown and synced.
+  const goneSent = useRef(new Map()) // key -> tries
+  const reopenSent = useRef(new Set())
+  const [goneRetry, setGoneRetry] = useState(0)
+  const liveDoc = !preview && !state.unsynced
   useEffect(() => {
-    if (!editor || !check?.id || !coachModel) return undefined
+    if (!editor || !check?.id || !coachModel || !liveDoc) return undefined
     const checkId = check.id
     const timer = window.setTimeout(() => {
       for (const note of coachModel.notes) {
-        if (noteStates[note.id] || anchored.has(note.id)) continue
         const key = `${checkId}:${note.id}`
-        if (goneSent.current.has(key)) continue
-        goneSent.current.add(key)
+        const mark = noteStates[note.id]
+        if (mark === 'gone' && anchored.has(note.id)) {
+          if (reopenSent.current.has(key)) continue
+          reopenSent.current.add(key)
+          goneSent.current.delete(key)
+          setNoteStates((previous) => applyNoteState(previous, note.id, 'open'))
+          essayLabApi.setDepthNoteState(essay.id, checkId, note.id, 'open').catch((error) => {
+            console.warn('Coach note state not saved', error)
+            reopenSent.current.delete(key)
+          })
+          continue
+        }
+        if (mark || anchored.has(note.id)) continue
+        const tries = goneSent.current.get(key) ?? 0
+        if (tries < 0 || tries >= 3) continue
+        goneSent.current.set(key, -1) // in flight
+        reopenSent.current.delete(key)
         setNoteStates((previous) => (previous[note.id] ? previous : applyNoteState(previous, note.id, 'gone')))
-        essayLabApi.setDepthNoteState(essay.id, checkId, note.id, 'gone').catch((error) => console.warn('Coach note state not saved', error))
+        essayLabApi.setDepthNoteState(essay.id, checkId, note.id, 'gone').then(() => {
+          goneSent.current.set(key, 99) // saved
+        }, (error) => {
+          console.warn('Coach note state not saved', error)
+          goneSent.current.set(key, tries + 1)
+          setNoteStates((previous) => (previous[note.id] === 'gone' ? applyNoteState(previous, note.id, 'open') : previous))
+          window.setTimeout(() => setGoneRetry((value) => value + 1), 3000 * (tries + 1))
+        })
       }
     }, 1200)
     return () => window.clearTimeout(timer)
-  }, [editor, check, coachModel, noteStates, anchored, essay.id])
+  }, [editor, check, coachModel, noteStates, anchored, essay.id, liveDoc, goneRetry])
 
   const noticeTimer = useRef(null)
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
@@ -712,10 +737,12 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     } catch (error) {
       if (serverNotice(error) === 'notes_open') {
         // Show the server's view of the notes instead of a dead end (one GET).
+        goneSent.current.clear()
+        reopenSent.current.clear()
         essayLabApi.latestDepthCheck(essay.id, session.id).then((latest) => {
           if (!latest?.result) return
           setCheck(latest)
-          setNoteStates(latest.note_states || {})
+          setNoteStates((previous) => mergeNoteStates(latest.note_states, previous, inflightNotes.current))
         }, () => {})
       }
       setCheckStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message } })
@@ -736,14 +763,19 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   const noteStatesRef = useLatest(noteStates)
   const checkRef = useLatest(check)
   const tabNotifyRef = useLatest(notify)
+  const inflightNotes = useRef(new Set())
   const setNoteState = useCallback((note, state) => {
     const checkId = checkRef.current?.id
-    if (!checkId) return
+    if (!checkId || inflightNotes.current.has(note.id)) return // one save per note at a time
     const before = noteStatesRef.current[note.id] || 'open'
     if (before === state) return
     setNoteStates((previous) => applyNoteState(previous, note.id, state))
     if (state !== 'open') setActiveNoteId((current) => (current === note.id ? null : current))
-    essayLabApi.setDepthNoteState(essay.id, checkId, note.id, state).catch(() => {
+    inflightNotes.current.add(note.id)
+    essayLabApi.setDepthNoteState(essay.id, checkId, note.id, state).then(() => {
+      inflightNotes.current.delete(note.id)
+    }, () => {
+      inflightNotes.current.delete(note.id)
       if (checkRef.current?.id !== checkId) return
       setNoteStates((previous) => applyNoteState(previous, note.id, before))
       tabNotifyRef.current(t('Could not save that. Try again.'), 'error')

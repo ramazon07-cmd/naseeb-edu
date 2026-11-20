@@ -3293,6 +3293,7 @@
 }
 
 .el-co-corner {
+  position: relative;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -3303,6 +3304,32 @@
   background: var(--el-surface);
   color: var(--el-muted);
   cursor: pointer;
+}
+
+.el-co-corner::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.el-co-corner:focus-visible {
+  outline: 2px solid var(--el-focus);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse), (max-width: 820px) {
+  .el-co-corner {
+    width: 44px;
+    height: 44px;
+  }
+
+  .el-co-corner::after {
+    inset: 0;
+  }
+
+  .el-co-note-top {
+    min-height: 44px;
+  }
 }
 
 .el-co-corner:hover {

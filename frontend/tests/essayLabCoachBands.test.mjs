@@ -1,7 +1,8 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
-  applyNoteState, deltaSince, doneNotes, goneNotes, headline, levelWord, normalizeCheck, normalizeForFingerprint, openNotes, recheckBlock, serverNotice,
+  applyNoteState, mergeNoteStates, deltaSince, doneNotes, goneNotes, headline, levelWord, normalizeCheck, normalizeForFingerprint, openNotes, recheckBlock, serverNotice,
   textFingerprint,
 } from '../src/essayLab/coachModel.js';
 
@@ -118,4 +119,35 @@ test('gone notes are resolved but not listed as done', () => {
   assert.deepEqual(openNotes(notes, states, anchored).map((note) => note.id), ['c']);
   assert.deepEqual(doneNotes(notes, states).map((note) => note.id), ['a']);
   assert.deepEqual(goneNotes(notes, states, anchored).map((note) => note.id), ['b']);
+});
+
+test('fingerprint matches the shared server fixtures', async (t) => {
+  const url = new URL('../../docs/essay-coach-fingerprint-fixtures.json', import.meta.url);
+  let raw;
+  try { raw = JSON.parse(readFileSync(url, 'utf8')); } catch { t.skip('fixtures file is not there yet'); return; }
+  const cases = Array.isArray(raw) ? raw : raw.cases || [];
+  assert.ok(cases.length > 0, 'the fixtures file has cases');
+  for (const item of cases) {
+    const input = item.input ?? item.text;
+    const expected = item.sha256 ?? item.expected ?? item.fingerprint;
+    assert.equal(await textFingerprint(input), expected, `case ${item.name || JSON.stringify(input).slice(0, 40)}`);
+  }
+});
+
+test('Python whitespace set and U+FEFF are handled like the server', () => {
+  assert.equal(normalizeForFingerprint('a b　c d\u001ce'), 'a b c d e');
+  assert.equal(normalizeForFingerprint('a﻿b'), 'ab', 'U+FEFF is dropped, not whitespace');
+  assert.equal(normalizeForFingerprint('a​b'), 'ab');
+});
+
+test('a refetch keeps the optimistic state of a note that is still saving', () => {
+  assert.deepEqual(mergeNoteStates({ a: 'done' }, { a: 'open', b: 'dismissed' }, new Set(['b'])), { a: 'done', b: 'dismissed' });
+  assert.deepEqual(mergeNoteStates({ a: 'done' }, {}, new Set(['a'])), {});
+  assert.deepEqual(mergeNoteStates(null, {}, null), {});
+});
+
+test('v1 checks never block Check again', () => {
+  const v1 = normalizeCheck({ result: { notes: [{ id: 'a', kind: 'reflect', quote: 'q', question: 'Q' }] } });
+  assert.equal(v1.version2, false);
+  assert.equal(recheckBlock({ hasCheck: true, openCount: v1.version2 ? 1 : 0, changed: true }), null);
 });

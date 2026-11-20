@@ -296,6 +296,8 @@ export const ESSAY_LAB_TRANSLATIONS = {
   'All notes done.': ['Barcha izohlar bajarildi.', 'Все заметки выполнены.'],
   '1 idea no longer matches your text': ['1 ta g‘oya endi matningizga mos kelmaydi', '1 идея больше не соответствует вашему тексту'],
   '{n} ideas no longer match your text': ['{n} ta g‘oya endi matningizga mos kelmaydi', '{n} идея больше не соответствует вашему тексту|{n} идеи больше не соответствуют вашему тексту|{n} идей больше не соответствуют вашему тексту'],
+  'Mark note {n} as done: {text}': ['{n}-izohni bajarildi deb belgilash: {text}', 'Отметить заметку {n} как выполненную: {text}'],
+  'Mark note {n} as not useful: {text}': ['{n}-izohni foydasiz deb belgilash: {text}', 'Отметить заметку {n} как бесполезную: {text}'],
   'Quick check': ['Tezkor tekshiruv', 'Быстрая проверка'],
   '+{n} since last check': ['Oxirgi tekshiruvdan beri +{n}', '+{n} с прошлой проверки'],
   Overview: ['Umumiy ko‘rinish', 'Обзор'],

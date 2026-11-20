@@ -30,7 +30,7 @@ const EXPLAIN = {
   prompt_fit: 'Does the essay answer the question it was asked?',
 }
 
-const DAILY_CHECKS = 5
+const DAILY_CHECKS = 5 // fallback when the server sends no daily_limit
 
 function CriterionIcon({ criterion, size = 16 }) {
   const Icon = CRITERION_ICON[criterion] || Lightbulb
@@ -128,11 +128,12 @@ function CoachPanel({
 
   const scored = Boolean(model?.scored)
   const delta = scored ? deltaSince(model.overall, check?.previous_overall) : null
-  const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: open.length, changed })
+  const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: model?.version2 ? open.length : 0, changed })
   const blockText = block ? t(BLOCK_TEXT[block]) : ''
   const errorCode = status.error?.code
   const errorText = status.error ? t(ERROR_TEXT[errorCode] || status.error.message || 'Coach couldn’t check this essay.') : ''
   const footerError = errorCode === 'notes_open' || errorCode === 'too_small_change'
+  const dailyLimit = Number(check?.daily_limit) > 0 ? Math.round(Number(check.daily_limit)) : DAILY_CHECKS
   const checksLeft = Number.isFinite(Number(check?.checks_left)) && check?.checks_left !== null ? Math.max(0, Number(check.checks_left)) : null
   const hint = status.loading ? '' : footerError ? errorText : notice === 'reused' ? t('Already checked — nothing changed') : blockText
   const hintId = 'el-coach-hint'
@@ -249,16 +250,17 @@ function CoachPanel({
             </div>}
 
             <div className="el-notes">
-              {shown.map((note) => {
+              {shown.map((note, position) => {
+                const snippet = note.question.split(/\s+/).slice(0, 6).join(' ')
                 const active = note.id === activeId
                 return <article key={note.id} data-note={note.id} className={`el-note is-${note.criterion}${active ? ' is-active' : ''}`} onClick={() => onJump(note)}>
                   <div className="el-note-top">
                     <CriterionIcon criterion={note.criterion} />
                     {note.priority && <span className="el-co-flag">{t('Priority')}</span>}
                     <span className="el-co-sp" />
-                    <button type="button" className="el-co-corner is-ok" aria-label={t('Mark as done')} title={t('Mark as done')}
+                    <button type="button" className="el-co-corner is-ok" aria-label={t('Mark note {n} as done: {text}', { n: position + 1, text: snippet })} title={t('Mark as done')}
                       onClick={(event) => { event.stopPropagation(); onSetState(note, 'done') }}><Check size={15} aria-hidden="true" /></button>
-                    <button type="button" className="el-co-corner" aria-label={t('Not useful')} title={t('Not useful')}
+                    <button type="button" className="el-co-corner" aria-label={t('Mark note {n} as not useful: {text}', { n: position + 1, text: snippet })} title={t('Not useful')}
                       onClick={(event) => { event.stopPropagation(); onSetState(note, 'dismissed') }}><X size={15} aria-hidden="true" /></button>
                   </div>
                   <button type="button" className="el-note-main" aria-pressed={active}>
@@ -306,7 +308,7 @@ function CoachPanel({
         <div className="el-co-foot-info">
           {checksLeft !== null && <span className="el-co-left" title={t('Re-checking unchanged text is free')}>
             <span className="el-co-pips" aria-hidden="true">
-              {Array.from({ length: DAILY_CHECKS }, (_, index) => <i key={index} className={index < Math.min(DAILY_CHECKS, checksLeft) ? '' : 'is-used'} />)}
+              {Array.from({ length: dailyLimit }, (_, index) => <i key={index} className={index < Math.min(dailyLimit, checksLeft) ? '' : 'is-used'} />)}
             </span>
             {t('{n} left today', { n: checksLeft })}
           </span>}

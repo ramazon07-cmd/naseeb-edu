@@ -142,6 +142,16 @@ export function openNotes(notes, states, anchored) {
   return (notes || []).filter((note) => !states?.[note.id] && anchored?.has(note.id))
 }
 
+// After a refetch: the server's states, except notes whose own save is still in flight.
+export function mergeNoteStates(server, local, inflight) {
+  const next = { ...(server || {}) }
+  for (const id of inflight || []) {
+    if (local?.[id]) next[id] = local[id]
+    else delete next[id]
+  }
+  return next
+}
+
 // Notes marked done/dismissed (shown in the collapsed "Done" row).
 export function doneNotes(notes, states) {
   return (notes || []).filter((note) => states?.[note.id] === 'done' || states?.[note.id] === 'dismissed')
@@ -164,6 +174,11 @@ export function recheckBlock({ hasCheck, openCount, changed }) {
 // --- Fingerprint ---------------------------------------------------------------
 // Same as the server: NFKC, lower-case, curly quotes to straight, drop every
 // character that is not a letter, digit or whitespace, collapse whitespace, trim.
+// Python's str.isspace() set (not JS \s, which differs, e.g. U+FEFF is not whitespace in Python).
+const PY_SPACE = '\\t\\n\\v\\f\\r \\x1c-\\x1f\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000'
+const NOT_KEPT = new RegExp(`[^\\p{L}\\p{N}${PY_SPACE}]`, 'gu')
+const SPACE_RUN = new RegExp(`[${PY_SPACE}]+`, 'gu')
+const SPACE_EDGES = new RegExp(`^[${PY_SPACE}]+|[${PY_SPACE}]+$`, 'gu')
 const SINGLE_QUOTES = /[‘’‚‛′‵]/g
 const DOUBLE_QUOTES = /[“”„‟″‶«»]/g
 
@@ -173,9 +188,9 @@ export function normalizeForFingerprint(text) {
     .toLowerCase()
     .replace(SINGLE_QUOTES, "'")
     .replace(DOUBLE_QUOTES, '"')
-    .replace(/[^\p{L}\p{N}\s]/gu, '')
-    .replace(/\s+/gu, ' ')
-    .trim()
+    .replace(NOT_KEPT, '')
+    .replace(SPACE_RUN, ' ')
+    .replace(SPACE_EDGES, '')
 }
 
 // -> sha256 hex of the normalized text, or null when crypto.subtle is unavailable.
