@@ -319,7 +319,8 @@ def _step1_instruction(rubric, noun='essay'):
     return '\n'.join(parts)
 
 
-def _step2_instruction(rubric, cap, overall, noun='essay', asker='the student', source='their own life'):
+def _step2_instruction(rubric, cap, overall, noun='essay', asker='the student', source='their own life',
+                       quote_hint=''):
     keys = list(RUBRIC_WEIGHTS[rubric]) if rubric else list(SCORE_KEYS)
     keys = ', '.join(f'"{key}"' for key in keys)
     focus = ''
@@ -331,7 +332,7 @@ def _step2_instruction(rubric, cap, overall, noun='essay', asker='the student', 
         f'(the most useful first).{focus}',
         f'Each note is an object {{"criterion", "quote", "question", "context"}}:',
         f'- "criterion": one of {keys}.',
-        f'- "quote": one sentence copied exactly from the {noun} (inside one paragraph, at most 300 characters).',
+        f'- "quote": one sentence copied exactly from the {noun} (inside one paragraph, at most 300 characters).{quote_hint}',
         f'- "question": one open question, at most 200 characters, that only {asker} can answer from {source}.',
         '- "context": one short line (at most 120 characters) that adds something the question does not say. '
         'Never repeat or rephrase the question there; if there is nothing new, use an empty string.',
@@ -476,7 +477,9 @@ def validate_notes(raw_notes, content, rubric, cap):
     return notes
 
 
-def build_result(step1, notes, *, rubric, overall, notes_locked=False):
+def build_result(step1, notes, *, rubric, overall, notes_locked=False, restore=None):
+    if restore is not None:
+        notes = _restore_quotes(step1, notes, restore)
     return {
         'version': RESULT_VERSION,
         'scored': overall is not None,
@@ -592,6 +595,7 @@ class CheckSpec:
     asker: str = 'the student'
     source: str = 'their own life'
     restore: object = None
+    quote_hint: str = ''
 
 
 def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call):
@@ -642,23 +646,24 @@ def run_check(spec, user, before_call=lambda: None):
     )
     if 'safety' in step1:
         empty = {'scores': {}, 'summary': step1['safety'], 'suggestions': [], 'strengths': []}
-        return build_result(empty, [], rubric=rubric, overall=None, notes_locked=True), settings.ESSAY_COACH_MODEL
+        return (build_result(empty, [], rubric=rubric, overall=None, notes_locked=True, restore=spec.restore),
+                settings.ESSAY_COACH_MODEL)
 
     overall = compute_overall(rubric, step1['scores']) if rubric else None
     cap = notes_cap(overall, spec.words)
     if overall is not None and overall < NOTES_MIN_OVERALL:
-        return build_result(step1, [], rubric=rubric, overall=overall, notes_locked=True), settings.ESSAY_COACH_MODEL
+        return (build_result(step1, [], rubric=rubric, overall=overall, notes_locked=True, restore=spec.restore),
+                settings.ESSAY_COACH_MODEL)
     notes = []
     if cap:
-        instruction = _step2_instruction(rubric, cap, overall, spec.noun, spec.asker, spec.source)
+        instruction = _step2_instruction(rubric, cap, overall, spec.noun, spec.asker, spec.source, spec.quote_hint)
         notes = _run_step(
             spec, user, [system, user_message(instruction)], NOTE_TOKENS * cap + NOTES_BASE_TOKENS,
             lambda raw: validate_notes(raw.get('notes') if isinstance(raw, dict) else None, content, rubric, cap),
             deadline, before_call,
         )
-    if spec.restore is not None:
-        notes = _restore_quotes(step1, notes, spec.restore)
-    return build_result(step1, notes, rubric=rubric, overall=overall), settings.ESSAY_COACH_MODEL
+    return (build_result(step1, notes, rubric=rubric, overall=overall, restore=spec.restore),
+            settings.ESSAY_COACH_MODEL)
 
 
 def run_ai_check(essay, content, user, before_call=lambda: None):

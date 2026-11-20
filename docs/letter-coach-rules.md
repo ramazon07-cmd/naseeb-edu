@@ -100,3 +100,16 @@ voice 5.
   `REC_LETTER_CHECK_MIN_INTERVAL_SECONDS` (15), `REC_LETTER_CHECK_HOURLY_LIMIT` (60). The AI call
   deadlines reuse the `ESSAY_COACH_*` settings. Usage is logged as feature
   `recommendation_letter_check`.
+- Calibration: the rubric README requires at least ten synthetic calibration letters (second-language
+  writers and short letters included) with expected score ranges before production use. Do not enable
+  the letter check for real counselors until they exist.
+- `PATCH /recommendations/<id>/` accepts an optional `base_updated_at`; when it differs from the
+  letter's `updated_at` the answer is 409 `stale` with the current serialized letter at `details.letter` and
+  nothing is written. Without it, saves behave as before.
+- Names are hidden from the model in every spelling the letter may use: first, last and middle names
+  (split on spaces and hyphens, 3+ letters), curly or modifier apostrophes, Cyrillic, and inflected
+  endings (up to 5 letters); the school name becomes `[School]`. A quote that is only the
+  placeholder is rejected, and a restored quote is widened to its whole sentence.
+- A letter check refused because AI is off (master switch or no gateway key) is 503
+  `coach_unavailable` with `details.ai_available: false`; a provider or timeout failure is the same
+  code with `details.ai_available: true`. Both are free.

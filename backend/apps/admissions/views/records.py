@@ -522,6 +522,23 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
     def get_queryset(self):
         return self.filter_for_user(self.queryset)
 
+    def update(self, request, *args, **kwargs):
+        """PUT/PATCH. With `base_updated_at`, the write happens only if the letter is still at that version:
+        otherwise 409 `stale` with the current letter and nothing is written. Without it: as before."""
+        base = request.data.get('base_updated_at') if hasattr(request.data, 'get') else None
+        if base in (None, ''):
+            return super().update(request, *args, **kwargs)
+        base = LetterCheckRequestSerializer(data={'base_updated_at': base})
+        base.is_valid(raise_exception=True)
+        with transaction.atomic():
+            letter = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=kwargs['pk'])
+            if abs(letter.updated_at - base.validated_data['base_updated_at']) >= LETTER_STALE_TOLERANCE:
+                return Response({
+                    'detail': 'This letter has changed since you opened it.', 'code': 'stale',
+                    'details': {'letter': self.get_serializer(letter).data},
+                }, status=status.HTTP_409_CONFLICT)
+            return super().update(request, *args, **kwargs)
+
     @action(detail=False, methods=['post'], url_path='suggest')
     def suggest(self, request):
         """Ideas for the letter a counselor is writing, drawn from the student's profile."""
@@ -557,12 +574,18 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             release_db_connection()  # don't hold a pooled connection during the AI call
             language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
             ai_usage.begin()
+            succeeded = False
             try:
                 suggestions = rec_letter_ai.ai_suggestions(student, facts, data['draft'], letter=data, language=language)
                 ai_usage.record('recommendation_letter', request.user, provider='gateway', status=ai_usage.OK)
-                return answer('ai', suggestions + rec_letter_ai.missing_facts(facts, data['draft']), True)
+                succeeded = True
             except rec_letter_ai.SuggestionsUnavailable:
                 ai_usage.record('recommendation_letter', request.user, provider='gateway', status=ai_usage.FAILED)
+            finally:
+                if not succeeded:
+                    ai_budget.refund('recommendation_letter', request.user)  # a failed call is free
+            if succeeded:
+                return answer('ai', suggestions + rec_letter_ai.missing_facts(facts, data['draft']), True)
         else:
             ai_usage.record(
                 'recommendation_letter', request.user, provider='gateway',
@@ -612,7 +635,8 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             self.throttled(request, throttle.wait())
         if not coach.gateway_configured():
             # The letter has no rule-based reader: without the AI there is nothing to run.
-            raise CodedError('The letter check is unavailable right now.', 'coach_unavailable', status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({'detail': 'The letter check is unavailable right now.', 'code': 'coach_unavailable',
+                             'details': {'ai_available': False}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if not ai_budget.consume('recommendation_letter_check', request.user):
             ai_usage.record(letter_coach.FEATURE, request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
             raise CodedError('The Coach is resting for today. Please try again tomorrow.', 'coach_resting',
@@ -623,8 +647,9 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             result, model = coach.run_check(spec, request.user, release_db_connection)
         except coach.CoachUnavailable:
             ai_budget.refund('recommendation_letter_check', request.user)  # a failed check is free
-            raise CodedError('The Coach is unavailable right now. Please try again soon.', 'coach_unavailable',
-                             status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({'detail': 'The Coach is unavailable right now. Please try again soon.',
+                             'code': 'coach_unavailable', 'details': {'ai_available': True}},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         with transaction.atomic():
             # The letter may have been deleted during the AI call.
@@ -673,7 +698,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(LetterCheckSerializer(check, context=self._check_context(request, letter)).data)
 
-    @action(detail=True, methods=['patch'], url_path=r'depth-check/(?P<check_id>[0-9]+)/notes')
+    @action(detail=True, methods=['patch'], url_path=r'depth-check/(?P<check_id>[0-9]{1,10})/notes')
     def depth_check_note(self, request, pk=None, check_id=None):
         """Mark one note done, not useful (dismissed), gone (not found in the text) or open again."""
         letter = self._check_letter(pk)

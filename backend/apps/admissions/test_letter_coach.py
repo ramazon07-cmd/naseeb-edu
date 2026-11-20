@@ -282,7 +282,7 @@ class LetterCheckGuardTests(LetterCheckCase):
         with mock.patch('urllib.request.urlopen', side_effect=urllib.error.URLError('down')) as urlopen:
             response = self.client.post(f'{URL}/{self.letter.pk}/depth-check/',
                                         {'base_updated_at': self.reload().updated_at.isoformat()}, format='json')
-        self.assertEqual((response.status_code, response.data['code']), (503, 'coach_unavailable'))
+        self.assertEqual((response.status_code, response.data['code'], response.data['details']), (503, 'coach_unavailable', {'ai_available': True}))
         self.assertEqual(urlopen.call_count, 1)  # no paid retry
         self.assertEqual((self.left(), RecommendationLetterCheck.objects.count()), (before, 0))
         self.assertEqual(AiUsageLog.objects.get().feature, 'recommendation_letter_check')
@@ -341,7 +341,7 @@ class LetterCheckGuardTests(LetterCheckCase):
     def test_the_master_switch_off_means_no_check_and_no_cost(self):
         left = self.left()
         response, gateway = self.check(FakeGateway())
-        self.assertEqual((response.status_code, response.data['code']), (503, 'coach_unavailable'))
+        self.assertEqual((response.status_code, response.data['code'], response.data['details']), (503, 'coach_unavailable', {'ai_available': False}))
         self.assertEqual((gateway.bodies, self.left(), RecommendationLetterCheck.objects.count()), ([], left, 0))
 
     def test_the_essay_coach_budget_is_separate(self):
@@ -443,3 +443,148 @@ class LetterSuggestAiFlagTests(LetterCheckCase):
 
         self.assertEqual(settings.REC_LETTER_AI_USER_DAILY_LIMIT, 20)
         self.assertEqual(settings.REC_LETTER_CHECK_USER_DAILY_LIMIT, 5)
+
+
+@override_settings(**AI_ON)
+class LetterNameHidingTests(LetterCheckCase):
+    def student_named(self, first, last, middle=''):
+        self.student_user.first_name, self.student_user.last_name = first, last
+        self.student_user.save(update_fields=['first_name', 'last_name'])
+        self.student.application_profile = {'middle_name': middle} if middle else {}
+        self.student.save()
+
+    def anonymize(self, text):
+        student = type(self.student).objects.select_related('user', 'school').get(pk=self.student.pk)
+        return letter_coach.anonymize(text, student)
+
+    def test_apostrophes_cyrillic_inflections_and_compound_names_are_all_hidden(self):
+        self.student_named("Oʻktam", 'Ramazon-Karimov', 'Abdu Salom')
+        for text, hidden in (
+            ("Oʻktam works hard.", ['Oʻktam']), ("O'ktam works hard.", ["O'ktam"]), ("O‘ktam works hard.", ['O‘ktam']),
+            ("O’ktam works hard.", ['O’ktam']), ('Ramazonning ukasi keldi.', ['Ramazon']),
+            ('Ramazonga aytdim.', ['Ramazon']), ('Рамазона я знаю.', []), ('Abdu Salom came.', ['Abdu', 'Salom']),
+            ('Karimov-Ramazon spoke.', ['Karimov', 'Ramazon']), ('OʻKTAM spoke.', ['KTAM']),
+        ):
+            result = self.anonymize(text)
+            self.assertIn('[Student]', result if hidden or 'Рамазона' not in text else '[Student]', text)
+            for part in hidden:
+                self.assertNotIn(part, result, text)
+        self.student_named('Рамазон', 'Каримов')
+        self.assertNotIn('Рамазона', self.anonymize('Рамазона я знаю.'))
+        self.assertNotIn('Каримова', self.anonymize('У Каримова хорошо. Каримова ждёт.'))
+
+    def test_short_tokens_are_left_and_the_school_name_is_hidden(self):
+        self.student_named('Li', 'Karimova')
+        self.assertEqual(self.anonymize('Li is here; Karimova too.'), 'Li is here; [Student] too.')
+        self.assertEqual(self.anonymize(f'At {self.school_a.name} she studies.'), 'At [School] she studies.')
+
+    def test_none_of_them_reach_the_prompt(self):
+        self.student_named("Oʻktam", 'Ramazon-Karimov')
+        self.set_body(
+            "Oʻktam stayed after class. O'ktam rebuilt the rig. Ramazonning notebook was green and full of "
+            "attempts. Karimov-Ramazon never gave up on the pendulum in March. Ramazonga I said that again "
+            f"and again at {self.school_a.name} this spring.")
+        response, gateway = self.check(FakeGateway(score=SCORE_REPLY))
+        self.assertEqual(response.status_code, 200, response.data)
+        sent = json.dumps(gateway.bodies, ensure_ascii=False)
+        for private in ('Oʻktam', "O'ktam", 'Ramazon', 'Karimov', self.school_a.name):
+            self.assertNotIn(private, sent)
+
+    def test_a_note_on_a_sentence_with_an_apostrophe_name_is_restored_not_dropped(self):
+        self.student_named("O'ktam", 'Karimov')
+        self.set_body("O’ktam rebuilt the pendulum rig in March after three groups gave up. She kept every failed "
+                      "attempt in a green notebook and read them to the class.")
+        notes = {'notes': [{'criterion': 'evidence', 'quote': '[Student] rebuilt the pendulum rig in March after three groups gave up.',
+                            'question': 'What did you see her change after the third failure?', 'context': ''}]}
+        response, _ = self.check(FakeGateway(score=SCORE_REPLY, notes=notes))
+        self.assertEqual([note['quote'] for note in response.data['result']['notes']],
+                         ["O'ktam rebuilt the pendulum rig in March after three groups gave up."])  # quotes are stored normalized
+
+
+@override_settings(**AI_ON)
+class LetterQuoteRestoreTests(LetterCheckCase):
+    def notes_for(self, *quotes):
+        return {'notes': [{'criterion': 'evidence', 'quote': quote, 'question': f'Which detail number {index} stayed with you?',
+                           'context': ''} for index, quote in enumerate(quotes)]}
+
+    def test_a_name_only_or_tiny_quote_is_rejected(self):
+        notes = self.notes_for('[Student]', '[Student] [Student].', '[Student] stayed', 'Malika')
+        response, _ = self.check(FakeGateway(score=SCORE_REPLY, notes=notes))
+        self.assertEqual(response.data['result']['notes'], [])
+
+    def test_a_partial_quote_widens_to_its_whole_sentence(self):
+        notes = self.notes_for('[Student] [Student] is among the five strongest')
+        response, _ = self.check(FakeGateway(score=SCORE_REPLY, notes=notes))
+        self.assertEqual([note['quote'] for note in response.data['result']['notes']],
+                         ['Malika Karimova is among the five strongest students I have taught in twelve years.'])
+
+    def test_the_letter_prompt_asks_for_whole_sentences(self):
+        _, gateway = self.check(FakeGateway(score=SCORE_REPLY, notes=NOTES))
+        self.assertIn('Quote one whole sentence, never only [Student].', gateway.bodies[1]['messages'][-1]['content'])
+
+    def test_strength_quotes_are_restored_also_when_notes_are_locked(self):
+        low = {**SCORE_REPLY, 'scores': {key: 1 for key in SCORES},
+               'strengths': [{'criterion': 'evidence', 'quote': '[Student] [Student] is among the five strongest students',
+                              'text': 'A comparison.'}]}
+        response, gateway = self.check(FakeGateway(score=low))
+        self.assertTrue(response.data['result']['notes_locked'])
+        self.assertEqual(gateway.steps, ['score'])
+        quote = response.data['result']['strengths'][0]['quote']
+        self.assertEqual(quote, 'Malika Karimova is among the five strongest students I have taught in twelve years.')
+
+    def test_two_identical_sentences_resolve_to_one_of_them(self):
+        self.set_body('Malika Karimova was kind to the whole class every day. Another paragraph follows here.\n\n'
+                      'Malika Karimova was kind to the whole class every day. She also tutored two classmates weekly.')
+        notes = self.notes_for('[Student] [Student] was kind to the whole class every day.')
+        response, _ = self.check(FakeGateway(score=SCORE_REPLY, notes=notes))
+        [note] = response.data['result']['notes']
+        self.assertEqual(note['quote'], 'Malika Karimova was kind to the whole class every day.')
+
+
+@override_settings(**AI_ON)
+class LetterReviewFixTests(LetterCheckCase):
+    def test_a_note_id_route_is_bounded(self):
+        response = self.client.patch(f'{URL}/{self.letter.pk}/depth-check/{"9" * 11}/notes/',
+                                     {'note_id': 'n1', 'state': 'done'}, format='json')
+        self.assertEqual(response.status_code, 404)
+
+    def test_conditional_save_with_base_updated_at(self):
+        letter = self.reload()
+        base = letter.updated_at.isoformat()
+        ok = self.client.patch(f'{URL}/{letter.pk}/', {'notes': 'First', 'base_updated_at': base}, format='json')
+        self.assertEqual(ok.status_code, 200, ok.data)
+        stale = self.client.patch(f'{URL}/{letter.pk}/', {'notes': 'Second', 'base_updated_at': base}, format='json')
+        self.assertEqual((stale.status_code, stale.data['code']), (409, 'stale'))
+        self.assertEqual(stale.data['details']['letter']['notes'], 'First')
+        self.assertEqual(self.reload().notes, 'First')
+        # no base: as before
+        free = self.client.patch(f'{URL}/{letter.pk}/', {'notes': 'Third'}, format='json')
+        self.assertEqual(free.status_code, 200)
+        self.assertEqual(self.reload().notes, 'Third')
+
+    def test_a_bad_base_is_a_validation_error(self):
+        response = self.client.patch(f'{URL}/{self.letter.pk}/', {'notes': 'x', 'base_updated_at': 'soon'}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS=0)
+class LetterSuggestRefundTests(LetterCheckCase):
+    def suggest(self):
+        return self.client.post(SUGGEST_URL, {'student': self.student.id, 'draft': '', 'ai': True}, format='json')
+
+    def test_a_provider_failure_gives_the_unit_back(self):
+        with mock.patch('urllib.request.urlopen', side_effect=urllib.error.URLError('down')):
+            response = self.suggest()
+        self.assertEqual((response.data['source'], response.data['ai_left']), ('profile', 20))
+
+    def test_an_unusable_answer_gives_the_unit_back(self):
+        answer = {'suggestions': [{'kind': 'essay', 'text': 'Not a kind we show.'}]}
+        with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
+            response = self.suggest()
+        self.assertEqual((response.data['source'], response.data['ai_left']), ('profile', 20))
+
+    def test_an_unexpected_error_gives_the_unit_back_too(self):
+        with mock.patch('apps.admissions.rec_letter_ai.ai_suggestions', side_effect=RuntimeError('boom')):
+            with self.assertRaises(RuntimeError):
+                self.suggest()
+        self.assertEqual(ai_budget.user_remaining('recommendation_letter', self.counselor), 20)
