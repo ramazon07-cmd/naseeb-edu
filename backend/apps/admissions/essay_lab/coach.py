@@ -24,6 +24,7 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -156,7 +157,10 @@ def _similarity(a, b):
 # Rubrics: weights are read from the rubric files so the tables stay the one source.
 
 RUBRIC_DIR = Path(__file__).parent / 'rubrics'
-RUBRIC_FILES = {'personal_statement': 'personal_statement.md', 'supplement': 'supplemental_essay.md'}
+RUBRIC_FILES = {
+    'personal_statement': 'personal_statement.md', 'supplement': 'supplemental_essay.md',
+    'recommendation_letter': 'recommendation_letter.md',
+}
 RUBRIC_FOR_TYPE = {
     'personal_statement': 'personal_statement',
     'free_writing': 'personal_statement',
@@ -167,6 +171,7 @@ RUBRIC_FOR_TYPE = {
 RUBRIC_ALIASES = {
     'personal_statement': {},
     'supplement': {'fit_specificity': 'prompt_fit', 'evidence': 'specificity', 'concision': 'structure'},
+    'recommendation_letter': {},
 }
 _TABLE_ROW = re.compile(r'^\|\s*`([a-z_]+)`\s*\|[^|]*\|\s*(\d+)\s*\|\s*$', re.MULTILINE)
 
@@ -200,7 +205,7 @@ def criterion_key(rubric, value):
         return None
     value = value.strip()
     value = RUBRIC_ALIASES.get(rubric, {}).get(value, value)
-    return value if value in SCORE_KEYS else None
+    return value if value in (CRITERIA[rubric] if rubric else SCORE_KEYS) else None
 
 
 def compute_overall(rubric, scores):
@@ -269,8 +274,8 @@ Rubric:
 """
 
 
-def _system_message(rubric):
-    return SYSTEM_RULES + _rubric_text(rubric)
+def _system_message(rubric, rules=SYSTEM_RULES):
+    return rules + _rubric_text(rubric)
 
 
 def _essay_block(essay, content):
@@ -292,17 +297,17 @@ def _essay_block(essay, content):
     )
 
 
-def _step1_instruction(rubric):
+def _step1_instruction(rubric, noun='essay'):
     parts = ['TASK: SCORE. Return a JSON object with exactly these keys:']
     if rubric:
         keys = ', '.join(f'"{key}"' for key in RUBRIC_WEIGHTS[rubric])
         parts.append(f'- "scores": an object with an integer 1-4 for each of {keys}, as the rubric defines them. '
                      'Do not add an overall score.')
     parts += [
-        '- "summary": at most 400 characters: what the essay is about and its biggest opportunity.',
-        '- "strengths": 1 to 3 objects {"criterion", "quote", "text"}. "quote" is copied exactly from the essay '
+        f'- "summary": at most 400 characters: what the {noun} is about and its biggest opportunity.',
+        f'- "strengths": 1 to 3 objects {{"criterion", "quote", "text"}}. "quote" is copied exactly from the {noun} '
         '(inside one paragraph, at most 300 characters, or an empty string); "text" says in one sentence why it works.',
-        '- "suggestions": 2 to 4 short big-picture suggestions for the whole essay, phrased as questions or '
+        f'- "suggestions": 2 to 4 short big-picture suggestions for the whole {noun}, phrased as questions or '
         'directions, never as replacement text.',
     ]
     if rubric:
@@ -314,20 +319,20 @@ def _step1_instruction(rubric):
     return '\n'.join(parts)
 
 
-def _step2_instruction(rubric, cap, overall):
+def _step2_instruction(rubric, cap, overall, noun='essay', asker='the student', source='their own life'):
     keys = list(RUBRIC_WEIGHTS[rubric]) if rubric else list(SCORE_KEYS)
     keys = ', '.join(f'"{key}"' for key in keys)
     focus = ''
     if overall is not None and overall <= 60:
         focus = f' Pick the biggest problems only: between {min(3, cap)} and {cap} notes.'
-    known = f' The essay scored {overall}/100.' if overall is not None else ''
+    known = f' The {noun} scored {overall}/100.' if overall is not None else ''
     return '\n'.join([
         f'TASK: NOTES.{known} Return {{"notes": [...]}} with at most {cap} notes, ordered by importance '
         f'(the most useful first).{focus}',
         f'Each note is an object {{"criterion", "quote", "question", "context"}}:',
         f'- "criterion": one of {keys}.',
-        '- "quote": one sentence copied exactly from the essay (inside one paragraph, at most 300 characters).',
-        '- "question": one open question, at most 200 characters, that only the student can answer from their own life.',
+        f'- "quote": one sentence copied exactly from the {noun} (inside one paragraph, at most 300 characters).',
+        f'- "question": one open question, at most 200 characters, that only {asker} can answer from {source}.',
         '- "context": one short line (at most 120 characters) that adds something the question does not say. '
         'Never repeat or rephrase the question there; if there is nothing new, use an empty string.',
         'At most one note per sentence, and no two notes may ask nearly the same question. '
@@ -567,21 +572,57 @@ def gateway_configured():
 _PROVIDER_ERRORS = (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError)
 
 
-def _run_step(essay, user, messages, max_tokens, validate, deadline, before_call):
+@dataclass(frozen=True)
+class CheckSpec:
+    """What the two-step engine needs to read one text: the rubric, the prompt pieces and who is billed.
+
+    `content` is the text the model sees and the quotes are validated against; `words` is the word count
+    that caps the notes. `restore`, when given, turns a validated quote back into the stored text it came
+    from (or None to drop the note): letters show the model "[Student]" and keep real names in storage.
+    """
+
+    rubric: str
+    system: str
+    block: str
+    content: str
+    words: int
+    feature: str
+    log_id: str
+    noun: str = 'essay'
+    asker: str = 'the student'
+    source: str = 'their own life'
+    restore: object = None
+
+
+def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call):
     """One billed call, recorded in ai_usage. Never retried (the only retry is the reasoning_effort 400)."""
     before_call()  # hand the database connection back for the length of the provider call
     ai_usage.begin()
     try:
         validated = validate(_request_gateway(messages, max_tokens, deadline))
     except _PROVIDER_ERRORS:
-        ai_usage.record('essay_coach', user, provider='gateway', status=ai_usage.FAILED)
-        logger.warning('essay_coach_provider_failure essay_id=%s', essay.pk)
+        ai_usage.record(spec.feature, user, provider='gateway', status=ai_usage.FAILED)
+        logger.warning('%s_provider_failure %s', spec.feature, spec.log_id)
         raise CoachUnavailable()
-    ai_usage.record('essay_coach', user, provider='gateway', status=ai_usage.OK)
+    ai_usage.record(spec.feature, user, provider='gateway', status=ai_usage.OK)
     return validated
 
 
-def run_ai_check(essay, content, user, before_call=lambda: None):
+def _restore_quotes(step1, notes, restore):
+    """Quotes back in the stored text; a note whose quote cannot be found there is dropped and ids renumbered."""
+    for strength in step1.get('strengths') or []:
+        strength['quote'] = (restore(strength['quote']) or '') if strength['quote'] else ''
+    kept = []
+    for note in notes:
+        quote = restore(note['quote'])
+        if quote is not None:
+            kept.append({**note, 'quote': quote})
+    return [
+        {**note, 'id': f'n{index}', 'priority': index <= PRIORITY_NOTES} for index, note in enumerate(kept, start=1)
+    ]
+
+
+def run_check(spec, user, before_call=lambda: None):
     """Return (v2 result, model). Raises CoachUnavailable on any provider failure or a missed deadline.
 
     Every call is recorded in ai_usage here, so both steps' tokens are counted. `before_call` runs before
@@ -589,16 +630,14 @@ def run_ai_check(essay, content, user, before_call=lambda: None):
     finish within ESSAY_COACH_TOTAL_SECONDS: step 2 gets only the time left.
     """
     deadline = time.monotonic() + settings.ESSAY_COACH_TOTAL_SECONDS
-    rubric = rubric_for(essay.essay_type)
-    words = len(content.split())
-    system = {'role': 'system', 'content': _system_message(rubric)}
-    block = _essay_block(essay, content)
+    rubric, content = spec.rubric, spec.content
+    system = {'role': 'system', 'content': spec.system}
 
     def user_message(instruction):
-        return {'role': 'user', 'content': f'{block}\n\n{instruction}'}
+        return {'role': 'user', 'content': f'{spec.block}\n\n{instruction}'}
 
     step1 = _run_step(
-        essay, user, [system, user_message(_step1_instruction(rubric))], STEP1_MAX_TOKENS,
+        spec, user, [system, user_message(_step1_instruction(rubric, spec.noun))], STEP1_MAX_TOKENS,
         lambda raw: validate_score_step(raw, content, rubric), deadline, before_call,
     )
     if 'safety' in step1:
@@ -606,18 +645,30 @@ def run_ai_check(essay, content, user, before_call=lambda: None):
         return build_result(empty, [], rubric=rubric, overall=None, notes_locked=True), settings.ESSAY_COACH_MODEL
 
     overall = compute_overall(rubric, step1['scores']) if rubric else None
-    cap = notes_cap(overall, words)
+    cap = notes_cap(overall, spec.words)
     if overall is not None and overall < NOTES_MIN_OVERALL:
         return build_result(step1, [], rubric=rubric, overall=overall, notes_locked=True), settings.ESSAY_COACH_MODEL
     notes = []
     if cap:
-        instruction = _step2_instruction(rubric, cap, overall)
+        instruction = _step2_instruction(rubric, cap, overall, spec.noun, spec.asker, spec.source)
         notes = _run_step(
-            essay, user, [system, user_message(instruction)], NOTE_TOKENS * cap + NOTES_BASE_TOKENS,
+            spec, user, [system, user_message(instruction)], NOTE_TOKENS * cap + NOTES_BASE_TOKENS,
             lambda raw: validate_notes(raw.get('notes') if isinstance(raw, dict) else None, content, rubric, cap),
             deadline, before_call,
         )
+    if spec.restore is not None:
+        notes = _restore_quotes(step1, notes, spec.restore)
     return build_result(step1, notes, rubric=rubric, overall=overall), settings.ESSAY_COACH_MODEL
+
+
+def run_ai_check(essay, content, user, before_call=lambda: None):
+    """The Essay Coach's check: `run_check` for an essay's text."""
+    rubric = rubric_for(essay.essay_type)
+    spec = CheckSpec(
+        rubric=rubric, system=_system_message(rubric), block=_essay_block(essay, content), content=content,
+        words=len(content.split()), feature='essay_coach', log_id=f'essay_id={essay.pk}',
+    )
+    return run_check(spec, user, before_call)
 
 
 # ---------------------------------------------------------------------------
