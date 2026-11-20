@@ -241,21 +241,39 @@ _STATUS_NAMES = {
 }
 
 
+_MONTHS = {
+    'en': ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'),
+    'uz': ('yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'),
+    'ru': ('янв.', 'февр.', 'марта', 'апр.', 'мая', 'июня', 'июля', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'),
+}
+
+
+def _plural_en(text, n):
+    # English templates write "task(s)" / "day(s)"; pick the right form for n.
+    return text.replace('(s)', '' if n == 1 else 's')
+
+
 def _t(key, lang, **values):
-    return _T[key][lang].format(**values)
+    text = _T[key][lang].format(**values)
+    return _plural_en(text, values['n']) if lang == 'en' and isinstance(values.get('n'), int) else text
+
+
+def _date(day, lang):
+    month = _MONTHS[lang][day.month - 1]
+    return f'{day.day}-{month}' if lang == 'uz' else f'{day.day} {month}'
 
 
 def _when(due, today, lang):
     days = (due - today).days
     if days < 0:
-        text = {'en': f'{-days} day(s) overdue', 'uz': f'{-days} kun kechikkan', 'ru': f'просрочено на {-days} дн.'}
+        text = {'en': _plural_en(f'{-days} day(s) overdue', -days), 'uz': f'{-days} kun kechikkan', 'ru': f'просрочено на {-days} дн.'}
     elif days == 0:
         text = {'en': 'today', 'uz': 'bugun', 'ru': 'сегодня'}
     elif days == 1:
         text = {'en': 'tomorrow', 'uz': 'ertaga', 'ru': 'завтра'}
     else:
         text = {'en': f'in {days} days', 'uz': f'{days} kundan keyin', 'ru': f'через {days} дн.'}
-    return f'{due.isoformat()}, {text[lang]}'
+    return f'{_date(due, lang)}, {text[lang]}'
 
 
 def _status_lines(counts, lang):
