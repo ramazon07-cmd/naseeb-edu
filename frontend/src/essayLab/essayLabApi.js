@@ -58,6 +58,11 @@ export const essayLabApi = {
   depthCheck: (id, tab, baseSeq) => request(`${BASE}/essays/${id}/depth-check/`, json('POST', { tab, base_seq: baseSeq }, { timeoutMs: 60_000 })),
   // Without a tab: the document's latest check (the library card).
   latestDepthCheck: (id, tab) => request(`${BASE}/essays/${id}/depth-check/latest/${query({ tab })}`),
+  // state: 'done' | 'dismissed' | 'open'. The answer is the check, with its note_states.
+  setDepthNoteState: (id, checkId, noteId, state) => request(
+    `${BASE}/essays/${id}/depth-check/${checkId}/notes/`,
+    json('PATCH', { note_id: noteId, state }),
+  ),
 
   // Comments and suggestions. changes() answers { notModified } while nothing changed
   // (ETag); otherwise the tab's threads, pending suggestions and, when newer

@@ -1,6 +1,6 @@
 # Rubrics: how the server must use these files
 
-Status: **drafts. Not wired into `coach.py`. Do not enable for students until the items below exist.**
+Status: **drafts. `coach.py` now loads the personal statement and supplement rubrics, parses their weight tables (`CRITERIA`, tested), computes the overall score on the server and pins the model at temperature 0. Items 4 and 8, the full safety flow of item 5 (today a safety answer is passed through unscored) and the calibration set below are still open: do not enable real scores for students until they exist.**
 
 ## Required in code before use
 1. `CRITERIA = {type: {key: weight}}` and a test that parses each md weight table, asserts it sums to 100,

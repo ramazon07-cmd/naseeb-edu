@@ -8,10 +8,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.admissions import ai_budget
-from apps.admissions.models import School
+from apps.admissions.models import EssayTab, School
 from apps.users.models import User
 
-from .test_essay_lab import BASE, EssayLabTestCase, gateway_response
+from .test_essay_lab import BASE, EssayLabTestCase, gateway_response, make_doc
 
 
 def fresh_fallback():
@@ -152,14 +152,20 @@ class AiBudgetTests(APITestCase):
 class EssayCoachBudgetTests(EssayLabTestCase):
     def test_per_user_daily_limit(self):
         essay = self.make_essay()
-        payload = {'summary': 'ok', 'strengths': [], 'scores': {}, 'notes': []}
+        payload = {'summary': 'ok', 'strengths': [], 'suggestions': [],
+                   'scores': {'reflection': 1, 'specificity': 1, 'voice': 1, 'structure': 1, 'prompt_fit': 1}}
 
-        def check():
+        def check(text=None):
+            seq = 0
+            if text:
+                tab = self.tab_of(essay)
+                EssayTab.objects.filter(pk=tab.pk).update(content=text, doc=make_doc(text), save_seq=1)
+                seq = 1
             with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(payload))):
-                return self.client.post(f'{BASE}/essays/{essay.pk}/depth-check/', {'base_seq': 0},
+                return self.client.post(f'{BASE}/essays/{essay.pk}/depth-check/', {'base_seq': seq},
                                         format='json')
 
         self.assertEqual(check().status_code, status.HTTP_200_OK)
-        response = check()
+        response = check('Entirely new words about tea and jam and honey.')
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(response.data['code'], 'coach_resting')

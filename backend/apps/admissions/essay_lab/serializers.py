@@ -1,8 +1,11 @@
 """Input validation and response shapes for the student Essay Lab API."""
 
+from django.db.models import Q
 from rest_framework import serializers
 
+from .. import ai_budget
 from ..models import Essay, EssayCheckpoint, EssayDepthCheck, EssayFolder, EssayTab
+from .coach import LOCAL_MODEL
 from .doc import BID_PATTERN, tab_doc
 from .tabs import MAX_TAB_TITLE
 
@@ -193,6 +196,11 @@ class CheckpointCreateSerializer(serializers.Serializer):
     tab = serializers.IntegerField(min_value=1, required=False)
 
 
+class NoteStateSerializer(serializers.Serializer):
+    note_id = serializers.CharField(max_length=20)
+    state = serializers.ChoiceField(choices=('done', 'dismissed', 'gone', 'open'))
+
+
 class TabQuerySerializer(serializers.Serializer):
     tab = serializers.IntegerField(min_value=1, required=False)
 
@@ -243,10 +251,38 @@ class CheckpointDetailSerializer(CheckpointSummarySerializer):
 
 
 class DepthCheckSerializer(serializers.ModelSerializer):
+    """A depth check. Context: `request` (for `checks_left`) and `reused` (same text returned unchanged)."""
+
+    source = serializers.SerializerMethodField()
+    previous_overall = serializers.SerializerMethodField()
+    checks_left = serializers.SerializerMethodField()
+    reused = serializers.SerializerMethodField()
+
     class Meta:
         model = EssayDepthCheck
-        fields = ('id', 'tab', 'save_seq', 'created_at', 'model', 'result')
+        fields = ('id', 'tab', 'save_seq', 'created_at', 'model', 'result', 'source', 'text_fingerprint',
+                  'note_states', 'overall', 'previous_overall', 'checks_left', 'reused')
         read_only_fields = fields
+
+    def get_source(self, obj):
+        return 'rules' if obj.model == LOCAL_MODEL else 'ai'
+
+    def get_previous_overall(self, obj):
+        return (
+            EssayDepthCheck.objects.filter(tab_id=obj.tab_id)
+            .filter(Q(created_at__lt=obj.created_at) | Q(created_at=obj.created_at, id__lt=obj.id))
+            .order_by('-created_at', '-id').values_list('overall', flat=True).first()
+        )
+
+    def get_checks_left(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if user is None or not user.is_authenticated:
+            return None
+        return ai_budget.user_remaining('essay_coach', user)
+
+    def get_reused(self, obj):
+        return bool(self.context.get('reused'))
 
 
 class FolderSerializer(serializers.ModelSerializer):

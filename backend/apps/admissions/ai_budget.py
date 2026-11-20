@@ -118,6 +118,21 @@ def consume(feature, user):
     return False
 
 
+def user_remaining(feature, user):
+    """Calls ``user`` may still make today, or ``None`` (no per-user cap, or the cache cannot be read).
+
+    Read-only and one cache read: nothing is incremented.
+    """
+    user_cap = _limits(feature)[2]
+    if user_cap is None:
+        return None
+    key = f'ai-budget:{feature}:{timezone.localdate().isoformat()}:user:{user.pk}'
+    values = cache_get_many([key])
+    if values is None:
+        return None
+    return max(0, user_cap - int(values.get(key) or 0))
+
+
 def usage_today(school_ids):
     """Today's calls, caps and refusals per feature, plus the busiest schools.
 
