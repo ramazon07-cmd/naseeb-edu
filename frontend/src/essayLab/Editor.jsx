@@ -41,7 +41,7 @@ import { createPoller } from '../lib/poller.js'
 import { loadFontsIn } from './fonts.js'
 import { errorCode, essayLabApi, essayTypeName } from './essayLabApi.js'
 import { deriveText, docFromText } from './docText.js'
-import { STRENGTHS, applyNoteState, mergeNoteStates, normalizeCheck, openNotes, serverNotice, textFingerprint } from './coachModel.js'
+import { STRENGTHS, applyNoteState, inputChangedSince, mergeNoteStates, normalizeCheck, openNotes, serverNotice, textFingerprint } from './coachModel.js'
 import { checkpointDate, relativeTime, whenWritten } from './format.js'
 import {
   createSessionRegistry, createTabSession, discardLocalDraft, keepLocalDraft, saveProblem, syncTabs, unsavedTabs,
@@ -501,6 +501,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   const [noteStates, setNoteStates] = useState({}) // check.note_states: { note_id: 'done' | 'dismissed' }
   const [liveFingerprint, setLiveFingerprint] = useState(null)
   const [coachNotice, setCoachNotice] = useState(null)
+  const [currentInputHash, setCurrentInputHash] = useState(null)
   const [liveText, setLiveText] = useState(null)
   const [historyVersion, setHistoryVersion] = useState(0)
   const [preview, setPreview] = useState(null) // { checkpoint, doc }
@@ -622,6 +623,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
       if (!alive || !latest?.result) return
       setCheck(latest)
       setNoteStates(latest.note_states || {})
+      setCurrentInputHash(latest.current_input_hash || null)
     }, () => {})
     return () => { alive = false }
   }, [essay.id, session.id])
@@ -705,6 +707,21 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     return () => window.clearTimeout(timer)
   }, [editor, check, coachModel, noteStates, anchored, essay.id, liveDoc, goneRetry])
 
+  // The question, type or word limit was saved with a new value: one GET for a fresh current_input_hash.
+  const inputKey = `${essay.prompt ?? ''}|${essay.essay_type ?? ''}|${essay.word_limit ?? ''}`
+  const lastInputKey = useRef(inputKey)
+  useEffect(() => {
+    if (lastInputKey.current === inputKey) return undefined
+    lastInputKey.current = inputKey
+    if (!check?.id) return undefined
+    let alive = true
+    essayLabApi.latestDepthCheck(essay.id, session.id).then((latest) => {
+      if (alive && latest?.current_input_hash) setCurrentInputHash(latest.current_input_hash)
+    }, () => {})
+    return () => { alive = false }
+  }, [inputKey, check?.id, essay.id, session.id])
+  const inputChanged = inputChangedSince(check, currentInputHash)
+
   const noticeTimer = useRef(null)
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
@@ -725,6 +742,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
       }
       setCheck(result)
       setNoteStates(result.note_states || {})
+      setCurrentInputHash(result.current_input_hash || null)
       setActiveNoteId(null)
       setCheckStatus({ loading: false, error: null })
       if (result.reused) {
@@ -1108,7 +1126,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
       busyKey={feedbackBusy} acceptAll={allIds} loaded={feedback.loaded} error={feedback.error}
       onSelect={selectItem} onDecide={decide} onReply={replyToThread} onRetry={() => poller.current?.poke()} onClose={closeComments} />}
     {panel === 'coach' && !focusMode && <CoachPanel check={check} status={checkStatus} anchored={anchored} activeId={activeNoteId} states={noteStates}
-      changed={textChanged} notice={coachNotice} words={tabWords}
+      changed={textChanged} inputChanged={inputChanged} notice={coachNotice} words={tabWords}
       onCheck={runCheck} onJump={jumpToNote} onSetState={setNoteState} onClose={closePanel} />}
   </>
 }

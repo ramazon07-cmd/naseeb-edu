@@ -64,7 +64,7 @@ function noteCount(n) {
 // Coach panel: sticky header (score), tabs, scrollable content and a sticky footer
 // with the one "Check again" button. Notes only count while their quote can be found.
 function CoachPanel({
-  check, status, anchored, activeId, states, changed, notice, words,
+  check, status, anchored, activeId, states, changed, inputChanged, notice, words,
   onCheck, onJump, onSetState, onClose,
 }) {
   const [tab, setTab] = useState('overview')
@@ -128,7 +128,7 @@ function CoachPanel({
 
   const scored = Boolean(model?.scored)
   const delta = scored ? deltaSince(model.overall, check?.previous_overall) : null
-  const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: model?.version2 ? open.length : 0, changed })
+  const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: model?.version2 ? open.length : 0, changed, inputChanged })
   const blockText = block ? t(BLOCK_TEXT[block]) : ''
   const errorCode = status.error?.code
   const errorText = status.error ? t(ERROR_TEXT[errorCode] || status.error.message || 'Coach couldn’t check this essay.') : ''
@@ -169,7 +169,7 @@ function CoachPanel({
     <div className="el-coach-body" ref={bodyRef} id="el-coach-panel" role={model ? 'tabpanel' : undefined} aria-labelledby={model ? `el-tab-${tab}` : undefined}>
       {status.loading && <div className="el-coach-loading" role="status">
         <span className="el-shimmer is-big" /><span className="el-shimmer" /><span className="el-shimmer is-short" />
-        <p>{t('Coach is reading your essay. This can take up to half a minute.')}</p>
+        <p>{t('Coach is reading your essay. This can take up to a minute or two.')}</p>
       </div>}
       {errorText && !footerError && !status.loading && <div className="el-alert is-error" role="alert">{errorText}</div>}
 
@@ -312,7 +312,7 @@ function CoachPanel({
             </span>
             {t('{n} left today', { n: checksLeft })}
           </span>}
-          {check && <span className={`el-co-state${changed ? ' is-changed' : ''}`}><i aria-hidden="true" />{changed ? t('Text changed') : t('Up to date')}</span>}
+          {check && <span className={`el-co-state${changed || inputChanged ? ' is-changed' : ''}`}><i aria-hidden="true" />{inputChanged ? t('Question changed') : changed ? t('Text changed') : t('Up to date')}</span>}
         </div>
         <span className="el-co-check-wrap" title={blockText || undefined}>
           <button type="button" className="el-btn is-primary" onClick={onCheck} disabled={status.loading || Boolean(block)} aria-busy={status.loading} aria-describedby={hint ? hintId : undefined}>

@@ -164,8 +164,8 @@ export function goneNotes(notes, states, anchored) {
 
 // "Check again" state: why it is blocked, or null when it can run.
 // -> 'notes_open' | 'unchanged' | null
-export function recheckBlock({ hasCheck, openCount, changed }) {
-  if (!hasCheck) return null
+export function recheckBlock({ hasCheck, openCount, changed, inputChanged = false }) {
+  if (!hasCheck || inputChanged) return null // a new question/type/word limit is checked without the notes/text rules
   if (openCount > 0) return 'notes_open'
   if (!changed) return 'unchanged'
   return null
@@ -200,6 +200,11 @@ export async function textFingerprint(text) {
   const bytes = new TextEncoder().encode(normalizeForFingerprint(text))
   const digest = await subtle.digest('SHA-256', bytes)
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+// The prompt, type or word limit changed since the check (only when the server sends both hashes).
+export function inputChangedSince(check, currentHash) {
+  return Boolean(check?.input_hash && currentHash && check.input_hash !== currentHash)
 }
 
 // Server messages for the footer (409s and the like).

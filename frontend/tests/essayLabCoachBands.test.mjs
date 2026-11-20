@@ -2,7 +2,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
-  applyNoteState, mergeNoteStates, deltaSince, doneNotes, goneNotes, headline, levelWord, normalizeCheck, normalizeForFingerprint, openNotes, recheckBlock, serverNotice,
+  applyNoteState, inputChangedSince, mergeNoteStates, deltaSince, doneNotes, goneNotes, headline, levelWord, normalizeCheck, normalizeForFingerprint, openNotes, recheckBlock, serverNotice,
   textFingerprint,
 } from '../src/essayLab/coachModel.js';
 
@@ -150,4 +150,12 @@ test('v1 checks never block Check again', () => {
   const v1 = normalizeCheck({ result: { notes: [{ id: 'a', kind: 'reflect', quote: 'q', question: 'Q' }] } });
   assert.equal(v1.version2, false);
   assert.equal(recheckBlock({ hasCheck: true, openCount: v1.version2 ? 1 : 0, changed: true }), null);
+});
+
+test('a changed question, type or word limit enables Check again', () => {
+  assert.equal(inputChangedSince({ input_hash: 'a' }, 'b'), true);
+  assert.equal(inputChangedSince({ input_hash: 'a' }, 'a'), false);
+  assert.equal(inputChangedSince({ input_hash: 'a' }, null), false, 'falls back when a hash is missing');
+  assert.equal(inputChangedSince({}, 'b'), false);
+  assert.equal(recheckBlock({ hasCheck: true, openCount: 3, changed: false, inputChanged: true }), null);
 });

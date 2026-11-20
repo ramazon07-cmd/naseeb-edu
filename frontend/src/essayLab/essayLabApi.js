@@ -55,7 +55,7 @@ export const essayLabApi = {
     json('POST', { base_seq: baseSeq }),
   ),
 
-  depthCheck: (id, tab, baseSeq) => request(`${BASE}/essays/${id}/depth-check/`, json('POST', { tab, base_seq: baseSeq }, { timeoutMs: 60_000 })),
+  depthCheck: (id, tab, baseSeq) => request(`${BASE}/essays/${id}/depth-check/`, json('POST', { tab, base_seq: baseSeq }, { timeoutMs: 100_000 })),
   // Without a tab: the document's latest check (the library card).
   latestDepthCheck: (id, tab) => request(`${BASE}/essays/${id}/depth-check/latest/${query({ tab })}`),
   // state: 'done' | 'dismissed' | 'open'. The answer is the check, with its note_states.
