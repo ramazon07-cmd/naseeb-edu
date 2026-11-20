@@ -4,7 +4,7 @@ import { applyNoteState, doneNotes, goneNotes, noteStateUpdates, openNotes, rech
 import { buildPath, parsePath, resolveRoute } from '../src/lib/routes.js';
 import { createIdeasController } from '../src/letters/ideasController.js';
 import {
-  LETTER_KEYS, aiIdeasOf, fillCheckText, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
+  LETTER_KEYS, aiIdeasOf, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
 } from '../src/letters/letterModel.js';
 
 const LETTER = 'I have known Ramazon for two years.\n\nHe is a hardworking student. He leads the robotics club.\n\nHe is a hardworking student.';
@@ -234,4 +234,32 @@ test('check text shows the first name instead of [Student]', () => {
   assert.equal(filled.notes[0].question, 'What did Ramazon do?');
   assert.equal(filled.notes[0].context, 'About Ramazon.');
   assert.equal(fillCheckText(null, 'R'), null);
+});
+
+test('a tiny hit grows to its sentence; a longer one stays as is', () => {
+  const text = 'He is calm. His team trusts him a lot. Thanks.';
+  const tiny = locateNotes(text, [{ id: 't', quote: 'trusts him' }]).get('t');
+  assert.equal(text.slice(tiny.from, tiny.to), 'His team trusts him a lot.');
+  const long = locateNotes(text, [{ id: 'l', quote: 'team trusts him a' }]).get('l');
+  assert.equal(text.slice(long.from, long.to), 'team trusts him a');
+  const line = 'First para ends.\nCalm\nNext.';
+  const word = sentenceAround(line, 17, 21);
+  assert.equal(line.slice(word.from, word.to), 'Calm');
+});
+
+test('line endings are normalized and a conflict is a coded error', () => {
+  assert.equal(normalizeNewlines('a\r\nb\rc\n'), 'a\nb\nc\n');
+  assert.equal(normalizeNewlines(null), '');
+  assert.equal(conflictError('x').details.code, 'conflict');
+});
+
+test('a provider failure (503) on AI ideas keeps the button; 403 turns AI off', async () => {
+  const busy = harness((payload) => { if (payload.ai) throw Object.assign(new Error('Unavailable'), { status: 503 }); return { suggestions: [] }; });
+  await busy.controller.start(ctx('a'));
+  await busy.controller.askAi();
+  assert.equal(busy.controller.state.ai.available, true);
+  const off = harness((payload) => { if (payload.ai) throw Object.assign(new Error('No'), { status: 403 }); return { suggestions: [] }; });
+  await off.controller.start(ctx('a'));
+  await off.controller.askAi();
+  assert.equal(off.controller.state.ai.available, false);
 });

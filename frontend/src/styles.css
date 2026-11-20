@@ -16456,7 +16456,7 @@ a:focus-visible {
     opacity var(--theme-duration) ease;
 }
 
-.cx-btn:hover {
+.cx-btn:not(:disabled):hover {
   background: var(--cx-hover);
 }
 
@@ -16466,7 +16466,7 @@ a:focus-visible {
   color: var(--cx-on-dark);
 }
 
-.cx-btn.primary:hover {
+.cx-btn.primary:not(:disabled):hover {
   opacity: 0.9;
 }
 
@@ -16477,6 +16477,14 @@ a:focus-visible {
 .cx-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* A disabled primary button reads as disabled, not as a dimmed call to action. */
+.cx-btn.primary:disabled {
+  border-color: var(--cx-line-strong);
+  background: var(--cx-line);
+  color: var(--cx-muted);
+  opacity: 1;
 }
 
 .cx-link {

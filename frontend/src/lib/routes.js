@@ -141,6 +141,8 @@ export function buildPath({ page, params = {} } = {}) {
   const record = RECORD_ROUTES[page];
   const id = record ? params[record.param] : null;
   if (page === 'students' && ID_PATTERN.test(String(id ?? '')) && (params.letterId === 'new' || ID_PATTERN.test(String(params.letterId ?? '')))) return `${base}/${id}/letters/${params.letterId}`;
+  // Back from the letter workspace: the student's Recommendations tab.
+  if (page === 'students' && params.tab === 'letters' && ID_PATTERN.test(String(id ?? ''))) return `${base}/${id}?tab=letters`;
   if (record && ID_PATTERN.test(String(id ?? ''))) return `${base}${record.segment ? `/${record.segment}` : ''}/${id}`;
   return base;
 }

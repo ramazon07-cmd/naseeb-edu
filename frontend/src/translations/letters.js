@@ -112,6 +112,12 @@ export const LETTER_TRANSLATIONS = {
   'Research': ['Tadqiqot', 'Исследование'],
   'Internship': ['Amaliyot', 'Стажировка'],
   'Project': ['Loyiha', 'Проект'],
+  'Daily AI limit reached': ['Kunlik AI limiti tugadi', 'Дневной лимит ИИ исчерпан'],
+  'This letter was changed somewhere else while you were editing.': ['Siz tahrirlayotganda bu tavsiyanoma boshqa joyda o‘zgartirildi.', 'Пока вы редактировали, это письмо изменили в другом месте.'],
+  'Nothing was overwritten. Choose which version to keep.': ['Hech narsa ustidan yozilmadi. Qaysi nusxani saqlashni tanlang.', 'Ничего не перезаписано. Выберите, какую версию оставить.'],
+  'Use the newer version': ['Yangi nusxadan foydalanish', 'Использовать новую версию'],
+  'Keep mine': ['Meniki qolsin', 'Оставить мою'],
+  'This letter changed elsewhere. Choose a version above.': ['Bu tavsiyanoma boshqa joyda o‘zgargan. Yuqorida nusxani tanlang.', 'Письмо изменили в другом месте. Выберите версию выше.'],
 };
 
 export function letterMessages(language) {

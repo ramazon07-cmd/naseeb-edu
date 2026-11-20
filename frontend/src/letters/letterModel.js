@@ -18,12 +18,39 @@ export const letterCriterionLabel = (key) => LETTER_CRITERIA.find((item) => item
 export const LETTER_MAX_CHARS = 20000
 export const AI_DAILY_LIMIT = 20
 
+export const conflictError = (message) => Object.assign(new Error(message), { details: { code: 'conflict' } })
+export const normalizeNewlines = (text) => String(text ?? '').replace(/\r\n?/g, '\n')
+
 export const wordCount = (text) => (String(text ?? '').trim() ? String(text).trim().split(/\s+/).length : 0)
 
 // --- Where the notes' sentences are in the text ----------------------------------
 // notes: [{ id, quote }]; hints: Map id -> previous start offset (kept across edits so a note
 // stays on the same sentence when it is repeated). Two notes never take the same occurrence
 // while a free one exists. -> Map id -> { from, to }
+// The sentence (or line) around a short hit: ends at . ! ? or a line break, quotes and brackets included.
+export function sentenceAround(text, from, to) {
+  const source = String(text ?? '')
+  let start = from
+  while (start > 0) {
+    const before = source[start - 1]
+    if (before === '\n') break
+    if (/[.!?]/.test(before) && /\s/.test(source[start] ?? ' ') && start - 1 < from) break
+    start -= 1
+  }
+  while (start < from && /\s/.test(source[start])) start += 1
+  let end = to
+  while (end < source.length && source[end] !== '\n') {
+    if (/[.!?]/.test(source[end])) {
+      end += 1
+      while (end < source.length && /["'”’)\]]/.test(source[end])) end += 1
+      break
+    }
+    end += 1
+  }
+  while (end > to && /\s/.test(source[end - 1])) end -= 1
+  return { from: start, to: end }
+}
+
 export function locateNotes(text, notes, hints = new Map()) {
   const located = new Map()
   const list = (notes || []).filter((note) => note?.quote)
@@ -45,7 +72,8 @@ export function locateNotes(text, notes, hints = new Map()) {
       }
     }
     taken.push(pick)
-    located.set(note.id, pick)
+    const tiny = wordCount(text.slice(pick.from, pick.to)) <= 2
+    located.set(note.id, tiny ? sentenceAround(text, pick.from, pick.to) : pick)
   }
   return located
 }

@@ -737,13 +737,13 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
 // (/students/15), so a reload, a bookmark or Back reopens the same profile. The list's
 // filters and page live here, so Back from a profile returns to the same view.
 // `onAddStudent` replaces the header's "Add student" (default: the quick-create form).
-export function CounselorStudentsPage({ user, data, query, setQuery, reload, notify, studentId = null, letterId = null, onStudent, onLetter, onDirect, setPage, onAddStudent }) {
+export function CounselorStudentsPage({ user, data, query, setQuery, reload, notify, studentId = null, letterId = null, search = '', onStudent, onLetter, onLeaveLetter, onDirect, setPage, onAddStudent }) {
   const [listState, setListState] = useState(() => ({ ...STUDENT_LIST_DEFAULTS, search: query }));
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
-  // Back from the letter workspace lands on the Recommendations tab; letters saved there lead the list until it reloads.
-  const [returnTab, setReturnTab] = useState(null);
+  // Back from the letter workspace lands on the Recommendations tab (?tab=letters); letters saved there lead the list until it reloads.
+  const returnTab = new URLSearchParams(search).get('tab') === 'letters' ? 'letters' : null;
   const [savedLetters, setSavedLetters] = useState({ studentId: null, items: [] });
   const listed = useRef([]);
   const onItems = useCallback((items) => { listed.current = items; }, []);
@@ -776,13 +776,12 @@ export function CounselorStudentsPage({ user, data, query, setQuery, reload, not
     );
   }
 
-  useEffect(() => { if (returnTab && studentId && !letterId) setReturnTab(null); }, [returnTab, studentId, letterId]);
   const letterSaved = useCallback((saved) => {
     setSavedLetters((current) => ({ studentId, items: [saved, ...(current.studentId === studentId ? current.items : []).filter((item) => item.id !== saved.id)] }));
     reload({ endpoints: ['recommendations'] });
   }, [studentId, reload]);
   const openLetter = useCallback((id, options) => onLetter(id, options), [onLetter]);
-  const leaveLetter = useCallback(() => { setReturnTab('letters'); onStudent(studentId); }, [onStudent, studentId]);
+  const leaveLetter = useCallback(() => onLeaveLetter(studentId), [onLeaveLetter, studentId]);
   const openedLetter = useCallback((id) => openLetter(id, { replace: true }), [openLetter]);
 
   if (studentId && error) return <div className="cx-page"><button type="button" className="cx-back" onClick={() => onStudent(null)}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button><div className="alert error" role="alert">{error} <button type="button" className="cx-btn" onClick={() => setAttempt((n) => n + 1)}>{t("Retry")}</button></div></div>;

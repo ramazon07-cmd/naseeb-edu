@@ -227,8 +227,8 @@
   padding: 44px 56px 52px;
   border: 1px solid var(--lw-line);
   border-radius: 6px;
-  background: #fff;
-  color: #17243b;
+  background: var(--lw-card);
+  color: var(--lw-text);
   box-shadow: 0 1px 2px rgba(23, 36, 59, 0.05), 0 18px 40px -26px rgba(23, 36, 59, 0.35);
 }
 
@@ -239,7 +239,7 @@
   margin-bottom: var(--space-5);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--lw-line);
-  color: #5b6780;
+  color: var(--lw-muted);
   font-size: var(--text-xs);
 }
 
@@ -267,7 +267,7 @@
 
 .lw-mirror {
   min-height: 12em;
-  color: #17243b;
+  color: var(--lw-text);
   pointer-events: none;
 }
 
@@ -280,12 +280,13 @@
   resize: none;
   background: transparent;
   color: transparent;
-  caret-color: #17243b;
+  caret-color: var(--lw-text);
   outline: none;
 }
 
 .lw-area::placeholder {
-  color: #98a2b3;
+  color: var(--lw-muted);
+  opacity: 0.7;
 }
 
 .lw-area::selection {
@@ -348,6 +349,51 @@
   color: var(--lw-muted);
   font-size: var(--text-xs);
   text-align: right;
+}
+
+.lw-conflict {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 740px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--warning-border, rgba(178, 106, 0, 0.26));
+  border-radius: var(--radius-lg);
+  background: var(--warning-bg, rgba(178, 106, 0, 0.1));
+  font-size: var(--text-sm);
+}
+
+.lw-conflict p {
+  margin: 0;
+  color: var(--lw-muted);
+}
+
+.lw-conflict div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Windows high contrast: the textarea shows the text in system colours, the mirror only draws the underlines. */
+@media (forced-colors: active) {
+  .lw-mirror {
+    forced-color-adjust: none;
+    color: transparent;
+  }
+
+  .lw-area {
+    color: CanvasText;
+    caret-color: CanvasText;
+  }
+
+  .lw-hl,
+  .lw-hl.is-evidence,
+  .lw-hl.is-insight,
+  .lw-hl.is-context,
+  .lw-hl.is-structure,
+  .lw-hl.is-voice {
+    text-decoration-color: Highlight;
+  }
 }
 
 /* --- panel --- */
@@ -764,7 +810,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--lw-card);
   color: var(--warning-text, #8a5200);
   font-size: var(--text-xs);
   font-weight: 700;

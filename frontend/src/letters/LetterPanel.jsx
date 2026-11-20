@@ -14,6 +14,7 @@ const ERROR_TEXT = {
   counselors_only: 'Only counselors can use Check.',
   empty_essay: 'Write a few sentences first, then check.',
   stale: 'Your latest words were still saving. Check again.',
+  conflict: 'This letter changed elsewhere. Choose a version above.',
   notes_open: 'Resolve all notes first',
   too_small_change: 'Change a few more words before checking again',
 }
@@ -50,7 +51,7 @@ function IdeasTab({ ideas, name, onInsertFact, onInsertIdea }) {
     </ul>
     {!factsLoading && !factsError && !facts.length && <p className="lw-note">{t('Nothing new to suggest from the profile.')}</p>}
 
-    {ai.available !== false && ai.asked && <>
+    {(items.length > 0 || (ai.available !== false && ai.asked)) && <>
       <div className="lw-sec"><h3>{t('AI ideas')}</h3></div>
       {ai.error && <p className="lw-note is-error" role="alert">{ai.error}</p>}
       {ai.loading && <p className="lw-note" role="status">{t('Thinking…')}</p>}
@@ -162,7 +163,7 @@ function CheckTab({ check, model: rawModel, name, status, anchored, activeId, st
   </>
 }
 
-function CheckFooter({ check, model, status, anchored, states, changed, inputChanged, notice, empty, onCheck }) {
+function CheckFooter({ check, model, status, anchored, states, changed, inputChanged, notice, empty, aiAvailable, onCheck }) {
   const open = useMemo(() => openNotes(model?.notes, states, anchored), [model, states, anchored])
   const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: open.length, changed, inputChanged })
   const errorCode = status.error?.code
@@ -178,27 +179,30 @@ function CheckFooter({ check, model, status, anchored, states, changed, inputCha
   else if (block === 'unchanged') line = t('Change the letter to check again')
   else if (check) line = inputChanged ? t('Details changed') : changed ? t('Letter changed') : t('Up to date')
   else if (empty) line = t('Write the letter first')
-  const unavailable = errorCode === 'coach_unavailable' || errorCode === 'counselors_only'
-  const disabled = status.loading || Boolean(block) || empty
+  // Hidden only when it can never work: not a counselor, or the server says AI is switched off.
+  // A provider failure stays retryable.
+  const unavailable = errorCode === 'counselors_only' || Boolean(status.error?.off) || (errorCode === 'coach_unavailable' && aiAvailable === false)
+  const retry = errorCode === 'coach_unavailable' && !unavailable
+  const disabled = status.loading || (Boolean(block) && !retry) || empty
   return <div className="lw-foot-row">
     <div className="lw-foot-info">
       <b className={footerError ? 'is-error' : ''} role={footerError ? 'alert' : 'status'}>{line}</b>
       {left !== null && <small>{t('{n} left today', { n: Math.min(left, dailyLimit) })}</small>}
     </div>
     {!unavailable && <button type="button" className="cx-btn primary" disabled={disabled} aria-busy={status.loading} onClick={onCheck}>
-      <RefreshCw size={14} aria-hidden="true" className={status.loading ? 'spin' : ''} />{check ? t('Check again') : t('Check depth')}
+      <RefreshCw size={14} aria-hidden="true" className={status.loading ? 'spin' : ''} />{retry ? t('Try again') : check ? t('Check again') : t('Check depth')}
     </button>}
     {errorText && !footerError && !status.loading && <p className="lw-foot-error" role="alert">{errorText}</p>}
   </div>
 }
 
 function IdeasFooter({ ai, onAsk }) {
-  if (ai.available === false) return <div className="lw-foot-row"><p className="lw-foot-note">{t('AI ideas are off for this account. Ideas from the profile still appear above.')}</p></div>
   const out = ai.left !== null && ai.left <= 0
+  if (ai.available === false && !out) return <div className="lw-foot-row"><p className="lw-foot-note">{t('AI ideas are off for this account. Ideas from the profile still appear above.')}</p></div>
   return <div className="lw-foot-row">
     <div className="lw-foot-info">
       <b>{ai.left !== null ? t('AI · {n} of {limit} today', { n: ai.left, limit: ai.limit }) : t('AI ideas')}</b>
-      <small>{out ? t('The daily limit is used. Try again tomorrow.') : t('Only when you ask. Never automatic.')}</small>
+      <small>{out ? t('Daily AI limit reached') : t('Only when you ask. Never automatic.')}</small>
     </div>
     <button type="button" className="cx-btn primary" disabled={ai.loading || out} aria-busy={ai.loading} onClick={onAsk}>
       <Sparkles size={14} aria-hidden="true" />{ai.loading ? t('Thinking…') : t('Get AI ideas')}
@@ -230,7 +234,7 @@ function LetterPanel({ tab, onTab, ideas, onInsertFact, onInsertIdea, onAskAi, n
     <div className="lw-foot">
       {tab === 'ideas'
         ? <IdeasFooter ai={ideas.ai} onAsk={onAskAi} />
-        : <CheckFooter {...{ check, model, status, anchored, changed, inputChanged, notice, empty, onCheck }} states={noteStates} />}
+        : <CheckFooter {...{ check, model, status, anchored, changed, inputChanged, notice, empty, onCheck }} aiAvailable={ideas.ai.available} states={noteStates} />}
     </div>
   </section>
 }

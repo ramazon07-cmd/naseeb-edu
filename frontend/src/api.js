@@ -637,6 +637,12 @@ export const api = {
     signal,
     timeoutMs: 45_000,
   }),
+  // Saving a letter: the same PATCH as update(), with an optional keepalive so it survives a closing page.
+  saveLetter: (id, payload, { keepalive = false } = {}) => request(`/recommendations/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    ...(keepalive ? { keepalive: true, retries: 0 } : {}),
+  }),
   // Letter Check (counselors only): the latest check (empty answer when none), one run, and a note's state.
   latestLetterCheck: (id) => request(`/recommendations/${id}/depth-check/latest/`),
   letterDepthCheck: (id, baseUpdatedAt) => request(`/recommendations/${id}/depth-check/`, {

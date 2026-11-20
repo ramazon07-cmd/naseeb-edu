@@ -83,7 +83,7 @@ export function createIdeasController({ load, onChange, debounceMs = FACTS_DEBOU
         setAi({ ...takeMeta(response), loading: false, items, unavailable: response?.source !== 'ai' && !items.length })
       } catch (error) {
         if (run !== aiRun) return
-        const gone = error?.status === 503 || error?.status === 403
+        const gone = error?.status === 403 // 503 is a provider hiccup: the button stays
         setAi({ loading: false, error: error?.message || 'error', ...(gone ? { available: false } : {}) })
       }
     },

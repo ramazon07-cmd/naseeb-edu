@@ -3,12 +3,12 @@ import { api } from '../api.js'
 import { t } from '../i18n.js'
 import { applyNoteState, inputChangedSince, mergeNoteStates, noteStateUpdates, serverNotice, textFingerprint } from '../essayLab/coachModel.js'
 import { errorCode } from '../essayLab/essayLabApi.js'
-import { locateNotes, normalizeLetterCheck } from './letterModel.js'
+import { conflictError, locateNotes, normalizeLetterCheck } from './letterModel.js'
 
 // The Check tab's data: the latest check, its notes placed in the text, note states and one "Check again".
 // Same rules as Essay Coach (coachModel.js): notes whose sentence is gone count as resolved, the
 // "text changed" test is the local fingerprint, and nothing here polls.
-export function useLetterCheck({ letterId, body, inputKey, synced, flush, letterRef, notify, onOpen }) {
+export function useLetterCheck({ letterId, body, inputKey, synced, flush, resolveStale, letterRef, notify, onOpen }) {
   const [check, setCheck] = useState(null)
   const [status, setStatus] = useState({ loading: false, error: null })
   const [noteStates, setNoteStates] = useState({})
@@ -53,10 +53,12 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, letter
   }, [body])
   const changed = Boolean(check) && liveFingerprint !== null && (!check.text_fingerprint || liveFingerprint !== check.text_fingerprint)
 
-  // A 409 notice in the footer goes away once the counselor acts on it.
-  useEffect(() => {
-    setStatus((previous) => (previous.error && (previous.error.code === 'notes_open' || previous.error.code === 'too_small_change') ? { loading: false, error: null } : previous))
-  }, [liveFingerprint, noteStates])
+  // An error in the footer goes away once the counselor edits the letter or acts on a note
+  // (a conflict stays until they choose a version).
+  const clearError = useCallback(() => {
+    setStatus((previous) => (previous.error && previous.error.code !== 'conflict' ? { loading: false, error: null } : previous))
+  }, [])
+  useEffect(() => { clearError() }, [liveFingerprint, noteStates, clearError])
 
   // Title or relationship changed (and saved): one GET for the fresh input hash.
   const lastInput = useRef(inputKey)
@@ -110,13 +112,16 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, letter
     try {
       let result
       for (let attempt = 0; attempt < 2 && !result; attempt += 1) {
-        await flush({ force: attempt > 0 })
+        await flush()
         const current = letterRef.current
         try {
           result = await api.letterDepthCheck(current.id, current.updated_at)
         } catch (error) {
-          // "stale": the letter changed elsewhere. Save ours and retry once.
+          // "stale": the letter changed elsewhere. With nothing unsaved here, take the newer copy and
+          // retry once; with unsaved typing, stop and let the counselor choose (never overwrite).
           if (error?.status !== 409 || attempt === 1 || serverNotice(error)) throw error
+          const outcome = await resolveStale()
+          if (outcome !== 'adopted') throw outcome === 'conflict' ? conflictError('') : error
         }
       }
       setCheck(result)
@@ -139,9 +144,9 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, letter
           setNoteStates((previous) => mergeNoteStates(latestCheck.note_states, previous, inflight.current))
         }, () => {})
       }
-      setStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message } })
+      setStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message, off: error?.details?.ai_available === false } })
     }
-  }, [flush, letterRef])
+  }, [flush, resolveStale, letterRef])
 
   // state: 'done' | 'dismissed' | 'open'. Applied at once, saved, rolled back when it fails.
   const setNoteState = useCallback((note, state) => {
@@ -164,5 +169,5 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, letter
     })
   }, [letterRef])
 
-  return { check, model, status, noteStates, notice, changed, inputChanged, located, anchored, marks, activeId, setActiveId, runCheck, setNoteState }
+  return { check, model, status, noteStates, notice, changed, inputChanged, located, anchored, marks, activeId, setActiveId, clearError, runCheck, setNoteState }
 }

@@ -287,3 +287,8 @@ test('an assistant invitation link is a public page with its token', () => {
   assert.equal(assistantInviteTokenFor('/assistant-invite/short'), null);
   assert.equal(joinTokenFor(`/assistant-invite/${token}`), null);
 });
+
+test('leaving the letter workspace returns to the Recommendations tab by URL', () => {
+  assert.equal(buildPath({ page: 'students', params: { studentId: 15, tab: 'letters' } }), '/students/15?tab=letters');
+  assert.deepEqual(parsePath('/students/15'), { page: 'students', params: { studentId: 15 } });
+});
