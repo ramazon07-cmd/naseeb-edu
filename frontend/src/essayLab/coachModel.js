@@ -19,10 +19,11 @@ export const criterionLabel = (key) => CRITERIA.find((item) => item.key === key)
 // Old checks (no version 2) used these kinds.
 const LEGACY_CRITERION = { reflect: 'reflection', specific: 'specificity', clarity: 'structure', strength: STRENGTHS }
 
-export function criterionOf(note) {
+// `keys`/`fallback` let another rubric (recommendation letters) reuse the normalizer.
+export function criterionOf(note, keys = CRITERION_KEYS, fallback = 'reflection') {
   const direct = note?.criterion
-  if (CRITERION_KEYS.includes(direct)) return direct
-  return LEGACY_CRITERION[note?.kind] || 'reflection'
+  if (keys.includes(direct)) return direct
+  return LEGACY_CRITERION[note?.kind] || fallback
 }
 
 // 1-4 -> level word
@@ -85,7 +86,7 @@ export function coachSource(check) {
 
 // One shape for the panel, whatever version the stored check has.
 // -> { version2, scored, overall, scores, summary, suggestions, strengths, notesLocked, notes }
-export function normalizeCheck(check) {
+export function normalizeCheck(check, { keys = CRITERION_KEYS, fallback = 'reflection' } = {}) {
   const result = check?.result
   if (!result) return null
   const version2 = Number(result.version) === 2
@@ -93,14 +94,14 @@ export function normalizeCheck(check) {
   const strengths = []
   const notes = []
   for (const note of rawNotes) {
-    const criterion = criterionOf(note)
+    const criterion = criterionOf(note, keys, fallback)
     if (!version2 && criterion === STRENGTHS) {
       strengths.push({ id: String(note.id), criterion: null, quote: note.quote || '', text: note.question || '' })
       continue
     }
     notes.push({
       id: String(note.id),
-      criterion: criterion === STRENGTHS ? 'reflection' : criterion,
+      criterion: criterion === STRENGTHS ? fallback : criterion,
       quote: note.quote || '',
       question: note.question || '',
       context: String(version2 ? note.context || '' : note.context || note.why || '').trim(),
@@ -160,6 +161,19 @@ export function doneNotes(notes, states) {
 // Notes whose sentence is gone count as resolved.
 export function goneNotes(notes, states, anchored) {
   return (notes || []).filter((note) => states?.[note.id] === 'gone' || (!states?.[note.id] && !anchored?.has(note.id)))
+}
+
+// What the client should tell the server after the text moved: notes whose sentence vanished
+// become 'gone'; 'gone' notes whose sentence is back are reopened. -> [{ id, state }]
+export function noteStateUpdates(notes, states, anchored) {
+  const updates = []
+  for (const note of notes || []) {
+    const mark = states?.[note.id]
+    const found = Boolean(anchored?.has(note.id))
+    if (mark === 'gone' && found) updates.push({ id: note.id, state: 'open' })
+    else if (!mark && !found) updates.push({ id: note.id, state: 'gone' })
+  }
+  return updates
 }
 
 // "Check again" state: why it is blocked, or null when it can run.
