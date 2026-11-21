@@ -160,6 +160,30 @@ class OrderingTests(RulesFixture, APITestCase):
         self.assertEqual(names, [self.state.name, 'Popular Majors College'])
         self.assertNotIn('Other College', self.names())
 
+    def test_a_short_abbreviation_is_not_found_inside_another_word(self):
+        self.college('Physics College', None, popular_majors='Physics')
+        self.college('Politics College', None, popular_majors='Political Science')
+        self.college('Abbreviation College', None, popular_majors='CS, Biology')
+        for major in ('CS', 'IT'):
+            self.ready_profile(target_major=major, scholarship_needed=False)
+            names = self.names()
+            self.assertNotIn('Physics College', names, major)
+            self.assertNotIn('Politics College', names, major)
+        self.ready_profile(target_major='CS', scholarship_needed=False)
+        self.assertIn('Abbreviation College', self.names())
+
+    def test_suggested_programs_do_not_match_an_abbreviation_inside_another_word(self):
+        from apps.admissions.college_match import suggested_programs
+        from apps.admissions.models import UniversityProgram
+        UniversityProgram.objects.create(university=self.state, name='BSc Physics', canonical_major='Physics')
+        UniversityProgram.objects.create(university=self.state, name='BA Political Science', canonical_major='Political Science')
+        UniversityProgram.objects.create(university=self.state, name='BSc CS Theory', canonical_major='CS Theory')
+        for major in ('cs', 'it'):
+            found = [item['name'] for item in suggested_programs(self.state, [major])]
+            self.assertNotIn('BSc Physics', found, major)
+            self.assertNotIn('BA Political Science', found, major)
+        self.assertIn('BSc CS Theory', [item['name'] for item in suggested_programs(self.state, ['cs'])])
+
 
 class ListShapeTests(RulesFixture, APITestCase):
     def test_three_reach_four_target_three_safety_filled_from_the_nearest_group(self):

@@ -15,6 +15,8 @@ The same profile always gives the same list. Every step is a rule over catalogue
 6. Three reach (reach, then far reach), four target and three safety universities. A short band is
    filled from the nearest band and the response says so.
 """
+import re
+
 from django.db.models import Max
 
 from . import admission_chance
@@ -113,6 +115,11 @@ def covers(student_code, program_code):
     return student_code == program_code or (student_code.startswith('AREA_') and SUBJECTS[program_code][1] == student_code)
 
 
+def names(text, major):
+    """True when ``major`` appears in ``text`` as whole words, so 'cs' is not found inside 'physics'."""
+    return bool(major) and re.search(r'(?<!\w)' + re.escape(major) + r'(?!\w)', text) is not None
+
+
 def suggested_programs(university, majors):
     """Up to two of the university's eligible programs for the stated majors, by rule: a program matches a major
     when the two texts contain one another or when both map to the same QS subject. Majors keep the student's order."""
@@ -124,7 +131,7 @@ def suggested_programs(university, majors):
             if not name or any(program.name == item['name'] for item in found):
                 continue
             theirs = subjects_for_major(name)
-            if major in name or name in major or any(covers(mine, other) for mine in wanted for other in theirs):
+            if names(name, major) or names(major, name) or any(covers(mine, other) for mine in wanted for other in theirs):
                 found.append({'name': program.name, 'canonical_major': program.canonical_major})
     return found[:MATCH_PROGRAMS]
 
@@ -158,7 +165,7 @@ def candidates(subject_codes, majors, ctx):
     if subject_codes:
         for pk, popular in University.objects.exclude(popular_majors='').exclude(pk__in=picks).values_list('pk', 'popular_majors'):
             hits = [code for code in subject_codes if any(covers(code, other) for other in subjects_for_major(popular))]
-            if hits or any(major in popular.lower() for major in majors):
+            if hits or any(names(popular.lower(), major) for major in majors):
                 picks[pk] = {'code': (hits or subject_codes)[0], 'rank': None, 'label': '', 'score': None, 'year': None}
     # Target countries, as College Search reads them ('Europe' also matches the QS region).
     meta = University.objects.filter(pk__in=list(picks)).values_list('pk', 'country', 'qs_data__region')

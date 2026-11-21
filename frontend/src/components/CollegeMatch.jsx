@@ -7,7 +7,7 @@ import { api } from '../api';
 import { formatNumberLocale, getLanguage, t, tx } from '../i18n';
 import { TierBand } from './college';
 import { bandLabel, rankText } from '../lib/college';
-import { costText, matchMessage, satPositionText, subjectRankText } from '../lib/collegeMatch';
+import { addAllBusy, beginReasons, costText, failReasons, finishReasons, idleReasons, individualAddBusy, matchMessage, reasonsKey, reasonsView, satPositionText, subjectRankText } from '../lib/collegeMatch';
 import { money } from '../lib/format';
 import { fitReasonText } from '../lib/fitReasons';
 import { BlueButton, GlassCard } from '../design/blue/ui';
@@ -78,22 +78,26 @@ function MatchCard({ university, application, busy, reason, onAdd, onOpen }) {
 }
 
 // The optional "Why these fit you" lines: idle until asked; the one place the match can reach an AI.
-function useReasons() {
-  const [state, setState] = useState({ status: 'idle', lines: {}, error: '' });
+// The state is keyed by match generation + language: a new list, a reopened panel or another language starts idle,
+// and an answer to an earlier ask is ignored.
+function useReasons(generation) {
+  const language = getLanguage();
+  const key = reasonsKey(generation, language);
+  const [state, setState] = useState(() => idleReasons(key));
   async function ask() {
-    setState((current) => ({ ...current, status: 'loading', error: '' }));
+    setState((current) => beginReasons(current, key));
     try {
-      const answer = await api.collegeMatchReasons(getLanguage());
-      setState({ status: 'done', lines: answer.reasons, error: '' });
+      const answer = await api.collegeMatchReasons(language);
+      setState((current) => finishReasons(current, key, answer.reasons));
     } catch (error) {
-      setState((current) => ({ ...current, status: 'error', error: error.message }));
+      setState((current) => failReasons(current, key, error.message));
     }
   }
-  return [state, ask];
+  return [reasonsView(state, key), ask];
 }
 
 export function CollegeMatchPanel({ state, listed, busyId, addingAll, onAdd, onAddAll, onOpen, onRetry, onClose }) {
-  const [reasons, askReasons] = useReasons();
+  const [reasons, askReasons] = useReasons(state.generation);
   if (state.loading) return <div className="college-research-state match-loading" role="status"><RefreshCw className="spin" size={22} aria-hidden="true" /><div><b>{t("Finding your best-fit colleges…")}</b><p>{t("Matching your profile against every university.")}</p></div></div>;
   if (state.error) return <div className="college-research-state error" role="alert"><X size={22} aria-hidden="true" /><div><b>{t("Your college match could not be built")}</b><p>{state.error}</p></div><button type="button" className="button quiet small" onClick={onRetry}>{t("Retry")}</button></div>;
   const { data } = state;
@@ -107,7 +111,7 @@ export function CollegeMatchPanel({ state, listed, busyId, addingAll, onAdd, onA
     title={t("Your best-fit colleges")} icon={Compass}
     action={<div className="nb-match-actions">
       {all.length > 0 && reasons.status !== 'done' && <BlueButton variant="ghost" size="sm" icon={asking ? RefreshCw : Sparkles} disabled={asking} aria-busy={asking} onClick={askReasons}>{asking ? t("Naseeb AI is writing…") : t("Why these fit you")}</BlueButton>}
-      {toAdd.length > 0 && <BlueButton size="sm" icon={Plus} disabled={addingAll} aria-busy={addingAll} onClick={() => onAddAll(toAdd)}>{tx`Add all ${formatNumberLocale(toAdd.length)} to my list`}</BlueButton>}
+      {toAdd.length > 0 && <BlueButton size="sm" icon={Plus} disabled={addAllBusy({ busyId, addingAll })} aria-busy={addingAll} onClick={() => onAddAll(toAdd)}>{tx`Add all ${formatNumberLocale(toAdd.length)} to my list`}</BlueButton>}
       <button type="button" className="nb-match-close" aria-label={t("Close")} onClick={onClose}><X size={16} aria-hidden="true" /></button>
     </div>}>
     <Scores rubric={data.rubric} />
@@ -116,7 +120,7 @@ export function CollegeMatchPanel({ state, listed, busyId, addingAll, onAdd, onA
     {reasons.status === 'error' && <p className="nb-match-error" role="alert">{reasons.error}</p>}
     {data.groups.map((group) => <div className="nb-match-group" key={group.band}>
       <h3><TierBand value={group.band} /><small>{formatNumberLocale(group.results.length)}</small></h3>
-      {group.results.length ? <div className="nb-match-cards">{group.results.map((university) => <MatchCard key={university.id} university={university} application={listed.get(university.id)} busy={busyId === university.id} reason={reasons.lines[university.id]} onAdd={() => onAdd(university)} onOpen={() => onOpen(university.id)} />)}</div>
+      {group.results.length ? <div className="nb-match-cards">{group.results.map((university) => <MatchCard key={university.id} university={university} application={listed.get(university.id)} busy={individualAddBusy({ busyId, addingAll }, university.id)} reason={reasons.lines[university.id]} onAdd={() => onAdd(university)} onOpen={() => onOpen(university.id)} />)}</div>
         : <p className="nb-match-empty">{tx`No ${bandLabel(group.band)} universities match your profile yet.`}</p>}
     </div>)}
     <p className="nb-match-foot">{t("Matched with fixed rules from QS subject rankings 2026: the same profile always gets the same list. Bands are estimates, not admission decisions.")}</p>
