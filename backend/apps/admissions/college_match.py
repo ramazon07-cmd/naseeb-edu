@@ -71,10 +71,10 @@ def international_cost(university):
 
 
 def passes_gate(university, cost, ctx):
-    """The aid and cost gate for a student's budget. ``cost`` None (unknown) is never a reason to drop.
+    """The aid and cost gate for a student's budget.
 
     * Needs a scholarship and the university gives none to students from abroad: kept only when it
-      costs no more than the budget.
+      is known to cost no more than the budget (an unknown cost or budget drops it).
     * Costs more than twice the budget and gives no aid to students from abroad: dropped.
     """
     if gives_international_aid(university):
