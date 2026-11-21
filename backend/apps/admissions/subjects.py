@@ -72,6 +72,78 @@ SUBJECTS = {
 }
 AREAS = tuple(code for code in SUBJECTS if code.startswith('AREA_'))
 
+# The indicators QS scores a subject by, in the order of its columns, and each subject's weights for them
+# (0 = not used, so the score is not published). From the 'methodology' sheet; tests check this table against
+# the snapshot (catalog_data/qs_subject_rankings_2026.json), which carries the same weights.
+INDICATORS = ('academic', 'employer', 'citations', 'h_index', 'irn')
+SUBJECT_WEIGHTS = {
+    'AREA_ART': (0.6, 0.2, 0.075, 0.075, 0.05),
+    'ARC01': (0.7, 0.1, 0.1, 0.1, 0),
+    'ARC02': (0.7, 0.1, 0.1, 0.1, 0),
+    'ART01': (0.9, 0.1, 0, 0, 0),
+    'CLA01': (0.9, 0.1, 0, 0, 0),
+    'ENG07': (0.8, 0.1, 0.1, 0, 0),
+    'HIS01': (0.6, 0.1, 0.15, 0.15, 0),
+    'HIS02': (0.9, 0.1, 0, 0, 0),
+    'LIN01': (0.8, 0.1, 0.05, 0.05, 0),
+    'MOD01': (0.7, 0.3, 0, 0, 0),
+    'MUS01': (0.8, 0.2, 0, 0, 0),
+    'PER01': (0.8, 0.2, 0, 0, 0),
+    'PHI01': (0.75, 0.05, 0.1, 0.1, 0),
+    'THE01': (0.7, 0.1, 0.1, 0.1, 0),
+    'AREA_ENG': (0.4, 0.3, 0.1, 0.1, 0.1),
+    'COM02': (0.4, 0.3, 0.125, 0.125, 0.05),
+    'DAT01': (0.4, 0.3, 0.15, 0.15, 0),
+    'ENG01': (0.4, 0.3, 0.125, 0.125, 0.05),
+    'ENG02': (0.4, 0.3, 0.15, 0.15, 0),
+    'ENG03': (0.4, 0.3, 0.125, 0.125, 0.05),
+    'ENG05': (0.4, 0.3, 0.125, 0.125, 0.05),
+    'ENG06': (0.4, 0.3, 0.15, 0.15, 0),
+    'PET01': (0.4, 0.3, 0.15, 0.15, 0),
+    'AREA_LIF': (0.4, 0.1, 0.2, 0.2, 0.1),
+    'AGR01': (0.5, 0.1, 0.15, 0.15, 0.1),
+    'ANA01': (0.4, 0.1, 0.25, 0.25, 0),
+    'BIO01': (0.4, 0.1, 0.2, 0.2, 0.1),
+    'DEN01': (0.3, 0.1, 0.3, 0.3, 0),
+    'MED01': (0.4, 0.1, 0.2, 0.2, 0.1),
+    'NUR01': (0.3, 0.1, 0.3, 0.3, 0),
+    'PHA01': (0.4, 0.1, 0.2, 0.2, 0.1),
+    'PSY01': (0.4, 0.2, 0.15, 0.15, 0.1),
+    'VET01': (0.3, 0.1, 0.3, 0.3, 0),
+    'AREA_NAT': (0.4, 0.2, 0.15, 0.15, 0.1),
+    'CHE01': (0.4, 0.2, 0.15, 0.15, 0.1),
+    'EAR01': (0.4, 0.1, 0.2, 0.2, 0.1),
+    'ENV01': (0.4, 0.1, 0.225, 0.225, 0.05),
+    'GEO01': (0.6, 0.1, 0.15, 0.15, 0),
+    'GEO02': (0.3, 0.1, 0.25, 0.25, 0.1),
+    'GEO03': (0.3, 0.1, 0.25, 0.25, 0.1),
+    'MET01': (0.4, 0.1, 0.2, 0.2, 0.1),
+    'MAT01': (0.4, 0.2, 0.15, 0.15, 0.1),
+    'PHY01': (0.4, 0.2, 0.15, 0.15, 0.1),
+    'AREA_SOC': (0.5, 0.3, 0.075, 0.075, 0.05),
+    'ACC01': (0.5, 0.3, 0.1, 0.1, 0),
+    'ANT01': (0.7, 0.1, 0.1, 0.1, 0),
+    'BUS01': (0.5, 0.3, 0.1, 0.1, 0),
+    'COM01': (0.5, 0.1, 0.2, 0.2, 0),
+    'DEV01': (0.6, 0.1, 0.15, 0.15, 0),
+    'ECO01': (0.4, 0.2, 0.2, 0.2, 0),
+    'EDU01': (0.5, 0.1, 0.2, 0.2, 0),
+    'HOS01': (0.45, 0.5, 0.05, 0, 0),
+    'LAW01': (0.5, 0.3, 0.05, 0.15, 0),
+    'LIB01': (0.7, 0.1, 0.15, 0.05, 0),
+    'MAR01': (0.5, 0.3, 0.1, 0.1, 0),
+    'POL01': (0.5, 0.3, 0.1, 0.1, 0),
+    'SOC01': (0.7, 0.2, 0.1, 0, 0),
+    'SOC03': (0.7, 0.1, 0.05, 0.15, 0),
+    'SPO01': (0.6, 0.1, 0.15, 0.15, 0),
+    'STA01': (0.5, 0.1, 0.2, 0.2, 0),
+}
+
+
+def subject_indicators(code):
+    """``[(indicator, weight)]`` the subject is scored by, in column order; [] for an unknown code."""
+    return [(name, weight) for name, weight in zip(INDICATORS, SUBJECT_WEIGHTS.get(code, ())) if weight]
+
 # Keywords per subject in English, Russian and Uzbek (Latin). A keyword matches from the start of a
 # word, so 'информатик' also finds 'информатика' and 'kompyuter' finds 'kompyuter injiniringi'.
 # A trailing '$' means the whole word only ('ai$', 'art$').

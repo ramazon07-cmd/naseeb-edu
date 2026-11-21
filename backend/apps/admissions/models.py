@@ -533,6 +533,13 @@ class UniversitySubjectRank(models.Model):
     # The rank as published when it is a range or tied ('201-250', '=51'); blank for a plain number.
     rank_label = models.CharField(max_length=20, blank=True, default='')
     score = models.FloatField(null=True, blank=True)
+    # The indicator scores behind the subject score (0-100); NULL for an indicator the subject does not use
+    # (subjects.SUBJECT_WEIGHTS) or QS did not publish.
+    academic_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    employer_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    citations_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    h_index_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    irn_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     year = models.PositiveSmallIntegerField()
 
     class Meta:

@@ -37,6 +37,7 @@ from apps.users.admin_permissions import SupportReadOpsWrite, has_tier
 from apps.users.services import audit_product_action
 from ..catalog_cache import CachedCatalogListMixin
 from ..college_search import SEARCH_FIELDS
+from ..subject_ranks import latest_year, major_subject_codes, prefetch_subject_ranks
 from ..pricing import with_cost
 from ..listing import ListQueryMixin
 from .common import CounselorOrOwnerPermission, ProductAdminPermission
@@ -201,7 +202,18 @@ class UniversityViewSet(ListQueryMixin, CachedCatalogListMixin, viewsets.ModelVi
     def get_queryset(self):
         if self.action == 'list':
             return with_cost(University.objects.all())
-        return with_cost(super().get_queryset())
+        queryset = with_cost(super().get_queryset())
+        if self.action == 'retrieve':
+            # The detail carries the university's subject ranks: one prefetch, however many it has.
+            self.subject_year = latest_year()
+            queryset = queryset.prefetch_related(prefetch_subject_ranks(self.subject_year))
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.action == 'retrieve':
+            context['subjects'] = {'year': getattr(self, 'subject_year', None), 'major_codes': major_subject_codes(self.request.user)}
+        return context
 
     def get_serializer_class(self):
         return UniversityRowSerializer if self.action == 'list' else UniversitySerializer

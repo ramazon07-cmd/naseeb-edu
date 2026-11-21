@@ -10,6 +10,8 @@ from ..college_match import college_match, match_with_context
 from ..college_search import (
     CollegeSearchParams, college_search, evidence_counts, fit_key, missing_fields,
 )
+from ..subjects import subjects_for_major
+from ..subject_rankings import SubjectRankingParams, cached_subject_ranking
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
 
@@ -45,6 +47,8 @@ def build_college_research(profile):
             'scholarship_needed': profile.scholarship_needed,
             'evidence': evidence,
         },
+        # The QS subjects of the target major, in the order stated: College Search presets its Subject picker to the first.
+        'subjects': subjects_for_major(profile.target_major),
         'methodology': 'Academic fit, preferences, aid and verified profile evidence.',
         'generated_at': timezone.now(),
     }
@@ -87,6 +91,17 @@ class CollegeSearchView(APIView):
         params = CollegeSearchParams(data=request.query_params)
         params.is_valid(raise_exception=True)
         return Response(college_search(profile, params.validated_data))
+
+
+class SubjectRankingView(APIView):
+    """One page of the QS subject ranking (``GET /api/subject-rankings/``); read only when the student opens it."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        params = SubjectRankingParams(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        return Response(cached_subject_ranking(params.validated_data))
 
 
 class EducationMatchAIView(APIView):
