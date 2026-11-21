@@ -2913,6 +2913,13 @@ export const UI_TRANSLATIONS = {
   "QS {year} · ranked in {n} subjects": ["QS {year} · {n} ta fan bo'yicha reytingda", "QS {year} · в рейтинге по предметам: {n}"],
   "Score {n} of 100": ["Ball: 100 dan {n}", "Балл: {n} из 100"],
   "Rank {n}": ["O'rin {n}", "Место {n}"],
+  "Subject rankings": ["Fanlar bo'yicha reyting", "Рейтинг по предметам"],
+  "Subject score": ["Fan bali", "Балл по предмету"],
+  "Citations per paper": ["Maqolaga iqtiboslar", "Цитирования на статью"],
+  "H-index": ["H-indeks", "Индекс Хирша"],
+  "{area}: overall": ["{area}: umumiy", "{area}: в целом"],
+  "Counts for {n} of the subject score": ["Fan balining {n} qismini tashkil qiladi", "Составляет {n} балла по предмету"],
+  "Rankings: QS World University Rankings by Subject {year}.": ["Reyting: QS World University Rankings by Subject {year}.", "Рейтинг: QS World University Rankings by Subject {year}."],
 }
 
 export function uiMessages(language) {
