@@ -13,9 +13,10 @@ Code: `backend/apps/admissions/college_match.py` (rules), `subjects.py` (major t
 - **Subject ranks:** QS World University Rankings by Subject **2026** (55 subjects and 5 broad areas),
   stored in `UniversitySubjectRank` from `catalog_data/qs_subject_rankings_2026.json`. A ranked range
   such as 201-250 is stored as 201 and shown as published. Rebuild the file with
-  `scripts/build_qs_subject_catalog.py <xlsx>`; load it with `python manage.py load_qs_subject_rankings`
-  (run `load_qs_rankings` first; it matches by university name and country, never creates a
-  university, and is safe to run again).
+  `scripts/build_qs_subject_catalog.py <xlsx>`; `build.sh` loads it on every deploy, right after the migrations
+  (`load_qs_rankings`, then `load_qs_subject_rankings`; both safe to run again, about 2 s each, and a failure
+  stops the deploy). By hand: the same two commands in that order. It matches by university name and country
+  and never creates a university.
 - **Overall rank** (only when no major maps): QS World University Rankings 2027, already in the catalogue.
 - **Admission and aid facts:** the catalogue (SAT range, admit rates, international cost, aid flags,
   need policy).
