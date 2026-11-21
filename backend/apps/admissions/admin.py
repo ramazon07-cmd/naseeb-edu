@@ -35,6 +35,7 @@ from .models import (
     SupportTicket,
     Task,
     University,
+    UniversitySubjectRank,
     UniversityProgram,
     XPTransaction,
 )
@@ -95,6 +96,26 @@ class UniversityAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'market', 'country', 'institution_type', 'acceptance_rate', 'net_price_usd', 'ranking', 'catalog_verified_at')
     search_fields = ('name', 'country', 'city')
     list_filter = ('market', 'country', 'institution_type', 'degree_type', 'test_optional', 'offers_international_aid', 'credential_route')
+
+
+@admin.register(UniversitySubjectRank)
+class UniversitySubjectRankAdmin(admin.ModelAdmin):
+    """Read only: the rows come from ``load_qs_subject_rankings``, which replaces any edit."""
+
+    list_display = ('university', 'subject_code', 'rank', 'rank_label', 'score', 'year')
+    list_filter = ('year', 'subject_code')
+    search_fields = ('university__name',)
+    raw_id_fields = ('university',)
+    list_select_related = ('university',)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(UniversityProgram)
