@@ -522,6 +522,29 @@ class University(TimeStampedModel):
         return f'{self.name}, {self.country}'
 
 
+class UniversitySubjectRank(models.Model):
+    """A university's published QS rank in one subject (or broad area), from qs_subject_rankings_<year>.json."""
+
+    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name='subject_ranks')
+    # A methodology SUBJECT_CODE ('COM02') or a broad area ('AREA_ENG').
+    subject_code = models.CharField(max_length=20)
+    # The lower bound of a published range ('201-250' -> 201).
+    rank = models.PositiveIntegerField()
+    # The rank as published when it is a range or tied ('201-250', '=51'); blank for a plain number.
+    rank_label = models.CharField(max_length=20, blank=True, default='')
+    score = models.FloatField(null=True, blank=True)
+    year = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['university', 'subject_code', 'year'], name='unique_university_subject_rank_year'),
+        ]
+        indexes = [models.Index(fields=['subject_code', 'rank'], name='subject_rank_lookup')]
+
+    def __str__(self):
+        return f'{self.university.name}: {self.subject_code} #{self.rank_label or self.rank} ({self.year})'
+
+
 class UniversityProgram(TimeStampedModel):
     class DegreeLevel(models.TextChoices):
         BACHELOR = 'bachelor', "Bachelor's"
