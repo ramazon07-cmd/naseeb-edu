@@ -114,7 +114,12 @@ def build_context(profile, major_candidates, subject_strengths):
     }
 
 
-def _request_gateway(context):
+def _call_gateway(context):
+    """Send the request; returns the decoded provider payload.
+
+    Only transport failures (URLError incl. HTTP errors, timeouts, OSError)
+    escape from here before an answer arrives, so they are the uncharged ones.
+    """
     body = {
         'model': settings.EDUCATION_MATCH_MODEL,
         'messages': [
@@ -138,7 +143,13 @@ def _request_gateway(context):
         method='POST',
     )
     with urllib.request.urlopen(request, timeout=settings.AI_RECOMMENDATION_TIMEOUT_SECONDS) as response:
-        payload = json.loads(response.read().decode('utf-8'))
+        raw = response.read()
+    return raw, body
+
+
+def _parse_gateway(raw, body):
+    """Validate a billed provider answer; raises KeyError/IndexError/TypeError/ValueError."""
+    payload = json.loads(raw.decode('utf-8'))
     ai_usage.capture(payload, body)
     content = payload['choices'][0]['message']['content']
     content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE)
@@ -173,18 +184,27 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
     cached = cache_get(cache_key)
     if cached:
         return cached
-    if not ai_budget.consume(FEATURE, user):
+    reservation = ai_budget.consume(FEATURE, user)
+    if not reservation:
         ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
         raise EducationAIBudgetExhausted()
     ai_usage.begin()
     try:
-        result = _validate_result(_request_gateway(context), major_candidates, subject_strengths)
-        if not result['major_guidance']:
-            raise ValueError('AI response did not contain an allowed major.')
-    except (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError):
+        raw, body = _call_gateway(context)
+    except (urllib.error.URLError, TimeoutError, OSError):
+        # No completion arrived: the provider did not charge, so give the call back.
         logger.warning('education_ai_provider_failure student_id=%s', profile.pk)
         ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED)
-        ai_budget.refund(FEATURE, user)
+        ai_budget.refund(reservation)
+        raise EducationAIUnavailable()
+    try:
+        result = _validate_result(_parse_gateway(raw, body), major_candidates, subject_strengths)
+        if not result['major_guidance']:
+            raise ValueError('AI response did not contain an allowed major.')
+    except (KeyError, IndexError, TypeError, ValueError):
+        # The provider answered (and billed), so the call stays counted.
+        logger.warning('education_ai_invalid_output student_id=%s', profile.pk)
+        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED)
         raise EducationAIUnavailable()
     ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.OK)
     cache_set(cache_key, result, timeout=CACHE_TTL_SECONDS)

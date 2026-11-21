@@ -1,5 +1,6 @@
 """Education-match AI: gateway, daily budget, cache, de-identification, permissions."""
 import json
+import urllib.error
 from unittest import mock
 
 from django.core.cache import cache
@@ -87,12 +88,29 @@ class EducationMatchAITests(RoleIsolationBase):
         self.assertEqual(self.used(f':user:{self.student_a_user.pk}'), 0)
         self.assertEqual(AiUsageLog.objects.get(feature='education_match').status, 'provider_error')
 
-    def test_unusable_answer_is_503_and_refunded(self):
+    def test_http_error_is_503_and_refunded(self):
+        error = urllib.error.HTTPError('https://gw', 500, 'boom', {}, None)
+        with mock.patch('urllib.request.urlopen', side_effect=error):
+            self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(self.used(), 0)
+
+    def test_billed_unusable_answer_is_503_and_stays_charged(self):
         with mock.patch('urllib.request.urlopen', return_value=gateway_reply({'summary': 'x', 'major_guidance': []})):
             response = self.post()
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        self.assertEqual(self.used(), 0)
+        self.assertEqual(self.used(), 1)
+        self.assertEqual(self.used(f':school:{self.school_a.pk}'), 1)
+        self.assertEqual(self.used(f':user:{self.student_a_user.pk}'), 1)
         self.assertEqual(AiUsageLog.objects.get(feature='education_match').status, 'invalid_output')
+
+    def test_malformed_billed_answer_stays_charged_and_cannot_be_retried_forever(self):
+        reply = mock.MagicMock()
+        reply.read.return_value = json.dumps({'choices': []}).encode()
+        reply.__enter__.return_value = reply
+        with mock.patch('urllib.request.urlopen', return_value=reply):
+            for _ in range(3):
+                self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(self.used(), 3)
 
     @override_settings(EDUCATION_MATCH_USER_DAILY_LIMIT=1)
     def test_daily_limit_is_429_with_no_call(self):
@@ -184,7 +202,8 @@ class EducationBudgetRefundTests(RoleIsolationBase):
         cache.clear()
         self.addCleanup(cache.clear)
         user = self.student_a_user
-        self.assertTrue(ai_budget.consume('education_match', user))
-        ai_budget.refund('education_match', user)
+        reservation = ai_budget.consume('education_match', user)
+        self.assertTrue(reservation)
+        ai_budget.refund(reservation)
         day = timezone.localdate().isoformat()
         self.assertEqual(cache.get(f'ai-budget:education_match:{day}'), 0)
