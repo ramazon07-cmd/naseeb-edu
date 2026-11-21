@@ -2899,6 +2899,20 @@ export const UI_TRANSLATIONS = {
   "{0} universities were left out because the catalogue lists no aid for international students.": ["{0} ta universitet chiqarib tashlandi: katalogda xorijiy talabalar uchun yordam ko‘rsatilmagan.", "Исключено университетов: {0}, так как в каталоге нет помощи иностранным студентам."],
   "{0} universities were left out because the catalogue has no admission data to place them.": ["{0} ta universitet chiqarib tashlandi: katalogda ularni baholash uchun qabul ma’lumotlari yo‘q.", "Исключено университетов: {0}, так как в каталоге нет данных о приёме для оценки."],
   "Ranked by QS 2026 for: {0}": ["QS 2026 bo‘yicha reyting: {0}", "Рейтинг QS 2026 по направлениям: {0}"],
+  "Study subject": ["Fan", "Предмет"],
+  "Any subject": ["Istalgan fan", "Любой предмет"],
+  "Best in subject": ["Fan bo'yicha eng yaxshi", "Лучшие по предмету"],
+  "Only ranked in this subject": ["Faqat shu fan bo'yicha reytingdagilar", "Только с рейтингом по этому предмету"],
+  "Strongest subjects": ["Eng kuchli fanlar", "Сильнейшие предметы"],
+  "Your major": ["Sizning yo'nalishingiz", "Ваша специальность"],
+  "Show all {n} subjects": ["Barcha {n} ta fanni ko'rsatish", "Показать все предметы: {n}"],
+  "How to read this": ["Buni qanday o'qish kerak", "Как читать этот рейтинг"],
+  "The rank compares universities worldwide in one subject. It is built from academic and employer reputation and research citations, not teaching quality or student life.": ["Reyting dunyo universitetlarini bitta fan bo'yicha solishtiradi. U akademik va ish beruvchilar obro'si hamda ilmiy iqtiboslarga asoslangan; o'qitish sifati yoki talabalar hayotini hisobga olmaydi.", "Рейтинг сравнивает университеты мира по одному предмету. Он строится на академической и работодательской репутации и цитируемости исследований, а не на качестве преподавания или студенческой жизни."],
+  "Gold = top 10 in the world for that subject.": ["Oltin rang = shu fan bo'yicha dunyoda eng yaxshi 10 talik.", "Золотой цвет = топ-10 в мире по этому предмету."],
+  "Source: QS World University Rankings by Subject {year}": ["Manba: QS World University Rankings by Subject {year}", "Источник: QS World University Rankings by Subject {year}"],
+  "QS {year} · ranked in {n} subjects": ["QS {year} · {n} ta fan bo'yicha reytingda", "QS {year} · в рейтинге по предметам: {n}"],
+  "Score {n} of 100": ["Ball: 100 dan {n}", "Балл: {n} из 100"],
+  "Rank {n}": ["O'rin {n}", "Место {n}"],
 }
 
 export function uiMessages(language) {

@@ -27,6 +27,8 @@ from .listing import MAX_SEARCH_LENGTH, search_terms, term_query
 from .models import StudentProfile, University, UniversityProgram
 from .pricing import with_cost
 from .student_rubric import rubric
+from .subject_ranks import latest_year, subject_rank_row, with_subject_rank
+from .subjects import SUBJECTS
 
 PAGE_SIZES = (10, 25, 50, 100)
 MAX_IDS = 100
@@ -53,6 +55,8 @@ ORDERINGS = {
     'price': (F('cost').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
     'deadline': (F('application_deadline').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
     'acceptance': (F('acceptance_rate').desc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
+    # Best rank in the selected subject first, universities not ranked in it last (needs ``subject``).
+    'subject': (F('subject_rank').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'name', 'id'),
 }
 SORTS = (*ORDERINGS, 'fit')
 # The profile answers scoring needs; College Research asks for the missing ones. Test scores
@@ -407,6 +411,10 @@ class CollegeSearchParams(serializers.Serializer):
     size = serializers.CharField(required=False, allow_blank=True, default='', max_length=40)
     focus = serializers.CharField(required=False, allow_blank=True, default='', max_length=40)
     research = serializers.CharField(required=False, allow_blank=True, default='', max_length=40)
+    # A QS subject code (the 55 subjects; a broad area code works too). With it every row carries its rank in it.
+    subject = serializers.ChoiceField(choices=tuple(SUBJECTS), required=False, allow_blank=True, default='')
+    # Keep only the universities ranked in ``subject``.
+    subject_only = serializers.BooleanField(default=False)
     sort = serializers.ChoiceField(choices=SORTS, default='ranking')
     page = serializers.IntegerField(min_value=1, max_value=1000, default=1)
     page_size = serializers.ChoiceField(
@@ -426,6 +434,8 @@ class CollegeSearchParams(serializers.Serializer):
         unknown = sorted(set(self.initial_data) - set(self.fields))
         if unknown:
             raise serializers.ValidationError({name: 'Unknown parameter.' for name in unknown})
+        if attrs['sort'] == 'subject' and not attrs['subject']:
+            raise serializers.ValidationError({'sort': 'Choose a subject to sort by subject rank.'})
         return attrs
 
     @staticmethod
@@ -456,7 +466,7 @@ class CollegeSearchParams(serializers.Serializer):
         return ids
 
 
-def filtered_catalog(params, profile):
+def filtered_catalog(params, profile, subject_year=None):
     queryset = with_cost(University.objects.all())
     for term in params['search'].split():
         queryset = queryset.filter(term_query(SEARCH_FIELDS, term, 'search_text'))
@@ -478,24 +488,31 @@ def filtered_catalog(params, profile):
     for name in QS_FILTERS:
         if params[name]:
             queryset = queryset.filter(**{f'qs_data__{name}': params[name]})
+    if params['subject']:
+        queryset = with_subject_rank(queryset, params['subject'], subject_year if subject_year is not None else latest_year())
+        if params['subject_only']:
+            queryset = queryset.filter(subject_rank__isnull=False)
     return queryset
 
 
-def serialize_rows(universities, ctx):
+def serialize_rows(universities, ctx, subject=None):
     """Slim rows plus what College Search needs on top: the eligible programs
-    (``addToList`` picks one by the target major) and the student's fit."""
+    (``addToList`` picks one by the target major), the student's fit and, when the
+    rows were annotated for a subject, the rank in it (``subject_rank``, None when unranked). ``subject`` is the ``(code, year)`` the rows were annotated for."""
     from .serializers import UniversityRowSerializer
 
     rows = UniversityRowSerializer(universities, many=True).data
     for row, university in zip(rows, universities):
         row['programs'] = [{'name': program.name, 'canonical_major': program.canonical_major} for program in university.programs.all()]
+        if hasattr(university, 'subject_rank'):
+            row['subject_rank'] = subject_rank_row(university, *subject)
         if ctx is not None:
             row['fit'] = score_university(university, ctx)
     return rows
 
 
 # The query parameters that change which rows match (not the page or the extras).
-FILTER_PARAMS = ('search', 'country', 'price', 'aid', 'bands', 'test_optional', 'sat_fit', 'public', *QS_FILTERS)
+FILTER_PARAMS = ('search', 'country', 'price', 'aid', 'bands', 'test_optional', 'sat_fit', 'public', 'subject', 'subject_only', *QS_FILTERS)
 
 
 def fit_ranking(profile, ctx, params, queryset, scores):
@@ -523,6 +540,11 @@ def college_search(profile, params):
     """
     ready = not missing_fields(profile)
     rows = with_cost(University.objects.prefetch_related(eligible_programs()))
+    subject_year = subject = None
+    if params['subject'] and not params['ids']:
+        subject_year = latest_year()
+        subject = (params['subject'], subject_year)
+        rows = with_subject_rank(rows, params['subject'], subject_year)
     if params['ids']:
         # Rows the page already knows by id (the student's list, a university page).
         page = list(rows.filter(pk__in=params['ids']).order_by(*ORDERINGS['ranking']))
@@ -533,7 +555,7 @@ def college_search(profile, params):
     by_fit = params['sort'] == 'fit' and ready
     ctx = fit_context(profile) if ready and (by_fit or band_filter or params['facets']) else None
     scores = fit_scores(profile, ctx) if ctx is not None else {}
-    queryset = filtered_catalog(params, profile)
+    queryset = filtered_catalog(params, profile, subject_year)
     if band_filter:
         if ctx is None:
             # Without a ready profile no row has a band.
@@ -562,7 +584,7 @@ def college_search(profile, params):
         'page': params['page'],
         'page_size': size,
         'next': params['page'] + 1 if start + size < count else None,
-        'results': serialize_rows(page, ctx),
+        'results': serialize_rows(page, ctx, subject),
     }
     if params['price'] != 'all' and params['page'] == 1:
         # Matching rows without a known cost, which the price filter keeps (the first page says it once).

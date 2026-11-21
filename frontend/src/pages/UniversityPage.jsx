@@ -4,6 +4,7 @@ import { formatNumberLocale, formatPercentLocale, t, tx } from '../i18n';
 import { PortalTabs } from '../components/forms';
 import { Empty } from '../components/ui';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
+import { StrongestSubjects } from '../components/SubjectRank';
 import { institutionStatus } from '../lib/qs';
 import { AidTags, DeadlineCard, InfoCard, PriceMeter, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { dateText, money } from '../lib/format';
@@ -35,6 +36,7 @@ function UniversityOverview({ university, result, fitStatus, onRetryFit, researc
         <InfoCard title="Watch-outs"><ul className="note-list gap">{result.gaps.map((gap) => <li key={fitReasonText(gap)}><Clock3 size={15} aria-hidden="true" /><span>{fitReasonText(gap)}</span></li>)}{!result.gaps.length && <li><CheckCircle2 size={15} aria-hidden="true" /><span>{t("Nothing to watch out for.")}</span></li>}</ul></InfoCard>
       </div>}
       <QsUniversityDetails university={university} />
+      <StrongestSubjects subjects={university.subjects} />
       <InfoCard title="Numbers that matter"><div className="numbers">
         <div><span className="k">{t("Acceptance rate")}</span><span className="v">{percentText(rate)}</span><span className="s">{rate == null ? t("Not available in the catalog.") : Number(rate) < 15 ? t("Highly selective: fewer than 15% are admitted.") : Number(rate) >= 45 ? t("Less selective: 45% or more are admitted.") : t("Moderately selective.")}</span></div>
         <div><span className="k">{t("SAT range")}</span><span className="v">{satLabel(university)}</span>{university.sat_min && <SatRange min={university.sat_min} max={university.sat_max} score={sat} />}<span className={`s ${sat && university.sat_min && sat < university.sat_min ? 'warn' : ''}`.trim()}>{!sat || !university.sat_min ? t("No SAT minimum listed.") : sat < university.sat_min ? tx`Your SAT is ${String(sat)}, ${university.sat_min - sat} below` : tx`Your SAT is ${String(sat)}, in range`}</span></div>

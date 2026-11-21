@@ -10,6 +10,7 @@ from ..college_match import college_match, match_with_context
 from ..college_search import (
     CollegeSearchParams, college_search, evidence_counts, fit_key, missing_fields,
 )
+from ..subjects import subjects_for_major
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
 
@@ -45,6 +46,8 @@ def build_college_research(profile):
             'scholarship_needed': profile.scholarship_needed,
             'evidence': evidence,
         },
+        # The QS subjects of the target major, in the order stated: College Search presets its Subject picker to the first.
+        'subjects': subjects_for_major(profile.target_major),
         'methodology': 'Academic fit, preferences, aid and verified profile evidence.',
         'generated_at': timezone.now(),
     }

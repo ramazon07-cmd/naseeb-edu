@@ -6,7 +6,7 @@ import { Empty, Modal } from '../components/ui';
 import { FilterOption, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { BAND_TIERS, COLLEGE_AID_FLAGS, bandLabel, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
+import { BAND_TIERS, COLLEGE_AID_FLAGS, bandLabel, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, collegeSorts, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 import { useCollegeSearch } from '../hooks/useCollegeSearch';
@@ -16,6 +16,8 @@ import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar'
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
 import { CollegeMatchPanel } from '../components/CollegeMatch';
+import { SubjectRankChip } from '../components/SubjectRank';
+import { SUBJECT_AREAS } from '../lib/subjects';
 import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
 import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
@@ -48,6 +50,19 @@ function CollegeFilters({ filters, setFilters, facets, showBands, chips }) {
     </fieldset>
   </>;
   return <div className="college-advanced-filters" id="college-advanced-filters">{clear && <header>{clear}</header>}{groups}</div>;
+}
+
+// The QS subject whose rank every row shows: the 55 subjects under their 5 broad areas. It starts at the
+// student's own major subject; "Only ranked" drops the universities QS does not rank in it.
+function SubjectPicker({ subject, only, onSubject, onOnly }) {
+  return <div className="college-subject-row">
+    <label className="college-subject-field"><span>{t('Study subject')}</span>
+      <select aria-label={t('Study subject')} value={subject} onChange={(event) => onSubject(event.target.value)}>
+        <option value="">{t('Any subject')}</option>
+        {SUBJECT_AREAS.map((area) => <optgroup key={area.code} label={area.name}>{area.subjects.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</optgroup>)}
+      </select></label>
+    {subject && <label className="college-subject-only"><input type="checkbox" checked={only} onChange={(event) => onOnly(event.target.checked)} /><span>{t('Only ranked in this subject')}</span></label>}
+  </div>;
 }
 
 function CollegeSkyline() {
@@ -89,7 +104,7 @@ function CollegeRow({ university, detail, detailError, view, application, expand
   const price = priceInfo(university);
   return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
     <div className="uni-fit" role="cell"><b>{rankText(university)}</b></div>
-    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small></span></div>
+    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small><SubjectRankChip rank={university.subject_rank} /></span></div>
     <div className="uni-facts">
       {view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <div className={`uni-value ${code === 'overall' ? 'qs-score-primary' : ''}`} role="cell" data-label={t(title)} key={code}><span className="v">{qsScoreText(qsScore(university.qs_data, code))}</span></div>) : <>
       <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{fit ? <>{formatNumberLocale(fit.match_score)}<small>/100</small></> : '—'}</span></div>
@@ -133,7 +148,7 @@ function CollegeCard({ university, profile, application, busy, compared, compare
     <header>
       <UniversityLogo university={university} />
       <div className="nb-cc-title"><h3><button type="button" onClick={onOpen}>{university.name}</button></h3><p>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</p>
-        <div className="nb-cc-chips">{fit?.admission_band && <TierBand value={fit.admission_band} />}<span className="nb-cc-chip">{rankText(university)}</span></div></div>
+        <div className="nb-cc-chips">{fit?.admission_band && <TierBand value={fit.admission_band} />}<span className="nb-cc-chip">{rankText(university)}</span><SubjectRankChip rank={university.subject_rank} /></div></div>
       {fit && <span className="nb-cc-ring" style={{ '--v': Math.max(0, Math.min(100, Number(fit.match_score) || 0)) }} role="img" aria-label={`${t('Fit')}: ${formatNumberLocale(fit.match_score)}/100`}><b>{formatNumberLocale(fit.match_score)}</b><small>{t('fit')}</small></span>}
     </header>
     {lo > 0 && <div className="nb-cc-sat"><div><small>{t('SAT middle 50%')}</small><b>{satLabel(university)}</b></div><SatRange min={lo} max={hi} score={me} />{satNote && <p>{satNote}</p>}</div>}
@@ -223,6 +238,9 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [searchTerm, setSearchTerm] = useState(query || '');
   const [filters, setFilters] = useState(DEFAULT_COLLEGE_FILTERS);
   const [sort, setSort] = useState('ranking');
+  // The Subject picker: null until the student touches it, so it follows the preset from their major.
+  const [subjectPick, setSubjectPick] = useState(null);
+  const [onlyPick, setOnlyPick] = useState(null);
   // Up to three loaded universities to compare side by side (kept in memory, no requests).
   const [compareMap, setCompareMap] = useState(() => new Map());
   const [compareOpen, setCompareOpen] = useState(false);
@@ -262,7 +280,13 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
   const closeUniversity = useCallback(() => setPage('college_search'), [setPage]);
   const student = ownStudent(data);
-  const search = useCollegeSearch(collegeSearchQuery({ query: searchTerm, filters, qsFilters, sort, view, pageSize }), researchVersion);
+  // The first page waits for the research answer, which names the subject of the student's major, so the
+  // first request already carries it (no second request when it arrives).
+  const subjectReady = research != null || researchError !== '';
+  const subject = subjectPick ?? (research?.subjects?.[0] || '');
+  // Choosing a subject yourself keeps only the universities ranked in it; the preset from the major only shows ranks.
+  const subjectOnly = Boolean(subject) && (onlyPick ?? (subjectPick != null && subjectPick !== ''));
+  const search = useCollegeSearch(subjectReady ? collegeSearchQuery({ query: searchTerm, filters, qsFilters, sort, view, pageSize, subject, subjectOnly }) : null, researchVersion);
   const rows = search.rows;
   // The open university's fit as its row on screen has it, when that row is for the current profile.
   const rowFit = universityId != null && search.version === researchVersion ? rows.find((item) => item.id === universityId)?.fit : undefined;
@@ -496,6 +520,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
           <div className="college-data-views" role="group" aria-label={t('University data view')}>{[['qs', 'QS rankings'], ['admissions', 'Admissions & costs']].map(([key, title]) => <button type="button" key={key} aria-pressed={view === key} onClick={() => { setView(key); setExpandedId(null); setSort(key === 'qs' ? 'ranking' : 'fit'); }}>{t(title)}{key === 'qs' && <span className="college-edition">2027</span>}</button>)}</div>
           <button type="button" className="college-saved-button" onClick={() => setListOpen(true)} aria-label={t('My college list')}><Bookmark size={17} aria-hidden="true" /><span>{t('My List')}</span><b>{formatNumberLocale(data.applications.length)}</b></button>
         </header>
+        <SubjectPicker subject={subject} only={subjectOnly} onOnly={setOnlyPick} onSubject={(code) => { setSubjectPick(code); setOnlyPick(null); if (code && sort === 'ranking') setSort('subject'); }} />
         <div className="college-filter-row">
           {view === 'qs' && <div className="college-qs-filters">{QS_CLASSIFICATIONS.slice(0, 4).map(([key, title, values]) => <CollegeFilterSelect key={key} label={t(title)} value={qsFilters[key] || ''} onChange={(value) => setQsFilters((current) => ({ ...current, [key]: value }))} options={[{ value: '', label: t('All') }, ...Object.keys(values).filter((value) => facets.qs[key]?.[value]).map((value) => ({ value, label: qsClassification(key, value), count: facets.qs[key][value] }))]} />)}</div>}
           <button type="button" className="college-filters-toggle" aria-expanded={filtersOpen} aria-controls="college-advanced-filters" onClick={() => setFiltersOpen(!filtersOpen)}><Filter size={16} aria-hidden="true" />{t('Filters')}{chips.length > 0 && <b>{formatNumberLocale(chips.length)}</b>}<ChevronDown size={14} aria-hidden="true" /></button>
@@ -505,7 +530,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
           <p className="filter-count" aria-live="polite"><b>{search.query == null ? '…' : formatNumberLocale(search.count)}</b> {t('Universities')}</p>
           {chips.map((chip) => <span className="filter-token" key={chip.key}>{chip.text}<button type="button" aria-label={tx`Remove ${chip.text} filter`} onClick={chip.clear}><X size={13} aria-hidden="true" /></button></span>)}
           {view === 'qs' && Object.values(qsFilters).some(Boolean) && <button type="button" className="college-reset-filters" onClick={() => setQsFilters({})}><X size={13} aria-hidden="true" />{t('Clear')}</button>}
-          <div className="sort-control"><span>{t('Sort by')}</span><select aria-label={t('Sort by')} value={sort} onChange={(event) => setSort(event.target.value)}>{COLLEGE_SORTS.map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
+          <div className="sort-control"><span>{t('Sort by')}</span><select aria-label={t('Sort by')} value={sort === 'subject' && !subject ? 'ranking' : sort} onChange={(event) => setSort(event.target.value)}>{collegeSorts(subject).map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
           <div className="sort-control"><span>{t('Show')}</span><select aria-label={t('Universities per page')} value={pageSize} onChange={(event) => changePageSize(Number(event.target.value))}>{COLLEGE_PAGE_SIZES.map((size) => <option value={size} key={size}>{formatNumberLocale(size)}</option>)}</select></div>
         </div>
         {priceNotes.unpriced && <p className="college-price-notes" role="status">{priceNotes.unpriced}</p>}
