@@ -282,3 +282,23 @@
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   }
 }
+
+.nb-blue .nb-match-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nb-blue .nb-match-subject {
+  margin: 0;
+  color: var(--nb-ink-strong);
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+}
+
+.nb-blue .nb-match-factor.is-over {
+  background: transparent;
+  border: 1px solid var(--nb-late);
+  color: var(--nb-late);
+}
