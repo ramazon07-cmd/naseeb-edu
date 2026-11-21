@@ -343,7 +343,11 @@ migrations and the cron jobs, which connect directly.
 | `ERROR_TRACKER_URL` | unset | Link to the error tracker's dashboard on the admin Health page. |
 | `AI_ASSISTANT_SCHOOL_DAILY_BUDGET` | 1000 | Paid assistant calls per school per day (0 = no cap). |
 | `ESSAY_COACH_SCHOOL_DAILY_BUDGET` | 1000 | Paid coach checks per school per day (0 = no cap). |
-| `ESSAY_COACH_USER_DAILY_LIMIT` | 40 | Paid coach checks per student per day (0 = no cap). |
+| `ESSAY_COACH_USER_DAILY_LIMIT` | 5 | Paid coach checks per student per day (0 = no cap). A check is one unit even though it makes two AI calls; re-checks of unchanged text are free. |
+| `ESSAY_COACH_REASONING_EFFORT` | minimal | `reasoning_effort` sent with each coach call (empty = not sent). |
+| `ESSAY_COACH_MIN_CHANGED_WORDS` | 3 | Changed words a coach re-check needs against the last checked text. |
+| `ESSAY_COACH_TOTAL_SECONDS` | 90 | Deadline for both calls of one coach check together; an overrun fails and refunds the check. |
+| `ESSAY_COACH_RECHECK_PER_MINUTE` | 20 | Depth-check requests per user per minute, in front of the re-check rules. |
 | `AI_FALLBACK_PROCESS_DAILY_BUDGET` | 20 | Paid AI calls each process may make per day while Redis is down (0 = none). Worst case per day = processes × this. |
 | `AI_STREAM_MAX_SECONDS` | 60 | Total time for one streamed assistant reply. |
 | `AI_MAX_STREAMS_PER_PROCESS` | 4 | Concurrent assistant streams per gunicorn process. |

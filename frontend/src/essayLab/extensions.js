@@ -95,7 +95,7 @@ function buildDecorations(doc, notes, located, activeId) {
     const range = located.get(note.id)
     if (!range || range.from >= range.to) continue
     decorations.push(Decoration.inline(range.from, range.to, {
-      class: `el-hl el-hl-${note.kind || 'reflect'}${note.id === activeId ? ' is-active' : ''}`,
+      class: `el-hl el-hl-${note.criterion || 'reflection'}${note.id === activeId ? ' is-active' : ''}`,
       'data-note-id': note.id,
     }, { noteId: note.id }))
   }

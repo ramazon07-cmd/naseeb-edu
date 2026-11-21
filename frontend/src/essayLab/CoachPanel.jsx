@@ -1,73 +1,123 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, Info, MessageCircleQuestion, RefreshCw, Sparkles, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Compass, Feather, HeartHandshake, Info, LayoutList, Lightbulb, MessageCircleQuestion, RefreshCw, Lock, Sparkles, Star, Target, Undo2, X } from 'lucide-react'
 import { t, tp } from '../i18n.js'
-import { NOTE_KINDS, SCORE_KEYS, coachSource, kindOf, overallScore, scoreBand } from './coachModel.js'
-import { relativeTime } from './format.js'
+import {
+  STRENGTHS, coachSource, criteriaFor, deltaSince, doneNotes, explainFor, goneNotes, headline, levelWord, nearBandEdge, normalizeCheck, openNotes, recheckBlock,
+} from './coachModel.js'
 
 const ERROR_TEXT = {
   slow_down: 'Give it a few seconds, then check again.',
-  coach_resting: 'Coach is resting for today. Your essay is saved — try again tomorrow.',
-  coach_unavailable: 'Coach can’t be reached right now. Try again in a minute.',
-  empty_essay: 'Write a few sentences first, then ask Coach.',
+  coach_resting: 'Naseeb AI is resting for today. Your essay is saved — try again tomorrow.',
+  coach_unavailable: 'Naseeb AI can’t be reached right now. Try again in a minute.',
+  empty_essay: 'Write a few sentences first, then ask Naseeb AI.',
   stale: 'Your latest words were still saving. Check again.',
+  notes_open: 'Resolve all notes first',
+  too_small_change: 'Change a few more words before checking again',
+}
+
+const BLOCK_TEXT = {
+  notes_open: 'Resolve all notes first',
+  unchanged: 'Change your essay first',
+}
+
+const CRITERION_ICON = { reflection: Lightbulb, specificity: Target, voice: Feather, structure: LayoutList, prompt_fit: Compass, [STRENGTHS]: Star }
+
+const EXPLAIN = {
+  reflection: 'Do you say what you learned or felt, not only what happened?',
+  specificity: 'Real moments, names and details a reader can picture.',
+  voice: 'Does it sound like you and nobody else?',
+  structure: 'Does each part lead clearly to the next?',
+  prompt_fit: 'Does the essay answer the question it was asked?',
+}
+
+const DAILY_CHECKS = 5 // fallback when the server sends no daily_limit
+
+function CriterionIcon({ criterion, size = 16 }) {
+  const Icon = CRITERION_ICON[criterion] || Lightbulb
+  return <Icon size={size} aria-hidden="true" className="el-co-kic" />
 }
 
 function ScoreRing({ percent, label }) {
-  const radius = 30
+  const radius = 36
   const circumference = 2 * Math.PI * radius
   const dash = (Math.max(0, Math.min(100, percent)) / 100) * circumference
-  return <svg className="el-ring" width="72" height="72" viewBox="0 0 72 72" role="img" aria-label={label}>
-    <circle cx="36" cy="36" r={radius} className="el-ring-track" />
-    <circle cx="36" cy="36" r={radius} className="el-ring-value" strokeDasharray={`${dash} ${circumference}`} transform="rotate(-90 36 36)" />
-    <text x="36" y="41" textAnchor="middle" className="el-ring-text">{percent}</text>
-  </svg>
+  return <div className="el-ring-wrap" role="img" aria-label={label}>
+    <svg className="el-ring" width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
+      <circle cx="44" cy="44" r={radius} className="el-ring-track" />
+      <circle cx="44" cy="44" r={radius} className="el-ring-value" strokeDasharray={`${dash} ${circumference}`} transform="rotate(-90 44 44)" />
+    </svg>
+    <span className="el-ring-num"><b>{percent}</b><small>/100</small></span>
+  </div>
 }
 
-function ScoreBars({ scores }) {
-  return <dl className="el-scores">
-    {SCORE_KEYS.map(({ key, label }) => {
-      const value = Number(scores?.[key]) || 0
-      const band = scoreBand(value)
-      return <div key={key} className="el-score">
-        <dt>{t(label)}</dt>
-        <dd>
-          <span className="el-score-bar" role="img" aria-label={t('{label}: {value} of 4, {band}', { label: t(label), value, band: t(band.label) })}>
-            {[1, 2, 3, 4].map((step) => <span key={step} className={step <= value ? `is-on is-${band.tone}` : ''} />)}
-          </span>
-          <span className="el-score-label">{t(band.label)}</span>
-        </dd>
-      </div>
-    })}
-  </dl>
+function Meter({ value, criterion, label }) {
+  const level = Math.max(0, Math.min(4, Math.round(Number(value)) || 0))
+  return <span className={`el-co-meter is-${criterion}`} role="img" aria-label={label}>
+    {[1, 2, 3, 4].map((step) => <span key={step} className={step <= level ? 'is-on' : ''} />)}
+  </span>
 }
 
-// Coach panel: overall ring, five score bars, tabs and note cards.
-// Notes only show while their quote can still be found in the text.
+function noteCount(n) {
+  return n === 1 ? t('1 note') : tp('{n} notes', n, { n })
+}
+
+// Coach panel: sticky header (score), tabs, scrollable content and a sticky footer
+// with the one "Check again" button. Notes only count while their quote can be found.
 function CoachPanel({
-  check, status, anchored, activeId, dismissed, words, onCheck, onSelect, onJump, onDismiss, onClose,
+  check, status, anchored, activeId, states, changed, inputChanged, notice, words,
+  onCheck, onJump, onSetState, onClose,
 }) {
-  const [tab, setTab] = useState('all')
+  const [tab, setTab] = useState('overview')
+  const [filter, setFilter] = useState('all')
   const [expanded, setExpanded] = useState(true) // bottom sheet on phones
   const [showSummary, setShowSummary] = useState(false)
-  const listRef = useRef(null)
-  const result = check?.result
-  const overall = overallScore(result?.scores)
+  const [openCriterion, setOpenCriterion] = useState(null)
+  const [showDone, setShowDone] = useState(false)
+  const bodyRef = useRef(null)
 
-  const visibleNotes = useMemo(() => (result?.notes || []).filter((note) => anchored.has(note.id) && !dismissed.has(note.id)), [result, anchored, dismissed])
-  const goneCount = (result?.notes || []).filter((note) => !anchored.has(note.id) && !dismissed.has(note.id)).length
-  const counts = useMemo(() => Object.fromEntries(NOTE_KINDS.map((kind) => [kind.id, visibleNotes.filter((note) => kindOf(note).id === kind.id).length])), [visibleNotes])
-  const notes = tab === 'all' ? visibleNotes : visibleNotes.filter((note) => kindOf(note).id === tab)
-  const strengths = (tab === 'all' || tab === 'strength') ? (result?.strengths || []).filter(Boolean) : []
+  const model = useMemo(() => normalizeCheck(check), [check])
+  const notes = model?.notes
+  const criteria = useMemo(() => criteriaFor(model?.rubric), [model?.rubric])
+  const open = useMemo(() => openNotes(notes, states, anchored), [notes, states, anchored])
+  const done = useMemo(() => doneNotes(notes, states), [notes, states])
+  const gone = useMemo(() => goneNotes(notes, states, anchored), [notes, states, anchored])
+  const total = open.length + done.length
+  const chips = useMemo(() => criteria.map((item) => ({ ...item, count: open.filter((note) => note.criterion === item.key).length })).filter((item) => item.count > 0), [criteria, open])
+  const activeFilter = filter === 'all' || chips.some((chip) => chip.key === filter) ? filter : 'all'
+  const shown = activeFilter === 'all' ? open : open.filter((note) => note.criterion === activeFilter)
+  const strengths = model?.strengths || []
+  const locked = Boolean(model?.notesLocked)
+  const danger = model?.safety === 'current_danger'
 
-  // Bring the selected card into view when a highlight in the text is clicked.
+  // A new check starts again from the overview.
+  const checkId = check?.id
   useEffect(() => {
-    if (!activeId) return
-    const card = listRef.current?.querySelector(`[data-note="${CSS.escape(activeId)}"]`)
-    card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    setTab('overview'); setFilter('all'); setOpenCriterion(null); setShowDone(false); setShowSummary(false)
+  }, [checkId])
+
+  // A highlight clicked in the text selects its card here.
+  useEffect(() => {
+    if (!activeId || !model) return
+    const isStrength = strengths.some((item) => item.id === activeId) && !notes.some((note) => note.id === activeId)
+    setTab(isStrength ? 'strengths' : 'notes')
+    if (!isStrength) {
+      const note = notes.find((item) => item.id === activeId)
+      if (note) setFilter((current) => (current === 'all' || current === note.criterion ? current : 'all'))
+    }
     setExpanded(true)
+    const id = window.requestAnimationFrame(() => {
+      bodyRef.current?.querySelector(`[data-note="${CSS.escape(activeId)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    })
+    return () => window.cancelAnimationFrame(id)
+    // Only the selection matters here, not every re-render of the lists.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
-  const tabs = [{ id: 'all', label: 'All', count: visibleNotes.length }, ...NOTE_KINDS.map((kind) => ({ id: kind.id, label: kind.tab, count: counts[kind.id] }))]
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'notes', label: 'Notes', count: locked ? 0 : open.length },
+    { id: 'strengths', label: 'Strengths', count: strengths.length, good: true },
+  ]
   const onTabKey = (event, index) => {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
     event.preventDefault()
@@ -76,106 +126,223 @@ function CoachPanel({
     event.currentTarget.parentElement?.querySelector(`[data-tab="${next.id}"]`)?.focus()
   }
 
-  const nextNote = (note) => {
-    const index = visibleNotes.findIndex((item) => item.id === note.id)
-    const next = visibleNotes[(index + 1) % visibleNotes.length]
-    if (next) onJump(next)
-  }
+  const showNotes = (criterion) => { setFilter(criterion); setTab('notes') }
 
-  const errorText = status.error ? t(ERROR_TEXT[status.error.code] || status.error.message || 'Coach couldn’t check this essay.') : ''
-  const activeIndex = visibleNotes.findIndex((note) => note.id === activeId)
+  const scored = Boolean(model?.scored)
+  const nearEdge = scored && nearBandEdge(model.overall)
+  const delta = scored ? deltaSince(model.overall, check?.previous_overall) : null
+  const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: model?.version2 ? open.length : 0, changed, inputChanged })
+  const blockText = block ? t(BLOCK_TEXT[block]) : ''
+  const errorCode = status.error?.code
+  const errorText = status.error ? t(ERROR_TEXT[errorCode] || status.error.message || 'Naseeb AI couldn’t check this essay.') : ''
+  const footerError = errorCode === 'notes_open' || errorCode === 'too_small_change'
+  const dailyLimit = Number(check?.daily_limit) > 0 ? Math.round(Number(check.daily_limit)) : DAILY_CHECKS
+  const checksLeft = Number.isFinite(Number(check?.checks_left)) && check?.checks_left !== null ? Math.max(0, Number(check.checks_left)) : null
+  const hint = status.loading ? '' : footerError ? errorText : notice === 'reused' ? t('Already checked — nothing changed') : blockText
+  const hintId = 'el-coach-hint'
 
-  return <aside className={`el-side-panel el-coach${expanded ? ' is-expanded' : ' is-collapsed'}`} aria-label={t('Naseeb Coach')}>
-    <button type="button" className="el-sheet-handle" aria-label={expanded ? t('Collapse coach') : t('Expand coach')} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+  return <aside className={`el-side-panel el-coach${expanded ? ' is-expanded' : ' is-collapsed'}`} aria-label={t('Naseeb AI')}>
+    <button type="button" className="el-sheet-handle" aria-label={expanded ? t('Collapse Naseeb AI') : t('Expand Naseeb AI')} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
       <span aria-hidden="true" />
     </button>
     <div className="el-coach-head">
-      {overall
-        ? <ScoreRing percent={overall.percent} label={t('Depth score {n} of 100', { n: overall.percent })} />
-        : <span className="el-coach-icon" aria-hidden="true"><Sparkles size={20} /></span>}
+      {scored
+        ? <ScoreRing percent={model.overall} label={t('Depth score {n} of 100', { n: model.overall })} />
+        : <span className="el-coach-icon" aria-hidden="true"><Sparkles size={22} /></span>}
       <div className="el-coach-title">
-        <strong>{overall ? t('Depth score') : t('Naseeb Coach')}</strong>
-        <span>{check
-          ? (visibleNotes.length === 1 ? t('Checked {when} · 1 idea', { when: relativeTime(check.created_at) }) : tp('Checked {when} · {n} ideas', visibleNotes.length, { when: relativeTime(check.created_at), n: visibleNotes.length }))
-          : t('Questions that help you go deeper')}</span>
-        {overall && <span className={`el-badge is-${overall.band.tone}`}>{t(overall.band.label)}</span>}
+        <strong>{scored ? t(headline(model.overall)) : danger ? t('Take care') : check ? t('Quick check') : t('Naseeb AI')}</strong>
+        {delta !== null && <span className="el-co-delta">{t('+{n} since last check', { n: delta })}</span>}
+        {nearEdge && <span className="el-co-near">{t('Close to the next level')}</span>}
       </div>
       <div className="el-coach-actions">
-        <button type="button" className="el-btn is-small" onClick={onCheck} disabled={status.loading} aria-busy={status.loading}>
-          <RefreshCw size={14} aria-hidden="true" className={status.loading ? 'el-spin' : ''} />{check ? t('Check again') : t('Check depth')}
-        </button>
-        <button type="button" className="el-icon-btn el-hide-sm" aria-label={t('Hide coach')} title={t('Hide coach')} onClick={onClose}><X size={18} /></button>
-        <button type="button" className="el-icon-btn el-show-sm" aria-label={expanded ? t('Collapse coach') : t('Expand coach')} onClick={() => setExpanded((value) => !value)}>
+        <button type="button" className="el-icon-btn el-hide-sm" aria-label={t('Hide Naseeb AI')} title={t('Hide Naseeb AI')} onClick={onClose}><X size={18} /></button>
+        <button type="button" className="el-icon-btn el-show-sm" aria-label={expanded ? t('Collapse Naseeb AI') : t('Expand Naseeb AI')} onClick={() => setExpanded((value) => !value)}>
           {expanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
         </button>
       </div>
     </div>
 
-    <div className="el-coach-body">
+    {model && !danger && !status.loading && <div role="tablist" aria-label={t('Naseeb AI')} className="el-tabs">
+      {tabs.map((item, index) => <button key={item.id} type="button" role="tab" data-tab={item.id} id={`el-tab-${item.id}`}
+        aria-selected={tab === item.id} aria-controls="el-coach-panel" tabIndex={tab === item.id ? 0 : -1}
+        className={`el-tab${tab === item.id ? ' is-on' : ''}`} onClick={() => setTab(item.id)} onKeyDown={(event) => onTabKey(event, index)}>
+        {t(item.label)}{item.count > 0 && <span className={`el-tab-count${item.good ? ' is-good' : ''}`}>{item.count}</span>}
+      </button>)}
+    </div>}
+
+    <div className="el-coach-body" ref={bodyRef} id="el-coach-panel" role={model ? 'tabpanel' : undefined} aria-labelledby={model ? `el-tab-${tab}` : undefined}>
       {status.loading && <div className="el-coach-loading" role="status">
-        <span className="el-shimmer" /><span className="el-shimmer is-short" /><span className="el-shimmer" />
-        <p>{t('Coach is reading your essay. This can take up to half a minute.')}</p>
+        <span className="el-shimmer is-big" /><span className="el-shimmer" /><span className="el-shimmer is-short" />
+        <p>{t('Naseeb AI is reading your essay. This can take up to a minute or two.')}</p>
       </div>}
-      {errorText && !status.loading && <div className="el-alert is-error" role="alert">{errorText}</div>}
+      {errorText && !footerError && !status.loading && <div className="el-alert is-error" role="alert">{errorText}</div>}
 
       {!check && !status.loading && <div className="el-coach-empty">
         <MessageCircleQuestion size={28} aria-hidden="true" />
         <strong>{t('How deep does your essay go?')}</strong>
-        <p>{t('Coach reads your draft and asks questions where a reader will want more: reflection, specific details, your voice and how well you answer the question. It never writes for you.')}</p>
+        <p>{t('Naseeb AI reads your draft and asks questions where a reader will want more: reflection, specific details, your voice and how well you answer the question.')}</p>
+        <p className="el-co-never">{t('Naseeb AI asks questions. It never writes your essay for you.')}</p>
         {words < 80 && <p className="el-small">{t('Tip: it works best once you have a paragraph or two.')}</p>}
       </div>}
 
-      {result && !status.loading && <>
+      {model && !status.loading && <>
         {coachSource(check) === 'rules' && <p className="el-alert is-info el-coach-source" role="note">
           <Info size={15} aria-hidden="true" />
-          <span><strong>{t('Quick check (built-in rules)')}</strong> {t('AI feedback isn’t available right now, so these ideas come from simple writing checks. They can still help.')}</span>
+          <span>{t('AI feedback isn’t available right now, so these ideas come from simple writing checks. They can still help.')}</span>
         </p>}
-        <ScoreBars scores={result.scores} />
-        {result.summary && <div className="el-coach-summary">
-          <p className={showSummary ? '' : 'is-clamped'}>{result.summary}</p>
-          {result.summary.length > 140 && <button type="button" className="el-link" onClick={() => setShowSummary((value) => !value)}>{showSummary ? t('Show less') : t('Read more')}</button>}
-        </div>}
 
-        <div role="tablist" aria-label={t('Coach notes')} className="el-tabs">
-          {tabs.map((item, index) => <button key={item.id} type="button" role="tab" data-tab={item.id} id={`el-tab-${item.id}`}
-            aria-selected={tab === item.id} aria-controls="el-coach-list" tabIndex={tab === item.id ? 0 : -1}
-            className={`el-tab is-${item.id}${tab === item.id ? ' is-on' : ''}`} onClick={() => setTab(item.id)} onKeyDown={(event) => onTabKey(event, index)}>
-            {t(item.label)} <span className="el-tab-count">{item.count}</span>
-          </button>)}
-        </div>
+        {danger && <section className="el-co-card el-co-safety" role="note">
+          <HeartHandshake size={22} aria-hidden="true" />
+          <strong>{t('You are not alone in this')}</strong>
+          <p>{t('What you wrote sounds heavy, so Naseeb AI has not scored this essay. Please talk to your counselor or to someone you trust. Telling them is your choice, and you can go at your own pace.')}</p>
+          {model.helpline && <p className="el-co-helpline">{t('Helpline')}: <b>{model.helpline}</b></p>}
+        </section>}
 
-        <div id="el-coach-list" role="tabpanel" aria-labelledby={`el-tab-${tab}`} className="el-notes" ref={listRef}>
-          {notes.map((note) => {
-            const kind = kindOf(note)
-            const open = note.id === activeId
-            return <article key={note.id} data-note={note.id} className={`el-note is-${kind.id}${open ? ' is-open' : ''}`}>
-              <button type="button" className="el-note-head" aria-expanded={open} onClick={() => onSelect(open ? null : note)}>
-                <span className="el-dot" aria-hidden="true" />
-                <span className="el-note-kind">{t(kind.label)}</span>
-                <span className="el-note-title">{note.question}</span>
+        {!danger && tab === 'overview' && <>
+          {scored && model.overall <= 50 && <section className="el-co-card el-co-bigpicture">
+            <h3>{t('Big picture first')}</h3>
+            {model.summary && <p>{model.summary}</p>}
+            {model.suggestions.length > 0 && <ol className="el-co-steps">
+              {model.suggestions.map((text, index) => <li key={index}><span className="el-co-step-n" aria-hidden="true">{index + 1}</span><span>{text}</span></li>)}
+            </ol>}
+          </section>}
+
+          {model.safety === 'past_hardship' && <p className="el-alert is-info el-co-support" role="note">
+            <HeartHandshake size={15} aria-hidden="true" />
+            <span>{t('If writing about this was hard, your counselor is there to talk, whenever you want.')}</span>
+          </p>}
+
+          {model.fitDefault && <p className="el-alert is-info el-co-support" role="note">
+            <Info size={15} aria-hidden="true" />
+            <span>{t('No question was given, so fit to the question counts as Solid (3). Add the school’s question to have it judged.')}</span>
+          </p>}
+
+          {Object.keys(model.scores).length > 0 && <section className="el-co-card">
+            <h3>{t('Five criteria')}</h3>
+            <ul className="el-co-crit">
+              {criteria.map(({ key, label }) => {
+                const value = Number(model.scores[key]) || 0
+                const word = levelWord(value)
+                const count = open.filter((note) => note.criterion === key).length
+                const isOpen = openCriterion === key
+                return <li key={key} className={`is-${key}`}>
+                  <div className="el-co-crit-row">
+                    <button type="button" className="el-co-crit-main" aria-expanded={isOpen} onClick={() => setOpenCriterion(isOpen ? null : key)}>
+                      <span className="el-co-crit-name">{t(label)}</span>
+                      <Meter value={value} criterion={key} label={word ? t('{label}: {value} of 4, {band}', { label: t(label), value, band: t(word) }) : t(label)} />
+                      <span className="el-co-crit-level">{word ? t(word) : ''}</span>
+                      <ChevronDown size={16} aria-hidden="true" className="el-co-crit-chev" />
+                    </button>
+                    {count > 0 && !locked && <button type="button" className="el-co-crit-count" onClick={() => showNotes(key)}>{noteCount(count)}</button>}
+                  </div>
+                  {isOpen && <p className="el-co-crit-explain">{t(explainFor(model.rubric, key, EXPLAIN))}</p>}
+                </li>
+              })}
+            </ul>
+          </section>}
+
+          {!(scored && model.overall <= 50) && model.summary && <section className="el-co-card">
+            <h3>{t('Summary')}</h3>
+            <p className={`el-co-summary${showSummary ? '' : ' is-clamped'}`}>{model.summary}</p>
+            {model.summary.length > 140 && <button type="button" className="el-link" onClick={() => setShowSummary((value) => !value)}>{showSummary ? t('Show less') : t('Read more')}</button>}
+          </section>}
+        </>}
+
+        {!danger && tab === 'notes' && (locked
+          ? <div className="el-co-card el-co-locked">
+            <span className="el-coach-icon" aria-hidden="true"><Lock size={22} /></span>
+            <strong>{t('Notes unlock at 51')}</strong>
+            <p>{t('Work on the big picture first.')}</p>
+          </div>
+          : <>
+            {chips.length > 0 && <div className="el-co-chips" role="group" aria-label={t('Filter notes')}>
+              <button type="button" className={`el-co-chip${activeFilter === 'all' ? ' is-on' : ''}`} aria-pressed={activeFilter === 'all'} onClick={() => setFilter('all')}>
+                {t('All')} <b>{open.length}</b>
               </button>
-              {open && <div className="el-note-body">
-                <blockquote>“{note.quote}”</blockquote>
-                <div className="el-ask"><strong>{kind.id === 'strength' ? t('Why it works') : t('Ask yourself')}</strong><span>{note.question}</span></div>
-                {note.why && <p className="el-why"><Info size={14} aria-hidden="true" />{note.why}</p>}
-                <div className="el-note-actions">
-                  <button type="button" className="el-btn is-small is-primary" onClick={() => onJump(note)}>{kind.id === 'strength' ? t('Show me') : t('Jump to it')}</button>
-                  <button type="button" className="el-btn is-small" onClick={() => onDismiss(note)}>{kind.id === 'strength' ? t('Got it') : t('Dismiss')}</button>
-                  {visibleNotes.length > 1 && <button type="button" className="el-btn is-small is-ghost el-next" onClick={() => nextNote(note)}>
-                    {t('Next idea')} <span className="el-small">{activeIndex + 1}/{visibleNotes.length}</span>
-                  </button>}
-                </div>
-              </div>}
-            </article>
+              {chips.map((chip) => <button key={chip.key} type="button" className={`el-co-chip is-${chip.key}${activeFilter === chip.key ? ' is-on' : ''}`} aria-pressed={activeFilter === chip.key} onClick={() => setFilter(chip.key)}>
+                <i className="el-co-chip-dot" aria-hidden="true" />{t(chip.label)} <b>{chip.count}</b>
+              </button>)}
+            </div>}
+            {total > 0 && <div className="el-co-progress-note">
+              <span className="el-co-bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done.length} aria-label={t('{done} of {total} done', { done: done.length, total })}>
+                <span style={{ width: `${(done.length / total) * 100}%` }} />
+              </span>
+              <span className="el-small">{t('{done} of {total} done', { done: done.length, total })}</span>
+            </div>}
+
+            <div className="el-notes">
+              {shown.map((note, position) => {
+                const snippet = note.question.split(/\s+/).slice(0, 6).join(' ')
+                const active = note.id === activeId
+                return <article key={note.id} data-note={note.id} className={`el-note is-${note.criterion}${active ? ' is-active' : ''}`} onClick={() => onJump(note)}>
+                  <div className="el-note-top">
+                    <CriterionIcon criterion={note.criterion} />
+                    {note.priority && <span className="el-co-flag">{t('Priority')}</span>}
+                    <span className="el-co-sp" />
+                    <button type="button" className="el-co-corner is-ok" aria-label={t('Mark note {n} as done: {text}', { n: position + 1, text: snippet })} title={t('Mark as done')}
+                      onClick={(event) => { event.stopPropagation(); onSetState(note, 'done') }}><Check size={15} aria-hidden="true" /></button>
+                    <button type="button" className="el-co-corner" aria-label={t('Mark note {n} as not useful: {text}', { n: position + 1, text: snippet })} title={t('Not useful')}
+                      onClick={(event) => { event.stopPropagation(); onSetState(note, 'dismissed') }}><X size={15} aria-hidden="true" /></button>
+                  </div>
+                  <button type="button" className="el-note-main" aria-pressed={active}>
+                    <span className="el-note-q">{note.question}</span>
+                    {note.context && <span className="el-note-ctx">{note.context}</span>}
+                  </button>
+                </article>
+              })}
+              {!shown.length && <p className="el-empty">{open.length ? t('Nothing in this group.') : t('All notes done.')}</p>}
+            </div>
+
+            {done.length > 0 && <div className="el-co-done">
+              <button type="button" className="el-co-done-toggle" aria-expanded={showDone} onClick={() => setShowDone((value) => !value)}>
+                <Check size={15} aria-hidden="true" />{t('Done ({n})', { n: done.length })}
+                <ChevronDown size={15} aria-hidden="true" className="el-co-crit-chev" />
+              </button>
+              {showDone && <ul>
+                {done.map((note) => <li key={note.id}>
+                  <span title={note.question}>{note.question}</span>
+                  <button type="button" className="el-link" onClick={() => onSetState(note, 'open')}><Undo2 size={13} aria-hidden="true" />{t('Undo')}</button>
+                </li>)}
+              </ul>}
+            </div>}
+            {gone.length > 0 && <p className="el-small el-gone">{gone.length === 1 ? t('1 idea no longer matches your text') : tp('{n} ideas no longer match your text', gone.length, { n: gone.length })}</p>}
+          </>)}
+
+        {!danger && tab === 'strengths' && <div className="el-notes">
+          {strengths.map((item) => {
+            const jumpable = Boolean(item.quote) && anchored.has(item.id)
+            const body = <>
+              <Star size={15} aria-hidden="true" className="el-co-kic" />
+              <span>{item.text}</span>
+            </>
+            return jumpable
+              ? <button key={item.id} type="button" data-note={item.id} className={`el-strength-card is-link${item.id === activeId ? ' is-active' : ''}`} onClick={() => onJump({ id: item.id })}>{body}</button>
+              : <div key={item.id} data-note={item.id} className="el-strength-card">{body}</div>
           })}
-          {strengths.map((text, index) => <div key={`s${index}`} className="el-strength-card"><span className="el-dot" aria-hidden="true" /><span>{text}</span></div>)}
-          {!notes.length && !strengths.length && <p className="el-empty">{visibleNotes.length || tab !== 'all' ? t('Nothing in this group.') : t('No open ideas. Nice work — check again after your next revision.')}</p>}
-          {goneCount > 0 && <p className="el-small el-gone">{goneCount === 1 ? t('1 idea disappeared because you changed that sentence.') : tp('{n} ideas disappeared because you changed those sentences.', goneCount, { n: goneCount })}</p>}
-        </div>
+          {!strengths.length && <p className="el-empty">{t('Nothing in this group.')}</p>}
+        </div>}
       </>}
     </div>
 
-    <div className="el-coach-foot"><Info size={15} aria-hidden="true" /><span>{t('Coach asks questions. It never writes your essay for you.')}</span></div>
+    <div className="el-coach-foot">
+      <div className="el-co-foot-row">
+        <div className="el-co-foot-info">
+          {checksLeft !== null && <span className="el-co-left" title={t('Re-checking unchanged text is free')}>
+            <span className="el-co-pips" aria-hidden="true">
+              {Array.from({ length: dailyLimit }, (_, index) => <i key={index} className={index < Math.min(dailyLimit, checksLeft) ? '' : 'is-used'} />)}
+            </span>
+            {t('{n} left today', { n: checksLeft })}
+          </span>}
+          {check && <span className={`el-co-state${changed || inputChanged ? ' is-changed' : ''}`}><i aria-hidden="true" />{inputChanged ? t('Question changed') : changed ? t('Text changed') : t('Up to date')}</span>}
+        </div>
+        <span className="el-co-check-wrap" title={blockText || undefined}>
+          <button type="button" className="el-btn is-primary" onClick={onCheck} disabled={status.loading || Boolean(block)} aria-busy={status.loading} aria-describedby={hint ? hintId : undefined}>
+            <RefreshCw size={14} aria-hidden="true" className={status.loading ? 'el-spin' : ''} />{check ? t('Check again') : t('Check depth')}
+          </button>
+        </span>
+      </div>
+      {hint && <p id={hintId} className={`el-co-foot-hint${footerError ? ' is-error' : ''}`} role={footerError ? 'alert' : 'status'}>{hint}</p>}
+    </div>
   </aside>
 }
 

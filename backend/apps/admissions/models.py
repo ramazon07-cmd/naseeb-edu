@@ -2021,6 +2021,14 @@ class EssayDepthCheck(models.Model):
     save_seq = models.PositiveIntegerField()
     result = models.JSONField(default=dict)
     model = models.CharField(max_length=120)
+    # sha256 of the folded text that was checked (see coach.text_fingerprint); blank on checks from before v2.
+    text_fingerprint = models.CharField(max_length=64, blank=True)
+    # sha256 of essay type, prompt, rubric text and model: a saved check is reused only when this matches too.
+    input_hash = models.CharField(max_length=64, blank=True)
+    # 0-100 from the criterion scores; null when unscored and on checks from before v2.
+    overall = models.PositiveSmallIntegerField(null=True, blank=True)
+    # {note_id: "done" | "dismissed"}; an open note has no entry.
+    note_states = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

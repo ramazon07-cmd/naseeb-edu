@@ -88,15 +88,28 @@ AI_RECOMMENDATION_TIMEOUT_SECONDS = config('AI_RECOMMENDATION_TIMEOUT_SECONDS', 
 # Essay Lab. The coach reuses the AI gateway credentials above.
 ESSAY_COACH_MODEL = config('ESSAY_COACH_MODEL', default=AI_ASSISTANT_MODEL).strip()
 ESSAY_COACH_TIMEOUT_SECONDS = config('ESSAY_COACH_TIMEOUT_SECONDS', default=40, cast=int)
-ESSAY_COACH_MAX_OUTPUT_TOKENS = config('ESSAY_COACH_MAX_OUTPUT_TOKENS', default=1800, cast=int)
+# Ceiling for one call; step 1 asks for about 500 and step 2 for about 70 per note + 150.
+# Both calls of one check together; step 2 gets only the time left. Set the client timeout above it.
+ESSAY_COACH_TOTAL_SECONDS = config('ESSAY_COACH_TOTAL_SECONDS', default=90, cast=int)
+ESSAY_COACH_MAX_OUTPUT_TOKENS = config('ESSAY_COACH_MAX_OUTPUT_TOKENS', default=2200, cast=int)
+# Sent as `reasoning_effort` (empty = not sent). Dropped for one retry if the gateway rejects it.
+ESSAY_COACH_REASONING_EFFORT = config('ESSAY_COACH_REASONING_EFFORT', default='minimal').strip()
+# A re-check needs at least this many changed words against the last checked text.
+ESSAY_COACH_MIN_CHANGED_WORDS = config('ESSAY_COACH_MIN_CHANGED_WORDS', default=3, cast=int)
 ESSAY_COACH_MAX_INPUT_CHARS = config('ESSAY_COACH_MAX_INPUT_CHARS', default=24000, cast=int)
 # The platform-wide coach budget is required (0 = AI checks off); school and
 # user caps use 0 = no cap.
 ESSAY_COACH_DAILY_BUDGET = config('ESSAY_COACH_DAILY_BUDGET', default=5000, cast=int)
 ESSAY_COACH_SCHOOL_DAILY_BUDGET = config('ESSAY_COACH_SCHOOL_DAILY_BUDGET', default=1000, cast=int)
-ESSAY_COACH_USER_DAILY_LIMIT = config('ESSAY_COACH_USER_DAILY_LIMIT', default=40, cast=int)
+ESSAY_COACH_USER_DAILY_LIMIT = config('ESSAY_COACH_USER_DAILY_LIMIT', default=5, cast=int)
 ESSAY_COACH_MIN_INTERVAL_SECONDS = config('ESSAY_COACH_MIN_INTERVAL_SECONDS', default=15, cast=int)
 ESSAY_COACH_HOURLY_LIMIT = config('ESSAY_COACH_HOURLY_LIMIT', default=120, cast=int)
+# Cheap guard in front of the re-check rules (reused and refused re-checks never reach the AI): requests per minute per user.
+ESSAY_COACH_RECHECK_PER_MINUTE = config('ESSAY_COACH_RECHECK_PER_MINUTE', default=20, cast=int)
+# A check that finds current danger in a personal statement is not scored. The helpline text is shown to the
+# student as written (empty = no number is shown). The first N such checks per user per day are free.
+ESSAY_SAFETY_HELPLINE = config('ESSAY_SAFETY_HELPLINE', default='').strip()
+ESSAY_SAFETY_FREE_PER_DAY = config('ESSAY_SAFETY_FREE_PER_DAY', default=2, cast=int)
 # Recommendation-letter suggestions for counselors use the assistant's gateway
 # and models. The platform-wide budget is required (0 = AI off; profile-based
 # suggestions remain); school and user caps use 0 = no cap.

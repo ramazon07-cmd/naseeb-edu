@@ -41,6 +41,7 @@ import { createPoller } from '../lib/poller.js'
 import { loadFontsIn } from './fonts.js'
 import { errorCode, essayLabApi, essayTypeName } from './essayLabApi.js'
 import { deriveText, docFromText } from './docText.js'
+import { STRENGTHS, applyNoteState, inputChangedSince, mergeNoteStates, normalizeCheck, openNotes, serverNotice, textFingerprint } from './coachModel.js'
 import { checkpointDate, relativeTime, whenWritten } from './format.js'
 import {
   createSessionRegistry, createTabSession, discardLocalDraft, keepLocalDraft, saveProblem, syncTabs, unsavedTabs,
@@ -388,7 +389,7 @@ function DocumentEditor({ initial, user, folders, notify, initialFocus, initialP
   const saveBadge = elsewhere.length
     ? <UnsavedTabsBadge count={unsaved.length} name={titleOf(elsewhere[0].id)} onOpen={() => openTab(elsewhere[0].id)} compact={phone} />
     : <SaveBadge state={sessionState} onRetry={() => session?.queue.retryNow()} compact={phone} iconOnly={phone} />
-  const coachLabel = panel === 'coach' ? t('Hide coach') : coach.checked ? t('Coach') : t('Check depth')
+  const coachLabel = panel === 'coach' ? t('Hide Naseeb AI') : coach.checked ? t('Naseeb AI') : t('Check depth')
   const coachIdeas = panel !== 'coach' && coach.count > 0 ? (coach.count === 1 ? t('1 idea') : tp('{n} ideas', coach.count, { n: coach.count })) : null
   const commentsLabel = panel === 'comments' ? t('Hide comments') : t('Comments')
   const moreItems = [
@@ -497,7 +498,11 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   const [checkStatus, setCheckStatus] = useState({ loading: false, error: null })
   const [anchored, setAnchored] = useState(() => new Set())
   const [activeNoteId, setActiveNoteId] = useState(null)
-  const [dismissed, setDismissed] = useState(() => new Set())
+  const [noteStates, setNoteStates] = useState({}) // check.note_states: { note_id: 'done' | 'dismissed' }
+  const [liveFingerprint, setLiveFingerprint] = useState(null)
+  const [coachNotice, setCoachNotice] = useState(null)
+  const [currentInputHash, setCurrentInputHash] = useState(null)
+  const [liveText, setLiveText] = useState(null)
   const [historyVersion, setHistoryVersion] = useState(0)
   const [preview, setPreview] = useState(null) // { checkpoint, doc }
   const [welcome, setWelcome] = useState(null)
@@ -518,6 +523,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   const report = useCallback((current) => {
     const derived = deriveText(current.getJSON())
     onStats({ tab: session.id, ...derived })
+    setLiveText(derived.content)
     const headings = []
     current.state.doc.forEach((node, offset) => {
       const kind = node.type.name === 'heading' ? `h${node.attrs.level}` : node.type.name === 'title' ? 'title' : null
@@ -616,24 +622,112 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     essayLabApi.latestDepthCheck(essay.id, session.id).then((latest) => {
       if (!alive || !latest?.result) return
       setCheck(latest)
-      setDismissed(readDismissed(latest.id))
+      setNoteStates(latest.note_states || {})
+      setCurrentInputHash(latest.current_input_hash || null)
     }, () => {})
     return () => { alive = false }
   }, [essay.id, session.id])
 
+  const coachModel = useMemo(() => normalizeCheck(check), [check])
+
+  // Underlined sentences: open notes (in their criterion's colour) and strengths with a quote.
   useEffect(() => {
     if (!editor) return
-    const notes = (check?.result?.notes || []).filter((note) => note?.id && note.quote && !dismissed.has(note.id))
-    setCoachNotes(editor, notes, activeNoteIdRef.current)
-  }, [editor, check, dismissed, activeNoteIdRef])
+    const marks = []
+    for (const note of coachModel?.notes || []) {
+      if (note.quote && noteStates[note.id] !== 'done' && noteStates[note.id] !== 'dismissed') marks.push({ id: note.id, quote: note.quote, criterion: note.criterion })
+    }
+    for (const item of coachModel?.strengths || []) {
+      if (item.quote) marks.push({ id: item.id, quote: item.quote, criterion: STRENGTHS })
+    }
+    setCoachNotes(editor, marks, activeNoteIdRef.current)
+  }, [editor, coachModel, noteStates, activeNoteIdRef])
 
   useEffect(() => { if (editor) setActiveNote(editor, activeNoteId) }, [editor, activeNoteId])
 
-  const coachCount = (check?.result?.notes || []).filter((note) => anchored.has(note.id) && !dismissed.has(note.id)).length
+  const coachCount = openNotes(coachModel?.notes, noteStates, anchored).length
   useEffect(() => { onCoach({ count: coachCount, checked: Boolean(check) }) }, [coachCount, check, onCoach])
+
+  // "Text changed": the fingerprint of the current text (same rule as the server) vs the check's.
+  // Computed locally after the debounced stats; no request.
+  useEffect(() => {
+    if (liveText === null) return undefined
+    let alive = true
+    textFingerprint(liveText).then((value) => { if (alive) setLiveFingerprint(value) }, () => {})
+    return () => { alive = false }
+  }, [liveText])
+  const textChanged = Boolean(check) && liveFingerprint !== null && (!check.text_fingerprint || liveFingerprint !== check.text_fingerprint)
+
+  // A 409 shown in the footer goes away once the student acts on it.
+  useEffect(() => {
+    setCheckStatus((previous) => (previous.error && (previous.error.code === 'notes_open' || previous.error.code === 'too_small_change') ? { loading: false, error: null } : previous))
+  }, [liveFingerprint, noteStates])
+
+  // A note whose sentence can't be found (changed, or inside a tracked suggestion) is resolved:
+  // tell the server once per check+note so "Check again" is not blocked by it. A 'gone' note whose
+  // sentence is back (undo, restore) is reopened once. Only while the live doc is shown and synced.
+  const goneSent = useRef(new Map()) // key -> tries
+  const reopenSent = useRef(new Set())
+  const [goneRetry, setGoneRetry] = useState(0)
+  const liveDoc = !preview && !state.unsynced
+  useEffect(() => {
+    if (!editor || !check?.id || !coachModel || !liveDoc) return undefined
+    const checkId = check.id
+    const timer = window.setTimeout(() => {
+      for (const note of coachModel.notes) {
+        const key = `${checkId}:${note.id}`
+        const mark = noteStates[note.id]
+        if (mark === 'gone' && anchored.has(note.id)) {
+          if (reopenSent.current.has(key)) continue
+          reopenSent.current.add(key)
+          goneSent.current.delete(key)
+          setNoteStates((previous) => applyNoteState(previous, note.id, 'open'))
+          essayLabApi.setDepthNoteState(essay.id, checkId, note.id, 'open').catch((error) => {
+            console.warn('Coach note state not saved', error)
+            reopenSent.current.delete(key)
+          })
+          continue
+        }
+        if (mark || anchored.has(note.id)) continue
+        const tries = goneSent.current.get(key) ?? 0
+        if (tries < 0 || tries >= 3) continue
+        goneSent.current.set(key, -1) // in flight
+        reopenSent.current.delete(key)
+        setNoteStates((previous) => (previous[note.id] ? previous : applyNoteState(previous, note.id, 'gone')))
+        essayLabApi.setDepthNoteState(essay.id, checkId, note.id, 'gone').then(() => {
+          goneSent.current.set(key, 99) // saved
+        }, (error) => {
+          console.warn('Coach note state not saved', error)
+          goneSent.current.set(key, tries + 1)
+          setNoteStates((previous) => (previous[note.id] === 'gone' ? applyNoteState(previous, note.id, 'open') : previous))
+          window.setTimeout(() => setGoneRetry((value) => value + 1), 3000 * (tries + 1))
+        })
+      }
+    }, 1200)
+    return () => window.clearTimeout(timer)
+  }, [editor, check, coachModel, noteStates, anchored, essay.id, liveDoc, goneRetry])
+
+  // The question, type or word limit was saved with a new value: one GET for a fresh current_input_hash.
+  const inputKey = `${essay.prompt ?? ''}|${essay.essay_type ?? ''}|${essay.word_limit ?? ''}`
+  const lastInputKey = useRef(inputKey)
+  useEffect(() => {
+    if (lastInputKey.current === inputKey) return undefined
+    lastInputKey.current = inputKey
+    if (!check?.id) return undefined
+    let alive = true
+    essayLabApi.latestDepthCheck(essay.id, session.id).then((latest) => {
+      if (alive && latest?.current_input_hash) setCurrentInputHash(latest.current_input_hash)
+    }, () => {})
+    return () => { alive = false }
+  }, [inputKey, check?.id, essay.id, session.id])
+  const inputChanged = inputChangedSince(check, currentInputHash)
+
+  const noticeTimer = useRef(null)
+  useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
   const runCheck = useCallback(async () => {
     setCheckStatus({ loading: true, error: null })
+    setCoachNotice(null)
     setPanel('coach')
     try {
       let result
@@ -643,20 +737,35 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
           result = await essayLabApi.depthCheck(essay.id, session.id, seq)
         } catch (error) {
           // "stale": a save landed in between (another tab, or a follow-up) — save and retry once.
-          if (error?.status !== 409 || attempt === 1) throw error
+          if (error?.status !== 409 || attempt === 1 || serverNotice(error)) throw error
         }
       }
       setCheck(result)
-      setDismissed(readDismissed(result.id))
+      setNoteStates(result.note_states || {})
+      setCurrentInputHash(result.current_input_hash || null)
       setActiveNoteId(null)
       setCheckStatus({ loading: false, error: null })
-      setHistoryVersion((value) => value + 1) // the check made a checkpoint
+      if (result.reused) {
+        setCoachNotice('reused') // same text: nothing was charged and nothing changed
+        window.clearTimeout(noticeTimer.current)
+        noticeTimer.current = window.setTimeout(() => setCoachNotice(null), 4000)
+      } else {
+        setHistoryVersion((value) => value + 1) // the check made a checkpoint
+      }
     } catch (error) {
-      setCheckStatus({ loading: false, error: { code: errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message } })
+      if (serverNotice(error) === 'notes_open') {
+        // Show the server's view of the notes instead of a dead end (one GET).
+        goneSent.current.clear()
+        reopenSent.current.clear()
+        essayLabApi.latestDepthCheck(essay.id, session.id).then((latest) => {
+          if (!latest?.result) return
+          setCheck(latest)
+          setNoteStates((previous) => mergeNoteStates(latest.note_states, previous, inflightNotes.current))
+        }, () => {})
+      }
+      setCheckStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message } })
     }
   }, [queue, essay.id, session.id, setPanel])
-
-  const selectNote = useCallback((note) => setActiveNoteId(note?.id ?? null), [])
 
   const jumpToNote = useCallback((note) => {
     const current = editorRef.current
@@ -668,15 +777,28 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     window.requestAnimationFrame(() => scrollToPos(current, canvasRef.current, range.from))
   }, [])
 
-  const dismissNote = useCallback((note) => {
-    setDismissed((previous) => {
-      const next = new Set(previous)
-      next.add(note.id)
-      if (check?.id) writeDismissed(check.id, next)
-      return next
+  // state: 'done' | 'dismissed' | 'open'. Applied at once, saved on the server, rolled back if that fails.
+  const noteStatesRef = useLatest(noteStates)
+  const checkRef = useLatest(check)
+  const tabNotifyRef = useLatest(notify)
+  const inflightNotes = useRef(new Set())
+  const setNoteState = useCallback((note, state) => {
+    const checkId = checkRef.current?.id
+    if (!checkId || inflightNotes.current.has(note.id)) return // one save per note at a time
+    const before = noteStatesRef.current[note.id] || 'open'
+    if (before === state) return
+    setNoteStates((previous) => applyNoteState(previous, note.id, state))
+    if (state !== 'open') setActiveNoteId((current) => (current === note.id ? null : current))
+    inflightNotes.current.add(note.id)
+    essayLabApi.setDepthNoteState(essay.id, checkId, note.id, state).then(() => {
+      inflightNotes.current.delete(note.id)
+    }, () => {
+      inflightNotes.current.delete(note.id)
+      if (checkRef.current?.id !== checkId) return
+      setNoteStates((previous) => applyNoteState(previous, note.id, before))
+      tabNotifyRef.current(t('Could not save that. Try again.'), 'error')
     })
-    setActiveNoteId((current) => (current === note.id ? null : current))
-  }, [check])
+  }, [essay.id, checkRef, noteStatesRef, tabNotifyRef])
 
   const closePanel = useCallback(() => setPanel(null), [setPanel])
 
@@ -1003,21 +1125,10 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     {panel === 'comments' && !focusMode && <CommentsPanel readOnly={(feedback.status ?? essay.status) === 'approved'} items={items} activeKey={activeItem ? `${activeItem.kind}:${activeItem.id}` : null}
       busyKey={feedbackBusy} acceptAll={allIds} loaded={feedback.loaded} error={feedback.error}
       onSelect={selectItem} onDecide={decide} onReply={replyToThread} onRetry={() => poller.current?.poke()} onClose={closeComments} />}
-    {panel === 'coach' && !focusMode && <CoachPanel check={check} status={checkStatus} anchored={anchored} activeId={activeNoteId} dismissed={dismissed}
-      words={tabWords}
-      onCheck={runCheck} onSelect={selectNote} onJump={jumpToNote} onDismiss={dismissNote} onClose={closePanel} />}
+    {panel === 'coach' && !focusMode && <CoachPanel check={check} status={checkStatus} anchored={anchored} activeId={activeNoteId} states={noteStates}
+      changed={textChanged} inputChanged={inputChanged} notice={coachNotice} words={tabWords}
+      onCheck={runCheck} onJump={jumpToNote} onSetState={setNoteState} onClose={closePanel} />}
   </>
-}
-
-const DISMISSED_PREFIX = 'naseeb-essay-coach-dismissed:'
-
-function readDismissed(checkId) {
-  if (!checkId) return new Set()
-  try { return new Set(JSON.parse(localStorage.getItem(DISMISSED_PREFIX + checkId) || '[]')) } catch { return new Set() }
-}
-
-function writeDismissed(checkId, ids) {
-  try { localStorage.setItem(DISMISSED_PREFIX + checkId, JSON.stringify([...ids])) } catch { /* per-device convenience only */ }
 }
 
 function paragraphNumber(doc, pos) {

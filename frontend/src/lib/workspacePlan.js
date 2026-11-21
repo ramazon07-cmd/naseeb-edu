@@ -2,7 +2,7 @@
 export const SEATS = [['max_counselors', 'Counselors'], ['max_students', 'Students'], ['max_teachers', 'Teachers']];
 
 // Plan feature flags in display order (backend PLAN_FEATURES).
-export const PLAN_FEATURES = [['ai_assistant', 'AI assistant'], ['essay_coach', 'Essay coach'], ['parent_portal', 'Parent portal'], ['reports', 'Reports'], ['organization_accounts', 'School logins']];
+export const PLAN_FEATURES = [['ai_assistant', 'AI assistant'], ['essay_coach', 'Naseeb AI essay feedback'], ['parent_portal', 'Parent portal'], ['reports', 'Reports'], ['organization_accounts', 'School logins']];
 
 // Plans a workspace can be put on: its current plan (even a retired one) and
 // the active plans made for its kind of workspace.
