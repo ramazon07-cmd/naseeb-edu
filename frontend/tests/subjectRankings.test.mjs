@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const lib = await import('../src/lib/subjectRankings.js');
-const { FALLBACK_SUBJECT, SUBJECT_PAGE_SIZES, appendRows, isTopRank, presetSubject, publishedRank, scoreText, subjectLimit, subjectRankingsPath, subjectRankingsQuery, weightText } = lib;
+const { FALLBACK_SUBJECT, canLoadMore, SUBJECT_PAGE_SIZES, appendRows, isTopRank, presetSubject, publishedRank, scoreText, subjectLimit, subjectRankingsPath, subjectRankingsQuery, weightText } = lib;
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const query = (options) => Object.fromEntries(new URLSearchParams(subjectRankingsQuery(options)));
@@ -100,4 +100,36 @@ test('the build has a separate Subject rankings chunk that no start-up chunk con
   for (const name of files.filter((file) => /^(index|react-vendor|icons)-.*\.js$/.test(file))) {
     assert.ok(!readFileSync(new URL(name, assets), 'utf8').includes('subject-rankings'), `${name} must not carry the Subject rankings request`);
   }
+});
+
+test('"Show more" only pages the query that produced the rows on screen', () => {
+  const loaded = { query: 'subject=LAW01&limit=10', nextOffset: 10, loading: false, loadingMore: false };
+  assert.ok(canLoadMore(loaded, 'subject=LAW01&limit=10'));
+  // A filter changed and its first page failed: the old rows and offset must not page the new query.
+  assert.ok(!canLoadMore(loaded, 'subject=LAW01&country=France&limit=10'));
+  assert.ok(!canLoadMore({ ...loaded, nextOffset: null }, loaded.query));
+  assert.ok(!canLoadMore({ ...loaded, loading: true }, loaded.query));
+  assert.ok(!canLoadMore({ ...loaded, loadingMore: true }, loaded.query));
+  const hook = read('../src/hooks/useSubjectRankings.js');
+  assert.match(hook, /canLoadMore\(state, query\)/);
+  assert.match(hook, /previous\.query === query \? previous : \{ \.\.\.previous, rows: \[\], count: 0, nextOffset: null \}/);
+});
+
+test('Retry after a failed chunk load remounts the child so it renders the new lazy view', () => {
+  const loader = read('../src/components/SubjectRankingsLoader.jsx');
+  assert.match(loader, /attempt: state\.attempt \+ 1/);
+  assert.match(loader, /<Fragment key=\{this\.state\.attempt\}>/);
+  assert.match(loader, /View = lazy\(load\)/);
+  // The child reads the module-level lazy type at render time instead of holding the rejected one in its element.
+  assert.match(loader, /function CurrentView\(props\) \{\s*return <View \{\.\.\.props\} \/>/);
+  assert.match(loader, /<CurrentView \{\.\.\.props\} \/>/);
+  assert.ok(!/<View \{\.\.\.props\} \/><\/Suspense>/.test(loader));
+});
+
+test('the request that carries the facets is not cancelled when the Subject rankings view opens', () => {
+  const hook = read('../src/hooks/useCollegeSearch.js');
+  assert.match(hook, /const signal = withFacets \? undefined : controller\.current\?\.signal/);
+  assert.match(hook, /facets: payload\.facets \}\)\)/);
+  // No extra request: the facets still ride on the first page request.
+  assert.equal((hook.match(/api\.collegeSearch\(/g) || []).length, 1);
 });

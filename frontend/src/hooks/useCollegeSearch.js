@@ -35,14 +35,19 @@ export function useCollegeSearch(query, version = 0) {
     const key = `${version}|${query}|${number}`;
     const cached = pages.current.get(key);
     if (cached && !cached.failed && (cached.done || !cached.signal?.aborted)) return cached.promise;
-    const signal = controller.current?.signal;
     const withFacets = number === 1 && !facets.current.has(version);
+    // The request that carries the facets is the only one that supplies them: it is not tied to the search that
+    // started it, so opening the Subject rankings view (query null) or changing a filter does not cancel it.
+    const signal = withFacets ? undefined : controller.current?.signal;
     const promise = api.collegeSearch(`${query}&page=${number}${withFacets ? '&facets=true' : ''}`, signal);
     pages.current.set(key, { promise, signal });
     const entry = pages.current.get(key);
     promise.then((payload) => {
       entry.done = true;
-      if (payload.facets) facets.current.set(version, payload.facets);
+      if (payload.facets) {
+        facets.current.set(version, payload.facets);
+        setState((previous) => ({ ...previous, facets: payload.facets }));
+      }
     }, () => {entry.failed = true;});
     return promise;
   }, [query, version]);

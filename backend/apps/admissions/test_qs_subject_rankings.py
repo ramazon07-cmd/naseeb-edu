@@ -121,6 +121,22 @@ class LoaderTests(TestCase):
             ['COM02', 5, '', 'Unknown Institute of Nowhere', 'Atlantis', 80.0],
         ]
 
+    def test_snapshot_without_weights_loads_and_reloads_with_empty_indicators(self):
+        # An older snapshot has no per-subject weights and no trailing indicator scores.
+        snapshot = {'source': 'QS by Subject 2025', 'year': 2025, 'subjects': [{'code': 'COM02'}],
+                    'rows': [['COM02', 3, '', 'Massachusetts Institute of Technology (MIT)', 'United States', 90.0]]}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'old.json'
+            path.write_text(json.dumps(snapshot), encoding='utf-8')
+            call_command('load_qs_subject_rankings', file=str(path), stdout=StringIO())
+            snapshot['rows'][0][1] = 4
+            path.write_text(json.dumps(snapshot), encoding='utf-8')
+            call_command('load_qs_subject_rankings', file=str(path), stdout=StringIO())
+        row = UniversitySubjectRank.objects.get(university=self.mit, subject_code='COM02')
+        self.assertEqual((row.rank, row.year), (4, 2025))
+        for field in ('academic_score', 'employer_score', 'citations_score', 'h_index_score', 'irn_score'):
+            self.assertIsNone(getattr(row, field))
+
     def test_matches_by_key_never_creates_universities_and_reports(self):
         output = self.load(*self.rows)
         self.assertEqual(University.objects.count(), 2)

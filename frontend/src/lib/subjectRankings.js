@@ -62,3 +62,7 @@ export function appendRows(rows, page) {
   const seen = new Set(rows.map((row) => row.id));
   return [...rows, ...page.filter((row) => !seen.has(row.id))];
 }
+
+// "Show more" may page a query only from rows that query itself produced: after a failed reload the rows and
+// offset on screen belong to the previous query.
+export const canLoadMore = (state, query) => state.query === query && state.nextOffset != null && !state.loading && !state.loadingMore;

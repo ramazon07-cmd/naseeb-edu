@@ -30,7 +30,7 @@ def indicator_scores(scores, weights):
     """The row's trailing scores (one per indicator the subject uses) as the five indicator fields; the
     others stay None. An older snapshot without them gives all None."""
     used = iter(scores)
-    values = {}
+    values = dict.fromkeys(INDICATOR_FIELDS)
     for field, weight in zip(INDICATOR_FIELDS, weights):
         value = next(used, None) if weight else None
         values[field] = None if value is None else Decimal(str(value)).quantize(TENTH)

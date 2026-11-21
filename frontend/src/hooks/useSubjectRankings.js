@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { appendRows, subjectRankingsPath } from '../lib/subjectRankings';
+import { appendRows, canLoadMore, subjectRankingsPath } from '../lib/subjectRankings';
 
 // One page of the QS subject ranking, through the generic page request: api.js (the start-up bundle) has no
 // method of its own for it.
 const fetchPage = (path, signal) => api.page('subject-rankings', `?${path}`, signal);
 
-const INITIAL = { subject: null, rows: [], count: 0, year: null, indicators: [], nextOffset: null, loading: true, loadingMore: false, error: '' };
+const INITIAL = { query: null, subject: null, rows: [], count: 0, year: null, indicators: [], nextOffset: null, loading: true, loadingMore: false, error: '' };
 
 /**
  * One subject ranking, one page at a time. `query` comes from subjectRankingsQuery() (null waits: nothing
@@ -29,18 +29,21 @@ export function useSubjectRankings(query, subject) {
     fetchPage(subjectRankingsPath(query), own.signal).then((payload) => {
       if (own.signal.aborted) return;
       setState({
-        subject, rows: payload.results, count: payload.count, year: payload.year, indicators: payload.indicators,
+        query, subject, rows: payload.results, count: payload.count, year: payload.year, indicators: payload.indicators,
         nextOffset: payload.next_offset, loading: false, loadingMore: false, error: '',
       });
     }).catch((error) => {
-      if (!own.signal.aborted && error?.name !== 'AbortError') setState((previous) => ({ ...previous, loading: false, error: error.message }));
+      if (!own.signal.aborted && error?.name !== 'AbortError') setState((previous) => ({
+        // Rows that belong to another query must not stay: "Show more" would page the new query from their offset.
+        ...(previous.query === query ? previous : { ...previous, rows: [], count: 0, nextOffset: null }), loading: false, error: error.message,
+      }));
     });
     return () => own.abort();
   }, [query, subject, attempt]);
 
   const loadMore = useCallback(() => {
     const own = controller.current;
-    if (!own || state.nextOffset == null || state.loading || state.loadingMore) return;
+    if (!own || !canLoadMore(state, query) || state.loading || state.loadingMore) return;
     const offset = state.nextOffset;
     setState((previous) => ({ ...previous, loadingMore: true }));
     fetchPage(subjectRankingsPath(query, offset), own.signal).then((payload) => {
@@ -51,7 +54,7 @@ export function useSubjectRankings(query, subject) {
     }).catch((error) => {
       if (!own.signal.aborted && error?.name !== 'AbortError') setState((previous) => ({ ...previous, loadingMore: false, error: error.message }));
     });
-  }, [query, state.nextOffset, state.loading, state.loadingMore]);
+  }, [query, state]);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   return { ...state, loadMore, retry };
