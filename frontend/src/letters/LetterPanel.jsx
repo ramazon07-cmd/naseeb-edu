@@ -1,8 +1,8 @@
 import { memo, useMemo, useState } from 'react'
-import { Check, ChevronDown, Info, Lock, MessageCircleQuestion, Plus, RefreshCw, Sparkles, Undo2, X } from 'lucide-react'
-import { t, tp } from '../i18n.js'
+import { Check, ChevronDown, Copy, Info, Lock, MessageCircleQuestion, Plus, RefreshCw, ShieldAlert, Sparkles, Undo2, X } from 'lucide-react'
+import { formatDateLocale, t, tp } from '../i18n.js'
 import { coachSource, deltaSince, doneNotes, goneNotes, headline, levelWord, openNotes, recheckBlock } from '../essayLab/coachModel.js'
-import { LETTER_CRITERIA, aiIdeasOf, fillCheckText, fillStudent, letterCriterionLabel } from './letterModel.js'
+import { LETTER_CRITERIA, aiIdeasOf, fillCheckText, fillExtras, fillStudent, letterCriterionLabel } from './letterModel.js'
 
 const SOURCE_LABELS = { academics: 'Academics', honor: 'Honor', activity: 'Activity', achievement: 'Achievement', research: 'Research', internship: 'Internship', project: 'Project' }
 const DAILY_CHECKS = 5
@@ -68,8 +68,19 @@ function IdeasTab({ ideas, name, onInsertFact, onInsertIdea }) {
   </div>
 }
 
-function CheckTab({ check, model: rawModel, name, status, anchored, activeId, states, onJump, onSetState, words }) {
+// A reader note or a sensitive-content note: no score, no done/not useful buttons, just a question and its sentence.
+function ExtraCard({ note, label, active, onJump }) {
+  return <article data-note={note.id} className={`lw-note-card is-${note.criterion}${active ? ' is-active' : ''}`}>
+    <div className="lw-note-top"><span className="lw-note-crit">{label}</span></div>
+    <button type="button" className="lw-note-main" aria-pressed={active} onClick={() => onJump(note)}>
+      <span className="lw-note-q">{note.kind ? t(note.question) : note.question}</span>
+    </button>
+  </article>
+}
+
+function CheckTab({ check, model: rawModel, extras: rawExtras, name, status, anchored, activeId, states, onJump, onSetState, words }) {
   const model = useMemo(() => fillCheckText(rawModel, name), [rawModel, name])
+  const extras = useMemo(() => fillExtras(rawExtras, name), [rawExtras, name])
   const [filter, setFilter] = useState('all')
   const [openCriterion, setOpenCriterion] = useState(null)
   const [showDone, setShowDone] = useState(false)
@@ -94,7 +105,8 @@ function CheckTab({ check, model: rawModel, name, status, anchored, activeId, st
       <p className="lw-fine">{t('Check asks questions. It never writes the letter for you.')}</p>
       {words < 80 && <p className="lw-fine">{t('Tip: it works best once you have a paragraph or two.')}</p>}
     </div>}
-    {model && !status.loading && <>
+    {model && !status.loading && extras.safety && <p className="lw-note is-warn" role="alert"><ShieldAlert size={16} aria-hidden="true" />{t('This letter may describe a child in current danger, so it was not scored. Please follow your school’s child-protection procedure.')}</p>}
+    {model && !status.loading && !extras.safety && <>
       {coachSource(check) === 'rules' && <p className="lw-note is-info" role="note"><Info size={14} aria-hidden="true" />{t('AI feedback isn’t available right now, so these ideas come from simple writing checks. They can still help.')}</p>}
       <div className="lw-score">
         {scored ? <ScoreRing percent={model.overall} label={t('Depth score {n} of 100', { n: model.overall })} /> : <span className="lw-score-icon" aria-hidden="true"><Sparkles size={22} /></span>}
@@ -126,6 +138,16 @@ function CheckTab({ check, model: rawModel, name, status, anchored, activeId, st
         {model.suggestions.length > 0 && <ol>{model.suggestions.map((text, index) => <li key={index}><span aria-hidden="true">{index + 1}</span>{text}</li>)}</ol>}
       </section>}
       {!(scored && model.overall <= 50) && model.summary && <p className="lw-summary">{model.summary}</p>}
+
+      {extras.copy && <p className="lw-note is-info" role="note"><Copy size={14} aria-hidden="true" />{t('{n}% of this letter matches your letter of {date}. Only you see this.', { n: extras.copy.percent, date: formatDateLocale(extras.copy.date) })}</p>}
+      {extras.sensitive.length > 0 && <>
+        <div className="lw-sec"><h3>{t('Sensitive content')}</h3><span>{t('Not scored')}</span></div>
+        <div className="lw-notes">{extras.sensitive.map((note) => <ExtraCard key={note.id} note={note} label={t(note.kind === 'health' ? 'Health' : 'Disciplinary matter')} active={note.id === activeId} onJump={onJump} />)}</div>
+      </>}
+      {extras.readerNotes.length > 0 && <>
+        <div className="lw-sec"><h3>{t('How a reader may read this')}</h3><span>{t('Not scored')}</span></div>
+        <div className="lw-notes">{extras.readerNotes.map((note) => <ExtraCard key={note.id} note={note} label={t('Reader note')} active={note.id === activeId} onJump={onJump} />)}</div>
+      </>}
 
       {locked ? (scored && model.overall <= 50 ? null : <p className="lw-note">{t('Work on the big picture first.')}</p>) : <>
         <div className="lw-sec"><h3>{t('Notes')}</h3><span>{open.length ? tp('{n} to go', open.length, { n: open.length }) : ''}</span></div>
@@ -211,7 +233,7 @@ function IdeasFooter({ ai, onAsk }) {
 }
 
 function LetterPanel({ tab, onTab, ideas, onInsertFact, onInsertIdea, onAskAi, name, checkState, onCheck, onJump, onSetState, words, empty }) {
-  const { check, model, status, noteStates, anchored, activeId, changed, inputChanged, notice } = checkState
+  const { check, model, extras, status, noteStates, anchored, activeId, changed, inputChanged, notice } = checkState
   const openCount = useMemo(() => openNotes(model?.notes, noteStates, anchored).length, [model, noteStates, anchored])
   const tabs = [{ id: 'ideas', label: t('Ideas'), count: ideas.facts.length }, { id: 'check', label: t('Check'), count: model && !model.notesLocked ? openCount : 0 }]
   const onKey = (event, index) => {
@@ -229,7 +251,7 @@ function LetterPanel({ tab, onTab, ideas, onInsertFact, onInsertIdea, onAskAi, n
     <div className="lw-pbody" id="lw-tabpanel" role="tabpanel" aria-labelledby={`lw-tab-${tab}`}>
       {tab === 'ideas'
         ? <IdeasTab ideas={ideas} name={name} onInsertFact={onInsertFact} onInsertIdea={onInsertIdea} />
-        : <CheckTab {...{ check, model, name, status, anchored, activeId, onJump, onSetState, words }} states={noteStates} />}
+        : <CheckTab {...{ check, model, extras, name, status, anchored, activeId, onJump, onSetState, words }} states={noteStates} />}
     </div>
     <div className="lw-foot">
       {tab === 'ideas'

@@ -9,7 +9,7 @@ from django.core.cache import cache
 from django.test import override_settings
 from rest_framework.test import APITestCase
 
-from . import ai_budget, letter_coach
+from . import ai_budget, letter_coach, letter_sensitive
 from .essay_lab import coach
 from .models import AiUsageLog, Honor, RecommendationLetter, RecommendationLetterCheck
 from .test_essay_lab import FakeGateway
@@ -588,3 +588,234 @@ class LetterSuggestRefundTests(LetterCheckCase):
             with self.assertRaises(RuntimeError):
                 self.suggest()
         self.assertEqual(ai_budget.user_remaining('recommendation_letter', self.counselor), 20)
+
+
+@override_settings(**AI_ON)
+class LetterReaderNotesTests(LetterCheckCase):
+    READER = {'reader_notes': [
+        {'quote': 'She wrote down every failed attempt in a green notebook.',
+         'question': 'A US reader may read this as only diligence; is that what you mean?'},
+        {'quote': 'Not a sentence of this letter at all.', 'question': 'Dropped: the quote is not in the letter.'},
+        {'quote': 'I recommend her without reservation.', 'question': 'Q two?'},
+        {'quote': 'She explained the rig to a younger boy twice without being asked and without any hurry in her voice.',
+         'question': 'Third one is over the cap.'},
+    ]}
+
+    def run_check(self, extra, notes=None):
+        return self.check(FakeGateway(score={**SCORE_REPLY, **extra}, notes=notes or NOTES))
+
+    def test_reader_notes_are_unscored_capped_at_two_and_quote_the_real_letter(self):
+        response, gateway = self.run_check(self.READER)
+        result = response.data['result']
+        self.assertEqual(result['overall'], 67)  # unchanged by the reader notes
+        self.assertEqual([note['id'] for note in result['reader_notes']], ['r1', 'r2'])
+        self.assertEqual(result['reader_notes'][0]['quote'], 'She wrote down every failed attempt in a green notebook.')
+        self.assertNotIn('r1', [note['id'] for note in result['notes']])
+        self.assertIn('"reader_notes"', gateway.bodies[0]['messages'][-1]['content'])
+        self.assertNotIn('reader_notes', gateway.bodies[1]['messages'][-1]['content'])
+
+    def test_a_reader_note_with_a_student_placeholder_is_restored(self):
+        extra = {'reader_notes': [{'quote': '[Student] [Student] is among the five strongest students I have taught in twelve years.',
+                                   'question': 'Is "among the strongest" a rank you can stand behind?'}]}
+        response, _ = self.run_check(extra)
+        self.assertEqual([note['quote'] for note in response.data['result']['reader_notes']],
+                         ['Malika Karimova is among the five strongest students I have taught in twelve years.'])
+
+    def test_no_reader_notes_when_the_model_returns_none_or_junk(self):
+        for junk in ({}, {'reader_notes': 'x'}, {'reader_notes': [None, 3, {'quote': 'a'}]}):
+            self.set_body(BODY + ' ' * len(str(junk)))  # fresh text so the check is not reused
+            response, _ = self.run_check(junk)
+            self.assertEqual(response.data['result']['reader_notes'], [], junk)
+
+    def test_formal_wording_is_raised_as_a_reader_note_not_marked_down(self):
+        """The prompt says so; the server keeps the model's scores as they are."""
+        _, gateway = self.run_check({})
+        sent = gateway.bodies[0]['messages'][0]['content']
+        self.assertIn('never lowers any score', gateway.bodies[0]['messages'][-1]['content'])
+        self.assertIn('is not weak voice', sent)
+
+
+@override_settings(**AI_ON)
+class LetterSensitiveTests(LetterCheckCase):
+    HEALTH_BODY = (
+        'I have taught Malika Karimova physics for three years. In March she stayed after class to rebuild the '
+        'pendulum rig that three groups had given up on. Last spring she was treated for depression and missed '
+        'six weeks of school. She explained the rig to a younger boy twice without being asked. '
+        'I recommend her without reservation.'
+    )
+
+    def test_a_health_sentence_is_never_quoted_by_a_note_a_strength_or_a_reader_note(self):
+        self.set_body(self.HEALTH_BODY)
+        sentence = 'Last spring she was treated for depression and missed six weeks of school.'
+        score = {**SCORE_REPLY, 'strengths': [{'criterion': 'insight', 'quote': sentence, 'text': 'Resilience.'}],
+                 'reader_notes': [{'quote': sentence, 'question': 'How may a reader take this?'}]}
+        notes = {'notes': [
+            {'criterion': 'evidence', 'quote': sentence, 'question': 'What did you see during those weeks?', 'context': ''},
+            {'criterion': 'evidence', 'quote': 'She explained the rig to a younger boy twice without being asked.',
+             'question': 'What did the boy do afterwards?', 'context': ''},
+        ]}
+        response, _ = self.check(FakeGateway(score=score, notes=notes))
+        result = response.data['result']
+        self.assertEqual([note['quote'] for note in result['notes']],
+                         ['She explained the rig to a younger boy twice without being asked.'])
+        self.assertEqual(result['strengths'][0]['quote'], '')
+        self.assertEqual(result['reader_notes'], [])
+        self.assertEqual(result['sensitive'], [{'kind': 'health', 'quote': sentence}])
+
+    def test_the_models_sensitive_flag_is_enforced_without_a_keyword(self):
+        sentence = 'She was away for a long stretch while the family arranged her care.'
+        self.set_body(BODY + ' ' + sentence)
+        score = {**SCORE_REPLY, 'sensitive': {'health': sentence, 'discipline': ''}}
+        notes = {'notes': [{'criterion': 'evidence', 'quote': sentence, 'question': 'How did that stretch go?', 'context': ''}]}
+        response, _ = self.check(FakeGateway(score=score, notes=notes))
+        self.assertEqual(response.data['result']['notes'], [])
+        self.assertEqual(response.data['result']['sensitive'], [{'kind': 'health', 'quote': sentence}])
+
+    def test_russian_and_uzbek_health_words_are_found(self):
+        for text in ('Весной у неё был диагноз, и она долго болела.', "U kasalxonada davolangan va darslarni qoldirgan."):
+            self.assertTrue(letter_sensitive.keyword_sentences(text, letter_sensitive.HEALTH), text)
+        for text in ('She runs the hospitality club.', 'Our hive of activity.', 'Disciplined and kind.'):
+            self.assertFalse(letter_sensitive.keyword_sentences(text, letter_sensitive.HEALTH), text)
+            self.assertFalse(letter_sensitive.keyword_sentences(text, letter_sensitive.DISCIPLINE), text)
+
+    def test_a_disciplinary_sentence_gets_one_note_and_no_advice_to_hide_it(self):
+        self.set_body(BODY + ' In October she was suspended for two days for copying homework.')
+        response, _ = self.check()
+        result = response.data['result']
+        self.assertEqual([item['kind'] for item in result['sensitive']], ['discipline'])
+        self.assertIn('suspended', result['sensitive'][0]['quote'])
+        self.assertEqual(result['overall'], 67)
+
+    def test_no_sensitive_note_for_an_ordinary_letter(self):
+        response, _ = self.check()
+        self.assertEqual((response.data['result']['sensitive'], response.data['result']['reader_notes']), ([], []))
+
+    def test_current_abuse_is_not_scored_and_costs_nothing(self):
+        self.set_body(BODY + ' Her stepfather beats her at home and she is afraid to go home.')
+        before = self.left()
+        response, gateway = self.check()
+        self.assertEqual(response.status_code, 200, response.data)
+        result = response.data['result']
+        self.assertEqual(gateway.bodies, [])  # no AI call
+        self.assertEqual((result['safety'], result['scored'], result['overall'], result['notes']), (True, False, None, []))
+        self.assertTrue(result['notes_locked'])
+        self.assertEqual(self.left(), before)
+
+    def test_current_danger_words_in_russian_and_uzbek(self):
+        for text in ('Отец бьёт её дома.', "Otasi uni uyda kaltaklaydi.", 'Ona kaltaklanmoqda.'):
+            self.assertTrue(letter_sensitive.current_danger(text), text)
+        for text in ('She overcame a hard childhood.', 'Она победила в олимпиаде.'):
+            self.assertFalse(letter_sensitive.current_danger(text), text)
+
+    def test_the_model_can_raise_the_safety_flag(self):
+        response, gateway = self.check(FakeGateway(score={**SCORE_REPLY, 'safety': True}))
+        result = response.data['result']
+        self.assertEqual(gateway.steps, ['score'])  # no notes step
+        self.assertEqual((result['safety'], result['scored'], result['overall'], result['notes']), (True, False, None, []))
+        self.assertEqual(result['strengths'], [])
+        self.assertEqual(result['reader_notes'], [])
+
+
+class LetterPrivacyRedactionTests(LetterCheckCase):
+    def anonymize(self, text):
+        return letter_coach.anonymize(text, self.student)
+
+    def test_family_staff_and_classmate_names_become_person(self):
+        out = self.anonymize('Her mother, Nodira Rahimova, and her teacher Mr. Saidov helped; classmate Ali too.')
+        self.assertEqual(out.count('[Person]'), 3)
+        for name in ('Nodira', 'Rahimova', 'Saidov', 'Ali'):
+            self.assertNotIn(name, out)
+
+    def test_dates_of_birth_ids_and_places(self):
+        out = self.anonymize('Born on 12 March 2008 in Samarqand. Student ID: AB12345. Passport AA1234567. '
+                             'She walks from Chilonzor to school; the family is from Qibray district.')
+        for private in ('12 March 2008', 'Samarqand', 'AB12345', 'AA1234567', 'Chilonzor', 'Qibray'):
+            self.assertNotIn(private, out)
+        for placeholder in ('[Date of birth]', '[Place]', '[ID]'):
+            self.assertIn(placeholder, out)
+
+    def test_uzbek_and_russian(self):
+        uz = self.anonymize("Uning onasi Nodira opa va ustozi Karim domla yordam berdi. Tug'ilgan sana: 03.05.2008. "
+                            "U Farg'onada o'qigan, Toshkent viloyatida yashaydi.")
+        for private in ('Nodira', 'Karim', '03.05.2008', "Farg'ona", 'Toshkent'):
+            self.assertNotIn(private, uz)
+        ru = self.anonymize('Её мама Ирина Петровна и учитель Сидоров помогли. Родилась 12.03.2008 в Ташкенте, '
+                            'в селе Куйган. ПИНФЛ 12345678901234.')
+        for private in ('Ирина', 'Сидоров', '12.03.2008', 'Ташкент', 'Куйган', '12345678901234'):
+            self.assertNotIn(private, ru)
+
+    def test_ordinary_capitalised_words_stay(self):
+        text = 'In March the Physics Club met in Room 4. I teach physics; the school year ended in June.'
+        self.assertEqual(self.anonymize(text), text)
+
+    def test_none_of_it_reaches_the_prompt_and_quotes_are_restored(self):
+        self.set_body(
+            'I have taught Malika Karimova physics for three years. Her mother, Nodira Rahimova, visited the lab in '
+            'March and Malika Karimova explained the pendulum rig to her. She was born on 12 March 2008 in Samarqand '
+            'and walks to class every morning. I recommend her without reservation.')
+        notes = {'notes': [{'criterion': 'evidence', 'quote': 'Her mother, [Person], visited the lab in March and [Student] [Student] '
+                            'explained the pendulum rig to her.', 'question': 'What did the mother say after the visit?',
+                            'context': ''}]}
+        with override_settings(**AI_ON):
+            response, gateway = self.check(FakeGateway(score=SCORE_REPLY, notes=notes))
+        sent = json.dumps(gateway.bodies, ensure_ascii=False)
+        for private in ('Nodira', 'Rahimova', '12 March 2008', 'Samarqand', 'Malika'):
+            self.assertNotIn(private, sent)
+        self.assertEqual([note['quote'] for note in response.data['result']['notes']],
+                         ['Her mother, Nodira Rahimova, visited the lab in March and Malika Karimova explained the pendulum rig to her.'])
+
+
+class LetterCopyCheckTests(LetterCheckCase):
+    SHARED = (
+        'She is a student who shows patience and curiosity in every lab, and she always helps classmates who struggle '
+        'with the material before the exam. In my twelve years of teaching physics I have rarely met a student who '
+        'asks such careful questions about the limits of an experiment.'
+    )
+
+    def make(self, body, **fields):
+        fields.setdefault('recommender_name', 'Base Counselor')
+        return RecommendationLetter.objects.create(student=self.student, status='drafting', body=body, **fields)
+
+    def result_after_check(self, **kwargs):
+        with override_settings(**AI_ON):
+            response, _ = self.check(**kwargs)
+        return response.data['result']
+
+    def test_a_letter_that_repeats_an_earlier_one_shows_percent_and_date_only(self):
+        other = self.make(self.SHARED + ' Second letter ending that is quite different from the first one at all.')
+        self.set_body(self.SHARED + ' A closing line that has nothing in common with the other letter whatsoever.')
+        result = self.result_after_check()
+        self.assertGreaterEqual(result['copy']['percent'], 30)
+        self.assertEqual(result['copy']['date'], other.created_at.date().isoformat())
+        self.assertEqual(set(result['copy']), {'percent', 'date'})
+        self.assertNotIn('curiosity in every lab', json.dumps(result['copy']))
+
+    def test_a_different_student_name_does_not_hide_the_copy(self):
+        other_user = type(self.student_user).objects.create_user(
+            username='copy-other', email='copy-other@example.com', password='StrongPass123!', role='student',
+            school=self.school_a, first_name='Aziza', last_name='Nazarova')
+        other_student = type(self.student).objects.create(user=other_user, school=self.school_a, school_name=self.school_a.name,
+                                                          assigned_counselor=self.counselor)
+        RecommendationLetter.objects.create(
+            student=other_student, recommender_name='BASE counselor', status='drafting',
+            body='Aziza Nazarova ' + self.SHARED.replace('She is', 'is'))
+        self.set_body('Malika Karimova ' + self.SHARED.replace('She is', 'is') + ' It ends here.')
+        self.assertGreaterEqual(self.result_after_check()['copy']['percent'], 90)
+
+    def test_below_thirty_percent_nothing_is_shown(self):
+        self.make('A completely different letter about a chemistry student who built a titration rig and wrote careful '
+                  'notes on every failed run while helping two younger pupils each week after school ended.')
+        self.assertNotIn('copy', self.result_after_check())
+
+    def test_only_the_same_author_and_never_the_letter_itself(self):
+        self.make(self.SHARED, recommender_name='Someone Else')
+        self.set_body(self.SHARED)
+        self.assertNotIn('copy', self.result_after_check())  # another author's letter is ignored
+
+    def test_shingle_math(self):
+        from . import letter_copy
+        mine = letter_copy.shingles('one two three four five six seven eight')
+        self.assertEqual(len(mine), 4)
+        self.assertEqual(letter_copy.containment(mine, letter_copy.shingles('one two three four five six')), 0.5)
+        self.assertEqual(letter_copy.shingles('too short'), set())
+        self.assertIsNone(letter_copy.best_match(mine, []))

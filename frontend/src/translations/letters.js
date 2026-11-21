@@ -118,6 +118,15 @@ export const LETTER_TRANSLATIONS = {
   'Use the newer version': ['Yangi nusxadan foydalanish', 'Использовать новую версию'],
   'Keep mine': ['Meniki qolsin', 'Оставить мою'],
   'This letter changed elsewhere. Choose a version above.': ['Bu tavsiyanoma boshqa joyda o‘zgargan. Yuqorida nusxani tanlang.', 'Письмо изменили в другом месте. Выберите версию выше.'],
+  'This letter may describe a child in current danger, so it was not scored. Please follow your school’s child-protection procedure.': ['Bu xatda bolaning hozirgi xavf ostida ekani yozilgan bo‘lishi mumkin, shuning uchun baholanmadi. Iltimos, maktabingizning bolalarni himoya qilish tartibiga amal qiling.', 'В письме может быть описан ребёнок, которому сейчас грозит опасность, поэтому оценка не выставлена. Пожалуйста, следуйте процедуре защиты детей вашей школы.'],
+  '{n}% of this letter matches your letter of {date}. Only you see this.': ['Bu xatning {n}% qismi sizning {date} dagi xatingizga mos keladi. Buni faqat siz ko‘rasiz.', '{n}% этого письма совпадает с вашим письмом от {date}. Это видите только вы.'],
+  'Sensitive content': ['Nozik mavzular', 'Деликатные темы'],
+  'Health': ['Salomatlik', 'Здоровье'],
+  'Disciplinary matter': ['Intizom masalasi', 'Дисциплинарный вопрос'],
+  'How a reader may read this': ['O‘quvchi buni qanday tushunishi mumkin', 'Как это может прочитать читатель'],
+  'Reader note': ['O‘quvchi nuqtai nazari', 'Взгляд читателя'],
+  'This names a health matter of a minor. Have the student and family agreed to share it, and does the reader need it?': ['Bunda voyaga yetmagan bolaning sog‘lig‘i haqida gap ketyapti. O‘quvchi va oilasi buni ulashishga rozimi va xatni o‘qiydigan tomon buni bilishi kerakmi?', 'Здесь названа проблема со здоровьем несовершеннолетнего. Согласны ли ученик и семья делиться этим и нужно ли это читателю?'],
+  'If this explains an event on the record, does the letter say what happened afterwards in your own observation?': ['Agar bu hujjatdagi voqeani tushuntirsa, xatda keyin nima bo‘lgani sizning o‘z kuzatuvingiz bo‘yicha aytilganmi?', 'Если это объясняет событие в личном деле, говорится ли в письме, что было потом, по вашим собственным наблюдениям?'],
 };
 
 export function letterMessages(language) {

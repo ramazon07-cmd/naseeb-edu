@@ -596,6 +596,12 @@ class CheckSpec:
     source: str = 'their own life'
     restore: object = None
     quote_hint: str = ''
+    # Optional extras a caller (the letter check) asks of the score step: instruction text appended to the
+    # SCORE task, `read_extra(raw, step1)` returns step1 (with extra keys) or {'safety': message}, and
+    # `finish(result, step1)` returns the final result.
+    step1_extra: str = ''
+    read_extra: object = None
+    finish: object = None
 
 
 def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call):
@@ -640,20 +646,27 @@ def run_check(spec, user, before_call=lambda: None):
     def user_message(instruction):
         return {'role': 'user', 'content': f'{spec.block}\n\n{instruction}'}
 
+    def validate_step1(raw):
+        step = validate_score_step(raw, content, rubric)
+        return spec.read_extra(raw, step) if spec.read_extra is not None and 'safety' not in step else step
+
+    def finished(result, step):
+        return spec.finish(result, step) if spec.finish is not None else result
+
     step1 = _run_step(
-        spec, user, [system, user_message(_step1_instruction(rubric, spec.noun))], STEP1_MAX_TOKENS,
-        lambda raw: validate_score_step(raw, content, rubric), deadline, before_call,
+        spec, user, [system, user_message(_step1_instruction(rubric, spec.noun) + spec.step1_extra)], STEP1_MAX_TOKENS,
+        validate_step1, deadline, before_call,
     )
     if 'safety' in step1:
         empty = {'scores': {}, 'summary': step1['safety'], 'suggestions': [], 'strengths': []}
-        return (build_result(empty, [], rubric=rubric, overall=None, notes_locked=True, restore=spec.restore),
-                settings.ESSAY_COACH_MODEL)
+        result = build_result(empty, [], rubric=rubric, overall=None, notes_locked=True, restore=spec.restore)
+        return finished(result, step1), settings.ESSAY_COACH_MODEL
 
     overall = compute_overall(rubric, step1['scores']) if rubric else None
     cap = notes_cap(overall, spec.words)
     if overall is not None and overall < NOTES_MIN_OVERALL:
-        return (build_result(step1, [], rubric=rubric, overall=overall, notes_locked=True, restore=spec.restore),
-                settings.ESSAY_COACH_MODEL)
+        result = build_result(step1, [], rubric=rubric, overall=overall, notes_locked=True, restore=spec.restore)
+        return finished(result, step1), settings.ESSAY_COACH_MODEL
     notes = []
     if cap:
         instruction = _step2_instruction(rubric, cap, overall, spec.noun, spec.asker, spec.source, spec.quote_hint)
@@ -662,8 +675,8 @@ def run_check(spec, user, before_call=lambda: None):
             lambda raw: validate_notes(raw.get('notes') if isinstance(raw, dict) else None, content, rubric, cap),
             deadline, before_call,
         )
-    return (build_result(step1, notes, rubric=rubric, overall=overall, restore=spec.restore),
-            settings.ESSAY_COACH_MODEL)
+    result = build_result(step1, notes, rubric=rubric, overall=overall, restore=spec.restore)
+    return finished(result, step1), settings.ESSAY_COACH_MODEL
 
 
 def run_ai_check(essay, content, user, before_call=lambda: None):

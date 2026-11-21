@@ -17,7 +17,7 @@ from apps.users.models import User
 from apps.users.throttles import WindowRateThrottle
 from core.exceptions import CodedError
 from core.ai_policy import outbound_ai_allowed
-from .. import ai_budget, ai_usage, letter_coach, rec_letter_ai
+from .. import ai_budget, ai_usage, letter_coach, letter_copy, letter_sensitive, rec_letter_ai
 from ..essay_lab import coach
 from ..models import (
     Achievement,
@@ -633,6 +633,11 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
         throttle = LetterCheckThrottle()
         if not throttle.allow_request(request, self):
             self.throttled(request, throttle.wait())
+        if letter_sensitive.current_danger(body):
+            # Current abuse or danger: never scored, no AI call, no cost; the author is pointed to the
+            # school's child-protection procedure.
+            return self._save_check(request, letter, letter_sensitive.safety_result(), coach.current_model(),
+                                    fingerprint, input_hash, body)
         if not coach.gateway_configured():
             # The letter has no rule-based reader: without the AI there is nothing to run.
             return Response({'detail': 'The letter check is unavailable right now.', 'code': 'coach_unavailable',
@@ -650,7 +655,13 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             return Response({'detail': 'Naseeb AI is unavailable right now. Please try again soon.',
                              'code': 'coach_unavailable', 'details': {'ai_available': True}},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return self._save_check(request, letter, result, model, fingerprint, input_hash, body)
 
+    def _save_check(self, request, letter, result, model, fingerprint, input_hash, body):
+        # No AI: how much of the letter the same author wrote before (shown to the author only).
+        match = letter_copy.copy_match(letter, self.get_queryset(), letter_coach.anonymize)
+        if match:
+            result = {**result, 'copy': match}
         with transaction.atomic():
             # The letter may have been deleted during the AI call.
             if not RecommendationLetter.objects.select_for_update().filter(pk=letter.pk).exists():

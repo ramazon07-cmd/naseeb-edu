@@ -4,7 +4,7 @@ import { applyNoteState, doneNotes, goneNotes, noteStateUpdates, openNotes, rech
 import { buildPath, parsePath, resolveRoute } from '../src/lib/routes.js';
 import { createIdeasController } from '../src/letters/ideasController.js';
 import {
-  LETTER_KEYS, aiIdeasOf, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
+  LETTER_KEYS, SENSITIVE_TEXT, aiIdeasOf, letterExtras, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
 } from '../src/letters/letterModel.js';
 
 const LETTER = 'I have known Ramazon for two years.\n\nHe is a hardworking student. He leads the robotics club.\n\nHe is a hardworking student.';
@@ -262,4 +262,34 @@ test('a provider failure (503) on AI ideas keeps the button; 403 turns AI off', 
   await off.controller.start(ctx('a'));
   await off.controller.askAi();
   assert.equal(off.controller.state.ai.available, false);
+});
+
+// --- reader notes, sensitive notes, copy check, safety -----------------------------------
+test('letterExtras reads reader notes, sensitive notes, the copy check and the safety flag', () => {
+  const extras = letterExtras({ result: {
+    reader_notes: [{ id: 'r1', quote: 'He tries hard.', question: 'A US reader may read this as faint praise; is that what you mean?' }, { id: 'r2', quote: '', question: 'no quote' }],
+    sensitive: [{ kind: 'health', quote: 'She was treated for depression.' }, { kind: 'other', quote: 'x' }],
+    copy: { percent: 42, date: '2026-11-02' },
+  } });
+  assert.deepEqual(extras.readerNotes.map((note) => note.id), ['r1'], 'a reader note without a quote is dropped');
+  assert.equal(extras.readerNotes[0].criterion, 'reader');
+  assert.deepEqual(extras.sensitive.map((note) => [note.id, note.question]), [['sx-health', SENSITIVE_TEXT.health]], 'unknown kinds are dropped; the wording is fixed');
+  assert.deepEqual(extras.copy, { percent: 42, date: '2026-11-02' });
+  assert.equal(extras.safety, false);
+});
+
+test('letterExtras: copy under 30% or malformed is ignored, safety is only a literal true, old checks work', () => {
+  assert.equal(letterExtras({ result: { copy: { percent: 29, date: '2026-01-01' } } }).copy, null);
+  assert.equal(letterExtras({ result: { copy: { percent: 'x', date: '2026-01-01' } } }).copy, null);
+  assert.equal(letterExtras({ result: { safety: 'yes' } }).safety, false);
+  assert.equal(letterExtras({ result: { safety: true } }).safety, true);
+  assert.deepEqual(letterExtras(null), { readerNotes: [], sensitive: [], copy: null, safety: false });
+  assert.deepEqual(letterExtras({ result: { version: 2, notes: [] } }).readerNotes, []);
+});
+
+test('reader and sensitive notes are placed in the text like notes', () => {
+  const extras = letterExtras({ result: { reader_notes: [{ id: 'r1', quote: 'He leads the robotics club.', question: 'Q?' }], sensitive: [{ kind: 'discipline', quote: 'He is a hardworking student.' }] } });
+  const located = locateNotes(LETTER, [...extras.readerNotes, ...extras.sensitive]);
+  assert.equal(LETTER.slice(located.get('r1').from, located.get('r1').to), 'He leads the robotics club.');
+  assert.ok(located.has('sx-discipline'));
 });

@@ -68,25 +68,32 @@ is not marked down in voice; it is raised as a reader note.
   per 25 words, so up to 28 notes on a 700-word letter). Proposed for letters: always give notes;
   0-50 → 3-4 notes on evidence and basis only; 51-70 → up to 6; 71-100 → up to 8; at most one per
   60 words.
-- **[to build] Reader notes** (not scored, at most 2): how a US or UK reader may read a phrase, as a
+- **[built] Reader notes** (not scored, at most 2): how a US or UK reader may read a phrase, as a
   question: lukewarm praise ("satisfactory", "tries hard", "generally"), faint praise, a rank with
   no basis, or gender-coded patterns (only "caring, diligent" for a girl, only "brilliant, leader"
   for a boy). Example: "A US reader may read 'satisfactory' as a warning; is that what you mean?"
-- **[to build] Copy check** (no AI): compare with the same author's other letters and show "x% of
-  this letter matches your letter of <date>" to the author only.
+- **[built] Copy check** (no AI): compared with the same author's other letters (same recommender name,
+  names and private details masked, word 5-gram shingles, containment of this letter in the other) and
+  shown to the author only as "x% of this letter matches your letter of <date>" at 30% or more. Computed
+  on the check and stored in the check result (`copy: {percent, date}`); the other letter's text is never
+  returned.
 
-## Sensitive content [to build]
+## Sensitive content [built]
 - **Health, mental health, disability:** never scored, quoted as evidence or asked about. One neutral
   note: "This names a health matter of a minor. Have the student and family agreed to share it, and
-  does the reader need it?"
+  does the reader need it?" Server-enforced: a keyword pre-check plus the model's `sensitive` field; a
+  note or strength that quotes a health sentence is dropped.
 - **Disciplinary issues:** never advise hiding or adding. One note: "If this explains an event on the
   record, does the letter say what happened afterwards in your own observation?"
 - **Family hardship:** legitimate context; Naseeb AI never asks for it.
 - **Current abuse or danger:** not scored; one sentence pointing the author to the school's child-
-  protection procedure.
+  protection procedure. Server-enforced: the model's `safety` flag or a present-tense keyword pre-check
+  (the pre-check answers without an AI call and costs nothing).
 - **Privacy:** the student's name, middle name and school are replaced before sending [built]; also
   replace family members', classmates' and staff names ("[Person]"), dates of birth, student IDs and
-  district or town ("[Place]") [to build]. Use a provider with zero data retention.
+  district or town ("[Place]") [built]: by rules (relationship and role cues such as "her mother X",
+  "teacher X", "Mr X", "X opa", "учитель X", a list of Uzbekistan regions, districts and cities, birth-date and
+  ID cues in English, Russian and Uzbek), never by AI; placeholders in quotes are restored in the shown quote. Use a provider with zero data retention.
 
 ## Ideas tab [decide]
 The reviewer flagged that AI sentence starters contradict "never drafts" and make letters for

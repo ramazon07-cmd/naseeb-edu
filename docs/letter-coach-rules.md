@@ -113,3 +113,17 @@ voice 5.
 - A letter check refused because AI is off (master switch or no gateway key) is 503
   `coach_unavailable` with `details.ai_available: false`; a provider or timeout failure is the same
   code with `details.ai_available: true`. Both are free.
+
+### Reader notes, sensitive content, copy check, extra redaction
+
+- The score step also returns `reader_notes` (at most 2 `{quote, question}`, never scored), `safety` and
+  `sensitive` ({health, discipline} sentences). The server stores `result.reader_notes` (ids `r1`, `r2`),
+  `result.sensitive` (`[{kind, quote}]`, one per kind, wording fixed in the frontend in en/ru/uz),
+  `result.safety` and `result.copy` (`{percent, date}`, 30% or more, author only).
+- A sentence with a health keyword (en/ru/uz) or flagged by the model is never quoted by a note, strength
+  or reader note (the quote is dropped). `safety` true, or a current-danger keyword in the letter, gives an
+  unscored check with one sentence pointing to the school's child-protection procedure; the keyword path
+  makes no AI call and uses no budget.
+- Before sending, besides names and school: `[Person]`, `[Place]`, `[ID]`, `[Date of birth]`
+  (`letter_privacy.py`), restored in quotes.
+- Copy check: `letter_copy.py`, same recommender name, word 5-gram shingles, containment; no AI.

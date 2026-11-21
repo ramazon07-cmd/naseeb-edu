@@ -15,6 +15,30 @@ export const LETTER_NORMALIZE = { keys: LETTER_KEYS, fallback: 'evidence' }
 export const normalizeLetterCheck = (check) => normalizeCheck(check, LETTER_NORMALIZE)
 export const letterCriterionLabel = (key) => LETTER_CRITERIA.find((item) => item.key === key)?.label || LETTER_CRITERIA[0].label
 
+// Not scored, not notes: the reader notes, the sensitive-content notes, the copy check and the safety
+// flag the server puts next to the notes of a check (result.reader_notes / sensitive / copy / safety).
+// The wording of the sensitive notes is fixed here so it can be shown in every language.
+export const SENSITIVE_TEXT = {
+  health: 'This names a health matter of a minor. Have the student and family agreed to share it, and does the reader need it?',
+  discipline: 'If this explains an event on the record, does the letter say what happened afterwards in your own observation?',
+}
+export const READER_CRITERION = 'reader'
+export const SENSITIVE_CRITERION = 'sensitive'
+
+export function letterExtras(check) {
+  const result = check?.result
+  if (!result || typeof result !== 'object') return { readerNotes: [], sensitive: [], copy: null, safety: false }
+  const readerNotes = (Array.isArray(result.reader_notes) ? result.reader_notes : [])
+    .filter((item) => item && item.id && item.quote && item.question)
+    .map((item) => ({ id: String(item.id), criterion: READER_CRITERION, quote: String(item.quote), question: String(item.question) }))
+  const sensitive = (Array.isArray(result.sensitive) ? result.sensitive : [])
+    .filter((item) => item && SENSITIVE_TEXT[item.kind])
+    .map((item) => ({ id: `sx-${item.kind}`, criterion: SENSITIVE_CRITERION, kind: item.kind, quote: String(item.quote || ''), question: SENSITIVE_TEXT[item.kind] }))
+  const percent = Math.round(Number(result.copy?.percent))
+  const copy = result.copy && Number.isFinite(percent) && percent >= 30 && result.copy.date ? { percent: Math.min(100, percent), date: String(result.copy.date) } : null
+  return { readerNotes, sensitive, copy, safety: result.safety === true }
+}
+
 export const LETTER_MAX_CHARS = 20000
 export const AI_DAILY_LIMIT = 20
 
@@ -146,6 +170,8 @@ export function fillCheckText(model, name) {
     notes: model.notes.map((note) => ({ ...note, question: fill(note.question), context: fill(note.context) })),
   }
 }
+
+export const fillExtras = (extras, name) => ({ ...extras, readerNotes: extras.readerNotes.map((note) => ({ ...note, question: fillStudent(note.question, name) })) })
 
 export const factsOf = (items) => (items || []).filter((item) => item?.kind === 'fact')
 export const aiIdeasOf = (items) => (items || []).filter((item) => (item?.kind === 'sentence' || item?.kind === 'idea') && item.text)
