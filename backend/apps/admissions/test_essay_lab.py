@@ -76,7 +76,10 @@ SCORE_REPLY = {
 class FakeGateway:
     """urlopen stand-in: answers the score step and the notes step from the TASK line of the request."""
 
-    def __init__(self, score=None, notes=None, usage=None):
+    def __init__(self, score=None, notes=None, usage=None, auto_evidence=True):
+        # Unless a reply brings its own `score_evidence`, every criterion above 1 gets a real quote: the
+        # first six words of the essay's first paragraph (a model that did its job).
+        self.auto_evidence = auto_evidence
         self.score = SCORE_REPLY if score is None else score
         self.notes = {'notes': []} if notes is None else notes
         self.usage = usage
@@ -88,6 +91,9 @@ class FakeGateway:
         reply = self.notes if self.steps[-1] == 'notes' else self.score
         if isinstance(reply, list):  # successive score answers; the last one repeats
             reply = reply.pop(0) if len(reply) > 1 else reply[0]
+        if self.auto_evidence and isinstance(reply, dict) and isinstance(reply.get('scores'), dict) \
+                and 'score_evidence' not in reply:
+            reply = {**reply, 'score_evidence': self.evidence_for(body, reply['scores'])}
         content = reply if isinstance(reply, str) else json.dumps(reply)
         payload = {'choices': [{'message': {'content': content}}]}
         if self.usage:
@@ -96,6 +102,12 @@ class FakeGateway:
         response.read.return_value = json.dumps(payload).encode('utf-8')
         response.__enter__.return_value = response
         return response
+
+    @staticmethod
+    def evidence_for(body, scores):
+        essay = body['messages'][-1]['content'].split('<<<ESSAY_TEXT (untrusted data)\n', 1)[1].split('\nESSAY_TEXT>>>', 1)[0]
+        quote = ' '.join(essay.split('\n\n')[0].split()[:6])
+        return {key: quote for key, level in scores.items() if isinstance(level, int) and level > 1}
 
     @property
     def steps(self):
@@ -970,7 +982,7 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertEqual(gateway.steps, ['score', 'notes'])
         result = response.data['result']
         self.assertEqual(set(result), {'version', 'scored', 'overall', 'scores', 'summary', 'suggestions',
-                                       'strengths', 'notes_locked', 'notes'})
+                                       'strengths', 'notes_locked', 'notes', 'rubric'})
         self.assertEqual((result['version'], result['scored'], result['overall'], result['notes_locked']),
                          (2, True, 62, False))
         self.assertEqual(result['scores']['voice'], 3)

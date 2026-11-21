@@ -64,7 +64,7 @@ Fewer, distinct notes also mean fewer output tokens.
   and not counted against the daily limit.
 - 5 checks per student per day. A re-check of unchanged text does not count.
 - Temperature 0 and one pinned model for scoring (no silent fallback model), so the score is stable.
-- Output caps: step 1 about 400 tokens; step 2 scales with the band (about 60 tokens per note).
+- Output caps: step 1 about 500 tokens (800 for scored types, which also return evidence quotes); step 2 scales with the band (about 60 tokens per note).
 
 ## Language
 
@@ -196,12 +196,13 @@ changed, a new check runs without the re-check rules.
 | `ESSAY_COACH_RECHECK_PER_MINUTE` | 20 | Cheap per-user limit on depth-check requests, applied before the re-check rules (reused and refused re-checks use it, not the 15-second slot or the budget). |
 | `ESSAY_COACH_REASONING_EFFORT` | minimal | Sent as `reasoning_effort`; empty = not sent; dropped for one retry if the gateway answers 400 about it. |
 | `ESSAY_COACH_MAX_OUTPUT_TOKENS` | 2200 | Ceiling for one call (step 1 asks for 500, step 2 for 70 per note + 150). |
+| `ESSAY_SAFETY_HELPLINE` | empty | Helpline text shown with the safety message (empty = no number). Never invent one. |
+| `ESSAY_SAFETY_FREE_PER_DAY` | 2 | Safety answers per user per day that do not use the daily limit. |
 | `ESSAY_COACH_MODEL` | `AI_ASSISTANT_MODEL` | Pinned scoring model; no fallback model is sent. |
 
 The database connection is released before each provider call.
 
 Backend notes: the supplement rubric's criteria are stored under the API keys
 (`fit_specificity` = `prompt_fit`, `evidence` = `specificity`, `concision` = `structure`).
-`notes_locked` is true when the score is 50 or less (step 2 skipped). A distress answer from the
-rubric's safety branch is returned unscored with the message as `summary` and no notes.
+`notes_locked` is true when the score is 50 or less (step 2 skipped). Step 1 also returns `score_evidence` (a quote of at least 5 words per level above 1; without a quote that occurs in the essay the server lowers the level to 1; listed in `evidence_lowered`) and `safety`. `safety: current_danger` returns an unscored result (`safety`, `helpline`, empty summary, no notes); the first `ESSAY_SAFETY_FREE_PER_DAY` such checks per user per day give the daily unit back. `past_hardship` is scored normally and the result carries `safety`. Results also carry `rubric` and, for supplements, `subtype` and `fit_default`. Zero-width and format characters are removed from the essay and prompt before they are sent.
 Error bodies: `notes_open` also carries `open`; `too_small_change` carries `changed` and `min_words`.

@@ -1,8 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, ChevronUp, Compass, Feather, Info, LayoutList, Lightbulb, MessageCircleQuestion, RefreshCw, Lock, Sparkles, Star, Target, Undo2, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Compass, Feather, HeartHandshake, Info, LayoutList, Lightbulb, MessageCircleQuestion, RefreshCw, Lock, Sparkles, Star, Target, Undo2, X } from 'lucide-react'
 import { t, tp } from '../i18n.js'
 import {
-  CRITERIA, STRENGTHS, coachSource, deltaSince, doneNotes, goneNotes, headline, levelWord, normalizeCheck, openNotes, recheckBlock,
+  STRENGTHS, coachSource, criteriaFor, deltaSince, doneNotes, explainFor, goneNotes, headline, levelWord, nearBandEdge, normalizeCheck, openNotes, recheckBlock,
 } from './coachModel.js'
 
 const ERROR_TEXT = {
@@ -77,15 +77,17 @@ function CoachPanel({
 
   const model = useMemo(() => normalizeCheck(check), [check])
   const notes = model?.notes
+  const criteria = useMemo(() => criteriaFor(model?.rubric), [model?.rubric])
   const open = useMemo(() => openNotes(notes, states, anchored), [notes, states, anchored])
   const done = useMemo(() => doneNotes(notes, states), [notes, states])
   const gone = useMemo(() => goneNotes(notes, states, anchored), [notes, states, anchored])
   const total = open.length + done.length
-  const chips = useMemo(() => CRITERIA.map((item) => ({ ...item, count: open.filter((note) => note.criterion === item.key).length })).filter((item) => item.count > 0), [open])
+  const chips = useMemo(() => criteria.map((item) => ({ ...item, count: open.filter((note) => note.criterion === item.key).length })).filter((item) => item.count > 0), [criteria, open])
   const activeFilter = filter === 'all' || chips.some((chip) => chip.key === filter) ? filter : 'all'
   const shown = activeFilter === 'all' ? open : open.filter((note) => note.criterion === activeFilter)
   const strengths = model?.strengths || []
   const locked = Boolean(model?.notesLocked)
+  const danger = model?.safety === 'current_danger'
 
   // A new check starts again from the overview.
   const checkId = check?.id
@@ -127,6 +129,7 @@ function CoachPanel({
   const showNotes = (criterion) => { setFilter(criterion); setTab('notes') }
 
   const scored = Boolean(model?.scored)
+  const nearEdge = scored && nearBandEdge(model.overall)
   const delta = scored ? deltaSince(model.overall, check?.previous_overall) : null
   const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: model?.version2 ? open.length : 0, changed, inputChanged })
   const blockText = block ? t(BLOCK_TEXT[block]) : ''
@@ -147,8 +150,9 @@ function CoachPanel({
         ? <ScoreRing percent={model.overall} label={t('Depth score {n} of 100', { n: model.overall })} />
         : <span className="el-coach-icon" aria-hidden="true"><Sparkles size={22} /></span>}
       <div className="el-coach-title">
-        <strong>{scored ? t(headline(model.overall)) : check ? t('Quick check') : t('Naseeb AI')}</strong>
+        <strong>{scored ? t(headline(model.overall)) : danger ? t('Take care') : check ? t('Quick check') : t('Naseeb AI')}</strong>
         {delta !== null && <span className="el-co-delta">{t('+{n} since last check', { n: delta })}</span>}
+        {nearEdge && <span className="el-co-near">{t('Close to the next level')}</span>}
       </div>
       <div className="el-coach-actions">
         <button type="button" className="el-icon-btn el-hide-sm" aria-label={t('Hide Naseeb AI')} title={t('Hide Naseeb AI')} onClick={onClose}><X size={18} /></button>
@@ -158,7 +162,7 @@ function CoachPanel({
       </div>
     </div>
 
-    {model && !status.loading && <div role="tablist" aria-label={t('Naseeb AI')} className="el-tabs">
+    {model && !danger && !status.loading && <div role="tablist" aria-label={t('Naseeb AI')} className="el-tabs">
       {tabs.map((item, index) => <button key={item.id} type="button" role="tab" data-tab={item.id} id={`el-tab-${item.id}`}
         aria-selected={tab === item.id} aria-controls="el-coach-panel" tabIndex={tab === item.id ? 0 : -1}
         className={`el-tab${tab === item.id ? ' is-on' : ''}`} onClick={() => setTab(item.id)} onKeyDown={(event) => onTabKey(event, index)}>
@@ -187,7 +191,14 @@ function CoachPanel({
           <span>{t('AI feedback isn’t available right now, so these ideas come from simple writing checks. They can still help.')}</span>
         </p>}
 
-        {tab === 'overview' && <>
+        {danger && <section className="el-co-card el-co-safety" role="note">
+          <HeartHandshake size={22} aria-hidden="true" />
+          <strong>{t('You are not alone in this')}</strong>
+          <p>{t('What you wrote sounds heavy, so Naseeb AI has not scored this essay. Please talk to your counselor or to someone you trust. Telling them is your choice, and you can go at your own pace.')}</p>
+          {model.helpline && <p className="el-co-helpline">{t('Helpline')}: <b>{model.helpline}</b></p>}
+        </section>}
+
+        {!danger && tab === 'overview' && <>
           {scored && model.overall <= 50 && <section className="el-co-card el-co-bigpicture">
             <h3>{t('Big picture first')}</h3>
             {model.summary && <p>{model.summary}</p>}
@@ -196,10 +207,20 @@ function CoachPanel({
             </ol>}
           </section>}
 
+          {model.safety === 'past_hardship' && <p className="el-alert is-info el-co-support" role="note">
+            <HeartHandshake size={15} aria-hidden="true" />
+            <span>{t('If writing about this was hard, your counselor is there to talk, whenever you want.')}</span>
+          </p>}
+
+          {model.fitDefault && <p className="el-alert is-info el-co-support" role="note">
+            <Info size={15} aria-hidden="true" />
+            <span>{t('No question was given, so fit to the question counts as Solid (3). Add the school’s question to have it judged.')}</span>
+          </p>}
+
           {Object.keys(model.scores).length > 0 && <section className="el-co-card">
             <h3>{t('Five criteria')}</h3>
             <ul className="el-co-crit">
-              {CRITERIA.map(({ key, label }) => {
+              {criteria.map(({ key, label }) => {
                 const value = Number(model.scores[key]) || 0
                 const word = levelWord(value)
                 const count = open.filter((note) => note.criterion === key).length
@@ -214,7 +235,7 @@ function CoachPanel({
                     </button>
                     {count > 0 && !locked && <button type="button" className="el-co-crit-count" onClick={() => showNotes(key)}>{noteCount(count)}</button>}
                   </div>
-                  {isOpen && <p className="el-co-crit-explain">{t(EXPLAIN[key])}</p>}
+                  {isOpen && <p className="el-co-crit-explain">{t(explainFor(model.rubric, key, EXPLAIN))}</p>}
                 </li>
               })}
             </ul>
@@ -227,7 +248,7 @@ function CoachPanel({
           </section>}
         </>}
 
-        {tab === 'notes' && (locked
+        {!danger && tab === 'notes' && (locked
           ? <div className="el-co-card el-co-locked">
             <span className="el-coach-icon" aria-hidden="true"><Lock size={22} /></span>
             <strong>{t('Notes unlock at 51')}</strong>
@@ -287,7 +308,7 @@ function CoachPanel({
             {gone.length > 0 && <p className="el-small el-gone">{gone.length === 1 ? t('1 idea no longer matches your text') : tp('{n} ideas no longer match your text', gone.length, { n: gone.length })}</p>}
           </>)}
 
-        {tab === 'strengths' && <div className="el-notes">
+        {!danger && tab === 'strengths' && <div className="el-notes">
           {strengths.map((item) => {
             const jumpable = Boolean(item.quote) && anchored.has(item.id)
             const body = <>
