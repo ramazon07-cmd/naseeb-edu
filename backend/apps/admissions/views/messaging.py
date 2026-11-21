@@ -101,6 +101,32 @@ def messaging_contacts_for(user):
     return queryset.filter(reachable).order_by(*order)
 
 
+def pinned_counselor_for(user):
+    """The student's assigned counselor for the pinned row in Messages, or ``None``.
+
+    Only a counselor the student may message (``messaging_contacts_for``), so
+    "start the conversation" always works. ``direct_channel_id`` is the existing
+    chat between them, or ``None`` until one of them writes first.
+    """
+    if user.role != User.Role.STUDENT:
+        return None
+    counselor_id = StudentProfile.objects.filter(user=user).values_list('assigned_counselor_id', flat=True).first()
+    if not counselor_id:
+        return None
+    counselor = messaging_contacts_for(user).filter(id=counselor_id, role=User.Role.COUNSELOR).first()
+    if counselor is None:
+        return None
+    first_id, second_id = sorted([user.id, counselor.id])
+    channel_id = MessageChannel.objects.filter(
+        direct_key=f'{first_id}:{second_id}', kind=MessageChannel.Kind.DIRECT,
+    ).values_list('id', flat=True).first()
+    return {
+        'id': counselor.id,
+        'full_name': counselor.get_full_name() or counselor.username,
+        'direct_channel_id': channel_id,
+    }
+
+
 def discoverable_channels_for(user):
     # Only the requester's own membership is loaded, plus both members of direct
     # chats (for the display name); a community channel can have thousands.
