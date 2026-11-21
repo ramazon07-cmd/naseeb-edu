@@ -347,13 +347,16 @@ class UserViewSet(ListQueryMixin, viewsets.ModelViewSet):
         # Students connect Telegram on Meetings (code from the bot) for meeting messages and reminders.
         from apps.telegram_bot.student_link import link_status
         data['telegram'] = link_status(request.user) if request.user.role == User.Role.STUDENT else None
+        # Students: the assigned counselor, pinned at the top of Messages (null when none).
+        from apps.admissions.views.messaging import pinned_counselor_for
+        data['counselor'] = pinned_counselor_for(request.user)
         # Off: "Add student" offers only the account the counselor creates.
         data['student_self_join'] = self_join_enabled()
         # A student who joined by invite sees only the waiting screen until confirmed.
         data['pending_join'] = pending_join_info(request.user)
         data['awaiting_confirmation'] = data['pending_join'] is not None
         if data['awaiting_confirmation']:
-            data.update(workspace=None, assistant_enabled=False)
+            data.update(workspace=None, assistant_enabled=False, counselor=None)
         return Response(data)
 
     @action(
