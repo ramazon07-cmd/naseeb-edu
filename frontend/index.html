@@ -67,15 +67,30 @@
           document.documentElement.style.colorScheme = 'light'
         }
         // The hero is only preloaded for visitors who will see the landing
-        // page: not for a signed-in browser (the workspace opens) or #/login.
+        // page: not for a signed-in browser (the workspace opens) or any other path.
         // The session key (src/sessionKeys.js, filled in at build time) holds no
         // secret; tokens are never in storage.
         let signedIn = false
         try {
           signedIn = localStorage.getItem('__SESSION_HINT_KEY__') !== null
         } catch { /* storage disabled: treat as a visitor */ }
+        // The sign-in page sets its text in Mona Sans (Latin subset): fetch it early
+        // there only. The session hint holds no role, so a signed-in browser (staff
+        // included) does not preload it; the student app loads it with its styles.
+        if ((location.pathname || '').startsWith('/login') || location.hash === '#/login') {
+          const mona = document.createElement('link')
+          mona.rel = 'preload'
+          mona.as = 'font'
+          mona.type = 'font/woff2'
+          mona.href = '/fonts/mona-sans-latin.woff2'
+          mona.crossOrigin = ''
+          document.head.appendChild(mona)
+        }
+        // Only the landing page shows the hero: /login (and any other path, which opens
+        // the workspace or sign-in) must not spend ~1 MB on an image it never draws.
+        const onLanding = (location.pathname || '/') === '/' && !location.hash
         const hero = document.querySelector('link[data-theme-hero]')
-        if (hero && (signedIn || location.hash === '#/login')) hero.remove()
+        if (hero && (signedIn || !onLanding)) hero.remove()
         else if (hero) {
           // Match the rendered hero, including the storage-disabled fallback.
           const variant = 'light'

@@ -10,6 +10,7 @@ tab's `save_seq` counter for optimistic concurrency.
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import BooleanField, Count, ExpressionWrapper, Max, Q, Value
 from django.db.models.functions import Coalesce
@@ -23,7 +24,7 @@ from rest_framework.settings import api_settings
 from apps.users.audit import audit_product_action
 from apps.users.entitlements import require_feature
 from apps.users.models import User
-from .. import ai_usage
+from .. import ai_budget, ai_usage
 from ..models import (
     ActivityLog, Essay, EssayCheckpoint, EssayDepthCheck, EssayFolder, EssayRevision, EssayTab, EssayTabEdit,
     Notification, StudentProfile,
@@ -51,6 +52,7 @@ from .serializers import (
     FolderOrderSerializer,
     FolderSerializer,
     FolderWriteSerializer,
+    NoteStateSerializer,
     ShareSerializer,
     TabCreateSerializer,
     TabDetailSerializer,
@@ -64,7 +66,7 @@ from .tabs import (
     tree_order,
 )
 from .streak import build_streak, own_words_delta, parse_month, record_words
-from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, spend_coach_budget
+from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, EssayDepthGateThrottle, spend_coach_budget
 from .writes import CHECKPOINT_CAP, TEXT_FIELDS, make_checkpoint, set_text  # noqa: F401 (CHECKPOINT_CAP: tests)
 
 LIST_LIMIT = 500
@@ -810,8 +812,21 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             return error('Save your latest changes before the check.', 'stale', status.HTTP_409_CONFLICT,
                          save_seq=tab.save_seq)
         if not tab.content.strip():
-            raise EssayLabError('Write something first, then ask the Coach.', 'empty_essay')
+            raise EssayLabError('Write something first, then ask Naseeb AI.', 'empty_essay')
         require_feature(request, 'essay_coach')
+        # Cheap guard first: the re-check rules below read the database and compare texts.
+        gate_throttle = EssayDepthGateThrottle()
+        if not gate_throttle.allow_request(request, self):
+            self.throttled(request, gate_throttle.wait())
+        fingerprint = coach.text_fingerprint(tab.content)
+        model_now = coach.current_model()
+        input_hash = coach.input_hash(essay, model_now)
+        latest = EssayDepthCheck.objects.filter(tab_id=tab.pk).order_by('-created_at', '-id').first()
+        if latest is not None:
+            # Re-check rules: answered before the check's own throttle slot, any AI call or the budget.
+            blocked = self._recheck_gate(request, tab, latest, fingerprint, input_hash)
+            if blocked is not None:
+                return blocked
         throttle = EssayDepthCheckThrottle()
         if not throttle.allow_request(request, self):
             self.throttled(request, throttle.wait())
@@ -820,16 +835,15 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
         if coach.gateway_configured():
             if not spend_coach_budget(request.user):
                 ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
-                raise EssayLabError('The Coach is resting for today. Please try again tomorrow.', 'coach_resting', 503)
-            release_db_connection()  # don't hold a pooled connection during the AI call
-            ai_usage.begin()
+                raise EssayLabError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting', 503)
             try:
-                result, model = coach.run_ai_check(essay, tab.content)
+                # Both calls of the check are recorded in ai_usage inside run_ai_check.
+                # release_db_connection runs before each provider call (the transaction guard is inside it).
+                result, model = coach.run_ai_check(essay, tab.content, request.user, release_db_connection)
             except coach.CoachUnavailable:
-                ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.FAILED)
-                raise EssayLabError('The Coach is unavailable right now. Please try again soon.',
+                ai_budget.refund('essay_coach', request.user)  # a failed check is free
+                raise EssayLabError('Naseeb AI is unavailable right now. Please try again soon.',
                                     'coach_unavailable', 503)
-            ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.OK)
         else:
             result, model = coach.run_local_check(essay, tab.content)
             ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.LOCAL_FALLBACK)
@@ -839,16 +853,79 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
             essay = self.get_essay(pk, lock=True, defer=('content',))
             if not EssayTab.objects.filter(pk=tab.pk, essay_id=essay.pk).exists():
                 raise exceptions.NotFound('Tab not found.')
-            check = EssayDepthCheck.objects.create(essay_id=essay.pk, tab=tab, save_seq=tab.save_seq, result=result,
-                                                   model=model)
+            check = EssayDepthCheck.objects.create(
+                essay_id=essay.pk, tab=tab, save_seq=tab.save_seq, result=result, model=model,
+                text_fingerprint=fingerprint, input_hash=input_hash, overall=result.get('overall'),
+            )
             stale_ids = list(
                 EssayDepthCheck.objects.filter(tab_id=tab.pk).order_by('-created_at', '-id')
                 .values_list('id', flat=True)[DEPTH_CHECK_KEEP:]
             )
             if stale_ids:
                 EssayDepthCheck.objects.filter(id__in=stale_ids).delete()
-            _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Coach check', author=request.user)
-        return Response(DepthCheckSerializer(check).data)
+            _make_checkpoint(essay, tab, EssayCheckpoint.Reason.DEPTH_CHECK, label='Naseeb AI check', author=request.user)
+        return Response(DepthCheckSerializer(check, context=self._check_context(request, essay)).data)
+
+    @staticmethod
+    def _check_context(request, essay):
+        """Serializer context; `current_input_hash` is what a check made now would carry (loaded fields only)."""
+        return {'request': request, 'current_input_hash': coach.input_hash(essay, coach.current_model())}
+
+    def _recheck_gate(self, request, tab, latest, fingerprint, input_hash):
+        """The response that refuses or answers a re-check without the AI, or None to go ahead.
+
+        Same text and same input (type, prompt, rubric, model): the latest check comes back unchanged.
+        Same text but another input (or a check from before fingerprints): a new check, no rules, as
+        there is nothing for the student to resolve or change. Otherwise every open note must be
+        resolved (cheap, checked first) and enough words must have changed since the checked text.
+        Without the checkpoint holding that text the word rule cannot be measured and is skipped.
+        """
+        same_text = bool(latest.text_fingerprint) and latest.text_fingerprint == fingerprint
+        if same_text and latest.input_hash == input_hash:
+            return Response(DepthCheckSerializer(
+                latest, context={'request': request, 'reused': True, 'current_input_hash': input_hash}).data)
+        if same_text or not latest.text_fingerprint:
+            return None
+        open_notes = coach.open_note_count(latest.result, latest.note_states, tab.content)
+        if open_notes:
+            return error('Resolve all notes first.', 'notes_open', status.HTTP_409_CONFLICT, open=open_notes)
+        checked_text = (
+            EssayCheckpoint.objects.filter(tab_id=tab.pk, reason=EssayCheckpoint.Reason.DEPTH_CHECK)
+            .order_by('-created_at', '-id').values_list('content', flat=True).first()
+        )
+        if checked_text is None:
+            coach.logger.info('essay_coach_recheck_unmeasured essay_id=%s tab_id=%s', tab.essay_id, tab.pk)
+            return None
+        needed = settings.ESSAY_COACH_MIN_CHANGED_WORDS
+        changed = coach.changed_words(checked_text, tab.content, limit=settings.ESSAY_COACH_MAX_INPUT_CHARS,
+                                      threshold=needed)
+        if changed < needed:
+            return error('Change your essay first.', 'too_small_change', status.HTTP_409_CONFLICT,
+                         changed=changed, min_words=needed)
+        return None
+
+    @action(detail=True, methods=['patch'], url_path=r'depth-check/(?P<check_id>[0-9]+)/notes')
+    def depth_check_note(self, request, pk=None, check_id=None):
+        """Mark one note done, not useful (dismissed), gone (the editor cannot anchor it) or open again. Owner only."""
+        serializer = NoteStateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        note_id, state = serializer.validated_data['note_id'], serializer.validated_data['state']
+        with transaction.atomic():
+            essay = self.get_essay(pk, defer=('content',))
+            check = EssayDepthCheck.objects.select_for_update().filter(pk=check_id, essay_id=essay.pk).first()
+            if check is None:
+                raise exceptions.NotFound('Check not found.')
+            notes = check.result.get('notes') if isinstance(check.result, dict) else None
+            if not any(isinstance(note, dict) and note.get('id') == note_id for note in notes or []):
+                raise EssayLabError('That note is not in this check.', 'unknown_note')
+            states = dict(check.note_states or {})
+            if state == 'open':
+                states.pop(note_id, None)
+            else:
+                states[note_id] = state
+            check.note_states = states
+            check.save(update_fields=['note_states'])
+        return Response(DepthCheckSerializer(check, context=self._check_context(request, essay)).data)
 
     @action(detail=True, methods=['get'], url_path='depth-check/latest')
     def depth_check_latest(self, request, pk=None):
@@ -862,7 +939,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
         check = checks.order_by('-created_at', '-id').first()
         if check is None:
             return Response(status=status.HTTP_204_NO_CONTENT)
-        return Response(DepthCheckSerializer(check).data)
+        return Response(DepthCheckSerializer(check, context=self._check_context(request, essay)).data)
 
 
 def _copy_tabs(essay, originals, now, *, position=None, first_title=None):

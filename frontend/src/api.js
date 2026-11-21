@@ -639,6 +639,24 @@ export const api = {
     signal,
     timeoutMs: 45_000,
   }),
+  // Saving a letter: the same PATCH as update(), with an optional keepalive so it survives a closing page.
+  saveLetter: (id, payload, { keepalive = false } = {}) => request(`/recommendations/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    ...(keepalive ? { keepalive: true, retries: 0 } : {}),
+  }),
+  // Letter Check (counselors only): the latest check (empty answer when none), one run, and a note's state.
+  latestLetterCheck: (id) => request(`/recommendations/${id}/depth-check/latest/`),
+  letterDepthCheck: (id, baseUpdatedAt) => request(`/recommendations/${id}/depth-check/`, {
+    method: 'POST',
+    body: JSON.stringify({ base_updated_at: baseUpdatedAt }),
+    timeoutMs: 100_000,
+    retries: 0,
+  }),
+  setLetterNoteState: (id, checkId, noteId, state) => request(`/recommendations/${id}/depth-check/${checkId}/notes/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ note_id: noteId, state }),
+  }),
   // The student's answer about a shared letter: { decision: 'confirmed' | 'changes_requested', note }.
   reviewLetter: (id, payload) => request(`/recommendations/${id}/student-review/`, {
     method: 'POST',
@@ -712,14 +730,23 @@ export const api = {
   studentXpHistory: (id) => request(`/students/${id}/xp-history/`),
   studentDataVisibility: (id) => request(`/students/${id}/data-visibility/`),
   bookingParticipants: () => request('/bookings/participants/'),
-  bookingAvailability: (participant) => request(`/bookings/availability/${participant ? `?participant=${participant}` : ''}`),
+  // `asStudent` (staff, their own id only): the times a student would be offered — window, notice and free times applied.
+  bookingAvailability: (participant, { asStudent = false } = {}) => request(`/bookings/availability/${participant ? `?participant=${participant}${asStudent ? '&as_student=1' : ''}` : ''}`),
   addBookingAvailability: (payload) => request('/bookings/availability/', { method: 'POST', body: JSON.stringify(payload) }),
   removeBookingAvailability: (id) => request('/bookings/availability/', { method: 'DELETE', body: JSON.stringify({ id }) }),
   editBookingAvailability: (id, payload) => request('/bookings/availability/', { method: 'PATCH', body: JSON.stringify({ ...payload, id }) }),
   // { weekdays: [0-6, Monday = 0], time: 'HH:MM', end_time?: 'HH:MM' (a range cut into slots), duration_minutes, start_date, end_date, timezone } → { created, skipped, slots }
   repeatBookingAvailability: (payload) => request('/bookings/availability/repeat/', { method: 'POST', body: JSON.stringify(payload) }),
   // → { url }: Google's sign-in page; it returns to /meetings?google=connected|failed.
-  startGoogleConnect: () => request('/users/google/start/', { method: 'POST' }),
+  // A student's Telegram for meeting messages. startTelegramLink → { url, expires_in }: a one-time t.me link; the
+  // student presses Start there, and telegramStatus → { enabled, linked } turns linked.
+  telegramStatus: () => request('/telegram/student/'),
+  startTelegramLink: () => request('/telegram/student/link/', { method: 'POST', body: JSON.stringify({}) }),
+  // Superadmin: the Telegram @username a counselor or assistant may log in to the bot with.
+  // List → [{ user_id, telegram_username, role, ... }]; PUT { telegram_username }; DELETE clears it.
+  telegramStaffAccess: () => request('/telegram/staff-access/'),
+  setTelegramStaffAccess: (userId, telegramUsername) => request(`/telegram/staff-access/${userId}/`, { method: 'PUT', body: JSON.stringify({ telegram_username: telegramUsername }) }),
+  clearTelegramStaffAccess: (userId) => request(`/telegram/staff-access/${userId}/`, { method: 'DELETE' }),
   // { duration_minutes, hours: { '0': [['09:00', '12:00']] } } with Monday = 0, Tashkent clock.
   weeklyAvailability: () => request('/bookings/availability/weekly/'),
   saveWeeklyAvailability: (payload) => request('/bookings/availability/weekly/', { method: 'PUT', body: JSON.stringify(payload) }),

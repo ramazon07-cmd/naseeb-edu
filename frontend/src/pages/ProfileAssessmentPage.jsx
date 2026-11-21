@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, BrainCircuit, Check, CheckCircle2, ChevronRight, CloudOff, Fingerprint, Hexagon, Lock, RefreshCw, RotateCw } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BookOpen, Brain, BrainCircuit, Briefcase, Check, CheckCircle2, ChevronRight, CircleHelp, CloudOff, Download, Fingerprint, Heart, Hexagon, IdCard, Lightbulb, Lock, Puzzle, RefreshCw, Sparkles, Target } from 'lucide-react';
 import { api } from '../api';
 import { t } from '../i18n';
 import { Panel } from '../components/ui';
+import { PageHeader } from '../design/blue/ui';
 import { ProfileResultCard } from '../components/ProfileResultCard';
 import { fullName, ownStudent } from '../lib/labels';
 import { profileCardData } from '../lib/profileCard';
@@ -18,6 +19,7 @@ import {
 '../challenges';
 import { EQ_LEAD, EQ_NAME, EQ_ORDER } from '../challengeBanksMind';
 import './assessment-hub.css';
+import '../design/pages/mind-blue.css';
 import {
   MAJOR_ENTRIES, NAMES, recRank, recSignals, subjectPerformance } from
 '../careers';
@@ -481,155 +483,151 @@ function cardSummary(key, result) {
   return null
 }
 
-function HubCard({ challenge, result, answers, saveState, onRetrySave, onOpen, onSeeResult }) {
-  // Hover turns a finished card over; touch and keyboard use the flip button.
-  const [flipped, setFlipped] = useState(false)
-  const frontFlip = useRef(null)
-  const backFlip = useRef(null)
-  const turned = useRef(false)
-  // The face being left goes inert, so keyboard focus follows to the other one.
-  useEffect(() => {
-    if (!turned.current) return
-    turned.current = false
-    const target = flipped ? backFlip.current : frontFlip.current
-    target?.focus({ preventScroll: true })
-  }, [flipped])
-  const turn = (value) => { turned.current = true; setFlipped(value) }
-  const meta = HUB_CARD[challenge.key]
-  // Reasoning has no score columns on the page; its back is its result.
-  const hasDetails = DETAIL_KEYS.includes(challenge.key)
-  // A result still being saved keeps its front, where Retry lives.
-  const unsaved = Boolean(result) && (saveState === 'pending' || saveState === 'failed')
-  const answered = answeredCount(challenge, answers)
-  const total = challenge.items.length
-  const started = answered > 0 && !result
-  const action = result ? t('See the result') : started ? t('Continue') : t('Start')
-  const summary = result ? cardSummary(challenge.key, result) : null
-  const go = <button type="button" className="hub-card-go" aria-label={`${action}: ${t(meta.title)}`} onClick={!result ? onOpen : hasDetails ? onSeeResult : () => turn(true)}>
-    {action}<span aria-hidden="true">→</span>
-  </button>
-  const backTab = flipped ? 0 : -1
-  return <li className={`hub-card${result ? ' is-done' : ''}${unsaved ? ' is-unsaved' : ''}${flipped ? ' is-flipped' : ''}`} data-kind={challenge.key}>
-    <div className="hub-card-inner">
-      <div className="hub-card-face hub-card-front" inert={flipped}>
-        <div className="hub-card-body">
-          <h2>{t(meta.title)}</h2>
-          <p>{t(meta.brief)}</p>
-          <div className="hub-card-side">
-            {started && <>
-              <span className="hub-card-part">{t('{answered} of {total}', { answered, total })}</span>
-              <span className="hub-card-progress" aria-hidden="true"><i style={{ width: `${Math.round((answered / total) * 100)}%` }} /></span>
-            </>}
-            {result && saveState === 'pending' && <span className="hub-card-save" role="status"><RefreshCw size={12} className="spin" aria-hidden="true" />{t('Not saved yet — retrying')}</span>}
-            {result && saveState === 'failed' && <span className="hub-card-save" role="alert"><CloudOff size={12} aria-hidden="true" />{t('Not saved')}<button type="button" onClick={onRetrySave}>{t('Retry')}</button></span>}
-            {go}
-          </div>
-        </div>
-        <img className="hub-card-art" src={meta.image} alt="" decoding="async" />
-        {summary && <button ref={frontFlip} type="button" className="hub-card-flip" aria-label={t('Show summary: {test}', { test: t(meta.title) })} onClick={() => turn(true)}><RotateCw size={16} aria-hidden="true" /></button>}
-      </div>
-      {/* Not inert: a hover turns the card without changing state, and the back's
-          button must take that click. Keyboard and screen readers reach it only
-          once the flip button has turned it. */}
-      {summary && <div className="hub-card-face hub-card-back" aria-hidden={!flipped}>
-        <div className="hub-card-body">
-          <span className="hub-card-eyebrow">{t(meta.title)}</span>
-          <h3>{summary.headline}</h3>
-          <p>{summary.text}</p>
-          <div className="hub-card-side">
-            {hasDetails && <button type="button" className="hub-card-go" tabIndex={backTab} aria-label={`${t('See the result')}: ${t(meta.title)}`} onClick={onSeeResult}>
-              {t('See the result')}<span aria-hidden="true">→</span>
-            </button>}
-            <button type="button" className={hasDetails ? 'hub-card-review' : 'hub-card-go'} tabIndex={backTab} aria-label={`${t('Review answers')}: ${t(meta.title)}`} onClick={onOpen}>
-              {t('Review answers')}{!hasDetails && <span aria-hidden="true">→</span>}
-            </button>
-          </div>
-        </div>
-        <div className="hub-card-chart">{summary.chart}</div>
-        <button ref={backFlip} type="button" className="hub-card-flip" aria-label={t('Show the front: {test}', { test: t(meta.title) })} tabIndex={backTab} onClick={() => turn(false)}><RotateCw size={16} aria-hidden="true" /></button>
-      </div>}
-    </div>
-  </li>
+// ---- the profile sheet ----
+// One section per test, in the order the profile reads: a finished test shows its
+// result, an unfinished one asks the question it will answer. Tests open in the
+// page itself, so "Take test" and "Review answers" call onOpen.
+const MF_ORDER = ['personality', 'interests', 'subjects', 'values', 'workimportance', 'reasoning', 'eq']
+const MF_ICON = { personality: Brain, interests: Lightbulb, subjects: BookOpen, values: Briefcase, workimportance: Target, reasoning: Puzzle, eq: Heart }
+const MF_TITLE = { values: 'What you want from work', workimportance: 'What matters most to you', reasoning: 'How you reason', eq: 'How you handle emotions' }
+const MF_TEASER = {
+  personality: 'Fifty statements about how you usually are. Which ones sound like you?',
+  interests: 'Which kinds of work would you enjoy? Not about ability, only about liking it.',
+  subjects: 'Eleven school subjects. What can you do, what do you enjoy, what does it cost you?',
+  values: 'What do you want from your future work?',
+  workimportance: 'Twenty things a job can offer. Which matter most to you?',
+  reasoning: 'Sixteen puzzles. Can you find the pattern?',
+  eq: 'How do you understand and manage emotions?',
 }
 
-// The hub's third column. While a core test is unfinished it points at the
-// next one; once all seven are saved, Continue turns it into the student's three
-// majors, which stay on the card (and in this browser) from then on.
-function HubNextCard({ results, answers, lockReason, shortlist, revealed, onReveal, onOpen, student, reload, notify }) {
+const questionCount = (challenge) => challenge.key === 'reasoning'
+  ? t('{n} puzzles', { n: challenge.items.length })
+  : t('{n} questions', { n: challenge.items.length })
+
+// Label, bar and value rows; `max` is the test's own top score.
+function MfBars({ rows, max = 5 }) {
+  return <ul className="nb-mf-bars">{rows.map(([label, value], index) => <li key={label} className={index === 0 ? 'is-top' : ''}>
+    <span>{label}</span>
+    <i aria-hidden="true"><u style={{ width: `${Math.max(4, Math.min(100, (value / max) * 100))}%` }} /></i>
+    <b>{Number(value).toFixed(1)}</b>
+  </li>)}</ul>
+}
+
+function mfBody(key, result) {
+  const summary = cardSummary(key, result)
+  if (key === 'personality') {
+    return <MfBars rows={TRAIT_ORDER.map((trait) => [t(TRAIT_LABEL[trait]), result[trait]]).sort((a, b) => b[1] - a[1])} />
+  }
+  if (key === 'interests') return <div className="nb-mf-hex">
+    <ProfilePolygon
+      caption={t('Your interest profile')}
+      axes={RIASEC_ORDER.map((s) => ({ key: s, label: t(RIASEC_NAME[s]), short: s, value: result.means[s] }))}
+    />
+    <p>{summary.headline}</p>
+  </div>
+  if (key === 'subjects') return <>
+    <div className="nb-mf-chips">{result.ranked.slice(0, 3).map((subject) => <span key={subject}>{t(SUBJECT_NAME[subject])} <b>{Number(result.bySubject[subject]).toFixed(1)}</b></span>)}</div>
+    <p className="nb-mf-note">{t('From “How school feels”. Not your marks.')}</p>
+  </>
+  if (key === 'values') return <>
+    <p className="nb-mf-lead">{summary.headline}</p>
+    <MfBars rows={result.ranked.slice(0, 4).map((dim) => [t(VALUE_NAME[dim]), result.byDim[dim]])} />
+  </>
+  if (key === 'workimportance') return <>
+    <p className="nb-mf-lead">{summary.headline}</p>
+    <MfBars rows={result.ranked.slice(0, 4).map((value) => [t(WIL_SHORT[value]), result.scores[value]])} />
+  </>
+  if (key === 'eq') return <>
+    <p className="nb-mf-lead">{summary.headline}</p>
+    <MfBars rows={EQ_ORDER.map((dim) => [t(EQ_SHORT[dim]), result.scores[dim]])} max={7} />
+  </>
+  return <div className="nb-mf-score"><strong>{result.correct}<small> / {result.total}</small></strong><p>{summary.headline}</p><p className="nb-mf-note">{summary.text}</p></div>
+}
+
+function MindSection({ index, challenge, result, answers, saveState, isNext, onOpen, onRetrySave }) {
+  const key = challenge.key
+  const Icon = MF_ICON[key]
+  const icon = <span className="nb-mf-si"><Icon size={18} aria-hidden="true" /></span>
+  const name = t(HUB_CARD[key].title)
+  const style = { '--i': index }
+  if (result) {
+    const status = saveState === 'pending'
+      ? <span className="nb-mf-save" role="status"><RefreshCw size={13} className="spin" aria-hidden="true" />{t('Not saved yet — retrying')}</span>
+      : saveState === 'failed'
+        ? <span className="nb-mf-save is-failed" role="alert"><CloudOff size={13} aria-hidden="true" />{t('Not saved')}<button type="button" onClick={onRetrySave}>{t('Retry')}</button></span>
+        : <span className="nb-mf-ok"><Check size={13} aria-hidden="true" />{t('Done')}</span>
+    return <section className="nb-mf-sec" style={style} data-kind={key} aria-label={name}>
+      <header>{icon}<h3>{name}</h3>{status}</header>
+      {mfBody(key, result)}
+      <button type="button" className="nb-mf-rev" onClick={onOpen}>{t('Review answers')}</button>
+    </section>
+  }
+  const started = answeredCount(challenge, answers) > 0
+  const action = started ? t('Continue') : isNext ? t('Start') : t('Take test')
+  return <section className={`nb-mf-sec is-locked${isNext ? ' is-next' : ''}`} style={style} data-kind={key} aria-label={name}>
+    <span className="nb-mf-qm" aria-hidden="true">?</span>
+    <header>{icon}<h3>{MF_TITLE[key] ? t(MF_TITLE[key]) : name}</h3>{isNext ? <span className="nb-mf-tag is-next">{t('Next step')}</span> : <span className="nb-mf-tag">{questionCount(challenge)}</span>}</header>
+    <p className="nb-mf-tz">{t(MF_TEASER[key])}</p>
+    <div className="nb-mf-fill">
+      <span><Lock size={15} aria-hidden="true" />{t('Fills in after “{test}”', { test: name })}</span>
+      <button type="button" className={`nb-mf-go${isNext ? ' is-primary' : ''}`} aria-label={`${action}: ${name}`} onClick={onOpen}>{action}<ArrowUpRight size={14} aria-hidden="true" /></button>
+    </div>
+  </section>
+}
+
+// The three majors. Locked until every test is saved; Continue then reveals the
+// three, which stay on the card (and in this browser) from then on.
+function MindMajors({ left, lockReason, shortlist, revealed, onReveal, student, reload, notify }) {
   const [pick, setPick] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const done = results.filter(([, result]) => result).length
-  const dots = <div className="hub-next-dots" aria-hidden="true">{results.map(([challenge, result]) => <i key={challenge.key} className={result ? 'is-done' : ''} />)}</div>
-  const status = <div className="hub-next-status"><span>{t('{done} / {total} completed', { done, total: results.length })}</span>{dots}</div>
-  const logo = <img className="hub-next-logo" src="/assessment/hub/logo.png" alt="" />
-
   const majors = revealed && !lockReason ? revealed.majors : null
-  if (majors) {
-    const saved = student?.target_major || ''
-    const chosen = pick || majors.find((key) => NAMES.majors[key] === saved) || ''
-    const unsaved = Boolean(chosen) && NAMES.majors[chosen] !== saved
-    async function save() {
-      if (!unsaved || !student) return
-      setSaving(true)
-      setError('')
-      try {
-        await api.update('students', student.id, { target_major: NAMES.majors[chosen] })
-        notify?.(t('{major} saved as your current study direction.', { major: t(NAMES.majors[chosen]) }))
-        setPick('')
-        reload?.()
-      } catch (requestError) {
-        setError(requestError.message || t('We could not save your selected major.'))
-      } finally {
-        setSaving(false)
-      }
+  const ready = !lockReason && shortlist.length > 0
+  const savedMajor = student?.target_major || ''
+  const chosen = pick || (majors ? majors.find((key) => NAMES.majors[key] === savedMajor) : '') || ''
+  const unsaved = Boolean(chosen) && NAMES.majors[chosen] !== savedMajor
+  async function save() {
+    if (!unsaved || !student) return
+    setSaving(true)
+    setError('')
+    try {
+      await api.update('students', student.id, { target_major: NAMES.majors[chosen] })
+      notify?.(t('{major} saved as your current study direction.', { major: t(NAMES.majors[chosen]) }))
+      setPick('')
+      reload?.()
+    } catch (requestError) {
+      setError(requestError.message || t('We could not save your selected major.'))
+    } finally {
+      setSaving(false)
     }
-    return <aside className="hub-next has-picks" aria-labelledby="hub-next-title">
-      <div className="hub-next-eyebrow">{t('Recommended majors')}</div>
-      <h2 id="hub-next-title">{t('Your three majors')}</h2>
+  }
+  const unlocked = Boolean(majors) || ready
+  return <section className="nb-mf-sec nb-mf-maj" style={{ '--i': 7 }} aria-labelledby="mind-majors-title">
+    <header>
+      <span className="nb-mf-si"><Sparkles size={18} aria-hidden="true" /></span>
+      <h3 id="mind-majors-title">{majors ? t('Your three majors') : t('Who could you become?')}</h3>
+      <span className="nb-mf-tag">{unlocked ? t('Your three majors are ready') : <><Lock size={12} aria-hidden="true" /> {left > 0 ? t('{n} tests left', { n: left }) : t('Locked')}</>}</span>
+    </header>
+    {majors ? <>
       <p>{t('Based on your results. Saved on this computer.')}</p>
-      <div className="hub-next-majors" role="radiogroup" aria-label={t('Your three majors')}>
-        {majors.map((key, index) => <button key={key} type="button" role="radio" aria-checked={chosen === key} className={chosen === key ? 'selected' : ''} onClick={() => setPick(key)}>
-          <span>{String(index + 1).padStart(2, '0')}</span>
+      <div className="nb-mf-picks" role="radiogroup" aria-label={t('Your three majors')}>
+        {majors.map((key, position) => <button key={key} type="button" role="radio" aria-checked={chosen === key} className={chosen === key ? 'is-selected' : ''} onClick={() => setPick(key)}>
+          <span>{String(position + 1).padStart(2, '0')}</span>
           <strong>{t(NAMES.majors[key])}{coreSubjects(key).length > 0 && <small>{coreSubjects(key).join(' · ')}</small>}</strong>
           {chosen === key && <Check size={16} aria-hidden="true" />}
         </button>)}
       </div>
-      <button type="button" className="hub-next-button" onClick={save} disabled={!unsaved || saving || !student}>
-        {saving ? t('Saving choice…') : unsaved ? t('Choose {major}', { major: t(NAMES.majors[chosen]) }) : saved && chosen ? <><CheckCircle2 size={18} aria-hidden="true" />{t('Saved as your study direction')}</> : t('Select one major')}
+      <button type="button" className="nb-mf-choose" onClick={save} disabled={!unsaved || saving || !student}>
+        {saving ? t('Saving choice…') : unsaved ? t('Choose {major}', { major: t(NAMES.majors[chosen]) }) : savedMajor && chosen ? <><CheckCircle2 size={18} aria-hidden="true" />{t('Saved as your study direction')}</> : t('Select one major')}
       </button>
-      {error && <p className="hub-next-error" role="alert">{error}</p>}
-    </aside>
-  }
-
-  const ready = !lockReason && shortlist.length > 0
-  if (ready || (lockReason && lockReason !== 'incomplete')) return <aside className="hub-next" aria-labelledby="hub-next-title">
-    {logo}
-    <div className="hub-next-eyebrow">{t('Next step')}</div>
-    <h2 id="hub-next-title">{t('Recommended majors')}</h2>
-    <p>{ready ? t('All seven tests are complete. Continue to see your three majors.') : t(LOCK_TEXT[lockReason])}</p>
-    {status}
-    <button type="button" className="hub-next-button" onClick={() => onReveal(shortlist)} disabled={!ready}>
-      {lockReason === 'loading' ? <RefreshCw size={18} className="spin" aria-hidden="true" /> : !ready ? <Lock size={18} aria-hidden="true" /> : null}
-      <span>{t('Continue')}</span>{ready && <ArrowRight size={18} aria-hidden="true" />}
-    </button>
-  </aside>
-
-  // The test they left half-way wins over the first one they have not started.
-  const open = results.filter(([, result]) => !result).map(([challenge]) => challenge)
-  const next = open.find((challenge) => answeredCount(challenge, answers) > 0) || open[0]
-  if (!next) return null
-  const paused = answeredCount(next, answers) > 0
-  return <aside className="hub-next" aria-labelledby="hub-next-title">
-    {logo}
-    <div className="hub-next-eyebrow">{t('Next step')}</div>
-    <h2 id="hub-next-title">{t(HUB_CARD[next.key].title)}</h2>
-    <p>{paused ? t('Continue the test you started. Your answers are saved.') : done ? t('Take the assessments to understand yourself better.') : t('Start with this test to understand your personal traits.')}</p>
-    {status}
-    <button type="button" className="hub-next-button" onClick={() => onOpen(next.key)}>
-      <span>{paused ? t('Continue') : t('Start')}</span><ArrowRight size={18} aria-hidden="true" />
-    </button>
-  </aside>
+      {error && <p className="nb-mf-error" role="alert">{error}</p>}
+    </> : <>
+      <div className="nb-mf-deck" aria-hidden="true">{[1, 2, 3].map((n) => <div className="nb-mf-q" key={n}>?<small>{n}</small></div>)}</div>
+      <p>{ready ? t('All seven tests are complete. Continue to see your three majors.') : lockReason && lockReason !== 'incomplete' ? t(LOCK_TEXT[lockReason]) : t('When all 7 tests are done, Naseeb Mind shows the three majors that fit you best. Pick one and it becomes your study direction.')}</p>
+      {unlocked && <button type="button" className="nb-mf-choose" onClick={() => onReveal(shortlist)}>{t('Continue')}<ArrowRight size={18} aria-hidden="true" /></button>}
+    </>}
+    {student?.target_major && !majors && <div className="nb-mf-dir"><Target size={17} aria-hidden="true" /><span><small>{t('Your study direction now')}</small><b>{t(student.target_major)}</b></span></div>}
+  </section>
 }
 
 // Every challenge, EQ included, is needed before the majors unlock.
@@ -655,14 +653,6 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
   const FP_STORAGE_KEY = userStorageKey(USER_STORAGE.assessment, user.id)
   const [answers, setAnswers] = useState(() => loadChallengeAnswers(FP_STORAGE_KEY))
   const [openKey, setOpenKey] = useState(null)
-  const [highlight, setHighlight] = useState(null)
-  const [cardFlipRequest, setCardFlipRequest] = useState(0)
-  // "See the result" marks its column for a moment, then lets it go.
-  useEffect(() => {
-    if (!highlight) return undefined
-    const timer = window.setTimeout(() => setHighlight(null), 2600)
-    return () => window.clearTimeout(timer)
-  }, [highlight])
   const MAJORS_KEY = userStorageKey(USER_STORAGE.assessmentMajors, user.id)
   const [revealed, setRevealed] = useState(() => loadRevealedMajors(MAJORS_KEY))
   // Completed attempts already on the server, newest per challenge.
@@ -827,58 +817,90 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
     firstName: person?.first_name || fullName(person),
     lastName: person?.last_name || '',
   })
+  const order = MF_ORDER.map((key) => results.find(([challenge]) => challenge.key === key)).filter(Boolean)
+  const percent = Math.round((doneCount / results.length) * 100)
+  // The test they left half-way wins over the first one they have not started.
+  const openOnes = order.filter(([, result]) => !result).map(([challenge]) => challenge)
+  const nextChallenge = openOnes.find((challenge) => answeredCount(challenge, answers) > 0) || openOnes[0] || null
+  const nextStarted = nextChallenge ? answeredCount(nextChallenge, answers) > 0 : false
   const openChallenge = (key) => { setOpenKey(key); window.scrollTo(0, 0) }
-  // A finished card leads to its own numbers: on the profile card's back for
-  // the three it carries (turning the card over), in the list under it for the rest.
-  const seeResult = (key) => {
-    const onCardBack = Boolean(card) && CARD_BACK_KEYS.includes(key)
-    const target = onCardBack ? document.querySelector('.profile-card-panel') : document.getElementById(`assessment-result-${key}`)
-    if (!target) return
-    if (onCardBack) setCardFlipRequest((value) => value + 1)
-    setHighlight(key)
-    target.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })
+  // "Your results on one card" brings the profile card into view.
+  const showCard = () => {
+    const target = document.querySelector('.profile-card-panel')
+    target?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
   }
 
-  if (open) return <ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} />
+  // The blue shell hides its fallback title once a PageHeader is mounted, so every state renders one.
+  const mindHeader = <PageHeader title={t('Naseeb Mind')} subtitle={t('Discover your personality, interests and strongest subjects — and the study directions that fit you.')} />;
+
+  if (open) return <>{mindHeader}<ChallengeRunner challenge={open} answers={answers} onAnswer={answerItem} onFinish={() => finishChallenge(open)} onBack={() => setOpenKey(null)} /></>
 
   return <div className="section-stack student-portal profile-assessment-page">
+    {mindHeader}
     {loadState === 'error' && <div className="assessment-load-error" role="alert">
       <CloudOff size={16} aria-hidden="true" />
       <span>{t('We couldn’t load the results saved to your account.')}</span>
       <button type="button" className="button quiet small" onClick={loadAttempts}><RefreshCw size={14} aria-hidden="true" /> {t('Retry')}</button>
     </div>}
-    <div className="hub-layout">
-      <ol className="hub-list" aria-label={t('Profile assessment challenges')}>{results.map(([challenge, result]) => <HubCard
-        key={challenge.key}
-        challenge={challenge}
-        result={result}
-        answers={answers}
-        saveState={failed[challenge.key] ? 'failed' : pending[challenge.key] ? 'pending' : saved[challenge.key] ? 'saved' : null}
-        onRetrySave={retrySave}
-        onOpen={() => openChallenge(challenge.key)}
-        onSeeResult={() => seeResult(challenge.key)}
-      />)}</ol>
-      <HubNextCard
-        results={results}
-        answers={answers}
-        lockReason={lockReason}
-        shortlist={shortlist}
-        revealed={revealed}
-        onReveal={revealMajors}
-        onOpen={openChallenge}
-        student={student}
-        reload={reload}
-        notify={notify}
-      />
+    <div className="nb-mf-hdr">
+      <div><p className="eyebrow">{t('Naseeb Mind · your profile')}</p><h2>{t('What we know about you so far')}</h2></div>
+      <div className="nb-mf-seg" role="img" aria-label={t('{a} of {b} tests done', { a: doneCount, b: results.length })}>
+        {order.map(([challenge, result]) => <i key={challenge.key} className={result ? 'is-done' : nextChallenge?.key === challenge.key ? 'is-next' : ''} title={t(HUB_CARD[challenge.key].title)} />)}
+        <span className="nb-mf-seg-lock"><Lock size={13} aria-hidden="true" /></span>
+        <em>{doneCount} / {results.length}</em>
+      </div>
+    </div>
+    <div className="nb-mf">
+      <div className="nb-mf-sheet">
+        {order.map(([challenge, result], index) => <MindSection
+          key={challenge.key}
+          index={index}
+          challenge={challenge}
+          result={result}
+          answers={answers}
+          saveState={failed[challenge.key] ? 'failed' : pending[challenge.key] ? 'pending' : saved[challenge.key] ? 'saved' : null}
+          isNext={nextChallenge?.key === challenge.key}
+          onOpen={() => openChallenge(challenge.key)}
+          onRetrySave={retrySave}
+        />)}
+        <MindMajors
+          left={results.length - doneCount}
+          lockReason={lockReason}
+          shortlist={shortlist}
+          revealed={revealed}
+          onReveal={revealMajors}
+          student={student}
+          reload={reload}
+          notify={notify}
+        />
+      </div>
+      <aside className="nb-mf-side">
+        {nextChallenge && <div className="nb-mf-card">
+          <p className="eyebrow">{t('Next step')}</p>
+          <h3>{t(HUB_CARD[nextChallenge.key].title)}</h3>
+          <p>{questionCount(nextChallenge)} · {t(HUB_CARD[nextChallenge.key].brief)}</p>
+          <button type="button" className="nb-mf-start" onClick={() => openChallenge(nextChallenge.key)}>{nextStarted ? t('Continue') : t('Start')}<ArrowRight size={16} aria-hidden="true" /></button>
+        </div>}
+        <div className="nb-mf-card">
+          <div className="nb-mf-ring">
+            <span className="nb-mf-ringv" style={{ '--v': percent }} aria-hidden="true"><b>{percent}%</b></span>
+            <div><b>{t('{a} of {b} tests done', { a: doneCount, b: results.length })}</b><p>{t('Answers save as you go. Take the tests in any order.')}</p></div>
+          </div>
+        </div>
+        <p className="nb-mf-guide"><CircleHelp size={18} aria-hidden="true" /><span><b>{t('A guide, not a diagnosis.')}</b> {t('A result is a picture of you today. Retake a test to update it.')}</span></p>
+        {card && <div className="nb-mf-links">
+          <button type="button" className="nb-mf-link" onClick={showCard}><IdCard size={22} aria-hidden="true" /><span><b>{t('Your results on one card')}</b><small>{t('Download card')}</small></span><Download size={16} aria-hidden="true" /></button>
+        </div>}
+      </aside>
     </div>
 
     {doneCount > 0 && <div id="assessment-results" className="assessment-results-stack">
       {card
         ? <>
-          <ProfileResultCard card={card} student={student} flipRequest={cardFlipRequest}><ResultNumbers results={results} keys={CARD_BACK_KEYS} highlight={highlight} /></ProfileResultCard>
-          <ResultNumbers results={results} keys={UNDER_CARD_KEYS} highlight={highlight} />
+          <ProfileResultCard card={card} student={student} ><ResultNumbers results={results} keys={CARD_BACK_KEYS} /></ProfileResultCard>
+          <ResultNumbers results={results} keys={UNDER_CARD_KEYS} />
         </>
-        : <ResultsSummary results={results} highlight={highlight} />}
+        : <ResultsSummary results={results} />}
     </div>}
   </div>
 }

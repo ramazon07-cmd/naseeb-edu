@@ -10,7 +10,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
-from apps.users.google import google_connect_enabled
+from apps.telegram_bot.student_link import is_linked, telegram_link_enabled
 from apps.users.models import User
 from apps.users.serializers import ContactSerializer
 from ..models import (
@@ -33,19 +33,14 @@ from ..serializers import (
 from ..serializers.portal import CHOOSE_AVAILABLE_TIME, MeetingAvailabilityRepeatSerializer, MeetingAvailabilitySerializer, MeetingScheduleSerializer
 from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
 from ..listing import ListQueryMixin
-from ..meeting_mail import email_after_commit
+from ..meeting_service import create_staff_booking, notice_time, notify_participant, notify_student
 from ..meetings import (
-    MAX_REPEAT_SLOTS, add_free_slots, fill_schedule, free_slots, overlapping, top_up_schedule, top_up_schedules,
-    upcoming_slots, weekly_starts, with_availability,
+    MAX_REPEAT_SLOTS, add_free_slots, bookable_slots, fill_schedule, free_slots, notice_message, outside_window, overlapping, respecting_notice,
+    too_soon_for_student, top_up_schedule, top_up_schedules, upcoming_slots, weekly_starts, with_availability, within_window,
 )
-from ..params import int_param
+from ..params import flag_param, int_param
 from ..scoping import booking_participants_for, scope_students, visible_students
 from .common import CONTACT_LIST_LIMIT, SCREEN_TIME_TEAM_LIMIT
-
-
-def notice_time(value):
-    # Readers may sit in another zone; the notice text says which clock it uses.
-    return f"{timezone.localtime(value).strftime('%d %b %Y, %H:%M')} (Tashkent time)"
 
 
 class StudentPortalPermission(permissions.BasePermission):
@@ -90,25 +85,34 @@ class StudentCollaborationPermission(permissions.BasePermission):
             if isinstance(obj, Booking):
                 return obj.counselor_id == user.id
             if isinstance(obj, StudentMessage):
-                return user.id in {obj.sender_id, obj.recipient_id}
+                if user.id not in {obj.sender_id, obj.recipient_id}:
+                    return False
+                # Same rule as the student: staff may change only what they wrote; marking read is separate.
+                if request.method in permissions.SAFE_METHODS:
+                    return True
+                return view.action == 'read' or obj.sender_id == user.id
             return False
-        return getattr(obj, 'student_id', None) == user.student_profile.id
+        if getattr(obj, 'student_id', None) != user.student_profile.id:
+            return False
+        # In their own thread a student may only change what they wrote; reading is a separate action.
+        if isinstance(obj, StudentMessage) and request.method not in permissions.SAFE_METHODS:
+            return view.action == 'read' or obj.sender_id == user.id
+        return True
 
 
 # Staff who take meetings with their students; an assistant has their own calendar.
 BOOKING_STAFF_ROLES = {User.Role.COUNSELOR, User.Role.ASSISTANT, User.Role.TEACHER, User.Role.ORGANIZATION}
 
 
-# Who must connect a Google account (a verified email for meeting emails) before changing meetings.
-GOOGLE_REQUIRED_ROLES = {User.Role.STUDENT, User.Role.COUNSELOR, User.Role.ASSISTANT}
-# The writes that start something new; every other meeting action works without Google.
-GOOGLE_REQUIRED_ACTIONS = {'create', 'availability', 'availability_repeat', 'availability_weekly'}
+OUTSIDE_WINDOW = 'This time is outside the days this staff member accepts meetings. Choose another time.'
+# A student connects Telegram (meeting messages and reminders) before requesting or moving a meeting.
+TELEGRAM_REQUIRED_ACTIONS = {'create', 'reschedule'}
 
 
 class BookingPermission(permissions.BasePermission):
     """Keep meeting requests scoped to the student and the selected staff participant."""
 
-    STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'availability', 'cancel', 'reschedule', 'destroy'}
+    STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'availability', 'approve', 'reject', 'cancel', 'reschedule', 'destroy'}
     STAFF_ACTIONS = {'list', 'retrieve', 'create', 'availability', 'availability_repeat', 'availability_weekly', 'approve', 'reject', 'complete', 'cancel', 'reschedule', 'destroy'}
 
     def has_permission(self, request, view):
@@ -117,12 +121,11 @@ class BookingPermission(permissions.BasePermission):
             return False
         if user.is_superuser or user.role == User.Role.ADMIN:
             return True
-        # Starting something new (a request, published times) needs the connected account. Meetings that
-        # already exist can still be confirmed, declined, moved, cancelled and cleared without it, so
-        # turning the feature on never strands a booked meeting.
-        if (request.method not in permissions.SAFE_METHODS and view.action in GOOGLE_REQUIRED_ACTIONS
-                and user.role in GOOGLE_REQUIRED_ROLES and not user.google_email and google_connect_enabled()):
-            raise PermissionDenied('Connect your Google account to use Meetings.')
+        # A new request or a move needs the student's Telegram, where its answer and reminders arrive. Existing
+        # meetings can still be cancelled without it, so turning this on strands nothing. Staff are never gated.
+        if (request.method not in permissions.SAFE_METHODS and view.action in TELEGRAM_REQUIRED_ACTIONS
+                and user.role == User.Role.STUDENT and telegram_link_enabled() and not is_linked(user)):
+            raise drf_serializers.ValidationError({'detail': 'Connect Telegram to book a meeting.', 'code': 'telegram_required'})
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
             return view.action in self.STUDENT_ACTIONS
         if user.role in BOOKING_STAFF_ROLES:
@@ -134,7 +137,7 @@ class BookingPermission(permissions.BasePermission):
         if user.is_superuser or user.role == User.Role.ADMIN:
             return True
         if user.role == User.Role.STUDENT and hasattr(user, 'student_profile'):
-            return obj.student_id == user.student_profile.id and view.action in {'retrieve', 'cancel', 'reschedule', 'destroy'}
+            return obj.student_id == user.student_profile.id and view.action in {'retrieve', 'approve', 'reject', 'cancel', 'reschedule', 'destroy'}
         return obj.participant_id == user.id and view.action in {'retrieve', 'approve', 'reject', 'complete', 'cancel', 'reschedule', 'destroy'}
 
 
@@ -148,7 +151,7 @@ class StudentPortalOwnedViewSet(viewsets.ModelViewSet):
 class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
     serializer_class = BookingSerializer
     permission_classes = [BookingPermission]
-    queryset = Booking.objects.select_related('student__user', 'participant', 'participant__school').all()
+    queryset = Booking.objects.select_related('student__user', 'student__user__student_telegram', 'participant', 'participant__school').all()
     search_fields = ('topic',)
     search_student_path = 'student'
     int_filters = {'student': 'student_id', 'participant': 'participant_id'}
@@ -179,22 +182,13 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             profile = visible_students(user).filter(id=student_id).first()
             if not profile:
                 raise drf_serializers.ValidationError({'student': 'Select one of your students.'})
-            start = serializer.validated_data['starts_at']
-            duration = serializer.validated_data.get('duration_minutes', 45)
-            with transaction.atomic():
-                # Same per-staff lock as availability and student claims.
-                User.objects.select_for_update().get(pk=user.pk)
-                if overlapping(Booking.objects.filter(participant=user, status__in=Booking.OPEN_STATUSES), start, duration):
-                    raise drf_serializers.ValidationError({'starts_at': 'This time overlaps another meeting.'})
-                # Staff books with themselves: confirmed immediately (no self-approval
-                # step), the student is told and can still reschedule or cancel.
-                booking = serializer.save(student=profile, participant=user, status=Booking.Status.APPROVED)
-                participant_name = user.get_full_name() or user.username
-                meeting_time = notice_time(booking.starts_at)
-                self._notify(
-                    booking, 'Meeting confirmed',
-                    f'{participant_name} booked "{booking.topic}" with you on {meeting_time}.',
-                )
+            data = serializer.validated_data
+            # A counselor's invitation waits for the student's answer unless the form says otherwise.
+            ask_student = flag_param(self.request.data, 'ask_student', default=True)
+            serializer.instance = create_staff_booking(
+                user, profile, starts_at=data['starts_at'], duration_minutes=data.get('duration_minutes', 45),
+                topic=data['topic'], notes=data.get('notes', ''), ask_student=ask_student,
+            )
             return
         if user.role != User.Role.STUDENT or not hasattr(user, 'student_profile'):
             # Product admins pass the permission check but neither hold a student profile nor take meetings.
@@ -209,6 +203,10 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 requested = (serializer.validated_data['starts_at'], serializer.validated_data.get('duration_minutes', 45))
                 if (locked.starts_at, locked.duration_minutes) != requested:
                     raise drf_serializers.ValidationError({'availability_slot': 'This time just changed. Pick it again.'})
+                if too_soon_for_student(locked.participant_id, locked.starts_at):
+                    raise drf_serializers.ValidationError({'availability_slot': notice_message(locked.participant_id)})
+                if outside_window(locked.participant_id, locked.starts_at):
+                    raise drf_serializers.ValidationError({'availability_slot': OUTSIDE_WINDOW})
                 if locked.bookings.filter(status__in=Booking.OPEN_STATUSES).exists():
                     raise drf_serializers.ValidationError({'availability_slot': 'This time has already been requested.'})
                 meetings = Booking.objects.filter(participant_id=slot.participant_id, status__in=Booking.OPEN_STATUSES)
@@ -292,6 +290,15 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         moving = int_param(request.query_params, 'reschedule')
         if moving is not None and not self.get_queryset().filter(pk=moving).exists():
             return Response({'detail': 'Meeting not found.'}, status=404)
+        if staff and request.query_params.get('as_student') in ('1', 'true'):
+            # Preview as student: only the caller's own calendar, through the exact filters a student's request uses.
+            if int_param(request.query_params, 'participant') != user.pk:
+                return Response({'participant': 'You can only preview your own booking page.'}, status=403)
+            top_up_schedule(user.pk)
+            return Response([
+                {**MeetingAvailabilitySerializer(slot).data, 'participant': slot.participant_id, 'available': True}
+                for slot in upcoming_slots(free_slots(bookable_slots([user.pk]), moving=moving))
+            ])
         if staff:
             top_up_schedule(user.pk)
             # `editable`: no meeting, of any status, points at the slot (the PATCH rule).
@@ -313,12 +320,12 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 if not participants.filter(pk=participant_id).exists():
                     return Response({'participant': 'Choose a staff member from your school.'}, status=400)
                 top_up_schedule(participant_id)
-                slots = MeetingAvailability.objects.filter(participant_id=participant_id)
+                slots = bookable_slots([participant_id])
             else:
                 allowed_ids = list(participants.values_list('id', flat=True)[:CONTACT_LIST_LIMIT])
                 # Also here, not only when one person is picked: staff nobody picks would run out of times.
                 top_up_schedules(allowed_ids)
-                slots = MeetingAvailability.objects.filter(participant_id__in=allowed_ids)
+                slots = bookable_slots(allowed_ids)
                 overview = True
         else:
             return Response({'detail': 'Availability is unavailable for this role.'}, status=403)
@@ -393,19 +400,10 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
 
     def _notify(self, booking, title, message):
         # Student notifications are also the assigned counselor's feed (see NotificationViewSet).
-        Notification.objects.create(
-            student=booking.student, title=title, message=message, kind=Notification.Kind.MEETING,
-        )
-        email_after_commit(booking, booking.student.user, title, self.request)
+        notify_student(booking, title, message, self.request.user)
 
     def _notify_participant(self, booking, title, message):
-        # A separate row addressed to the staff member: their bell (and reading it) never touches the student's feed.
-        if booking.participant_id:
-            Notification.objects.create(
-                student=booking.student, recipient_id=booking.participant_id,
-                title=title, message=message, kind=Notification.Kind.MEETING, target_id=booking.pk,
-            )
-            email_after_commit(booking, booking.participant, title, self.request)
+        notify_participant(booking, title, message, self.request.user)
 
     def _transition(self, target_status, allowed_from):
         with transaction.atomic():
@@ -421,7 +419,15 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 return Response({'detail': 'This request expired before it was confirmed.'}, status=400)
             booking.status = target_status
             booking.save(update_fields=['status', 'updated_at'])
-            _, participant_name, meeting_time = self._names(booking)
+            student_name, participant_name, meeting_time = self._names(booking)
+            if booking.staff_requested and self.request.user.role == User.Role.STUDENT:
+                # The student answered a staff invitation: the staff member hears it (the student knows).
+                accepted = target_status == Booking.Status.APPROVED
+                self._notify_participant(
+                    booking, 'Meeting invitation accepted' if accepted else 'Meeting invitation declined',
+                    f'{student_name} {"confirmed" if accepted else "declined"} "{booking.topic}" on {meeting_time}.',
+                )
+                return Response(self.get_serializer(booking).data)
             # The UI calls an approved meeting "confirmed".
             word = 'confirmed' if target_status == Booking.Status.APPROVED else booking.get_status_display().lower()
             self._notify(
@@ -437,13 +443,24 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         booking.delete()
         return Response(status=204)
 
+    def _answer_guard(self, request):
+        """Who answers a pending meeting: the student for one staff proposed, the staff participant otherwise."""
+        booking = self.get_object()
+        if request.user.is_product_admin:
+            return None
+        if request.user.role == User.Role.STUDENT and not booking.staff_requested:
+            return Response({'detail': 'Only the staff member can answer this request.'}, status=403)
+        if request.user.role != User.Role.STUDENT and booking.staff_requested and booking.status == Booking.Status.PENDING:
+            return Response({'detail': 'This meeting waits for the student. Cancel or reschedule it instead.'}, status=403)
+        return None
+
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        return self._transition(Booking.Status.APPROVED, {Booking.Status.PENDING})
+        return self._answer_guard(request) or self._transition(Booking.Status.APPROVED, {Booking.Status.PENDING})
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
-        return self._transition(Booking.Status.REJECTED, {Booking.Status.PENDING})
+        return self._answer_guard(request) or self._transition(Booking.Status.REJECTED, {Booking.Status.PENDING})
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
@@ -459,7 +476,8 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             if booking.status not in Booking.OPEN_STATUSES or booking.has_started:
                 return Response({'detail': 'Only a meeting that has not started yet can be cancelled.'}, status=400)
             booking.status = Booking.Status.CANCELLED
-            booking.save(update_fields=['status', 'updated_at'])
+            booking.cancelled_by_role = 'student' if request.user.role == User.Role.STUDENT else 'staff'
+            booking.save(update_fields=['status', 'cancelled_by_role', 'updated_at'])
             student_name, participant_name, meeting_time = self._names(booking)
             if request.user.role == User.Role.STUDENT:
                 message = f'{student_name} cancelled the meeting "{booking.topic}" on {meeting_time}.'
@@ -503,6 +521,10 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
                 slot = MeetingAvailability.objects.select_for_update().get(pk=slot.pk)
                 if slot.participant_id != booking.participant_id or slot.starts_at != starts_at or slot.duration_minutes != duration:
                     return Response({'availability_slot': 'Choose a time from this staff member’s availability.'}, status=400)
+                if student_moves and too_soon_for_student(slot.participant_id, slot.starts_at):
+                    return Response({'availability_slot': notice_message(slot.participant_id)}, status=400)
+                if student_moves and outside_window(slot.participant_id, slot.starts_at):
+                    return Response({'availability_slot': OUTSIDE_WINDOW}, status=400)
                 if slot.bookings.filter(status__in=Booking.OPEN_STATUSES).exclude(pk=booking.pk).exists():
                     return Response({'availability_slot': 'This time has already been requested.'}, status=400)
             meetings = Booking.objects.filter(participant_id=booking.participant_id, status__in=Booking.OPEN_STATUSES)
@@ -514,8 +536,15 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             booking.availability_slot = slot
             # The participant must agree to any time they did not pick themselves.
             moved_by_participant = request.user.pk == booking.participant_id
-            booking.status = Booking.Status.APPROVED if moved_by_participant else Booking.Status.PENDING
-            booking.save(update_fields=['previous_starts_at', 'starts_at', 'duration_minutes', 'availability_slot', 'status', 'updated_at'])
+            # An invitation the student has not answered stays theirs to answer at the new time; otherwise
+            # a student's move goes to the participant, a participant's is confirmed.
+            awaits_student = booking.staff_requested and booking.status == Booking.Status.PENDING and not student_moves
+            if not awaits_student:
+                booking.staff_requested = False
+            booking.status = Booking.Status.APPROVED if moved_by_participant and not awaits_student else Booking.Status.PENDING
+            booking.save(update_fields=[
+                'previous_starts_at', 'starts_at', 'duration_minutes', 'availability_slot', 'status', 'staff_requested', 'updated_at',
+            ])
             student_name, participant_name, meeting_time = self._names(booking)
             if student_moves:
                 title = 'Meeting reschedule requested'
@@ -548,7 +577,10 @@ class StudentMessageViewSet(viewsets.ModelViewSet):
             return scope_students(
                 self.queryset.filter(Q(sender=user) | Q(recipient=user)), user, via='student',
             )
-        return self.queryset.filter(student=user.student_profile)
+        profile = getattr(user, 'student_profile', None)
+        if profile is None:
+            return self.queryset.none()
+        return self.queryset.filter(student=profile)
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -562,6 +594,8 @@ class StudentMessageViewSet(viewsets.ModelViewSet):
         profile = user.student_profile
         if not profile.assigned_counselor:
             raise drf_serializers.ValidationError({'recipient': 'A counselor has not been assigned yet.'})
+        if profile.assigned_counselor.school_id != profile.school_id:
+            raise drf_serializers.ValidationError({'recipient': 'Your assigned counselor is not available at your school.'})
         serializer.save(student=profile, sender=user, recipient=profile.assigned_counselor)
 
     @action(detail=True, methods=['post'])

@@ -118,6 +118,15 @@ test('the post-login destination is limited to workspace paths on this site', ()
   assert.equal(new URLSearchParams(loginPath('/programs?type=national').split('?')[1]).get('next'), '/programs?type=national');
 });
 
+test('a booking link survives sign-in: the next path keeps ?book= and nothing else can sneak in', () => {
+  assert.equal(safeNextPath('/meetings?book=7'), '/meetings?book=7');
+  assert.equal(loginPath('/meetings?book=7'), '/login?next=%2Fmeetings%3Fbook%3D7');
+  assert.equal(new URLSearchParams(loginPath('/meetings?book=7').split('?')[1]).get('next'), '/meetings?book=7');
+  for (const bad of ['//evil.example/meetings?book=7', 'https://evil.example/meetings?book=7', '/\\evil.example/meetings?book=7', '/meetings/book/7/../../..//evil']) {
+    assert.equal(safeNextPath(bad), null, bad);
+  }
+});
+
 test('public pages: landing, /login and the old #/login link', () => {
   assert.equal(publicPageFor('/'), 'landing');
   assert.equal(publicPageFor('/', '#journey'), 'landing');
@@ -175,9 +184,11 @@ test('the store is shown locked to students and cannot be opened', () => {
 });
 
 test('roadmap pages stay locked for students and counselors, including direct tab links', () => {
-  assert.ok(!navigationFor(student).includes('roadmap'));
+  // Students see Roadmap in the menu as a locked "Coming soon" item (like Store) but cannot open it.
+  assert.ok(navigationFor(student).includes('roadmap'));
+  assert.ok(!reachablePages(student).has('roadmap'));
   assert.ok(!navigationFor(counselor).includes('counselor_roadmap'));
-  for (const user of [student, counselor, { role: 'assistant' }]) {
+  for (const user of [counselor, { role: 'assistant' }]) {
     assert.ok(!navigationFor(user).includes('roadmap'));
     assert.ok(!navigationFor(user).includes('counselor_roadmap'));
     assert.equal(isPageLocked('roadmap', user), true);
@@ -275,4 +286,9 @@ test('an assistant invitation link is a public page with its token', () => {
   assert.equal(assistantInviteTokenFor(`/assistant-invite/${token}/`), token);
   assert.equal(assistantInviteTokenFor('/assistant-invite/short'), null);
   assert.equal(joinTokenFor(`/assistant-invite/${token}`), null);
+});
+
+test('leaving the letter workspace returns to the Recommendations tab by URL', () => {
+  assert.equal(buildPath({ page: 'students', params: { studentId: 15, tab: 'letters' } }), '/students/15?tab=letters');
+  assert.deepEqual(parsePath('/students/15'), { page: 'students', params: { studentId: 15 } });
 });

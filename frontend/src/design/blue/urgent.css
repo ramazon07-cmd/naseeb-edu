@@ -1,0 +1,154 @@
+/* The once-a-day overdue pop-up (UrgentPopup.jsx). */
+.nb-blue .nb-urgent-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2900;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(2, 12, 40, 0.45);
+  animation: nb-urgent-fade 0.2s ease-out;
+}
+
+.nb-blue .nb-urgent {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  width: min(440px, 100%);
+  max-height: 88vh;
+  padding: 26px 22px 20px;
+  overflow: auto;
+  border-radius: 28px;
+  background: var(--nb-card);
+  border: 1px solid var(--nb-glass-line);
+  box-shadow: 0 30px 80px rgba(2, 14, 43, 0.4);
+  color: var(--nb-ink);
+  animation: nb-urgent-pop 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nb-blue .nb-urgent h2 {
+  margin: 0;
+  font-size: var(--nb-text-xl);
+}
+
+.nb-blue .nb-urgent p {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--nb-muted);
+}
+
+.nb-blue .nb-urgent-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--nb-late-bg);
+  color: var(--nb-late);
+}
+
+.nb-blue .nb-urgent-x {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--nb-muted);
+  cursor: pointer;
+}
+
+.nb-blue .nb-urgent-x:hover {
+  background: var(--nb-tint);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-urgent ul {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-urgent li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--nb-late-bg);
+  border: 1px solid var(--nb-late-line);
+}
+
+.nb-blue .nb-urgent li small {
+  color: var(--nb-late);
+  font-weight: 700;
+}
+
+.nb-blue .nb-urgent .nb-urgent-more {
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-urgent-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.nb-blue .nb-urgent-actions button {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-btn-ghost);
+  font: inherit;
+  font-weight: 750;
+  color: var(--nb-btn-ghost-fg, var(--nb-ink));
+  cursor: pointer;
+}
+
+.nb-blue .nb-urgent-actions .nb-urgent-primary {
+  border-color: transparent;
+  background: var(--nb-btn);
+  color: var(--nb-btn-fg);
+  box-shadow: var(--nb-btn-shadow);
+}
+
+.nb-blue .nb-urgent button:focus-visible {
+  outline: 3px solid var(--nb-focus, var(--nb-blue));
+  outline-offset: 2px;
+}
+
+@keyframes nb-urgent-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes nb-urgent-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-blue .nb-urgent-scrim,
+  .nb-blue .nb-urgent {
+    animation: none;
+  }
+}

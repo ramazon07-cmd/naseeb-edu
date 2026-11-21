@@ -93,6 +93,36 @@ MESSAGES = {
         'ru': 'Здравствуйте, {name}!\n\nВстреча с {other} отменена.',
         'en': 'Hello {name},\n\nThe meeting with {other} was cancelled.',
     },
+    'meeting_email_invited_subject': {
+        'uz': 'Uchrashuvga taklif: {other}',
+        'ru': 'Приглашение на встречу: {other}',
+        'en': '{other} invited you to a meeting',
+    },
+    'meeting_email_invited': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} sizni uchrashuvga taklif qildi. Saytda tasdiqlang yoki rad eting.',
+        'ru': 'Здравствуйте, {name}!\n\n{other} приглашает вас на встречу. Подтвердите или отклоните её на сайте.',
+        'en': 'Hello {name},\n\n{other} invited you to a meeting. Confirm it on the website.',
+    },
+    'meeting_email_invite_accepted_subject': {
+        'uz': 'Uchrashuv tasdiqlandi: {time}',
+        'ru': 'Встреча подтверждена: {time}',
+        'en': 'Meeting confirmed: {time}',
+    },
+    'meeting_email_invite_accepted': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} uchrashuv taklifingizni tasdiqladi.',
+        'ru': 'Здравствуйте, {name}!\n\n{other} подтвердил(а) ваше приглашение на встречу.',
+        'en': 'Hello {name},\n\n{other} confirmed your meeting invitation.',
+    },
+    'meeting_email_invite_declined_subject': {
+        'uz': 'Uchrashuv taklifi rad etildi',
+        'ru': 'Приглашение на встречу отклонено',
+        'en': 'Meeting invitation declined',
+    },
+    'meeting_email_invite_declined': {
+        'uz': 'Assalomu alaykum, {name}!\n\n{other} uchrashuv taklifingizni rad etdi. Boshqa vaqtni taklif qilishingiz mumkin.',
+        'ru': 'Здравствуйте, {name}!\n\n{other} отклонил(а) ваше приглашение на встречу. Вы можете предложить другое время.',
+        'en': 'Hello {name},\n\n{other} declined your meeting invitation. You can propose another time.',
+    },
     'meeting_email_move_requested_subject': {
         'uz': 'Uchrashuvni ko‘chirish so‘rovi',
         'ru': 'Запрос на перенос встречи',

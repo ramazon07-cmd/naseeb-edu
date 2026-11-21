@@ -1,8 +1,10 @@
-"""Adding a student from the counselor bot.
+"""Adding a student, and giving a student a new temporary password, from the counselor bot.
 
 The bot sends the name, email and phone a counselor typed; the account is made by
 ``create_student_account``, the same function the website's quick-create uses, so the
-student gets the same school, profile, seat check and temporary password.
+student gets the same school, profile, seat check and temporary password. A new password
+goes through ``issue_temporary_credential``, as on the website's account page, and only
+for a student the bot already lists for that counselor or assistant.
 """
 import re
 from datetime import timedelta
@@ -11,10 +13,11 @@ from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.admissions.models import School
-from apps.admissions.scoping import visible_students
+from apps.admissions.scoping import active_visible_students, visible_students
 from apps.admissions.tenancy import create_student_account, find_school_student
 from apps.users import entitlements
 from apps.users.audit import audit_product_action
@@ -28,6 +31,9 @@ from .services import Refused, User
 PASSWORD_LENGTH = 10
 NAME_LIMIT = 150
 ADDS_PER_HOUR = 60
+RESETS_PER_HOUR = 30
+SEARCH_RESULTS = 8
+QUERY_LIMIT = 100
 PHONE_DIGITS = re.compile(r'\d')
 # A repeat of an add the same person made this recently (the bot timed out and they tapped
 # again) gets a fresh password for that student instead of "already exists".
@@ -80,18 +86,24 @@ def _just_added_by(student, actor):
     )
 
 
-def _payload(student, password, phone):
+def _name(user):
+    return user.get_full_name().strip() or user.username
+
+
+def _payload(student, password, phone=None):
     credential = student.temporary_credentials.order_by('-issued_at', '-id').first()
-    return {
-        'full_name': student.get_full_name().strip() or student.username,
+    payload = {
+        'full_name': _name(student),
         # The login to hand out. Like quick-create, the answer never says whether the email was
         # already registered (that account then gets a placeholder), so the username is what always works.
         'username': student.username,
-        'phone': phone,
         'temporary_password': password,
         'expires_at': credential.expires_at.isoformat() if credential else None,
         'login_url': f'{settings.FRONTEND_URL}/login',
     }
+    if phone is not None:
+        payload['phone'] = phone
+    return payload
 
 
 def add_student(link, *, full_name, email, phone):
@@ -118,7 +130,7 @@ def add_student(link, *, full_name, email, phone):
                 return _payload(student, password, phone)
             raise Refused(
                 'student_exists', 409,
-                full_name=existing.user.get_full_name().strip() or existing.user.username,
+                full_name=_name(existing.user),
                 username=existing.user.username,
             )
 
@@ -147,3 +159,58 @@ def add_student(link, *, full_name, email, phone):
             actor=actor, action='student.created_via_bot', target=profile.user, metadata={'school': school.id},
         )
         return _payload(profile.user, password, phone)
+
+
+def find_students(link, query):
+    """The caller's active students whose name, login or email holds every word of ``query``."""
+    words = ' '.join(str(query or '').split())
+    if len(words) < 2 or len(words) > QUERY_LIMIT:
+        raise Refused('invalid_query', 400)
+    match = Q()
+    for word in words.split():
+        match &= (
+            Q(user__first_name__icontains=word) | Q(user__last_name__icontains=word)
+            | Q(user__username__icontains=word) | Q(user__email__icontains=word)
+        )
+    rows = list(
+        active_visible_students(link.user).filter(match).select_related('user')
+        .order_by('user__first_name', 'user__last_name', 'id')[:SEARCH_RESULTS + 1]
+    )
+    return {
+        'students': [
+            {'id': profile.pk, 'full_name': _name(profile.user), 'username': profile.user.username}
+            for profile in rows[:SEARCH_RESULTS]
+        ],
+        'more': len(rows) > SEARCH_RESULTS,
+    }
+
+
+def reset_password(link, student_id):
+    """A new temporary password for one of the caller's students; the old one stops working."""
+    actor = link.user
+    if isinstance(student_id, bool) or not isinstance(student_id, int):
+        raise Refused('invalid_request', 400)
+    profile = active_visible_students(actor).select_related('user').filter(pk=student_id).first()
+    if profile is None:
+        # Not theirs, deactivated or gone: the same answer, so ids of other schools tell nothing.
+        raise Refused('student_not_found', 404)
+    hits = count_hit(f'tgbot-reset-password:{link.chat_id}', 3600)
+    if hits is not None and hits[0] > RESETS_PER_HOUR:
+        raise Refused('too_many', 429)
+    with transaction.atomic():
+        for attempt in range(3):
+            password = generate_temporary_password(PASSWORD_LENGTH)
+            try:
+                with transaction.atomic():
+                    student, _, _, _ = issue_temporary_credential(
+                        user=profile.user, issued_by=actor, raw_password=password,
+                    )
+                break
+            except DjangoValidationError:
+                # The random password was too close to the name; nothing was saved, so try another.
+                if attempt == 2:
+                    raise
+        audit_product_action(
+            actor=actor, action='credential.issued', target=student, metadata={'role': student.role, 'via': 'bot'},
+        )
+    return _payload(student, password)

@@ -45,6 +45,13 @@ def _limits(feature):
             settings.REC_LETTER_AI_SCHOOL_DAILY_BUDGET or None,
             settings.REC_LETTER_AI_USER_DAILY_LIMIT or None,
         )
+    if feature == 'recommendation_letter_check':
+        # Like the coach: a platform budget of 0 turns AI letter checks off.
+        return (
+            settings.REC_LETTER_CHECK_DAILY_BUDGET,
+            settings.REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET or None,
+            settings.REC_LETTER_CHECK_USER_DAILY_LIMIT or None,
+        )
     raise ValueError(f'Unknown AI feature: {feature}')
 
 
@@ -55,6 +62,13 @@ class _ProcessFallback:
         self.lock = threading.Lock()
         self.day = None
         self.counts = {}
+
+    def refund(self, day, keys):
+        with self.lock:
+            if day == self.day:
+                for key in keys:
+                    if self.counts.get(key, 0) > 0:
+                        self.counts[key] -= 1
 
     def consume(self, day, caps):
         with self.lock:
@@ -70,7 +84,7 @@ class _ProcessFallback:
 _fallback = _ProcessFallback()
 
 
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter')
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'recommendation_letter_check')
 TOP_SCHOOLS = 5
 
 
@@ -116,6 +130,36 @@ def consume(feature, user):
         cache_decrement(key)
     _note([f'{prefix}:refused'])
     return False
+
+
+def refund(feature, user):
+    """Give back the unit :func:`consume` took for a call that failed (best effort, every counter it touched)."""
+    day = timezone.localdate().isoformat()
+    _, _, user_cap = _limits(feature)
+    prefix = f'ai-budget:{feature}:{day}'
+    keys = [prefix]
+    if user.school_id:
+        keys.append(f'{prefix}:school:{user.school_id}')
+    if user_cap is not None:
+        keys.append(f'{prefix}:user:{user.pk}')
+    for key in keys:
+        cache_decrement(key)
+    _fallback.refund(day, [f'{feature}:process'] + ([f'{feature}:user:{user.pk}'] if user_cap is not None else []))
+
+
+def user_remaining(feature, user):
+    """Calls ``user`` may still make today, or ``None`` (no per-user cap, or the cache cannot be read).
+
+    Read-only and one cache read: nothing is incremented.
+    """
+    user_cap = _limits(feature)[2]
+    if user_cap is None:
+        return None
+    key = f'ai-budget:{feature}:{timezone.localdate().isoformat()}:user:{user.pk}'
+    values = cache_get_many([key])
+    if values is None:
+        return None
+    return max(0, user_cap - int(values.get(key) or 0))
 
 
 def usage_today(school_ids):

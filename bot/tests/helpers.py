@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.session.base import BaseSession
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.methods import (
-    AnswerCallbackQuery, DeleteMessage, EditMessageReplyMarkup, EditMessageText, GetMe, SendChatAction, SendMessage,
+    AnswerCallbackQuery, DeleteMessage, EditMessageReplyMarkup, EditMessageText, GetMe, SendChatAction, SendMessage, SetMyCommands,
 )
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
@@ -55,7 +55,7 @@ class MockedSession(BaseSession):
             )
         if isinstance(method, GetMe):
             return User(id=123456789, is_bot=True, first_name='Bot', username='test_bot')
-        if isinstance(method, (DeleteMessage, AnswerCallbackQuery, SendChatAction, EditMessageReplyMarkup)):
+        if isinstance(method, (DeleteMessage, AnswerCallbackQuery, SendChatAction, EditMessageReplyMarkup, SetMyCommands)):
             return True
         raise AssertionError(f'unexpected Telegram method {kind}')
 
@@ -79,7 +79,16 @@ class FakeApi:
         ]}
         self.digest_data = {'date': '2026-11-08', 'total_students': 0, 'omitted': 0, 'students': []}
         self.errors = {}
+        self.meetings_data = {'role': 'staff', 'meetings': [], 'counts': {
+            'booked': 0, 'waiting_for_you': 0, 'waiting_for_student': 0, 'cancelled_week': 0,
+        }, 'free_slots': 0, 'settings': None}
+        # What whoami answers for a chat that is not linked as a counselor.
+        self.who = {'kind': 'staff_allowed', 'site_url': 'https://naseeb.example/meetings'}
         self.due_items = []
+        self.outbox_items = []
+        self.action_result = {'result': 'done', 'alert': None, 'text': 'card\n\n✅ Confirmed', 'buttons': [
+            [{'text': 'Cancel', 'callback_data': 'mt:cancel:5'}]]}
+        self.found = {'students': [{'id': 7, 'full_name': 'Ali Valiyev', 'username': 'ali-valiyev'}], 'more': False}
 
     def _record(self, name, **args):
         self.calls.append((name, args))
@@ -91,9 +100,15 @@ class FakeApi:
     def names(self, name):
         return [args for call, args in self.calls if call == name]
 
-    async def login(self, chat_id, username, password):
-        self._record('login', chat_id=chat_id, username=username, password=password)
+    async def login(self, chat_id, username, password, telegram_username=None):
+        self._record('login', chat_id=chat_id, username=username, password=password, telegram_username=telegram_username)
         return self.card
+
+    async def whoami(self, chat_id, telegram_username=None):
+        self._record('whoami', chat_id=chat_id, telegram_username=telegram_username)
+        if self.linked:
+            return {'kind': 'staff_linked', 'name': self.link['full_name'], 'site_url': self.who['site_url']}
+        return self.who
 
     async def confirm(self, chat_id, pending_token, language):
         self._record('confirm', chat_id=chat_id, pending_token=pending_token, language=language)
@@ -105,6 +120,10 @@ class FakeApi:
         self._record('students', chat_id=chat_id)
         return self.students_data
 
+    async def meetings(self, chat_id, telegram_username=None):
+        self._record('meetings', chat_id=chat_id, telegram_username=telegram_username)
+        return self.meetings_data
+
     async def digest(self, chat_id):
         self._record('digest', chat_id=chat_id)
         return self.digest_data
@@ -115,6 +134,34 @@ class FakeApi:
             'full_name': full_name, 'username': 'saydazimova-sofiya', 'phone': '+998910076825',
             'temporary_password': 'Tmp-Pass-42', 'expires_at': '2026-11-13T16:14:20+00:00',
             'login_url': 'https://naseeb.example/login',
+        }
+
+    async def meeting_action(self, chat_id, booking_id, action, telegram_username=None):
+        self._record('meeting_action', chat_id=chat_id, booking_id=booking_id, action=action, telegram_username=telegram_username)
+        return self.action_result
+
+    async def student_link(self, chat_id, token, language, telegram_username=None):
+        self._record('student_link', chat_id=chat_id, token=token, language=language, telegram_username=telegram_username)
+        return {'full_name': 'Ali <Valiyev> & Co', 'language': language}
+
+    async def student_outbox(self):
+        self._record('student_outbox')
+        items, self.outbox_items = self.outbox_items, []
+        return items
+
+    async def student_outbox_ack(self, sent, blocked):
+        self._record('student_outbox_ack', sent=sent, blocked=blocked)
+        return {'sent': len(sent)}
+
+    async def find_students(self, chat_id, query):
+        self._record('find_students', chat_id=chat_id, query=query)
+        return self.found
+
+    async def reset_password(self, chat_id, student_id):
+        self._record('reset_password', chat_id=chat_id, student_id=student_id)
+        return {
+            'full_name': 'Ali Valiyev', 'username': 'ali-valiyev', 'temporary_password': 'New-Pass-77',
+            'expires_at': '2026-11-13T16:14:20+00:00', 'login_url': 'https://naseeb.example/login',
         }
 
     async def get_settings(self, chat_id):
@@ -162,6 +209,8 @@ class Harness:
         self.dp.include_router(router)
         self._update_id = 0
         self._message_id = 0
+        self.language_code = None
+        self.username = 'dilnoza_k'
 
     def close(self):
         router._parent_router = None
@@ -170,7 +219,9 @@ class Harness:
         self._message_id += 1
         return Message(
             message_id=message_id or self._message_id, date=datetime.now(), chat=Chat(id=chat_id, type='private'),
-            from_user=User(id=chat_id, is_bot=False, first_name='Dilnoza'), text=text,
+            from_user=User(
+                id=chat_id, is_bot=False, first_name='Dilnoza', language_code=self.language_code, username=self.username,
+            ), text=text,
         )
 
     async def say(self, text, chat_id=1, message_id=None):
@@ -181,7 +232,7 @@ class Harness:
     async def tap(self, data, chat_id=1, message_id=500):
         self._update_id += 1
         callback = CallbackQuery(
-            id=str(self._update_id), from_user=User(id=chat_id, is_bot=False, first_name='Dilnoza'),
+            id=str(self._update_id), from_user=User(id=chat_id, is_bot=False, first_name='Dilnoza', username=self.username),
             chat_instance='x', message=self._message('menu', chat_id, message_id), data=data,
         )
         return await self.dp.feed_update(self.bot, Update(update_id=self._update_id, callback_query=callback))

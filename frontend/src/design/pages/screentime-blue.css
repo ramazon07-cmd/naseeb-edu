@@ -1,0 +1,121 @@
+/* Student Screen Time page (blue design). Bars reuse the dashboard card's bar rules (dashboard-blue.css). */
+.nb-blue .nb-st {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-gap);
+  min-width: 0;
+}
+
+.nb-blue .nb-st-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--nb-gap);
+}
+
+.nb-blue .nb-st-chart .nb-dash-bars {
+  height: 240px;
+}
+
+.nb-blue .nb-st-chart .nb-dash-bars.is-fortnight {
+  gap: 5px;
+}
+
+.nb-blue .nb-st-chart .nb-tabs {
+  margin: 0 0 12px;
+  gap: 6px;
+}
+
+.nb-blue .nb-st-chart .nb-tab {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-st .nb-dash-bar:focus-visible {
+  outline: 2px solid var(--nb-focus);
+  outline-offset: 2px;
+}
+
+.nb-blue .nb-st-hint {
+  margin: 12px 0 0;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-st-pagelist {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-st-pagelist li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 2px;
+  border-top: 1px solid var(--nb-line-soft);
+  font-size: var(--nb-text-md);
+}
+
+.nb-blue .nb-st-pagelist li:first-child {
+  border-top: 0;
+}
+
+.nb-blue .nb-st-pagelist b {
+  flex: none;
+  color: var(--nb-ink-strong);
+}
+
+.nb-blue .nb-st-priv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--nb-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-st-priv li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.nb-blue .nb-st-priv li > span {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-tint);
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-st-priv b {
+  display: block;
+  color: var(--nb-ink-strong);
+  font-size: var(--nb-text-md);
+}
+
+.nb-blue .nb-st-priv small {
+  display: block;
+  margin-top: 2px;
+  color: var(--nb-muted);
+  font-size: var(--nb-text-sm);
+  line-height: 1.45;
+}
+
+@media (max-width: 820px) {
+  .nb-blue .nb-st-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .nb-blue .nb-st-chart .nb-dash-bars {
+    height: 190px;
+  }
+}

@@ -13,6 +13,17 @@ const MAX_SEARCH = 100;
 
 export const programGrades = (item) => String(item.eligible_grades || '').split(',').map((part) => part.trim()).filter(Boolean);
 
+// The grade filter is 'all' or one or more grades joined by commas in
+// PROGRAM_GRADES order ('9' or '9,10,gap'), so a link with one `grade` value
+// keeps working and one grade behaves exactly as before.
+export const selectedGrades = (grade) => (!grade || grade === 'all' ? [] : String(grade).split(',').filter((part) => PROGRAM_GRADES.includes(part)));
+
+export const toggleGrade = (grade, picked) => {
+  const next = new Set(selectedGrades(grade));
+  if (!next.delete(picked)) next.add(picked);
+  return next.size ? PROGRAM_GRADES.filter((part) => next.has(part)).join(',') : 'all';
+};
+
 export const isClosedProgram = (item, today) => Boolean(item.deadline) && item.deadline < today;
 
 // "6,7,8,9,10,11,gap" -> ['6–11', 'gap']: consecutive grades collapse into a range.
@@ -119,6 +130,12 @@ export function groupProgramsByDeadline(rows) {
   return groups;
 }
 
+function readGradeParam(value) {
+  const picked = new Set(String(value || '').split(',').map((part) => part.trim()));
+  const grades = PROGRAM_GRADES.filter((grade) => picked.has(grade));
+  return grades.length ? grades.join(',') : PROGRAM_FILTER_DEFAULTS.grade;
+}
+
 // URL query -> filters. Unknown values fall back to the default instead of
 // producing an empty list nobody can explain.
 export function readProgramFilters(search) {
@@ -129,7 +146,7 @@ export function readProgramFilters(search) {
     q: (params.get('q') || '').slice(0, MAX_SEARCH),
     type: pick('type', PROGRAM_TYPES),
     category: category || 'all',
-    grade: pick('grade', PROGRAM_GRADES),
+    grade: readGradeParam(params.get('grade')),
     delivery: pick('delivery', PROGRAM_DELIVERY),
     aid: params.get('aid') === '1',
     open: params.get('open') !== '0',
@@ -180,6 +197,7 @@ const FACETS = ['search', 'type', 'category', 'grade', 'delivery', 'aid', 'open'
 // other active filter, so each number is what choosing that option shows.
 export function filterPrograms(catalog, filters, { today, query = '', translate = (value) => value, localeTag = '' } = {}) {
   const terms = [...searchTerms(filters.q, localeTag), ...searchTerms(query, localeTag)];
+  const wanted = selectedGrades(filters.grade);
   const counts = { type: { all: 0 }, category: {}, grade: {}, delivery: {}, aid: 0, closed: 0 };
   const programs = [];
   const bump = (bucket, key) => { bucket[key] = (bucket[key] || 0) + 1; };
@@ -191,7 +209,7 @@ export function filterPrograms(catalog, filters, { today, query = '', translate 
       search: terms.every((term) => text.includes(term)),
       type: filters.type === 'all' || item.program_type === filters.type,
       category: filters.category === 'all' || item.category === filters.category,
-      grade: filters.grade === 'all' || grades.includes(filters.grade),
+      grade: !wanted.length || wanted.some((grade) => grades.includes(grade)),
       delivery: filters.delivery === 'all' || item.delivery_mode === filters.delivery,
       aid: !filters.aid || Boolean(item.scholarship_available),
       open: !filters.open || !closed,

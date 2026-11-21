@@ -256,6 +256,33 @@ class AssistantScopeTests(AssistantBase):
             with self.subTest(student=other.user.username):
                 self.assertEqual(self.client.get(f'/api/students/{other.pk}/').status_code, 404)
 
+    def test_assistant_resets_the_login_of_their_own_students_only(self):
+        outside = self.make_student('far', self.counselor, school=self.other_school)
+
+        def reset(account):
+            return self.client.post(f'/api/users/accounts/{account.pk}/temporary-credential/', {}, format='json')
+
+        done = reset(self.mine.user)
+        self.assertEqual(done.status_code, 200, done.data)
+        self.assertTrue(done.data['temporary_password'])
+        self.assertTrue(self.mine.user.temporary_credentials.filter(issued_by=self.assistant, status='issued').exists())
+        for other in (self.also_mine, self.colleagues, outside):
+            with self.subTest(student=other.user.username):
+                self.assertEqual(reset(other.user).status_code, 404)
+                self.assertFalse(other.user.temporary_credentials.exists())
+        for account in (self.counselor, self.assistant):
+            with self.subTest(account=account.username):
+                self.assertNotEqual(reset(account).status_code, 200)
+                self.assertFalse(account.temporary_credentials.exists())
+
+    def test_assistant_lists_and_edits_no_student_account_beyond_their_own_students(self):
+        listed = self.client.get('/api/users/accounts/')
+        self.assertEqual({row['id'] for row in listed.data['results']}, {self.assistant.pk, self.mine.user_id})
+        edit = self.client.patch(f'/api/users/accounts/{self.mine.user_id}/', {'first_name': 'Changed'}, format='json')
+        self.assertEqual(edit.status_code, 403)
+        self.mine.user.refresh_from_db()
+        self.assertNotEqual(self.mine.user.first_name, 'Changed')
+
     def test_assistant_reads_and_edits_counselor_notes_of_their_students(self):
         StudentProfile.objects.filter(pk=self.mine.pk).update(notes='Private counselor note')
         self.assertEqual(self.client.get(f'/api/students/{self.mine.pk}/').data['notes'], 'Private counselor note')

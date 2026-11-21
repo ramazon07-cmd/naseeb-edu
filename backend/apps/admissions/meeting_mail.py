@@ -18,6 +18,10 @@ EVENTS = {
     'Meeting cancelled': 'cancelled',
     'Meeting reschedule requested': 'move_requested',
     'Meeting moved': 'moved',
+    # A staff member invited the student, who answers it.
+    'Meeting invitation': 'invited',
+    'Meeting invitation accepted': 'invite_accepted',
+    'Meeting invitation declined': 'invite_declined',
 }
 
 
@@ -83,3 +87,37 @@ def email_after_commit(booking, recipient, title, request):
         # shortcut: sent in the request after commit (waits up to EMAIL_TIMEOUT); move to a queue when mail volume grows.
         # robust: the change is already saved, so nothing about the email may turn the response into an error.
         transaction.on_commit(lambda: send_meeting_email(booking, recipient, event), robust=True)
+
+
+def telegram_after_commit(booking, recipient, title, request):
+    """The Telegram message matching an in-app notification `title`, for a student who linked the bot."""
+    event = EVENTS.get(title)
+    if event and recipient and recipient.pk != request.user.pk:
+        from apps.telegram_bot.student_link import queue_event
+
+        transaction.on_commit(lambda: queue_event(booking, recipient, event), robust=True)
+
+
+# In-app notification title -> what the student did, for the Telegram messages sent when the STUDENT is the actor.
+STUDENT_ACTIONS = {
+    'New meeting request': 'booked',
+    'Meeting cancelled': 'cancelled',
+    'Meeting reschedule requested': 'moved',
+    'Meeting invitation accepted': 'accepted',
+    'Meeting invitation declined': 'declined',
+}
+# Students get their own confirmation for these (answering an invitation needs none).
+STUDENT_OWN = {'booked', 'cancelled', 'moved'}
+
+
+def telegram_student_action(booking, title, actor):
+    """After a student's own change: confirm it to them and tell their counselor, both only if linked to the bot."""
+    action = STUDENT_ACTIONS.get(title)
+    if not action or actor.pk != booking.student.user_id:
+        return
+    from apps.telegram_bot.staff_meetings import queue_staff_update
+    from apps.telegram_bot.student_link import queue_own_action
+
+    if action in STUDENT_OWN:
+        transaction.on_commit(lambda: queue_own_action(booking, action), robust=True)
+    transaction.on_commit(lambda: queue_staff_update(booking, action), robust=True)

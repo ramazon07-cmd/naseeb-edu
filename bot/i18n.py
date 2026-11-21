@@ -72,9 +72,9 @@ STRINGS = {
         'en': 'Done, {name}. Account linked.',
     },
     'already_linked': {
-        'uz': "Siz {name} sifatida kirgansiz.\n\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/settings - sozlamalar\n/logout - chiqish",
-        'ru': 'Вы вошли как {name}.\n\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/settings - настройки\n/logout - выйти',
-        'en': "You're logged in as {name}.\n\n/now - update now\n/students - students\n/add - add a student\n/settings - settings\n/logout - log out",
+        'uz': "Siz {name} sifatida kirgansiz.\n\n/now - hozir yangilanish\n/students - o'quvchilar\n/meetings - uchrashuvlar\n/add - yangi o'quvchi qo'shish\n/reset - o'quvchiga yangi parol\n/settings - sozlamalar\n/logout - chiqish",
+        'ru': 'Вы вошли как {name}.\n\n/now - сводка сейчас\n/students - ученики\n/meetings - встречи\n/add - добавить ученика\n/reset - новый пароль ученику\n/settings - настройки\n/logout - выйти',
+        'en': "You're logged in as {name}.\n\n/now - update now\n/students - students\n/add - add a student\n/reset - new password for a student\n/settings - settings\n/logout - log out",
     },
     'other_account': {'uz': 'Boshqa hisob', 'ru': 'Другой аккаунт', 'en': 'Other account'},
     'grade_name': {
@@ -133,6 +133,31 @@ STRINGS = {
     'seen_days': {'uz': '{days} kun oldin', 'ru': '{days} дн. назад', 'en': '{days} days ago'},
     'seen_never': {'uz': 'hali kirmagan', 'ru': 'ещё не заходил', 'en': 'never opened'},
     'seen_expired': {'uz': 'yaqinda kirmagan', 'ru': 'давно не заходил', 'en': 'no recent activity'},
+    'password_issued': {
+        'uz': 'Vaqtinchalik parol: hali ishlatilmagan',
+        'ru': 'Временный пароль: ещё не использован',
+        'en': 'Temporary password: not used yet',
+    },
+    'password_used': {
+        'uz': "Vaqtinchalik parol: ishlatilgan, o'z parolini hali o'rnatmagan",
+        'ru': 'Временный пароль: использован, свой пароль ещё не задан',
+        'en': 'Temporary password: used, own password not set yet',
+    },
+    'password_expired': {
+        'uz': 'Vaqtinchalik parol: muddati tugagan, ishlatilmagan',
+        'ru': 'Временный пароль: срок истёк, не использован',
+        'en': 'Temporary password: expired unused',
+    },
+    'password_revoked': {
+        'uz': 'Vaqtinchalik parol: bekor qilingan',
+        'ru': 'Временный пароль: отозван',
+        'en': 'Temporary password: replaced',
+    },
+    'password_changed': {
+        'uz': "Parol: o'quvchi o'z parolini o'rnatgan",
+        'ru': 'Пароль: ученик задал свой пароль',
+        'en': 'Password: the student set their own',
+    },
     'detail_seen': {'uz': 'Oxirgi kirish: {when}', 'ru': 'Последний вход: {when}', 'en': 'Last seen: {when}'},
     'omitted_line': {
         'uz': "...yana {omitted} ta o'quvchi ko'rsatilmadi",
@@ -236,6 +261,11 @@ STRINGS = {
         'ru': 'Активности {activities}, достижения {honors}, документы {docs_done}/{docs_total}, заявки {apps_done}/{apps_total}, рекомендации {rec_done}/{rec_total}',
         'en': 'Extracurriculars {activities}, honors {honors}, documents {docs_done}/{docs_total}, applications {apps_done}/{apps_total}, letters {rec_done}/{rec_total}',
     },
+    'meeting_forbidden': {
+        'uz': 'Bu uchrashuv bilan amal bajarib bo\'lmaydi.',
+        'ru': 'С этой встречей нельзя выполнить это действие.',
+        'en': 'This action is not available for this meeting.',
+    },
     'expired': {
         'uz': "Muddati o'tdi. Yangisini olish uchun /now.",
         'ru': 'Устарело. Получить новую сводку: /now.',
@@ -316,16 +346,160 @@ STRINGS = {
         'ru': 'Слишком много учеников за час. Попробуйте позже.',
         'en': 'Too many students added this hour. Please try again later.',
     },
+    'btn_new_password': {'uz': '🔑 Yangi parol', 'ru': '🔑 Новый пароль', 'en': '🔑 New password'},
+    'reset_prompt': {
+        'uz': "Kimga yangi parol kerak? O'quvchining ismi, familiyasi yoki loginini yuboring.",
+        'ru': 'Кому нужен новый пароль? Отправьте имя, фамилию или логин ученика.',
+        'en': "Who needs a new password? Send the student's name, last name or login.",
+    },
+    'reset_short': {
+        'uz': "Kamida 2 ta harf yuboring yoki /cancel.",
+        'ru': 'Отправьте хотя бы 2 буквы или /cancel.',
+        'en': 'Send at least 2 letters, or /cancel.',
+    },
+    'reset_none': {
+        'uz': "\"{query}\" bo'yicha o'quvchingiz topilmadi. Boshqacha yozib ko'ring yoki /cancel.",
+        'ru': 'Ученик по запросу «{query}» не найден. Попробуйте иначе или /cancel.',
+        'en': 'No student of yours matches "{query}". Try another spelling, or /cancel.',
+    },
+    'reset_pick': {
+        'uz': "Qaysi o'quvchi?",
+        'ru': 'Какой ученик?',
+        'en': 'Which student?',
+    },
+    'reset_more': {
+        'uz': "Hammasi ko'rsatilmadi: aniqroq yozing (ism va familiya).",
+        'ru': 'Показаны не все: уточните запрос (имя и фамилия).',
+        'en': 'Not all are shown: be more specific (first and last name).',
+    },
+    'reset_card': {
+        'uz': "<b>{name}</b> (login: <code>{username}</code>) uchun yangi vaqtinchalik parol yaratilsinmi?\n\nEski parol darhol ishlamay qoladi.",
+        'ru': 'Создать новый временный пароль для <b>{name}</b> (логин: <code>{username}</code>)?\n\nСтарый пароль сразу перестанет работать.',
+        'en': 'Make a new temporary password for <b>{name}</b> (login: <code>{username}</code>)?\n\nThe old password stops working at once.',
+    },
+    'reset_card_no_login': {
+        'uz': "<b>{name}</b> uchun yangi vaqtinchalik parol yaratilsinmi?\n\nEski parol darhol ishlamay qoladi.",
+        'ru': 'Создать новый временный пароль для <b>{name}</b>?\n\nСтарый пароль сразу перестанет работать.',
+        'en': 'Make a new temporary password for <b>{name}</b>?\n\nThe old password stops working at once.',
+    },
+    'reset_yes': {'uz': '🔑 Yangi parol', 'ru': '🔑 Новый пароль', 'en': '🔑 New password'},
+    'reset_working': {
+        'uz': 'Yangi parol yaratilmoqda...',
+        'ru': 'Создаём новый пароль...',
+        'en': 'Making a new password...',
+    },
+    'reset_done': {
+        'uz': "🔑 Yangi parol tayyor: <b>{name}</b>\n\nLogin: <code>{username}</code>\nVaqtinchalik parol: <code>{password}</code>\nAmal qiladi: {expires} gacha\nSayt: {url}\n\nShu ma'lumotni o'quvchiga yuboring. Kirgach, o'z parolini o'rnatadi. Yuborgach, bu xabarni o'chirib qo'ying.",
+        'ru': '🔑 Новый пароль готов: <b>{name}</b>\n\nЛогин: <code>{username}</code>\nВременный пароль: <code>{password}</code>\nДействует до: {expires}\nСайт: {url}\n\nПередайте эти данные ученику. После входа он задаст свой пароль. После отправки удалите это сообщение.',
+        'en': '🔑 New password ready: <b>{name}</b>\n\nLogin: <code>{username}</code>\nTemporary password: <code>{password}</code>\nValid until: {expires}\nWebsite: {url}\n\nSend these to the student. They set their own password after signing in. Delete this message once sent.',
+    },
+    'reset_cancelled': {
+        'uz': "Bekor qilindi. Parol o'zgarmadi.",
+        'ru': 'Отменено. Пароль не изменён.',
+        'en': 'Cancelled. The password was not changed.',
+    },
+    'reset_not_found': {
+        'uz': "Bu o'quvchi endi ro'yxatingizda yo'q. Parol o'zgarmadi.",
+        'ru': 'Этого ученика больше нет в вашем списке. Пароль не изменён.',
+        'en': 'This student is no longer on your list. The password was not changed.',
+    },
+    'reset_too_many': {
+        'uz': "Bir soatda juda ko'p parol yangilandi. Birozdan so'ng qayta urinib ko'ring.",
+        'ru': 'Слишком много новых паролей за час. Попробуйте позже.',
+        'en': 'Too many passwords reset this hour. Please try again later.',
+    },
+    'student_linked': {
+        'uz': "✅ Ulandi: <b>{name}</b>. Uchrashuv xabarlari va eslatmalar shu yerga keladi.",
+        'ru': '✅ Подключено: <b>{name}</b>. Сообщения и напоминания о встречах будут приходить сюда.',
+        'en': '✅ Connected: <b>{name}</b>. Meeting messages and reminders will come here.',
+    },
+    'student_link_invalid': {
+        'uz': "Bu havola eskirgan yoki allaqachon ishlatilgan. Saytda Meetings sahifasini oching va «Telegramni ulash» tugmasini qayta bosing.\n{url}",
+        'ru': 'Эта ссылка устарела или уже использована. Откройте Meetings на сайте и снова нажмите «Подключить Telegram».\n{url}',
+        'en': 'This link has expired or was already used. Open Meetings on the website and press Connect Telegram again.\n{url}',
+    },
+    'student_connected': {
+        'uz': "Siz <b>{name}</b> sifatida ulangansiz. Uchrashuv xabarlari shu yerga keladi.",
+        'ru': 'Вы подключены как <b>{name}</b>. Сообщения о встречах приходят сюда.',
+        'en': "You're connected as <b>{name}</b>. Meeting messages come here.",
+    },
+    'unknown_user': {
+        'uz': "Bu bot Naseeb o'quvchilari va maslahatchilari uchun.\n\nO'quvchilar: saytda Meetings sahifasini oching va «Telegramni ulash» tugmasini bosing: {url}\nMaslahatchilar: kirish uchun Telegram username'ingizni administratorga yuboring.",
+        'ru': 'Этот бот для учеников и консультантов Naseeb.\n\nУченики: откройте Meetings на сайте и нажмите «Подключить Telegram»: {url}\nКонсультанты: отправьте свой Telegram username администратору, чтобы получить доступ.',
+        'en': "This bot is for Naseeb students and counselors.\n\nStudents: open Meetings on the website and press 'Connect Telegram': {url}\nCounselors: send your Telegram username to the administrator to get access.",
+    },
+    'unknown_no_username': {
+        'uz': "Maslahatchilar avval Telegram sozlamalarida username o'rnatishi kerak.",
+        'ru': 'Консультантам сначала нужно задать username в настройках Telegram.',
+        'en': 'Counselors must first set a Telegram username in Telegram settings.',
+    },
+    'staff_not_allowed': {
+        'uz': "Bu Telegram akkaunti ushbu hisobga kira olmaydi. Administratorga murojaat qiling. Hech narsa saqlanmadi.",
+        'ru': 'Этому Telegram-аккаунту нельзя войти в этот аккаунт. Обратитесь к администратору. Ничего не сохранено.',
+        'en': 'This Telegram account is not allowed to log in to that account. Contact the administrator. Nothing was saved.',
+    },
+    'meetings_title': {
+        'uz': '📅 <b>Uchrashuvlar</b>', 'ru': '📅 <b>Встречи</b>', 'en': '📅 <b>Meetings</b>',
+    },
+    'meetings_empty': {
+        'uz': "Yaqin uchrashuvlar yo'q.", 'ru': 'Ближайших встреч нет.', 'en': 'No upcoming meetings.',
+    },
+    'meetings_counts': {
+        'uz': "Band: {booked} · kutilmoqda: {waiting} · oxirgi 7 kunda bekor: {cancelled} · bo'sh vaqt: {free}",
+        'ru': 'Занято: {booked} · ждут ответа: {waiting} · отменено за 7 дней: {cancelled} · свободно: {free}',
+        'en': 'Booked: {booked} · waiting: {waiting} · cancelled in 7 days: {cancelled} · free slots: {free}',
+    },
+    'meetings_wait_you': {'uz': 'sizning javobingiz kutilmoqda', 'ru': 'ждёт вашего ответа', 'en': 'waiting for you'},
+    'meetings_wait_student': {'uz': "o'quvchi javobi kutilmoqda", 'ru': 'ждёт ответа ученика', 'en': 'waiting for student'},
+    'meetings_wait_staff': {'uz': 'tasdiqlash kutilmoqda', 'ru': 'ждёт подтверждения', 'en': 'waiting for confirmation'},
+    'meetings_minutes': {'uz': '{n} daq', 'ru': '{n} мин', 'en': '{n} min'},
+    'meetings_more': {'uz': "… yana {n} ta", 'ru': '… и ещё {n}', 'en': '… and {n} more'},
+    'meetings_settings_rolling': {
+        'uz': 'Sozlamalar: {minutes} daqiqa · oldindan {notice} soat · keyingi {days} kun',
+        'ru': 'Настройки: {minutes} мин · заранее за {notice} ч · ближайшие {days} дн.',
+        'en': 'Settings: {minutes} min · {notice} h notice · next {days} days',
+    },
+    'meetings_settings_range': {
+        'uz': 'Sozlamalar: {minutes} daqiqa · oldindan {notice} soat · {start} – {end}',
+        'ru': 'Настройки: {minutes} мин · заранее за {notice} ч · {start} – {end}',
+        'en': 'Settings: {minutes} min · {notice} h notice · {start} – {end}',
+    },
+    'meetings_booking_link': {
+        'uz': 'Sizning bron havolangiz: {url}', 'ru': 'Ваша ссылка для записи: {url}', 'en': 'Your booking link: {url}',
+    },
     'error': {
         'uz': "Xatolik yuz berdi. Qayta urinib ko'ring.",
         'ru': 'Произошла ошибка. Попробуйте ещё раз.',
         'en': 'Something went wrong. Please try again.',
     },
     'help': {
-        'uz': "/start - kirish\n/now - hozir yangilanish\n/students - o'quvchilar\n/add - yangi o'quvchi qo'shish\n/settings - vaqt, til, nimalar kelishi\n/logout - chiqish va ma'lumotlarni o'chirish\n/help - yordam",
-        'ru': '/start - вход\n/now - сводка сейчас\n/students - ученики\n/add - добавить ученика\n/settings - время, язык, состав сводки\n/logout - выйти и удалить данные\n/help - помощь',
-        'en': '/start - log in\n/now - update now\n/students - list students\n/add - add a student\n/settings - time, language, contents\n/logout - log out and wipe data\n/help - this help',
+        'uz': "/start - kirish\n/now - hozir yangilanish\n/students - o'quvchilar\n/meetings - uchrashuvlar\n/add - yangi o'quvchi qo'shish\n/reset - o'quvchiga yangi parol\n/settings - vaqt, til, nimalar kelishi\n/logout - chiqish va ma'lumotlarni o'chirish\n/help - yordam",
+        'ru': '/start - вход\n/now - сводка сейчас\n/students - ученики\n/meetings - встречи\n/add - добавить ученика\n/reset - новый пароль ученику\n/settings - время, язык, состав сводки\n/logout - выйти и удалить данные\n/help - помощь',
+        'en': '/start - log in\n/now - update now\n/students - list students\n/meetings - upcoming meetings\n/add - add a student\n/reset - new password for a student\n/settings - time, language, contents\n/logout - log out and wipe data\n/help - this help',
     },
+}
+
+# The command list behind Telegram's "Menu" button.
+MENU = {
+    'uz': [
+        ('add', "Yangi o'quvchi qo'shish"), ('reset', "O'quvchiga yangi parol"), ('students', "O'quvchilar"), ('meetings', 'Uchrashuvlar'),
+        ('now', 'Hozirgi holat'), ('settings', 'Sozlamalar'), ('help', 'Yordam'), ('logout', 'Chiqish'),
+    ],
+    'ru': [
+        ('add', 'Добавить ученика'), ('reset', 'Новый пароль ученику'), ('students', 'Ученики'), ('meetings', 'Встречи'),
+        ('now', 'Сводка сейчас'), ('settings', 'Настройки'), ('help', 'Помощь'), ('logout', 'Выйти'),
+    ],
+    'en': [
+        ('add', 'Add a student'), ('reset', 'New password for a student'), ('students', 'Students'), ('meetings', 'Meetings'),
+        ('now', 'Update now'), ('settings', 'Settings'), ('help', 'Help'), ('logout', 'Log out'),
+    ],
+}
+
+# Students link their chat with a one-time link; they only need /start.
+MENU_STUDENT = {
+    'uz': [('start', 'Boshlash'), ('meetings', 'Uchrashuvlar')],
+    'ru': [('start', 'Начать'), ('meetings', 'Встречи')],
+    'en': [('start', 'Start'), ('meetings', 'Meetings')],
 }
 
 

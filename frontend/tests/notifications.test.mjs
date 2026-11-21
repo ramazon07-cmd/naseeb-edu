@@ -72,9 +72,10 @@ test('counselors have a Notifications page at /notifications', () => {
   assert.equal(buildPath({ page: 'review', params: { item: reviewItemForNotice({ kind: 'document', target_id: 4 }) } }), '/review?item=document-4');
 });
 
-test('only a counselor workspace opens the Notifications page', () => {
+test('a counselor workspace and students open the Notifications page', () => {
   assert.equal(canOpenPage('notifications', { id: 1, role: 'counselor' }), true);
-  for (const user of [{ id: 2, role: 'student' }, { id: 3, role: 'teacher' }, { id: 4, role: 'parent' }, { id: 5, role: 'counselor', is_superuser: true }]) {
+  assert.equal(canOpenPage('notifications', { id: 2, role: 'student' }), true);
+  for (const user of [{ id: 3, role: 'teacher' }, { id: 4, role: 'parent' }, { id: 5, role: 'counselor', is_superuser: true }]) {
     assert.equal(canOpenPage('notifications', user), false, user.role);
   }
 });

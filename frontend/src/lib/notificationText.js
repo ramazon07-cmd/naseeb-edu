@@ -70,6 +70,9 @@ const MESSAGES = {
     [new RegExp(`^Your meeting with (.+) was moved to ${MEETING_TIME}\\.$`), ([, name, time]) => t('Your meeting with {name} was moved to {time}.', { name: participant(name), time: meetingTime(time) })],
     [new RegExp(`^(.+) moved "(.*)" with (.+) to ${MEETING_TIME}\\. Please confirm\\.$`), ([, name, topic, student, time]) => t('{name} moved “{topic}” with {student} to {time}. Please confirm.', { name, topic, student, time: meetingTime(time) })],
     [new RegExp(`^(.+) booked "(.*)" with you on ${MEETING_TIME}\\.$`), ([, name, topic, time]) => t('{name} booked “{topic}” with you on {time}.', { name, topic, time: meetingTime(time) })],
+    [new RegExp(`^(.+) invited you to "(.*)" on ${MEETING_TIME}\\. Confirm it on the website\\.$`), ([, name, topic, time]) => t('{name} invited you to “{topic}” on {time}. Confirm it on the website.', { name, topic, time: meetingTime(time) })],
+    [new RegExp(`^(.+) confirmed "(.*)" on ${MEETING_TIME}\\.$`), ([, name, topic, time]) => t('{name} confirmed “{topic}” on {time}.', { name, topic, time: meetingTime(time) })],
+    [new RegExp(`^(.+) declined "(.*)" on ${MEETING_TIME}\\.$`), ([, name, topic, time]) => t('{name} declined “{topic}” on {time}.', { name, topic, time: meetingTime(time) })],
     [new RegExp(`^(.+) requested "(.*)" on ${MEETING_TIME}\\.$`), ([, name, topic, time]) => t('{name} requested “{topic}” on {time}.', { name, topic, time: meetingTime(time) })],
   ],
 };

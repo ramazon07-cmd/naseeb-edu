@@ -3,6 +3,7 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from apps.admissions.models import School, StudentProfile
+from apps.telegram_bot.models import StaffTelegramAccess
 from apps.users.models import User
 
 KEY = 'test-service-key-0123456789abcdef'
@@ -14,6 +15,10 @@ def make_user(username, role, school=None, **extra):
         username=username, email=f'{username}@example.com', password=PASSWORD, role=role, school=school,
         first_name=username.title(), last_name='Tester', **extra,
     )
+
+
+def tg_name(username):
+    return f'tg_{username}'
 
 
 def make_student(username, school, counselor=None, assistant=None, grade='10'):
@@ -40,9 +45,16 @@ class BotTestCase(APITestCase):
         self.s3 = make_student('stu3', self.school_a, self.c2, self.a2, grade='10')
         self.s4 = make_student('stu4', self.school_b, self.cb, grade='11')
         self.chat = 1001
+        # The counselor flow is open only to Telegram usernames a superadmin allowed, one per account.
+        for staff in (self.c1, self.c2, self.cb, self.a1, self.a2):
+            StaffTelegramAccess.objects.create(user=staff, telegram_username=tg_name(staff.username))
 
     def call(self, method, path, data=None, key=KEY):
         headers = {'HTTP_X_BOT_SERVICE_KEY': key} if key is not None else {}
+        if path == 'login' and isinstance(data, dict) and 'telegram_username' not in data:
+            # Tests act as the account's own Telegram user unless they say otherwise.
+            access = StaffTelegramAccess.objects.filter(user__username=str(data.get('username', ''))).first()
+            data = {**data, 'telegram_username': access.telegram_username if access else tg_name(self.c1.username)}
         return getattr(self.client, method)(f'/api/bot/{path}/', data, format='json', **headers)
 
     def post(self, path, data=None, **kw):
@@ -50,6 +62,7 @@ class BotTestCase(APITestCase):
 
     def link(self, user, chat_id=None, language='uz'):
         chat_id = chat_id or self.chat
+        StaffTelegramAccess.objects.get_or_create(user=user, defaults={'telegram_username': tg_name(user.username)[:32]})
         login = self.post('login', {'chat_id': chat_id, 'username': user.username, 'password': PASSWORD})
         assert login.status_code == 200, login.content
         confirm = self.post('confirm', {

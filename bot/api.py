@@ -55,8 +55,13 @@ class ApiClient:
             raise ApiError(status, (body or {}).get('code', ''), **extra)
         return body
 
-    async def login(self, chat_id, username, password):
-        return await self._call('POST', 'login', json={'chat_id': chat_id, 'username': username, 'password': password})
+    async def login(self, chat_id, username, password, telegram_username=None):
+        return await self._call('POST', 'login', json={
+            'chat_id': chat_id, 'username': username, 'password': password, 'telegram_username': telegram_username,
+        })
+
+    async def whoami(self, chat_id, telegram_username=None):
+        return await self._call('POST', 'whoami', json={'chat_id': chat_id, 'telegram_username': telegram_username})
 
     async def confirm(self, chat_id, pending_token, language):
         return await self._call('POST', 'confirm', json={
@@ -66,6 +71,9 @@ class ApiClient:
     async def students(self, chat_id):
         return await self._call('POST', 'students', json={'chat_id': chat_id})
 
+    async def meetings(self, chat_id, telegram_username=None):
+        return await self._call('POST', 'meetings', json={'chat_id': chat_id, 'telegram_username': telegram_username})
+
     async def digest(self, chat_id):
         return await self._call('POST', 'digest', json={'chat_id': chat_id})
 
@@ -73,6 +81,32 @@ class ApiClient:
         return await self._call('POST', 'add-student', json={
             'chat_id': chat_id, 'full_name': full_name, 'email': email, 'phone': phone,
         })
+
+    async def find_students(self, chat_id, query):
+        return await self._call('POST', 'find-students', json={'chat_id': chat_id, 'query': query})
+
+    async def reset_password(self, chat_id, student_id):
+        return await self._call('POST', 'reset-password', json={'chat_id': chat_id, 'student_id': student_id})
+
+    async def student_link(self, chat_id, token, language, telegram_username=None):
+        return await self._call('POST', 'student-link', json={
+            'chat_id': chat_id, 'token': token, 'language': language, 'telegram_username': telegram_username,
+        })
+
+    async def meeting_action(self, chat_id, booking_id, action, telegram_username=None):
+        return await self._call('POST', 'meeting-action', json={
+            'chat_id': chat_id, 'booking_id': booking_id, 'action': action, 'telegram_username': telegram_username,
+        })
+
+    async def student_outbox(self):
+        body = await self._call('POST', 'student-outbox', json={})
+        messages = body.get('messages') if isinstance(body, dict) else None
+        if not isinstance(messages, list):
+            raise ApiUnavailable('outbox answer has no messages list')
+        return messages
+
+    async def student_outbox_ack(self, sent, blocked):
+        return await self._call('POST', 'student-outbox/ack', json={'sent': sent, 'blocked': blocked})
 
     async def get_settings(self, chat_id):
         return await self._call('GET', 'settings', params={'chat_id': chat_id})

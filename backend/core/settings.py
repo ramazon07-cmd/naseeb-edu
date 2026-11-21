@@ -88,23 +88,43 @@ AI_RECOMMENDATION_TIMEOUT_SECONDS = config('AI_RECOMMENDATION_TIMEOUT_SECONDS', 
 # Essay Lab. The coach reuses the AI gateway credentials above.
 ESSAY_COACH_MODEL = config('ESSAY_COACH_MODEL', default=AI_ASSISTANT_MODEL).strip()
 ESSAY_COACH_TIMEOUT_SECONDS = config('ESSAY_COACH_TIMEOUT_SECONDS', default=40, cast=int)
-ESSAY_COACH_MAX_OUTPUT_TOKENS = config('ESSAY_COACH_MAX_OUTPUT_TOKENS', default=1800, cast=int)
+# Ceiling for one call; step 1 asks for about 500 and step 2 for about 70 per note + 150.
+# Both calls of one check together; step 2 gets only the time left. Set the client timeout above it.
+ESSAY_COACH_TOTAL_SECONDS = config('ESSAY_COACH_TOTAL_SECONDS', default=90, cast=int)
+ESSAY_COACH_MAX_OUTPUT_TOKENS = config('ESSAY_COACH_MAX_OUTPUT_TOKENS', default=2200, cast=int)
+# Sent as `reasoning_effort` (empty = not sent). Dropped for one retry if the gateway rejects it.
+ESSAY_COACH_REASONING_EFFORT = config('ESSAY_COACH_REASONING_EFFORT', default='minimal').strip()
+# A re-check needs at least this many changed words against the last checked text.
+ESSAY_COACH_MIN_CHANGED_WORDS = config('ESSAY_COACH_MIN_CHANGED_WORDS', default=3, cast=int)
 ESSAY_COACH_MAX_INPUT_CHARS = config('ESSAY_COACH_MAX_INPUT_CHARS', default=24000, cast=int)
 # The platform-wide coach budget is required (0 = AI checks off); school and
 # user caps use 0 = no cap.
 ESSAY_COACH_DAILY_BUDGET = config('ESSAY_COACH_DAILY_BUDGET', default=5000, cast=int)
 ESSAY_COACH_SCHOOL_DAILY_BUDGET = config('ESSAY_COACH_SCHOOL_DAILY_BUDGET', default=1000, cast=int)
-ESSAY_COACH_USER_DAILY_LIMIT = config('ESSAY_COACH_USER_DAILY_LIMIT', default=40, cast=int)
+ESSAY_COACH_USER_DAILY_LIMIT = config('ESSAY_COACH_USER_DAILY_LIMIT', default=5, cast=int)
 ESSAY_COACH_MIN_INTERVAL_SECONDS = config('ESSAY_COACH_MIN_INTERVAL_SECONDS', default=15, cast=int)
 ESSAY_COACH_HOURLY_LIMIT = config('ESSAY_COACH_HOURLY_LIMIT', default=120, cast=int)
+# Cheap guard in front of the re-check rules (reused and refused re-checks never reach the AI): requests per minute per user.
+ESSAY_COACH_RECHECK_PER_MINUTE = config('ESSAY_COACH_RECHECK_PER_MINUTE', default=20, cast=int)
 # Recommendation-letter suggestions for counselors use the assistant's gateway
 # and models. The platform-wide budget is required (0 = AI off; profile-based
 # suggestions remain); school and user caps use 0 = no cap.
 REC_LETTER_AI_DAILY_BUDGET = config('REC_LETTER_AI_DAILY_BUDGET', default=3000, cast=int)
 REC_LETTER_AI_SCHOOL_DAILY_BUDGET = config('REC_LETTER_AI_SCHOOL_DAILY_BUDGET', default=600, cast=int)
-REC_LETTER_AI_USER_DAILY_LIMIT = config('REC_LETTER_AI_USER_DAILY_LIMIT', default=150, cast=int)
+REC_LETTER_AI_USER_DAILY_LIMIT = config('REC_LETTER_AI_USER_DAILY_LIMIT', default=20, cast=int)
 REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS = config('REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS', default=4, cast=int)
 REC_LETTER_SUGGEST_HOURLY_LIMIT = config('REC_LETTER_SUGGEST_HOURLY_LIMIT', default=180, cast=int)
+# Facts-only suggestions (no AI call, refreshed while the counselor types): a cheap, generous per-user limit per minute.
+REC_LETTER_FACTS_PER_MINUTE = config('REC_LETTER_FACTS_PER_MINUTE', default=120, cast=int)
+# Letter depth check (the Essay Coach engine on a recommendation letter). Same rules as the coach:
+# a platform budget of 0 turns AI checks off; school and user caps use 0 = no cap.
+REC_LETTER_CHECK_DAILY_BUDGET = config('REC_LETTER_CHECK_DAILY_BUDGET', default=2000, cast=int)
+REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET = config('REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET', default=400, cast=int)
+REC_LETTER_CHECK_USER_DAILY_LIMIT = config('REC_LETTER_CHECK_USER_DAILY_LIMIT', default=5, cast=int)
+# Cheap guard in front of the letter re-check rules, and the check's own minimum interval and hourly cap.
+REC_LETTER_CHECK_RECHECK_PER_MINUTE = config('REC_LETTER_CHECK_RECHECK_PER_MINUTE', default=20, cast=int)
+REC_LETTER_CHECK_MIN_INTERVAL_SECONDS = config('REC_LETTER_CHECK_MIN_INTERVAL_SECONDS', default=15, cast=int)
+REC_LETTER_CHECK_HOURLY_LIMIT = config('REC_LETTER_CHECK_HOURLY_LIMIT', default=60, cast=int)
 ESSAY_AUTOSAVE_LIMIT = config('ESSAY_AUTOSAVE_LIMIT', default=1200, cast=int)
 ESSAY_AUTOSAVE_WINDOW_SECONDS = config('ESSAY_AUTOSAVE_WINDOW_SECONDS', default=600, cast=int)
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)
@@ -422,6 +442,7 @@ REST_FRAMEWORK = {
         'refresh_ip': config('AUTH_REFRESH_IP_RATE', default='600/minute'),
         'password_change': config('AUTH_PASSWORD_CHANGE_RATE', default='5/hour'),
         'google_connect': config('GOOGLE_CONNECT_RATE', default='20/hour'),
+        'telegram_link': config('TELEGRAM_LINK_RATE', default='10/hour'),
         'credential_issue': config('AUTH_CREDENTIAL_ISSUE_RATE', default='20/hour'),
         'remind': config('REMIND_RATE', default='60/hour'),
         'account_change': config('AUTH_ACCOUNT_CHANGE_RATE', default='10/hour'),
@@ -444,6 +465,8 @@ REST_FRAMEWORK = {
 
 # Telegram counselor bot (apps/telegram_bot). Empty key = every bot endpoint answers 401.
 BOT_SERVICE_KEY = config('BOT_SERVICE_KEY', default='')
+# The counselor bot's @username (without @). Set: students connect Telegram on Meetings for meeting messages.
+TELEGRAM_BOT_USERNAME = config('TELEGRAM_BOT_USERNAME', default='').lstrip('@')
 
 # Per-account login lockout shared by /api/auth/token/ and /admin/login/.
 LOGIN_LOCKOUT_THRESHOLD = config('LOGIN_LOCKOUT_THRESHOLD', default=10, cast=int)

@@ -195,7 +195,7 @@ class SettingsTests(BotTestCase):
     def test_digest_only_has_the_enabled_parts(self):
         self.put(prefs={'essays': False, 'streak': False, 'application': True})
         student = self.post('digest', {'chat_id': self.chat}).json()['students'][0]
-        self.assertEqual(set(student), {'id', 'name', 'grade', 'application', 'last_seen_at', 'last_seen_expired'})
+        self.assertEqual(set(student), {'id', 'name', 'grade', 'application', 'last_seen_at', 'last_seen_expired', 'password'})
         self.put(prefs={'essays': True, 'streak': True, 'application': False})
         student = self.post('digest', {'chat_id': self.chat}).json()['students'][0]
-        self.assertEqual(set(student), {'id', 'name', 'grade', 'essays', 'streak', 'last_seen_at', 'last_seen_expired'})
+        self.assertEqual(set(student), {'id', 'name', 'grade', 'essays', 'streak', 'last_seen_at', 'last_seen_expired', 'password'})

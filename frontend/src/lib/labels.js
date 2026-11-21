@@ -13,7 +13,7 @@ export const LABELS = {
   leadership: 'Leadership', club: 'Club', competition: 'Competition', community: 'Community service',
   school: 'School', regional: 'Regional', national: 'National', international: 'International',
   project: 'Project', research: 'Research', olympiad: 'Olympiad', startup: 'Startup', sport: 'Sport', art: 'Art',
-  planned: 'Planned', completed: 'Completed', active: 'Active', pending: 'Pending', confirmed: 'Confirmed',
+  planned: 'Planned', completed: 'Completed', active: 'Active', pending: 'Pending', confirmed: 'Confirmed', waiting_for_student: 'Waiting for student',
   cancelled: 'Cancelled', discussion: 'Discussion', question: 'Q&A', update: 'Update',
   direct: 'Direct', group: 'Group', public: 'Public', private: 'Private', urban: 'Urban', suburban: 'Suburban', rural: 'Rural',
   four_year: '4-year', two_year: '2-year', merit: 'Merit', need_based: 'Need-based', athletic: 'Athletic',

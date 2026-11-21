@@ -121,7 +121,9 @@ def complete_password_change(*, user, new_password, request=None):
     locked_user.must_change_password = False
     locked_user.password_version += 1
     locked_user.password_changed_at = timezone.now()
-    locked_user.save(update_fields=['password', 'must_change_password', 'password_version', 'password_changed_at'])
+    # Setting the password is a sign-in too: the session is issued from here.
+    locked_user.last_login = locked_user.password_changed_at
+    locked_user.save(update_fields=['password', 'must_change_password', 'password_version', 'password_changed_at', 'last_login'])
     credential = locked_user.temporary_credentials.order_by('-issued_at', '-id').first()
     CredentialAuditEvent.objects.create(
         target_user=locked_user,

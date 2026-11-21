@@ -197,10 +197,10 @@ class BookingChangeTests(RoleIsolationBase):
         starts_at = self.soon + timedelta(days=5)
         response = self.client.post('/api/bookings/', {
             'student': self.student_a.pk, 'topic': 'SAT plan',
-            'starts_at': starts_at.isoformat(), 'duration_minutes': 30,
+            'starts_at': starts_at.isoformat(), 'duration_minutes': 30, 'ask_student': False,
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
-        # Confirmed immediately: no self-approval step, but the student is told.
+        # ask_student=false: confirmed immediately, the student is only told.
         self.assertEqual(response.data['status'], Booking.Status.APPROVED)
         booking = Booking.objects.get(pk=response.data['id'])
         self.assertEqual((booking.student_id, booking.participant_id), (self.student_a.pk, self.counselor.pk))

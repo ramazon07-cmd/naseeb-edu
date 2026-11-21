@@ -108,19 +108,20 @@ if (!app.includes("['programServices', 'program-services']") || !app.includes('M
 if (app.includes('function ProgramUsagePage(') || app.includes("page === 'program_usage'")) throw new Error('The standalone Program Usage page must stay removed.');
 if (!app.includes('<ProgramUsageSummary user={user} data={data} />') || !app.includes('{isCounselor(user) && <ProgramUsageSummary')) throw new Error('Program usage must render as a dashboard section for students and counselors.');
 if (app.includes("return ['dashboard', 'schools', 'students', 'counselor_roadmap'")) throw new Error('Counselors belong to one school; the Schools page must stay out of their navigation.');
-if (!app.includes('{!manager && <PortalTabs active={tab} onChange={setTab} items={[["path", "Level path"], ["tasks", "Tasks"]]} />}')) throw new Error('Student roadmap level-path / task tabs are missing.');
+if (!app.includes("t('Level path')") || !app.includes('nb-rm-head') || !app.includes('nb-rm-path-h')) throw new Error('Student roadmap level-path card is missing.');
 if (app.includes('filter-panel') || app.includes('finder-layout') || !app.includes('function FilterChip(') || !app.includes('function CollegeFilters(') || !styles.includes('.college-filters') || app.includes('SidebarSlotContext') || app.includes('sidebar-slot')) throw new Error('College search filters must sit in a right-hand panel beside the results (inline disclosure on narrow screens), never in the app sidebar or a legacy filter panel.');
 if (!app.includes('function UniversityPage(') || !app.includes('function CollegeListDrawer(') || !/t\(["']Add to my list["']\)/.test(app) || !/t\(["']My college list["']\)/.test(app)) throw new Error('College search must offer per-university pages, Add to my list and the My college list drawer.');
 if (!app.includes('function ApplicationSummary(') || !app.includes('APPLICATION_STAGES') || !app.includes('locked: true') || !styles.includes('.board-card')) throw new Error('Applications must render the five-stage board with a counselor-only Decision column.');
 const compactDashboard = fs.readFileSync(path.join(root, 'frontend/src/CompactDashboard.jsx'), 'utf8');
-if (!compactDashboard.includes("setPage('find_personality')") || !compactDashboard.includes("setPage('college_search')") || !styles.includes('.dashboard-discovery-card')) throw new Error('Student dashboard discovery cards are missing.');
+const dashboardBlue = fs.readFileSync(path.join(root, 'frontend/src/design/pages/dashboard-blue.css'), 'utf8');
+if (!compactDashboard.includes("'find_personality'") || !compactDashboard.includes("'college_search'") || !dashboardBlue.includes('.nb-dash-tools')) throw new Error('Student dashboard discovery cards are missing.');
 // The QS catalogue spans 100+ countries: one country picker, not a checkbox per market.
 // College Search filters run on the server (/api/college-search/); the page only builds the query.
 if (!app.includes("params.set('country', filters.country)") || !app.includes('{t("Where")}</legend><select className="filter-country"')) throw new Error('The College Search country filter is not wired to the university catalog.');
 if (!app.includes("params.set('bands', filters.bands.join(','))") || !styles.includes('.filter-set')) throw new Error('Reach, target, and safety filters are not wired to college recommendations.');
 // Majors are revealed on the hub's Next step card once all seven tests are saved,
 // and kept in this browser per user.
-if (!app.includes('function HubNextCard(') || !app.includes("t('Your three majors')") || !app.includes('USER_STORAGE.assessmentMajors') || !app.includes('/assessment/hub/logo.png') || !hubStyles.includes('.hub-next-majors')) throw new Error('The Next step card with the three revealed majors is missing.');
+if (!app.includes("t('Your three majors')") || !app.includes('USER_STORAGE.assessmentMajors') || !app.includes('nb-mf-picks')) throw new Error('The Next step card with the three revealed majors is missing.');
 if (app.includes('education-ai-colleges') || app.includes('college_explanations')) throw new Error('University AI must remain separate from the major guidance stage.');
 if (app.includes('title="Where this could lead"')) throw new Error('The retired deterministic career recommendation panel has returned.');
 if (!app.includes('function ChallengeRunner(') || !styles.includes('.challenge-scale') || !app.includes('Profile Assessment')) throw new Error('Profile Assessment challenges are missing.');
@@ -128,7 +129,7 @@ if (!challenges.includes('VALUES_CHALLENGE') || !challenges.includes('WORK_IMPOR
 if (app.includes("key: 'academic-profile'") || app.includes("key: 'goals-preferences'") || app.includes('function AssessmentProfileStepCard(')) throw new Error('Profile Assessment must contain only the seven active challenges.');
 // The Naseeb Mind hub: Personality hero, image cards, EQ banner, and cards that
 // turn over to a summary once finished.
-if (!app.includes('function HubCard(') || !app.includes('function cardSummary(') || !app.includes('hub-card-back') || !hubStyles.includes(".hub-card[data-kind='personality']") || !hubStyles.includes(".hub-card[data-kind='eq']") || !hubStyles.includes('backface-visibility: hidden')) throw new Error('The Profile Assessment hub with flipping cards is missing.');
+if (!app.includes('nb-mf-sheet') || !app.includes('nb-mf-bar')) throw new Error('The Profile Assessment profile sheet is missing.');
 // One current challenge per instrument, each with its own scorer.
 for (const scoring of ['bigfive', 'riasec', 'values', 'subjects', 'wil', 'reasoning', 'eq']) {
   if (!challenges.includes(`"scoring": "${scoring}"`) && !challenges.includes(`scoring: '${scoring}'`) && !mindBanks.includes(`"scoring": "${scoring}"`)) throw new Error(`The ${scoring} instrument is missing from the challenge banks.`);
@@ -158,11 +159,11 @@ if (!app.includes("bookings: { label: 'Meetings'")) throw new Error('Booking wor
 // The retired standalone notification page and launcher stay gone; server
 // notices are shown by the sidebar bell instead.
 // The counselor shell has its own notifications page (bell in the sidebar);
-// it must stay in that shell (counselors and their assistants), and the old centre and launcher stay retired.
+// it must stay in that shell (counselors and their assistants) and the student blue shell, and the old centre and launcher stay retired.
 const notificationsPageUses = app.split('<NotificationsPage').length - 1;
 if (app.includes('function NotificationCenter(') || styles.includes('.notification-launcher')
   || notificationsPageUses !== 1
-  || !app.includes("page === 'notifications' && usesCounselorLayout(user)) return <NotificationsPage")) throw new Error('The retired notification page and launcher must not come back.');
+  || !app.includes("page === 'notifications' && (usesCounselorLayout(user) || user.role === 'student')) return <NotificationsPage")) throw new Error('The retired notification page and launcher must not come back.');
 if (!api.includes("'/notifications/summary/'") || !api.includes('markAllNotificationsRead')) throw new Error('The notification bell must load and clear server notifications.');
 if (!app.includes('function AssistantCenter(') || !styles.includes('.assistant-launcher') || !styles.includes('.assistant-drawer')) throw new Error('Corner AI assistant is missing.');
 if (!app.includes('Role-scoped context only') || !app.includes('History is kept only while this page is open.')) throw new Error('Assistant privacy and retention guidance is missing.');
@@ -186,7 +187,8 @@ for (const uzbekFragment of ['Hozircha ma’lumot', 'Missiya yangilandi', 'Uchra
 if (app.includes('className="palette-row"')) throw new Error('Login palette swatches must not be rendered.');
 if (!app.includes("if (role === 'organization') return [staff.bookings, staff.messageChannels, staff.supportTickets]") || !app.includes("usePagedList('students'")) throw new Error('Organization data scope is missing: school rosters must be server-paged.');
 if (!app.includes("document.documentElement.dataset.theme = 'light'")) throw new Error('The single light theme must be applied to <html>.');
-if (app.includes('ThemeToggle') || app.includes('toggleTheme')) throw new Error('Naseeb Edu is light-only; the theme toggle must not return.');
+// The classic (staff) app is light-only; the student blue design has its own scoped looks (design/blue/theme.js).
+if (/\bThemeToggle\b|\btoggleTheme\b/.test(app)) throw new Error('Naseeb Edu is light-only; the theme toggle must not return.');
 if (/data-theme='dark'|prefers-color-scheme/.test(html) || /\[data-theme=.dark.\]/.test(styles)) throw new Error('Dark-theme rules must not return.');
 const imagePreloads = html.match(/<link\b[^>]*rel="preload"[^>]*as="image"[^>]*>/g) || [];
 if (imagePreloads.length !== 1 || !imagePreloads[0].includes('data-theme-hero') || !imagePreloads[0].includes('fetchpriority="high"')) throw new Error('Only the active landing hero should have a high-priority image preload.');
@@ -199,7 +201,8 @@ for (const variant of ['light']) {
 for (const shared of ['[640, 960, 1448]', '(max-width: 820px) 100vw, 760px', '/landing/hero-']) {
   if (!html.includes(shared) || !landingPage.replace(/"/g, "'").includes(shared)) throw new Error(`Hero preload must match the rendered image set (${shared}).`);
 }
-if (!app.includes('login-form-panel') || !styles.includes('.login-form-panel')) throw new Error('Responsive login form panel is missing.');
+const loginStyles = fs.readFileSync(path.join(root, 'frontend/src/design/blue/login.css'), 'utf8');
+if (!app.includes('nb-login-panel') || !loginStyles.includes('.nb-login-panel')) throw new Error('Responsive login form panel is missing.');
 if (!styles.includes('.student-target-cell')) throw new Error('Target-country validation or overflow protection is missing.');
 if (!api.includes('fetchWithTimeout') || !api.includes('REQUEST_TIMEOUT_MS')) throw new Error('Slow-network timeout handling is missing.');
 if (!app.includes('Promise.allSettled') || !app.includes('function PageDataBoundary(') || !styles.includes('.page-skeleton')) throw new Error('Partial loading, retry, or skeleton states are missing.');
@@ -211,7 +214,7 @@ for (const asset of ['montserrat-latin.woff2', 'montserrat-cyrillic.woff2']) {
   if (!fs.existsSync(path.join(root, 'frontend/public/fonts', asset))) throw new Error(`Font asset missing: ${asset}`);
 }
 if (!styles.includes('.brand-logo::after') || !styles.includes('.brand-logo::before')) throw new Error('Brand logo image layers are missing.');
-if (!styles.includes('.brand-logo.login-emblem {') || !styles.includes('flex: 0 0 112px') || !styles.includes('aspect-ratio: 1')) throw new Error('Login emblem must preserve its dimensions.');
+if (!/\.nb-login-emblem \{[^}]*width: 66px;[^}]*height: 66px;/.test(loginStyles)) throw new Error('Login emblem must preserve its dimensions.');
 if (!app.includes('function ChannelListSkeleton(') || !app.includes('function MessageListSkeleton(') || !app.includes('function StaffStatsSkeleton(')) throw new Error('Messaging shaped skeleton states are missing.');
 if (!app.includes('The preview is taking longer than expected.') || !styles.includes('.embedded-preview-state')) throw new Error('Embedded preview slow-loading fallback is missing.');
 if (!app.includes('Create self-task') || !app.includes("t('Personal task')") || !app.includes('item.is_self_assigned')) throw new Error('Student zero-XP self-task UI is missing.');

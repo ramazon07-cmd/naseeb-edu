@@ -1,6 +1,12 @@
 // Counselor Home (pages/DashboardPage.jsx, components/counselorHome.jsx): English key -> [Uzbek (Latin), Russian].
 // Russian plural keys hold "one|few|many" forms.
 export const COUNSELOR_HOME_TRANSLATIONS = {
+  'Ask the student to confirm': ['Talabadan tasdiqlashni so‘rash', 'Попросить ученика подтвердить'],
+  'Invitation sent. Waiting for the student to confirm.': ['Taklif yuborildi. Talaba tasdiqlashi kutilmoqda.', 'Приглашение отправлено. Ждём подтверждения ученика.'],
+  'Waiting for student': ['Talaba tasdiqlashini kutmoqda', 'Ждёт ученика'],
+  'Students must book at least': ['Talabalar kamida', 'Ученики должны записываться не позднее чем за'],
+  'hours ahead': ['soat oldin band qilishi kerak', 'ч. до встречи'],
+  'Enter a notice between 0 and 168 hours.': ['0 dan 168 soatgacha bo‘lgan muddatni kiriting.', 'Укажите срок от 0 до 168 часов.'],
   'Next at {time} · {name}': ['Keyingisi {time} da · {name}', 'Следующая в {time} · {name}'],
   "All of today's meetings have started": ['Bugungi barcha uchrashuvlar boshlangan', 'Все сегодняшние встречи уже начались'],
   "All of today's meetings are done": ['Bugungi barcha uchrashuvlar yakunlandi', 'Все сегодняшние встречи завершены'],

@@ -10,7 +10,7 @@ const html = injectSessionKey(source);
 const landing = readFileSync(new URL('../src/LandingPage.jsx', import.meta.url), 'utf8');
 const bootstrap = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
-function boot({ saved, systemDark = false, storageBlocked = false, lang = 'en', tokens = {}, hash = '', search = '' }) {
+function boot({ saved, systemDark = false, storageBlocked = false, lang = 'en', tokens = {}, hash = '', search = '', pathname = '/' }) {
   const hero = { removed: false, setAttribute(name, value) { this[name] = value; }, remove() { this.removed = true; } };
   const appended = [];
   const documentElement = { dataset: {}, style: {} };
@@ -22,7 +22,7 @@ function boot({ saved, systemDark = false, storageBlocked = false, lang = 'en', 
       getElementById: () => ({}),
       querySelector: (selector) => selector === 'link[data-theme-hero]' ? hero : {},
     },
-    location: { hash, search },
+    location: { hash, search, pathname },
     URLSearchParams,
     localStorage: { getItem: (key) => {
       if (storageBlocked) throw new Error('Storage unavailable');
@@ -66,11 +66,13 @@ test('system-dark and storage-disabled visitors still preload the light hero', (
   }
 });
 
-test('signed-in users and the login route skip the hero preload', () => {
+test('signed-in users, /login and other paths skip the hero preload', () => {
   assert.equal(boot({ saved: 'light', tokens: { [SESSION_HINT_KEY]: 'k3x.2' } }).preloaded, false);
   // Tokens left in storage by the old frontend are dropped on load, not a session.
   assert.notEqual(boot({ saved: 'light', tokens: { 'naseeb-refresh-token': 'x' } }).preloaded, false);
   assert.equal(boot({ saved: 'dark', hash: '#/login' }).preloaded, false);
+  // The sign-in page and every other path never draw the landing hero.
+  for (const pathname of ['/login', '/dashboard', '/meetings']) assert.equal(boot({ saved: 'light', pathname }).preloaded, false);
 });
 
 test('Russian also preloads the Cyrillic font subset', () => {

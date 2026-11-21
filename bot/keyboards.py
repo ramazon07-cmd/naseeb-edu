@@ -83,3 +83,38 @@ def list_markup(lang, numbered, page, pages, sort, flt):
 
 def back_to_list(lang, page, sort, flt):
     return _markup([[_button(t(lang, 'btn_back'), f'l:{page}:{sort}:{flt}')]])
+
+
+def student_detail(lang, student_id, page, sort, flt):
+    return _markup([
+        [_button(t(lang, 'btn_new_password'), f'rp:{student_id}')],
+        [_button(t(lang, 'btn_back'), f'l:{page}:{sort}:{flt}')],
+    ])
+
+
+def pick_student(lang, students):
+    rows = [[_button(f"{row['full_name']} ({row['username']})"[:60], f"rp:{row['id']}")] for row in students]
+    rows.append([_button(t(lang, 'add_no'), 'rp:x')])
+    return _markup(rows)
+
+
+def confirm_reset(lang, student_id):
+    return _markup([[_button(t(lang, 'reset_yes'), f'rpy:{student_id}'), _button(t(lang, 'add_no'), 'rp:x')]])
+
+
+
+def from_rows(rows):
+    """An inline keyboard from the backend's rows of {'text', 'callback_data'|'url'}; None when there is nothing to show."""
+    keyboard = []
+    for row in rows or []:
+        buttons = []
+        for item in row if isinstance(row, list) else []:
+            if not isinstance(item, dict) or not item.get('text'):
+                continue
+            if item.get('callback_data') and len(str(item['callback_data']).encode()) <= 64:
+                buttons.append(InlineKeyboardButton(text=str(item['text']), callback_data=str(item['callback_data'])))
+            elif item.get('url'):
+                buttons.append(InlineKeyboardButton(text=str(item['text']), url=str(item['url'])))
+        if buttons:
+            keyboard.append(buttons)
+    return _markup(keyboard) if keyboard else None

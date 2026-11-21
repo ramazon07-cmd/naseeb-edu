@@ -15,7 +15,7 @@ from ..models import (
     ScreenTimeDaily,
     StudentMessage,
 )
-from ..meetings import MAX_REPEAT_DAYS, MEETING_DURATIONS, overlapping
+from ..meetings import MAX_MIN_NOTICE_HOURS, MAX_REPEAT_DAYS, MEETING_DURATIONS, overlapping, window_summary
 from ..scoping import booking_participants_for, school_staff, tenant_school_id
 from .common import StudentRecordSerializerMixin, scope_related_field
 
@@ -48,13 +48,16 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
     participant_role = serializers.CharField(source='participant.role', read_only=True)
     participant_detail = ContactSerializer(source='participant', read_only=True)
     student_name = serializers.SerializerMethodField()
+    # Only for staff who can see the booking; a student never gets these (null).
+    student_username = serializers.SerializerMethodField()
+    student_telegram_username = serializers.SerializerMethodField()
     is_expired = serializers.BooleanField(read_only=True)
     availability_slot = serializers.PrimaryKeyRelatedField(queryset=MeetingAvailability.objects.all(), required=False, allow_null=True)
 
     class Meta:
         model = Booking
         fields = '__all__'
-        read_only_fields = ('student', 'status', 'previous_starts_at')
+        read_only_fields = ('student', 'status', 'previous_starts_at', 'staff_requested', 'cancelled_by_role')
 
     def get_participant_name(self, obj):
         if not obj.participant:
@@ -63,6 +66,20 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
 
     def get_student_name(self, obj):
         return obj.student.user.get_full_name() or obj.student.user.username
+
+    def _staff_viewer(self):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        return bool(user and user.is_authenticated and user.role != User.Role.STUDENT)
+
+    def get_student_username(self, obj):
+        return obj.student.user.username if self._staff_viewer() else None
+
+    def get_student_telegram_username(self, obj):
+        if not self._staff_viewer():
+            return None
+        link = getattr(obj.student.user, 'student_telegram', None)
+        return (link.telegram_username or None) if link else None
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -99,7 +116,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
 
     def validate_duration_minutes(self, value):
         if value not in MEETING_DURATIONS:
-            raise serializers.ValidationError('Choose a 30, 45, or 60 minute meeting.')
+            raise serializers.ValidationError('Choose a 15, 20, 30, 45, 60, or 90 minute meeting.')
         return value
 
     def validate(self, attrs):
@@ -184,11 +201,52 @@ class MeetingScheduleSerializer(serializers.ModelSerializer):
 
     MAX_RANGES_PER_DAY = 4
 
+    # Read-only: the clock all hours and dates use, and the counselor's tally inside the booking window.
+    timezone = serializers.SerializerMethodField()
+    upcoming_booked = serializers.SerializerMethodField()
+    free_slots = serializers.SerializerMethodField()
+
     class Meta:
         model = MeetingSchedule
-        fields = ('duration_minutes', 'hours')
+        fields = (
+            'duration_minutes', 'hours', 'min_notice_hours', 'window_mode', 'window_days', 'window_start', 'window_end',
+            'timezone', 'upcoming_booked', 'free_slots',
+        )
+        extra_kwargs = {
+            'min_notice_hours': {'min_value': 0, 'max_value': MAX_MIN_NOTICE_HOURS},
+            'window_days': {'min_value': 1, 'max_value': 365},
+        }
 
     validate_duration_minutes = BookingSerializer.validate_duration_minutes
+
+    def get_timezone(self, obj):
+        return settings.TIME_ZONE
+
+    def _summary(self, obj):
+        # One pair of count queries serves both fields.
+        if not hasattr(self, '_tally'):
+            self._tally = window_summary(obj.participant)
+        return self._tally
+
+    def get_upcoming_booked(self, obj):
+        return self._summary(obj)['upcoming_booked']
+
+    def get_free_slots(self, obj):
+        return self._summary(obj)['free_slots']
+
+    def validate(self, attrs):
+        # A request that omits a field keeps what is stored, so older clients still work.
+        current = self.instance or MeetingSchedule()
+        mode, start, end = (attrs.get(name, getattr(current, name)) for name in ('window_mode', 'window_start', 'window_end'))
+        if mode == MeetingSchedule.WindowMode.RANGE:
+            if not start or not end:
+                raise serializers.ValidationError({'window_start': 'Choose the first and last day students may book.'}
+                                                  if not start else {'window_end': 'Choose the last day students may book.'})
+            if end < start:
+                raise serializers.ValidationError({'window_end': 'Choose an end date on or after the start date.'})
+            if end < timezone.localdate():
+                raise serializers.ValidationError({'window_end': 'Choose an end date that is not in the past.'})
+        return attrs
 
     def validate_hours(self, value):
         if not isinstance(value, dict):
@@ -201,12 +259,14 @@ class MeetingScheduleSerializer(serializers.ModelSerializer):
                 parsed = sorted((time.fromisoformat(begin), time.fromisoformat(end)) for begin, end in ranges)
             except (TypeError, ValueError):
                 raise serializers.ValidationError('Enter each time as HH:MM.')
-            if any(end <= begin for begin, end in parsed):
+            # An end of 00:00 means midnight, the end of that day.
+            parsed = [(begin, end, end if end != time(0, 0) else time.max) for begin, end in parsed]
+            if any(real_end <= begin for begin, _, real_end in parsed):
                 raise serializers.ValidationError('Choose an end time after the start time.')
-            if any(later[0] < earlier[1] for earlier, later in zip(parsed, parsed[1:])):
+            if any(later[0] < earlier[2] for earlier, later in zip(parsed, parsed[1:])):
                 raise serializers.ValidationError('Hours on the same day cannot overlap.')
             if parsed:
-                clean[weekday] = [[begin.strftime('%H:%M'), end.strftime('%H:%M')] for begin, end in parsed]
+                clean[weekday] = [[begin.strftime('%H:%M'), end.strftime('%H:%M')] for begin, end, _ in parsed]
         return clean
 
 

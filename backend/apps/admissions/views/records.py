@@ -1,4 +1,6 @@
 """Admissions API views — records."""
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Prefetch, Q
@@ -10,11 +12,13 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
-from apps.users.entitlements import feature_enabled
+from apps.users.entitlements import feature_enabled, require_feature
 from apps.users.models import User
 from apps.users.throttles import WindowRateThrottle
 from core.exceptions import CodedError
-from .. import ai_budget, ai_usage, rec_letter_ai
+from core.ai_policy import outbound_ai_allowed
+from .. import ai_budget, ai_usage, letter_coach, rec_letter_ai
+from ..essay_lab import coach
 from ..models import (
     Achievement,
     Activity,
@@ -28,6 +32,7 @@ from ..models import (
     Notification,
     Project,
     RecommendationLetter,
+    RecommendationLetterCheck,
     Research,
     StudentMessage,
     StudentProfile,
@@ -44,6 +49,9 @@ from ..serializers import (
     DocumentSerializer,
     HonorSerializer,
     InternshipSerializer,
+    LetterCheckNoteSerializer,
+    LetterCheckRequestSerializer,
+    LetterCheckSerializer,
     LetterStudentReviewSerializer,
     LetterSuggestionRequestSerializer,
     MeetingNoteSerializer,
@@ -453,21 +461,56 @@ class HonorViewSet(PrivateEvidenceViewSetMixin, StudentRecordListMixin, ScopedQu
 LETTER_CHANGED_MESSAGE = 'This letter has changed. Reopen it and read the latest text before reviewing.'
 
 
-class LetterSuggestThrottle(WindowRateThrottle):
-    """Suggestions follow the counselor's typing: a short minimum interval plus an hourly cap."""
-
-    scope = 'rec_letter_suggest'
+class LetterThrottle(WindowRateThrottle):
     sliding = False
     cache_prefix = 'rec-letter'
 
     def get_cache_key(self, request, view):
         return str(request.user.pk) if request.user.is_authenticated else None
 
+
+class LetterSuggestThrottle(LetterThrottle):
+    """AI ideas: a short minimum interval plus an hourly cap."""
+
+    scope = 'rec_letter_suggest'
+
     def get_limits(self):
         return [
             (1, settings.REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS),
             (settings.REC_LETTER_SUGGEST_HOURLY_LIMIT, 3600),
         ]
+
+
+class LetterFactsThrottle(LetterThrottle):
+    """Facts-only suggestions follow the counselor's typing: no AI, so a cheap and generous limit."""
+
+    scope = 'rec_letter_facts'
+
+    def get_limits(self):
+        return [(settings.REC_LETTER_FACTS_PER_MINUTE, 60)]
+
+
+class LetterCheckGateThrottle(LetterThrottle):
+    """Cheap per-user limit in front of the re-check rules; spends neither the check interval nor the budget."""
+
+    scope = 'rec_letter_check_gate'
+
+    def get_limits(self):
+        return [(settings.REC_LETTER_CHECK_RECHECK_PER_MINUTE, 60)]
+
+
+class LetterCheckThrottle(LetterThrottle):
+    scope = 'rec_letter_check'
+
+    def get_limits(self):
+        return [
+            (1, settings.REC_LETTER_CHECK_MIN_INTERVAL_SECONDS),
+            (settings.REC_LETTER_CHECK_HOURLY_LIMIT, 3600),
+        ]
+
+
+LETTER_CHECK_KEEP = 10
+LETTER_STALE_TOLERANCE = timedelta(milliseconds=1)
 
 
 class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -479,6 +522,23 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
     def get_queryset(self):
         return self.filter_for_user(self.queryset)
 
+    def update(self, request, *args, **kwargs):
+        """PUT/PATCH. With `base_updated_at`, the write happens only if the letter is still at that version:
+        otherwise 409 `stale` with the current letter and nothing is written. Without it: as before."""
+        base = request.data.get('base_updated_at') if hasattr(request.data, 'get') else None
+        if base in (None, ''):
+            return super().update(request, *args, **kwargs)
+        base = LetterCheckRequestSerializer(data={'base_updated_at': base})
+        base.is_valid(raise_exception=True)
+        with transaction.atomic():
+            letter = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=kwargs['pk'])
+            if abs(letter.updated_at - base.validated_data['base_updated_at']) >= LETTER_STALE_TOLERANCE:
+                return Response({
+                    'detail': 'This letter has changed since you opened it.', 'code': 'stale',
+                    'details': {'letter': self.get_serializer(letter).data},
+                }, status=status.HTTP_409_CONFLICT)
+            return super().update(request, *args, **kwargs)
+
     @action(detail=False, methods=['post'], url_path='suggest')
     def suggest(self, request):
         """Ideas for the letter a counselor is writing, drawn from the student's profile."""
@@ -486,31 +546,180 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             raise PermissionDenied('Only a counselor can ask for letter suggestions.')
         payload = LetterSuggestionRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        throttle = LetterSuggestThrottle()
+        data = payload.validated_data
+        throttle = LetterSuggestThrottle() if data['ai'] else LetterFactsThrottle()
         if not throttle.allow_request(request, self):
             self.throttled(request, throttle.wait())
-        data = payload.validated_data
         # The school name is read during the AI call (to keep it out of the prompt),
         # which runs after the connection is released: load it now.
         student = get_object_or_404(scope_students(StudentProfile.objects.select_related('user', 'school'), request.user), pk=data['student'])
         facts = rec_letter_ai.profile_facts(student)
-        ai_available = rec_letter_ai.gateway_configured() and feature_enabled(request.user, 'ai_assistant')
+
+        def answer(source, suggestions, available):
+            left = ai_budget.user_remaining('recommendation_letter', request.user)
+            return Response({
+                'source': source, 'suggestions': suggestions,
+                # Master switch, gateway key, plan feature and both budgets (platform and this user's) all allow it.
+                'ai_available': bool(available and left != 0 and settings.REC_LETTER_AI_DAILY_BUDGET > 0),
+                'ai_left': left, 'ai_limit': settings.REC_LETTER_AI_USER_DAILY_LIMIT or None,
+            })
+
+        ai_available = (
+            outbound_ai_allowed() and rec_letter_ai.gateway_configured() and feature_enabled(request.user, 'ai_assistant')
+        )
+        if not data['ai']:
+            # Typing-time refresh: facts only, no AI call and no budget.
+            return answer('profile', rec_letter_ai.local_suggestions(facts, data['draft']), ai_available)
         if ai_available and ai_budget.consume('recommendation_letter', request.user):
             release_db_connection()  # don't hold a pooled connection during the AI call
             language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
             ai_usage.begin()
+            succeeded = False
             try:
                 suggestions = rec_letter_ai.ai_suggestions(student, facts, data['draft'], letter=data, language=language)
                 ai_usage.record('recommendation_letter', request.user, provider='gateway', status=ai_usage.OK)
-                return Response({'source': 'ai', 'suggestions': suggestions + rec_letter_ai.missing_facts(facts, data['draft'])})
+                succeeded = True
             except rec_letter_ai.SuggestionsUnavailable:
                 ai_usage.record('recommendation_letter', request.user, provider='gateway', status=ai_usage.FAILED)
+            finally:
+                if not succeeded:
+                    ai_budget.refund('recommendation_letter', request.user)  # a failed call is free
+            if succeeded:
+                return answer('ai', suggestions + rec_letter_ai.missing_facts(facts, data['draft']), True)
         else:
             ai_usage.record(
                 'recommendation_letter', request.user, provider='gateway',
                 status=ai_usage.BUDGET_REFUSED if ai_available else ai_usage.LOCAL_FALLBACK,
             )
-        return Response({'source': 'profile', 'suggestions': rec_letter_ai.local_suggestions(facts, data['draft'])})
+        return answer('profile', rec_letter_ai.local_suggestions(facts, data['draft']), ai_available)
+
+    # ------------------------------------------------------------ depth check
+
+    def _check_letter(self, pk):
+        """The letter for a depth-check request. Only counselors (who can write the letter) may; never a student."""
+        if not self.request.user.is_counselor_like:
+            raise CodedError('Only a counselor can check a recommendation letter.', 'counselors_only', status.HTTP_403_FORBIDDEN)
+        return get_object_or_404(self.get_queryset(), pk=pk)
+
+    @staticmethod
+    def _check_context(request, letter, **extra):
+        """Serializer context; `current_input_hash` is what a check made now would carry."""
+        return {'request': request, 'current_input_hash': letter_coach.input_hash(letter, coach.current_model()), **extra}
+
+    @action(detail=True, methods=['post'], url_path='depth-check')
+    def depth_check(self, request, pk=None):
+        letter = self._check_letter(pk)
+        payload = LetterCheckRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        if abs(letter.updated_at - payload.validated_data['base_updated_at']) >= LETTER_STALE_TOLERANCE:
+            raise CodedError('Save your latest changes before the check.', 'stale', status.HTTP_409_CONFLICT,
+                             updated_at=letter.updated_at)
+        body = letter.body
+        if not body.strip():
+            raise CodedError('Write something first, then run the check.', 'empty_letter')
+        require_feature(request, 'ai_assistant')
+        # Cheap guard first: the re-check rules below read the database and compare texts.
+        gate = LetterCheckGateThrottle()
+        if not gate.allow_request(request, self):
+            self.throttled(request, gate.wait())
+        fingerprint = coach.text_fingerprint(body)
+        model_now = coach.current_model()
+        input_hash = letter_coach.input_hash(letter, model_now)
+        latest = RecommendationLetterCheck.objects.filter(letter_id=letter.pk).order_by('-created_at', '-id').first()
+        if latest is not None:
+            blocked = self._recheck_gate(request, letter, latest, fingerprint, input_hash, body)
+            if blocked is not None:
+                return blocked
+        throttle = LetterCheckThrottle()
+        if not throttle.allow_request(request, self):
+            self.throttled(request, throttle.wait())
+        if not coach.gateway_configured():
+            # The letter has no rule-based reader: without the AI there is nothing to run.
+            return Response({'detail': 'The letter check is unavailable right now.', 'code': 'coach_unavailable',
+                             'details': {'ai_available': False}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if not ai_budget.consume('recommendation_letter_check', request.user):
+            ai_usage.record(letter_coach.FEATURE, request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
+            raise CodedError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting',
+                             status.HTTP_503_SERVICE_UNAVAILABLE)
+        spec = letter_coach.build_spec(letter, letter.student, body)
+        try:
+            # Both calls are recorded in ai_usage inside run_check; the connection is released before each.
+            result, model = coach.run_check(spec, request.user, release_db_connection)
+        except coach.CoachUnavailable:
+            ai_budget.refund('recommendation_letter_check', request.user)  # a failed check is free
+            return Response({'detail': 'Naseeb AI is unavailable right now. Please try again soon.',
+                             'code': 'coach_unavailable', 'details': {'ai_available': True}},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        with transaction.atomic():
+            # The letter may have been deleted during the AI call.
+            if not RecommendationLetter.objects.select_for_update().filter(pk=letter.pk).exists():
+                raise Http404
+            check = RecommendationLetterCheck.objects.create(
+                letter_id=letter.pk, author=request.user, result=result, model=model, text_fingerprint=fingerprint,
+                input_hash=input_hash, overall=result.get('overall'), letter_text=body,
+            )
+            stale_ids = list(
+                RecommendationLetterCheck.objects.filter(letter_id=letter.pk).order_by('-created_at', '-id')
+                .values_list('id', flat=True)[LETTER_CHECK_KEEP:]
+            )
+            if stale_ids:
+                RecommendationLetterCheck.objects.filter(id__in=stale_ids).delete()
+        return Response(LetterCheckSerializer(check, context=self._check_context(request, letter)).data)
+
+    @staticmethod
+    def _recheck_gate(request, letter, latest, fingerprint, input_hash, body):
+        """The response that refuses or answers a re-check without the AI, or None to go ahead (see the Essay Coach)."""
+        same_text = bool(latest.text_fingerprint) and latest.text_fingerprint == fingerprint
+        if same_text and latest.input_hash == input_hash:
+            return Response(LetterCheckSerializer(
+                latest, context={'request': request, 'reused': True, 'current_input_hash': input_hash}).data)
+        if same_text or not latest.text_fingerprint:
+            return None
+        open_notes = coach.open_note_count(latest.result, latest.note_states, body)
+        if open_notes:
+            return Response({'detail': 'Resolve all notes first.', 'code': 'notes_open', 'open': open_notes},
+                            status=status.HTTP_409_CONFLICT)
+        if not latest.letter_text:
+            coach.logger.info('letter_check_recheck_unmeasured letter_id=%s', letter.pk)
+            return None
+        needed = settings.ESSAY_COACH_MIN_CHANGED_WORDS
+        changed = coach.changed_words(latest.letter_text, body, limit=settings.ESSAY_COACH_MAX_INPUT_CHARS, threshold=needed)
+        if changed < needed:
+            return Response({'detail': 'Change your letter first.', 'code': 'too_small_change', 'changed': changed,
+                             'min_words': needed}, status=status.HTTP_409_CONFLICT)
+        return None
+
+    @action(detail=True, methods=['get'], url_path='depth-check/latest')
+    def depth_check_latest(self, request, pk=None):
+        letter = self._check_letter(pk)
+        check = RecommendationLetterCheck.objects.filter(letter_id=letter.pk).order_by('-created_at', '-id').first()
+        if check is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(LetterCheckSerializer(check, context=self._check_context(request, letter)).data)
+
+    @action(detail=True, methods=['patch'], url_path=r'depth-check/(?P<check_id>[0-9]{1,10})/notes')
+    def depth_check_note(self, request, pk=None, check_id=None):
+        """Mark one note done, not useful (dismissed), gone (not found in the text) or open again."""
+        letter = self._check_letter(pk)
+        payload = LetterCheckNoteSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        note_id, state = payload.validated_data['note_id'], payload.validated_data['state']
+        with transaction.atomic():
+            check = RecommendationLetterCheck.objects.select_for_update().filter(pk=check_id, letter_id=letter.pk).first()
+            if check is None:
+                raise Http404
+            notes = check.result.get('notes') if isinstance(check.result, dict) else None
+            if not any(isinstance(note, dict) and note.get('id') == note_id for note in notes or []):
+                raise CodedError('That note is not in this check.', 'unknown_note')
+            states = dict(check.note_states or {})
+            if state == 'open':
+                states.pop(note_id, None)
+            else:
+                states[note_id] = state
+            check.note_states = states
+            check.save(update_fields=['note_states'])
+        return Response(LetterCheckSerializer(check, context=self._check_context(request, letter)).data)
 
     @action(detail=True, methods=['post'], url_path='student-review')
     def student_review(self, request, pk=None):

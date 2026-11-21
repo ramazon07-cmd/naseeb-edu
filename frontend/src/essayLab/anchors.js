@@ -68,6 +68,18 @@ function allMatches(haystack, needle) {
   return found
 }
 
+// Every place `quote` occurs, in text order: [{ from, to }] in original offsets.
+export function findAllQuotes(index, quote) {
+  let needle = normalizeText(quote).trim()
+  if (!needle || !index?.norm) return []
+  let hits = allMatches(index.norm, needle)
+  if (!hits.length && LIST_PREFIX.test(needle)) {
+    needle = needle.replace(LIST_PREFIX, '')
+    hits = allMatches(index.norm, needle)
+  }
+  return hits.map((at) => ({ from: index.start[at], to: index.end[at + needle.length - 1] }))
+}
+
 // Find `quote` inside an index built with buildIndex. Returns original
 // offsets { from, to } (to exclusive) or null. With several matches, the one
 // closest to `hint` (an original offset) wins, which keeps a highlight on the

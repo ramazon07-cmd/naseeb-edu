@@ -94,12 +94,22 @@ function normalizePath(pathname) {
   return path.length > 1 ? path.replace(/\/+$/, '') : path;
 }
 
+// The counselor's letter workspace: /students/15/letters/new and /students/15/letters/8.
+const LETTER_PATH = /^\/students\/([1-9]\d{0,9})\/letters\/(new|[1-9]\d{0,9})$/;
+export function parseLetterPath(path) {
+  const match = LETTER_PATH.exec(path);
+  if (!match) return null;
+  return { page: 'students', params: { studentId: Number(match[1]), letterId: match[2] === 'new' ? 'new' : Number(match[2]) } };
+}
+
 // '/essay-lab/essays/42' -> { page: 'essay_lab', params: { essayId: 42 } };
 // null for anything that is not a workspace page.
 export function parsePath(pathname) {
   const path = normalizePath(pathname);
   if (PATH_PAGES.has(path)) return { page: PATH_PAGES.get(path), params: {} };
   if (PATH_ALIASES.has(path)) return { page: PATH_ALIASES.get(path), params: {} };
+  const letter = parseLetterPath(path);
+  if (letter) return letter;
   const cut = path.lastIndexOf('/');
   const base = path.slice(0, cut);
   const last = path.slice(cut + 1);
@@ -123,11 +133,16 @@ export function buildPath({ page, params = {} } = {}) {
   const tabs = TAB_PAGES[page];
   // Every section card is on the overview tab.
   if (page === 'student_center' && STUDENT_CENTER_EDIT_SECTIONS.includes(params.edit)) return `${base}?edit=${params.edit}`;
+  // A program opened from a deadline row (?program=12).
+  if (page === 'programs' && ID_PATTERN.test(String(params.programId ?? ''))) return `${base}?program=${params.programId}`;
   // One queue item opened from Home (?item=document-12).
   if (page === 'review' && REVIEW_ITEM_PATTERN.test(String(params.item ?? ''))) return `${base}?item=${params.item}`;
   if (tabs && tabs.includes(params.tab) && params.tab !== DEFAULT_TAB[page]) return `${base}/${params.tab}`;
   const record = RECORD_ROUTES[page];
   const id = record ? params[record.param] : null;
+  if (page === 'students' && ID_PATTERN.test(String(id ?? '')) && (params.letterId === 'new' || ID_PATTERN.test(String(params.letterId ?? '')))) return `${base}/${id}/letters/${params.letterId}`;
+  // Back from the letter workspace: the student's Recommendations tab.
+  if (page === 'students' && params.tab === 'letters' && ID_PATTERN.test(String(id ?? ''))) return `${base}/${id}?tab=letters`;
   if (record && ID_PATTERN.test(String(id ?? ''))) return `${base}${record.segment ? `/${record.segment}` : ''}/${id}`;
   return base;
 }
@@ -154,7 +169,7 @@ export function navigationFor(user) {
   if (isCounselor(user)) return [...COUNSELOR_NAV, 'support'];
   if (user?.role === 'teacher') return ['dashboard', 'students', 'tasks', 'roadmap', 'bookings', 'messages', 'screen_time'];
   if (user?.role === 'organization') return ['dashboard', 'students', 'school_counselors', 'bookings', 'messages', 'screen_time', 'support'];
-  return ['dashboard', 'student_center', 'find_personality', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
+  return ['dashboard', 'student_center', 'find_personality', 'roadmap', 'tasks', 'bookings', 'messages', 'programs', 'essay_lab', 'applications', 'college_search', 'store', 'screen_time', 'support'];
 }
 
 // Unavailable pages fall back to Home, including old bookmarks. Only pages
@@ -174,7 +189,7 @@ export const isPageLocked = (page, user) => lockedPages(user).has(page);
 
 // Pages opened from the account menu (or, for counselors, the shell's
 // Notifications item) rather than the sidebar list.
-const ACCOUNT_MENU_PAGES = { student: ['account_settings'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings', 'notifications'] };
+const ACCOUNT_MENU_PAGES = { student: ['account_settings', 'notifications'], counselor: ['account_settings', 'notifications'], parent: ['account_settings'], assistant: ['account_settings', 'notifications'] };
 
 export function reachablePages(user) {
   if (!user) return new Set();

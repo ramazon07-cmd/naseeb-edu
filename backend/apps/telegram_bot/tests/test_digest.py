@@ -11,6 +11,8 @@ from apps.admissions.models import (
 )
 from apps.telegram_bot import activity, digest
 from apps.telegram_bot.models import TelegramLink
+from apps.users.credentials import complete_password_change, issue_temporary_credential, mark_temporary_credential_used
+from apps.users.models import TemporaryCredential
 
 from .base import BotTestCase, make_student
 
@@ -70,6 +72,46 @@ class DigestContentTests(BotTestCase):
         self.assertFalse(item['last_seen_expired'])
         self.assertEqual(body['retention_days'], 365)
         self.assertIn('id', item)
+
+    def test_a_student_who_signed_in_is_never_shown_as_never_opened(self):
+        # No screen-time row at all, as for a student who signed in but closed the tab at once.
+        stamp = timezone.now() - timedelta(days=1)
+        type(self.s1.user).objects.filter(pk=self.s1.user_id).update(last_login=stamp)
+        seen = datetime.fromisoformat(self.by_name(self.digest(), 'Stu1 Tester')['last_seen_at'])
+        self.assertAlmostEqual(seen.timestamp(), stamp.timestamp(), delta=1)
+
+    def test_a_used_temporary_password_counts_as_signed_in_even_without_last_login(self):
+        counselor = self.s2.user
+        _, credential, _, _ = issue_temporary_credential(user=self.s2.user, issued_by=counselor)
+        mark_temporary_credential_used(user=self.s2.user)
+        item = self.by_name(self.digest(), 'Stu2 Tester')
+        self.assertIsNotNone(item['last_seen_at'])
+        self.assertEqual(item['password'], 'used')
+
+    def test_password_state_follows_the_latest_credential_and_the_students_own_password(self):
+        user = self.s1.user
+        self.assertEqual(self.by_name(self.digest(), 'Stu1 Tester')['password'], 'none')
+        issue_temporary_credential(user=user, issued_by=self.c1)
+        self.assertEqual(self.by_name(self.digest(), 'Stu1 Tester')['password'], 'issued')
+        mark_temporary_credential_used(user=user)
+        self.assertEqual(self.by_name(self.digest(), 'Stu1 Tester')['password'], 'used')
+        # Reset after a sign-in: the new password is unused, whatever the old one did.
+        issue_temporary_credential(user=user, issued_by=self.c1)
+        self.assertEqual(self.by_name(self.digest(), 'Stu1 Tester')['password'], 'issued')
+        TemporaryCredential.objects.filter(user=user, status='issued').update(expires_at=timezone.now() - timedelta(hours=1))
+        self.assertEqual(self.by_name(self.digest(), 'Stu1 Tester')['password'], 'expired')
+        issue_temporary_credential(user=user, issued_by=self.c1)
+        complete_password_change(user=user, new_password='A-brand-new-Pass-83!')
+        item = self.by_name(self.digest(), 'Stu1 Tester')
+        self.assertEqual(item['password'], 'changed')
+        self.assertIsNotNone(item['last_seen_at'])
+
+    def test_setting_the_first_password_records_a_sign_in(self):
+        user = self.s1.user
+        issue_temporary_credential(user=user, issued_by=self.c1)
+        complete_password_change(user=user, new_password='Another-Strong-Pass-71!')
+        user.refresh_from_db()
+        self.assertIsNotNone(user.last_login)
 
     def test_a_student_older_than_the_retention_window_without_rows_is_expired_not_never(self):
         type(self.s2.user).objects.filter(pk=self.s2.user_id).update(date_joined=timezone.now() - timedelta(days=400))

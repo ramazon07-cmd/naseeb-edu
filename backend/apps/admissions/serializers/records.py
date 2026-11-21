@@ -1,4 +1,6 @@
 """Admissions API serializers — records."""
+from django.conf import settings
+from django.db.models import Q
 from rest_framework import serializers
 from django.urls import reverse
 from apps.users.models import User
@@ -16,6 +18,7 @@ from ..models import (
     Notification,
     Project,
     RecommendationLetter,
+    RecommendationLetterCheck,
     Research,
     Task,
 )
@@ -29,6 +32,7 @@ from .common import (
     uploaded_file_details,
     validate_private_upload,
 )
+from .. import ai_budget
 from .catalog import UniversitySerializer
 from core.storage import delete_file_on_commit
 
@@ -607,6 +611,64 @@ class LetterSuggestionRequestSerializer(serializers.Serializer):
     draft = serializers.CharField(max_length=20000, allow_blank=True, required=False, default='', trim_whitespace=False)
     recommender_title = serializers.CharField(max_length=180, allow_blank=True, required=False, default='')
     relationship = serializers.CharField(max_length=180, allow_blank=True, required=False, default='')
+    # false: profile facts only (no AI call, no budget); true: facts plus AI ideas, counted against the AI limit.
+    ai = serializers.BooleanField(required=False, default=False)
+
+
+class LetterCheckRequestSerializer(serializers.Serializer):
+    """`base_updated_at`: the letter's `updated_at` as the client loaded it; a different value is a stale check."""
+
+    base_updated_at = serializers.DateTimeField()
+
+
+class LetterCheckNoteSerializer(serializers.Serializer):
+    note_id = serializers.CharField(max_length=20)
+    state = serializers.ChoiceField(choices=('done', 'dismissed', 'gone', 'open'))
+
+
+class LetterCheckSerializer(serializers.ModelSerializer):
+    """A letter depth check, in the shape of an Essay Coach v2 check. The checked text is never returned.
+
+    Context: `request` (for `checks_left`), `reused` and `current_input_hash`.
+    """
+
+    source = serializers.SerializerMethodField()
+    previous_overall = serializers.SerializerMethodField()
+    checks_left = serializers.SerializerMethodField()
+    daily_limit = serializers.SerializerMethodField()
+    reused = serializers.SerializerMethodField()
+    current_input_hash = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RecommendationLetterCheck
+        fields = ('id', 'created_at', 'model', 'result', 'source', 'text_fingerprint', 'note_states', 'overall',
+                  'previous_overall', 'checks_left', 'daily_limit', 'reused', 'input_hash', 'current_input_hash')
+        read_only_fields = fields
+
+    def get_daily_limit(self, obj) -> int | None:
+        return settings.REC_LETTER_CHECK_USER_DAILY_LIMIT or None
+
+    def get_source(self, obj) -> str:
+        return 'rules' if obj.model == 'local' else 'ai'
+
+    def get_previous_overall(self, obj) -> int | None:
+        return (
+            RecommendationLetterCheck.objects.filter(letter_id=obj.letter_id)
+            .filter(Q(created_at__lt=obj.created_at) | Q(created_at=obj.created_at, id__lt=obj.id))
+            .order_by('-created_at', '-id').values_list('overall', flat=True).first()
+        )
+
+    def get_checks_left(self, obj) -> int | None:
+        user = getattr(self.context.get('request'), 'user', None)
+        if user is None or not user.is_authenticated:
+            return None
+        return ai_budget.user_remaining('recommendation_letter_check', user)
+
+    def get_current_input_hash(self, obj) -> str | None:
+        return self.context.get('current_input_hash')
+
+    def get_reused(self, obj) -> bool:
+        return bool(self.context.get('reused'))
 
 
 class MeetingNoteSerializer(StudentRecordSerializerMixin, serializers.ModelSerializer):

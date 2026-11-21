@@ -37,3 +37,18 @@ def int_list_param(source, name):
     if any(not -MAX_ID <= number <= MAX_ID for number in numbers):
         raise ValidationError({name: ['Provide a list of integer ids.']})
     return numbers
+
+
+def flag_param(source, name, default=False):
+    """Return ``source[name]`` as a bool (true/false, 1/0, yes/no); ``default`` when absent or blank, else 400."""
+    value = source.get(name)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {'1', 'true', 'yes', 'on'}:
+        return True
+    if text in {'0', 'false', 'no', 'off'}:
+        return False
+    raise ValidationError({name: ['A valid boolean is required.']})

@@ -1,25 +1,4 @@
-import { uiMessages } from "./translations/ui.js";
-import { schoolCounselorMessages } from "./translations/schoolCounselors.js";
-import { essayLabMessages } from "./translations/essayLab.js";
-import { copyMessages } from "./translations/copy.js";
-import { fileMessages } from "./translations/files.js";
-import { notificationMessages } from "./translations/notifications.js";
-import { studentCenterMessages } from "./translations/studentCenter.js";
-import { essayLabPagesMessages } from "./translations/essayLabPages.js";
-import { accountMessages } from "./translations/account.js";
-import { errorCodeMessages } from "./translations/errorCodes.js";
-import { fitReasonMessages } from "./translations/fitReasons.js";
-import { letterMessages } from "./translations/letters.js";
-import { catalogAdminMessages } from "./translations/catalogAdmin.js";
-import { counselorHomeMessages } from "./translations/counselorHome.js";
-import { inviteMessages } from "./translations/invites.js";
-import { counselorStudentsMessages } from "./translations/counselorStudents.js";
-import { reviewMessages } from "./translations/review.js";
-import { counselorShellMessages } from "./translations/counselorShell.js";
-import { assessmentHubMessages } from "./translations/assessmentHub.js";
-import { landingMessages } from "./translations/landing.js";
-
-import { ASSESSMENT_TRANSLATIONS } from "./translations/assessment.js";
+/* global __I18N_SPLIT__ -- defined by Vite for browser builds; absent in Node */
 
 const LANGUAGE_KEY = "naseeb-edu-language-v1";
 
@@ -31,394 +10,45 @@ export const LANGUAGE_OPTIONS = [
 
 const LOCALES = { uz: "uz-UZ", ru: "ru-RU", en: "en-GB" };
 
-export const TRANSLATIONS = {
-  uz: {
-    ...inviteMessages("uz"),
-    ...schoolCounselorMessages("uz"),
-    ...essayLabMessages("uz"),
-    ...uiMessages("uz"),
-    ...copyMessages("uz"),
-    ...fileMessages("uz"),
-    ...notificationMessages("uz"),
-    ...studentCenterMessages("uz"),
-    ...essayLabPagesMessages("uz"),
-    ...accountMessages("uz"),
-    ...errorCodeMessages("uz"),
-    ...fitReasonMessages("uz"),
-    ...letterMessages("uz"),
-    ...catalogAdminMessages("uz"),
-    ...counselorHomeMessages("uz"),
-    ...counselorStudentsMessages("uz"),
-    ...reviewMessages("uz"),
-    ...counselorShellMessages("uz"),
-    ...assessmentHubMessages("uz"),
-    ...landingMessages("uz"),
-    ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[0]])),
-    "Education Counseling Platform": "Ta’lim bo‘yicha maslahat platformasi",
-    Dashboard: "Bosh sahifa",
-    Schools: "Maktablar",
-    Students: "O‘quvchilar",
-    "My profile": "Mening profilim",
-    Academics: "Akademik ma’lumotlar",
-    Portfolio: "Portfolio",
-    Activities: "Faoliyatlar",
-    Recommendations: "Tavsiyanomalar",
-    Tasks: "Vazifalar",
-    Applications: "Arizalar",
-    Documents: "Hujjatlar",
-    Certificates: "Sertifikatlar",
-    Essays: "Insholar",
-    "Student Center": "O‘quvchi markazi",
-    Roadmap: "Yo‘l xaritasi",
-    Community: "Hamjamiyat",
-    Meetings: "Uchrashuvlar",
-    Messages: "Xabarlar",
-    "Program Usage": "Dasturdan foydalanish",
-    Programs: "Dasturlar",
-    "Essay Lab": "Insholar laboratoriyasi",
-    "College Search": "Universitetlar qidiruvi",
-    "Naseeb Store": "Naseeb do‘koni",
-    Support: "Yordam",
-    "Screen Time": "Ekran vaqti",
-    Progress: "Jarayon",
-    "A complete view of the application journey":
-      "Ariza jarayonining to‘liq ko‘rinishi",
-    "Schools and organization accounts": "Maktablar va tashkilot akkauntlari",
-    "Student profiles and progress": "O‘quvchi profillari va jarayoni",
-    "Your personal application profile": "Shaxsiy ariza profilingiz",
-    "Academic results and research": "Akademik natijalar va tadqiqotlar",
-    "Projects and internship experience": "Loyihalar va amaliyot tajribasi",
-    "Activities, honors, and achievements":
-      "Faoliyatlar, mukofotlar va yutuqlar",
-    "Recommendation letter progress": "Tavsiyanomalar jarayoni",
-    "Assignments and deadline tracking": "Vazifalar va muddatlar nazorati",
-    "University application pipeline": "Universitet arizalari jarayoni",
-    "Documents, uploads, and review": "Hujjatlar, yuklash va tekshiruv",
-    "Certificates and supporting files": "Sertifikatlar va qo‘shimcha fayllar",
-    "Essay drafts and revision history": "Insho qoralamalari va tahrir tarixi",
-    "Academic profile, portfolio, activities, and documents":
-      "Akademik profil, portfolio, faoliyat va hujjatlar",
-    "Level-linked missions, milestones, and reflections":
-      "Darajaga bog‘langan missiyalar va bosqichlar",
-    "Student discussions, questions, and shared experience":
-      "O‘quvchilar muhokamasi va tajriba almashuvi",
-    "Schedule and manage meetings":
-      "Uchrashuvlarni rejalashtirish va boshqarish",
-    "Direct, Group, Community, and Discussion messages":
-      "Shaxsiy, guruh va hamjamiyat xabarlari",
-    "Services, mentors, and usage balance":
-      "Xizmatlar, mentorlar va foydalanish balansi",
-    "National and international opportunity catalog":
-      "Mahalliy va xalqaro imkoniyatlar katalogi",
-    "Essay drafts, feedback, and revision history":
-      "Insho qoralamalari, fikrlar va tahrir tarixi",
-    "Find, compare, and shortlist universities":
-      "Universitetlarni qidiring, solishtiring va tanlang",
-    "Additional education and application services":
-      "Qo‘shimcha ta’lim va ariza xizmatlari",
-    "Contact support and track your requests":
-      "Yordamga murojaat qiling va so‘rovlarni kuzating",
-    "Active learning time without idle minutes":
-      "Bekor vaqtni hisoblamaydigan faol o‘qish vaqti",
-    "Sign in": "Kirish",
-    "Enter your username and password.": "Login va parolingizni kiriting.",
-    Username: "Login",
-    Password: "Parol",
-    "Signing in…": "Kirilmoqda…",
-    "Every opportunity.": "Har bir imkoniyat.",
-    "One trusted path.": "Bir ishonchli yo‘l.",
-    "A professional counseling platform connecting students worldwide with global education opportunities.":
-      "Butun dunyo o‘quvchilarini global ta’lim imkoniyatlari bilan bog‘lovchi professional maslahat platformasi.",
+// Language dictionaries are generated at build time (see i18nDictionaries in
+// vite.config.js) and loaded per language by loadLanguage(); English is the key.
+// In Node (tests, scripts) there is no bundler, so every dictionary is built
+// from the source tables instead.
+export const TRANSLATIONS = { uz: {}, ru: {}, en: {} };
 
-    "Connecting Students to the World Through Education":
-      "O‘quvchilarni ta’lim orqali dunyo bilan bog‘laymiz",
-    "New password": "Yangi parol",
-    "Confirm password": "Parolni tasdiqlang",
-    "Save new password": "Yangi parolni saqlash",
-    "Saving securely…": "Xavfsiz saqlanmoqda…",
-    "Sign out": "Chiqish",
-    "Use at least 12 characters with upper/lowercase letters and a number.":
-      "Kamida 12 belgi, katta-kichik harf va raqam ishlating.",
-    "Your temporary password has already been consumed. If you leave now, an administrator must reissue it.":
-      "Vaqtinchalik parol ishlatildi. Hozir chiqsangiz, administrator yangi parol berishi kerak.",
-    "Search…": "Qidirish…",
-    Refresh: "Yangilash",
-    Logout: "Chiqish",
-    "You are offline": "Internet aloqasi yo‘q",
-    "Current information remains available. Reconnect before saving changes.":
-      "Joriy ma’lumotlar ko‘rinadi. O‘zgarishlarni saqlashdan oldin internetga qayta ulaning.",
-    "Light mode": "Yorug‘ rejim",
-    "Dark mode": "Tungi rejim",
-    "Switch to light mode": "Yorug‘ rejimga o‘tish",
-    "Switch to dark mode": "Tungi rejimga o‘tish",
-    Language: "Til",
-    "Reset login": "Login parolini yangilash",
-    "Issue a new one-time password": "Yangi bir martalik parol berish",
-    "Generate temporary password": "Vaqtinchalik parol yaratish",
-    "Generated password": "Yaratilgan parol",
-    "Copy password": "Parolni nusxalash",
-    Copied: "Nusxalandi",
-    Close: "Yopish",
-    Cancel: "Bekor qilish",
-    expires: "amal qilish muddati",
-    "Passwords do not match.": "Parollar bir xil emas.",
-    "Temporary password": "Vaqtinchalik parol",
-    "The password is shown once. Send it through an approved secure channel.":
-      "Parol faqat bir marta ko‘rsatiladi. Uni tasdiqlangan xavfsiz kanal orqali yuboring.",
-    "This revokes existing sessions and any previous temporary password.":
-      "Bu mavjud sessiyalarni va avvalgi vaqtinchalik parolni bekor qiladi.",
-    Admin: "Admin",
-    "School Counselor": "Maktab maslahatchisi",
-    Teacher: "O‘qituvchi",
-    "Organization School": "Maktab tashkiloti",
-    Parent: "Ota-ona",
-    "To do": "Bajarish kerak",
-    "In progress": "Jarayonda",
-    Submitted: "Topshirildi",
-    Approved: "Tasdiqlandi",
-    Late: "Kechikkan",
-    Required: "Talab qilinadi",
-    Uploaded: "Yuklandi",
-    Reviewing: "Tekshirilmoqda",
-    Rejected: "Rad etildi",
-    "No information available yet.": "Hozircha ma’lumot yo‘q.",
-    "No students found.": "O‘quvchilar topilmadi.",
-    Add: "Qo‘shish",
-    Edit: "Tahrirlash",
-    Delete: "O‘chirish",
-    Save: "Saqlash",
-    "Saving…": "Saqlanmoqda…",
-    Preview: "Ko‘rish",
-    Download: "Yuklab olish",
-    Approve: "Tasdiqlash",
-    "View all": "Barchasini ko‘rish",
-    Student: "O‘quvchi",
-    School: "Maktab",
-    Grade: "Sinf",
-    Counselor: "Maslahatchi",
-    Major: "Yo‘nalish",
-    Countries: "Davlatlar",
-    Scholarship: "Stipendiya",
-    Needed: "Kerak",
-    "Not needed": "Kerak emas",
-    "Not listed": "Ko‘rsatilmagan",
-    "Not listed. Check the official aid page.": "Ko‘rsatilmagan. Rasmiy moliyaviy yordam sahifasini tekshiring.",
-    Level: "Daraja",
-    "Assigned tasks": "Biriktirilgan vazifalar",
-    Profile: "Profil",
-    "Profile overview": "Profil haqida",
-    Mother: "Ona",
-    Father: "Ota",
-    Guardian: "Vasiy",
-    Open: "Ochiq",
-    Closed: "Yopiq",
-    Resolved: "Hal qilindi",
-    Pending: "Kutilmoqda",
-    Active: "Faol",
-    Completed: "Tugallangan",
-    Cancelled: "Bekor qilingan",
-    Low: "Past",
-    Medium: "O‘rta",
-    High: "Yuqori",
-    Urgent: "Shoshilinch",
-    Draft: "Qoralama",
-    "Select university": "Universitetni tanlang",
-    "General essay": "Umumiy insho",
-  },
-  ru: {
-    ...inviteMessages("ru"),
-    ...schoolCounselorMessages("ru"),
-    ...essayLabMessages("ru"),
-    ...uiMessages("ru"),
-    ...copyMessages("ru"),
-    ...fileMessages("ru"),
-    ...notificationMessages("ru"),
-    ...studentCenterMessages("ru"),
-    ...essayLabPagesMessages("ru"),
-    ...accountMessages("ru"),
-    ...errorCodeMessages("ru"),
-    ...fitReasonMessages("ru"),
-    ...letterMessages("ru"),
-    ...catalogAdminMessages("ru"),
-    ...counselorHomeMessages("ru"),
-    ...counselorStudentsMessages("ru"),
-    ...reviewMessages("ru"),
-    ...counselorShellMessages("ru"),
-    ...assessmentHubMessages("ru"),
-    ...landingMessages("ru"),
-    ...Object.fromEntries(Object.entries(ASSESSMENT_TRANSLATIONS).map(([key, values]) => [key, values[1]])),
-    "Education Counseling Platform": "Консультации по образованию",
-    Dashboard: "Главная",
-    Schools: "Школы",
-    Students: "Ученики",
-    "My profile": "Мой профиль",
-    Academics: "Учёба",
-    Portfolio: "Портфолио",
-    Activities: "Активности",
-    Recommendations: "Рекомендации",
-    Tasks: "Задания",
-    Applications: "Заявки",
-    Documents: "Документы",
-    Certificates: "Сертификаты",
-    Essays: "Эссе",
-    "Student Center": "Центр ученика",
-    Roadmap: "План",
-    Community: "Сообщество",
-    Meetings: "Встречи",
-    Messages: "Сообщения",
-    "Program Usage": "Использование программы",
-    Programs: "Программы",
-    "Essay Lab": "Лаборатория эссе",
-    "College Search": "Поиск университетов",
-    "Naseeb Store": "Магазин Naseeb",
-    Support: "Поддержка",
-    "Screen Time": "Экранное время",
-    Progress: "Прогресс",
-    "A complete view of the application journey":
-      "Полная картина процесса поступления",
-    "Schools and organization accounts": "Школы и аккаунты организаций",
-    "Student profiles and progress": "Профили и прогресс учеников",
-    "Your personal application profile": "Ваш личный профиль поступления",
-    "Academic results and research": "Учебные результаты и исследования",
-    "Projects and internship experience": "Проекты и опыт стажировок",
-    "Activities, honors, and achievements": "Активности, награды и достижения",
-    "Recommendation letter progress": "Статус рекомендательных писем",
-    "Assignments and deadline tracking": "Задания и контроль сроков",
-    "University application pipeline": "Процесс подачи заявок",
-    "Documents, uploads, and review": "Документы, загрузка и проверка",
-    "Certificates and supporting files": "Сертификаты и дополнительные файлы",
-    "Essay drafts and revision history": "Черновики эссе и история правок",
-    "Academic profile, portfolio, activities, and documents":
-      "Учебный профиль, портфолио, активности и документы",
-    "Level-linked missions, milestones, and reflections":
-      "Миссии, этапы и рефлексии по уровням",
-    "Student discussions, questions, and shared experience":
-      "Обсуждения, вопросы и обмен опытом",
-    "Schedule and manage meetings": "Планирование и управление встречами",
-    "Direct, Group, Community, and Discussion messages":
-      "Личные, групповые и общие сообщения",
-    "Services, mentors, and usage balance":
-      "Услуги, наставники и баланс использования",
-    "National and international opportunity catalog":
-      "Каталог местных и международных возможностей",
-    "Essay drafts, feedback, and revision history":
-      "Черновики, отзывы и история правок",
-    "Find, compare, and shortlist universities":
-      "Поиск, сравнение и выбор университетов",
-    "Additional education and application services":
-      "Дополнительные образовательные услуги",
-    "Contact support and track your requests":
-      "Обращения в поддержку и их статус",
-    "Active learning time without idle minutes":
-      "Активное учебное время без простоя",
-    "Sign in": "Войти",
-    "Enter your username and password.": "Введите логин и пароль.",
-    Username: "Логин",
-    Password: "Пароль",
-    "Signing in…": "Вход…",
-    "Every opportunity.": "Каждая возможность.",
-    "One trusted path.": "Один надёжный путь.",
-    "A professional counseling platform connecting students worldwide with global education opportunities.":
-      "Профессиональная платформа, соединяющая учащихся по всему миру с глобальными образовательными возможностями.",
+if (typeof __I18N_SPLIT__ === "undefined") {
+  const all = await import("./translations/all.js");
+  for (const language of Object.keys(all.TRANSLATIONS)) Object.assign(TRANSLATIONS[language], all.TRANSLATIONS[language]);
+}
 
-    "Connecting Students to the World Through Education":
-      "Соединяем учащихся с миром через образование",
-    "New password": "Новый пароль",
-    "Confirm password": "Подтвердите пароль",
-    "Save new password": "Сохранить новый пароль",
-    "Saving securely…": "Безопасное сохранение…",
-    "Sign out": "Выйти",
-    "Use at least 12 characters with upper/lowercase letters and a number.":
-      "Используйте минимум 12 символов, строчные и заглавные буквы и цифру.",
-    "Your temporary password has already been consumed. If you leave now, an administrator must reissue it.":
-      "Временный пароль уже использован. Если выйти сейчас, администратор должен выдать новый.",
-    "Search…": "Поиск…",
-    Refresh: "Обновить",
-    Logout: "Выйти",
-    "You are offline": "Нет подключения",
-    "Current information remains available. Reconnect before saving changes.":
-      "Текущие данные доступны. Подключитесь к интернету перед сохранением.",
-    "Light mode": "Светлая тема",
-    "Dark mode": "Тёмная тема",
-    "Switch to light mode": "Переключить на светлую тему",
-    "Switch to dark mode": "Переключить на тёмную тему",
-    Language: "Язык",
-    "Reset login": "Сбросить пароль",
-    "Issue a new one-time password": "Выдать новый одноразовый пароль",
-    "Generate temporary password": "Создать временный пароль",
-    "Generated password": "Созданный пароль",
-    "Copy password": "Скопировать пароль",
-    Copied: "Скопировано",
-    Close: "Закрыть",
-    Cancel: "Отмена",
-    expires: "действует до",
-    "Passwords do not match.": "Пароли не совпадают.",
-    "Temporary password": "Временный пароль",
-    "The password is shown once. Send it through an approved secure channel.":
-      "Пароль показывается один раз. Передайте его через утверждённый защищённый канал.",
-    "This revokes existing sessions and any previous temporary password.":
-      "Это завершит текущие сеансы и отменит предыдущий временный пароль.",
-    Admin: "Администратор",
-    "School Counselor": "Школьный консультант",
-    Teacher: "Учитель",
-    "Organization School": "Школа",
-    Parent: "Родитель",
-    "To do": "К выполнению",
-    "In progress": "В процессе",
-    Submitted: "Отправлено",
-    Approved: "Одобрено",
-    Late: "Просрочено",
-    Required: "Требуется",
-    Uploaded: "Загружено",
-    Reviewing: "На проверке",
-    Rejected: "Отклонено",
-    "No information available yet.": "Пока нет информации.",
-    "No students found.": "Ученики не найдены.",
-    Add: "Добавить",
-    Edit: "Изменить",
-    Delete: "Удалить",
-    Save: "Сохранить",
-    "Saving…": "Сохранение…",
-    Preview: "Просмотр",
-    Download: "Скачать",
-    Approve: "Одобрить",
-    "View all": "Показать все",
-    Student: "Ученик",
-    School: "Школа",
-    Grade: "Класс",
-    Counselor: "Консультант",
-    Major: "Направление",
-    Countries: "Страны",
-    Scholarship: "Стипендия",
-    Needed: "Нужна",
-    "Not needed": "Не нужна",
-    "Not listed": "Не указано",
-    "Not listed. Check the official aid page.": "Не указано. Проверьте официальную страницу финансовой помощи.",
-    Level: "Уровень",
-    "Assigned tasks": "Назначенные задания",
-    Profile: "Профиль",
-    "Profile overview": "Обзор профиля",
-    Mother: "Мать",
-    Father: "Отец",
-    Guardian: "Опекун",
-    Open: "Открыт",
-    Closed: "Закрыт",
-    Resolved: "Решён",
-    Pending: "Ожидается",
-    Active: "Активен",
-    Completed: "Завершён",
-    Cancelled: "Отменён",
-    Low: "Низкий",
-    Medium: "Средний",
-    High: "Высокий",
-    Urgent: "Срочный",
-    Draft: "Черновик",
-    "Select university": "Выберите университет",
-    "General essay": "Общее эссе",
-  },
-  // English is the source text everywhere else; fit reasons are keyed by code.
-  en: { ...fitReasonMessages("en") },
+const LOADERS = {
+  uz: () => import("virtual:i18n/uz"),
+  ru: () => import("virtual:i18n/ru"),
+  en: () => import("virtual:i18n/en"),
 };
+const loading = {};
+
+// Fetches the dictionary for `language` (a retry on failure) so t() can stay
+// synchronous. Resolves true when it is ready, false when it could not be
+// loaded; the caller then keeps showing English, which is the key text.
+export function loadLanguage(language) {
+  if (!isSupported(language)) return Promise.resolve(true);
+  const dictionary = TRANSLATIONS[language];
+  if (typeof __I18N_SPLIT__ === "undefined" || Object.keys(dictionary).length) return Promise.resolve(true);
+  loading[language] ??= (async () => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        Object.assign(dictionary, (await LOADERS[language]()).default);
+        return true;
+      } catch {
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+    }
+    delete loading[language];
+    return false;
+  })();
+  return loading[language];
+}
 
 let activeLanguage = "en";
 

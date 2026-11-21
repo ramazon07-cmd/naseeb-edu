@@ -19,6 +19,12 @@ export const NOTIFICATION_TRANSLATIONS = {
   'Meeting reschedule requested': ['Uchrashuvni ko‘chirish so‘raldi', 'Запрошен перенос встречи'],
   'Meeting moved': ['Uchrashuv ko‘chirildi', 'Встреча перенесена'],
   'New meeting request': ['Yangi uchrashuv so‘rovi', 'Новый запрос на встречу'],
+  'Meeting invitation': ['Uchrashuvga taklif', 'Приглашение на встречу'],
+  'Meeting invitation accepted': ['Uchrashuv taklifi tasdiqlandi', 'Приглашение на встречу принято'],
+  'Meeting invitation declined': ['Uchrashuv taklifi rad etildi', 'Приглашение на встречу отклонено'],
+  '{name} invited you to “{topic}” on {time}. Confirm it on the website.': ['{name} sizni “{topic}” uchrashuviga ({time}) taklif qildi. Saytda tasdiqlang.', '{name} приглашает вас на встречу «{topic}» ({time}). Подтвердите на сайте.'],
+  '{name} confirmed “{topic}” on {time}.': ['{name} “{topic}” uchrashuvini ({time}) tasdiqladi.', '{name} подтвердил(а) встречу «{topic}» ({time}).'],
+  '{name} declined “{topic}” on {time}.': ['{name} “{topic}” uchrashuvini ({time}) rad etdi.', '{name} отклонил(а) встречу «{topic}» ({time}).'],
   // Bodies of the notices the server writes (see lib/notificationText.js).
   '{n} task is past its deadline.|{n} tasks are past their deadline.': ['{n} ta vazifaning muddati o‘tib ketgan.', '{n} задача просрочена.|{n} задачи просрочены.|{n} задач просрочено.'],
   '{n} required document still needs to be uploaded.|{n} required documents still need to be uploaded.': ['{n} ta majburiy hujjat hali yuklanmagan.', 'Нужно загрузить ещё {n} обязательный документ.|Нужно загрузить ещё {n} обязательных документа.|Нужно загрузить ещё {n} обязательных документов.'],

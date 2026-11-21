@@ -109,6 +109,7 @@ last_edited_at, updated_at, trashed_at, status`.
    Shared cases: `essay_lab/fixtures/doc_delta_cases.json`.
 
 ### Depth check
+> Superseded by the v2 two-step check: see `docs/essay-coach-rules.md` for the result shape, re-check rules and endpoints. The v1 description below is kept for old rows.
 - Requires `base_seq == save_seq` (the client saves first). Creates a `depth_check` checkpoint.
 - AI call: non-streaming JSON mode through `settings.AI_GATEWAY_URL` / `AI_GATEWAY_API_KEY`, model
   `settings.ESSAY_COACH_MODEL` (default = `AI_ASSISTANT_MODEL`), timeout `ESSAY_COACH_TIMEOUT_SECONDS` (default 40).

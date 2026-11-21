@@ -9,13 +9,13 @@ from aiogram.filters import Command, ChatMemberUpdatedFilter, KICKED
 from aiogram.filters.exception import ExceptionTypeFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, ChatMemberUpdated, ErrorEvent, Message
+from aiogram.types import BotCommand, BotCommandScopeChat, CallbackQuery, ChatMemberUpdated, ErrorEvent, Message
 
 from . import keyboards
 from .api import ApiError, ApiUnavailable
 from .delivery import list_message, send_digest
-from .i18n import DEFAULT, LANGUAGES, t
-from .render import SORT_AZ, contacts, render_detail
+from .i18n import DEFAULT, LANGUAGES, MENU_STUDENT, t
+from .render import SORT_AZ, contacts, render_detail, render_meetings
 from .students import format_expiry, is_complete, parse_student
 
 log = logging.getLogger('bot.handlers')
@@ -23,10 +23,16 @@ router = Router()
 router.message.filter(F.chat.type == 'private')
 router.callback_query.filter(F.message.chat.type == 'private')
 
-COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|add|cancel|settings|logout)(@\w+)?(\s|$)')
+COMMAND_PATTERN = re.compile(r'^/(start|help|now|students|meetings|add|reset|cancel|settings|logout)(@\w+)?(\s|$)')
+LANGUAGE_PROMPT = 'Til / Язык / Language'
+STUDENT_START = r'^/start(@\w+)?\s+s_([A-Za-z0-9_-]{1,62})\s*$'
+STAFF_KINDS = ('staff_linked', 'staff_allowed')
 TIME_PATTERN = re.compile(r'^\s*(\d{1,2})[:.](\d{2})\s*$')
+MEETING_BUTTON = re.compile(r'^mt:(confirm|decline|cancel):(\d{1,12})$')
 LIST_BUTTON = re.compile(r'^l:(\d{1,4}):([az]):([ai])$')
 DETAIL_BUTTON = re.compile(r'^d:(\d{1,12}):(\d{1,4}):([az]):([ai])$')
+RESET_PICK = re.compile(r'^rp:(\d{1,12})$')
+RESET_YES = re.compile(r'^rpy:(\d{1,12})$')
 
 
 class Login(StatesGroup):
@@ -43,6 +49,14 @@ class Setup(StatesGroup):
 class AddStudent(StatesGroup):
     details = State()
     confirm = State()
+
+
+class ResetPassword(StatesGroup):
+    query = State()
+
+
+# Chats with a password reset on its way to the backend: a second tap waits for the first.
+_resetting = set()
 
 
 async def _delete(message):
@@ -71,6 +85,18 @@ async def get_link(api, cache, chat_id, *, fresh=False):
         raise
     cache.set(key, link)
     return link
+
+
+def command_args(text):
+    """What follows the command, split on any whitespace: "/add\nName" keeps the whole name."""
+    parts = (text or '').split(maxsplit=1)
+    return parts[1] if len(parts) > 1 else ''
+
+
+async def _leave_text_prompt(state):
+    """A new command ends a waiting /add or /reset prompt, so plain text is not read as its answer."""
+    if await state.get_state() in {AddStudent.details.state, ResetPassword.query.state}:
+        await state.set_state(None)
 
 
 async def language_of(state, cache, chat_id):
@@ -106,34 +132,110 @@ async def _change(api, cache, chat_id, **changes):
     return link
 
 
-@router.message(Command('start'))
-async def start(message: Message, state: FSMContext, api, cache):
+def _telegram_language(user):
+    code = (getattr(user, 'language_code', None) or '')[:2].lower()
+    return code if code in LANGUAGES else DEFAULT
+
+
+def _username(user):
+    return getattr(user, 'username', None) or None
+
+
+async def _unknown_reply(bot, chat_id, user, who, edit_message_id=None):
+    """Who the bot is for, shown to a chat that is neither a counselor nor a student."""
+    lang = _telegram_language(user)
+    text = t(lang, 'unknown_user', url=escape(who.get('site_url') or ''))
+    if not _username(user):
+        text += '\n\n' + t(lang, 'unknown_no_username')
+    if edit_message_id is not None:
+        await _edit(bot, chat_id, edit_message_id, text)
+    else:
+        await bot.send_message(chat_id, text)
+
+
+async def _staff_gate(bot, api, chat_id, user, edit_message_id=None):
+    """True when this chat may use the counselor login; otherwise it is told who the bot is for."""
+    who = await api.whoami(chat_id, _username(user))
+    if who.get('kind') in STAFF_KINDS:
+        return True
+    await _unknown_reply(bot, chat_id, user, who, edit_message_id)
+    return False
+
+
+async def _set_student_menu(bot, chat_id, lang):
+    # Students only need /start: hide the counselor commands from this chat's menu.
+    commands = [BotCommand(command=name, description=text) for name, text in MENU_STUDENT[lang]]
+    with suppress(TelegramAPIError):
+        await bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=chat_id))
+
+
+@router.message(Command('start'), F.text.regexp(STUDENT_START))
+async def start_student(message: Message, state: FSMContext, bot, api):
+    # Opened from the website's Meetings page: the one-time link of a student connecting their Telegram.
     await state.clear()
     chat_id = message.chat.id
-    link = await get_link(api, cache, chat_id, fresh=True)
-    if link:
-        lang = link['language']
-        await message.answer(
-            t(lang, 'already_linked', name=escape(link['full_name'])), reply_markup=keyboards.already_linked(lang),
-        )
+    lang = _telegram_language(message.from_user)
+    token = re.match(STUDENT_START, message.text).group(2)
+    try:
+        result = await api.student_link(chat_id, token, lang, _username(message.from_user))
+    except ApiError as exc:
+        if exc.code not in ('invalid_token', 'too_many'):
+            raise
+        if exc.code == 'invalid_token':
+            await message.answer(t(lang, 'student_link_invalid', url=escape(exc.extra.get('site_url', ''))))
+        else:
+            await message.answer(t(lang, 'error'))
+        return
+    await message.answer(t(lang, 'student_linked', name=escape(result['full_name'])))
+    await _set_student_menu(bot, chat_id, lang)
+
+
+@router.message(Command('start'))
+async def start(message: Message, state: FSMContext, bot, api, cache):
+    await state.clear()
+    chat_id = message.chat.id
+    who = await api.whoami(chat_id, _username(message.from_user))
+    kind = who.get('kind')
+    if kind == 'staff_linked':
+        link = await get_link(api, cache, chat_id, fresh=True)
+        if link:
+            lang = link['language']
+            await message.answer(
+                t(lang, 'already_linked', name=escape(link['full_name'])), reply_markup=keyboards.already_linked(lang),
+            )
+            return
+    elif kind == 'student':
+        lang = _telegram_language(message.from_user)
+        await message.answer(t(lang, 'student_connected', name=escape(who.get('name') or '')))
+        await _set_student_menu(bot, chat_id, lang)
+        return
+    elif kind != 'staff_allowed':
+        await _unknown_reply(bot, chat_id, message.from_user, who)
         return
     await state.set_state(Login.language)
-    await message.answer('Til / Язык / Language', reply_markup=keyboards.languages())
+    await message.answer(LANGUAGE_PROMPT, reply_markup=keyboards.languages())
 
 
 @router.callback_query(F.data == 'login:again')
-async def login_again(callback: CallbackQuery, state: FSMContext):
+async def login_again(callback: CallbackQuery, state: FSMContext, bot, api):
     await callback.answer()
     await state.clear()
+    chat_id = callback.message.chat.id
+    if not await _staff_gate(bot, api, chat_id, callback.from_user, callback.message.message_id):
+        return
     await state.set_state(Login.language)
-    await callback.message.edit_text('Til / Язык / Language', reply_markup=keyboards.languages())
+    await callback.message.edit_text(LANGUAGE_PROMPT, reply_markup=keyboards.languages())
 
 
 @router.callback_query(Login.language, F.data.startswith('lang:'))
-async def pick_language(callback: CallbackQuery, state: FSMContext):
+async def pick_language(callback: CallbackQuery, state: FSMContext, bot, api):
     await callback.answer()
     lang = callback.data.split(':', 1)[1]
     if lang not in LANGUAGES:
+        return
+    # The allowlist may have changed since /start: re-check before asking for any credentials.
+    if not await _staff_gate(bot, api, callback.message.chat.id, callback.from_user, callback.message.message_id):
+        await state.clear()
         return
     await state.update_data(lang=lang, prompt_id=callback.message.message_id)
     await state.set_state(Login.username)
@@ -141,9 +243,12 @@ async def pick_language(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(Login.username, F.text, ~F.text.regexp(COMMAND_PATTERN))
-async def got_username(message: Message, state: FSMContext, bot):
+async def got_username(message: Message, state: FSMContext, bot, api):
     username = message.text.strip()
     await _delete(message)
+    if not await _staff_gate(bot, api, message.chat.id, message.from_user):
+        await state.clear()
+        return
     data = await state.get_data()
     lang = data.get('lang', DEFAULT)
     await state.update_data(username=username)
@@ -165,7 +270,7 @@ async def got_password(message: Message, state: FSMContext, bot, api):
     await _edit(bot, chat_id, prompt_id, t(lang, 'checking'))
     await bot.send_chat_action(chat_id, 'typing')
     try:
-        card = await api.login(chat_id, username, password)
+        card = await api.login(chat_id, username, password, _username(message.from_user))
     except ApiError as exc:
         await _login_refused(bot, state, chat_id, prompt_id, lang, exc)
         return
@@ -187,6 +292,7 @@ async def _login_refused(bot, state, chat_id, prompt_id, lang, exc):
         await state.clear()
         text = {
             'locked': lambda: t(lang, 'locked', minutes=_minutes(exc)),
+            'telegram_not_allowed': lambda: t(lang, 'staff_not_allowed'),
             'role_not_allowed': lambda: t(lang, 'role_refused'),
             'password_change_required': lambda: t(lang, 'password_change_required'),
             'account_unavailable': lambda: t(lang, 'account_unavailable'),
@@ -235,6 +341,7 @@ async def login_confirm(callback: CallbackQuery, state: FSMContext, bot, api, ca
 @router.message(Command('help'))
 async def help_command(message: Message, state: FSMContext, api, cache):
     lang = await language_of(state, cache, message.chat.id)
+    await _leave_text_prompt(state)
     await message.answer(t(lang, 'help'))
 
 
@@ -265,6 +372,18 @@ async def students_command(message: Message, state: FSMContext, bot, api, cache)
     await send_digest(bot, chat_id, await _load_digest(api, cache, chat_id), lang, sort=SORT_AZ)
 
 
+@router.message(Command('meetings'))
+async def meetings_command(message: Message, state: FSMContext, bot, api, cache):
+    """Upcoming meetings of whoever this chat is linked as: a counselor (with counts) or a student (their own)."""
+    await _leave_text_prompt(state)
+    chat_id = message.chat.id
+    link = await get_link(api, cache, chat_id)
+    lang = link['language'] if link else _telegram_language(message.from_user)
+    await bot.send_chat_action(chat_id, 'typing')
+    # The backend decides the role by the chat; a chat linked as neither gets the usual "not linked" reply.
+    await message.answer(render_meetings(await api.meetings(chat_id, _username(message.from_user)), lang))
+
+
 @router.message(Command('now'))
 async def now_command(message: Message, state: FSMContext, bot, api, cache):
     link = await _require_link(message, api, cache, state)
@@ -286,6 +405,22 @@ async def now_command(message: Message, state: FSMContext, bot, api, cache):
 @router.callback_query(F.data == 'noop')
 async def noop(callback: CallbackQuery):
     await callback.answer()
+
+
+@router.callback_query(F.data.regexp(MEETING_BUTTON))
+async def meeting_button(callback: CallbackQuery, bot, api):
+    """Confirm / Decline / Cancel under a meeting card: the backend applies it (or refuses) and redraws the card."""
+    chat_id = callback.message.chat.id
+    action, booking_id = MEETING_BUTTON.match(callback.data).groups()
+    try:
+        result = await api.meeting_action(chat_id, int(booking_id), action, _username(callback.from_user))
+    except ApiError:
+        # Not this chat's meeting, or not its answer to give: a short alert and nothing else.
+        await callback.answer(t(_telegram_language(callback.from_user), 'meeting_forbidden'), show_alert=True)
+        return
+    alert = result.get('alert')
+    await callback.answer(alert or None, show_alert=bool(alert))
+    await _edit(bot, chat_id, callback.message.message_id, result['text'], keyboards.from_rows(result.get('buttons')))
 
 
 @router.callback_query(F.data.regexp(LIST_BUTTON))
@@ -319,12 +454,13 @@ async def student_detail(callback: CallbackQuery, bot, api, cache):
     await callback.answer()
     await _edit(
         bot, chat_id, callback.message.message_id, render_detail(item, lang),
-        keyboards.back_to_list(lang, int(page), sort, flt),
+        keyboards.student_detail(lang, item['id'], int(page), sort, flt),
     )
 
 
 @router.message(Command('settings'))
 async def settings_command(message: Message, state: FSMContext, bot, api, cache):
+    await _leave_text_prompt(state)
     link = await _require_link(message, api, cache, state)
     if link is not None:
         await _panel(bot, message.chat.id, None, link)
@@ -425,7 +561,7 @@ async def add_command(message: Message, state: FSMContext, api, cache):
         return
     lang = link['language']
     # Details may come with the command itself: "/add Ali Valiyev ali@x.com +998...".
-    details = parse_student(message.text.partition(' ')[2])
+    details = parse_student(command_args(message.text))
     if is_complete(details):
         await _show_student_card(message, state, lang, details)
         return
@@ -437,8 +573,9 @@ async def add_command(message: Message, state: FSMContext, api, cache):
 @router.message(Command('cancel'))
 async def cancel_command(message: Message, state: FSMContext, cache):
     lang = await language_of(state, cache, message.chat.id)
+    resetting = await state.get_state() == ResetPassword.query.state
     await state.clear()
-    await message.answer(t(lang, 'add_cancelled'))
+    await message.answer(t(lang, 'reset_cancelled' if resetting else 'add_cancelled'))
 
 
 @router.message(AddStudent.details, F.text, ~F.text.regexp(COMMAND_PATTERN))
@@ -515,6 +652,153 @@ async def add_confirm(callback: CallbackQuery, state: FSMContext, bot, api, cach
     cache.drop_chat(chat_id)
     await callback.message.edit_text(t(
         lang, 'add_done', name=escape(result['full_name']), username=escape(result['username']),
+        password=escape(result['temporary_password']), expires=format_expiry(result.get('expires_at')),
+        url=escape(result.get('login_url') or ''),
+    ))
+
+
+@router.message(Command('reset'))
+async def reset_command(message: Message, state: FSMContext, bot, api, cache):
+    await state.clear()
+    link = await _require_link(message, api, cache, state)
+    if link is None:
+        return
+    lang = link['language']
+    query = command_args(message.text).strip()
+    if query:
+        await _search_students(message, state, api, lang, query)
+        return
+    await state.set_state(ResetPassword.query)
+    await state.update_data(lang=lang)
+    await message.answer(t(lang, 'reset_prompt'))
+
+
+@router.message(ResetPassword.query, F.text, ~F.text.regexp(COMMAND_PATTERN))
+async def got_reset_query(message: Message, state: FSMContext, api, cache):
+    lang = await language_of(state, cache, message.chat.id)
+    await _search_students(message, state, api, lang, message.text.strip())
+
+
+async def _search_students(message, state, api, lang, query):
+    try:
+        result = await api.find_students(message.chat.id, query[:100])
+    except ApiError as exc:
+        if exc.code != 'invalid_query':
+            raise
+        await state.set_state(ResetPassword.query)
+        await state.update_data(lang=lang)
+        await message.answer(t(lang, 'reset_short'))
+        return
+    students = result.get('students') or []
+    if not students:
+        await state.set_state(ResetPassword.query)
+        await state.update_data(lang=lang)
+        await message.answer(t(lang, 'reset_none', query=escape(query[:100])))
+        return
+    await state.clear()
+    # Remembered so the next tap can name the student on its card.
+    await state.update_data(lang=lang, matches={str(row['id']): [row['full_name'], row['username']] for row in students})
+    if len(students) == 1:
+        row = students[0]
+        await message.answer(
+            _reset_card(lang, row['full_name'], row['username']), reply_markup=keyboards.confirm_reset(lang, row['id']),
+        )
+        return
+    text = t(lang, 'reset_pick') + ('\n' + t(lang, 'reset_more') if result.get('more') else '')
+    await message.answer(text, reply_markup=keyboards.pick_student(lang, students))
+
+
+def _reset_card(lang, name, username):
+    return t(lang, 'reset_card', name=escape(name), username=escape(username))
+
+
+@router.callback_query(F.data == 'rp:x')
+async def reset_cancel(callback: CallbackQuery, state: FSMContext, cache):
+    await callback.answer()
+    lang = await language_of(state, cache, callback.message.chat.id)
+    await state.clear()
+    await callback.message.edit_text(t(lang, 'reset_cancelled'))
+
+
+@router.callback_query(F.data.regexp(RESET_PICK))
+async def reset_pick(callback: CallbackQuery, state: FSMContext, bot, api, cache):
+    chat_id = callback.message.chat.id
+    link = await get_link(api, cache, chat_id)
+    if link is None:
+        await callback.answer()
+        await bot.send_message(chat_id, t(DEFAULT, 'not_linked'))
+        return
+    lang = link['language']
+    student_id = RESET_PICK.match(callback.data).group(1)
+    found = ((await state.get_data()).get('matches') or {}).get(student_id)
+    if found is None:
+        # From a student's card in the list: the name comes from the same list.
+        data = await _load_digest(api, cache, chat_id)
+        item = next((row for row in data['students'] if str(row.get('id')) == student_id), None)
+        if item is None:
+            await callback.answer(t(lang, 'student_gone'), show_alert=True)
+            return
+        await callback.answer()
+        await bot.send_message(
+            chat_id, t(lang, 'reset_card_no_login', name=escape(item['name'])),
+            reply_markup=keyboards.confirm_reset(lang, int(student_id)),
+        )
+        return
+    await callback.answer()
+    await _edit(
+        bot, chat_id, callback.message.message_id, _reset_card(lang, *found),
+        keyboards.confirm_reset(lang, int(student_id)),
+    )
+
+
+RESET_REFUSALS = {
+    'student_not_found': 'reset_not_found',
+    'too_many': 'reset_too_many',
+}
+
+
+@router.callback_query(F.data.regexp(RESET_YES))
+async def reset_confirm(callback: CallbackQuery, state: FSMContext, bot, api, cache):
+    chat_id = callback.message.chat.id
+    if chat_id in _resetting:
+        await callback.answer()
+        return
+    link = await get_link(api, cache, chat_id)
+    if link is None:
+        await callback.answer()
+        await bot.send_message(chat_id, t(DEFAULT, 'not_linked'))
+        return
+    await callback.answer()
+    lang = link['language']
+    student_id = int(RESET_YES.match(callback.data).group(1))
+    # An old card can come back as an inaccessible message, which has no text.
+    card_text = callback.message.html_text if getattr(callback.message, 'text', None) else ''
+    # Only a reset in progress is cleared; an /add card waiting in this chat stays usable.
+    if await state.get_state() == ResetPassword.query.state:
+        await state.clear()
+    _resetting.add(chat_id)
+    try:
+        await _edit(bot, chat_id, callback.message.message_id, t(lang, 'reset_working'))
+        try:
+            result = await api.reset_password(chat_id, student_id)
+        except ApiUnavailable:
+            # Usually nothing changed; a timeout may come after the backend made a password nobody saw.
+            # Either way the card comes back, and a repeat tap makes a fresh password that is shown.
+            if card_text:
+                await _edit(
+                    bot, chat_id, callback.message.message_id, card_text, keyboards.confirm_reset(lang, student_id),
+                )
+            raise
+        except ApiError as exc:
+            if exc.code not in RESET_REFUSALS:
+                raise
+            await _edit(bot, chat_id, callback.message.message_id, t(lang, RESET_REFUSALS[exc.code]))
+            return
+    finally:
+        _resetting.discard(chat_id)
+    cache.drop_chat(chat_id)  # the student list shows the new password status
+    await _edit(bot, chat_id, callback.message.message_id, t(
+        lang, 'reset_done', name=escape(result['full_name']), username=escape(result['username']),
         password=escape(result['temporary_password']), expires=format_expiry(result.get('expires_at')),
         url=escape(result.get('login_url') or ''),
     ))

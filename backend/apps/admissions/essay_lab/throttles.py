@@ -38,6 +38,15 @@ class EssayDepthCheckThrottle(EssayThrottle):
         ]
 
 
+class EssayDepthGateThrottle(EssayThrottle):
+    """Cheap per-user limit in front of the re-check rules; spends neither the check interval nor the budget."""
+
+    scope = 'essay_depth_gate'
+
+    def get_limits(self):
+        return [(settings.ESSAY_COACH_RECHECK_PER_MINUTE, 60)]
+
+
 def spend_coach_budget(user):
     """Count one AI depth check against the daily budgets. False when one is spent."""
     return ai_budget.consume('essay_coach', user)

@@ -129,3 +129,12 @@ async def test_backend_down_gives_the_card_back(h):
     await h.tap('add:yes')
     assert len(h.api.names('add_student')) == 2
     assert 'Tmp-Pass-42' in h.session.texts()[-1]
+
+
+def test_command_args_split_on_any_whitespace():
+    from bot.handlers import command_args
+    assert command_args('/add\nSmokeov TestEN\nsmoke@example.com\n+998 90 101 11 01') == 'Smokeov TestEN\nsmoke@example.com\n+998 90 101 11 01'
+    assert command_args('/reset\nBobur Qodirov') == 'Bobur Qodirov'
+    assert command_args('/add Ali Valiyev') == 'Ali Valiyev'
+    assert command_args('/add') == ''
+    assert parse_student(command_args('/add\n' + SOFIYA))['full_name'] == 'Saydazimova Sofiya'

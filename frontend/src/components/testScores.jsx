@@ -293,7 +293,13 @@ function statusLine(status, date) {
   return date ? `${text} · ${dateText(date)}` : text;
 }
 
-export function TestScoreSummary({ student }) {
+// A thin bar for one part of a result (opt-in; the student's own cards show it).
+const PartBar = ({ value, max }) => {
+  const pct = Math.max(0, Math.min(100, Math.round((parseFloat(value) / max) * 100)));
+  return Number.isFinite(pct) ? <span className="test-score-meter" aria-hidden="true" style={{ '--v': `${pct}%` }} /> : null;
+};
+
+export function TestScoreSummary({ student, meters = false }) {
   if (!student) return null;
   const ieltsTaken = student.ielts_score != null;
   const satTaken = student.sat_score != null;
@@ -305,7 +311,7 @@ export function TestScoreSummary({ student }) {
     <article>
       <header><span>IELTS</span><span className="test-score-total">{ieltsTaken && <small>{t('Overall band')}</small>}<b>{ieltsTaken ? band(student.ielts_score) : '—'}</b></span></header>
       {ieltsTaken ? <>
-        {hasIeltsSections && <dl className="test-score-parts">{IELTS_SECTIONS.map(([key, label]) => <div key={key}><dt>{t(label)}</dt><dd>{band(student[key])}</dd></div>)}</dl>}
+        {hasIeltsSections && <dl className="test-score-parts">{IELTS_SECTIONS.map(([key, label]) => <div key={key}><dt>{t(label)}</dt>{meters && <PartBar value={student[key]} max={9} />}<dd>{band(student[key])}</dd></div>)}</dl>}
         {!hasIeltsSections && <p>{t('Overall band only')}</p>}
         {student.ielts_result_type === 'full_retake' && <p className="test-score-note">{t('Full test retake')}</p>}
         <Facts rows={[
@@ -319,7 +325,7 @@ export function TestScoreSummary({ student }) {
     <article>
       <header><span>SAT</span><span className="test-score-total">{satTaken && <small>{t('Total')}</small>}<b>{satTaken ? formatNumberLocale(student.sat_score, { useGrouping: false }) : '—'}</b></span></header>
       {satTaken ? <>
-        {student.sat_reading != null && <dl className="test-score-parts"><div><dt>{t('Reading and Writing')}</dt><dd>{student.sat_reading}</dd></div><div><dt>{t('Math')}</dt><dd>{student.sat_math}</dd></div></dl>}
+        {student.sat_reading != null && <dl className="test-score-parts"><div><dt>{t('Reading and Writing')}</dt>{meters && <PartBar value={student.sat_reading} max={800} />}<dd>{student.sat_reading}</dd></div><div><dt>{t('Math')}</dt>{meters && <PartBar value={student.sat_math} max={800} />}<dd>{student.sat_math}</dd></div></dl>}
         {student.sat_reading == null && <p>{t('Total only')}</p>}
         <Facts rows={[[t('Test date'), student.sat_test_date && dateText(student.sat_test_date)], [t('Attempts'), student.sat_attempts && formatNumberLocale(student.sat_attempts)]]} />
         {student.sat_superscore === true && <p className="test-score-note">{tx`Sends a superscore: Reading and Writing ${student.sat_superscore_reading}, Math ${student.sat_superscore_math}`}</p>}

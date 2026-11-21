@@ -80,3 +80,13 @@ test('Vercel sends the nginx security headers on every route and CSP in report-o
   assert.equal(headers['Content-Security-Policy-Report-Only'], buildCsp('', 'https://api.naseebedu.com/api'));
   assert.match(headers['Content-Security-Policy-Report-Only'], /connect-src 'self' https:\/\/api\.naseebedu\.com(?:;|$)/);
 });
+
+test('Hashed build files are cached for a year; pages are not', () => {
+  const rule = config.headers.find(({ source }) => source === '/assets/(.*)');
+  assert.ok(rule, 'hashed build files need a long cache rule');
+  const cache = rule.headers.find(({ key }) => key === 'Cache-Control')?.value;
+  assert.equal(cache, 'public, max-age=31536000, immutable');
+  // index.html (and every other page) must never get the long cache, or a deploy would not reach returning visitors.
+  const pageRules = config.headers.filter(({ source }) => new RegExp(`^${source}$`).test('/index.html'));
+  assert.ok(pageRules.every(({ headers }) => !headers.some(({ key }) => key === 'Cache-Control')));
+})

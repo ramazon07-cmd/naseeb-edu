@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from pathlib import Path
@@ -958,6 +959,19 @@ class MeetingSchedule(TimeStampedModel):
     hours = models.JSONField(default=dict, blank=True)
     # Slots exist through this day; later days are added as time moves on (meetings.fill_schedule).
     generated_until = models.DateField(null=True, blank=True)
+    # Students cannot book (or move to) a slot starting sooner than this many hours from now; staff are not held to it.
+    min_notice_hours = models.PositiveSmallIntegerField(default=12, validators=[MaxValueValidator(168)])
+
+    class WindowMode(models.TextChoices):
+        ROLLING = 'rolling', 'Next N days'
+        RANGE = 'range', 'Date range'
+
+    # How far ahead students may book: the next `window_days` calendar days (rolling), or between two dates (range).
+    window_mode = models.CharField(max_length=10, choices=WindowMode.choices, default=WindowMode.ROLLING)
+    window_days = models.PositiveSmallIntegerField(default=60, validators=[MinValueValidator(1), MaxValueValidator(365)])
+    # Inclusive Tashkent dates; only used (and then required) in range mode.
+    window_start = models.DateField(null=True, blank=True)
+    window_end = models.DateField(null=True, blank=True)
 
 
 class Booking(TimeStampedModel):
@@ -989,6 +1003,11 @@ class Booking(TimeStampedModel):
     notes = models.TextField(blank=True)
     # The start time the reminder email was sent for; a moved meeting is reminded again.
     reminded_for = models.DateTimeField(null=True, blank=True)
+    # True: the staff participant proposed this meeting, so a pending one waits for the STUDENT's answer.
+    # False (every older row): the student asked, and the participant answers.
+    staff_requested = models.BooleanField(default=False)
+    # Who cancelled it ('student' or 'staff'); empty unless the meeting is cancelled.
+    cancelled_by_role = models.CharField(max_length=10, null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ['starts_at']
@@ -1797,6 +1816,32 @@ class RecommendationLetter(TimeStampedModel):
         return f'{self.student} — {self.recommender_name}'
 
 
+class RecommendationLetterCheck(models.Model):
+    """One depth check of a recommendation letter (the Essay Coach engine). Counselor-only; the last 10 are kept."""
+
+    letter = models.ForeignKey(RecommendationLetter, on_delete=models.CASCADE, related_name='depth_checks')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    result = models.JSONField(default=dict)
+    model = models.CharField(max_length=120)
+    # sha256 of the folded text that was checked (coach.text_fingerprint).
+    text_fingerprint = models.CharField(max_length=64, blank=True)
+    # sha256 of recommender title, relationship, rubric text and model.
+    input_hash = models.CharField(max_length=64, blank=True)
+    overall = models.PositiveSmallIntegerField(null=True, blank=True)
+    # {note_id: "done" | "dismissed" | "gone"}; an open note has no entry.
+    note_states = models.JSONField(default=dict, blank=True)
+    # The checked body, kept to measure changed words on a re-check. Never serialized.
+    letter_text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['letter', '-created_at'], name='rec_letter_check_recent_idx')]
+
+    def __str__(self):
+        return f'{self.letter_id} letter check'
+
+
 class EssayFolder(TimeStampedModel):
     """A student's own folder in the Essay Lab library (at most one level of nesting)."""
 
@@ -2028,6 +2073,14 @@ class EssayDepthCheck(models.Model):
     save_seq = models.PositiveIntegerField()
     result = models.JSONField(default=dict)
     model = models.CharField(max_length=120)
+    # sha256 of the folded text that was checked (see coach.text_fingerprint); blank on checks from before v2.
+    text_fingerprint = models.CharField(max_length=64, blank=True)
+    # sha256 of essay type, prompt, rubric text and model: a saved check is reused only when this matches too.
+    input_hash = models.CharField(max_length=64, blank=True)
+    # 0-100 from the criterion scores; null when unscored and on checks from before v2.
+    overall = models.PositiveSmallIntegerField(null=True, blank=True)
+    # {note_id: "done" | "dismissed"}; an open note has no entry.
+    note_states = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
