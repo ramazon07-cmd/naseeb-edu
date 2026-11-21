@@ -1,0 +1,304 @@
+/* College match (student, blue design): the scores strip and the balanced list of cards
+   (components/CollegeMatch.jsx). Same tokens as the rest of College Search. */
+
+.nb-blue .nb-match-panel .nb-card-body {
+  display: grid;
+  gap: var(--nb-gap);
+  padding: var(--nb-pad);
+}
+
+.nb-blue .nb-match-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.nb-blue .nb-match-close {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-pill);
+  background: transparent;
+  color: var(--nb-ink);
+  cursor: pointer;
+}
+
+.nb-blue .nb-match-close:hover {
+  background: var(--nb-tint);
+}
+
+.nb-blue .nb-match-score-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-blue .nb-match-score-tiles li {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-sm);
+  background: var(--nb-card-soft);
+}
+
+.nb-blue .nb-match-score-tiles li > small {
+  color: var(--nb-faint);
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+}
+
+.nb-blue .nb-match-score-tiles b {
+  color: var(--nb-ink-strong);
+  font-size: var(--nb-text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.nb-blue .nb-match-score-tiles b small {
+  margin-left: 2px;
+  color: var(--nb-faint);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-match-score-tiles li.is-pending > span {
+  color: var(--nb-faint);
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+  line-height: 1.9rem;
+}
+
+.nb-blue .nb-match-score-tiles i {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--nb-blue) var(--fill), var(--nb-line) var(--fill));
+}
+
+.nb-blue .nb-match-hint,
+.nb-blue .nb-match-empty,
+.nb-blue .nb-match-foot {
+  margin: 8px 0 0;
+  color: var(--nb-faint);
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-match-hint .link-button {
+  margin-left: 8px;
+}
+
+.nb-blue .nb-match-error {
+  margin: 0;
+  color: var(--nb-late);
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-match-group {
+  display: grid;
+  gap: 10px;
+}
+
+.nb-blue .nb-match-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--nb-text-sm);
+}
+
+.nb-blue .nb-match-group h3 small {
+  color: var(--nb-faint);
+  font-weight: 700;
+}
+
+.nb-blue .nb-match-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.nb-blue .nb-match-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 14px 16px;
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-r-md);
+  background: var(--nb-card);
+  color: var(--nb-card-fg);
+}
+
+.nb-blue .nb-match-card header {
+  display: grid;
+  gap: 2px;
+}
+
+.nb-blue .nb-match-card header small {
+  color: var(--nb-faint);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-match-card-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-ink-strong);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nb-blue .nb-match-card-name:hover {
+  text-decoration: underline;
+}
+
+.nb-blue .nb-match-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+}
+
+.nb-blue .nb-match-card-facts div {
+  display: grid;
+  gap: 2px;
+}
+
+.nb-blue .nb-match-card-facts dt {
+  color: var(--nb-faint);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-match-card-facts dd {
+  margin: 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.nb-blue .nb-match-card-facts dd small {
+  color: var(--nb-faint);
+  font-weight: 700;
+}
+
+.nb-blue .nb-match-factors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nb-blue .nb-match-factor {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--nb-r-pill);
+  background: var(--nb-chip-bg);
+  color: var(--nb-chip-fg);
+  font-size: var(--nb-text-xs);
+  font-weight: 700;
+}
+
+.nb-blue .nb-match-factor small {
+  opacity: 0.75;
+  font-size: inherit;
+}
+
+.nb-blue .nb-match-factor.is-missing {
+  background: transparent;
+  border: 1px dashed var(--nb-line);
+  color: var(--nb-faint);
+}
+
+.nb-blue .nb-match-why,
+.nb-blue .nb-match-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--nb-text-xs);
+  line-height: 1.45;
+}
+
+.nb-blue .nb-match-why {
+  padding: 8px 10px;
+  border-radius: var(--nb-r-xs);
+  background: var(--nb-tint);
+  color: var(--nb-ink);
+}
+
+.nb-blue .nb-match-why svg,
+.nb-blue .nb-match-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.nb-blue .nb-match-why svg,
+.nb-blue .nb-match-note.ok svg {
+  color: var(--nb-blue);
+}
+
+.nb-blue .nb-match-note.gap svg {
+  color: var(--nb-faint);
+}
+
+.nb-blue .nb-match-programs {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  color: var(--nb-ink-2);
+  font-size: var(--nb-text-xs);
+}
+
+.nb-blue .nb-match-programs b {
+  color: var(--nb-faint);
+  font-weight: 700;
+}
+
+.nb-blue .nb-match-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nb-blue .nb-match-added {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--nb-ok);
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+}
+
+@media (max-width: 820px) {
+  .nb-blue .nb-match-score-tiles {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  }
+}
+
+.nb-blue .nb-match-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nb-blue .nb-match-subject {
+  margin: 0;
+  color: var(--nb-ink-strong);
+  font-size: var(--nb-text-sm);
+  font-weight: 700;
+}
+
+.nb-blue .nb-match-factor.is-over {
+  background: transparent;
+  border: 1px solid var(--nb-late);
+  color: var(--nb-late);
+}

@@ -12,6 +12,7 @@ profile answers and catalogue version, then cached.
 """
 import hashlib
 import json
+import re
 
 from django.db.models import Count, F, IntegerField, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Coalesce
@@ -25,6 +26,7 @@ from .countries import country_key, country_name, country_spellings
 from .listing import MAX_SEARCH_LENGTH, search_terms, term_query
 from .models import StudentProfile, University, UniversityProgram
 from .pricing import with_cost
+from .student_rubric import rubric
 
 PAGE_SIZES = (10, 25, 50, 100)
 MAX_IDS = 100
@@ -143,9 +145,8 @@ def fit_context(profile):
     """
     if missing_fields(profile):
         return None
-    counts = evidence_counts(profile)
     act = [row['score'] for row in certificates(profile, 'act')]
-    return {
+    ctx = {
         'gpa': float(profile.gpa),
         'gpa_scale': int(profile.effective_gpa_scale),
         'sat': int(profile.sat_score) if profile.sat_score is not None else None,
@@ -156,8 +157,10 @@ def fit_context(profile):
         'major': profile.target_major.strip().lower(),
         'major_name': profile.target_major,
         'scholarship_needed': bool(profile.scholarship_needed),
-        'strength': min(10, sum(min(value, 2) for value in counts.values()) * 2),
     }
+    # The student's rubric scores (0-10, essays None until the Essay Lab has scored a personal statement).
+    ctx['rubric'] = rubric(profile, ctx)
+    return ctx
 
 
 def country_match(university, countries):
