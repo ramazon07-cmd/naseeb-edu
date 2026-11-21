@@ -1790,6 +1790,32 @@ class RecommendationLetter(TimeStampedModel):
         return f'{self.student} — {self.recommender_name}'
 
 
+class RecommendationLetterCheck(models.Model):
+    """One depth check of a recommendation letter (the Essay Coach engine). Counselor-only; the last 10 are kept."""
+
+    letter = models.ForeignKey(RecommendationLetter, on_delete=models.CASCADE, related_name='depth_checks')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    result = models.JSONField(default=dict)
+    model = models.CharField(max_length=120)
+    # sha256 of the folded text that was checked (coach.text_fingerprint).
+    text_fingerprint = models.CharField(max_length=64, blank=True)
+    # sha256 of recommender title, relationship, rubric text and model.
+    input_hash = models.CharField(max_length=64, blank=True)
+    overall = models.PositiveSmallIntegerField(null=True, blank=True)
+    # {note_id: "done" | "dismissed" | "gone"}; an open note has no entry.
+    note_states = models.JSONField(default=dict, blank=True)
+    # The checked body, kept to measure changed words on a re-check. Never serialized.
+    letter_text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['letter', '-created_at'], name='rec_letter_check_recent_idx')]
+
+    def __str__(self):
+        return f'{self.letter_id} letter check'
+
+
 class EssayFolder(TimeStampedModel):
     """A student's own folder in the Essay Lab library (at most one level of nesting)."""
 

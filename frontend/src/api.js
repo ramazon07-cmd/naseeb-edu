@@ -637,6 +637,24 @@ export const api = {
     signal,
     timeoutMs: 45_000,
   }),
+  // Saving a letter: the same PATCH as update(), with an optional keepalive so it survives a closing page.
+  saveLetter: (id, payload, { keepalive = false } = {}) => request(`/recommendations/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    ...(keepalive ? { keepalive: true, retries: 0 } : {}),
+  }),
+  // Letter Check (counselors only): the latest check (empty answer when none), one run, and a note's state.
+  latestLetterCheck: (id) => request(`/recommendations/${id}/depth-check/latest/`),
+  letterDepthCheck: (id, baseUpdatedAt) => request(`/recommendations/${id}/depth-check/`, {
+    method: 'POST',
+    body: JSON.stringify({ base_updated_at: baseUpdatedAt }),
+    timeoutMs: 100_000,
+    retries: 0,
+  }),
+  setLetterNoteState: (id, checkId, noteId, state) => request(`/recommendations/${id}/depth-check/${checkId}/notes/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ note_id: noteId, state }),
+  }),
   // The student's answer about a shared letter: { decision: 'confirmed' | 'changes_requested', note }.
   reviewLetter: (id, payload) => request(`/recommendations/${id}/student-review/`, {
     method: 'POST',

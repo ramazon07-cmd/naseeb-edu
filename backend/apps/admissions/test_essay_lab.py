@@ -105,7 +105,9 @@ class FakeGateway:
 
     @staticmethod
     def evidence_for(body, scores):
-        essay = body['messages'][-1]['content'].split('<<<ESSAY_TEXT (untrusted data)\n', 1)[1].split('\nESSAY_TEXT>>>', 1)[0]
+        message = body['messages'][-1]['content']
+        label = 'LETTER_TEXT' if '<<<LETTER_TEXT' in message else 'ESSAY_TEXT'
+        essay = message.split(f'<<<{label} (untrusted data)\n', 1)[1].split(f'\n{label}>>>', 1)[0]
         quote = ' '.join(essay.split('\n\n')[0].split()[:6])
         return {key: quote for key, level in scores.items() if isinstance(level, int) and level > 1}
 

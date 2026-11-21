@@ -115,9 +115,20 @@ ESSAY_SAFETY_FREE_PER_DAY = config('ESSAY_SAFETY_FREE_PER_DAY', default=2, cast=
 # suggestions remain); school and user caps use 0 = no cap.
 REC_LETTER_AI_DAILY_BUDGET = config('REC_LETTER_AI_DAILY_BUDGET', default=3000, cast=int)
 REC_LETTER_AI_SCHOOL_DAILY_BUDGET = config('REC_LETTER_AI_SCHOOL_DAILY_BUDGET', default=600, cast=int)
-REC_LETTER_AI_USER_DAILY_LIMIT = config('REC_LETTER_AI_USER_DAILY_LIMIT', default=150, cast=int)
+REC_LETTER_AI_USER_DAILY_LIMIT = config('REC_LETTER_AI_USER_DAILY_LIMIT', default=20, cast=int)
 REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS = config('REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS', default=4, cast=int)
 REC_LETTER_SUGGEST_HOURLY_LIMIT = config('REC_LETTER_SUGGEST_HOURLY_LIMIT', default=180, cast=int)
+# Facts-only suggestions (no AI call, refreshed while the counselor types): a cheap, generous per-user limit per minute.
+REC_LETTER_FACTS_PER_MINUTE = config('REC_LETTER_FACTS_PER_MINUTE', default=120, cast=int)
+# Letter depth check (the Essay Coach engine on a recommendation letter). Same rules as the coach:
+# a platform budget of 0 turns AI checks off; school and user caps use 0 = no cap.
+REC_LETTER_CHECK_DAILY_BUDGET = config('REC_LETTER_CHECK_DAILY_BUDGET', default=2000, cast=int)
+REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET = config('REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET', default=400, cast=int)
+REC_LETTER_CHECK_USER_DAILY_LIMIT = config('REC_LETTER_CHECK_USER_DAILY_LIMIT', default=5, cast=int)
+# Cheap guard in front of the letter re-check rules, and the check's own minimum interval and hourly cap.
+REC_LETTER_CHECK_RECHECK_PER_MINUTE = config('REC_LETTER_CHECK_RECHECK_PER_MINUTE', default=20, cast=int)
+REC_LETTER_CHECK_MIN_INTERVAL_SECONDS = config('REC_LETTER_CHECK_MIN_INTERVAL_SECONDS', default=15, cast=int)
+REC_LETTER_CHECK_HOURLY_LIMIT = config('REC_LETTER_CHECK_HOURLY_LIMIT', default=60, cast=int)
 ESSAY_AUTOSAVE_LIMIT = config('ESSAY_AUTOSAVE_LIMIT', default=1200, cast=int)
 ESSAY_AUTOSAVE_WINDOW_SECONDS = config('ESSAY_AUTOSAVE_WINDOW_SECONDS', default=600, cast=int)
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)

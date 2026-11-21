@@ -227,7 +227,7 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
             self.assertEqual(self.suggest(user).status_code, 404, user.username)
         self.assertEqual(self.suggest(self.admin).status_code, 200)
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_ai_gets_facts_without_identity_and_bad_items_are_dropped(self):
         answer = {'suggestions': [
             {'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'fact': 'D'},
@@ -235,7 +235,7 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
             {'kind': 'idea', 'text': ''},
         ]}
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))) as urlopen:
-            response = self.suggest(draft=f'Malika is a joy to teach at {self.school_a.name}. Call 998901234567.')
+            response = self.suggest(ai=True, draft=f'Malika is a joy to teach at {self.school_a.name}. Call 998901234567.')
         self.assertEqual(response.data['source'], 'ai')
         self.assertEqual(response.data['suggestions'][0], {
             'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'source': 'activity', 'title': 'Robotics club',
@@ -251,7 +251,7 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         for private in ('Malika', 'Karimova', self.school_a.name, self.student_user.email, '998901234567'):
             self.assertNotIn(private, sent)
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_ai_text_must_rest_on_a_given_fact(self):
         answer = {'suggestions': [
             {'kind': 'sentence', 'text': '[Student] has a 3.9 GPA.', 'fact': 'A'},
@@ -262,13 +262,13 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
             {'kind': 'idea', 'text': 'Say how long you have known [Student].', 'fact': None},
         ]}
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
-            response = self.suggest(draft='')
+            response = self.suggest(ai=True, draft='')
         self.assertEqual([item for item in response.data['suggestions'] if item['kind'] != 'fact'], [
             {'kind': 'sentence', 'text': '[Student] has a 3.9 GPA.', 'source': 'academics', 'title': ''},
             {'kind': 'idea', 'text': 'Say how long you have known [Student].', 'source': '', 'title': ''},
         ])
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_a_number_from_another_fact_is_dropped(self):
         answer = {'suggestions': [
             {'kind': 'sentence', 'text': '[Student] won national gold in 2026.', 'fact': 'A'},
@@ -278,13 +278,13 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
             {'kind': 'idea', 'text': 'Mention the 2026 olympiad.', 'fact': None},
         ]}
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
-            response = self.suggest(draft='I have known her for 3 years.')
+            response = self.suggest(ai=True, draft='I have known her for 3 years.')
         self.assertEqual([item for item in response.data['suggestions'] if item['kind'] != 'fact'], [
             {'kind': 'sentence', 'text': '[Student] won national physics gold in 2026.', 'source': 'honor', 'title': 'National physics olympiad gold'},
             {'kind': 'idea', 'text': 'Say what she did in those 3 years.', 'source': '', 'title': ''},
         ])
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_the_ai_call_runs_without_touching_the_database(self):
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
@@ -302,20 +302,20 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         answer = {'suggestions': [{'kind': 'idea', 'text': 'Mention the robotics cup.'}]}
         with mock.patch.object(rec_letter_ai, 'ai_suggestions', counted), \
                 mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
-            response = self.suggest(draft=f'Malika studies at {self.school_a.name}.')
+            response = self.suggest(ai=True, draft=f'Malika studies at {self.school_a.name}.')
         self.assertEqual(response.data['source'], 'ai')
         self.assertEqual(during, [0])
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_a_failing_provider_falls_back_to_the_profile(self):
         with mock.patch('urllib.request.urlopen', side_effect=urllib.error.URLError('down')):
-            response = self.suggest()
+            response = self.suggest(ai=True)
         self.assertEqual(response.data['source'], 'profile')
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key', REC_LETTER_AI_DAILY_BUDGET=0)
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', REC_LETTER_AI_DAILY_BUDGET=0)
     def test_a_zero_budget_turns_the_ai_off(self):
         with mock.patch('urllib.request.urlopen') as urlopen:
-            response = self.suggest()
+            response = self.suggest(ai=True)
         urlopen.assert_not_called()
         self.assertEqual(response.data['source'], 'profile')
 
@@ -323,10 +323,10 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
     def test_requests_closer_than_the_interval_are_throttled(self):
         clock = mock.Mock(time=mock.Mock(return_value=1000.0))
         with mock.patch('apps.users.throttles.time', clock):
-            self.assertEqual(self.suggest().status_code, 200)
-            self.assertEqual(self.suggest().status_code, 429)
+            self.assertEqual(self.suggest(ai=True).status_code, 200)
+            self.assertEqual(self.suggest(ai=True).status_code, 429)
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_ai_suggestions_log_token_usage(self):
         answer = {'suggestions': [{'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'fact': 'D'}]}
         body = json.dumps({'choices': [{'message': {'content': json.dumps(answer)}}], 'model': 'openai/gpt-5.4-mini', 'usage': {'prompt_tokens': 900, 'completion_tokens': 200, 'total_tokens': 1100}}).encode()
@@ -334,12 +334,12 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         reply.read.return_value = body
         reply.__enter__.return_value = reply
         with mock.patch('urllib.request.urlopen', return_value=reply):
-            self.assertEqual(self.suggest(draft='').data['source'], 'ai')
+            self.assertEqual(self.suggest(ai=True, draft='').data['source'], 'ai')
         row = AiUsageLog.objects.get(feature='recommendation_letter')
         self.assertEqual((row.status, row.input_tokens, row.output_tokens, row.total_tokens, row.role, row.school_id),
                          ('ok', 900, 200, 1100, 'counselor', self.counselor.school_id))
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_unusable_ai_answer_is_logged_and_falls_back(self):
         answer = {'suggestions': [{'kind': 'essay', 'text': 'Not a kind we show.'}]}
         body = json.dumps({'choices': [{'message': {'content': json.dumps(answer)}}], 'usage': {'prompt_tokens': 900, 'completion_tokens': 200, 'total_tokens': 1100}}).encode()
@@ -347,18 +347,18 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         reply.read.return_value = body
         reply.__enter__.return_value = reply
         with mock.patch('urllib.request.urlopen', return_value=reply):
-            self.assertEqual(self.suggest(draft='').data['source'], 'profile')
+            self.assertEqual(self.suggest(ai=True, draft='').data['source'], 'profile')
         row = AiUsageLog.objects.get(feature='recommendation_letter')
         self.assertEqual((row.status, row.input_tokens), ('invalid_output', 900))
 
     def test_profile_answer_without_ai_is_logged_with_no_tokens(self):
-        self.assertEqual(self.suggest(draft='').data['source'], 'profile')
+        self.assertEqual(self.suggest(ai=True, draft='').data['source'], 'profile')
         row = AiUsageLog.objects.get(feature='recommendation_letter')
         self.assertEqual((row.status, row.total_tokens), ('local_fallback', 0))
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key', REC_LETTER_AI_DAILY_BUDGET=0)
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', REC_LETTER_AI_DAILY_BUDGET=0)
     def test_budget_refusal_is_logged(self):
-        self.assertEqual(self.suggest(draft='').data['source'], 'profile')
+        self.assertEqual(self.suggest(ai=True, draft='').data['source'], 'profile')
         self.assertEqual(AiUsageLog.objects.get(feature='recommendation_letter').status, 'budget_refused')
 
 

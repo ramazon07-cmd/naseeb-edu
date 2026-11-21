@@ -45,6 +45,13 @@ def _limits(feature):
             settings.REC_LETTER_AI_SCHOOL_DAILY_BUDGET or None,
             settings.REC_LETTER_AI_USER_DAILY_LIMIT or None,
         )
+    if feature == 'recommendation_letter_check':
+        # Like the coach: a platform budget of 0 turns AI letter checks off.
+        return (
+            settings.REC_LETTER_CHECK_DAILY_BUDGET,
+            settings.REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET or None,
+            settings.REC_LETTER_CHECK_USER_DAILY_LIMIT or None,
+        )
     raise ValueError(f'Unknown AI feature: {feature}')
 
 
@@ -77,7 +84,7 @@ class _ProcessFallback:
 _fallback = _ProcessFallback()
 
 
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter')
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'recommendation_letter_check')
 TOP_SCHOOLS = 5
 
 

@@ -348,6 +348,13 @@ migrations and the cron jobs, which connect directly.
 | `ESSAY_COACH_MIN_CHANGED_WORDS` | 3 | Changed words a coach re-check needs against the last checked text. |
 | `ESSAY_COACH_TOTAL_SECONDS` | 90 | Deadline for both calls of one coach check together; an overrun fails and refunds the check. |
 | `ESSAY_COACH_RECHECK_PER_MINUTE` | 20 | Depth-check requests per user per minute, in front of the re-check rules. |
+| `REC_LETTER_AI_USER_DAILY_LIMIT` | 20 | AI letter ideas per counselor per day (`POST /recommendations/suggest/` with `ai: true`; facts-only requests are free and uncounted). |
+| `REC_LETTER_FACTS_PER_MINUTE` | 120 | Facts-only suggestion requests per user per minute (cheap, no AI call). |
+| `REC_LETTER_CHECK_DAILY_BUDGET` | 2000 | Platform-wide AI letter checks per day (0 = AI letter checks off). |
+| `REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET` | 400 | AI letter checks per school per day (0 = no cap). |
+| `REC_LETTER_CHECK_USER_DAILY_LIMIT` | 5 | AI letter checks per counselor per day (0 = no cap). One check is one unit (two AI calls); reused and refused re-checks and failed checks cost nothing. |
+| `REC_LETTER_CHECK_RECHECK_PER_MINUTE` | 20 | Letter depth-check requests per user per minute, in front of the re-check rules. |
+| `REC_LETTER_CHECK_MIN_INTERVAL_SECONDS`, `REC_LETTER_CHECK_HOURLY_LIMIT` | 15, 60 | Minimum gap and hourly cap for letter checks that reach the AI. |
 | `AI_FALLBACK_PROCESS_DAILY_BUDGET` | 20 | Paid AI calls each process may make per day while Redis is down (0 = none). Worst case per day = processes × this. |
 | `AI_STREAM_MAX_SECONDS` | 60 | Total time for one streamed assistant reply. |
 | `AI_MAX_STREAMS_PER_PROCESS` | 4 | Concurrent assistant streams per gunicorn process. |
