@@ -10,7 +10,10 @@ export function SubjectRankChip({ rank }) {
   if (!rank) return null;
   const name = subjectName(rank.code);
   const text = subjectRankText(rank.rank, rank.label);
-  return <span className={`nb-subj-chip${isTopSubjectRank(rank.rank, rank.label) ? ' is-top' : ''}`} title={`${name}, QS ${rank.year}`}><b>{text}</b><span>{name}</span></span>;
+  // The short head of the name ("Computer Science" for "Computer Science & Information Systems") fits the
+  // chip without cutting off; the full name stays in the tooltip.
+  const short = name.split(/ & | \/ | and /)[0];
+  return <span className={`nb-subj-chip${isTopSubjectRank(rank.rank, rank.label) ? ' is-top' : ''}`} title={`${name}, QS ${rank.year}`}><b>{text}</b><span>{short}</span></span>;
 }
 
 function SubjectLine({ item }) {
