@@ -45,6 +45,13 @@ def _limits(feature):
             settings.REC_LETTER_AI_SCHOOL_DAILY_BUDGET or None,
             settings.REC_LETTER_AI_USER_DAILY_LIMIT or None,
         )
+    if feature == 'education_match':
+        # Like the coach: a platform budget of 0 turns the AI explanation off.
+        return (
+            settings.EDUCATION_MATCH_DAILY_BUDGET,
+            settings.EDUCATION_MATCH_SCHOOL_DAILY_BUDGET or None,
+            settings.EDUCATION_MATCH_USER_DAILY_LIMIT or None,
+        )
     raise ValueError(f'Unknown AI feature: {feature}')
 
 
@@ -66,11 +73,33 @@ class _ProcessFallback:
                 self.counts[key] = self.counts.get(key, 0) + 1
             return True
 
+    def refund(self, day, keys):
+        with self.lock:
+            if day == self.day:
+                for key in keys:
+                    if self.counts.get(key, 0) > 0:
+                        self.counts[key] -= 1
+
 
 _fallback = _ProcessFallback()
 
 
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter')
+class Reservation:
+    """One counted call: which backend took it and the exact keys/day it counted.
+
+    Truthy, so ``if consume(...)`` keeps working; ``refund`` undoes only this.
+    """
+
+    def __init__(self, backend, day, keys=()):
+        self.backend = backend  # 'cache', 'process' or None (nothing was counted)
+        self.day = day
+        self.keys = tuple(keys)
+
+    def __bool__(self):
+        return True
+
+
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'education_match')
 TOP_SCHOOLS = 5
 
 
@@ -82,6 +111,8 @@ def _note(keys):
 
 def consume(feature, user):
     """Count one paid call for ``user``; ``False`` when any daily cap is reached.
+
+    Otherwise returns a truthy :class:`Reservation` to hand to :func:`refund`.
 
     The platform and school counters are counted on every call, capped or not:
     they are also today's usage on the admin portal, so one atomic step both
@@ -103,19 +134,34 @@ def consume(feature, user):
     counts = count_hits([key for key, _ in counters], TTL_SECONDS)
     if counts is None:
         if not capped:
-            return True
+            return Reservation(None, day)
         local_caps = [(f'{feature}:process', settings.AI_FALLBACK_PROCESS_DAILY_BUDGET)]
         if user_cap is not None:
             local_caps.append((f'{feature}:user:{user.pk}', user_cap))
         allowed = _fallback.consume(day, local_caps)
         logger.warning('ai_budget_cache_down feature=%s allowed=%s: using the per-process allowance', feature, allowed)
-        return allowed
+        return Reservation('process', day, [key for key, _ in local_caps]) if allowed else False
     if all(limit is None or count <= limit for count, (_, limit) in zip(counts, counters)):
-        return True
+        return Reservation('cache', day, [key for key, _ in counters])
     for key, _ in counters:
         cache_decrement(key)
     _note([f'{prefix}:refused'])
     return False
+
+
+def refund(reservation):
+    """Give back the call a :class:`Reservation` counted (the provider did not charge).
+
+    Undoes only that backend, those keys and that day. Best effort; a falsy
+    reservation (refused call) or one that counted nothing is a no-op.
+    """
+    if not reservation or reservation.backend is None:
+        return
+    if reservation.backend == 'cache':
+        for key in reservation.keys:
+            cache_decrement(key)
+    else:
+        _fallback.refund(reservation.day, reservation.keys)
 
 
 def usage_today(school_ids):

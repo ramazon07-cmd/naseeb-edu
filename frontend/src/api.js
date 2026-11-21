@@ -549,6 +549,8 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  // { major_candidates, subject_strengths } -> AI explanation (mode 'ai'). 503 when AI is off or
+  // failed, 429 at the daily limit; counted in the AI budget. No page uses it yet.
   educationMatchAI: (payload) => request('/education-matches/ai/', {
     method: 'POST',
     body: JSON.stringify(payload),

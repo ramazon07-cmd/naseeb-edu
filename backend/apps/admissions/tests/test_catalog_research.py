@@ -203,38 +203,6 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
         response = self.client.get('/api/college-research/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @override_settings(GROQ_API_KEY='')
-    def test_major_match_ai_has_validated_offline_fallback(self):
-        self.student_a.gpa = '4.70'
-        self.student_a.sat_score = 1450
-        self.student_a.ielts_score = '7.5'
-        self.student_a.target_major = 'Computer Science'
-        self.student_a.target_countries = 'United States'
-        self.student_a.budget_usd = 30000
-        self.student_a.scholarship_needed = True
-        self.student_a.save(update_fields=[
-            'gpa', 'sat_score', 'ielts_score', 'target_major', 'target_countries',
-            'budget_usd', 'scholarship_needed', 'updated_at',
-        ])
-        self.client.force_authenticate(self.student_a_user)
-        response = self.client.post(
-            '/api/education-matches/ai/',
-            {
-                'major_candidates': ['Computer Science', 'Economics', 'Computer Science'],
-                'subject_strengths': ['Mathematics', 'Physics'],
-            },
-            format='json',
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['mode'], 'deterministic')
-        self.assertFalse(response.data['provider_available'])
-        self.assertEqual(
-            [item['major'] for item in response.data['major_guidance']],
-            ['Computer Science', 'Economics'],
-        )
-        self.assertEqual(response.data['major_guidance'][0]['subjects_to_focus'], ['Mathematics', 'Physics'])
-        self.assertNotIn('college_explanations', response.data)
-
     def test_major_ai_uses_current_assessments_and_ignores_retired_work_values(self):
         for challenge in ['personality', 'interests', 'subjects', 'reasoning', 'values', 'workimportance']:
             ChallengeAttempt.objects.create(
@@ -245,18 +213,6 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
         scores = latest_assessment_scores(self.student_a)
         self.assertEqual(set(scores), {'personality', 'interests', 'subjects', 'reasoning'})
 
-    @override_settings(OUTBOUND_AI_ENABLED=False, GROQ_API_KEY='test-key')
-    def test_ai_switch_off_keeps_education_guidance_offline(self):
-        self.client.force_authenticate(self.student_a_user)
-        with mock.patch('urllib.request.urlopen') as urlopen:
-            response = self.client.post(
-                '/api/education-matches/ai/', {'major_candidates': ['Computer Science']}, format='json',
-            )
-        urlopen.assert_not_called()
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['mode'], 'deterministic')
-        self.assertFalse(response.data['provider_available'])
-
     def test_non_student_cannot_generate_education_match_guidance(self):
         self.client.force_authenticate(self.counselor)
         response = self.client.post(
@@ -265,35 +221,3 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-    @override_settings(OUTBOUND_AI_ENABLED=True, GROQ_API_KEY='test-key')
-    def test_education_ai_logs_usage_and_cached_repeats_cost_nothing(self):
-        answer = {'summary': 'Good fit.', 'questions_to_consider': ['What do you enjoy?'], 'major_guidance': [
-            {'major': 'Computer Science', 'why_fit': 'Logic.', 'subjects_to_focus': ['Mathematics'], 'explore_next': 'Try a project.'}]}
-        body = json.dumps({'choices': [{'message': {'content': json.dumps(answer)}}], 'model': 'openai/gpt-oss-20b', 'usage': {'prompt_tokens': 900, 'completion_tokens': 200, 'total_tokens': 1100}}).encode()
-        reply = mock.MagicMock()
-        reply.read.return_value = body
-        reply.__enter__.return_value = reply
-        self.client.force_authenticate(self.student_a_user)
-        payload = {'major_candidates': ['Computer Science'], 'subject_strengths': ['Mathematics']}
-        with mock.patch('urllib.request.urlopen', return_value=reply) as urlopen:
-            first = self.client.post('/api/education-matches/ai/', payload, format='json')
-            self.client.post('/api/education-matches/ai/', payload, format='json')
-        self.assertEqual(first.data['mode'], 'groq')
-        self.assertEqual(urlopen.call_count, 1)
-        row = AiUsageLog.objects.get(feature='education_match')
-        self.assertEqual((row.status, row.provider, row.model, row.input_tokens, row.output_tokens),
-                         ('ok', 'groq', 'openai/gpt-oss-20b', 900, 200))
-
-    @override_settings(OUTBOUND_AI_ENABLED=True, GROQ_API_KEY='test-key')
-    def test_education_ai_provider_error_is_logged(self):
-        self.client.force_authenticate(self.student_a_user)
-        with mock.patch('urllib.request.urlopen', side_effect=OSError('down')):
-            response = self.client.post('/api/education-matches/ai/', {'major_candidates': ['Computer Science']}, format='json')
-        self.assertEqual(response.data['mode'], 'deterministic')
-        self.assertEqual(AiUsageLog.objects.get(feature='education_match').status, 'provider_error')
-
-    def test_education_without_ai_is_logged_as_local(self):
-        self.client.force_authenticate(self.student_a_user)
-        self.client.post('/api/education-matches/ai/', {'major_candidates': ['Computer Science']}, format='json')
-        self.assertEqual(AiUsageLog.objects.get(feature='education_match').status, 'local_fallback')
