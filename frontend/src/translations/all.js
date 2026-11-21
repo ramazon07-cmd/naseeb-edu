@@ -27,6 +27,7 @@ import { blueCatalogMessages } from "./blueCatalog.js";
 import { parityTourMessages } from "./parityTour.js";
 import { parityDashMessages } from "./parityDash.js";
 import { parityMindMessages } from "./parityMind.js";
+import { mindLinkMessages } from "./mindLink.js";
 import { parityCenterMessages } from "./parityCenter.js";
 import { parityMsgMessages } from "./parityMsg.js";
 import { parityCatMessages } from "./parityCat.js";
@@ -67,6 +68,7 @@ export const TRANSLATIONS = {
     ...parityTourMessages("uz"),
     ...parityDashMessages("uz"),
     ...parityMindMessages("uz"),
+    ...mindLinkMessages("uz"),
     ...parityCenterMessages("uz"),
     ...parityMsgMessages("uz"),
     ...parityCatMessages("uz"),
@@ -296,6 +298,7 @@ export const TRANSLATIONS = {
     ...parityTourMessages("ru"),
     ...parityDashMessages("ru"),
     ...parityMindMessages("ru"),
+    ...mindLinkMessages("ru"),
     ...parityCenterMessages("ru"),
     ...parityMsgMessages("ru"),
     ...parityCatMessages("ru"),

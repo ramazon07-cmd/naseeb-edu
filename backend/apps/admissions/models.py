@@ -2275,17 +2275,30 @@ class ChallengeAttempt(TimeStampedModel):
     a second implementation here is a second thing that can disagree.
     """
 
+    class Source(models.TextChoices):
+        EDU = 'naseeb_edu', 'Naseeb Edu'
+        MIND = 'naseeb_mind', 'Naseeb Mind'
+
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='challenge_attempts')
     challenge = models.CharField(max_length=40)
     instrument_version = models.CharField(max_length=20, default='1')
     answers = models.JSONField(default=dict)
     scores = models.JSONField(default=dict, blank=True)
     completed_at = models.DateTimeField(default=timezone.now)
+    # Where the attempt was taken. Rows imported from Naseeb Mind (see mind_link.py)
+    # keep Mind's attempt id in `external_id`, so re-sending one imports nothing.
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.EDU)
+    external_id = models.CharField(max_length=64, blank=True, default='')
+    # True when the attempt was answered under a different instrument version than
+    # this site's current one. Kept as sent, never compared or scored with others.
+    source_version_mismatch = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-completed_at', '-id']
         indexes = [models.Index(fields=['student', 'challenge', '-completed_at'])]
         constraints = [
+            models.UniqueConstraint(fields=['source', 'external_id'], condition=~models.Q(external_id=''),
+                                    name='unique_challenge_attempt_external_id'),
             # A client retrying a save sends the same completed_at, so a retry
             # whose first request did land cannot create a second attempt.
             models.UniqueConstraint(fields=['student', 'challenge', 'completed_at'],
@@ -2295,6 +2308,37 @@ class ChallengeAttempt(TimeStampedModel):
     def __str__(self):
         return f'{self.student}: {self.challenge} ({self.completed_at:%Y-%m-%d})'
 
+
+class MindLink(TimeStampedModel):
+    """A student's link to their Naseeb Mind account. One Mind account per student and vice versa.
+
+    Unlinking keeps the row (inactive) and every imported attempt: those results are
+    the student's record here.
+    """
+
+    student = models.OneToOneField(StudentProfile, on_delete=models.CASCADE, related_name='mind_link')
+    mind_user_id = models.UUIDField(unique=True)
+    active = models.BooleanField(default=True)
+    linked_at = models.DateTimeField(default=timezone.now)
+    last_sync_at = models.DateTimeField(null=True, blank=True)
+    unlinked_at = models.DateTimeField(null=True, blank=True)
+    # The major the student chose in Mind, offered (never applied) when they have none here.
+    chosen_major = models.CharField(max_length=160, blank=True)
+
+    def __str__(self):
+        return f'{self.student} <-> Mind ({"active" if self.active else "inactive"})'
+
+
+class MindLinkCode(TimeStampedModel):
+    """A one-time connect code. Only its SHA-256 is stored; it lives 10 minutes."""
+
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='mind_link_codes')
+    code_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f'Mind link code for {self.student}'
 
 
 class StudentInvite(TimeStampedModel):

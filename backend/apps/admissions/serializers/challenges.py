@@ -16,11 +16,11 @@ class ChallengeAttemptSerializer(serializers.ModelSerializer):
         model = ChallengeAttempt
         fields = (
             'id', 'student', 'student_name', 'challenge', 'instrument_version',
-            'answers', 'scores', 'completed_at', 'created_at',
+            'answers', 'scores', 'completed_at', 'created_at', 'source', 'source_version_mismatch',
         )
         # A student posts their own attempt; who it belongs to comes from the
         # request, never from the payload.
-        read_only_fields = ('student', 'created_at')
+        read_only_fields = ('student', 'created_at', 'source', 'source_version_mismatch')
 
     def get_student_name(self, obj) -> str:
         user = obj.student.user

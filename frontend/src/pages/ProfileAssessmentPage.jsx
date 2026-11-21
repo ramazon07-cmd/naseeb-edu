@@ -5,6 +5,8 @@ import { t } from '../i18n';
 import { Panel } from '../components/ui';
 import { PageHeader } from '../design/blue/ui';
 import { ProfileResultCard } from '../components/ProfileResultCard';
+import { MindLinkCard } from '../components/MindLinkCard';
+import { latestComparable, mismatchedAttempts } from '../lib/mindLink';
 import { fullName, ownStudent } from '../lib/labels';
 import { profileCardData } from '../lib/profileCard';
 import { USER_STORAGE, userStorageKey } from '../userStorage';
@@ -658,6 +660,7 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
   // Completed attempts already on the server, newest per challenge.
   const [saved, setSaved] = useState({})
   const [loadState, setLoadState] = useState('loading') // loading | ready | error
+  const [mismatched, setMismatched] = useState(0)
   // Finished results the server has not confirmed yet, kept across visits.
   const PENDING_KEY = userStorageKey(USER_STORAGE.assessmentPending, user.id)
   const [pending, setPending] = useState(() => loadPendingAttempts(window.localStorage, PENDING_KEY))
@@ -724,8 +727,9 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
       if (!sync.current.alive) return
       // The API returns newest first, so the first row seen for a challenge is
       // the current one; the older ones stay for the year-on-year comparison.
-      const latest = {}
-      for (const row of rows) if (!latest[row.challenge]) latest[row.challenge] = row
+      // Imported attempts from another instrument version are kept but never the current result.
+      const latest = latestComparable(rows)
+      setMismatched(mismatchedAttempts(rows).length)
       setSaved(latest)
       setLoadState('ready')
       // Server answers win over whatever is half-finished on this device.
@@ -842,6 +846,7 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
       <span>{t('We couldn’t load the results saved to your account.')}</span>
       <button type="button" className="button quiet small" onClick={loadAttempts}><RefreshCw size={14} aria-hidden="true" /> {t('Retry')}</button>
     </div>}
+    {mismatched > 0 && <p className="nb-mf-mismatch" role="status">{t('{n} imported result(s) were taken on a different version of the test. They are kept, but not scored or compared with your current results.', { n: mismatched })}</p>}
     <div className="nb-mf-hdr">
       <div><p className="eyebrow">{t('Naseeb Mind · your profile')}</p><h2>{t('What we know about you so far')}</h2></div>
       <div className="nb-mf-seg" role="img" aria-label={t('{a} of {b} tests done', { a: doneCount, b: results.length })}>
@@ -875,6 +880,7 @@ export default function ProfileAssessmentPage({ user, notify, data, reload }) {
         />
       </div>
       <aside className="nb-mf-side">
+        <MindLinkCard student={student} notify={notify} reload={reload} onLinked={loadAttempts} />
         {nextChallenge && <div className="nb-mf-card">
           <p className="eyebrow">{t('Next step')}</p>
           <h3>{t(HUB_CARD[nextChallenge.key].title)}</h3>

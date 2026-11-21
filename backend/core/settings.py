@@ -427,6 +427,10 @@ REST_FRAMEWORK = {
         'remind': config('REMIND_RATE', default='60/hour'),
         'account_change': config('AUTH_ACCOUNT_CHANGE_RATE', default='10/hour'),
         'public_reach': config('PUBLIC_REACH_RATE', default='60/minute'),
+        # Naseeb Mind link: signed server-to-server calls per client IP (Mind's edge
+        # functions share addresses), and students starting a link per user.
+        'mind_link_signed': config('MIND_LINK_SIGNED_RATE', default='300/minute'),
+        'mind_link_start': config('MIND_LINK_START_RATE', default='10/hour'),
         'telegram_feed': config('TELEGRAM_FEED_RATE', default='60/minute'),
         # The public join page. Per client IP: page loads, successful sign-ups
         # (failures are not counted) and every attempt; plus attempts per
@@ -447,6 +451,11 @@ REST_FRAMEWORK = {
 BOT_SERVICE_KEY = config('BOT_SERVICE_KEY', default='')
 # The counselor bot's @username (without @). Set: students connect Telegram on Meetings for meeting messages.
 TELEGRAM_BOT_USERNAME = config('TELEGRAM_BOT_USERNAME', default='').lstrip('@')
+
+# Naseeb Mind link. MIND_LINK_SECRET is the HMAC key shared with Naseeb Mind (its EDU_LINK_SECRET);
+# empty = the feature is off (button hidden, signed endpoints answer 503).
+MIND_LINK_SECRET = config('MIND_LINK_SECRET', default='').strip()
+MIND_SITE_URL = config('MIND_SITE_URL', default='https://naseebmind.uz').strip().rstrip('/')
 
 # Per-account login lockout shared by /api/auth/token/ and /admin/login/.
 LOGIN_LOCKOUT_THRESHOLD = config('LOGIN_LOCKOUT_THRESHOLD', default=10, cast=int)

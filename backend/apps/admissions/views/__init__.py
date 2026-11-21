@@ -113,3 +113,10 @@ from .challenges import (  # noqa: F401
     ChallengeAttemptPermission,
     ChallengeAttemptViewSet,
 )
+from .mind_link import (  # noqa: F401
+    MindLinkCompleteView,
+    MindLinkStartView,
+    MindLinkSyncView,
+    MindLinkUnlinkView,
+    MindLinkView,
+)
