@@ -545,8 +545,10 @@ export const api = {
   collegeResearch: () => request('/college-research/'),
   // One College Search page (filters, sort and page size in `query`); never the whole catalogue.
   collegeSearch: (query, signal) => request(`/college-search/?${query}`, { signal }, true, false),
-  // The AI college match: a balanced list of best-fitting universities.
+  // The college match: a balanced list of best-fitting universities (rules only, no AI).
   collegeMatch: () => request('/college-match/', { method: 'POST', body: '{}' }),
+  // The optional "Why these fit you" lines: one AI call for the whole list, cached by the server.
+  collegeMatchReasons: (language) => request('/college-match/reasons/', { method: 'POST', body: JSON.stringify({ language }) }),
   updateCollegeResearchProfile: (payload) => request('/college-research/', {
     method: 'POST',
     body: JSON.stringify(payload),
