@@ -36,6 +36,7 @@ from .research import (  # noqa: F401
     CollegeMatchReasonsView,
     CollegeMatchView,
     CollegeSearchView,
+    SubjectRankingView,
     EducationMatchAIView,
 )
 from .records import (  # noqa: F401

@@ -3,6 +3,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from django.test import TestCase
 
 from .management.commands.load_qs_subject_rankings import DATA_FILE
 from .models import University, UniversitySubjectRank
-from .subjects import SUBJECTS, split_majors, subjects_for_major
+from .subjects import SUBJECT_WEIGHTS, SUBJECTS, split_majors, subjects_for_major
 
 SCRIPT = Path(__file__).resolve().parents[3] / 'scripts' / 'build_qs_subject_catalog.py'
 try:
@@ -29,20 +30,23 @@ class ConverterTests(unittest.TestCase):
         methodology.append([5, 'ARC01', 'Archaeology', 0.7])
         methodology.append([28, 'HIS01', 'History', 0.6])
         methodology.append([91, 'F-ART', 'Arts & Humanities', 0.6])
-        header = ['2026', '2025', 'INSTITUTION', 'COUNTRY/TERRITORY', 'ACADEMIC', 'SCORE']
+        header = ['2026', '2025', 'INSTITUTION', 'COUNTRY/TERRITORY', 'ACADEMIC', 'ACADEMIC RANK', 'EMPLOYER', 'EMPLOYER RANK',
+                  'CITATIONS', 'CITATIONS RANK', 'H', 'H RANK', 'IRN', 'IRN RANK', 'SCORE']
+        # Weights (Academic, Employer, Citations, H index, IRN) as QS prints them above each table.
+        weights = {'Arts & Humanities': [0.6, 0.2, 0.075, 0.075, 0.05], 'Archaeology': [0.7, 0.1, 0.1, 0.1, 0], 'History_Subject': [0.6, 0.1, 0.15, 0.15, 0]}
         sheets = {
-            'Arts & Humanities': [[1, 1, 'University of Cambridge', 'United Kingdom', 100, 98.4]],
+            'Arts & Humanities': [[1, 1, 'University of Cambridge', 'United Kingdom', 100, 1, 99, 2, 80.5, 9, 90, 3, 70.1, 4, 98.4]],
             'Archaeology': [
-                [1, 1, 'University of Cambridge', 'United Kingdom', 100, 98.4],
-                ['=51', '=60', 'Massachusetts Institute of Technology (MIT)', 'United States of America', 70, 70.2],
-                ['201-250', '151-200', 'Peking University', 'China (Mainland)', 60, None],
+                [1, 1, 'University of Cambridge', 'United Kingdom', 100, 1, 95, 2, 90, 3, 88.5, 4, None, None, 98.4],
+                ['=51', '=60', 'Massachusetts Institute of Technology (MIT)', 'United States of America', 70, 5, 60.2, 6, 50, 7, 40, 8, None, None, 70.2],
+                ['201-250', '151-200', 'Peking University', 'China (Mainland)', 60, 9, 55, 10, 45, 11, 35, 12, None, None, None],
             ],
-            'History_Subject': [[3, 4, 'UCL', 'United Kingdom', 90, 90.1]],
+            'History_Subject': [[3, 4, 'UCL', 'United Kingdom', 90, 1, 80, 2, 70, 3, 60, 4, None, None, 90.1]],
         }
         for name, rows in sheets.items():
             sheet = workbook.create_sheet(name)
-            sheet.append(['QS by Subject'])
-            sheet.append([name])
+            sheet.append(['QS by Subject', None, None, None, None, 'Academic', 'Employer', 'Citations per Paper', 'H Index', 'International Research Network'])
+            sheet.append([name, None, None, None, None, *weights[name]])
             sheet.append([])
             sheet.append(header)
             for row in rows:
@@ -67,11 +71,14 @@ class ConverterTests(unittest.TestCase):
                 ('ARC01', 'Archaeology', 'AREA_ART'),
                 ('HIS01', 'History', 'AREA_ART'),
             ])
-            rows = list(module.sheet_rows(workbook['Archaeology'], 'ARC01'))
+            weights = module.weights_of(workbook['Archaeology'])
+            rows = list(module.sheet_rows(workbook['Archaeology'], 'ARC01', weights))
+        # Only the four indicators Archaeology uses are stored (IRN has weight 0), in the sheet's order.
+        self.assertEqual(weights, [0.7, 0.1, 0.1, 0.1, 0])
         self.assertEqual(rows, [
-            ['ARC01', 1, '', 'University of Cambridge', 'United Kingdom', 98.4],
-            ['ARC01', 51, '=51', 'Massachusetts Institute of Technology (MIT)', 'United States', 70.2],
-            ['ARC01', 201, '201-250', 'Peking University', 'China', None],
+            ['ARC01', 1, '', 'University of Cambridge', 'United Kingdom', 98.4, 100.0, 95.0, 90.0, 88.5],
+            ['ARC01', 51, '=51', 'Massachusetts Institute of Technology (MIT)', 'United States', 70.2, 70.0, 60.2, 50.0, 40.0],
+            ['ARC01', 201, '201-250', 'Peking University', 'China', None, 60.0, 55.0, 45.0, 35.0],
         ])
 
     def test_the_shipped_snapshot_is_complete(self):
@@ -82,15 +89,21 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(len(snapshot['rows']), 21348)
         codes = {row[0] for row in snapshot['rows']}
         self.assertEqual(codes, set(SUBJECTS))
-        for code, rank, label, name, country, score in snapshot['rows'][:3000:7]:
+        weights = {item['code']: item['weights'] for item in snapshot['subjects']}
+        # The table in subjects.py (what the API uses) is the one in the snapshot.
+        self.assertEqual({code: list(values) for code, values in SUBJECT_WEIGHTS.items()}, weights)
+        for code, rank, label, name, country, score, *scores in snapshot['rows'][:3000:7]:
             self.assertIsInstance(rank, int)
             self.assertTrue(name and country)
             self.assertTrue(label == '' or str(rank) in label)
+            # One score per indicator the subject uses, none for an unused one.
+            self.assertEqual(len(scores), sum(1 for weight in weights[code] if weight))
 
 
 class LoaderTests(TestCase):
     def load(self, *rows, year=2026):
-        snapshot = {'source': 'QS by Subject 2026', 'year': year, 'subjects': [], 'rows': list(rows)}
+        subjects = [{'code': 'COM02', 'weights': [0.4, 0.3, 0.125, 0.125, 0.05]}, {'code': 'MAT01', 'weights': [0.4, 0.2, 0.15, 0.15, 0.1]}]
+        snapshot = {'source': 'QS by Subject 2026', 'year': year, 'subjects': subjects, 'rows': list(rows)}
         output = StringIO()
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'subjects.json'
@@ -102,9 +115,9 @@ class LoaderTests(TestCase):
         self.mit = University.objects.create(name='Massachusetts Institute of Technology', country='United States')
         self.michigan = University.objects.create(name='University of Michigan', country='United States')
         self.rows = [
-            ['COM02', 1, '', 'Massachusetts Institute of Technology (MIT)', 'United States', 100.0],
-            ['MAT01', 201, '201-250', 'Massachusetts Institute of Technology (MIT)', 'United States', None],
-            ['COM02', 12, '', 'University of Michigan-Ann Arbor', 'United States', 90.5],
+            ['COM02', 1, '', 'Massachusetts Institute of Technology (MIT)', 'United States', 100.0, 94.7, 97.3, 93.6, 94.0, 88.2],
+            ['MAT01', 201, '201-250', 'Massachusetts Institute of Technology (MIT)', 'United States', None, 60.0, 50.5, 40.0, 30.0, 20.0],
+            ['COM02', 12, '', 'University of Michigan-Ann Arbor', 'United States', 90.5, 80.0, 70.0, 60.0, 50.0, 40.0],
             ['COM02', 5, '', 'Unknown Institute of Nowhere', 'Atlantis', 80.0],
         ]
 
@@ -120,12 +133,31 @@ class LoaderTests(TestCase):
             ('University of Michigan', 'COM02'): (12, '', 90.5, 2026),
         })
 
+    def test_indicator_scores_are_stored_and_an_older_row_without_them_gives_none(self):
+        self.load(*self.rows, ['COM02', 30, '', 'University of Michigan-Ann Arbor', 'United States', 70.0])
+        row = UniversitySubjectRank.objects.get(subject_code='COM02', university=self.mit)
+        self.assertEqual(
+            [row.academic_score, row.employer_score, row.citations_score, row.h_index_score, row.irn_score],
+            [Decimal('94.7'), Decimal('97.3'), Decimal('93.6'), Decimal('94.0'), Decimal('88.2')],
+        )
+        # The Michigan COM02 row came twice: the better rank (12) is kept with its scores.
+        self.assertEqual(UniversitySubjectRank.objects.get(subject_code='COM02', university=self.michigan).academic_score, Decimal('80.0'))
+        self.load(['COM02', 30, '', 'University of Michigan-Ann Arbor', 'United States', 70.0])
+        self.assertIsNone(UniversitySubjectRank.objects.get(subject_code='COM02', university=self.michigan).academic_score)
+
     def test_running_it_again_changes_nothing(self):
         self.load(*self.rows)
-        before = list(UniversitySubjectRank.objects.order_by('pk').values_list('pk', 'rank', 'rank_label', 'score'))
+        columns = ('pk', 'rank', 'rank_label', 'score', 'academic_score', 'employer_score', 'citations_score', 'h_index_score', 'irn_score')
+        before = list(UniversitySubjectRank.objects.order_by('pk').values_list(*columns))
         output = self.load(*self.rows)
-        self.assertEqual(list(UniversitySubjectRank.objects.order_by('pk').values_list('pk', 'rank', 'rank_label', 'score')), before)
+        self.assertEqual(list(UniversitySubjectRank.objects.order_by('pk').values_list(*columns)), before)
         self.assertIn('added 0 subject ranks, updated 0, removed 0', output)
+
+    def test_a_changed_indicator_score_is_updated(self):
+        self.load(*self.rows)
+        self.rows[0][6] = 95.0
+        self.assertIn('updated 1', self.load(*self.rows))
+        self.assertEqual(UniversitySubjectRank.objects.get(subject_code='COM02', university=self.mit).academic_score, Decimal('95.0'))
 
     def test_a_changed_rank_is_updated_and_a_dropped_one_removed(self):
         self.load(*self.rows)

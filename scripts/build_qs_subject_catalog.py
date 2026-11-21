@@ -4,12 +4,16 @@
 
 It rewrites backend/apps/admissions/catalog_data/qs_subject_rankings_2026.json, which
 `python manage.py load_qs_subject_rankings` loads. The 55 subjects and the 5 broad areas
-(codes AREA_*) are kept with every published rank; nothing is invented. openpyxl is needed
+(codes AREA_*) are kept with every published rank and indicator score; nothing is invented.
+Each row ends with the scores of the indicators the subject uses, in the order of the
+subject's "weights" (Academic, Employer, Citations per paper, H index, International
+research network); an indicator with weight 0 is not published and not stored. openpyxl is needed
 by this script only, not by the app.
 """
 import json
 import re
 import sys
+from itertools import islice
 from pathlib import Path
 
 import openpyxl
@@ -69,7 +73,17 @@ def score_of(value):
     return float(value)
 
 
-def sheet_rows(sheet, code):
+# Workbook columns of the five indicator scores, in the order of the sheet's weight row (F..J).
+INDICATOR_COLUMNS = ('ACADEMIC', 'EMPLOYER', 'CITATIONS', 'H', 'IRN')
+
+
+def weights_of(sheet):
+    """The five indicator weights QS prints above the table (0 when a subject does not use one)."""
+    row = next(islice(sheet.iter_rows(values_only=True), 1, 2))
+    return [round(float(value or 0), 4) for value in row[5:10]]
+
+
+def sheet_rows(sheet, code, weights):
     rows = sheet.iter_rows(values_only=True)
     header = next(row for row in rows if row and row[2] == 'INSTITUTION')
     column = {title: index for index, title in enumerate(header) if title}
@@ -79,7 +93,8 @@ def sheet_rows(sheet, code):
             continue
         country = clean(row[column['COUNTRY/TERRITORY']])
         rank, label = rank_of(row[column['2026']])
-        yield [code, rank, label, name, COUNTRY_NAMES.get(country, country), score_of(row[column['SCORE']])]
+        scores = [score_of(row[column[title]]) for title, weight in zip(INDICATOR_COLUMNS, weights) if weight]
+        yield [code, rank, label, name, COUNTRY_NAMES.get(country, country), score_of(row[column['SCORE']]), *scores]
 
 
 def main():
@@ -87,9 +102,10 @@ def main():
         sys.exit(__doc__)
     workbook = openpyxl.load_workbook(sys.argv[1], read_only=True, data_only=True)
     subjects = subjects_of(workbook)
-    rows = []
+    rows, weights = [], {}
     for code, _, _, sheet in subjects:
-        rows.extend(sheet_rows(workbook[sheet], code))
+        weights[code] = weights_of(workbook[sheet])
+        rows.extend(sheet_rows(workbook[sheet], code, weights[code]))
     seen = set()
     for row in rows:
         key = (row[0], row[3], row[4])
@@ -97,7 +113,7 @@ def main():
             sys.exit(f'The spreadsheet lists {row[3]} twice in {row[0]}.')
         seen.add(key)
     head = {'source': SOURCE, 'source_url': SOURCE_URL, 'year': YEAR,
-            'subjects': [{'code': code, 'name': name, 'area': area} for code, name, area, _ in subjects]}
+            'subjects': [{'code': code, 'name': name, 'area': area, 'weights': weights[code]} for code, name, area, _ in subjects]}
     lines = ',\n'.join(f'  {json.dumps(row, ensure_ascii=False)}' for row in rows)
     TARGET.parent.mkdir(exist_ok=True)
     body = json.dumps(head, ensure_ascii=False)[:-1]
