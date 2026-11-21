@@ -4,8 +4,9 @@ from core.jobs import ScheduledJobCommand
 
 class Command(ScheduledJobCommand):
     help = (
-        'Import new programs and scholarships from public Telegram channels '
-        '(daily cron, 23:59 Tashkent). Does nothing while OUTBOUND_AI_ENABLED is off.'
+        'Import new programs and scholarships from public Telegram channels. Production runs it '
+        'hourly from 23:00 to 07:00 Tashkent through the bot (apps/telegram_bot/jobs.py); each run '
+        'is incremental and time-boxed. Does nothing while OUTBOUND_AI_ENABLED is off.'
     )
 
     def run(self, **options):

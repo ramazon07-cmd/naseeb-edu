@@ -45,17 +45,27 @@ class DueJobsTests(BotTestCase):
     def test_daily_jobs_run_once_a_day_from_their_hour(self):
         from apps.telegram_bot.jobs import due_jobs, run_due_jobs
 
-        self.assertEqual(due_jobs(self.at(2)), ['send_meeting_reminders'])
-        self.assertEqual(due_jobs(self.at(4)), ['send_meeting_reminders', 'flush_expired_tokens', 'purge_screen_time'])
-        self.assertEqual(set(due_jobs(self.at(8))), {
+        self.assertEqual(due_jobs(self.at(2)), ['send_meeting_reminders', 'import_telegram_programs'])
+        self.assertEqual(due_jobs(self.at(4)), [
+            'send_meeting_reminders', 'flush_expired_tokens', 'purge_screen_time', 'import_telegram_programs',
+        ])
+        self.assertEqual(set(due_jobs(self.at(8))), {  # 08:00: outside the import's night window
             'send_meeting_reminders', 'flush_expired_tokens', 'purge_screen_time', 'generate_notifications',
         })
         ran = run_due_jobs()
         self.assertTrue(all(result == 'ok' for result in ran.values()), ran)
         # Done today: the next hour only sends reminders.
         later = timezone.localtime() + timedelta(hours=1)
-        if later.date() == timezone.localdate():
+        if later.date() == timezone.localdate() and later.hour < 23:
             self.assertEqual(due_jobs(later), ['send_meeting_reminders'])
+
+    def test_the_telegram_import_runs_every_hour_overnight(self):
+        from apps.telegram_bot.jobs import due_jobs
+
+        for hour in (23, 0, 3, 6):
+            self.assertIn('import_telegram_programs', due_jobs(self.at(hour)), hour)
+        for hour in (7, 12, 22):
+            self.assertNotIn('import_telegram_programs', due_jobs(self.at(hour)), hour)
 
     def test_a_failed_daily_job_is_tried_again_next_hour(self):
         from unittest import mock

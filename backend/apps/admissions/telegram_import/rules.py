@@ -1,9 +1,9 @@
 """Checks in code, before and after the AI. Nothing here calls a model.
 
-A post's text is untrusted. Before it is sent: invisible characters are removed and
-lines addressed to an AI are dropped (with their links). After the AI: the
-application link must be one of the post's own links and point at an official
-page, the deadline must not have passed, and the program must not already exist.
+A post's text (and any page read for it) is untrusted. Before it is sent: invisible
+characters are removed and lines addressed to an AI are dropped (with their links).
+After the AI: the application link must be one of the candidate links (the post's
+own, or those on the channel's article it points to) and point at an official page, the deadline must not have passed, and the program must not already exist.
 """
 import re
 import unicodedata
@@ -37,7 +37,8 @@ SHORTENERS = {
 }
 SOCIAL = {
     'youtube.com', 'youtu.be', 'instagram.com', 'facebook.com', 'fb.com', 'tiktok.com', 'x.com', 'twitter.com',
-    'vk.com', 'wa.me', 'whatsapp.com', 'chat.whatsapp.com', 'discord.gg', 'discord.com',
+    'vk.com', 'wa.me', 'whatsapp.com', 'chat.whatsapp.com', 'discord.gg', 'discord.com', 'linkedin.com',
+    'pinterest.com', 'reddit.com', 'threads.net', 'ok.ru',
 }
 
 
@@ -109,6 +110,11 @@ def link_problem(url):
 
 def official_links(links):
     return [url for url in links if not link_problem(url)]
+
+
+def article_links(links):
+    """Links to the channels' own article sites: not official, but they usually link to the official page."""
+    return [url for url in links if link_problem(url) == 'not_official_link']
 
 
 def normalize_url(url):

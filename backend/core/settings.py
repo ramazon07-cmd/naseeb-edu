@@ -105,10 +105,10 @@ REC_LETTER_AI_SCHOOL_DAILY_BUDGET = config('REC_LETTER_AI_SCHOOL_DAILY_BUDGET', 
 REC_LETTER_AI_USER_DAILY_LIMIT = config('REC_LETTER_AI_USER_DAILY_LIMIT', default=150, cast=int)
 REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS = config('REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS', default=4, cast=int)
 REC_LETTER_SUGGEST_HOURLY_LIMIT = config('REC_LETTER_SUGGEST_HOURLY_LIMIT', default=180, cast=int)
-# Daily import of programs from public Telegram channels (import_telegram_programs,
-# 23:59 Tashkent). Each new post with an outside link is formatted by the AI gateway
-# (pinned model, temperature 0); nothing is fetched or sent while OUTBOUND_AI_ENABLED
-# is off. The daily budget counts gateway calls (0 = import off).
+# Nightly import of programs from public Telegram channels (import_telegram_programs,
+# hourly from 23:00 to 07:00 Tashkent via the bot's scheduled-jobs call). For each new
+# post the official page is read and the AI gateway (pinned model, temperature 0)
+# writes the catalog entry; nothing is fetched or sent while OUTBOUND_AI_ENABLED is off. The daily budget counts gateway calls (0 = import off).
 TELEGRAM_IMPORT_CHANNELS = config(
     'TELEGRAM_IMPORT_CHANNELS',
     default='opportunitiescircleofficial,opcorners,edugrandsuz,grantlar,grantgouz,youthgrants',
@@ -119,7 +119,11 @@ TELEGRAM_IMPORT_MODEL = config('TELEGRAM_IMPORT_MODEL', default=ESSAY_COACH_MODE
 TELEGRAM_IMPORT_REASONING_EFFORT = config(
     'TELEGRAM_IMPORT_REASONING_EFFORT', default=config('ESSAY_COACH_REASONING_EFFORT', default='minimal'),
 ).strip()
-TELEGRAM_IMPORT_TIMEOUT_SECONDS = config('TELEGRAM_IMPORT_TIMEOUT_SECONDS', default=40, cast=int)
+TELEGRAM_IMPORT_TIMEOUT_SECONDS = config('TELEGRAM_IMPORT_TIMEOUT_SECONDS', default=30, cast=int)
+# The bot runs the import inside its hourly /api/bot/scheduled-jobs/ call, which must
+# end before gunicorn's 120 s timeout: a run stops starting new posts after this long
+# and the next hourly run carries on (overnight, see apps/telegram_bot/jobs.py).
+TELEGRAM_IMPORT_TIME_BUDGET_SECONDS = config('TELEGRAM_IMPORT_TIME_BUDGET_SECONDS', default=55, cast=int)
 TELEGRAM_IMPORT_MAX_OUTPUT_TOKENS = config('TELEGRAM_IMPORT_MAX_OUTPUT_TOKENS', default=900, cast=int)
 TELEGRAM_IMPORT_MAX_INPUT_CHARS = config('TELEGRAM_IMPORT_MAX_INPUT_CHARS', default=4000, cast=int)
 TELEGRAM_IMPORT_DAILY_BUDGET = config('TELEGRAM_IMPORT_DAILY_BUDGET', default=150, cast=int)
@@ -132,7 +136,7 @@ TELEGRAM_IMPORT_PUBLISH_IMMEDIATELY = config('TELEGRAM_IMPORT_PUBLISH_IMMEDIATEL
 # official page (see apps/admissions/telegram_import/rules.py).
 TELEGRAM_IMPORT_BLOCKED_LINK_DOMAINS = config(
     'TELEGRAM_IMPORT_BLOCKED_LINK_DOMAINS',
-    default='opportunitiescircle.com,opportunitiescorners.com,edugrants.uz,grantlar.uz,grantgo.uz,youthgrants.uz',
+    default='opportunitiescircle.com,opcircleacademy.com,opportunitiescorners.com,edugrants.uz,grantlar.uz,grantgo.uz,youthgrants.uz',
     cast=Csv(),
 )
 ESSAY_AUTOSAVE_LIMIT = config('ESSAY_AUTOSAVE_LIMIT', default=1200, cast=int)

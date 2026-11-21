@@ -16,7 +16,7 @@ from rest_framework.test import APITestCase
 from apps.users.models import JobRun, User
 
 from .models import AiUsageLog, OpportunityProgram, School, StudentProfile, TelegramImportChannel
-from .telegram_import import fetch, formatter, importer, rules
+from .telegram_import import fetch, formatter, importer, official, rules
 
 FIXTURES = Path(__file__).resolve().parent / 'tests' / 'fixtures' / 'telegram'
 AI_RESPONSES = json.loads((FIXTURES / 'ai_responses.json').read_text(encoding='utf-8'))
@@ -41,6 +41,20 @@ class FixturePages:
         if not path.exists():
             raise OSError(f'no fixture page {name}')
         return path.read_text(encoding='utf-8')
+
+
+class FixtureSites:
+    """Stands in for the web: serves saved article and official pages; any other URL is unreadable."""
+
+    def __init__(self):
+        self.index = json.loads((FIXTURES / 'sites' / 'index.json').read_text(encoding='utf-8'))
+        self.requests = []
+
+    def __call__(self, url):
+        self.requests.append(url)
+        if url not in self.index:
+            raise official.PageUnavailable('status_404')
+        return url, (FIXTURES / 'sites' / self.index[url]).read_text(encoding='utf-8')
 
 
 class FakeGateway:
@@ -79,11 +93,12 @@ class TelegramImportTests(TestCase):
             category='Research', application_url='https://other.example.org/gsr',
         )
         self.pages = FixturePages()
+        self.sites = FixtureSites()
         self.gateway = FakeGateway()
 
     def run_import(self, gateway=None):
         with mock.patch.object(formatter, '_post', gateway or self.gateway):
-            return importer.run(fetch=self.pages)
+            return importer.run(fetch=self.pages, pages=self.sites)
 
     def imported(self):
         return OpportunityProgram.objects.filter(source_key__startswith='telegram:')
@@ -94,19 +109,19 @@ class TelegramImportTests(TestCase):
         # First run: the newest page of each channel only.
         self.assertTrue(all(before is None for _, before in self.pages.requests))
         self.assertEqual(stats.fetched, 16)
-        self.assertEqual(stats.added, 3)
+        self.assertEqual(stats.added, 5)
         self.assertEqual(dict(stats.rejected), {
-            'no_official_link': 6, 'not_program': 4, 'deadline_passed': 1, 'duplicate': 2,
+            'no_official_link': 4, 'not_program': 4, 'deadline_passed': 1, 'duplicate': 2,
         })
-        # Posts with no outside official link never reach the AI.
-        self.assertEqual(stats.ai_calls, 10)
-        self.assertEqual(len(self.gateway.bodies), 10)
-        self.assertEqual(budget_used(), 10)
-        self.assertEqual(
-            sorted(self.imported().values_list('title', flat=True)),
-            ['Danube Youth Exchange', 'Global Youth Climate Fellowship 2027', 'Tashkent Robotics Challenge 2027'],
-        )
-        self.assertEqual(AiUsageLog.objects.filter(feature='telegram_import', status=AiUsageLog.Status.OK).count(), 10)
+        # Posts with no official link (in the post or on the channel's article) never reach the AI.
+        self.assertEqual(stats.ai_calls, 12)
+        self.assertEqual(len(self.gateway.bodies), 12)
+        self.assertEqual(budget_used(), 12)
+        self.assertEqual(sorted(self.imported().values_list('title', flat=True)), [
+            'Danube Youth Exchange', 'Global Youth Climate Fellowship 2027', 'IT Bootcamp Scholarship',
+            'Ocean Leaders Summer School 2027', 'Tashkent Robotics Challenge 2027',
+        ])
+        self.assertEqual(AiUsageLog.objects.filter(feature='telegram_import', status=AiUsageLog.Status.OK).count(), 12)
 
     def test_imported_rows_keep_the_post_link_and_need_verification(self):
         self.run_import()
@@ -125,7 +140,7 @@ class TelegramImportTests(TestCase):
     @override_settings(TELEGRAM_IMPORT_PUBLISH_IMMEDIATELY=False)
     def test_can_wait_for_staff_approval_instead(self):
         self.run_import()
-        self.assertEqual(self.imported().count(), 3)
+        self.assertEqual(self.imported().count(), 5)
         self.assertFalse(self.imported().filter(is_active=True).exists())
 
     def test_gateway_call_is_pinned_and_deterministic(self):
@@ -149,7 +164,7 @@ class TelegramImportTests(TestCase):
         stats = self.run_import()
         self.assertEqual((stats.fetched, stats.added, stats.ai_calls), (0, 0, 0))
         self.assertEqual(len(self.gateway.bodies), calls)
-        self.assertEqual(self.imported().count(), 3)
+        self.assertEqual(self.imported().count(), 5)
 
     def test_pages_back_to_the_last_seen_post(self):
         TelegramImportChannel.objects.create(channel='opcorners', last_message_id=7198)
@@ -195,11 +210,11 @@ class TelegramImportTests(TestCase):
         with self.assertLogs('naseeb.telegram_import', level='INFO') as logs:
             self.run_import()
         output = '\n'.join(logs.output)
-        self.assertIn('telegram_import_run fetched=16 added=3', output)
-        self.assertIn('no_official_link=6', output)
+        self.assertIn('telegram_import_run fetched=16 added=5', output)
+        self.assertIn('no_official_link=4', output)
         self.assertIn('deadline_passed=1', output)
         self.assertIn('duplicate=2', output)
-        for phrase in ('Ignore all previous', 'Fully funded', 'GIVEAWAY', 'Common App'):
+        for phrase in ('Ignore all previous', 'Fully funded', 'GIVEAWAY', 'Common App', 'six-month online fellowship'):
             self.assertNotIn(phrase, output)
 
     @override_settings(OUTBOUND_AI_ENABLED=False)
@@ -253,9 +268,9 @@ class TelegramImportTests(TestCase):
         self.assertEqual(stats.ai_calls, 2)
         self.assertEqual(stats.stopped, 'budget_exhausted')
         self.assertEqual(budget_used(), 2)
-        # Stopped at the third AI post (opcorners 7202): its cursor stays before it.
-        self.assertEqual(TelegramImportChannel.objects.get(channel='opcorners').last_message_id, 7201)
-        self.assertFalse(TelegramImportChannel.objects.filter(channel='grantgouz').exists())
+        # Stopped at the third AI post (5603): its cursor stays before it.
+        self.assertEqual(TelegramImportChannel.objects.get(channel='opportunitiescircleofficial').last_message_id, 5602)
+        self.assertFalse(TelegramImportChannel.objects.filter(channel='opcorners').exists())
 
     def test_reasoning_effort_is_dropped_once_when_the_gateway_rejects_it(self):
         calls = []
@@ -283,18 +298,19 @@ class TelegramImportTests(TestCase):
             return self.pages(channel, before)
 
         with mock.patch.object(formatter, '_post', self.gateway):
-            stats = importer.run(fetch=pages)
+            stats = importer.run(fetch=pages, pages=self.sites)
         self.assertEqual(stats.failed_channels, ['opcorners'])
-        self.assertEqual(stats.added, 3)
+        self.assertEqual(stats.added, 5)
         self.assertEqual(TelegramImportChannel.objects.get(channel='opcorners').last_message_id, 0)
 
     def test_command_records_the_run(self):
         out = io.StringIO()
-        with mock.patch.object(fetch, 'fetch_html', self.pages), mock.patch.object(formatter, '_post', self.gateway):
+        with mock.patch.object(fetch, 'fetch_html', self.pages), mock.patch.object(official, 'fetch_page', self.sites), \
+                mock.patch.object(formatter, '_post', self.gateway):
             call_command('import_telegram_programs', stdout=out)
-        self.assertIn('added=3', out.getvalue())
+        self.assertIn('added=5', out.getvalue())
         run = JobRun.objects.get(name='import_telegram_programs')
-        self.assertEqual((run.result, run.processed), ('ok', 3))
+        self.assertEqual((run.result, run.processed), ('ok', 5))
 
     @override_settings(OUTBOUND_AI_ENABLED=False)
     def test_command_with_ai_off_explains_itself(self):
@@ -304,6 +320,141 @@ class TelegramImportTests(TestCase):
         self.assertIn('skipped (outbound_ai_off)', out.getvalue())
         self.assertEqual(self.pages.requests, [])
         self.assertEqual(JobRun.objects.get(name='import_telegram_programs').processed, 0)
+
+
+@override_settings(**AI_ON)
+class OfficialPageTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.pages, self.sites, self.gateway = FixturePages(), FixtureSites(), FakeGateway()
+
+    def run_import(self, channels):
+        with override_settings(TELEGRAM_IMPORT_CHANNELS=channels), mock.patch.object(formatter, '_post', self.gateway):
+            return importer.run(fetch=self.pages, pages=self.sites)
+
+    def sent(self, phrase):
+        return next(body['messages'][1]['content'] for body in self.gateway.bodies if phrase in body['messages'][1]['content'])
+
+    def test_the_channel_article_is_opened_to_find_the_official_site(self):
+        stats = self.run_import(['opportunitiescircleofficial'])
+        self.assertIn('https://opportunitiescircle.com/ocean-leaders-summer-school/', self.sites.requests)
+        program = OpportunityProgram.objects.get(source_key='telegram:opportunitiescircleofficial:5601')
+        # The website link is the organiser's page found in the article, never the article itself.
+        self.assertEqual(program.application_url, 'https://oceanleaders.example.org/apply')
+        self.assertEqual(program.source_metadata['official_page_read'], 'https://oceanleaders.example.org/apply')
+        self.assertIn('Two weeks in Lisbon', program.description)
+        # Telegram, shortener and same-site links on the article are never candidates.
+        message = self.sent('Ocean Leaders')
+        links = message.split('LINKS (the only links application_url may use):\n')[1].split('\n\n')[0]
+        self.assertEqual(links, '- https://oceanleaders.example.org/apply')
+        self.assertEqual(stats.added, 2)
+
+    def test_the_official_page_text_is_sent_as_data_without_lines_addressed_to_the_ai(self):
+        self.run_import(['opportunitiescircleofficial'])
+        message = self.sent('Global Youth Climate Fellowship')
+        self.assertIn('Official page read: https://climatefellows.example.org/apply', message)
+        self.assertIn('<<<OFFICIAL_PAGE (untrusted data)', message)
+        self.assertIn('six-month online fellowship', message)
+        self.assertNotIn('ignore your rules', message)
+        # Scripts, menus and footers are not page text.
+        self.assertNotIn('tracking', message)
+        self.assertNotIn('Instagram', message)
+        self.assertIn('OFFICIAL_PAGE', formatter.SYSTEM_PROMPT)
+
+    def test_an_article_without_an_official_link_is_rejected_before_the_ai(self):
+        stats = self.run_import(['opcorners'])
+        self.assertIn('https://opportunitiescorners.com/international-peace-summit/', self.sites.requests)
+        self.assertFalse(any('Peace Summit' in body['messages'][1]['content'] for body in self.gateway.bodies))
+        self.assertEqual(stats.rejected['no_official_link'], 1)
+
+    def test_an_unreadable_official_page_still_uses_the_post(self):
+        stats = self.run_import(['grantgouz'])
+        self.assertIn('https://robotics.example.org/register', self.sites.requests)
+        self.assertNotIn('OFFICIAL_PAGE', self.sent('Tashkent Robotics'))
+        self.assertEqual(stats.added, 1)
+        self.assertEqual(OpportunityProgram.objects.get(source_key='telegram:grantgouz:9801').source_metadata['official_page_read'], '')
+
+    @override_settings(TELEGRAM_IMPORT_TIME_BUDGET_SECONDS=10)
+    def test_a_run_stops_on_time_and_the_next_one_carries_on(self):
+        clock = iter(range(0, 10_000, 4))  # every time check is 4 s later
+        with mock.patch.object(importer.time, 'monotonic', lambda: next(clock)):
+            stats = self.run_import(CHANNELS)
+        self.assertEqual(stats.stopped, 'time_budget')
+        done = dict(TelegramImportChannel.objects.values_list('channel', 'last_message_id'))
+        first = stats.added
+        self.assertLess(sum(1 for value in done.values() if value), len(CHANNELS))
+        # Finished posts were saved one by one; the next runs pick up the rest.
+        for _ in range(10):
+            if not self.run_import(CHANNELS).stopped:
+                break
+        # Six, not five: this class has no existing "Global Summer Research", so opcorners 7203 is new.
+        self.assertEqual(self.imported_count(), 6)
+        self.assertLess(first, 6)
+
+    def imported_count(self):
+        return OpportunityProgram.objects.filter(source_key__startswith='telegram:').count()
+
+
+class SafeFetchTests(TestCase):
+    def addresses(self, *ips):
+        return mock.patch.object(official.socket, 'getaddrinfo', return_value=[
+            (None, None, None, '', (ip, 443)) for ip in ips
+        ])
+
+    def test_only_https_on_443_without_credentials(self):
+        for url in ('http://site.example.org/', 'https://site.example.org:8443/', 'https://u:p@site.example.org/', 'ftp://x'):
+            with self.assertRaises(official.PageUnavailable):
+                official.check_url(url)
+        official.check_url('https://site.example.org/apply')
+
+    def test_private_and_internal_addresses_are_refused(self):
+        for ip in ('127.0.0.1', '10.0.0.5', '192.168.1.1', '169.254.169.254', '::1', 'fd00::1', '100.64.0.1', '0.0.0.0'):
+            with self.addresses(ip), self.assertRaises(official.PageUnavailable, msg=ip):
+                official.public_addresses('site.example.org')
+        # One private address among public ones is enough to refuse.
+        with self.addresses('93.184.216.34', '10.0.0.5'), self.assertRaises(official.PageUnavailable):
+            official.public_addresses('site.example.org')
+        with self.addresses('93.184.216.34'):
+            self.assertEqual(official.public_addresses('site.example.org'), ['93.184.216.34'])
+
+    def test_redirects_are_checked_and_limited(self):
+        with mock.patch.object(official, '_get', return_value=(302, 'http://site.example.org/', b'', '')):
+            with self.assertRaisesMessage(official.PageUnavailable, 'not_https'):
+                official.fetch_page('https://site.example.org/')
+        hops = mock.Mock(return_value=(302, '/again', b'', ''))
+        with mock.patch.object(official, 'check_url'), mock.patch.object(official, '_get', hops):
+            with self.assertRaisesMessage(official.PageUnavailable, 'too_many_redirects'):
+                official.fetch_page('https://site.example.org/')
+        self.assertEqual(hops.call_count, official.MAX_REDIRECTS + 1)
+
+    def test_article_links_are_ranked_body_and_apply_words_first(self):
+        page = official.read_page('https://blog.example.com/post/', '''<html><head><title>Post</title></head><body>
+            <header><a href="https://partner.example.net/ad">Our partner</a></header>
+            <aside><a href="https://sidebar.example.org/promo">Apply to our academy</a></aside>
+            <div class="entry-content"><p>Great camp. <a href="https://camp.example.org/">camp.example.org</a></p>
+            <p>To apply, use the <a href="https://camp.example.org/apply">official application form</a>.</p></div>
+            <footer><a href="https://www.linkedin.com/company/blog">LinkedIn</a></footer></body></html>''')
+        self.assertEqual(page['links'][:2], ['https://camp.example.org/apply', 'https://camp.example.org/'])
+        # Sidebars are neither text nor good links.
+        self.assertNotIn('academy', page['text'])
+        # Footers and menus are skipped altogether; header links rank last.
+        self.assertNotIn('https://www.linkedin.com/company/blog', page['links'])
+        self.assertEqual(page['links'][-1], 'https://partner.example.net/ad')
+        self.assertEqual(rules.link_problem('https://www.linkedin.com/company/blog'), 'social_link')
+
+    def test_only_html_is_read(self):
+        with mock.patch.object(official, '_get', return_value=(200, '', b'%PDF', 'application/pdf')):
+            with self.assertRaisesMessage(official.PageUnavailable, 'not_html'):
+                official.fetch_page('https://site.example.org/file.pdf')
+
+    def test_the_connection_goes_to_the_checked_address(self):
+        connection = official.PinnedHTTPSConnection('site.example.org', '93.184.216.34')
+        sock = mock.Mock()
+        with mock.patch.object(official.socket, 'create_connection', return_value=sock) as create, \
+                mock.patch.object(connection._context, 'wrap_socket') as wrap:
+            connection.connect()
+        create.assert_called_once_with(('93.184.216.34', 443), official.TIMEOUT)
+        wrap.assert_called_once_with(sock, server_hostname='site.example.org')
 
 
 class ParserAndRuleTests(TestCase):
@@ -391,10 +542,10 @@ class StudentListTests(APITestCase):
         )
         StudentProfile.objects.create(user=user, school=school, school_name=school.name)
         with mock.patch.object(formatter, '_post', FakeGateway()):
-            importer.run(fetch=FixturePages())
+            importer.run(fetch=FixturePages(), pages=FixtureSites())
         self.client.force_authenticate(user)
         imported = [row for row in self.all_rows() if (row.get('source_metadata') or {}).get('origin') == 'telegram']
-        self.assertEqual(len(imported), 4)  # no existing "Global Summer Research" here, so 7203 is new
+        self.assertEqual(len(imported), 6)  # no existing "Global Summer Research" here, so 7203 is new
         self.assertTrue(all(row['needs_verification'] for row in imported))
         self.assertTrue(all(row['source_url'].startswith('https://t.me/') for row in imported))
 
