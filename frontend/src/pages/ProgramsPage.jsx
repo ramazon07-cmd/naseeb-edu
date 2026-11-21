@@ -15,7 +15,7 @@ import { withQuery } from '../lib/routes';
 import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { PAGE_PATHS } from '../lib/routes';
 import { daysUntil, dueLabel, dueTone } from '../lib/college';
-import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline, hasProgramFilters, programFilterState, programFilterWrite, programGrades, selectedGrades, toggleGrade } from '../lib/programFilters';
+import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, isUnverifiedTelegramImport, groupProgramsByDeadline, hasProgramFilters, programFilterState, programFilterWrite, programGrades, selectedGrades, toggleGrade } from '../lib/programFilters';
 
 // The catalog is a yearly list: only a few rows carry a real date, the rest keep the
 // counselor sheet's own deadline text and have to be confirmed on the official page.
@@ -133,6 +133,7 @@ function ProgramRow({ item, closed, due, today, saved, busy, onToggle, onOpen, c
         {item.delivery_mode !== 'unspecified' && <span><Monitor size={15} aria-hidden="true" /> {t(DELIVERY_LABELS[item.delivery_mode] || 'To verify')}</span>}
         {item.fee_usd != null && <span><DollarSign size={15} aria-hidden="true" /> {Number(item.fee_usd) === 0 ? t('Free') : money(item.fee_usd)}</span>}
         {item.scholarship_available && <span className="program-row-aid" title={t(item.aid_details)}><HandCoins size={15} aria-hidden="true" /> {t('Financial aid available')}</span>}
+        {isUnverifiedTelegramImport(item) && <span className="program-row-unverified"><TriangleAlert size={15} aria-hidden="true" /> {t('From Telegram, not yet verified')}</span>}
       </div>
       {(item.description || item.requirements) && <details className="program-row-details"><summary>{t('Requirements')}</summary>{item.description && <p>{t(item.description)}</p>}{item.requirements && <p>{t(item.requirements)}</p>}</details>}
     </div>
@@ -185,6 +186,7 @@ function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBac
     </GlassCard>
     <div className="nb-pd-grid">
       <div className="nb-pd-main">
+        {isUnverifiedTelegramImport(item) && <p className="nb-pd-warn" role="note"><TriangleAlert size={18} aria-hidden="true" /><span><b>{t('From Telegram, not yet verified')}.</b> {t('We added this from a public Telegram channel and have not checked it yet. Confirm the details on the official page before you apply.')}{item.source_url && <> <a href={item.source_url} target="_blank" rel="noreferrer">{t('Original Telegram post')}</a></>}</span></p>}
         {!due?.exact && !closed && <p className="nb-pd-warn" role="note"><TriangleAlert size={18} aria-hidden="true" /><span>{t("We haven't confirmed this year's dates. Check the official site before you apply.")}</span></p>}
         {item.description && <GlassCard tone="solid" title={t('About the program')} headingLevel="h3"><p className="nb-pd-about">{t(item.description)}</p></GlassCard>}
         <div className="nb-pd-facts">

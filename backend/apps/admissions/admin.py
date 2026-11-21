@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db import transaction
 from apps.users.audit import ProductAuditAdminMixin
 from .models import (
     Achievement,
@@ -34,6 +35,7 @@ from .models import (
     StoreItem,
     SupportTicket,
     Task,
+    TelegramImportChannel,
     University,
     UniversityProgram,
     XPTransaction,
@@ -116,9 +118,37 @@ class ScholarshipAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
 @admin.register(OpportunityProgram)
 class OpportunityProgramAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
     audit_prefix = 'opportunity_program'
-    list_display = ('title', 'provider', 'program_type', 'category', 'country', 'deadline', 'scholarship_available')
-    search_fields = ('title', 'provider', 'country', 'city')
-    list_filter = ('program_type', 'category', 'delivery_mode', 'scholarship_available', 'is_active')
+    list_display = (
+        'title', 'provider', 'program_type', 'category', 'country', 'deadline', 'scholarship_available',
+        'needs_verification', 'is_active',
+    )
+    search_fields = ('title', 'provider', 'country', 'city', 'source_key')
+    list_filter = ('program_type', 'category', 'delivery_mode', 'scholarship_available', 'needs_verification', 'is_active')
+    actions = ('approve_programs', 'hide_programs')
+
+    def _bulk(self, request, queryset, verb, **values):
+        # One audited save per row (not queryset.update) so the catalogue cache refreshes too.
+        with transaction.atomic():
+            for program in queryset:
+                for name, value in values.items():
+                    setattr(program, name, value)
+                program.save(update_fields=[*values, 'updated_at'])
+                self._audit(request, program, verb, changes={name: [None, value] for name, value in values.items()})
+        self.message_user(request, f'{queryset.count()} program(s) {verb}.')
+
+    @admin.action(description='Approve: mark verified and show to students')
+    def approve_programs(self, request, queryset):
+        self._bulk(request, queryset, 'approved', needs_verification=False, is_active=True)
+
+    @admin.action(description='Hide from students')
+    def hide_programs(self, request, queryset):
+        self._bulk(request, queryset, 'hidden', is_active=False)
+
+
+@admin.register(TelegramImportChannel)
+class TelegramImportChannelAdmin(admin.ModelAdmin):
+    list_display = ('channel', 'last_message_id', 'failed_message_id', 'last_run_at')
+    readonly_fields = ('channel', 'failed_message_id', 'failed_attempts', 'last_run_at')
 
 
 @admin.register(Application)

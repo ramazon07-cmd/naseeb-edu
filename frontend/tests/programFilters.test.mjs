@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PROGRAM_FILTER_DEFAULTS, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline,
-  hasProgramFilters, programFilterState, programFilterWrite, programFiltersQuery, readProgramFilters, selectedGrades, toggleGrade, usualDeadline,
+  hasProgramFilters, isUnverifiedTelegramImport, programFilterState, programFilterWrite, programFiltersQuery, readProgramFilters, selectedGrades, toggleGrade, usualDeadline,
 } from '../src/lib/programFilters.js';
 
 const today = '2026-09-25';
@@ -193,4 +193,14 @@ test('the grade URL param takes one grade or a list and drops unknown ones', () 
   assert.equal(readProgramFilters('?grade=99,x').grade, 'all');
   assert.equal(programFiltersQuery('', readProgramFilters('?grade=10,9')), '?grade=9%2C10');
   assert.equal(activeProgramFilterCount({ ...PROGRAM_FILTER_DEFAULTS, grade: '9,10' }), 1);
+});
+
+test('only unverified rows from the Telegram import get the Telegram label', () => {
+  const telegram = { origin: 'telegram', channel: 'grantgouz', message_id: 9801 };
+  assert.equal(isUnverifiedTelegramImport(program(9, { needs_verification: true, source_metadata: telegram })), true);
+  assert.equal(isUnverifiedTelegramImport(program(9, { needs_verification: false, source_metadata: telegram })), false);
+  // Catalogue rows awaiting a check keep their own "confirm the date" hints, not the Telegram label.
+  assert.equal(isUnverifiedTelegramImport(program(9, { needs_verification: true, source_metadata: { sheet: 'counselors' } })), false);
+  assert.equal(isUnverifiedTelegramImport(program(9, { needs_verification: true })), false);
+  assert.equal(isUnverifiedTelegramImport(null), false);
 });

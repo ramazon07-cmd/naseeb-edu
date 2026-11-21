@@ -24,6 +24,9 @@ export const toggleGrade = (grade, picked) => {
   return next.size ? PROGRAM_GRADES.filter((part) => next.has(part)).join(',') : 'all';
 };
 
+// Rows the daily Telegram import added and staff have not checked yet (needs_verification).
+export const isUnverifiedTelegramImport = (item) => Boolean(item?.needs_verification) && item?.source_metadata?.origin === 'telegram';
+
 export const isClosedProgram = (item, today) => Boolean(item.deadline) && item.deadline < today;
 
 // "6,7,8,9,10,11,gap" -> ['6–11', 'gap']: consecutive grades collapse into a range.

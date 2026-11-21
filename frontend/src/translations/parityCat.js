@@ -53,6 +53,9 @@ export const PARITY_CAT_TRANSLATIONS = {
   "Date not announced yet": ["Sana hali e’lon qilinmagan", "Дата ещё не объявлена"],
   "Open Applications to include university deadlines": ["Universitet muddatlarini qo‘shish uchun Arizalarni oching", "Откройте «Заявки», чтобы добавить сроки вузов"],
   "Go to Applications": ["Arizalarga o‘tish", "Перейти к заявкам"],
+  "From Telegram, not yet verified": ["Telegramdan, hali tekshirilmagan", "Из Telegram, ещё не проверено"],
+  "We added this from a public Telegram channel and have not checked it yet. Confirm the details on the official page before you apply.": ["Buni ochiq Telegram kanalidan qo‘shdik va hali tekshirmadik. Ariza topshirishdan oldin ma’lumotlarni rasmiy sahifada tekshiring.", "Мы добавили это из открытого Telegram-канала и ещё не проверили. Перед подачей сверьте данные на официальной странице."],
+  "Original Telegram post": ["Asl Telegram posti", "Исходный пост в Telegram"],
 };
 
 export function parityCatMessages(language) {

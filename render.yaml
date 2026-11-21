@@ -40,6 +40,20 @@ services:
     envVars:
       - fromGroup: naseeb-backend
 
+  # New programs from public Telegram channels (docs in the job's command help and
+  # apps/admissions/telegram_import). Reads https://t.me/s/<channel>: no Telegram
+  # account or key. Needs OUTBOUND_AI_ENABLED and AI_GATEWAY_API_KEY in the group;
+  # while outbound AI is off it logs "skipped" and adds nothing.
+  - type: cron
+    name: naseeb-import-telegram-programs
+    runtime: python
+    plan: starter
+    schedule: "59 18 * * *"  # 23:59 Tashkent
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && python manage.py import_telegram_programs
+    envVars:
+      - fromGroup: naseeb-backend
+
   # Meeting reminder emails need no cron here: the counselor bot runs them hourly
   # through /api/bot/meeting-reminders/ (docs/telegram-bot.md).
 
