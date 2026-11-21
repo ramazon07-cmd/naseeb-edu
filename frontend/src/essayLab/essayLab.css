@@ -2722,6 +2722,34 @@
   white-space: nowrap;
 }
 
+.el-co-near {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--el-surface);
+  border: 1px solid var(--el-line);
+  color: var(--el-text);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.el-co-safety {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.el-co-helpline {
+  margin: 0;
+}
+
+.el-co-support {
+  margin: 0;
+}
+
 .el-coach-actions {
   align-self: flex-start;
   display: flex;

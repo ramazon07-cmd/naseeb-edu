@@ -66,7 +66,9 @@ from .tabs import (
     tree_order,
 )
 from .streak import build_streak, own_words_delta, parse_month, record_words
-from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, EssayDepthGateThrottle, spend_coach_budget
+from .throttles import (
+    EssayAutosaveThrottle, EssayDepthCheckThrottle, EssayDepthGateThrottle, spend_coach_budget, take_free_safety_check,
+)
 from .writes import CHECKPOINT_CAP, TEXT_FIELDS, make_checkpoint, set_text  # noqa: F401 (CHECKPOINT_CAP: tests)
 
 LIST_LIMIT = 500
@@ -844,6 +846,9 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
                 ai_budget.refund('essay_coach', request.user)  # a failed check is free
                 raise EssayLabError('Naseeb AI is unavailable right now. Please try again soon.',
                                     'coach_unavailable', 503)
+            if result.get('safety') == 'current_danger' and take_free_safety_check(request.user):
+                # Not scored: the first few such checks per day are free (the daily limit is given back).
+                ai_budget.refund('essay_coach', request.user)
         else:
             result, model = coach.run_local_check(essay, tab.content)
             ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.LOCAL_FALLBACK)

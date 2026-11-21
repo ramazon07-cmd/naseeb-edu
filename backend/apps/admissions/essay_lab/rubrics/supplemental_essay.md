@@ -19,37 +19,83 @@ so never judge whether this essay repeats it.
 
 ### fit_specificity (30)
 
-- 1: Could be pasted into any application. Praise of rankings or "world-class faculty".
-- 2: Names the school, but only with facts from its homepage (location, size, famous alumni).
-- 3: Names particular things (a course, lab, club, tradition, a professor's published work) and says why each matters to this writer.
-- 4: Also says what only this writer would do there, with a concrete first step.
-  If the prompt is not about a school, judge how precisely the answer addresses that prompt.
+The server reads the prompt and picks one prompt kind; only that kind's fit levels are shown below. The
+other criteria never change. When the essay details show no prompt, fit is 3 and the summary says in
+one sentence that fit could not be judged because no question was given.
+
+#### Fit: why_school
+
+- 1: Nothing names the school, or the reasons fit any selective university (rank, prestige, "diverse").
+- 2: Facts any applicant would cite (location, size, ranking), or a list of offerings not linked to the writer.
+- 3: At least one particular offering (course, lab, programme, professor's work, tradition) linked to a
+  specific earlier thing the writer did.
+- 4: Level 3 plus a concrete first action the writer would take there that follows from it.
+- Never reward campus visits or contact with admissions; online research counts the same.
+
+#### Fit: why_major
+
+- 1: Could be about any subject. 2: Says the subject matters, with no work of the writer's own.
+- 3: A specific problem, idea, text or method the writer pursued on their own (free courses, books,
+  projects, family work count) and what they did with it.
+- 4: Level 3 plus a question in the field the writer cannot answer yet.
+
+#### Fit: community
+
+- 1: Names no community, or only a label. 2: Describes the community but not the writer's part in it.
+- 3: Names the community and one thing the writer did or gave in it. A collective "we" is fine if the
+  writer's own role is clear.
+- 4: Level 3 plus what it changed in the writer, or what they still disagree with in it.
+
+#### Fit: scholarship
+
+- 1: Does not connect to the scholarship at all. 2: Says funding would help, in general terms.
+- 3: What the funding makes possible in specific terms, connected to the scholarship's stated criteria.
+- 4: Level 3 plus the writer's plan for after it.
+
+#### Fit: general
+
+- 1: Does not answer the question asked. 2: Answers in general terms any applicant could use.
+- 3: Answers this exact question with one specific example.
+- 4: Level 3 plus why it matters to the writer now.
+
+#### Wrong school (every kind)
+
+Only when the target school is given and the essay names a different school as the writer's
+destination, fit is 1, with a clarity note. Mentioning a school the writer compared is fine.
 
 ### reflection (25)
 
-- 1: Lists interests or states that something matters.
-- 2: Says an interest matters and gives a general reason.
-- 3: Explains how one experience led to the interest and what question it left open.
-- 4: Names a real tension or change in thinking that explains why this place or subject, quoted.
+- 1: No connection to the writer. 2: A stated reason with nothing behind it.
+- 3: One experience and what changed in the writer's thinking or plans because of it.
+- 4: A belief held before and what replaced it, or a tension still open, tied to this subject or place.
 
 ### evidence (20)
 
-- 1: Claims only. 2: One example mentioned in passing.
-- 3: One experience told with concrete details that support the claim.
-- 4: Two experiences of different kinds that each support the claim with concrete details.
+- 1: None. 2: An activity named without a moment. 3: One experience with two concrete details.
+- 4: Two experiences of different kinds. Short limits: under 150 words, level 4 is one experience with
+  two concrete details.
 
 ### voice (15)
 
-Same four levels as the personal statement: 1 borrowed; 2 correct but interchangeable (and no sentence
-that is plain, odd, unflattering or unfinished); 3 a recognisable way of saying things with one plain,
-direct sentence only this writer would write; 4 unmistakably this person throughout. Never count
-vocabulary, grammar or sentence variety.
+Judge what is said, never how fluently it is said. 1: borrowed. 2: correct and readable, but no
+sentence only this writer would write. 3: at least one sentence with a detail or judgement only this
+writer could know. 4: two or more such sentences. Never count vocabulary, grammar or sentence variety.
 
 ### concision (10)
 
-- 1: Under 50% of `word_limit`, or over it. 2: Between 50% and 75%, or visibly padded.
-- 3: 75% to 89%, or no limit given (default 3, say so), with every sentence doing work.
-- 4: 90% to 100% of the limit and nothing could be cut.
+Shown to the student as "Focus and length". The server computes the share of the word limit used and
+passes it as `word_limit_share_percent`; never count words yourself. With no limit, the default is 3.
+
+- 1: Over the limit (above 100%), or under 40% of it.
+- 2: 40% to 59%, or two or more sentences that only restate.
+- 3: 60% or more, with at most one sentence that adds nothing.
+- 4: 60% or more, and no sentence could go without losing a fact.
+
+## Scholarship essays: sensitivity
+
+- Never score how severe the hardship is. A short factual statement of need is not a weakness.
+- Never ask for income, debts, a parent's job loss, or similar details.
+- Reward the plan and the contribution, not the suffering. Do not prompt "give back" promises.
 
 ## Example question seeds (reword with the student's own nouns; never use verbatim)
 
@@ -66,5 +112,6 @@ vocabulary, grammar or sentence variety.
 
 ## Calibration
 
-`calibration/supplemental_essay/`: at least ten texts (why this school, community, curiosity), including
-Uzbek and Russian texts, two adversarial texts, and expected score ranges. Block production use until then.
+`calibration/supplement/`: texts with expected score ranges (why this school, why major, community,
+scholarship), including Uzbek and Russian texts and adversarial texts. Run `manage.py coach_calibrate`
+after every rubric, prompt or model change.

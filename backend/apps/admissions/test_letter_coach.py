@@ -715,6 +715,29 @@ class LetterSensitiveTests(LetterCheckCase):
         self.assertEqual(result['strengths'], [])
         self.assertEqual(result['reader_notes'], [])
 
+    def test_the_rubrics_own_danger_flag_word_is_the_letters_safety_too(self):
+        response, gateway = self.check(FakeGateway(score={'safety': 'current_danger'}))
+        result = response.data['result']
+        self.assertEqual(gateway.steps, ['score'])
+        self.assertEqual((result['safety'], result['scored'], result['notes']), (True, False, []))
+        self.assertNotIn('helpline', result)  # the essay's helpline is not the letter's child-protection message
+        self.assertIn('child-protection', result['summary'])
+
+    def test_the_letter_prompt_asks_for_evidence_but_not_the_essay_safety_flag(self):
+        _, gateway = self.check()
+        task = gateway.bodies[0]['messages'][-1]['content']
+        self.assertIn('"score_evidence"', task)
+        self.assertIn('from the letter', task)
+        self.assertNotIn('"past_hardship"', task)
+
+    def test_a_level_above_one_without_a_quote_in_the_letter_is_lowered(self):
+        reply = {**SCORE_REPLY, 'score_evidence': {'evidence': 'a sentence that is not in the letter at all'}}
+        response, _ = self.check(FakeGateway(score=reply, auto_evidence=False))
+        result = response.data['result']
+        self.assertEqual(result['scores']['evidence'], 1)
+        self.assertIn('evidence', result['evidence_lowered'])
+        self.assertNotIn('safety', result)
+
 
 class LetterPrivacyRedactionTests(LetterCheckCase):
     def anonymize(self, text):

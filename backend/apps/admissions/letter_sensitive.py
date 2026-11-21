@@ -127,7 +127,7 @@ def hooks(raw_text, anon_text, restore):
     def read_extra(raw, step):
         if not isinstance(raw, dict):
             return step
-        if raw.get('safety') is True:
+        if raw.get('safety') is True or raw.get('safety') == 'current_danger':
             return {'safety': SAFETY_MESSAGE}
         for item in raw.get('reader_notes') if isinstance(raw.get('reader_notes'), list) else []:
             if len(readers) >= MAX_READER_NOTES or not isinstance(item, dict):

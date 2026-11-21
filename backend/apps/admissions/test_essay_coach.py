@@ -213,7 +213,7 @@ class TwoStepTests(CoachApiTestCase):
         _, gateway = self.check()
         first, second = gateway.bodies
         cap = coach.notes_cap(62, len(LONG_TEXT.split()))
-        self.assertEqual(first['max_completion_tokens'], 500)
+        self.assertEqual(first['max_completion_tokens'], 800)  # a scored step 1 also returns its evidence quotes
         self.assertEqual(second['max_completion_tokens'], 70 * cap + 150)
         for body in gateway.bodies:
             self.assertEqual((body['temperature'], body['model']), (0, coach.settings.ESSAY_COACH_MODEL))
@@ -290,13 +290,17 @@ class TwoStepTests(CoachApiTestCase):
         self.assertEqual(result['strengths'][0]['criterion'], 'specificity')
         self.assertIn('"fit_specificity"', gateway.bodies[0]['messages'][1]['content'])
 
-    def test_safety_answer_is_passed_through_unscored(self):
-        reply = {'mode': 'safety', 'message': 'You are not alone; a trusted person can help.'}
-        response, gateway = self.check(FakeGateway(score=reply))
+    def test_current_danger_is_not_scored(self):
+        response, gateway = self.check(FakeGateway(score={'safety': 'current_danger'}))
         self.assertEqual(gateway.steps, ['score'])
         result = response.data['result']
-        self.assertEqual((result['summary'], result['overall'], result['notes']),
-                         ('You are not alone; a trusted person can help.', None, []))
+        self.assertEqual((result['scored'], result['overall'], result['notes'], result['summary']), (False, None, [], ''))
+        self.assertEqual((result['safety'], result['helpline'], result['notes_locked']), ('current_danger', '', True))
+
+    def test_the_old_safety_mode_is_treated_as_current_danger(self):
+        reply = {'mode': 'safety', 'message': 'You are not alone; a trusted person can help.'}
+        response, _ = self.check(FakeGateway(score=reply))
+        self.assertEqual((response.data['result']['safety'], response.data['overall']), ('current_danger', None))
 
     def test_both_calls_are_recorded_and_cost_one_budget_unit(self):
         before = ai_budget.user_remaining('essay_coach', self.student_user)
