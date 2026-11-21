@@ -54,6 +54,12 @@ class GateTests(RulesFixture, APITestCase):
         self.assertIn('Stretch College', names)
         self.assertIn('Dear Aid College', names, 'aid for international students keeps an expensive university')
 
+    def test_universities_dropped_for_unlisted_aid_are_counted_in_a_note(self):
+        self.college('Unlisted Aid College', 10, offers_international_aid=False, intl_cost_usd=60000)
+        self.ready_profile(scholarship_needed=True)
+        notes = {note['code']: note for note in self.match()['notes']}
+        self.assertEqual(notes['aid_unlisted']['params'], {'count': 1})
+
     def test_an_unknown_cost_is_kept_and_flagged(self):
         self.college('Unpriced College', 10, intl_cost_usd=None)
         self.ready_profile()
