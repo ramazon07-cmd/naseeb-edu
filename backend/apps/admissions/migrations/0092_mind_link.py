@@ -60,7 +60,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='challengeattempt',
-            constraint=models.UniqueConstraint(condition=models.Q(('external_id', ''), _negated=True), fields=('source', 'external_id'), name='unique_challenge_attempt_external_id'),
+            constraint=models.UniqueConstraint(condition=models.Q(('external_id', ''), _negated=True), fields=('student', 'source', 'external_id'), name='unique_challenge_attempt_external_id'),
         ),
         migrations.AddField(
             model_name='mindlink',

@@ -12,6 +12,11 @@ export const MIND_LINK_TRANSLATIONS = {
     'Naseeb Mind открыт в новой вкладке. Поделитесь результатами там, затем вернитесь и проверьте.',
   ],
   'Open Naseeb Mind': ['Naseeb Mind ni ochish', 'Открыть Naseeb Mind'],
+  'The link code expired. Start again to get a new one.': [
+    'Ulanish kodi muddati tugadi. Yangi kod olish uchun qaytadan boshlang.',
+    'Срок действия кода истёк. Начните заново, чтобы получить новый.',
+  ],
+  'Start again': ['Qaytadan boshlash', 'Начать заново'],
   'Check again': ['Qayta tekshirish', 'Проверить снова'],
   'Not linked yet.': ['Hali ulanmagan.', 'Пока не подключено.'],
   'Could not start the link. Try again.': ['Ulanishni boshlab bo‘lmadi. Qayta urinib ko‘ring.', 'Не удалось начать подключение. Попробуйте ещё раз.'],

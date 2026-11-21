@@ -67,8 +67,8 @@ def verify_request(request):
     body = request.body
     if len(body) > MAX_BODY_BYTES:
         raise MindLinkError('payload_too_large', 413)
-    timestamp = request.META.get('HTTP_X_NAISEB_TIMESTAMP', '')
-    given = request.META.get('HTTP_X_NAISEB_SIGNATURE', '')
+    timestamp = request.META.get('HTTP_X_NASEEB_TIMESTAMP', '')
+    given = request.META.get('HTTP_X_NASEEB_SIGNATURE', '')
     if not timestamp.isascii() or not timestamp.isdigit() or len(timestamp) > 12 or not given:
         raise MindLinkError('invalid_signature', 401)
     expected = sign(settings.MIND_LINK_SECRET, timestamp, body)
@@ -149,7 +149,7 @@ def import_attempts(student, attempts):
     """Store attempts not already stored. Returns (imported, skipped)."""
     imported = skipped = 0
     ids = [a['id'] for a in attempts]
-    known = set(ChallengeAttempt.objects.filter(source=ChallengeAttempt.Source.MIND, external_id__in=ids)
+    known = set(ChallengeAttempt.objects.filter(student=student, source=ChallengeAttempt.Source.MIND, external_id__in=ids)
                 .values_list('external_id', flat=True))
     for attempt in attempts:
         expected = INSTRUMENT_VERSION.get(attempt['challenge'])

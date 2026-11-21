@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ExternalLink, Link2, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { formatDateLocale, getLanguage, t } from '../i18n';
-import { majorOffer, mindCardState, shouldCheckOnFocus, startMindLink } from '../lib/mindLink';
+import { isCodeExpired, majorOffer, mindCardState, shouldCheckOnFocus, startMindLink } from '../lib/mindLink';
 
 // "Bring my Naseeb Mind results". One status request when the page opens, one on "Check again" and one
 // when the student returns to this tab while a link is waiting; never a timer.
@@ -11,9 +11,11 @@ export function MindLinkCard({ student, notify, reload, onLinked }) {
   const [waiting, setWaiting] = useState(false)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
-  const [fallbackUrl, setFallbackUrl] = useState('')
+  const [mindUrl, setMindUrl] = useState('')
+  const [expiresAt, setExpiresAt] = useState('')
+  const [expired, setExpired] = useState(false)
   const alive = useRef(true)
-  const last = useRef({ at: 0, waiting: false, linked: false })
+  const last = useRef({ at: 0, waiting: false, linked: false, expiresAt: '' })
 
   const refresh = useCallback(async () => {
     last.current.at = Date.now()
@@ -23,7 +25,7 @@ export function MindLinkCard({ student, notify, reload, onLinked }) {
       setStatus(next)
       if (next.linked) {
         setWaiting(false)
-        setFallbackUrl('')
+        setMindUrl('')
         if (!last.current.linked) onLinked?.()
       }
       last.current.linked = next.linked
@@ -39,24 +41,36 @@ export function MindLinkCard({ student, notify, reload, onLinked }) {
     return () => { alive.current = false }
   }, [refresh])
 
-  useEffect(() => { last.current.waiting = waiting }, [waiting])
+  useEffect(() => { last.current.waiting = waiting; last.current.expiresAt = expiresAt }, [waiting, expiresAt])
+  // One-shot (not a poll, no request): when the code's time is up the card stops waiting for it.
+  useEffect(() => {
+    if (!waiting || !expiresAt) return undefined
+    const left = new Date(expiresAt).getTime() - Date.now()
+    if (!Number.isFinite(left)) return undefined
+    if (left <= 0) { setExpired(true); return undefined }
+    const timer = setTimeout(() => setExpired(true), Math.min(left, 2147483647))
+    return () => clearTimeout(timer)
+  }, [waiting, expiresAt])
   useEffect(() => {
     const onFocus = () => {
+      if (isCodeExpired(last.current.expiresAt)) setExpired(true)
       if (shouldCheckOnFocus({ waiting: last.current.waiting, lastCheckAt: last.current.at, now: Date.now() })) refresh()
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [refresh])
 
-  const state = mindCardState(status, { waiting })
+  const state = mindCardState(status, { waiting, expired })
   if (state === 'hidden') return null
 
   const start = async () => {
     setBusy('start')
     setError('')
     try {
-      const { url, opened } = await startMindLink({ start: (lang) => api.startMindLink(lang), lang: getLanguage() })
-      setFallbackUrl(opened ? '' : url)
+      const { url, expiresAt: until } = await startMindLink({ start: (lang) => api.startMindLink(lang), lang: getLanguage() })
+      setMindUrl(url)
+      setExpiresAt(until || '')
+      setExpired(false)
       setWaiting(true)
     } catch (requestError) {
       // Someone already linked (another tab): show the real state.
@@ -118,10 +132,15 @@ export function MindLinkCard({ student, notify, reload, onLinked }) {
       : <>
         <p className="eyebrow">{t('Naseeb Mind')}</p>
         <h3>{t('Bring my Naseeb Mind results')}</h3>
-        {state === 'waiting'
+        {state === 'expired'
+          ? <>
+            <p>{t('The link code expired. Start again to get a new one.')}</p>
+            <button type="button" className="nb-mf-start" onClick={start} disabled={busy === 'start'}><Link2 size={15} aria-hidden="true" />{busy === 'start' ? t('Opening…') : t('Start again')}</button>
+          </>
+          : state === 'waiting'
           ? <>
             <p>{t('Naseeb Mind opened in a new tab. Share your results there, then come back and check.')}</p>
-            {fallbackUrl && <a className="nb-mf-mindlink-quiet" href={fallbackUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} aria-hidden="true" /> {t('Open Naseeb Mind')}</a>}
+            {mindUrl && <a className="nb-mf-mindlink-quiet" href={mindUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} aria-hidden="true" /> {t('Open Naseeb Mind')}</a>}
             <button type="button" className="nb-mf-start" onClick={check} disabled={busy === 'check'}><RefreshCw size={15} aria-hidden="true" />{t('Check again')}</button>
           </>
           : <>

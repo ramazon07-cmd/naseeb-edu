@@ -2297,7 +2297,7 @@ class ChallengeAttempt(TimeStampedModel):
         ordering = ['-completed_at', '-id']
         indexes = [models.Index(fields=['student', 'challenge', '-completed_at'])]
         constraints = [
-            models.UniqueConstraint(fields=['source', 'external_id'], condition=~models.Q(external_id=''),
+            models.UniqueConstraint(fields=['student', 'source', 'external_id'], condition=~models.Q(external_id=''),
                                     name='unique_challenge_attempt_external_id'),
             # A client retrying a save sends the same completed_at, so a retry
             # whose first request did land cannot create a second attempt.

@@ -46,7 +46,7 @@ class MindLinkTests(AuditBaseMixin, APITestCase):
         ts = str(int(time.time()) if timestamp is None else timestamp)
         return self.client.post(
             URL + path + '/', data=body, content_type='application/json',
-            HTTP_X_NAISEB_TIMESTAMP=ts, HTTP_X_NAISEB_SIGNATURE=mind_link.sign(secret, ts, body),
+            HTTP_X_NASEEB_TIMESTAMP=ts, HTTP_X_NASEEB_SIGNATURE=mind_link.sign(secret, ts, body),
         )
 
     def start(self, user=None):
@@ -90,7 +90,7 @@ class MindLinkTests(AuditBaseMixin, APITestCase):
         ts = str(int(time.time()))
         response = self.client.post(
             URL + 'sync/', data=body + b' ', content_type='application/json',
-            HTTP_X_NAISEB_TIMESTAMP=ts, HTTP_X_NAISEB_SIGNATURE=mind_link.sign(SECRET, ts, body))
+            HTTP_X_NASEEB_TIMESTAMP=ts, HTTP_X_NASEEB_SIGNATURE=mind_link.sign(SECRET, ts, body))
         self.assertEqual(response.status_code, 401)
 
     def test_expired_and_future_timestamps_are_rejected(self):
@@ -216,6 +216,36 @@ class MindLinkTests(AuditBaseMixin, APITestCase):
         MindLink.objects.update(active=False)
         self.assertEqual(self.complete().status_code, 200)
         self.assertEqual(MindLink.objects.get().student_id, self.student.id)
+
+    def test_history_follows_the_mind_account_to_the_new_student(self):
+        self.link()
+        payload = {'mind_user_id': self.mind_id, 'attempts': [attempt(1)]}
+        self.assertEqual(self.signed('sync', payload).json(), {'imported': 1, 'skipped': 0})
+        self.client.force_authenticate(self.student_user)
+        self.client.delete(URL)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.complete(user=self.student_b_user, attempts=[attempt(1)]).status_code, 200)
+        self.assertEqual(MindLink.objects.get().student_id, self.student_b.id)
+        mine = ChallengeAttempt.objects.filter(student=self.student, source='naseeb_mind').count()
+        theirs = ChallengeAttempt.objects.filter(student=self.student_b, source='naseeb_mind').count()
+        self.assertEqual((mine, theirs), (1, 1))
+        # Re-sending to the same student still imports nothing.
+        self.assertEqual(self.signed('sync', {**payload}).json(), {'imported': 0, 'skipped': 1})
+
+    # --- signature headers (real header names through the test client) ---
+
+    def test_documented_header_names_are_what_django_reads(self):
+        body = json.dumps({'mind_user_id': self.mind_id, 'attempts': []}).encode()
+        ts = str(int(time.time()))
+        self.link()
+        response = self.client.post(
+            URL + 'sync/', data=body, content_type='application/json',
+            headers={'X-Naseeb-Timestamp': ts, 'X-Naseeb-Signature': mind_link.sign(SECRET, ts, body)})
+        self.assertEqual(response.status_code, 200)
+        misspelled = self.client.post(
+            URL + 'sync/', data=body, content_type='application/json',
+            headers={'X-Naiseb-Timestamp': ts, 'X-Naiseb-Signature': mind_link.sign(SECRET, ts, body)})
+        self.assertEqual(misspelled.status_code, 401)
 
     # --- import ---------------------------------------------------------
 

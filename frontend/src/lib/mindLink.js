@@ -5,10 +5,18 @@ import { closeWindow, navigateWindow, openBlankWindow } from './telegramLink.js'
 
 // hidden: the feature is off (or the status is unknown); idle: can start; waiting: the link was opened in
 // Mind, the student comes back to check; linked: results are being shared.
-export function mindCardState(status, { waiting = false } = {}) {
+// expired: the 10-minute code ran out while waiting; the card offers "Start again" (a new code).
+export function mindCardState(status, { waiting = false, expired = false } = {}) {
   if (!status || !status.available) return 'hidden'
   if (status.linked) return 'linked'
-  return waiting ? 'waiting' : 'idle'
+  if (!waiting) return 'idle'
+  return expired ? 'expired' : 'waiting'
+}
+
+// True once the code's expires_at has passed (unknown or unparsable: not expired, the server decides).
+export function isCodeExpired(expiresAt, now = Date.now()) {
+  const at = expiresAt ? new Date(expiresAt).getTime() : NaN
+  return Number.isFinite(at) && now >= at
 }
 
 // Opens the blank tab first (still inside the click, so it is not taken for a pop-up), asks for the code,
@@ -16,8 +24,8 @@ export function mindCardState(status, { waiting = false } = {}) {
 export async function startMindLink({ start, lang, open = openBlankWindow, navigate = navigateWindow, close = closeWindow }) {
   const win = open()
   try {
-    const { url } = await start(lang)
-    return { url, opened: navigate(win, url) }
+    const { url, expires_at: expiresAt } = await start(lang)
+    return { url, expiresAt, opened: navigate(win, url) }
   } catch (error) {
     close(win)
     throw error

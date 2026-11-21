@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  latestComparable, majorOffer, mindCardState, mismatchedAttempts, shouldCheckOnFocus, startMindLink,
+  isCodeExpired, latestComparable, majorOffer, mindCardState, mismatchedAttempts, shouldCheckOnFocus, startMindLink,
 } from '../src/lib/mindLink.js';
 
 test('the card is hidden when the feature is off or the status is unknown', () => {
@@ -27,14 +27,14 @@ test('starting opens the tab before the request and sends it to the Naseeb Mind 
     close: () => calls.push(['close']),
   });
   assert.deepEqual(calls.map((call) => call[0]), ['open', 'start', 'navigate']);
-  assert.deepEqual(result, { url: 'https://naseebmind.uz/connect?code=x', opened: true });
+  assert.deepEqual(result, { url: 'https://naseebmind.uz/connect?code=x', expiresAt: undefined, opened: true });
 });
 
 test('a blocked tab still returns the url, and a failed start closes the blank tab', async () => {
   const blocked = await startMindLink({
     lang: 'uz', start: async () => ({ url: 'u' }), open: () => null, navigate: () => false, close() {},
   });
-  assert.deepEqual(blocked, { url: 'u', opened: false });
+  assert.deepEqual(blocked, { url: 'u', expiresAt: undefined, opened: false });
   let closed = 0;
   await assert.rejects(startMindLink({
     lang: 'uz', start: async () => { throw new Error('nope'); }, open: () => ({}), navigate: () => true, close: () => { closed += 1; },
@@ -65,4 +65,24 @@ test('the Naseeb Mind major is offered only to a student without one', () => {
   assert.equal(majorOffer(status, { target_major: 'Law' }), '');
   assert.equal(majorOffer({ chosen_major: null }, { target_major: '' }), '');
   assert.equal(majorOffer(status, undefined), '');
+});
+
+test('an expired code returns the waiting card to a restart, never stays waiting', () => {
+  const status = { available: true, linked: false };
+  assert.equal(mindCardState(status, { waiting: true, expired: true }), 'expired');
+  assert.equal(mindCardState(status, { waiting: false, expired: true }), 'idle');
+  assert.equal(mindCardState({ available: true, linked: true }, { waiting: true, expired: true }), 'linked');
+  const at = '2026-11-21T10:10:00Z';
+  const t0 = new Date(at).getTime();
+  assert.equal(isCodeExpired(at, t0 - 1), false);
+  assert.equal(isCodeExpired(at, t0), true);
+  assert.equal(isCodeExpired(undefined, t0), false);
+  assert.equal(isCodeExpired('garbage', t0), false);
+});
+
+test('starting also returns expires_at so the card can time the code out', async () => {
+  const result = await startMindLink({
+    lang: 'en', start: async () => ({ url: 'u', expires_at: '2026-11-21T10:10:00Z' }), open: () => null, navigate: () => false, close() {},
+  });
+  assert.deepEqual(result, { url: 'u', expiresAt: '2026-11-21T10:10:00Z', opened: false });
 });
