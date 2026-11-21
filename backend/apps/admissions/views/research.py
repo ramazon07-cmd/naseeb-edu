@@ -6,8 +6,9 @@ from apps.users.throttles import ScopedRateThrottle
 from rest_framework.views import APIView
 from apps.users.models import User
 from .. import match_reasons
+from ..college_match import college_match, match_with_context
 from ..college_search import (
-    CollegeSearchParams, college_match, college_search, evidence_counts, fit_key, match_with_context, missing_fields,
+    CollegeSearchParams, college_search, evidence_counts, fit_key, missing_fields,
 )
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
@@ -109,10 +110,9 @@ class EducationMatchAIView(APIView):
 
 
 class CollegeMatchView(APIView):
-    """The college match (``POST /api/college-match/``): a balanced list of best-fitting universities.
+    """The college match (``POST /api/college-match/``): ten universities for the student's major.
 
-    Every university is matched with fixed rules, never by AI: this call makes no AI request. The essays
-    score is the student's latest scored personal statement check from the Essay Lab (None until there is one).
+    Chosen with fixed rules (college_match.py), never by AI: this call makes no AI request.
     """
 
     permission_classes = [permissions.IsAuthenticated]

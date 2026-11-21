@@ -18,6 +18,7 @@ from apps.admissions.college_search import fit_context
 from apps.admissions.essay_lab import coach
 from apps.admissions.models import (
     Activity, AiUsageLog, Essay, EssayDepthCheck, EssayTab, Honor, RecommendationLetter, University, UniversityProgram,
+    UniversitySubjectRank,
 )
 from apps.admissions.student_rubric import academics_score, activities_score
 from apps.admissions.test_college_fit import FitFixture
@@ -38,6 +39,22 @@ def add_check(student, overall, **essay_fields):
         essay=essay, tab=tab, save_seq=0, model='m', overall=overall,
         result={'scored': overall is not None, 'overall': overall, 'summary': 's'},
     )
+
+
+class MatchFixture(FitFixture):
+    """The College Search fixture with QS 2026 Computer Science ranks for its two US universities."""
+
+    def rank(self, university, rank, code='COM02', label='', year=2026):
+        return UniversitySubjectRank.objects.create(
+            university=university, subject_code=code, rank=rank, rank_label=label, year=year,
+        )
+
+    def setUp(self):
+        super().setUp()
+        # A student who needs a scholarship only sees universities that give aid to students from abroad.
+        University.objects.filter(pk__in=[self.mit.pk, self.state.pk]).update(offers_international_aid=True)
+        self.rank(self.mit, 1)
+        self.rank(self.state, 120)
 
 
 class RubricTests(FitFixture, APITestCase):
@@ -124,22 +141,22 @@ class EssaysFactorTests(FitFixture, APITestCase):
         self.assertEqual(fit_context(self.student)['rubric']['essays'], 8.2)
 
 
-class CollegeMatchTests(FitFixture, APITestCase):
+class CollegeMatchTests(MatchFixture, APITestCase):
     def match(self):
         response = self.client.post(URL)
         self.assertEqual(response.status_code, 200, getattr(response, 'data', None))
         return response.data
 
-    def test_a_balanced_list_grouped_by_band(self):
+    def test_three_groups_each_card_keeps_its_own_band(self):
         self.ready_profile()
         data = self.match()
-        self.assertEqual([group['band'] for group in data['groups']], ['far_reach', 'reach', 'target', 'safety'])
+        self.assertEqual([(group['band'], group['quota']) for group in data['groups']], [('reach', 3), ('target', 4), ('safety', 3)])
         bands = {group['band']: [row['name'] for row in group['results']] for group in data['groups']}
-        self.assertEqual(bands['far_reach'], [self.mit.name])
-        self.assertEqual(set(bands['safety']), {self.state.name, self.unranked.name})
+        self.assertEqual(bands['reach'], [self.mit.name])
+        self.assertEqual(bands['safety'], [self.state.name])
         for group in data['groups']:
-            self.assertLessEqual(len(group['results']), group['quota'])
-            self.assertTrue(all(row['fit']['admission_band'] == group['band'] for row in group['results']))
+            self.assertTrue(all(row['fit']['admission_band'] == row['band'] for row in group['results']))
+        self.assertEqual(data['groups'][0]['results'][0]['band'], 'far_reach')
         self.assertEqual(data['rubric']['academics'], 8.3)
         self.assertIsNone(data['rubric']['essays'])
 
@@ -154,17 +171,6 @@ class CollegeMatchTests(FitFixture, APITestCase):
             self.assertNotIn(word, raw)
         self.assertNotIn('language', self.match()['rubric'])
         self.assertEqual(set(self.match()['rubric']), {'academics', 'activities', 'essays'})
-
-    def test_the_best_fit_comes_first_within_a_band(self):
-        self.ready_profile()
-        for index in range(5):
-            University.objects.create(name=f'Open College {index}', country='Germany', acceptance_rate='80.00')
-        safety = next(group for group in self.match()['groups'] if group['band'] == 'safety')
-        self.assertEqual(len(safety['results']), 3)
-        scores = [row['fit']['match_score'] for row in safety['results']]
-        self.assertEqual(scores, sorted(scores, reverse=True))
-        # US is the target country: Ohio State outranks the German colleges.
-        self.assertEqual(safety['results'][0]['name'], self.state.name)
 
     def test_students_only_and_a_ready_profile_first(self):
         self.assertEqual(self.client.post(URL).status_code, 400)
@@ -203,9 +209,9 @@ class NoLanguageScoringTests(TestCase):
     FORBIDDEN = re.compile(r'grammar|spelling|fluency|vocabulary|language_score|\'language\'\s*:', re.IGNORECASE)
 
     def test_the_scoring_modules_do_not_mention_language_criteria(self):
-        match_section = (HERE / 'college_search.py').read_text().split('College match (rules only)', 1)[-1]
         sources = {name: (HERE / name).read_text() for name in ('student_rubric.py', 'admission_chance.py')}
-        sources['college_search.py (match)'] = match_section
+        sources['college_match.py'] = (HERE / 'college_match.py').read_text()
+        sources['subjects.py'] = (HERE / 'subjects.py').read_text().split('KEYWORDS = ', 1)[0]
         sources['match_reasons.py (facts)'] = (HERE / 'match_reasons.py').read_text().split('SYSTEM = ', 1)[0]
         for name, source in sources.items():
             self.assertIsNone(self.FORBIDDEN.search(source), name)
@@ -220,7 +226,7 @@ class NoLanguageScoringTests(TestCase):
     COLLEGE_MATCH_REASONS_DAILY_BUDGET=100, COLLEGE_MATCH_REASONS_SCHOOL_DAILY_BUDGET=100,
     COLLEGE_MATCH_REASONS_USER_DAILY_LIMIT=5,
 )
-class ReasonsTests(FitFixture, APITestCase):
+class ReasonsTests(MatchFixture, APITestCase):
     def setUp(self):
         super().setUp()
         cache.clear()

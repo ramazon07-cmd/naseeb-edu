@@ -55,10 +55,14 @@ def cards(data, profile):
     for group in data['groups']:
         for row in group['results']:
             fit = row['fit']
+            subject = row.get('subject') or {}
             out.append({
-                'id': row['id'], 'name': row['name'], 'country': row['country'], 'band': group['band'],
-                'qs_rank': row.get('ranking'), 'admit_rate': fit['chance'].get('admit_rate'),
-                'fit_score': fit['match_score'], 'cost_usd': row.get('cost'),
+                'id': row['id'], 'name': row['name'], 'country': row['country'], 'band': row['band'],
+                'qs_rank': row.get('ranking'), 'subject': subject.get('name'),
+                'subject_rank_qs_2026': None if subject.get('overall') else subject.get('rank_label'),
+                'sat_position': row['sat']['position'], 'aid_for_internationals': row['aid_status'],
+                'admit_rate': fit['chance'].get('admit_rate'),
+                'fit_score': fit['match_score'], 'cost_usd': row.get('cost_usd'),
                 'offers_international_aid': row.get('offers_international_aid'),
                 'programs': [program['name'] for program in row.get('suggested_programs', [])],
                 'strengths': [clean(item['text']) for item in fit['reasons'][:2]],
