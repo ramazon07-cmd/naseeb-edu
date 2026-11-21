@@ -6,7 +6,7 @@ import { Empty, Modal } from '../components/ui';
 import { FilterOption, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { BAND_TIERS, COLLEGE_AID_FLAGS, bandLabel, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, collegeSorts, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
+import { BAND_TIERS, COLLEGE_AID_FLAGS, bandLabel, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, collegeSorts, daysUntil, dueLabel, dueTone, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 import { useCollegeSearch } from '../hooks/useCollegeSearch';
@@ -19,6 +19,7 @@ import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
 import { CollegeMatchPanel } from '../components/CollegeMatch';
 import { SubjectRankChip } from '../components/SubjectRank';
 import { SUBJECT_AREAS } from '../lib/subjects';
+import { applicationProgram, bulkAddTier } from '../lib/collegeMatch';
 import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
 import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
@@ -279,8 +280,10 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   // Bumped when the profile changes: the fit of every row has to be fetched again.
   const [researchVersion, setResearchVersion] = useState(0);
   // The AI college match: idle until the student asks for it.
-  const [match, setMatch] = useState({ loading: false, data: null, error: '' });
+  const [match, setMatch] = useState({ loading: false, data: null, error: '', generation: 0 });
   const [addingAll, setAddingAll] = useState(false);
+  const matchGeneration = useRef(0);
+  const listedRef = useRef(new Map());
   const previousQuery = useRef(query);
   const [radarOpen, setRadarOpen] = useState(false);
   const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
@@ -299,6 +302,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const rowFit = universityId != null && search.version === researchVersion ? rows.find((item) => item.id === universityId)?.fit : undefined;
   const facets = search.facets || EMPTY_FACETS;
   const listed = useMemo(() => new Map(data.applications.map((item) => [item.university, item])), [data.applications]);
+  listedRef.current = listed;
 
   // Rows carry the QS values the table shows; the QS panel loads the university's full record.
   const loadDetail = useCallback((id) => {
@@ -431,13 +435,14 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   }
 
   function createApplication(university, tier) {
-    const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
+    const program = applicationProgram(university, student?.target_major);
     return api.create('applications', { student: student?.id, university: university.id, program, tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
   }
 
   // Without a known band the student picks the tier: an unknown band is never filed as "target".
   async function addToList(university, fit, pickedTier) {
     const tier = pickedTier || BAND_TIERS[fit?.admission_band];
+    if (addingAll) return;
     if (!tier) {setTierFor({ university, fit });return;}
     setBusyId(university.id);
     try {
@@ -470,20 +475,26 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
 
   async function findMatches() {
     if (!research?.ready) {setProfileFocusRequested(true);return;}
-    setMatch({ loading: true, data: null, error: '' });
-    try {setMatch({ loading: false, data: await api.collegeMatch(), error: '' });}
-    catch (error) {setMatch({ loading: false, data: null, error: error.message });}
+    const generation = ++matchGeneration.current;
+    setMatch({ loading: true, data: null, error: '', generation });
+    try {
+      const data = await api.collegeMatch();
+      if (generation === matchGeneration.current) setMatch({ loading: false, data, error: '', generation });
+    } catch (error) {if (generation === matchGeneration.current) setMatch({ loading: false, data: null, error: error.message, generation });}
   }
 
   // Every match not yet on the list, in one go; the list reloads once at the end.
   async function addAllMatches(universities) {
+    if (addingAll || busyId != null) return;
     setAddingAll(true);
     let added = 0;
     try {
+      const filed = new Set();
       for (const university of universities) {
-        const tier = BAND_TIERS[university.fit?.admission_band];
+        const tier = filed.has(university.id) ? null : bulkAddTier(university, listedRef.current, BAND_TIERS);
         if (!tier) continue;
         await createApplication(university, tier);
+        filed.add(university.id);
         added += 1;
       }
       notify(tx`${formatNumberLocale(added)} universities added to your list.`);
@@ -539,7 +550,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   return <div className="section-stack student-portal college-page nb-bridge nb-colleges">
     {matchHeader}
     {ready && <CollegeMatchSummary research={research} applications={data.applications} setPage={setPage} activeTier={activeTier} onTier={pickTier} onRadar={() => setRadarOpen(true)} />}
-    <CollegeMatchPanel state={match} listed={listed} busyId={busyId} addingAll={addingAll} onAdd={(university) => addToList(university, university.fit)} onAddAll={addAllMatches} onOpen={openUniversity} onRetry={findMatches} onClose={() => setMatch({ loading: false, data: null, error: '' })} />
+    <CollegeMatchPanel state={match} listed={listed} busyId={busyId} addingAll={addingAll} onAdd={(university) => addToList(university, university.fit)} onAddAll={addAllMatches} onOpen={openUniversity} onRetry={findMatches} onClose={() => {matchGeneration.current += 1;setMatch({ loading: false, data: null, error: '', generation: matchGeneration.current });}} />
     <DeadlineRadar open={radarOpen} applications={data.applications} onOpen={(application) => { setRadarOpen(false); openUniversity(application.university); }} onClose={() => setRadarOpen(false)} />
     <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}
