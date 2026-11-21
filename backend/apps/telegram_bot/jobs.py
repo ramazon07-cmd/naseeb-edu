@@ -22,6 +22,17 @@ DAILY_JOBS = {
     'purge_screen_time': 3,
     'generate_notifications': 7,
 }
+# Every hour inside a Tashkent night window (start hour, end hour): the Telegram
+# program import starts at 23:00 and keeps going hourly until it has caught up.
+# Each run is incremental and time-boxed, so an hour with nothing new is quick.
+NIGHTLY_JOBS = {
+    'import_telegram_programs': (23, 7),
+}
+
+
+def in_window(hour, window):
+    start, end = window
+    return start <= hour < end if start < end else hour >= start or hour < end
 
 
 def due_jobs(now=None):
@@ -32,7 +43,8 @@ def due_jobs(now=None):
         name__in=list(DAILY_JOBS), result='ok', started_at__gte=day_start,
     ).values_list('name', flat=True))
     daily = [name for name, hour in DAILY_JOBS.items() if local.hour >= hour and name not in done_today]
-    return [*HOURLY_JOBS, *daily]
+    nightly = [name for name, window in NIGHTLY_JOBS.items() if in_window(local.hour, window)]
+    return [*HOURLY_JOBS, *daily, *nightly]
 
 
 def run_due_jobs(now=None):
