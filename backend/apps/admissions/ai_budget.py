@@ -45,6 +45,13 @@ def _limits(feature):
             settings.REC_LETTER_AI_SCHOOL_DAILY_BUDGET or None,
             settings.REC_LETTER_AI_USER_DAILY_LIMIT or None,
         )
+    if feature == 'education_match':
+        # Like the coach: a platform budget of 0 turns the AI explanation off.
+        return (
+            settings.EDUCATION_MATCH_DAILY_BUDGET,
+            settings.EDUCATION_MATCH_SCHOOL_DAILY_BUDGET or None,
+            settings.EDUCATION_MATCH_USER_DAILY_LIMIT or None,
+        )
     raise ValueError(f'Unknown AI feature: {feature}')
 
 
@@ -66,11 +73,18 @@ class _ProcessFallback:
                 self.counts[key] = self.counts.get(key, 0) + 1
             return True
 
+    def refund(self, day, keys):
+        with self.lock:
+            if day == self.day:
+                for key in keys:
+                    if self.counts.get(key, 0) > 0:
+                        self.counts[key] -= 1
+
 
 _fallback = _ProcessFallback()
 
 
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter')
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'education_match')
 TOP_SCHOOLS = 5
 
 
@@ -116,6 +130,21 @@ def consume(feature, user):
         cache_decrement(key)
     _note([f'{prefix}:refused'])
     return False
+
+
+def refund(feature, user):
+    """Give back one call counted by :func:`consume` (the provider failed). Best effort."""
+    day = timezone.localdate().isoformat()
+    _, _, user_cap = _limits(feature)
+    prefix = f'ai-budget:{feature}:{day}'
+    keys = [prefix]
+    if user.school_id:
+        keys.append(f'{prefix}:school:{user.school_id}')
+    if user_cap is not None:
+        keys.append(f'{prefix}:user:{user.pk}')
+    for key in keys:
+        cache_decrement(key)
+    _fallback.refund(day, [f'{feature}:process', f'{feature}:user:{user.pk}'])
 
 
 def usage_today(school_ids):

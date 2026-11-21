@@ -81,10 +81,13 @@ AI_ASSISTANT_SCHOOL_DAILY_BUDGET = config('AI_ASSISTANT_SCHOOL_DAILY_BUDGET', de
 AI_ASSISTANT_USER_DAILY_LIMIT = config('AI_ASSISTANT_USER_DAILY_LIMIT', default=60, cast=int)
 # Paid calls each process may still make per day while Redis is unreachable.
 AI_FALLBACK_PROCESS_DAILY_BUDGET = config('AI_FALLBACK_PROCESS_DAILY_BUDGET', default=20, cast=int)
-GROQ_API_KEY = config('GROQ_API_KEY', default='').strip()
-GROQ_API_URL = config('GROQ_API_URL', default='https://api.groq.com/openai/v1/chat/completions').strip()
-GROQ_RECOMMENDATION_MODEL = config('GROQ_RECOMMENDATION_MODEL', default='openai/gpt-oss-20b').strip()
 AI_RECOMMENDATION_TIMEOUT_SECONDS = config('AI_RECOMMENDATION_TIMEOUT_SECONDS', default=30, cast=int)
+# Education-match explanation: a small pinned model (no gateway fallback list), same
+# gateway and budget machinery as the assistant. A platform budget of 0 turns it off.
+EDUCATION_MATCH_MODEL = config('EDUCATION_MATCH_MODEL', default='openai/gpt-5.4-nano').strip()
+EDUCATION_MATCH_DAILY_BUDGET = config('EDUCATION_MATCH_DAILY_BUDGET', default=3000, cast=int)
+EDUCATION_MATCH_SCHOOL_DAILY_BUDGET = config('EDUCATION_MATCH_SCHOOL_DAILY_BUDGET', default=600, cast=int)
+EDUCATION_MATCH_USER_DAILY_LIMIT = config('EDUCATION_MATCH_USER_DAILY_LIMIT', default=20, cast=int)
 # Essay Lab. The coach reuses the AI gateway credentials above.
 ESSAY_COACH_MODEL = config('ESSAY_COACH_MODEL', default=AI_ASSISTANT_MODEL).strip()
 ESSAY_COACH_TIMEOUT_SECONDS = config('ESSAY_COACH_TIMEOUT_SECONDS', default=40, cast=int)

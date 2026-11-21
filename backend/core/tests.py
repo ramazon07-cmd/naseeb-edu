@@ -248,11 +248,11 @@ class OutboundAiSwitchTests(SimpleTestCase):
 
     def test_unused_provider_keys_are_reported(self):
         from core.checks import unused_ai_keys_check
-        with override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='key', GROQ_API_KEY=''):
+        with override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='key'):
             self.assertEqual([item.id for item in unused_ai_keys_check(None)], ['naseeb.W002'])
-        with override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='key', GROQ_API_KEY='key'):
+        with override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='key'):
             self.assertEqual(unused_ai_keys_check(None), [])
-        with override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='', GROQ_API_KEY=''):
+        with override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY=''):
             self.assertEqual(unused_ai_keys_check(None), [])
 
 
