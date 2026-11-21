@@ -12,6 +12,7 @@ profile answers and catalogue version, then cached.
 """
 import hashlib
 import json
+import re
 
 from django.db.models import Count, F, IntegerField, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Coalesce
@@ -157,7 +158,7 @@ def fit_context(profile):
         'major_name': profile.target_major,
         'scholarship_needed': bool(profile.scholarship_needed),
     }
-    # The student's four rubric scores (0-10, None when not scored yet).
+    # The student's rubric scores (0-10, essays None until the Essay Lab has scored a personal statement).
     ctx['rubric'] = rubric(profile, ctx)
     return ctx
 
@@ -603,17 +604,44 @@ def record_chance_snapshot(application):
     )
 
 
-# ---------------------------------------------------------------- AI college match
+# ---------------------------------------------------------------- College match (rules only)
 
 # How many universities of each band the match shows, dream schools first (a balanced list).
 MATCH_QUOTAS = (('far_reach', 2), ('reach', 3), ('target', 4), ('safety', 3))
 
 
-def college_match(profile):
-    """The student's balanced list: the best-fitting universities of each band, with the rubric.
+MATCH_PROGRAMS = 2
 
-    Built from the cached fit map, so it costs no more than one College Search page.
-    """
+
+def intended_majors(profile):
+    """The majors the student stated, in order (the field may hold several, separated by commas, semicolons or slashes)."""
+    parts = re.split(r'[,;/\n]+', profile.target_major or '')
+    return [part.strip().lower() for part in parts if part.strip()]
+
+
+def suggested_programs(university, majors):
+    """Up to two of the university's eligible programs for the stated majors, by rule (no AI): the same
+    two-way substring match as the program picker, majors in the order the student gave them."""
+    found = []
+    for major in majors:
+        for program in university.programs.all():
+            name = program.canonical_major.strip().lower()
+            if name and (major in name or name in major) and all(program.name != item['name'] for item in found):
+                found.append({'name': program.name, 'canonical_major': program.canonical_major})
+    return found[:MATCH_PROGRAMS]
+
+
+def chance_factors(model, rubric):
+    """How much each of the student's scored factors counts at a university of this admission model, as shares
+    of 100. Factors without a score (essays not checked yet) and the letters, which are never scored for a
+    student, are left out and the others renormalised."""
+    weights = {factor: admission_chance.WEIGHTS[model][factor] for factor in rubric if rubric[factor] is not None}
+    total = sum(weights.values())
+    return [{'key': factor, 'score': rubric[factor], 'share': round(100 * weight / total)} for factor, weight in weights.items()]
+
+
+def match_with_context(profile):
+    """``(match, ctx)``: the balanced list and the fit context it was built from."""
     ctx = fit_context(profile)
     scores = fit_scores(profile, ctx)
     ranking = dict(University.objects.filter(pk__in=list(scores)).values_list('pk', 'ranking'))
@@ -623,12 +651,26 @@ def college_match(profile):
         candidates.sort(key=lambda pk: (-scores[pk][0], ranking.get(pk) or 999999, pk))
         picked[band] = candidates[:quota]
     ids = [pk for ids in picked.values() for pk in ids]
-    rows = with_cost(University.objects.prefetch_related(eligible_programs())).filter(pk__in=ids)
-    serialized = {row['id']: row for row in serialize_rows(list(rows), ctx)}
+    universities = list(with_cost(University.objects.prefetch_related(eligible_programs())).filter(pk__in=ids))
+    majors = intended_majors(profile)
+    programs = {university.pk: suggested_programs(university, majors) for university in universities}
+    serialized = {row['id']: row for row in serialize_rows(universities, ctx)}
+    for pk, row in serialized.items():
+        row['suggested_programs'] = programs[pk]
+        row['factors'] = chance_factors(row['fit']['chance']['model'], ctx['rubric'])
     return {
+        # Essays are None until the Essay Lab has scored a personal statement. Letters are never part of a student's score.
         'rubric': ctx['rubric'],
         'groups': [
             {'band': band, 'quota': quota, 'results': [serialized[pk] for pk in picked[band] if pk in serialized]}
             for band, quota in MATCH_QUOTAS
         ],
-    }
+    }, ctx
+
+
+def college_match(profile):
+    """The student's balanced list: the best-fitting universities of each band, with the rubric.
+
+    Built from the cached fit map, so it costs no more than one College Search page. No AI runs here.
+    """
+    return match_with_context(profile)[0]

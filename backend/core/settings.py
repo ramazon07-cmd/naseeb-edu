@@ -125,6 +125,11 @@ REC_LETTER_CHECK_USER_DAILY_LIMIT = config('REC_LETTER_CHECK_USER_DAILY_LIMIT', 
 REC_LETTER_CHECK_RECHECK_PER_MINUTE = config('REC_LETTER_CHECK_RECHECK_PER_MINUTE', default=20, cast=int)
 REC_LETTER_CHECK_MIN_INTERVAL_SECONDS = config('REC_LETTER_CHECK_MIN_INTERVAL_SECONDS', default=15, cast=int)
 REC_LETTER_CHECK_HOURLY_LIMIT = config('REC_LETTER_CHECK_HOURLY_LIMIT', default=60, cast=int)
+# "Why these fit you" lines of the college match (one call per list, cached). Same rules as the coach:
+# a platform budget of 0 turns them off; school and user caps use 0 = no cap.
+COLLEGE_MATCH_REASONS_DAILY_BUDGET = config('COLLEGE_MATCH_REASONS_DAILY_BUDGET', default=3000, cast=int)
+COLLEGE_MATCH_REASONS_SCHOOL_DAILY_BUDGET = config('COLLEGE_MATCH_REASONS_SCHOOL_DAILY_BUDGET', default=600, cast=int)
+COLLEGE_MATCH_REASONS_USER_DAILY_LIMIT = config('COLLEGE_MATCH_REASONS_USER_DAILY_LIMIT', default=10, cast=int)
 ESSAY_AUTOSAVE_LIMIT = config('ESSAY_AUTOSAVE_LIMIT', default=1200, cast=int)
 ESSAY_AUTOSAVE_WINDOW_SECONDS = config('ESSAY_AUTOSAVE_WINDOW_SECONDS', default=600, cast=int)
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)

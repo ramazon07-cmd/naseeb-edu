@@ -52,6 +52,13 @@ def _limits(feature):
             settings.REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET or None,
             settings.REC_LETTER_CHECK_USER_DAILY_LIMIT or None,
         )
+    if feature == 'college_match_reasons':
+        # Like the coach: a platform budget of 0 turns the "Why these fit you" lines off.
+        return (
+            settings.COLLEGE_MATCH_REASONS_DAILY_BUDGET,
+            settings.COLLEGE_MATCH_REASONS_SCHOOL_DAILY_BUDGET or None,
+            settings.COLLEGE_MATCH_REASONS_USER_DAILY_LIMIT or None,
+        )
     raise ValueError(f'Unknown AI feature: {feature}')
 
 
@@ -84,7 +91,7 @@ class _ProcessFallback:
 _fallback = _ProcessFallback()
 
 
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'recommendation_letter_check')
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'recommendation_letter_check', 'college_match_reasons')
 TOP_SCHOOLS = 5
 
 

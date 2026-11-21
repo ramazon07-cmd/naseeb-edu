@@ -190,8 +190,8 @@ def chance(university, ctx):
     bar, = by_rate(SOFT_BARS, rate)
     soft = 0
     for factor in SOFT_FACTORS:
-        score = ctx['rubric'][factor]
-        # Not scored yet (no essay or letter, or AI is off): taken as at the bar, neither helps nor harms.
+        score = ctx['rubric'].get(factor)
+        # Not scored yet (no checked essay; letters are never scored for students): at the bar, neither helps nor harms.
         standing = 0 if score is None else clamp((score - bar) / SOFT_SPREAD)
         soft += weights[factor] * (standing if standing < 0 else gate * standing)
     position = weights['academics'] * academics + soft

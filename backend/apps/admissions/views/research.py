@@ -5,8 +5,10 @@ from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from rest_framework.views import APIView
 from apps.users.models import User
-from .. import rubric_ai
-from ..college_search import CollegeSearchParams, college_match, college_search, evidence_counts, missing_fields
+from .. import match_reasons
+from ..college_search import (
+    CollegeSearchParams, college_match, college_search, evidence_counts, fit_key, match_with_context, missing_fields,
+)
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
 
@@ -107,10 +109,31 @@ class EducationMatchAIView(APIView):
 
 
 class CollegeMatchView(APIView):
-    """The AI college match (``POST /api/college-match/``): a balanced list of best-fitting universities.
+    """The college match (``POST /api/college-match/``): a balanced list of best-fitting universities.
 
-    AI reads the student's essay and letters once per text (rubric_ai.py, only when outbound AI
-    is allowed); every university is then matched with fixed rules, never by AI.
+    Every university is matched with fixed rules, never by AI: this call makes no AI request. The essays
+    score is the student's latest scored personal statement check from the Essay Lab (None until there is one).
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        profile = student_profile(request)
+        if not profile:
+            return Response({'detail': 'The college match is available to student accounts only.'}, status=403)
+        missing = missing_fields(profile)
+        if missing:
+            return Response({'detail': 'Complete your research profile first.', 'missing_fields': missing}, status=400)
+        data = college_match(profile)
+        data['generated_at'] = timezone.now()
+        return Response(data)
+
+
+class CollegeMatchReasonsView(APIView):
+    """The optional "Why these fit you" lines (``POST /api/college-match/reasons/``).
+
+    One AI call writes one line for each card of the match; it counts as one unit of the daily limit,
+    is cached for the same list and profile, and answers 503 (unit given back) when it fails.
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -124,8 +147,13 @@ class CollegeMatchView(APIView):
         missing = missing_fields(profile)
         if missing:
             return Response({'detail': 'Complete your research profile first.', 'missing_fields': missing}, status=400)
-        rubric_ai.score_student(profile, request.user)
-        data = college_match(profile)
-        data['ai_scoring'] = rubric_ai.ai_available()
-        data['generated_at'] = timezone.now()
-        return Response(data)
+        data, ctx = match_with_context(profile)
+        language = str(request.data.get('language') or 'en')[:5]
+        try:
+            lines, cached = match_reasons.generate(
+                profile, request.user, data, fit_key(profile, ctx), ctx['rubric'], language)
+        except match_reasons.ReasonsUnavailable as unavailable:
+            detail = ('Naseeb AI is resting for today. Please try again tomorrow.' if unavailable.code == 'coach_resting'
+                      else 'Naseeb AI is unavailable right now. Please try again soon.')
+            return Response({'detail': detail, 'code': unavailable.code}, status=unavailable.status)
+        return Response({'reasons': lines, 'cached': cached})

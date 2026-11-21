@@ -1,17 +1,20 @@
-"""The student's rubric: academics, activities, essays and recommendations, each 0-10.
+"""The student's rubric: academics, activities and essays, each 0-10.
 
 Scored once per profile, like an IELTS band per skill, then matched against every
 university with fixed rules (admission_chance.py). Academics and activities come
 from what the student entered (grades, tests, honor levels, roles, years); no AI.
-Essays and recommendation letters are scored by AI once per text, only when outbound
-AI is allowed (rubric_ai.py), and are None until then: unknown, not zero.
+Essays are the student's latest scored personal statement check from the Essay Lab
+(0-100 divided by 10); no new AI call is made here. Without a scored check the
+essays score is None: "not checked yet", unknown, not zero.
+
+Recommendation letters are never part of a student's score, and writing language is never scored.
 
 The weights are starting values from the research (SFFA v. Harvard ratings, counselor
 activity tiers); they are meant to be tuned against recorded outcomes.
 """
 from datetime import date
 
-from .models import Achievement, Honor
+from .models import Achievement, Essay, EssayDepthCheck, Honor
 
 # Honor level -> how far the recognition reaches (Harvard extracurricular 1 is national or beyond).
 HONOR_LEVELS = {
@@ -26,14 +29,16 @@ ACHIEVEMENT_LEVELS = {
     Achievement.Category.OLYMPIAD: 0.6, Achievement.Category.STARTUP: 0.6, Achievement.Category.RESEARCH: 0.6,
 }
 ACHIEVEMENT_LEVEL = 0.45
-# Role words, strongest first; no role or an unknown one counts as taking part.
-ROLES = (
-    (1.0, ('founder', 'co-founder', 'cofounder', 'asoschi', 'основател')),
-    (0.85, ('president', 'captain', 'head', 'chair', 'editor', 'lead', 'leader', 'rais', 'sardor', 'капитан', 'президент', 'руководител')),
-    (0.7, ('organizer', 'organiser', 'coordinator', 'manager', 'author', 'tashkilotchi', 'организатор', 'координатор')),
+# A title is easy to claim, so it adds only a little: duration and verification count more.
+# Role words, strongest first, with the bonus they add to the base role value.
+ROLE_BASE = 0.55
+ROLE_BONUSES = (
+    (0.10, ('founder', 'co-founder', 'cofounder', 'asoschi', 'основател')),
+    (0.07, ('president', 'captain', 'head', 'chair', 'editor', 'lead', 'leader', 'rais', 'sardor', 'капитан', 'президент', 'руководител')),
+    (0.04, ('organizer', 'organiser', 'coordinator', 'manager', 'author', 'tashkilotchi', 'организатор', 'координатор')),
 )
-PARTICIPANT = 0.45
-UNVERIFIED = 0.9
+# Unverified evidence counts for little more than half.
+UNVERIFIED = 0.6
 # Weights of the strongest three items: one standout counts most (a "spike").
 TOP_WEIGHTS = (0.7, 0.2, 0.1)
 OLYMPIAD_WORDS = ('olymp', 'олимп')
@@ -48,14 +53,14 @@ def clamp(value, low=0.0, high=10.0):
 
 def role_weight(text):
     text = (text or '').lower()
-    return next((weight for weight, words in ROLES if any(word in text for word in words)), PARTICIPANT)
+    return ROLE_BASE + next((bonus for bonus, words in ROLE_BONUSES if any(word in text for word in words)), 0)
 
 
 def duration_weight(start, end, today=None):
     if not start:
-        return 0.6
+        return 0.5
     years = ((end or today or date.today()) - start).days / 365
-    return 1.0 if years >= 1.5 else 0.8 if years >= 0.5 else 0.6
+    return 1.0 if years >= 1.5 else 0.8 if years >= 0.5 else 0.5
 
 
 def academics_score(ctx, honors):
@@ -75,7 +80,7 @@ def academics_score(ctx, honors):
 
 
 def activity_items(profile, honors, today=None):
-    """Each piece of evidence as a 0-1 value: reach x role x how long, a little less while unverified."""
+    """Each piece of evidence as a 0-1 value: reach x role x how long, much less while unverified."""
     def value(level, role, start=None, end=None, verified=True, timed=False):
         item = level * role * (duration_weight(start, end, today) if timed else 1.0)
         return min(1.0, item * (1 if verified else UNVERIFIED))
@@ -87,13 +92,14 @@ def activity_items(profile, honors, today=None):
         role = role_weight(activity.role)
         if (activity.hours_per_week or 0) >= 5:
             role = min(1.0, role * 1.1)
-        items.append(value(ACTIVITY_LEVEL, role, activity.start_date, activity.end_date, activity.verified, timed=True))
+        level = ACTIVITY_LEVEL * (1.15 if activity.impact.strip() else 1)  # a stated result
+        items.append(value(level, role, activity.start_date, activity.end_date, activity.verified, timed=True))
     for research in profile.researches.all():
         level = RESEARCH_LEVEL * (1.15 if research.outcome else 1)
         items.append(value(level, role_weight(research.role), research.start_date, research.end_date, research.verified, timed=True))
     for internship in profile.internships.all():
         end = None if internship.is_current else internship.end_date
-        items.append(value(INTERNSHIP_LEVEL, 0.85, internship.start_date, end, internship.verified, timed=True))
+        items.append(value(INTERNSHIP_LEVEL, 0.65, internship.start_date, end, internship.verified, timed=True))
     for project in profile.projects.all():
         level = PROJECT_LEVEL * (1.1 if project.impact else 1)
         items.append(value(level, role_weight(project.role), verified=project.verified))
@@ -107,20 +113,23 @@ def activities_score(items):
     return round(clamp(10 * sum(weight * item for weight, item in zip(TOP_WEIGHTS, items))), 1)
 
 
-def ai_scores(profile):
-    """Essay and recommendation scores from AI, for the current texts only (rubric_ai.py)."""
-    from .rubric_ai import current_scores
+def essays_score(profile):
+    """The latest scored personal statement check, 0-100 as 0-10; None while no check is scored.
 
-    return current_scores(profile)
+    No AI call: the Essay Lab already scored it (EssayDepthCheck.overall, null for unscored checks).
+    """
+    overall = EssayDepthCheck.objects.filter(
+        essay__student=profile, essay__essay_type=Essay.EssayType.PERSONAL_STATEMENT, essay__trashed_at__isnull=True,
+        overall__isnull=False,
+    ).order_by('-created_at', '-id').values_list('overall', flat=True).first()
+    return None if overall is None else round(clamp(overall / 10), 1)
 
 
 def rubric(profile, ctx):
-    """The four scores, 0-10 or None when not scored yet."""
+    """The three scores, 0-10 (essays None when no personal statement check is scored yet)."""
     honors = list(profile.honors.all())
-    scored = ai_scores(profile)
     return {
         'academics': academics_score(ctx, honors),
         'activities': activities_score(activity_items(profile, honors)),
-        'essays': scored.get('essays'),
-        'recommendations': scored.get('recommendations'),
+        'essays': essays_score(profile),
     }
