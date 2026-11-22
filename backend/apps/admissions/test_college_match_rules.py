@@ -9,6 +9,7 @@ from apps.admissions.college_match import (
     MAX_FAR_REACH, aid_status, international_cost, passes_gate, pick_list, sat_position, sort_key,
 )
 from apps.admissions.essay_lab import coach
+from apps.admissions import ai_providers
 from apps.admissions.models import Activity, Honor, University, UniversitySubjectRank
 from apps.admissions.test_college_match import URL, MatchFixture, add_check
 
@@ -350,7 +351,7 @@ class DeterminismTests(RulesFixture, APITestCase):
 
     def test_the_default_match_makes_no_ai_call(self):
         self.ready_profile()
-        with mock.patch.object(coach, '_post') as post, mock.patch('urllib.request.urlopen') as urlopen, \
+        with mock.patch.object(ai_providers, 'chat') as post, mock.patch('urllib.request.urlopen') as urlopen, \
                 mock.patch.object(ai_budget, 'consume') as consume, mock.patch.object(coach, '_request_gateway') as gateway:
             self.match()
         for call in (post, urlopen, consume, gateway):

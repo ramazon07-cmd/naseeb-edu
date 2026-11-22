@@ -6,7 +6,7 @@ import { normalizeCheck } from '../essayLab/coachModel.js'
 export const LETTER_CRITERIA = [
   { key: 'evidence', label: 'Specific evidence', explain: 'Real moments, projects and results you saw yourself.' },
   { key: 'insight', label: 'Insight', explain: 'What the student’s actions say about who they are.' },
-  { key: 'context', label: 'Basis for comparison', explain: 'How the student compares with others you have taught or counselled.' },
+  { key: 'context', label: 'Basis and context', explain: 'How you know the student, and the school context a foreign reader needs.' },
   { key: 'structure', label: 'Structure and length', explain: 'A clear opening, a focused middle and a firm recommendation.' },
   { key: 'voice', label: 'Your voice', explain: 'Does it sound like you, not a template?' },
 ]
@@ -14,6 +14,30 @@ export const LETTER_KEYS = LETTER_CRITERIA.map((item) => item.key)
 export const LETTER_NORMALIZE = { keys: LETTER_KEYS, fallback: 'evidence' }
 export const normalizeLetterCheck = (check) => normalizeCheck(check, LETTER_NORMALIZE)
 export const letterCriterionLabel = (key) => LETTER_CRITERIA.find((item) => item.key === key)?.label || LETTER_CRITERIA[0].label
+
+// Not scored, not notes: the reader notes, the sensitive-content notes, the copy check and the safety
+// flag the server puts next to the notes of a check (result.reader_notes / sensitive / copy / safety).
+// The wording of the sensitive notes is fixed here so it can be shown in every language.
+export const SENSITIVE_TEXT = {
+  health: 'This names a health matter of a minor. Have the student and family agreed to share it, and does the reader need it?',
+  discipline: 'If this explains an event on the record, does the letter say what happened afterwards in your own observation?',
+}
+export const READER_CRITERION = 'reader'
+export const SENSITIVE_CRITERION = 'sensitive'
+
+export function letterExtras(check) {
+  const result = check?.result
+  if (!result || typeof result !== 'object') return { readerNotes: [], sensitive: [], copy: null, safety: false }
+  const readerNotes = (Array.isArray(result.reader_notes) ? result.reader_notes : [])
+    .filter((item) => item && item.id && item.quote && item.question)
+    .map((item) => ({ id: String(item.id), criterion: READER_CRITERION, quote: String(item.quote), question: String(item.question) }))
+  const sensitive = (Array.isArray(result.sensitive) ? result.sensitive : [])
+    .filter((item) => item && SENSITIVE_TEXT[item.kind])
+    .map((item) => ({ id: `sx-${item.kind}`, criterion: SENSITIVE_CRITERION, kind: item.kind, quote: String(item.quote || ''), question: SENSITIVE_TEXT[item.kind] }))
+  const percent = Math.round(Number(result.copy?.percent))
+  const copy = result.copy && Number.isFinite(percent) && percent >= 30 && result.copy.date ? { percent: Math.min(100, percent), date: String(result.copy.date) } : null
+  return { readerNotes, sensitive, copy, safety: result.safety === true }
+}
 
 export const LETTER_MAX_CHARS = 20000
 export const AI_DAILY_LIMIT = 20
@@ -147,8 +171,28 @@ export function fillCheckText(model, name) {
   }
 }
 
+export const fillExtras = (extras, name) => ({ ...extras, readerNotes: extras.readerNotes.map((note) => ({ ...note, question: fillStudent(note.question, name) })) })
+
 export const factsOf = (items) => (items || []).filter((item) => item?.kind === 'fact')
-export const aiIdeasOf = (items) => (items || []).filter((item) => (item?.kind === 'sentence' || item?.kind === 'idea') && item.text)
+// AI ideas are questions to the author (each cites one profile fact); they are never inserted into the letter.
+export const aiIdeasOf = (items) => (items || []).filter((item) => item?.kind === 'question' && item.text)
+// Only a profile fact has a "+" (it inserts the neutral "Title: detail." line).
+export const canInsert = (item) => item?.kind === 'fact'
+
+// The Check button after an error: hidden only when it can never work (not a counselor, or the server says
+// AI is switched off: `details.ai_available` false). A provider failure stays retryable.
+// The API error carries the whole response body; the server's own flags (`ai_available`) sit one level down.
+export const checkErrorDetails = (error) => {
+  const inner = error?.details?.details
+  return inner && typeof inner === 'object' ? inner : null
+}
+
+export function checkAvailability(error) {
+  const code = error?.code
+  const unavailable = code === 'counselors_only' || Boolean(error?.off)
+    || (code === 'coach_unavailable' && error?.details?.ai_available === false)
+  return { unavailable, retry: code === 'coach_unavailable' && !unavailable }
+}
 
 // --- Header line ---------------------------------------------------------------------
 export function recommenderSummary(form, { dueText = '', statusText = '' } = {}) {

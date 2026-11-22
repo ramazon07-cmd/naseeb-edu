@@ -17,7 +17,7 @@ from apps.users.models import User
 from apps.users.throttles import WindowRateThrottle
 from core.exceptions import CodedError
 from core.ai_policy import outbound_ai_allowed
-from .. import ai_budget, ai_usage, letter_coach, rec_letter_ai
+from .. import ai_budget, ai_providers, ai_usage, letter_coach, letter_copy, letter_sensitive, rec_letter_ai
 from ..essay_lab import coach
 from ..models import (
     Achievement,
@@ -569,29 +569,30 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
         )
         if not data['ai']:
             # Typing-time refresh: facts only, no AI call and no budget.
-            return answer('profile', rec_letter_ai.local_suggestions(facts, data['draft']), ai_available)
-        if ai_available and ai_budget.consume('recommendation_letter', request.user):
+            return answer('profile', rec_letter_ai.missing_facts(facts, data['draft']), ai_available)
+        reservation = ai_budget.consume('recommendation_letter', request.user) if ai_available else False
+        if reservation:
             release_db_connection()  # don't hold a pooled connection during the AI call
             language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
             ai_usage.begin()
             succeeded = False
             try:
                 suggestions = rec_letter_ai.ai_suggestions(student, facts, data['draft'], letter=data, language=language)
-                ai_usage.record('recommendation_letter', request.user, provider='gateway', status=ai_usage.OK)
+                ai_usage.record('recommendation_letter', request.user, provider=ai_providers.provider(), status=ai_usage.OK)
                 succeeded = True
             except rec_letter_ai.SuggestionsUnavailable:
-                ai_usage.record('recommendation_letter', request.user, provider='gateway', status=ai_usage.FAILED)
+                ai_usage.record('recommendation_letter', request.user, provider=ai_providers.provider(), status=ai_usage.FAILED)
             finally:
                 if not succeeded:
-                    ai_budget.refund('recommendation_letter', request.user)  # a failed call is free
+                    ai_budget.refund(reservation)  # a failed call is free
             if succeeded:
                 return answer('ai', suggestions + rec_letter_ai.missing_facts(facts, data['draft']), True)
         else:
             ai_usage.record(
-                'recommendation_letter', request.user, provider='gateway',
+                'recommendation_letter', request.user, provider=ai_providers.provider(),
                 status=ai_usage.BUDGET_REFUSED if ai_available else ai_usage.LOCAL_FALLBACK,
             )
-        return answer('profile', rec_letter_ai.local_suggestions(facts, data['draft']), ai_available)
+        return answer('profile', rec_letter_ai.missing_facts(facts, data['draft']), ai_available)
 
     # ------------------------------------------------------------ depth check
 
@@ -633,12 +634,18 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
         throttle = LetterCheckThrottle()
         if not throttle.allow_request(request, self):
             self.throttled(request, throttle.wait())
+        if letter_sensitive.current_danger(body):
+            # Current abuse or danger: never scored, no AI call, no cost; the author is pointed to the
+            # school's child-protection procedure.
+            return self._save_check(request, letter, letter_sensitive.safety_result(), coach.current_model(),
+                                    fingerprint, input_hash, body)
         if not coach.gateway_configured():
             # The letter has no rule-based reader: without the AI there is nothing to run.
             return Response({'detail': 'The letter check is unavailable right now.', 'code': 'coach_unavailable',
                              'details': {'ai_available': False}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        if not ai_budget.consume('recommendation_letter_check', request.user):
-            ai_usage.record(letter_coach.FEATURE, request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
+        reservation = ai_budget.consume('recommendation_letter_check', request.user)
+        if not reservation:
+            ai_usage.record(letter_coach.FEATURE, request.user, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
             raise CodedError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting',
                              status.HTTP_503_SERVICE_UNAVAILABLE)
         spec = letter_coach.build_spec(letter, letter.student, body)
@@ -646,11 +653,17 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             # Both calls are recorded in ai_usage inside run_check; the connection is released before each.
             result, model = coach.run_check(spec, request.user, release_db_connection)
         except coach.CoachUnavailable:
-            ai_budget.refund('recommendation_letter_check', request.user)  # a failed check is free
+            ai_budget.refund(reservation)  # a failed check is free
             return Response({'detail': 'Naseeb AI is unavailable right now. Please try again soon.',
                              'code': 'coach_unavailable', 'details': {'ai_available': True}},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return self._save_check(request, letter, result, model, fingerprint, input_hash, body)
 
+    def _save_check(self, request, letter, result, model, fingerprint, input_hash, body):
+        # No AI: how much of the letter the same author wrote before (shown to the author only).
+        match = letter_copy.copy_match(letter, self.get_queryset(), letter_coach.anonymize)
+        if match:
+            result = {**result, 'copy': match}
         with transaction.atomic():
             # The letter may have been deleted during the AI call.
             if not RecommendationLetter.objects.select_for_update().filter(pk=letter.pk).exists():

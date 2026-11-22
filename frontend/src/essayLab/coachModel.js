@@ -16,6 +16,19 @@ export const STRENGTHS = 'strengths'
 
 export const criterionLabel = (key) => CRITERIA.find((item) => item.key === key)?.label || 'Reflection'
 
+// The supplement rubric has no "Structure": its fifth criterion (API key `structure`) judges focus and
+// use of the word limit. Results carry `rubric` ('personal_statement' | 'supplement'); old ones have none.
+export const SUPPLEMENT_RUBRIC = 'supplement'
+const SUPPLEMENT_LABELS = { structure: 'Focus and length' }
+const SUPPLEMENT_EXPLAIN = { structure: 'Does it use the space well, with no sentence that only repeats?' }
+
+export function criteriaFor(rubric) {
+  if (rubric !== SUPPLEMENT_RUBRIC) return CRITERIA
+  return CRITERIA.map((item) => ({ ...item, label: SUPPLEMENT_LABELS[item.key] || item.label }))
+}
+
+export const explainFor = (rubric, key, explain) => (rubric === SUPPLEMENT_RUBRIC && SUPPLEMENT_EXPLAIN[key]) || explain[key]
+
 // Old checks (no version 2) used these kinds.
 const LEGACY_CRITERION = { reflect: 'reflection', specific: 'specificity', clarity: 'structure', strength: STRENGTHS }
 
@@ -42,6 +55,18 @@ export function headline(overall) {
   if (value <= 70) return 'Developing depth'
   if (value <= 80) return 'Solid depth'
   return 'Strong depth'
+}
+
+// Band edges of the notes (50/51, 60/61, 70/71, 80/81): within this many points the score can
+// flip between two checks of nearly the same text.
+export const BAND_EDGES = [50, 60, 70, 80]
+export const NEAR_EDGE_POINTS = 3
+
+export function nearBandEdge(overall) {
+  if (overall === null || overall === undefined) return false
+  const value = Number(overall)
+  if (!Number.isFinite(value)) return false
+  return BAND_EDGES.some((edge) => Math.abs(value - edge) <= NEAR_EDGE_POINTS)
 }
 
 export function deltaSince(overall, previous) {
@@ -82,6 +107,14 @@ export function coachSource(check) {
   if (!check) return null
   if (check.source === 'ai' || check.source === 'rules') return check.source
   return !check.model || check.model === LOCAL_COACH_MODEL ? 'rules' : 'ai'
+}
+
+export const SCORE_HIDDEN = ['short', 'calibrating']
+const LENGTH_FAILURES = ['over_limit', 'under_minimum']
+// The one line shown instead of the score ring when a result has no shown score.
+export const SCORE_HIDDEN_TEXT = {
+  short: 'Short answers get questions, not a score.',
+  calibrating: 'Scores for this type are not shown yet.',
 }
 
 // One shape for the panel, whatever version the stored check has.
@@ -126,6 +159,16 @@ export function normalizeCheck(check, { keys = CRITERION_KEYS, fallback = 'refle
     strengths,
     notesLocked: version2 && Boolean(result.notes_locked),
     notes,
+    rubric: version2 && typeof result.rubric === 'string' ? result.rubric : null,
+    // 'current_danger' (not scored: a calm message) | 'past_hardship' (scored, one optional support line)
+    safety: version2 && (result.safety === 'current_danger' || result.safety === 'past_hardship') ? result.safety : null,
+    helpline: version2 && typeof result.helpline === 'string' ? result.helpline.trim() : '',
+    // No question was given: fit to the prompt was set to 3 by the server, not judged.
+    fitDefault: version2 && Boolean(result.fit_default),
+    // 'short' (a short answer: questions, no score) | 'calibrating' (scores for this type are not shown yet)
+    scoreHidden: version2 && SCORE_HIDDEN.includes(result.score_hidden) ? result.score_hidden : null,
+    // A personal statement whose length failed: 'over_limit' | 'under_minimum' (fit counts as 1).
+    length: version2 && LENGTH_FAILURES.includes(result.length) ? result.length : null,
   }
 }
 

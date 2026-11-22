@@ -8,7 +8,7 @@ import { Field } from '../components/forms.jsx'
 import { StudentReviewNote } from '../components/RecommendationLetters.jsx'
 import { errorCode } from '../essayLab/essayLabApi.js'
 import { createIdeasController, initialIdeasState } from './ideasController.js'
-import { conflictError, factLine, fillStudent, inputKeyOf, insertAtCaret, normalizeNewlines, wordCount } from './letterModel.js'
+import { conflictError, factLine, inputKeyOf, insertAtCaret, normalizeNewlines, wordCount } from './letterModel.js'
 import { LetterSheet } from './LetterSheet.jsx'
 import LetterPanel from './LetterPanel.jsx'
 import { useLetterCheck } from './useLetterCheck.js'
@@ -192,9 +192,11 @@ function LetterEditor({ student, user, initialLetter, onBack, onOpened, onSaved,
 
   // Typing is never lost: save when the tab is hidden and when leaving, and ask before closing the page.
   useEffect(() => {
-    const pending = () => isDirty() && !conflictRef.current && (letterRef.current || formRef.current.body.trim())
+    // Unsaved text always warns; a conflict only stops the automatic save (the counselor must choose a version).
+    const unsaved = () => isDirty() && (letterRef.current || formRef.current.body.trim())
+    const pending = () => unsaved() && !conflictRef.current
     const hidden = () => { if (document.visibilityState === 'hidden' && pending()) flush({ keepalive: true }).catch(() => {}) }
-    const beforeUnload = (event) => { if (pending()) { event.preventDefault(); event.returnValue = '' } }
+    const beforeUnload = (event) => { if (unsaved()) { event.preventDefault(); event.returnValue = '' } }
     document.addEventListener('visibilitychange', hidden)
     window.addEventListener('beforeunload', beforeUnload)
     return () => {
@@ -291,7 +293,7 @@ function LetterEditor({ student, user, initialLetter, onBack, onOpened, onSaved,
       </main>
       <div className="lw-side" ref={panelRef}>
         <LetterPanel tab={tab} onTab={(id) => { setTab(id); checkState.clearError() }} ideas={ideasState.ideas} name={first} onAskAi={ideasState.askAi}
-          onInsertFact={(fact) => insert(factLine(fact))} onInsertIdea={(item) => insert(fillStudent(item.text, first))}
+          onInsertFact={(fact) => insert(factLine(fact))}
           checkState={checkState} onCheck={checkState.runCheck} onJump={jump} onSetState={checkState.setNoteState} words={words} empty={!form.body.trim()} />
       </div>
     </div>

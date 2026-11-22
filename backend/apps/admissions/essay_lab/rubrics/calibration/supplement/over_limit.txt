@@ -1,0 +1,5 @@
+I want to study computer science at Eastfield because I have spent two years building small tools for my family's grocery shop in Bukhara, and now I am stuck on problems I cannot name.
+
+The first tool was a spreadsheet that tracked which products expired before they sold. My father did not trust it until it showed him that we threw away more yogurt than we sold in July. The second was a simple program in Python that read our cash register's export file and warned us when a product sold out twice in one week. It works, but it is slow, and I rewrote a loop four times.
+
+Eastfield's course on algorithms and data structures, and the student-run software clinic for local businesses, are exactly where I could learn why my code is slow and build something better for shops like ours. I want to arrive with my own questions and leave with answers I can test at home, every summer, behind our counter.

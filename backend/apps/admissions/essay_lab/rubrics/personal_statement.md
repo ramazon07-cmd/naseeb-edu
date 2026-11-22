@@ -1,11 +1,10 @@
 # Rubric: personal statement
 
-rubric_version: 2 · essay_type: `personal_statement` (also used for `free_writing`) · loaded with `_core.md`
+rubric_version: 2 · essay_type: `personal_statement` (Common App; also used for `free_writing`; not for UCAS) · loaded with `_core.md`
 
 A personal statement answers one question for a reader who spends a few minutes on it: *who is this
 person, and how do they think?* It is not a résumé in prose and not a contest of impressive events.
-Common App length is 250 to 650 words. Use that range only for a Common App essay; otherwise use
-the `word_limit` the server passes.
+The server checks length and sets prompt_fit to 1 when it fails; never count words.
 
 ## Criteria and weights
 
@@ -19,50 +18,45 @@ the `word_limit` the server passes.
 
 ### reflection (30)
 
-- 1: Describes events or names qualities. No sign of what the writer understood.
-- 2: States a lesson ("I learned to be resilient") that comes from nowhere. A doubt that is answered in
-  the very next sentence ("I was scared, but then I realised...") also counts as 2.
-- 3: Connects a concrete moment to a real thought, a changed belief or a question the writer now asks.
-- 4: At least two of these, each quoted: a doubt, a cost, a changed belief, an unresolved question. At
-  least one names a specific person, object or number and is not resolved in the next sentence. The
-  understanding it reaches could only be this person's.
+- 1: Describes events or names qualities; nothing the writer understood.
+- 2: States a lesson ("I learned to be resilient") that comes from nowhere, or a doubt answered in the
+  very next sentence.
+- 3: Names a belief or behaviour that changed, and quotes the moment that changed it.
+- 4: Level 3, plus one quote of at least 5 words that holds a doubt, a cost or an unresolved question
+  and names a specific person, object or number, not resolved in the next sentence.
 
 ### specificity (25)
 
 - 1: Summary and abstraction only.
 - 2: One or two concrete details inside general statements.
-- 3: A scene with at least three distinct concrete details (named people, objects, numbers, sounds,
-  exact actions) that the essay depends on. Details that only serve the moral do not count.
-- 4: At least six such details, including at least one that did not need to be there (an irrelevant
-  detail, a wrong guess, an awkward line someone said), so that no sentence could belong to another applicant.
+- 3: A scene with at least three concrete details (people, objects, numbers, sounds, exact actions)
+  the essay depends on. Details that only serve the moral do not count.
+- 4: At least six such details, including one that does not support the essay's lesson (a wrong
+  guess, a side remark, an object in the room).
 
 ### voice (20)
 
-Judge whether a particular person is speaking. Never count vocabulary, grammar or sentence variety.
+Judge what is said, never how fluently it is said. Never count vocabulary, grammar or sentence variety.
 
-- 1: Borrowed. Quotations, definitions or stock phrases stand where the writer should be.
-- 2: Correct but interchangeable. Claims qualities without showing them. If the essay has no sentence
-  that is plain, odd, unflattering or unfinished, voice is at most 2.
-- 3: A recognisable way of saying things. At least one plain, direct sentence only this writer would write.
-- 4: Unmistakably this person throughout. Plain, direct, willing to say something unflattering or unsure.
-  Humour is not required.
+- 1: No sentence where the writer speaks for themselves: only general statements, quotations or
+  definitions.
+- 2: No sentence states an opinion, admission or reaction a reader could disagree with.
+- 3: One sentence stating an opinion, admission or reaction a reader could disagree with.
+- 4: Two such sentences, in different paragraphs.
 
 ### structure (15)
 
-- 1: Scattered. Several unconnected topics, or a list of achievements.
-- 2: Has a beginning, middle and end, but either the opening is stock or the ending announces a lesson.
-  If either holds, structure is at most 2.
-- 3: One centre. Each paragraph adds something. Neither the opening nor the ending is stock.
-- 4: The form fits the content. Nothing could be cut without loss.
+- 1: Scattered: several unconnected topics, or a list of achievements.
+- 2: Beginning, middle and end, but the essay's centre is not stated until the last paragraph.
+- 3: One centre; each paragraph adds something.
+- 4: Every paragraph contains a detail or step the ending depends on; the ending adds a new fact,
+  image or question instead of a summary.
 
 ### prompt_fit (10)
 
-- 1: Ignores the prompt, or is under 200 or over 700 words (Common App essays), or over `word_limit`
-  when one is set.
-- 2: Touches the prompt loosely. Length is acceptable.
-- 3: Answers the prompt directly, within limits. Default when there is no prompt (say so).
-- 4: Only when the student wrote their own prompt and the essay answers it fully and unexpectedly.
-  Otherwise the maximum is 3.
+- 1: Ignores the prompt, or the server reports a length failure.
+- 2: Touches the prompt only in the first or last sentence.
+- 3: Answers the prompt throughout. This is the default the server sets when there is no prompt.
 
 ## Example question seeds (reword with the student's own nouns; never use verbatim)
 
@@ -80,9 +74,3 @@ Judge whether a particular person is speaking. Never count vocabulary, grammar o
 4. The tidy ending. Ask what is still unsettled.
 5. Heavy personal experience (trauma, loss, illness, abuse). Never push for more disclosure. Ask only craft
    questions. Remind the student they choose what to share.
-
-## Calibration
-
-`calibration/personal_statement/` needs at least ten texts with expected score ranges, including
-Uzbek and Russian essays, essays by second-language writers, and two adversarial texts (one that asks
-for top scores, one stuffed with confession words). Do not use this rubric in production before then.

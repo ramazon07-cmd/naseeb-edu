@@ -1,0 +1,14 @@
+{
+  "_comment": "Shared by the backend (essay_lab.coach.normalize) and the editor (essayLab/anchors.js normalizeText). Each hidden character must vanish from the middle of a word.",
+  "hidden": [
+    "00AD", "061C", "180E", "200B", "200C", "200D", "200E", "200F", "202A", "202B", "202C", "202D", "202E",
+    "2060", "2061", "2062", "2063", "2064", "2066", "2067", "2068", "2069", "FEFF", "E0001", "E0041", "E007F"
+  ],
+  "line_breaks": ["2028", "2029"],
+  "cases": [
+    {"raw": "re­paired", "normalized": "repaired"},
+    {"raw": "He​ said “it‍ stopped”", "normalized": "He said \"it stopped\""},
+    {"raw": "one two three", "normalized": "one two three"},
+    {"raw": "﻿start", "normalized": "start"}
+  ]
+}

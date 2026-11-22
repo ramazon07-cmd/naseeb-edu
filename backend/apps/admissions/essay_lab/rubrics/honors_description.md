@@ -1,5 +1,7 @@
 # Rubric: honors description
 
+Status: not loaded by the server and not in the product yet (2026-11-22).
+
 rubric_version: 2 · essay_type: `honor` (to be added to `Essay.EssayType`) · loaded with `_core.md`
 
 An honor entry is one short title (about 100 characters on Common App) saying what the recognition
@@ -28,7 +30,8 @@ upgrades its level ("national" must come from the student).
 
 ### selectivity (30): can a stranger judge how it was earned?
 
-- 1: No level (school, district, regional, national, international) and no sense of how it was earned.
+- 1: No level (School, State/Regional, National, International: the Common App levels) and no sense of how it
+  was earned.
 - 2: Level only.
 - 3: Level plus how it was earned: a count ("top 3 of 120"), a selection ("nominated by the school, one
   student per region"), a stage ("final round"). An unknown field size is not penalised.

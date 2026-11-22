@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { buildIndex, findQuote, locateQuotes, normalizeText } from '../src/essayLab/anchors.js';
 
 test('normalizes like the backend: NFKC, straight quotes, collapsed whitespace', () => {
@@ -68,4 +69,28 @@ test('locateQuotes searches block by block, drops missing quotes and re-anchors'
   assert.equal(located.has('n4'), false);
   const moved = locateQuotes(blocks, notes, new Map([['n1', 81]]));
   assert.deepEqual(moved.get('n1'), {from: 80, to: 102});
+});
+
+// The list the backend test reads too (backend/apps/admissions/test_essay_coach_rules.py).
+const shared = JSON.parse(readFileSync(new URL('./fixtures/essay_hidden_characters.json', import.meta.url), 'utf8'));
+const chr = (hex) => String.fromCodePoint(parseInt(hex, 16));
+
+test('removes every shared hidden character like the backend does', () => {
+  for (const hex of shared.hidden) {
+    assert.equal(normalizeText(`a${chr(hex)}b`), 'ab', hex);
+  }
+  for (const hex of shared.line_breaks) {
+    assert.equal(normalizeText(`a${chr(hex)}b`), 'a b', hex);
+  }
+  for (const { raw, normalized } of shared.cases) {
+    assert.equal(normalizeText(raw), normalized);
+  }
+});
+
+test('anchors a cleaned quote against text pasted with hidden characters', () => {
+  const text = 'It was re\u00adpaired, and the\u200b radio\u2060 sang.';
+  const hit = findQuote(buildIndex(text), 'repaired, and the radio sang.');
+  assert.deepEqual(hit, {from: text.indexOf('re'), to: text.length});
+  const start = findQuote(buildIndex(text), 'repaired');
+  assert.equal(text.slice(start.from, start.to), 're\u00adpaired');
 });
