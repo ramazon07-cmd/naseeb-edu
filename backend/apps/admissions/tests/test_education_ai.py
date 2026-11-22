@@ -1,4 +1,5 @@
 """Education-match AI: gateway, daily budget, cache, de-identification, permissions."""
+import datetime
 import json
 import socket
 import urllib.error
@@ -11,7 +12,7 @@ from rest_framework import status
 
 from apps.users.models import User
 
-from .. import ai_budget
+from .. import ai_budget, ai_usage
 from ..models import AiUsageLog, ChallengeAttempt
 from .base import RoleIsolationBase
 
@@ -88,7 +89,16 @@ class EducationMatchAITests(RoleIsolationBase):
         self.assertEqual(self.used(), 0)
         self.assertEqual(self.used(f':school:{self.school_a.pk}'), 0)
         self.assertEqual(self.used(f':user:{self.student_a_user.pk}'), 0)
-        self.assertEqual(AiUsageLog.objects.get(feature='education_match').status, 'provider_error')
+        row = AiUsageLog.objects.get(feature='education_match')
+        self.assertEqual((row.status, row.refunded), ('provider_error', True))
+
+    def test_refunded_failure_is_not_a_paid_call_in_the_usage_summary(self):
+        error = urllib.error.URLError(ConnectionRefusedError(61, 'refused'))
+        with mock.patch('urllib.request.urlopen', side_effect=error):
+            self.post()
+        data = ai_usage.summary(timezone.now() - datetime.timedelta(days=1))['features']['education_match']
+        self.assertEqual((data['paid_calls'], data['refunded_calls'], data['error_rate']), (0, 1, 0))
+        self.assertEqual(ai_budget.usage_today([])['education_match']['used'], 0)
 
     def test_http_error_is_503_and_refunded(self):
         error = urllib.error.HTTPError('https://gw', 500, 'boom', {}, None)
@@ -124,6 +134,7 @@ class EducationMatchAITests(RoleIsolationBase):
         self.assertEqual(self.used(), 1)
         self.assertEqual(self.used(f':school:{self.school_a.pk}'), 1)
         self.assertEqual(self.used(f':user:{self.student_a_user.pk}'), 1)
+        self.assertFalse(AiUsageLog.objects.get(feature='education_match').refunded)
 
     @override_settings(EDUCATION_MATCH_DAILY_BUDGET=1, EDUCATION_MATCH_SCHOOL_DAILY_BUDGET=1,
                        EDUCATION_MATCH_USER_DAILY_LIMIT=1)

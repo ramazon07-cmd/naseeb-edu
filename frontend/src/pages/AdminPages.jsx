@@ -19,6 +19,7 @@ import { SupportViewModal } from '../components/SupportViewModal';
 import { ModerationCard, moderateReport } from '../components/moderation';
 import { dateText, dateTimeText, formatFileSize, joinParts } from '../lib/format';
 import { attentionRows } from '../lib/adminAttention';
+import { aiCostLine, aiTokenLine, aiUsageRows } from '../lib/aiUsage';
 import { InlineLoadError } from '../components/states';
 import { FEATURES } from '../lib/features';
 import { invalidatePagedLists, usePagedList } from '../hooks/usePagedList';
@@ -394,28 +395,39 @@ function AuditRecord({ event }) {
   </article>;
 }
 
-const AI_FEATURES = [['assistant', 'AI assistant'], ['essay_coach', 'Essay coach'], ['recommendation_letter', 'Letter suggestions']];
-
 // Paid AI calls today against the daily caps (#39); counters only, no student content.
+// The features listed are whatever the backend reports.
 function AiUsagePanel() {
   const usage = useAdminRequest(loadAiUsage);
   let body;
   if (usage.error) body = <InlineLoadError message={usage.error} onRetry={usage.retry} />;
   else if (!usage.data) body = <p className="paged-list-loading" role="status">{t("Loading…")}</p>;
-  else if (!usage.data.cache_available) body = <p className="form-note"><AlertTriangle size={16} /> {t("Usage unavailable: the cache is down, so today's counts cannot be read.")}</p>;
-  else body = <div className="ai-usage">{AI_FEATURES.map(([key, title]) => <AiUsageRow key={key} title={title} usage={usage.data.features[key]} />)}{usage.data.fallback_active && <p className="form-note"><AlertTriangle size={16} /> {t("The cache was unreachable earlier today; calls ran on each server's small fallback allowance.")}</p>}</div>;
+  else {
+    const data = usage.data;
+    const cost = aiCostLine(data.cost_estimate, data.tokens?.window_days);
+    body = <div className="ai-usage">
+      {!data.cache_available && <p className="form-note"><AlertTriangle size={16} /> {data.today_from_log ? t("The cache is down, so today's counts come from the usage log and no daily caps are shown.") : t("Usage unavailable: the cache is down, so today's counts cannot be read.")}</p>}
+      {aiUsageRows(data).map((row) => <AiUsageRow key={row.key} {...row} days={data.tokens?.window_days} />)}
+      {data.fallback_active && <p className="form-note"><AlertTriangle size={16} /> {t("The cache was unreachable earlier today; calls ran on each server's small fallback allowance, so the counts above may be low. The usage log counts are shown for comparison.")}</p>}
+      {cost && <small>{cost}</small>}
+    </div>;
+  }
   return <Panel title={t("AI usage today")}>{body}</Panel>;
 }
 
-function AiUsageRow({ title, usage }) {
-  const share = usage.limit ? Math.min(100, Math.round((usage.used / usage.limit) * 100)) : null;
+function AiUsageRow({ title, usage, log, tokens, cost, days }) {
+  const share = usage?.limit ? Math.min(100, Math.round((usage.used / usage.limit) * 100)) : null;
   const warn = share !== null && share >= 80;
-  const caption = usage.limit === 0 ? t("Turned off: the daily cap is 0.") : usage.limit ? tx`${formatNumberLocale(usage.used)} of ${formatNumberLocale(usage.limit)} calls` : tx`${formatNumberLocale(usage.used)} calls, no daily cap`;
+  const caption = !usage ? tx`${formatNumberLocale(log.used)} calls (usage log)` : usage.limit === 0 ? t("Turned off: the daily cap is 0.") : usage.limit ? tx`${formatNumberLocale(usage.used)} of ${formatNumberLocale(usage.limit)} calls` : tx`${formatNumberLocale(usage.used)} calls, no daily cap`;
+  const schools = (usage || log).top_schools || [];
+  const tokenLine = aiTokenLine(tokens, days);
   return <div className={`ai-usage-row ${warn ? 'warn' : ''}`}>
     <div className="ai-usage-head"><b>{t(title)}</b><span>{caption}</span></div>
     {share !== null && <div className="ai-usage-bar" role="progressbar" aria-label={t(title)} aria-valuemin={0} aria-valuemax={100} aria-valuenow={share}><span style={{ width: `${share}%` }} /></div>}
-    {(warn || usage.refused > 0) && <small>{joinParts(warn && t("80% or more of today's cap is used."), usage.refused > 0 && tp('{n} call refused at a cap|{n} calls refused at a cap', usage.refused, { n: usage.refused }))}</small>}
-    {usage.top_schools.length > 0 && <small>{t("Busiest schools")}: {usage.top_schools.map((row) => `${row.name} (${formatNumberLocale(row.used)})`).join(', ')}</small>}
+    {(warn || usage?.refused > 0) && <small>{joinParts(warn && t("80% or more of today's cap is used."), usage.refused > 0 && tp('{n} call refused at a cap|{n} calls refused at a cap', usage.refused, { n: usage.refused }))}</small>}
+    {usage && log && <small>{tx`${formatNumberLocale(log.used)} calls today in the usage log`}</small>}
+    {schools.length > 0 && <small>{t("Busiest schools")}: {schools.map((row) => `${row.name} (${formatNumberLocale(row.used)})`).join(', ')}</small>}
+    {tokenLine && <small>{tokenLine}{cost !== null && cost !== undefined ? ` · ~$${cost}` : ''}</small>}
   </div>;
 }
 

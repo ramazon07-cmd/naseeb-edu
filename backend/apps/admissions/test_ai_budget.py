@@ -206,7 +206,24 @@ class AiBudgetRefundTests(APITestCase):
             ai_budget.refund(reservation)
             self.assertEqual(cache.get(self.key()), 1)
             self.assertEqual(cache.get(self.key(suffix=f':user:{self.user.pk}')), 1)
-            self.assertEqual(ai_budget._fallback.counts['assistant:process'], 0)
+            self.assertEqual(ai_budget._fallback.counts.get('assistant:process', 0), 0)
+
+    def test_refunded_fallback_call_does_not_raise_the_fallback_flag(self):
+        with fresh_fallback():
+            with mock.patch.object(ai_budget, 'count_hits', return_value=None), \
+                    self.assertLogs('naseeb.ai_budget', level='WARNING'):
+                reservation = ai_budget.consume('assistant', self.user)
+            self.assertTrue(ai_budget.fallback_active())
+            ai_budget.refund(reservation)
+            self.assertFalse(ai_budget.fallback_active())
+
+    def test_fallback_call_that_stays_counted_keeps_the_flag(self):
+        with fresh_fallback():
+            with mock.patch.object(ai_budget, 'count_hits', return_value=None), \
+                    self.assertLogs('naseeb.ai_budget', level='WARNING'):
+                ai_budget.consume('assistant', self.user)
+            ai_budget.consume('assistant', self.user)  # cache is back
+            self.assertTrue(ai_budget.fallback_active())
 
     def test_cache_reservation_refund_does_not_touch_process_fallback(self):
         with fresh_fallback():

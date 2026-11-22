@@ -2411,6 +2411,8 @@ class AiUsageLog(models.Model):
     latency_ms = models.PositiveIntegerField(default=0)
     language = models.CharField(max_length=10, blank=True)
     fallback_used = models.BooleanField(default=False)
+    # The provider did not charge and the budget was given back, so it is not a paid call.
+    refunded = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at', '-id']

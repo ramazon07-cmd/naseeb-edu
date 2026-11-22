@@ -88,6 +88,10 @@ EDUCATION_MATCH_MODEL = config('EDUCATION_MATCH_MODEL', default='openai/gpt-5.4-
 EDUCATION_MATCH_DAILY_BUDGET = config('EDUCATION_MATCH_DAILY_BUDGET', default=3000, cast=int)
 EDUCATION_MATCH_SCHOOL_DAILY_BUDGET = config('EDUCATION_MATCH_SCHOOL_DAILY_BUDGET', default=600, cast=int)
 EDUCATION_MATCH_USER_DAILY_LIMIT = config('EDUCATION_MATCH_USER_DAILY_LIMIT', default=20, cast=int)
+# Optional USD per 1M tokens for the admin page's cost estimate. One price for every
+# model (0 = no estimate shown); cached input is counted at the input price.
+AI_COST_PER_MTOK_INPUT = config('AI_COST_PER_MTOK_INPUT', default=0, cast=float)
+AI_COST_PER_MTOK_OUTPUT = config('AI_COST_PER_MTOK_OUTPUT', default=0, cast=float)
 # Essay Lab. The coach reuses the AI gateway credentials above.
 ESSAY_COACH_MODEL = config('ESSAY_COACH_MODEL', default=AI_ASSISTANT_MODEL).strip()
 ESSAY_COACH_TIMEOUT_SECONDS = config('ESSAY_COACH_TIMEOUT_SECONDS', default=40, cast=int)

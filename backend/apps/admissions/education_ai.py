@@ -241,7 +241,7 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
         raw, body = _call_gateway(context)
     except GatewayFailure as failure:
         logger.warning('education_ai_provider_failure student_id=%s', profile.pk)
-        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED)
+        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED, refunded=bool(failure.unbilled))
         if failure.unbilled:
             ai_budget.refund(reservation)
         raise EducationAIUnavailable()

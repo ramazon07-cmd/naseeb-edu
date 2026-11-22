@@ -77,8 +77,11 @@ class _ProcessFallback:
         with self.lock:
             if day == self.day:
                 for key in keys:
-                    if self.counts.get(key, 0) > 0:
+                    if self.counts.get(key, 0) > 1:
                         self.counts[key] -= 1
+                    else:
+                        # Drop a key that reaches zero so "fell back today" means a call really stayed counted here.
+                        self.counts.pop(key, None)
 
 
 _fallback = _ProcessFallback()
@@ -194,5 +197,9 @@ def usage_today(school_ids):
 
 
 def fallback_active():
-    """Whether this process fell back to its own allowance today (cache unreachable)."""
-    return _fallback.day == timezone.localdate().isoformat() and bool(_fallback.counts)
+    """Whether this process still holds fallback-counted calls today (cache was unreachable).
+
+    Those calls never reached the shared counters, so today's totals undercount. A call that was
+    refunded leaves nothing behind, so it does not raise the flag.
+    """
+    return _fallback.day == timezone.localdate().isoformat() and any(_fallback.counts.values())

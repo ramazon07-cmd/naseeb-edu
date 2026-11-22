@@ -21,7 +21,7 @@ def make_user(name, school=None, role=User.Role.STUDENT):
     return User.objects.create_user(username=name, email=f'{name}@example.com', role=role, school=school)
 
 
-class RecordTests(TestCase):
+class RecordSetup:
     def setUp(self):
         self.school = School.objects.create(name='Usage School', code='usage-school')
         self.user = make_user('usage-student', self.school)
@@ -32,6 +32,8 @@ class RecordTests(TestCase):
                          {'model': 'openai/gpt-5.4-mini', 'messages': [{'role': 'user', 'content': 'y' * 800}]})
         return sink
 
+
+class RecordTests(RecordSetup, TestCase):
     def test_provider_usage_is_stored_as_reported(self):
         self.answered(model='openai/gpt-5.4-mini', usage={
             'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15,
@@ -51,7 +53,9 @@ class RecordTests(TestCase):
     def test_malformed_usage_values_never_break_recording(self):
         self.answered(usage={'prompt_tokens': 'many', 'completion_tokens': -3, 'total_tokens': None})
         ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.OK)
-        self.assertEqual(AiUsageLog.objects.get().total_tokens, 0)
+        row = AiUsageLog.objects.get()
+        # Nothing usable in the block: estimated from characters, not stored as exact zeros.
+        self.assertEqual((row.total_tokens, row.usage_estimated), (300, True))
 
     def test_failed_status_depends_on_whether_the_provider_answered(self):
         ai_usage.begin()
@@ -93,6 +97,49 @@ class RecordTests(TestCase):
     def test_only_counts_are_stored(self):
         stored = {field.name for field in AiUsageLog._meta.get_fields()}
         self.assertFalse({'prompt', 'content', 'response', 'text', 'messages', 'essay'} & stored)
+
+
+class TokenKeyTests(RecordSetup, TestCase):
+    def last(self):
+        return AiUsageLog.objects.latest('id')
+
+    def test_anthropic_style_usage_keys_are_read_as_exact(self):
+        self.answered(usage={'input_tokens': 100, 'output_tokens': 50, 'cache_read_input_tokens': 30})
+        ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.OK)
+        row = self.last()
+        self.assertEqual((row.input_tokens, row.output_tokens, row.total_tokens, row.cached_input_tokens), (100, 50, 150, 30))
+        self.assertFalse(row.usage_estimated)
+
+    def test_input_tokens_details_cached_count(self):
+        self.answered(usage={'input_tokens': 10, 'output_tokens': 5, 'input_tokens_details': {'cached_tokens': 4}})
+        ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.OK)
+        self.assertEqual(self.last().cached_input_tokens, 4)
+
+    def test_unrecognised_usage_block_is_estimated_not_zero(self):
+        self.answered(usage={'something_else': 7})
+        ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.OK)
+        row = self.last()
+        self.assertEqual((row.input_tokens, row.output_tokens), (200, 100))
+        self.assertTrue(row.usage_estimated)
+
+
+class RefundedCallTests(RecordSetup, TestCase):
+    def test_refunded_failure_is_an_attempt_not_a_paid_call(self):
+        ai_usage.begin()
+        ai_usage.record('education_match', self.user, provider='gateway', status=ai_usage.FAILED, refunded=True)
+        ai_usage.begin()
+        ai_usage.record('education_match', self.user, provider='gateway', status=ai_usage.FAILED)
+        data = ai_usage.summary(timezone.now() - timedelta(days=1))['features']['education_match']
+        self.assertEqual((data['calls'], data['paid_calls'], data['refunded_calls']), (2, 1, 1))
+        self.assertEqual(data['error_rate'], 1.0)
+
+    def test_refunded_flag_is_ignored_for_non_provider_statuses(self):
+        ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.BUDGET_REFUSED, refunded=True)
+        self.assertFalse(AiUsageLog.objects.get().refunded)
+
+    def test_feature_lists_share_one_source(self):
+        from apps.admissions import ai_budget
+        self.assertIs(ai_usage.FEATURES, ai_budget.FEATURES)
 
 
 class SummaryTests(TestCase):
@@ -166,6 +213,42 @@ class AdminEndpointTests(APITestCase):
         self.assertEqual(self.client.get('/api/admin/ai-usage/?days=abc').data['tokens']['window_days'], 30)
         self.assertEqual(self.client.get('/api/admin/ai-usage/?days=99999').data['tokens']['window_days'], 365)
 
+    def test_response_lists_features_from_the_backend_and_has_no_estimate_without_prices(self):
+        from apps.admissions import ai_budget
+        self.client.force_authenticate(self.support)
+        data = self.client.get('/api/admin/ai-usage/').data
+        self.assertEqual(data['feature_names'], list(ai_budget.FEATURES))
+        self.assertEqual(set(data['features']), set(ai_budget.FEATURES))
+        self.assertIsNone(data['cost_estimate'])
+        self.assertIsNone(data['today_from_log'])
+
+    def test_cost_estimate_uses_one_configured_price(self):
+        self.client.force_authenticate(self.support)
+        AiUsageLog.objects.all().delete()
+        AiUsageLog.objects.create(feature='essay_coach', status='ok', input_tokens=1_000_000, output_tokens=500_000,
+                                  total_tokens=1_500_000)
+        with self.settings(AI_COST_PER_MTOK_INPUT=1, AI_COST_PER_MTOK_OUTPUT=2):
+            data = self.client.get('/api/admin/ai-usage/').data
+        estimate = data['cost_estimate']
+        self.assertEqual(estimate['assumes'], 'one_price_for_all_models')
+        self.assertEqual(estimate['features']['essay_coach'], 2.0)
+        self.assertEqual(estimate['total_usd'], 2.0)
+
+    def test_cache_outage_reads_today_from_the_log_and_skips_refunded_rows(self):
+        school = School.objects.create(name='Log School', code='log-school')
+        for _ in range(3):
+            AiUsageLog.objects.create(feature='assistant', school=school, status='ok')
+        AiUsageLog.objects.create(feature='assistant', school=school, status='provider_error', refunded=True)
+        AiUsageLog.objects.create(feature='assistant', school=school, status='local_fallback')
+        old = AiUsageLog.objects.create(feature='assistant', school=school, status='ok')
+        AiUsageLog.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=2))
+        self.client.force_authenticate(self.support)
+        with mock.patch('apps.admissions.ai_budget.cache_get_many', return_value=None):
+            data = self.client.get('/api/admin/ai-usage/').data
+        self.assertFalse(data['cache_available'])
+        self.assertEqual(data['today_from_log']['assistant']['used'], 3)
+        self.assertEqual(data['today_from_log']['assistant']['top_schools'][0]['name'], 'Log School')
+
     def test_students_are_refused(self):
         self.client.force_authenticate(make_user('usage-student2', role=User.Role.STUDENT))
         self.assertEqual(self.client.get('/api/admin/ai-usage/').status_code, status.HTTP_403_FORBIDDEN)
@@ -189,6 +272,14 @@ class ReportCommandTests(TestCase):
         self.assertEqual(columns['group'], 'essay_coach')
         self.assertEqual(columns['input_tokens_sum'], '4000000')
         self.assertEqual(float(columns['cost_usd']), 4 * 0.5 + 2 * 2)
+        self.assertEqual(float(columns['cost_per_paid_call_usd']), 3.0)
+
+    def test_cost_per_paid_call_excludes_refunded_attempts(self):
+        AiUsageLog.objects.create(feature='essay_coach', status='provider_error', refunded=True)
+        text = self.run_command('--price-input', '0.5', '--price-output', '2')
+        header, line = text.strip().splitlines()
+        columns = dict(zip(header.split('\t'), line.split('\t')))
+        self.assertEqual(columns['paid_calls'], '2')
         self.assertEqual(float(columns['cost_per_paid_call_usd']), 3.0)
 
     def test_no_prices_means_no_cost_columns(self):
