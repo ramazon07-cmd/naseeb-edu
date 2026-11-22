@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ExternalLink, Link2, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { formatDateLocale, getLanguage, t } from '../i18n';
-import { isCodeExpired, majorOffer, mindCardState, shouldCheckOnFocus, startMindLink } from '../lib/mindLink';
+import { becameLinked, isCodeExpired, majorOffer, mindCardState, shouldCheckOnFocus, startMindLink } from '../lib/mindLink';
 
 // "Bring my Naseeb Mind results". One status request when the page opens, one on "Check again" and one
 // when the student returns to this tab while a link is waiting; never a timer.
@@ -15,7 +15,7 @@ export function MindLinkCard({ student, notify, reload, onLinked }) {
   const [expiresAt, setExpiresAt] = useState('')
   const [expired, setExpired] = useState(false)
   const alive = useRef(true)
-  const last = useRef({ at: 0, waiting: false, linked: false, expiresAt: '' })
+  const last = useRef({ at: 0, waiting: false, linked: null, expiresAt: '' })
 
   const refresh = useCallback(async () => {
     last.current.at = Date.now()
@@ -26,9 +26,9 @@ export function MindLinkCard({ student, notify, reload, onLinked }) {
       if (next.linked) {
         setWaiting(false)
         setMindUrl('')
-        if (!last.current.linked) onLinked?.()
+        if (becameLinked(last.current.linked, next.linked)) onLinked?.()
       }
-      last.current.linked = next.linked
+      last.current.linked = Boolean(next.linked)
       return next
     } catch {
       return null

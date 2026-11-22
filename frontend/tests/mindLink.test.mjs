@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  isCodeExpired, latestComparable, majorOffer, mindCardState, mismatchedAttempts, shouldCheckOnFocus, startMindLink,
+  becameLinked, isCodeExpired, latestComparable, majorOffer, mindCardState, mismatchedAttempts, shouldCheckOnFocus, startMindLink,
 } from '../src/lib/mindLink.js';
 
 test('the card is hidden when the feature is off or the status is unknown', () => {
@@ -86,3 +86,11 @@ test('starting also returns expires_at so the card can time the code out', async
   });
   assert.deepEqual(result, { url: 'u', expiresAt: '2026-11-21T10:10:00Z', opened: false });
 });
+
+test('the linked callback fires only on a not-linked to linked change seen in this mount', () => {
+  assert.equal(becameLinked(null, true), false)
+  assert.equal(becameLinked(true, true), false)
+  assert.equal(becameLinked(false, false), false)
+  assert.equal(becameLinked(false, true), true)
+  assert.equal(becameLinked(true, false), false)
+})

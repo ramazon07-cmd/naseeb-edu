@@ -25,7 +25,8 @@ def recommendation_ai_available():
 
 def latest_assessment_scores(profile):
     latest = {}
-    attempts = profile.challenge_attempts.order_by('-completed_at', '-id')
+    # Attempts answered under another instrument version are not comparable: skip them and use the newest compatible one.
+    attempts = profile.challenge_attempts.filter(source_version_mismatch=False).order_by('-completed_at', '-id')
     for attempt in attempts:
         if attempt.challenge in CURRENT_ASSESSMENTS and attempt.challenge not in latest:
             latest[attempt.challenge] = {

@@ -1,8 +1,9 @@
 """Role isolation: university catalog, college research and education-match AI."""
 import json
-from datetime import date
+from datetime import date, timedelta
 from unittest import mock
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework import status
 from apps.users.models import User
 from ..education_ai import latest_assessment_scores
@@ -244,6 +245,23 @@ class CatalogResearchRoleIsolationTests(RoleIsolationBase):
             )
         scores = latest_assessment_scores(self.student_a)
         self.assertEqual(set(scores), {'personality', 'interests', 'subjects', 'reasoning'})
+
+    def test_assessment_scores_skip_version_mismatched_attempts(self):
+        older = timezone.now() - timedelta(days=2)
+        ChallengeAttempt.objects.create(
+            student=self.student_a, challenge='personality', scores={'marker': 'compatible'}, completed_at=older,
+        )
+        ChallengeAttempt.objects.create(
+            student=self.student_a, challenge='personality', scores={'marker': 'flagged'},
+            instrument_version='2', source_version_mismatch=True, completed_at=timezone.now(),
+        )
+        ChallengeAttempt.objects.create(
+            student=self.student_a, challenge='interests', scores={'marker': 'only-flagged'},
+            source_version_mismatch=True,
+        )
+        scores = latest_assessment_scores(self.student_a)
+        self.assertEqual(scores['personality']['scores'], {'marker': 'compatible'})
+        self.assertNotIn('interests', scores)
 
     @override_settings(OUTBOUND_AI_ENABLED=False, GROQ_API_KEY='test-key')
     def test_ai_switch_off_keeps_education_guidance_offline(self):

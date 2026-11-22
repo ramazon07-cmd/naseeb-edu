@@ -56,3 +56,8 @@ export function majorOffer(status, student) {
   if (!offered || !student || (student.target_major || '').trim()) return ''
   return offered
 }
+
+// The linked-callback fires only on a real not-linked -> linked change seen during this mount. `previous` is
+// null until the first status arrives, so a student who was already linked (e.g. remounting after "Review
+// answers") never triggers a reload that would overwrite unfinished edits.
+export const becameLinked = (previous, next) => previous === false && Boolean(next)
