@@ -273,6 +273,13 @@ def _own_booking(user, role, booking_id):
     return bookings.filter(pk=booking_id, student__user=user).first()
 
 
+def staff_in_scope(booking):
+    """The rule _own_booking applies to a staff participant, for a booking already loaded (with its student
+    and participant): they have a school and it is the student's. False once a counselor has moved schools."""
+    staff = booking.participant
+    return bool(staff and staff.school_id and booking.student.school_id == staff.school_id)
+
+
 _VIEW_ACTIONS = {'confirm': 'approve', 'decline': 'reject', 'cancel': 'cancel'}
 _TARGETS = {
     'confirm': (Booking.Status.APPROVED, 'r_already_confirmed', 'r_confirmed'),

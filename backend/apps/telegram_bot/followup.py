@@ -20,7 +20,7 @@ from django.utils import timezone
 from apps.admissions.meeting_service import notice_time, notify_student
 from apps.admissions.models import Booking
 
-from .meeting_cards import _actor, _escape, _name, _own_booking, _run_view, _status_key, card_text, when_line
+from .meeting_cards import staff_in_scope, _actor, _escape, _name, _own_booking, _run_view, _status_key, card_text, when_line
 from .models import PendingMeetingNote, TelegramLink, TelegramOutbox
 from .services import Refused, link_allowed
 
@@ -86,7 +86,7 @@ def queue_followups(now=None):
     queued = 0
     for booking in bookings:
         link = booking.participant.telegram_link
-        if not link_allowed(link):
+        if not link_allowed(link) or not staff_in_scope(booking):
             continue
         key = f'meeting:{booking.pk}:{int(booking.starts_at.timestamp())}:followup:staff'
         _, created = TelegramOutbox.objects.get_or_create(key=key, defaults={
@@ -185,12 +185,12 @@ def save_note(chat_id, note):
     now = timezone.now()
     PendingMeetingNote.objects.filter(expires_at__lte=now).delete()
     with transaction.atomic():
-        pending = PendingMeetingNote.objects.select_for_update().select_related('booking').filter(chat_id=chat_id).first()
+        pending = PendingMeetingNote.objects.select_for_update().filter(chat_id=chat_id).first()
         if pending is None:
             return {'result': 'none'}
-        booking = pending.booking
+        booking = Booking.objects.select_related('student', 'participant').get(pk=pending.booking_id)
         pending.delete()
-        if booking.participant_id != user.pk or booking.status != Booking.Status.CANCELLED:
+        if booking.participant_id != user.pk or not staff_in_scope(booking) or booking.status != Booking.Status.CANCELLED:
             return {'result': 'none'}
         booking.staff_note = note[:NOTE_LIMIT]
         booking.save(update_fields=['staff_note', 'updated_at'])

@@ -25,6 +25,7 @@ from apps.users.models import User
 
 from .models import StudentLinkToken, StudentTelegram, TelegramLink, TelegramOutbox
 from .followup import queue_followups
+from .meeting_cards import staff_in_scope
 from .services import Refused, link_allowed
 
 TOKEN_PREFIX = 's_'
@@ -160,7 +161,9 @@ def pending_messages(now=None):
             .order_by('created_at', 'id')[:BATCH]
         )
         # Bookings are read apart: FOR UPDATE cannot lock across the nullable booking join on Postgres.
-        bookings = Booking.objects.in_bulk({row.booking_id for row in rows if row.key and row.booking_id})
+        bookings = Booking.objects.select_related('student', 'participant').in_bulk(
+            {row.booking_id for row in rows if row.key and row.booking_id},
+        )
         revoked = _revoked_chats({row.chat_id for row in rows})
         stale = [row.pk for row in rows if row.chat_id in revoked or _stale_reminder(row, bookings)]
         TelegramOutbox.objects.filter(pk__in=stale).delete()
@@ -189,6 +192,9 @@ def _stale_reminder(row, bookings):
         return False
     booking = bookings.get(row.booking_id)
     if booking is None or booking.status != Booking.Status.APPROVED:
+        return True
+    if row.key.endswith(':staff') and not staff_in_scope(booking):
+        # The counselor moved schools since this was queued: the old school's meeting is not theirs to see.
         return True
     return row.key.split(':')[2] != str(int(booking.starts_at.timestamp()))
 
@@ -310,7 +316,7 @@ def queue_reminders(now=None):
         if student_link:
             queued += _queue_reminder(booking, step, student_link, base, _other(booking))
         staff_link = _active(booking.participant, 'telegram_link') if booking.participant_id else None
-        if staff_link and link_allowed(staff_link):
+        if staff_link and link_allowed(staff_link) and staff_in_scope(booking):
             queued += _queue_reminder(booking, step, staff_link, f'{base}:staff', _name(booking.student.user))
     return queued
 

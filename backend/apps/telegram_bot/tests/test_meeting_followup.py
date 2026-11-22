@@ -278,6 +278,38 @@ class FollowupTests(BotTestCase):
     def followups(messages):
         return [m for m in messages if any(b.get('callback_data', '').startswith('mf:') for row in m['buttons'] for b in row)]
 
+    # --- school change ---
+
+    def move_counselor(self):
+        self.c1.school = self.school_b
+        self.c1.save(update_fields=['school'])
+
+    def test_a_school_change_stops_followups_and_staff_reminders(self):
+        self.booking()
+        self.link()
+        self.move_counselor()
+        self.assertEqual(student_link.queue_followups(self.moment(10)), 0)
+        self.assertEqual(student_link.queue_reminders(self.start - timedelta(minutes=60)), 0)
+        self.assertFalse(TelegramOutbox.objects.exists())
+
+    def test_an_already_queued_staff_row_is_not_delivered_after_a_school_change(self):
+        self.booking()
+        self.link()
+        student_link.queue_reminders(self.start - timedelta(minutes=60))
+        student_link.queue_followups(self.moment(10))
+        self.assertEqual(TelegramOutbox.objects.count(), 2)
+        self.move_counselor()
+        self.assertEqual(student_link.pending_messages(self.moment(10))['messages'], [])
+
+    def test_a_school_change_before_the_reply_saves_no_note(self):
+        booking = self.booking()
+        self.link()
+        self.press(booking, 'cancel')
+        self.move_counselor()
+        self.assertEqual(self.post('meeting-note', chat_id=STAFF_CHAT, text='late').data['result'], 'none')
+        booking.refresh_from_db()
+        self.assertEqual(booking.staff_note, '')
+
     # --- dismissing the note ---
 
     def test_dismiss_forgets_the_pending_note(self):
