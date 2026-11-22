@@ -207,6 +207,26 @@ class MajorMapTests(TestCase):
         self.check('Economics and Computer Science', 'ECO01', 'COM02')
         self.check('Oil and Gas and Law', 'PET01', 'LAW01')
 
+    def test_regressions_from_the_rules_review(self):
+        self.check('Liberal arts', 'AREA_ART')
+        self.check('Liberal Arts', 'AREA_ART')
+        self.check('Sport management', 'SPO01')
+        self.check('Sports Management', 'SPO01')
+        self.check('Sports science', 'SPO01')
+        self.assertNotEqual(subjects_for_major('Bioinformatics'), [])
+        self.check('Bioinformatics', 'BIO01', 'COM02')
+        self.check('Computational biology', 'BIO01', 'COM02')
+        self.check('Electrical & Electronic Engineering', 'ENG03')
+
+    def test_compound_names_stay_one_major(self):
+        from .subjects import split_majors_whole
+
+        self.assertEqual(split_majors_whole('Oil and gas'), ['oil and gas'])
+        self.assertEqual(split_majors_whole('Electrical & Electronic Engineering'), ['electrical & electronic engineering'])
+        self.assertEqual(split_majors_whole('Liberal arts | Law hamda Economics'), ['liberal arts', 'law', 'economics'])
+        self.assertEqual(split_majors_whole('Oil and Gas and Law'), ['oil and gas', 'law'])
+        self.assertEqual(split_majors_whole(''), [])
+
     def test_every_keyword_code_is_a_subject(self):
         from .subjects import KEYWORDS
 

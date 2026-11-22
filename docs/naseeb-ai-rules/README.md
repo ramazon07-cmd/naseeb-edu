@@ -7,6 +7,8 @@ How Naseeb AI reads and scores student essays and counselor letters. One file pe
   scholarship essays.
 - [recommendation-letter.md](recommendation-letter.md): counselor and teacher letters, used only by
   counselors.
+- [college-match.md](college-match.md): the rule-based list of ten universities and the optional
+  "Why these fit you" lines.
 
 These files are the product rules: what is scored, how, and what Naseeb AI must never do. The
 prompt text the server sends lives in `backend/apps/admissions/essay_lab/rubrics/*.md` and must

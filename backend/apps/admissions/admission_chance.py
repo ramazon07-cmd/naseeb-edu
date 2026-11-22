@@ -88,7 +88,8 @@ def international_rate(university):
     """``(rate, estimated)``: the admit rate for students from abroad, or ``(None, False)``.
 
     Students from abroad compete in a tighter pool (MIT: about 2% against 4.5% overall), so an
-    unpublished rate is estimated from the overall one.
+    unpublished rate is estimated from the overall one: x0.5 under 25%, x0.8 under 50%, as-is at 50% and
+    above. Every estimate is flagged ``estimated`` (the card shows it with a ≈), the as-is one too.
     """
     if university.intl_acceptance_rate is not None:
         return float(university.intl_acceptance_rate), False
@@ -99,7 +100,7 @@ def international_rate(university):
         return rate * 0.5, True
     if rate < 50:
         return rate * 0.8, True
-    return rate, False
+    return rate, True
 
 
 def admission_model(university):

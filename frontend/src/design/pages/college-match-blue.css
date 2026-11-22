@@ -187,6 +187,12 @@
   font-weight: 700;
 }
 
+.nb-blue .nb-match-card-facts dd .nb-match-estimate {
+  display: block;
+  font-size: var(--nb-text-xs);
+  font-weight: 600;
+}
+
 .nb-blue .nb-match-factors {
   display: flex;
   flex-wrap: wrap;

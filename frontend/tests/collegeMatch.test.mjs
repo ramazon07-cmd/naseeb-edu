@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const {
-  addAllBusy, applicationProgram, beginReasons, bulkAddTier, costText, failReasons, finishReasons, idleReasons,
+  academicStanding, addAllBusy, applicationProgram, matchFootnote, beginReasons, bulkAddTier, costText, failReasons, finishReasons, idleReasons,
   idleMatch, individualAddBusy, invalidateMatch, matchMessage, reasonsKey, reasonsView, satPositionText, subjectRankText,
 } = await import('../src/lib/collegeMatch.js');
 
@@ -22,6 +22,27 @@ test('the SAT position names the student score and the range', () => {
   assert.equal(satPositionText({ position: 'above', score: 1500, min: 1200, max: 1400 }), 'SAT 1500: above the usual range (1200–1400)');
   assert.equal(satPositionText({ position: 'inside', score: 1300, min: 1200, max: null }), 'SAT 1300: inside the usual range (1200+)');
   assert.equal(satPositionText({ position: 'no_range' }), 'No SAT range listed');
+  assert.equal(satPositionText({ position: 'act_used', score: 31, min: 1200, max: 1400 }), 'Compared using your ACT 31');
+});
+
+test('academic standing: below 0, the middle 50% up to 1, above from 1', () => {
+  assert.equal(academicStanding(null), null);
+  assert.equal(academicStanding(undefined), null);
+  assert.equal(academicStanding(-0.01), 'Below most admitted students');
+  assert.equal(academicStanding(0), 'Inside the middle 50%');
+  assert.equal(academicStanding(0.99), 'Inside the middle 50%');
+  assert.equal(academicStanding(1), 'Above most admitted students');
+  assert.equal(academicStanding(1.5), 'Above most admitted students');
+});
+
+test('the footnote names the ranking used and the AI lines only when shown', () => {
+  const bySubject = matchFootnote({ subjects: [{ code: 'COM02' }] }, false);
+  assert.match(bySubject, /QS subject rankings 2026/);
+  assert.doesNotMatch(bySubject, /Naseeb AI/);
+  const overall = matchFootnote({ subjects: [] }, true);
+  assert.match(overall, /overall QS World University Rankings 2027/);
+  assert.doesNotMatch(overall, /subject rankings/);
+  assert.match(overall, /Why these fit you lines are written by Naseeb AI from these facts only\.$/);
 });
 
 test('cost against the budget and server notes', () => {
@@ -31,6 +52,11 @@ test('cost against the budget and server notes', () => {
   assert.equal(matchMessage({ code: 'pick_major', text: 'x' }), 'Pick your major for a better list');
   assert.equal(matchMessage({ code: 'short_list', params: { count: 7 }, text: 'x' }), 'Only 7 universities fit your profile and budget.');
   assert.equal(matchMessage({ code: 'other', text: 'Plain text' }), 'Plain text');
+  assert.equal(matchMessage({ code: 'test_needed', params: { count: 3 }, text: 'x' }),
+    '3 universities were left out because they expect an SAT or ACT score; add yours to see them.');
+  assert.equal(matchMessage({ code: 'aid_unknown', params: { count: 2 }, text: 'x' }), '2 universities were left out: the catalogue has no aid details.');
+  assert.equal(matchMessage({ code: 'no_intl_aid', params: { count: 1 }, text: 'x' }), '1 universities were left out: they list no aid for students from abroad.');
+  assert.equal(matchMessage({ code: 'filled_from', params: { group: 'reach', from: 'safety', count: 2 }, text: 'x' }).endsWith('group were added.'), true);
 });
 
 test('an application is filed under the suggested program, then the matcher, then the typed major', () => {
