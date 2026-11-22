@@ -6,8 +6,14 @@ validation, usage capture and error handling, so a provider switch changes nothi
 
 - `gateway` (default): the HTTPS call to AI_GATEWAY_URL with AI_GATEWAY_API_KEY.
 - `claude_cli`: runs `claude -p --model AI_TEST_CLI_MODEL --output-format json` so the owner can test with a
-  Claude subscription instead of an API key. Allowed ONLY when APP_ENV is development or test: settings
-  refuse to start otherwise (core/environment.py) and `chat` refuses again at call time.
+  Claude subscription instead of an API key. Allowed when APP_ENV is development or test, or in production
+  only while AI_CLI_ALLOW_PRODUCTION is on (a temporary bridge until the API key is set): settings refuse
+  to start otherwise (core/environment.py) and `chat` refuses again at call time.
+
+Every CLI call takes one of AI_CLI_MAX_CONCURRENT slots shared by all gunicorn workers on the machine
+(a file lock each), so a burst of students never starts more Claude processes than the memory can hold.
+A call that finds no free slot within AI_CLI_SLOT_WAIT_SECONDS fails like a gateway timeout: the caller
+refunds the budget and tells the student to try again.
 
 Errors match the gateway path, so callers' failure, refund and usage handling is unchanged: a timeout is
 TimeoutError, a non-zero exit, a CLI error result or a missing binary is OSError, unreadable output is
@@ -17,10 +23,14 @@ The CLI cannot pin temperature or a token ceiling, and its reply is not strictly
 from a calibration run is `claude-cli/<model>`, so a result checked here never counts for another model.
 """
 
+import contextlib
+import fcntl
 import json
+import os
 import shutil
 import subprocess
 import tempfile
+import time
 import urllib.request
 
 from django.conf import settings
@@ -40,8 +50,20 @@ def uses_cli():
     return provider() == CLAUDE_CLI
 
 
+def cli_allowed():
+    return settings.APP_ENV in CLI_ENVIRONMENTS or settings.AI_CLI_ALLOW_PRODUCTION
+
+
+def _cli_binary():
+    """AI_CLI_PATH when it is an executable file (the Render disk install), else `claude` on PATH."""
+    path = settings.AI_CLI_PATH
+    if path:
+        return path if os.path.isfile(path) and os.access(path, os.X_OK) else None
+    return shutil.which(CLI_BINARY)
+
+
 def cli_available():
-    return shutil.which(CLI_BINARY) is not None
+    return _cli_binary() is not None
 
 
 def active_model(gateway_model):
@@ -52,7 +74,7 @@ def active_model(gateway_model):
 def configured():
     """Whether a real provider can be called (not the outbound switch: callers check that themselves)."""
     if uses_cli():
-        return settings.APP_ENV in CLI_ENVIRONMENTS and cli_available()
+        return cli_allowed() and cli_available()
     return bool(settings.AI_GATEWAY_API_KEY)
 
 
@@ -88,12 +110,58 @@ def _split_messages(messages):
     return system, '\n\n'.join(f"[{m.get('role', 'user')}]\n{m.get('content', '')}" for m in rest)
 
 
+SLOT_POLL_SECONDS = 0.25
+
+
+@contextlib.contextmanager
+def _cli_slot():
+    """Hold one of AI_CLI_MAX_CONCURRENT machine-wide slots; TimeoutError when none frees up in time.
+
+    The slots are lock files: every gunicorn worker and thread on this machine competes for the same
+    ones, and the operating system releases a lock when its process dies, so a crash never leaks a slot.
+    """
+    folder = os.path.join(tempfile.gettempdir(), 'naseeb-ai-cli-slots')
+    os.makedirs(folder, exist_ok=True)
+    count = max(1, settings.AI_CLI_MAX_CONCURRENT)
+    deadline = time.monotonic() + max(0, settings.AI_CLI_SLOT_WAIT_SECONDS)
+    while True:
+        for index in range(count):
+            handle = open(os.path.join(folder, f'slot-{index}.lock'), 'w')  # noqa: SIM115 - closed below
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                handle.close()
+                continue
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+                handle.close()
+            return
+        if time.monotonic() >= deadline:
+            raise TimeoutError('Every Claude CLI slot stayed busy; try again shortly.')
+        time.sleep(SLOT_POLL_SECONDS)
+
+
+def _cli_environment():
+    env = dict(os.environ)
+    if settings.AI_CLI_HOME:
+        env['HOME'] = settings.AI_CLI_HOME  # where the Render disk install keeps its login
+    # No update checks, telemetry or other background traffic: a call does one thing and exits.
+    env['DISABLE_AUTOUPDATER'] = '1'
+    env['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'] = '1'
+    return env
+
+
 def _claude_cli(body, timeout):
-    if settings.APP_ENV not in CLI_ENVIRONMENTS:
-        raise RuntimeError('AI_PROVIDER=claude_cli is only allowed when APP_ENV is development or test.')
-    binary = shutil.which(CLI_BINARY)
+    if not cli_allowed():
+        raise RuntimeError(
+            'AI_PROVIDER=claude_cli is only allowed when APP_ENV is development or test, '
+            'or while AI_CLI_ALLOW_PRODUCTION is on.',
+        )
+    binary = _cli_binary()
     if not binary:
-        raise OSError('The claude CLI was not found on PATH.')
+        raise OSError('The claude CLI was not found (AI_CLI_PATH or PATH).')
     system, prompt = _split_messages(body.get('messages') or [])
     command = [
         binary, '-p', '--model', settings.AI_TEST_CLI_MODEL, '--output-format', 'json',
@@ -101,16 +169,18 @@ def _claude_cli(body, timeout):
     ]
     if system:
         command += ['--system-prompt', system]
-    try:
-        # Own empty working folder: no project memory file or repository is picked up.
-        with tempfile.TemporaryDirectory() as workdir:
-            done = subprocess.run(
-                command, input=prompt, capture_output=True, text=True, timeout=timeout, cwd=workdir, check=False,
-            )
-    except subprocess.TimeoutExpired as exc:
-        raise TimeoutError('The claude CLI timed out.') from exc
+    with _cli_slot():
+        try:
+            # Own empty working folder: no project memory file or repository is picked up.
+            with tempfile.TemporaryDirectory() as workdir:
+                done = subprocess.run(
+                    command, input=prompt, capture_output=True, text=True, timeout=timeout, cwd=workdir,
+                    env=_cli_environment(), check=False,
+                )
+        except subprocess.TimeoutExpired as exc:
+            raise TimeoutError('The claude CLI timed out.') from exc
     if done.returncode != 0:
-        raise OSError(f'The claude CLI exited with {done.returncode}: {(done.stderr or "")[:300]}')
+        raise OSError(f'The claude CLI exited with {done.returncode}: {(done.stderr or done.stdout or "")[:300]}')
     return _cli_payload(done.stdout, body)
 
 

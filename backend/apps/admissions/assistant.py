@@ -25,7 +25,7 @@ from core.ai_policy import outbound_ai_allowed
 
 from apps.users.entitlements import ASSISTANT_ROLES, assistant_plan_allows, feature_not_in_plan, require_feature
 from apps.users.models import User
-from . import ai_budget, ai_usage
+from . import ai_budget, ai_providers, ai_usage
 from .assistant_local import answer_locally, assistant_students, detect_language
 from .gateway_errors import is_unbilled
 from .streaming import GuardedStream, acquire_stream_slot, release_db_connection
@@ -489,6 +489,13 @@ def _open_gateway(body, timeout):
         return urllib.request.urlopen(_gateway_request(body), timeout=timeout)
 
 
+def _provider_ready():
+    """The gateway key is set, or (temporary bridge) the Claude CLI is allowed and installed."""
+    if ai_providers.uses_cli():
+        return ai_providers.configured()
+    return bool(settings.AI_GATEWAY_API_KEY)
+
+
 def _gateway_stream(messages, system_prompt):
     # The routed model comes through the usage sink so the (messages, system_prompt)
     # signature stays stable; without one the full model is used.
@@ -508,6 +515,19 @@ def _gateway_stream(messages, system_prompt):
         body['reasoning_effort'] = settings.AI_ASSISTANT_REASONING_EFFORT
     if gateway_options:
         body['providerOptions'] = {'gateway': gateway_options}
+
+    if ai_providers.uses_cli():
+        # The Claude CLI answers in one piece (no stream): the whole reply is the one chunk.
+        cli_body = {'model': ai_providers.active_model(model), 'messages': body['messages']}
+        payload = ai_providers.chat(cli_body, settings.AI_ASSISTANT_TIMEOUT_SECONDS)
+        sink = ai_usage.current_sink()
+        if sink is not None:
+            ai_usage.capture(payload, cli_body, sink)
+            sink['finish_reason'] = 'stop'
+        content = payload['choices'][0]['message']['content']
+        if content:
+            yield content
+        return
 
     # AI_ASSISTANT_TIMEOUT_SECONDS bounds each read; AI_STREAM_MAX_SECONDS bounds
     # the whole reply, so a provider trickling bytes cannot hold the thread forever.
@@ -648,7 +668,7 @@ class AssistantChatView(APIView):
                 if not isinstance(cached_answer, str) or not cached_answer:
                     cached_answer = None
 
-        use_gateway = bool(not blocked and not local_answer and not cached_answer and settings.AI_GATEWAY_API_KEY)
+        use_gateway = bool(not blocked and not local_answer and not cached_answer and _provider_ready())
         context_text = build_topic_context(user, topics) if use_gateway else ''
         # General questions (no personal context) are the only ones that may be cached.
         if context_text:

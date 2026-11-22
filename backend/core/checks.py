@@ -47,6 +47,12 @@ def ai_provider_check(app_configs, **kwargs):
     """The Claude CLI provider is for local testing; it must never be selected in production."""
     provider = getattr(settings, 'AI_PROVIDER', 'gateway')
     if provider == 'claude_cli' and settings.APP_ENV not in ('development', 'test'):
+        if getattr(settings, 'AI_CLI_ALLOW_PRODUCTION', False):
+            return [checks.Warning(
+                'Production is using the Claude CLI (AI_CLI_ALLOW_PRODUCTION is on).',
+                hint='Temporary: set the API key, then unset AI_PROVIDER and AI_CLI_ALLOW_PRODUCTION.',
+                id='naseeb.W010',
+            )]
         return [checks.Error(
             'AI_PROVIDER=claude_cli is only allowed when APP_ENV is development or test.',
             hint='Unset AI_PROVIDER (it defaults to gateway) in production.',

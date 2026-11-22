@@ -55,6 +55,7 @@ def validate_runtime_environment(
     demo_accounts_enabled,
     hosted=False,
     ai_provider='gateway',
+    ai_cli_allow_production=False,
 ):
     """Return configuration errors that must stop a production deployment."""
     errors = []
@@ -64,7 +65,7 @@ def validate_runtime_environment(
 
     if ai_provider not in ('gateway', 'claude_cli'):
         errors.append('AI_PROVIDER must be gateway or claude_cli.')
-    elif ai_provider == 'claude_cli' and app_env not in ('development', 'test'):
+    elif ai_provider == 'claude_cli' and app_env not in ('development', 'test') and not ai_cli_allow_production:
         errors.append('AI_PROVIDER=claude_cli is only allowed when APP_ENV is development or test.')
     if hosted and app_env != 'production':
         errors.append('Hosted deployments must set APP_ENV=production; ephemeral SQLite data is not allowed.')
