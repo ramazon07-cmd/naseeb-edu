@@ -165,6 +165,15 @@ class SubjectRankingCostTests(SubjectRankingFixture, APITestCase):
         self.assertEqual(sql.count('MAX('), 0)
         self.assertIn('ORDER BY', sql)
 
+    def test_the_newest_year_subquery_is_not_tied_to_each_candidate_row(self):
+        # A correlated subquery compares U0.subject_code with the outer row's column and is re-run per row.
+        for query in (f'subject={CS}&limit=10', f'subject={CS}&limit=10&search=filler&country=Germany'):
+            subqueries = [sql for sql in self.queries(query) if 'U0.' in sql]
+            self.assertTrue(subqueries)
+            for sql in subqueries:
+                self.assertIn(f'U0."subject_code" = \'{CS}\'', sql)
+                self.assertNotIn('U0."subject_code" = ("admissions_universitysubjectrank"', sql)
+
     def test_a_repeated_page_comes_from_the_cache_without_touching_the_ranks(self):
         first = self.page(f'subject={CS}&limit=25')
         with CaptureQueriesContext(connection) as captured:

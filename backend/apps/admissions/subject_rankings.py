@@ -13,7 +13,7 @@ replaces them at once; every student asks for the same pages, so one cached answ
 import hashlib
 import json
 
-from django.db.models import F, OuterRef, Subquery
+from django.db.models import F, Subquery
 from rest_framework import serializers
 
 from apps.users.cache_safety import cache_get, cache_set
@@ -84,8 +84,9 @@ def subject_ranking(params):
     code = params['subject']
     indicators = subject_indicators(code)
     fields = [f'{name}_score' for name, _ in indicators]
-    # The newest year loaded for this subject, in the same query as the rows.
-    newest = UniversitySubjectRank.objects.filter(subject_code=OuterRef('subject_code')).order_by('-year').values('year')[:1]
+    # The newest year loaded for this subject, in the same query as the rows. Filtered by the code already known,
+    # not by the outer row's, so the database works it out once instead of once per candidate row.
+    newest = UniversitySubjectRank.objects.filter(subject_code=code).order_by('-year').values('year')[:1]
     queryset = UniversitySubjectRank.objects.filter(subject_code=code, year=Subquery(newest))
     universities = university_filter(params)
     if universities is not None:
