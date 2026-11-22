@@ -1,9 +1,9 @@
 // Finding Coach quotes in the essay text.
 //
 // The backend keeps a note only when its quote appears in the normalized
-// essay text. Normalization: NFKC, curly -> straight
-// quotes, whitespace runs -> one space. Here the same normalization is applied
-// while remembering, for every normalized character, which original character
+// essay text. Normalization: NFKC, hidden (format) characters removed, curly
+// -> straight quotes, whitespace runs -> one space (the backend's `normalize`).
+// Here the same normalization is applied while remembering, for every normalized character, which original character
 // range it came from, so a match can be turned back into editor positions.
 // Quotes never span paragraphs, so the editor searches one textblock at a time.
 // Framework-free: runs in the browser and under plain `node`.
@@ -11,12 +11,15 @@
 const SINGLE_QUOTES = /[‘’‚‛′‵]/g
 const DOUBLE_QUOTES = /[“”„‟″‶«»]/g
 const WHITESPACE = /^\s+$/u
+// Zero-width, soft-hyphen, bidi and tag characters (Unicode category Cf). The backend removes them from
+// quotes, and U+2028/U+2029 become line breaks, which the whitespace rule folds to a space.
+const HIDDEN = /\p{Cf}/gu
 // A base character followed by combining marks is normalized as one unit so
 // that NFKC can compose it (e + U+0301 -> é) exactly like a whole-string NFKC.
 const CLUSTER = /\P{M}\p{M}*|\p{M}+/gsu
 
 function foldQuotes(text) {
-  return text.replace(SINGLE_QUOTES, "'").replace(DOUBLE_QUOTES, '"')
+  return text.replace(HIDDEN, '').replace(SINGLE_QUOTES, "'").replace(DOUBLE_QUOTES, '"')
 }
 
 export function normalizeText(text) {

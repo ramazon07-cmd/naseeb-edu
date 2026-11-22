@@ -2,6 +2,7 @@
 
 import json
 import unicodedata
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -167,6 +168,19 @@ class HiddenCharacterTests(SimpleTestCase):
         for text in ('Plain text, 3.5 and "quotes".', 'Привет, мир!', "Oʻzbekiston — vatanim", 'Tab\tand\nnewline', 'é ñ 日本語'):
             self.assertEqual(coach.strip_hidden(text), text)
         self.assertEqual(coach.strip_hidden(None), '')
+
+    def test_the_list_shared_with_the_editor_normalizes_the_same_way(self):
+        # frontend/tests/essayLabAnchors.test.mjs checks the same file against anchors.js normalizeText.
+        path = Path(__file__).resolve().parents[3] / 'frontend' / 'tests' / 'fixtures' / 'essay_hidden_characters.json'
+        if not path.exists():
+            self.skipTest('frontend fixtures are not part of this deployment')
+        shared = json.loads(path.read_text(encoding='utf-8'))
+        for code in shared['hidden']:
+            self.assertEqual(coach.normalize(f'a{chr(int(code, 16))}b'), 'ab', code)
+        for code in shared['line_breaks']:
+            self.assertEqual(coach.normalize(f'a{chr(int(code, 16))}b'), 'a b', code)
+        for case in shared['cases']:
+            self.assertEqual(coach.normalize(case['raw']), case['normalized'])
 
     def test_nothing_in_category_cf_survives_cleaning(self):
         every = ''.join(chr(code) for code in range(0x110000) if unicodedata.category(chr(code)) == 'Cf')

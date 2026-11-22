@@ -835,7 +835,8 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
 
         # The AI call runs outside any transaction so no row lock is held while waiting on it.
         if coach.gateway_configured():
-            if not spend_coach_budget(request.user):
+            reservation = spend_coach_budget(request.user)
+            if not reservation:
                 ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
                 raise EssayLabError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting', 503)
             try:
@@ -843,12 +844,12 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
                 # release_db_connection runs before each provider call (the transaction guard is inside it).
                 result, model = coach.run_ai_check(essay, tab.content, request.user, release_db_connection)
             except coach.CoachUnavailable:
-                ai_budget.refund('essay_coach', request.user)  # a failed check is free
+                ai_budget.refund(reservation)  # a failed check is free
                 raise EssayLabError('Naseeb AI is unavailable right now. Please try again soon.',
                                     'coach_unavailable', 503)
             if result.get('safety') == 'current_danger' and take_free_safety_check(request.user):
                 # Not scored: the first few such checks per day are free (the daily limit is given back).
-                ai_budget.refund('essay_coach', request.user)
+                ai_budget.refund(reservation)
         else:
             result, model = coach.run_local_check(essay, tab.content)
             ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.LOCAL_FALLBACK)

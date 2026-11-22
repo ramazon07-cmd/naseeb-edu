@@ -50,7 +50,7 @@ class EssayDepthGateThrottle(EssayThrottle):
 
 
 def spend_coach_budget(user):
-    """Count one AI depth check against the daily budgets. False when one is spent."""
+    """Count one AI depth check against the daily budgets: a Reservation (to refund), or False when one is spent."""
     return ai_budget.consume('essay_coach', user)
 
 
