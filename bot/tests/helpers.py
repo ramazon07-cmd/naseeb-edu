@@ -151,6 +151,10 @@ class FakeApi:
         self._record('meeting_note', chat_id=chat_id, text=text)
         return self.note_result
 
+    async def dismiss_meeting_note(self, chat_id):
+        self._record('dismiss_meeting_note', chat_id=chat_id)
+        return {'dismissed': True}
+
     async def student_link(self, chat_id, token, language, telegram_username=None):
         self._record('student_link', chat_id=chat_id, token=token, language=language, telegram_username=telegram_username)
         return {'full_name': 'Ali <Valiyev> & Co', 'language': language}

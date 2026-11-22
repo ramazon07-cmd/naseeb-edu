@@ -284,6 +284,8 @@ class MeetingNoteView(BotView):
 
     def post(self, request):
         data = self.get_data(request)
+        if data.get('dismiss') is True:
+            return Response(followup.dismiss_note(_chat_id(data)))
         note = data.get('text')
         if not isinstance(note, str) or len(note) > 10000:
             raise services.Refused('invalid_request', 400)

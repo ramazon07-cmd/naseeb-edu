@@ -59,6 +59,12 @@ def _account_error(user):
     return None
 
 
+def link_allowed(link):
+    """Whether this staff link may still receive messages: the account is still allowed and its password
+    has not changed since linking. Like resolve_link, but it never deletes anything."""
+    return link.is_active and not _account_error(link.user) and fingerprint(link.user) == link.auth_fingerprint
+
+
 def _attempt_keys(chat_id):
     # Per chat only: an account-wide bot counter would let any Telegram user lock the owner out.
     return (f'tgbot-login:chat:{chat_id}',)

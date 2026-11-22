@@ -239,5 +239,57 @@ class FollowupTests(BotTestCase):
         self.assertEqual(self.post('meeting-followup', chat_id=STAFF_CHAT, booking_id='1', action='done').status_code, 400)
         self.assertEqual(self.client.post('/api/bot/meeting-followup/', {}, format='json').status_code, 401)
 
+    # --- revoked links ---
+
+    def revoke(self, how):
+        if how == 'password':
+            self.c1.password_version += 1
+            self.c1.save(update_fields=['password_version'])
+        else:
+            self.c1.is_active = False
+            self.c1.save(update_fields=['is_active'])
+
+    def check_revoked(self, how):
+        self.booking()
+        self.link()
+        self.revoke(how)
+        self.assertEqual(student_link.queue_followups(self.moment(10)), 0, how)
+        self.assertEqual(student_link.queue_reminders(self.start - timedelta(minutes=60)), 0, how)
+        self.assertFalse(TelegramOutbox.objects.exists(), how)
+
+    def test_password_change_stops_followups_and_reminders(self):
+        self.check_revoked('password')
+
+    def test_deactivated_account_stops_followups_and_reminders(self):
+        self.check_revoked('deactivated')
+
+    def test_an_already_queued_row_is_not_delivered_after_the_link_is_revoked(self):
+        self.booking()
+        self.link()
+        student_link.queue_followups(self.moment(10))
+        # The start reminder (step 0) is still within its grace at start+10, so pick the follow-up by its buttons.
+        self.assertEqual(len(self.followups(student_link.pending_messages(self.moment(10))['messages'])), 1)
+        TelegramOutbox.objects.update(claimed_at=None)
+        self.revoke('password')
+        self.assertEqual(student_link.pending_messages(self.moment(11))['messages'], [])
+        self.assertFalse(TelegramOutbox.objects.exists())
+
+    @staticmethod
+    def followups(messages):
+        return [m for m in messages if any(b.get('callback_data', '').startswith('mf:') for row in m['buttons'] for b in row)]
+
+    # --- dismissing the note ---
+
+    def test_dismiss_forgets_the_pending_note(self):
+        booking = self.booking()
+        self.link()
+        self.press(booking, 'cancel')
+        self.assertTrue(self.post('meeting-note', chat_id=STAFF_CHAT, dismiss=True).data['dismissed'])
+        self.assertFalse(PendingMeetingNote.objects.exists())
+        self.assertEqual(self.post('meeting-note', chat_id=STAFF_CHAT, text='Ali ali@x.com +998901234567').data['result'], 'none')
+        booking.refresh_from_db()
+        self.assertEqual(booking.staff_note, '')
+        self.assertFalse(self.post('meeting-note', chat_id=STAFF_CHAT, dismiss=True).data['dismissed'])
+
     def test_followup_module_constants(self):
         self.assertEqual(followup.FOLLOWUP_DELAY, timedelta(minutes=10))

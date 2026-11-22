@@ -240,3 +240,13 @@ async def test_a_text_after_cancel_is_saved_as_the_note_and_other_text_falls_thr
     h.api.note_result = {'result': 'none'}
     await h.say('hello there')
     assert h.session.texts()[-1] != 'Note saved.'
+
+
+async def test_the_note_prompt_clears_a_half_finished_flow_and_cancel_dismisses_the_wait(h):
+    from aiogram.fsm.storage.base import StorageKey
+    key = StorageKey(bot_id=h.bot.id, chat_id=1, user_id=1)
+    await h.dp.storage.set_state(key, 'AddStudent:details')
+    await h.tap('mf:cancel:5')
+    assert await h.dp.storage.get_state(key) is None
+    await h.say('/cancel')
+    assert h.api.names('dismiss_meeting_note') == [{'chat_id': 1}]

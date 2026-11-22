@@ -25,7 +25,7 @@ from apps.users.models import User
 
 from .models import StudentLinkToken, StudentTelegram, TelegramLink, TelegramOutbox
 from .followup import queue_followups
-from .services import Refused
+from .services import Refused, link_allowed
 
 TOKEN_PREFIX = 's_'
 TOKEN_TTL = timedelta(minutes=15)
@@ -161,13 +161,26 @@ def pending_messages(now=None):
         )
         # Bookings are read apart: FOR UPDATE cannot lock across the nullable booking join on Postgres.
         bookings = Booking.objects.in_bulk({row.booking_id for row in rows if row.key and row.booking_id})
-        stale = [row.pk for row in rows if _stale_reminder(row, bookings)]
+        revoked = _revoked_chats({row.chat_id for row in rows})
+        stale = [row.pk for row in rows if row.chat_id in revoked or _stale_reminder(row, bookings)]
         TelegramOutbox.objects.filter(pk__in=stale).delete()
         rows = [row for row in rows if row.pk not in stale]
         TelegramOutbox.objects.filter(pk__in=[row.pk for row in rows]).update(claimed_at=now)
     return {'messages': [
         {'id': row.pk, 'chat_id': row.chat_id, 'text': row.text, 'buttons': row.buttons or []} for row in rows
     ]}
+
+
+def _revoked_chats(chat_ids):
+    """Chats of staff links that may no longer be messaged (password changed, account deactivated): what is
+    still unsent for them is dropped. A chat that is also an active student chat is left alone."""
+    links = TelegramLink.objects.filter(chat_id__in=chat_ids).select_related(
+        'user__school', 'user__supervising_counselor',
+    )
+    revoked = {link.chat_id for link in links if not link_allowed(link)}
+    if revoked:
+        revoked -= set(StudentTelegram.objects.filter(chat_id__in=revoked, is_active=True).values_list('chat_id', flat=True))
+    return revoked
 
 
 def _stale_reminder(row, bookings):
@@ -282,7 +295,10 @@ def queue_reminders(now=None):
             starts_at__gt=now - REMINDER_GRACE,
             starts_at__lte=now + timedelta(minutes=REMINDER_STEPS[0]) + REMINDER_GRACE,
         )
-        .select_related('student__user__student_telegram', 'participant__telegram_link')
+        .select_related(
+            'student__user__student_telegram', 'participant__telegram_link', 'participant__school',
+            'participant__supervising_counselor',
+        )
     )
     queued = 0
     for booking in bookings:
@@ -294,7 +310,7 @@ def queue_reminders(now=None):
         if student_link:
             queued += _queue_reminder(booking, step, student_link, base, _other(booking))
         staff_link = _active(booking.participant, 'telegram_link') if booking.participant_id else None
-        if staff_link:
+        if staff_link and link_allowed(staff_link):
             queued += _queue_reminder(booking, step, staff_link, f'{base}:staff', _name(booking.student.user))
     return queued
 

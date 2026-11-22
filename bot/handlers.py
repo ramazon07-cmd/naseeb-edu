@@ -425,7 +425,7 @@ async def meeting_button(callback: CallbackQuery, bot, api):
 
 
 @router.callback_query(F.data.regexp(FOLLOWUP_BUTTON))
-async def followup_button(callback: CallbackQuery, bot, api):
+async def followup_button(callback: CallbackQuery, state: FSMContext, bot, api):
     """Done / Canceled under the post-meeting message: the backend applies it (or refuses) and redraws it;
     after a cancel the counselor is asked for a note, which the next text message in the chat carries."""
     chat_id = callback.message.chat.id
@@ -439,6 +439,8 @@ async def followup_button(callback: CallbackQuery, bot, api):
     await callback.answer(alert or None, show_alert=bool(alert))
     await _edit(bot, chat_id, callback.message.message_id, result['text'], keyboards.from_rows(result.get('buttons')))
     if result.get('prompt'):
+        # The note is the next text: a half-finished /add, /reset or time prompt must not swallow it.
+        await state.clear()
         await bot.send_message(chat_id, result['prompt'])
 
 
@@ -590,8 +592,11 @@ async def add_command(message: Message, state: FSMContext, api, cache):
 
 
 @router.message(Command('cancel'))
-async def cancel_command(message: Message, state: FSMContext, cache):
+async def cancel_command(message: Message, state: FSMContext, api, cache):
     lang = await language_of(state, cache, message.chat.id)
+    # Also drops a cancelled meeting's pending note, so later text is not saved as one.
+    with suppress(ApiError):
+        await api.dismiss_meeting_note(message.chat.id)
     resetting = await state.get_state() == ResetPassword.query.state
     await state.clear()
     await message.answer(t(lang, 'reset_cancelled' if resetting else 'add_cancelled'))

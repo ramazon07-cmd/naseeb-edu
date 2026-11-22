@@ -22,7 +22,7 @@ from apps.admissions.models import Booking
 
 from .meeting_cards import _actor, _escape, _name, _own_booking, _run_view, _status_key, card_text, when_line
 from .models import PendingMeetingNote, TelegramLink, TelegramOutbox
-from .services import Refused
+from .services import Refused, link_allowed
 
 CALLBACK_PREFIX = 'mf'
 ACTIONS = ('done', 'cancel')
@@ -46,9 +46,9 @@ TEXTS = {
     },
     'r_same': {'uz': 'ℹ️ Allaqachon: {status}', 'ru': 'ℹ️ Уже: {status}', 'en': 'ℹ️ Already: {status}'},
     'ask_note': {
-        'uz': 'Nima uchun bekor qilindi? Izohni bitta xabar bilan yozing (ixtiyoriy).',
-        'ru': 'Почему встреча отменена? Напишите заметку одним сообщением (по желанию).',
-        'en': 'Why was it canceled? Reply with a note in one message (optional).',
+        'uz': 'Nima uchun bekor qilindi? Izohni bitta xabar bilan yozing (ixtiyoriy). O\'tkazib yuborish: /cancel',
+        'ru': 'Почему встреча отменена? Напишите заметку одним сообщением (по желанию). Пропустить: /cancel',
+        'en': 'Why was it canceled? Reply with a note in one message (optional). Skip: /cancel',
     },
     'note_saved': {'uz': '📝 Izoh saqlandi.', 'ru': '📝 Заметка сохранена.', 'en': '📝 Note saved.'},
 }
@@ -80,10 +80,14 @@ def queue_followups(now=None):
     bookings = Booking.objects.filter(
         status=Booking.Status.APPROVED, participant__telegram_link__is_active=True,
         starts_at__lte=now - FOLLOWUP_DELAY, starts_at__gt=now - FOLLOWUP_DELAY - FOLLOWUP_GRACE,
-    ).select_related('student__user', 'participant__telegram_link')
+    ).select_related(
+        'student__user', 'participant__telegram_link', 'participant__school', 'participant__supervising_counselor',
+    )
     queued = 0
     for booking in bookings:
         link = booking.participant.telegram_link
+        if not link_allowed(link):
+            continue
         key = f'meeting:{booking.pk}:{int(booking.starts_at.timestamp())}:followup:staff'
         _, created = TelegramOutbox.objects.get_or_create(key=key, defaults={
             'chat_id': link.chat_id, 'booking': booking, 'text': followup_card(booking, link.language),
@@ -191,3 +195,10 @@ def save_note(chat_id, note):
         booking.staff_note = note[:NOTE_LIMIT]
         booking.save(update_fields=['staff_note', 'updated_at'])
     return {'result': 'saved', 'text': followup_text(language, 'note_saved')}
+
+
+def dismiss_note(chat_id):
+    """The counselor chose not to write the note: forget the wait. {'dismissed': True} if one was pending."""
+    deleted, _ = PendingMeetingNote.objects.filter(chat_id=chat_id, expires_at__gt=timezone.now()).delete()
+    PendingMeetingNote.objects.filter(chat_id=chat_id).delete()
+    return {'dismissed': bool(deleted)}
