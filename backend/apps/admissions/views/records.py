@@ -569,7 +569,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
         )
         if not data['ai']:
             # Typing-time refresh: facts only, no AI call and no budget.
-            return answer('profile', rec_letter_ai.local_suggestions(facts, data['draft']), ai_available)
+            return answer('profile', rec_letter_ai.missing_facts(facts, data['draft']), ai_available)
         if ai_available and ai_budget.consume('recommendation_letter', request.user):
             release_db_connection()  # don't hold a pooled connection during the AI call
             language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
@@ -591,7 +591,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
                 'recommendation_letter', request.user, provider='gateway',
                 status=ai_usage.BUDGET_REFUSED if ai_available else ai_usage.LOCAL_FALLBACK,
             )
-        return answer('profile', rec_letter_ai.local_suggestions(facts, data['draft']), ai_available)
+        return answer('profile', rec_letter_ai.missing_facts(facts, data['draft']), ai_available)
 
     # ------------------------------------------------------------ depth check
 

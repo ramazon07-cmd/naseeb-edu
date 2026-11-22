@@ -461,7 +461,8 @@ class LetterSuggestAiFlagTests(LetterCheckCase):
 
     @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS=0)
     def test_ai_true_counts_the_budget_and_returns_ai_left(self):
-        answer = {'suggestions': [{'kind': 'idea', 'text': 'Mention the pendulum rig.'}]}
+        Honor.objects.create(student=self.student, title='Regional olympiad bronze', level='regional')
+        answer = {'suggestions': [{'kind': 'question', 'text': 'What did you see her do at the olympiad?', 'fact': 'A'}]}
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))) as urlopen:
             response = self.suggest(ai=True)
         self.assertEqual(urlopen.call_count, 1)
