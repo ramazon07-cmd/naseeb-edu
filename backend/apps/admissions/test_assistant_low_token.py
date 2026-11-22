@@ -344,13 +344,18 @@ class EndpointTests(Fixture, APITestCase):
     def cached_keys(self):
         return [k for k in (cache._cache if hasattr(cache, '_cache') else {}) if 'assistant-answer:' in k]
 
+    def as_new_student(self, username):
+        user = User.objects.create_user(username=username, email=f'{username}@example.com', role=User.Role.STUDENT)
+        self.client.force_authenticate(user)
+        return user
+
     def test_answer_is_stored_on_the_second_ask_and_served_to_another_user_without_budget(self):
         response, text = self.ask('Explain the SAT format?', 'SAT has two sections.')
         self.assertEqual((response['X-Assistant-Source'], text), ('gateway', 'SAT has two sections.'))
         self.assertEqual(self.cached_keys(), [])  # first ask: only a text-free marker
+        self.as_new_student('lo2')
         self.ask('Explain the SAT format?', 'SAT has two sections.')
-        other = User.objects.create_user(username='lo', email='lo@example.com', role=User.Role.STUDENT)
-        self.client.force_authenticate(other)
+        other = self.as_new_student('lo')
         with mock.patch.object(assistant, '_gateway_stream') as gateway, \
                 mock.patch.object(assistant, 'consume_provider_budget') as budget, \
                 mock.patch.object(assistant, 'acquire_stream_slot') as slot:
@@ -361,9 +366,22 @@ class EndpointTests(Fixture, APITestCase):
         slot.assert_not_called()
         self.assertTrue(assistant.is_trusted_assistant_turn(other.id, text))
 
+    def test_one_user_re_asking_cannot_store_an_answer_for_everyone(self):
+        self.ask('Explain the SAT format?', 'Unwanted answer', times=3)
+        self.assertEqual(self.cached_keys(), [])
+        self.as_new_student('lo3')
+        response, text = self.ask('Explain the SAT format?', 'Fresh answer')
+        self.assertEqual((response['X-Assistant-Source'], text), ('gateway', 'Fresh answer'))
+        self.assertEqual(len(self.cached_keys()), 1)
+        self.as_new_student('lo4')
+        response, text = self.chat('Explain the SAT format?', language='en')
+        self.assertEqual((response['X-Assistant-Source'], text), ('cache', 'Fresh answer'))
+
     def test_cache_key_is_the_hash_of_the_normalized_parts_and_holds_no_user_or_text(self):
         import hashlib
-        self.ask('Explain the SAT format?', 'A', times=2)
+        self.ask('Explain the SAT format?', 'A')
+        self.as_new_student('lo5')
+        self.ask('Explain the SAT format?', 'A')
         expected = 'assistant-answer:' + hashlib.sha256(
             f'{assistant.PROMPT_VERSION}|en|simple|explain the sat format'.encode()).hexdigest()
         self.assertEqual(assistant._answer_cache_key('en', 'simple', 'Explain the SAT format?', [1], set()), expected)
@@ -375,7 +393,10 @@ class EndpointTests(Fixture, APITestCase):
             self.assertNotIn(self.student_user.username, key)
 
     def test_cache_is_separate_per_language(self):
-        self.ask('Explain the SAT format', 'EN', times=2)
+        self.ask('Explain the SAT format', 'EN')
+        self.as_new_student('lang2')
+        self.ask('Explain the SAT format', 'EN')
+        self.assertEqual(len(self.cached_keys()), 1)
         response, text = self.ask('Explain the SAT format', 'RU', language='ru')
         self.assertEqual((response['X-Assistant-Source'], text), ('gateway', 'RU'))
 
@@ -532,8 +553,8 @@ class EndpointTests(Fixture, APITestCase):
 
     def test_refund_undoes_one_consume(self):
         ai_budget.consume('assistant', self.student_user)
-        ai_budget.consume('assistant', self.student_user)
-        ai_budget.refund('assistant', self.student_user)
+        reservation = ai_budget.consume('assistant', self.student_user)
+        ai_budget.refund(reservation)
         self.assertEqual(ai_budget.usage_today([])['assistant']['used'], 1)
 
     # -- review follow-ups --------------------------------------------------

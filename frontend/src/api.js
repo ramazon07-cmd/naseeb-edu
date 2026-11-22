@@ -11,6 +11,7 @@ import { firstListPath } from './lib/listPath.js'
 import { requestRetryDelay, retryAfterMs } from './lib/backoff.js'
 import { protectedFileUrl, readProtectedFile } from './lib/protectedFile.js'
 import { sendWithProgress } from './lib/fileUpload.js'
+import { linkAbort } from './lib/abortLink.js'
 import { hasUserDrafts, removeUserDrafts } from './essayLab/drafts.js'
 
 // Same origin by default: the Vite dev server, the nginx image (API_UPSTREAM)
@@ -58,30 +59,25 @@ async function accessToken() {
   return getToken('access') || (hasSession() ? refreshAccessToken() : null)
 }
 
+// `timeoutMs` bounds the wait for the response headers. `keepAbortLink` (streams)
+// keeps the caller's signal linked after that, so aborting it still stops the body.
 async function fetchWithTimeout(url, options = {}) {
-  const { timeoutMs = REQUEST_TIMEOUT_MS, localize = true, ...fetchOptions } = options
-  const controller = new AbortController()
-  const callerSignal = fetchOptions.signal
-  let timedOut = false
-  const abortFromCaller = () => controller.abort()
-  if (callerSignal?.aborted) controller.abort()
-  else callerSignal?.addEventListener('abort', abortFromCaller, { once: true })
-  const timeoutId = window.setTimeout(() => {
-    timedOut = true
-    controller.abort()
-  }, timeoutMs)
+  const { timeoutMs = REQUEST_TIMEOUT_MS, localize = true, keepAbortLink = false, ...fetchOptions } = options
+  const link = linkAbort(fetchOptions.signal, timeoutMs, window)
+  let failed = false
   try {
     const headers = new Headers(fetchOptions.headers || {})
     if (localize) headers.set('Accept-Language', getLanguage())
-    return await fetch(url, { ...fetchOptions, headers, signal: controller.signal })
+    return await fetch(url, { ...fetchOptions, headers, signal: link.signal })
   } catch (error) {
-    if (timedOut) throw new ApiError(t('The server is taking too long to respond. Check your connection and retry.'), 408, null)
+    failed = true
+    if (link.timedOut()) throw new ApiError(t('The server is taking too long to respond. Check your connection and retry.'), 408, null)
     if (typeof navigator !== 'undefined' && !navigator.onLine) throw new ApiError(t('You appear to be offline. Reconnect and retry.'), 0, null)
     if (error?.name === 'AbortError') throw error
     throw new ApiError(t('Unable to connect to the server. Check your connection and retry.'), 0, null)
   } finally {
-    window.clearTimeout(timeoutId)
-    callerSignal?.removeEventListener('abort', abortFromCaller)
+    if (keepAbortLink && !failed) link.release()
+    else link.unlink()
   }
 }
 
@@ -396,6 +392,11 @@ async function uploadRequest(method, path, body, { onProgress, signal } = {}, re
   return payload
 }
 
+// The server sends the stream's headers only after the first AI chunk, which can take
+// the stream-slot wait plus the gateway timeout (AI_STREAM_SLOT_WAIT_SECONDS +
+// AI_ASSISTANT_TIMEOUT_SECONDS, 1 + 35 s by default), so the header wait is longer.
+const STREAM_HEADER_TIMEOUT_MS = 45_000
+
 async function streamRequest(path, payload, signal, retry = true) {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   const access = await accessToken()
@@ -405,6 +406,8 @@ async function streamRequest(path, payload, signal, retry = true) {
     headers,
     body: JSON.stringify(payload),
     signal,
+    timeoutMs: STREAM_HEADER_TIMEOUT_MS,
+    keepAbortLink: true,
   })
   if (response.status === 401 && retry && hasSession()) {
     await refreshAccessToken(access)

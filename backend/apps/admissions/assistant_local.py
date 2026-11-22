@@ -32,6 +32,40 @@ def _has(pattern, text):
     return re.search(pattern, text) is not None
 
 
+_CYRILLIC = re.compile(r'[а-яё]')
+_UZ_CYRILLIC = re.compile(r'[ўқғҳ]')
+_UZ_LATIN = re.compile(
+    r"\b(?:qaysi|nechta|qanday|qachon|qayerda|qaerda|mening|menga|nima|nega|uchun|kerak|bormi|"
+    r"vazifa\w*|ariza\w*|topshiriq\w*|o'quvchi\w*|yo'q|haqida|qilish|bilan|xarita\w*)\b|"
+    r"\b\w*[og]'(?!s\b|clock)[a-z]|\b[a-z']{3,}(?:larim|larni|imni|imga|imda|ingiz|imiz|ingizni)\b"
+)
+
+
+def detect_language(text, fallback=None):
+    """The language the message is written in: Cyrillic means Russian (Uzbek when it has
+    ў/қ/ғ/ҳ), Uzbek words or endings mean Uzbek, otherwise ``fallback`` (the site language).
+
+    English is never guessed: Uzbek written in Latin letters can look English.
+    """
+    folded = _normalize(text)
+    if _CYRILLIC.search(folded) or _UZ_CYRILLIC.search(folded):
+        return 'uz' if _UZ_CYRILLIC.search(folded) else 'ru'
+    if _UZ_LATIN.search(folded):
+        return 'uz'
+    return fallback
+
+
+def counselor_students(user):
+    """The counselor's own active students in their own school, even for a superuser.
+
+    ``active_visible_students`` is unscoped for product admins; the assistant never
+    sends platform-wide numbers, so it always narrows to this counselor and school.
+    """
+    if not user.school_id:
+        return StudentProfile.objects.none()
+    return active_visible_students(user).filter(assigned_counselor=user, school_id=user.school_id)
+
+
 # Questions about writing, improving or planning go to the AI, never here.
 _NOT_A_LOOKUP = (
     r'essay|insho|эссе|сочинен|\bwrite\b|\byoz(?:ib|ing|ish)|напиш|improve|\bplan\b|\breja|\bплан|advice|\btips?\b|'
@@ -160,6 +194,11 @@ _T = {
         'en': 'You have no applications yet.',
         'uz': 'Sizda hali arizalar yo\'q.',
         'ru': 'У вас пока нет заявок.',
+    },
+    'c_no_apps': {
+        'en': 'Your students have no applications yet.',
+        'uz': "O'quvchilaringizda hali ariza yo'q.",
+        'ru': 'У ваших учеников пока нет заявок.',
     },
     'apps': {
         'en': 'Your applications ({n} in total):',
@@ -337,7 +376,7 @@ def _student_answer(student, intent, lang):
 
 
 def _counselor_answer(user, intent, lang):
-    students = active_visible_students(user)
+    students = counselor_students(user)
     today = timezone.localdate()
     if intent == 'overdue':
         return _t('c_overdue', lang, n=Task.objects.filter(student__in=students).filter(late_tasks(today)).count())
@@ -353,7 +392,7 @@ def _counselor_answer(user, intent, lang):
     if intent == 'applications':
         counts = _counts(Application.objects.filter(student__in=students))
         if not sum(counts.values()):
-            return _t('no_apps', lang)
+            return _t('c_no_apps', lang)
         return _t('c_apps', lang, n=sum(counts.values())) + '\n' + _status_lines(counts, lang)
     return None
 

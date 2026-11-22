@@ -37,7 +37,7 @@ class AiBudgetTests(APITestCase):
                                         school=school)
 
     def spend(self, user, times=1, feature='assistant'):
-        return [ai_budget.consume(feature, user) for _ in range(times)]
+        return [bool(ai_budget.consume(feature, user)) for _ in range(times)]
 
     def global_count(self, feature='assistant'):
         return cache.get(f'ai-budget:{feature}:{timezone.localdate().isoformat()}')
@@ -163,3 +163,31 @@ class EssayCoachBudgetTests(EssayLabTestCase):
         response = check()
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(response.data['code'], 'coach_resting')
+
+
+@override_settings(
+    OUTBOUND_AI_ENABLED=True, AI_ASSISTANT_DAILY_BUDGET=100, AI_ASSISTANT_SCHOOL_DAILY_BUDGET=100, AI_ASSISTANT_USER_DAILY_LIMIT=100,
+)
+class AiBudgetReservationTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        school = School.objects.create(name='Reserve S', code='reserve-s')
+        self.user = User.objects.create_user(username='res1', email='res1@example.com', role=User.Role.STUDENT,
+                                             school=school)
+
+    def key(self):
+        return f'ai-budget:assistant:{timezone.localdate().isoformat()}'
+
+    def test_refund_undoes_its_own_reservation(self):
+        reservation = ai_budget.consume('assistant', self.user)
+        self.assertEqual(cache.get(self.key()), 1)
+        ai_budget.refund(reservation)
+        self.assertEqual(cache.get(self.key()), 0)
+
+    def test_refused_or_empty_reservation_refund_is_a_noop(self):
+        kept = ai_budget.consume('assistant', self.user)
+        ai_budget.refund(False)
+        ai_budget.refund(None)
+        self.assertTrue(kept)
+        self.assertEqual(cache.get(self.key()), 1)

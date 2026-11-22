@@ -6,6 +6,7 @@ import { initials, fullName } from '../lib/labels';
 import { assistantSource } from '../lib/assistantSource';
 import { buildAssistantPayload, assistantSuggestions, MAX_MESSAGE_LENGTH } from '../lib/assistantChat';
 import { assistantFailureReason, failedSend } from '../lib/assistantAccess';
+import { readTextStream } from '../lib/abortLink';
 
 // `launcher`: false drops the floating button (the counselor workspace opens the
 // assistant from its account menu); `openRequest` opens it when the number changes.
@@ -73,16 +74,12 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
       if (!response.body) throw new Error('Streaming is not supported by this browser.');
       const source = assistantSource(response.headers?.get('X-Assistant-Source'));
       if (source) setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, source } : message));
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value: chunk } = await reader.read();
-        if (done) break;
-        received += decoder.decode(chunk, { stream: true });
+      // Stop, Clear and unmount abort the controller: that cancels the reader at once.
+      received = await readTextStream(response.body, controller.signal, (text) => {
+        received = text;
         setStatus('streaming');
-        setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: received } : message));
-      }
-      received += decoder.decode();
+        setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: text } : message));
+      });
       if (!received.trim()) throw new Error('The assistant returned an empty response.');
       setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: received } : message));
       setStatus('ready');
@@ -106,7 +103,7 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
         if (unavailable) onUnavailable?.(message);
       }
     } finally {
-      abortRef.current = null;
+      if (abortRef.current === controller) abortRef.current = null;
     }
   }
 
