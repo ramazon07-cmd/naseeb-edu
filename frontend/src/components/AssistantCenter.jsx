@@ -15,7 +15,7 @@ export function AssistantCenter({ user, onOpenScreenTime, launcher = true, openR
     id: `welcome-${user.id}`,
     role: 'assistant',
     local: true,
-    content: user.role === 'counselor' ?
+    content: ['counselor', 'admin'].includes(user.role) ?
     'Let’s plan your work with students.' :
     'What would you like help with?'
   }), [user.id, user.role]);

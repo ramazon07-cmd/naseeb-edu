@@ -216,7 +216,24 @@ def school_has_feature(school_id, key):
     return True if row is None else bool((row[2] or {}).get(key))
 
 
-ASSISTANT_ROLES = frozenset({User.Role.STUDENT, User.Role.COUNSELOR})
+ASSISTANT_ROLES = frozenset({User.Role.STUDENT, User.Role.COUNSELOR, User.Role.ADMIN})
+
+
+def is_school_admin(user):
+    """An admin-role account that is not a superuser: it works inside one school and its plan."""
+    return user.role == User.Role.ADMIN and not user.is_superuser
+
+
+def assistant_plan_allows(user, subscription=_NOT_LOADED):
+    """The plan check for the assistant. ``feature_enabled`` lets every product admin through;
+    a school admin is held to their own school's plan, like a counselor, and needs a school."""
+    if not is_school_admin(user):
+        return feature_enabled(user, 'ai_assistant', subscription)
+    if not user.school_id:
+        return False
+    if subscription is not _NOT_LOADED:
+        return True if subscription is None else subscription.plan.has_feature('ai_assistant')
+    return school_has_feature(user.school_id, 'ai_assistant')
 
 
 def assistant_available(user, subscription=_NOT_LOADED):
@@ -224,7 +241,7 @@ def assistant_available(user, subscription=_NOT_LOADED):
     return (
         outbound_ai_allowed()
         and user.role in ASSISTANT_ROLES
-        and feature_enabled(user, 'ai_assistant', subscription)
+        and assistant_plan_allows(user, subscription)
     )
 
 

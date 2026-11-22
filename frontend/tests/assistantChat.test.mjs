@@ -38,6 +38,7 @@ test('every suggested question is translated into uz and ru', () => {
   }
   assert.ok(assistantSuggestions('student').includes('What’s my next deadline?'));
   assert.ok(assistantSuggestions('counselor').includes('How many students are at risk?'));
+  assert.deepEqual(assistantSuggestions('admin'), ['How many students are at risk?', 'How many tasks are overdue?']);
   assert.ok(UI_TRANSLATIONS[assistantSource('budget-exhausted').note]);
 });
 

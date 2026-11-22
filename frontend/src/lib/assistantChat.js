@@ -27,6 +27,10 @@ const COUNSELOR_SUGGESTIONS = [
   'Help me plan my student check-ins',
 ]
 
+// School admins ask about their school's totals; no personal records are involved.
+const ADMIN_SUGGESTIONS = COUNSELOR_SUGGESTIONS.slice(0, 2)
+
 export function assistantSuggestions(role) {
+  if (role === 'admin') return ADMIN_SUGGESTIONS
   return role === 'counselor' ? COUNSELOR_SUGGESTIONS : STUDENT_SUGGESTIONS
 }

@@ -66,6 +66,23 @@ def counselor_students(user):
     return active_visible_students(user).filter(assigned_counselor=user, school_id=user.school_id)
 
 
+def admin_students(user):
+    """A school admin's school: its active, confirmed students, even for a superuser.
+
+    Never platform-wide: no school means nobody, and another school is never included.
+    """
+    if not user.school_id:
+        return StudentProfile.objects.none()
+    return active_visible_students(user).filter(school_id=user.school_id, school__is_active=True)
+
+
+def assistant_students(user):
+    """The students whose aggregates the assistant may count for this staff user."""
+    if user.role == User.Role.ADMIN:
+        return admin_students(user)
+    return counselor_students(user)
+
+
 # Questions about writing, improving or planning go to the AI, never here.
 _NOT_A_LOOKUP = (
     r'essay|insho|эссе|сочинен|\bwrite\b|\byoz(?:ib|ing|ish)|напиш|improve|\bplan\b|\breja|\bплан|advice|\btips?\b|'

@@ -1,6 +1,6 @@
 # Naseeb AI assistant chat rules
 
-The assistant is the Naseeb AI chat drawer for students and counselors. **It reads; it never
+The assistant is the Naseeb AI chat drawer for students, counselors and school admins. **It reads; it never
 writes.** It answers questions about the user's own work, explains how to use NaseebEdu and gives
 general study-abroad guidance. It has no tools and cannot create, change or delete any record.
 
@@ -21,8 +21,8 @@ covered here.
 |---|---|---|
 | Student | Yes, if the school plan includes `ai_assistant` | Only their own profile, tasks, roadmap missions and application counts |
 | Counselor | Yes, if the school plan includes `ai_assistant` | Only **counts** over their own active assigned students in their own school; never a student's name, contact or record text |
+| School admin (admin role with a school) | Yes, if the school plan includes `ai_assistant`. **Decided (2026-11-22): school admins get the assistant, limited to their own school's aggregate data** **[built]** | Only **counts** over their own school's active, confirmed students; never a student's name, contact or record text, never another school |
 | Counselor's assistant, teacher, organization, parent | No (403) | Nothing |
-| Product admin / school admin | No (403) **[decide: admin access, limited to their own school's counts]** | Nothing |
 
 1. The outbound AI switch (`core/ai_policy.outbound_ai_allowed()`) off means the whole chat is off:
    the request gets 503 `assistant_disabled` and the launcher is hidden. **[built]**
@@ -37,17 +37,25 @@ covered here.
 2. **Counselor:** the context uses `counselor_students(user)` (`assistant_local.py`): students
    assigned to this counselor, in the counselor's school, active and confirmed. Only status counts and the at-risk
    count are sent; the prompt says "no student identities". **[built]**
-3. **No cross-school data.** Nothing from another school reaches the prompt, the local answers or
+3. **School admin:** the context uses `admin_students(user)` (`assistant_local.py`): every active,
+   confirmed student of the admin's own school (the school must be active). Only the student count,
+   the at-risk count and task, roadmap and application status counts are sent; the prompt says
+   "this school only" and "no student identities". An admin account without a school gets 403
+   (no school, no plan to check). A superuser with the admin role is also limited to its own
+   school (no school means zero counts; it never gets platform-wide numbers) and, as everywhere,
+   is not held to a plan. The plan check, outbound-AI switch, throttles, daily budget, usage
+   logging and refund rules are the same as for students and counselors. **[built]**
+4. **No cross-school data.** Nothing from another school reaches the prompt, the local answers or
    the shared answer cache. **[built]** A superuser account with the counselor role is still
    limited to its own assigned students in its own school; a counselor with no school sees nobody.
    **[built]**
-4. **Only what the question needs.** The question is matched to topics (tasks, roadmap,
+5. **Only what the question needs.** The question is matched to topics (tasks, roadmap,
    applications, profile, counselor workload) and only those sections are sent. A general question
    sends no personal context at all. **[built]**
-5. **Never sent:** internal ids, emails, phone numbers, passwords, passport, financial or parent
+6. **Never sent:** internal ids, emails, phone numbers, passwords, passport, financial or parent
    contact details. Emails and phone numbers are removed from user messages and from the context
    before they leave the server. **[built]**
-6. **Chat history lives in the browser only** and is gone when the page closes. The server keeps no
+7. **Chat history lives in the browser only** and is gone when the page closes. The server keeps no
    chat text; logs hold user id, role, mode, sizes and timing, never the question or answer. **[built]**
 
 ## 3. What it may do
