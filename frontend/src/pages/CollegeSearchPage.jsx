@@ -16,7 +16,7 @@ import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar'
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
 import { CollegeMatchPanel } from '../components/CollegeMatch';
-import { applicationProgram, bulkAddTier } from '../lib/collegeMatch';
+import { applicationProgram, bulkAddTier, invalidateMatch } from '../lib/collegeMatch';
 import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
 import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
@@ -363,10 +363,18 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     return () => {active = false;};
   }, [listOpen, data.applications, researchVersion, listFitsAttempt]);
 
+  // New research makes the stored match, and any match or reasons response still pending, stale.
+  function resetMatch() {
+    const next = invalidateMatch(matchGeneration.current);
+    matchGeneration.current = next.generation;
+    setMatch(next);
+  }
+
   async function refreshResearch() {
     setResearchLoading(true);setResearchError('');
     try {
       setResearch(await api.collegeResearch());
+      resetMatch();
       setResearchVersion((value) => value + 1);
     } catch (error) {setResearchError(error.message);} finally {setResearchLoading(false);}
   }
@@ -376,6 +384,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     try {
       const result = await api.updateCollegeResearchProfile(payload);
       setResearch(result);
+      resetMatch();
       setResearchVersion((value) => value + 1);
       notify(t("Profile details saved and college research updated."));
       reload();
@@ -493,7 +502,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   return <div className="section-stack student-portal college-page nb-bridge nb-colleges">
     {matchHeader}
     {ready && <CollegeMatchSummary research={research} applications={data.applications} setPage={setPage} activeTier={activeTier} onTier={pickTier} onRadar={() => setRadarOpen(true)} />}
-    <CollegeMatchPanel state={match} listed={listed} busyId={busyId} addingAll={addingAll} onAdd={(university) => addToList(university, university.fit)} onAddAll={addAllMatches} onOpen={openUniversity} onRetry={findMatches} onClose={() => {matchGeneration.current += 1;setMatch({ loading: false, data: null, error: '', generation: matchGeneration.current });}} />
+    <CollegeMatchPanel state={match} listed={listed} busyId={busyId} addingAll={addingAll} onAdd={(university) => addToList(university, university.fit)} onAddAll={addAllMatches} onOpen={openUniversity} onRetry={findMatches} onClose={resetMatch} />
     <DeadlineRadar open={radarOpen} applications={data.applications} onOpen={(application) => { setRadarOpen(false); openUniversity(application.university); }} onClose={() => setRadarOpen(false)} />
     <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}

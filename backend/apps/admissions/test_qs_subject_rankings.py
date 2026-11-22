@@ -197,6 +197,16 @@ class MajorMapTests(TestCase):
         self.assertEqual(split_majors('Business and Economics, Law'), ['business', 'economics', 'law'])
         self.check('Economics, economics / Экономика', 'ECO01')
 
+    def test_compound_subject_names_match_whole_before_splitting(self):
+        self.check('Oil and Gas', 'PET01')
+        self.check('Oil & Gas Engineering', 'PET01')
+        self.check('Hospitality & Leisure Management', 'HOS01')
+        self.check('Computer Science & Information Systems', 'COM02')
+
+    def test_two_real_majors_still_give_both(self):
+        self.check('Economics and Computer Science', 'ECO01', 'COM02')
+        self.check('Oil and Gas and Law', 'PET01', 'LAW01')
+
     def test_every_keyword_code_is_a_subject(self):
         from .subjects import KEYWORDS
 
