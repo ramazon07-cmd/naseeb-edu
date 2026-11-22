@@ -107,8 +107,25 @@ class TokenKeyTests(RecordSetup, TestCase):
         self.answered(usage={'input_tokens': 100, 'output_tokens': 50, 'cache_read_input_tokens': 30})
         ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.OK)
         row = self.last()
-        self.assertEqual((row.input_tokens, row.output_tokens, row.total_tokens, row.cached_input_tokens), (100, 50, 150, 30))
+        self.assertEqual((row.input_tokens, row.output_tokens, row.total_tokens, row.cached_input_tokens), (130, 50, 180, 30))
         self.assertFalse(row.usage_estimated)
+
+    def test_native_anthropic_input_includes_cache_reads_and_writes(self):
+        self.answered(usage={
+            'input_tokens': 100, 'output_tokens': 50, 'cache_read_input_tokens': 900, 'cache_creation_input_tokens': 200,
+        })
+        ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.OK)
+        row = self.last()
+        self.assertEqual((row.input_tokens, row.output_tokens, row.total_tokens, row.cached_input_tokens), (1200, 50, 1250, 900))
+        self.assertFalse(row.usage_estimated)
+
+    def test_openai_style_totals_are_not_counted_twice(self):
+        self.answered(usage={
+            'prompt_tokens': 1000, 'completion_tokens': 50, 'total_tokens': 1050, 'prompt_tokens_details': {'cached_tokens': 900},
+        })
+        ai_usage.record('essay_coach', self.user, provider='gateway', status=ai_usage.OK)
+        row = self.last()
+        self.assertEqual((row.input_tokens, row.total_tokens, row.cached_input_tokens), (1000, 1050, 900))
 
     def test_input_tokens_details_cached_count(self):
         self.answered(usage={'input_tokens': 10, 'output_tokens': 5, 'input_tokens_details': {'cached_tokens': 4}})

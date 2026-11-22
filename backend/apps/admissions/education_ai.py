@@ -130,12 +130,24 @@ _UNBILLED_HTTP = frozenset({400, 401, 402, 403, 404, 405, 409, 413, 415, 422, 42
 
 
 def _in_connect_phase(exc):
-    """True if the exception was raised while establishing the connection."""
-    tb = exc.__traceback__
-    while tb is not None:
-        if tb.tb_frame.f_code.co_name in ('create_connection', 'connect'):
-            return True
-        tb = tb.tb_next
+    """True if the exception was raised while establishing the connection.
+
+    urllib wraps the socket error in URLError, so the connect frames are on the wrapped
+    error's traceback (``reason``, or the chained cause), not on the wrapper's own.
+    """
+    seen = set()
+    pending = [exc]
+    while pending:
+        error = pending.pop()
+        if not isinstance(error, BaseException) or id(error) in seen:
+            continue
+        seen.add(id(error))
+        tb = error.__traceback__
+        while tb is not None:
+            if tb.tb_frame.f_code.co_name in ('create_connection', 'connect'):
+                return True
+            tb = tb.tb_next
+        pending += [getattr(error, 'reason', None), error.__cause__, error.__context__]
     return False
 
 

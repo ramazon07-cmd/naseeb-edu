@@ -125,6 +125,23 @@ class EducationMatchAITests(RoleIsolationBase):
             self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(self.used(), 0)
 
+    def test_connect_timeout_through_urllib_is_refunded(self):
+        # urllib wraps the socket timeout in a URLError: the connect frames sit on its reason, not on the wrapper.
+        with mock.patch('socket.create_connection', side_effect=socket.timeout('timed out')):
+            self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(self.used(), 0)
+        self.assertEqual(self.used(f':user:{self.student_a_user.pk}'), 0)
+        row = AiUsageLog.objects.get(feature='education_match')
+        self.assertEqual((row.status, row.refunded), ('provider_error', True))
+
+    def test_a_timeout_after_the_request_went_out_through_urllib_keeps_the_charge(self):
+        with mock.patch('socket.create_connection', return_value=mock.MagicMock()), \
+                mock.patch('http.client.HTTPConnection.getresponse', side_effect=socket.timeout('timed out')), \
+                mock.patch('http.client.HTTPConnection.send'):
+            self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(self.used(), 1)
+        self.assertFalse(AiUsageLog.objects.get(feature='education_match').refunded)
+
     def test_read_timeout_keeps_the_charge(self):
         reply = mock.MagicMock()
         reply.read.side_effect = socket.timeout('timed out')

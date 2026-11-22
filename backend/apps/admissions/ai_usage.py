@@ -96,6 +96,9 @@ def _tokens(sink, output_chars):
         details_in = usage.get('prompt_tokens_details') or usage.get('input_tokens_details') or {}
         details_out = usage.get('completion_tokens_details') or {}
         input_tokens = _count(usage.get('prompt_tokens', usage.get('input_tokens')))
+        if 'prompt_tokens' not in usage:
+            # Native Anthropic usage: input_tokens leaves out what was read from or written to the cache.
+            input_tokens += _count(usage.get('cache_read_input_tokens')) + _count(usage.get('cache_creation_input_tokens'))
         output_tokens = _count(usage.get('completion_tokens', usage.get('output_tokens')))
         total_tokens = _count(usage.get('total_tokens')) or input_tokens + output_tokens
         if total_tokens:
