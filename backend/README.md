@@ -52,13 +52,14 @@ It stays off until production use has legal sign-off (open item H8 in
 - the Naseeb AI assistant is unavailable: `POST /api/assistant/chat/` answers
   `503` with `"code": "assistant_disabled"`, and the frontend shows no launcher;
 - Essay Coach depth checks use the built-in rule-based coach (`model: "local"`);
-- education-match guidance uses its deterministic fallback (`provider_available: false`).
+- education-match guidance (`POST /api/education-matches/ai/`) answers `503` and makes no outside call.
 
 `GET /api/users/accounts/me/` reports `assistant_enabled`, which is true only when
 the switch is on, the user is a student or counselor and the school plan includes
-`ai_assistant`. With the switch on, the provider keys (`AI_GATEWAY_API_KEY`,
-`GROQ_API_KEY`) still decide whether outside calls happen; without a key each
-feature uses its local fallback. `manage.py check` warns (`naseeb.W002`) when a
+`ai_assistant`. With the switch on, the provider key (`AI_GATEWAY_API_KEY`)
+still decides whether outside calls happen; without a key each
+feature uses its local fallback (education-match guidance answers `503`).
+`manage.py check` warns (`naseeb.W002`) when the
 provider key is set while the switch is off, since the key is then unused.
 
 ### Assistant cost controls
@@ -85,6 +86,22 @@ questions without personal context or PII.
 
 Redis should run with `maxmemory-policy volatile-lru` (or `volatile-ttl`) so the budget and
 token counters, which all carry a TTL, are not evicted before the answer cache and other keys.
+
+### Education-match guidance
+
+`POST /api/education-matches/ai/` (students only) explains the student's ranked
+majors through the same Vercel AI Gateway as the assistant, with the pinned model
+`EDUCATION_MATCH_MODEL` (default `openai/gpt-5.4-nano`, temperature 0, no fallback
+list). It is counted in the daily AI budget (`EDUCATION_MATCH_DAILY_BUDGET`,
+`EDUCATION_MATCH_SCHOOL_DAILY_BUDGET`, `EDUCATION_MATCH_USER_DAILY_LIMIT`; a
+platform budget of 0 turns it off) and logged as feature `education_match`. Only
+de-identified data is sent: assessment scores and versions, grade, GPA, SAT and
+IELTS, and the major and subject names. Never a name, email, username, school or id.
+The result is cached per student by a hash of that input (7 days), so a repeat
+costs nothing. Responses: `200` (`mode: "ai"`), `403` non-students, `429` daily
+limit reached, `503` AI off, not configured, or provider failure (the budget
+charge is refunded). The frontend helper is `api.educationMatchAI({ major_candidates,
+subject_strengths })`; no page uses it yet. `GROQ_*` settings are gone.
 
 Setting `NASEEB_IGNORE_DOTENV=1` makes the settings read only the process
 environment and skip `backend/.env`; the tests that boot settings in a

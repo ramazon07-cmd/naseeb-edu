@@ -4,7 +4,7 @@ Every paid AI call, and every call that was refused or answered locally instead,
 
 ## What is stored
 
-`feature` (assistant, essay_coach, recommendation_letter, education_match), `provider` (gateway or groq), `model` the provider reports it used, `status`, input / output / cached-input / reasoning / total tokens, `latency_ms`, `language`, `fallback_used`, `role`, and the user and school (both set to null if deleted).
+`feature` (assistant, essay_coach, recommendation_letter, education_match), `provider` (gateway), `model` the provider reports it used, `status`, input / output / cached-input / reasoning / total tokens, `latency_ms`, `language`, `fallback_used`, `role`, and the user and school (both set to null if deleted).
 
 Statuses: `ok`; `provider_error` (no usable answer from the provider, no tokens); `invalid_output` (the provider answered and was billed, but the answer was unusable); `budget_refused` and `local_fallback` (no provider call, zero tokens). A `local_fallback` row means a request was answered locally because AI was off, not entitled, or not configured.
 

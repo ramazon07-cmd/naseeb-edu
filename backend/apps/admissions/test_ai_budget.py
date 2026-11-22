@@ -225,3 +225,96 @@ class AiBudgetReservationTests(APITestCase):
                 ai_budget.refund(reservation)  # the old day's call fails: today's count must stay
             self.assertEqual(ai_budget._fallback.counts['essay_coach:process'], 1)
             self.assertEqual(ai_budget._fallback.day, self.tomorrow.isoformat())
+
+
+@override_settings(
+    OUTBOUND_AI_ENABLED=True, AI_ASSISTANT_DAILY_BUDGET=100, AI_ASSISTANT_SCHOOL_DAILY_BUDGET=100, AI_ASSISTANT_USER_DAILY_LIMIT=100,
+    AI_FALLBACK_PROCESS_DAILY_BUDGET=5,
+)
+class AiBudgetRefundTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        school = School.objects.create(name='Refund S', code='refund-s')
+        self.user = User.objects.create_user(username='r1', email='r1@example.com', role=User.Role.STUDENT,
+                                             school=school)
+
+    def key(self, day=None, suffix=''):
+        return f'ai-budget:assistant:{day or timezone.localdate().isoformat()}{suffix}'
+
+    def test_refund_undoes_its_own_reservation(self):
+        reservation = ai_budget.consume('assistant', self.user)
+        self.assertEqual(cache.get(self.key()), 1)
+        ai_budget.refund(reservation)
+        self.assertEqual(cache.get(self.key()), 0)
+
+    def test_refused_or_empty_reservation_refund_is_a_noop(self):
+        kept = ai_budget.consume('assistant', self.user)
+        ai_budget.refund(False)
+        ai_budget.refund(None)
+        self.assertTrue(kept)
+        self.assertEqual(cache.get(self.key()), 1)
+
+    def test_outage_reservation_refund_leaves_unrelated_redis_count_alone(self):
+        with fresh_fallback():
+            with mock.patch.object(ai_budget, 'count_hits', return_value=None), \
+                    self.assertLogs('naseeb.ai_budget', level='WARNING'):
+                reservation = ai_budget.consume('assistant', self.user)
+            self.assertEqual(reservation.backend, 'process')
+            # Another request, after Redis recovered, reserved on the shared cache.
+            other = ai_budget.consume('assistant', self.user)
+            self.assertEqual(other.backend, 'cache')
+            self.assertEqual(cache.get(self.key()), 1)
+            ai_budget.refund(reservation)
+            self.assertEqual(cache.get(self.key()), 1)
+            self.assertEqual(cache.get(self.key(suffix=f':user:{self.user.pk}')), 1)
+            self.assertEqual(ai_budget._fallback.counts.get('assistant:process', 0), 0)
+
+    def test_refunded_fallback_call_does_not_raise_the_fallback_flag(self):
+        with fresh_fallback():
+            with mock.patch.object(ai_budget, 'count_hits', return_value=None), \
+                    self.assertLogs('naseeb.ai_budget', level='WARNING'):
+                reservation = ai_budget.consume('assistant', self.user)
+            self.assertTrue(ai_budget.fallback_active())
+            ai_budget.refund(reservation)
+            self.assertFalse(ai_budget.fallback_active())
+
+    def test_fallback_call_that_stays_counted_keeps_the_flag(self):
+        with fresh_fallback():
+            with mock.patch.object(ai_budget, 'count_hits', return_value=None), \
+                    self.assertLogs('naseeb.ai_budget', level='WARNING'):
+                ai_budget.consume('assistant', self.user)
+            ai_budget.consume('assistant', self.user)  # cache is back
+            self.assertTrue(ai_budget.fallback_active())
+
+    def test_cache_reservation_refund_does_not_touch_process_fallback(self):
+        with fresh_fallback():
+            with mock.patch.object(ai_budget, 'count_hits', return_value=None), \
+                    self.assertLogs('naseeb.ai_budget', level='WARNING'):
+                ai_budget.consume('assistant', self.user)
+            reservation = ai_budget.consume('assistant', self.user)
+            ai_budget.refund(reservation)
+            self.assertEqual(ai_budget._fallback.counts['assistant:process'], 1)
+
+    def test_refund_after_midnight_decrements_the_reserved_day(self):
+        before, after = '2026-06-01', '2026-06-02'
+        with mock.patch.object(ai_budget.timezone, 'localdate') as today:
+            today.return_value = timezone.datetime.fromisoformat(before).date()
+            reservation = ai_budget.consume('assistant', self.user)
+            today.return_value = timezone.datetime.fromisoformat(after).date()
+            next_day = ai_budget.consume('assistant', self.user)
+            ai_budget.refund(reservation)
+        self.assertEqual(cache.get(self.key(before)), 0)
+        self.assertEqual(cache.get(self.key(after)), 1)
+        self.assertTrue(next_day)
+
+    def test_process_refund_after_midnight_ignores_the_new_day(self):
+        with fresh_fallback(), mock.patch.object(ai_budget, 'count_hits', return_value=None), \
+                self.assertLogs('naseeb.ai_budget', level='WARNING'), \
+                mock.patch.object(ai_budget.timezone, 'localdate') as today:
+            today.return_value = timezone.datetime.fromisoformat('2026-06-01').date()
+            old = ai_budget.consume('assistant', self.user)
+            today.return_value = timezone.datetime.fromisoformat('2026-06-02').date()
+            ai_budget.consume('assistant', self.user)
+            ai_budget.refund(old)
+            self.assertEqual(ai_budget._fallback.counts['assistant:process'], 1)

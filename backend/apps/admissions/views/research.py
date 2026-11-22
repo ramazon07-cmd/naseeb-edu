@@ -13,7 +13,7 @@ from ..college_search import (
 from ..subjects import subjects_for_major
 from ..subject_rankings import SubjectRankingParams, cached_subject_ranking
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
-from ..education_ai import generate_education_guidance, recommendation_ai_available
+from ..education_ai import EducationAIBudgetExhausted, EducationAIUnavailable, generate_education_guidance
 
 
 COLLEGE_RESEARCH_QUESTIONS = {
@@ -115,12 +115,16 @@ class EducationMatchAIView(APIView):
         serializer = EducationMatchAIRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         profile = request.user.student_profile
-        result = generate_education_guidance(
-            profile=profile,
-            major_candidates=serializer.validated_data['major_candidates'],
-            subject_strengths=serializer.validated_data.get('subject_strengths', []),
-        )
-        result['provider_available'] = recommendation_ai_available()
+        try:
+            result = generate_education_guidance(
+                profile=profile,
+                major_candidates=serializer.validated_data['major_candidates'],
+                subject_strengths=serializer.validated_data.get('subject_strengths', []),
+            )
+        except EducationAIBudgetExhausted:
+            return Response({'detail': 'The daily limit for AI explanations is reached. Try again tomorrow.'}, status=429)
+        except EducationAIUnavailable:
+            return Response({'detail': 'AI explanations are not available right now.'}, status=503)
         return Response(result)
 
 

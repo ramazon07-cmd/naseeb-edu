@@ -20,7 +20,7 @@ def unused_ai_keys_check(app_configs, **kwargs):
     """Provider keys do nothing while the outbound-AI switch is off; say so instead of staying silent."""
     from core.ai_policy import outbound_ai_allowed
 
-    keys = [name for name in ('AI_GATEWAY_API_KEY', 'GROQ_API_KEY') if getattr(settings, name, '')]
+    keys = [name for name in ('AI_GATEWAY_API_KEY',) if getattr(settings, name, '')]
     if not keys or outbound_ai_allowed():
         return []
     return [checks.Warning(

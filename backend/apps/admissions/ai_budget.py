@@ -62,6 +62,13 @@ def _limits(feature):
     if feature == 'telegram_import':
         # A nightly job with no user or school: one platform cap (0 = import off).
         return (settings.TELEGRAM_IMPORT_DAILY_BUDGET, None, None)
+    if feature == 'education_match':
+        # Like the coach: a platform budget of 0 turns the AI explanation off.
+        return (
+            settings.EDUCATION_MATCH_DAILY_BUDGET,
+            settings.EDUCATION_MATCH_SCHOOL_DAILY_BUDGET or None,
+            settings.EDUCATION_MATCH_USER_DAILY_LIMIT or None,
+        )
     raise ValueError(f'Unknown AI feature: {feature}')
 
 
@@ -87,8 +94,11 @@ class _ProcessFallback:
         with self.lock:
             if day == self.day:
                 for key in keys:
-                    if self.counts.get(key, 0) > 0:
+                    if self.counts.get(key, 0) > 1:
                         self.counts[key] -= 1
+                    else:
+                        # Drop a key that reaches zero so "fell back today" means a call really stayed counted here.
+                        self.counts.pop(key, None)
 
 
 _fallback = _ProcessFallback()
@@ -109,7 +119,7 @@ class Reservation:
         return True
 
 
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'recommendation_letter_check', 'college_match_reasons')
+FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'recommendation_letter_check', 'college_match_reasons', 'education_match', 'telegram_import')
 TOP_SCHOOLS = 5
 
 
@@ -219,8 +229,12 @@ def usage_today(school_ids):
 
 
 def fallback_active():
-    """Whether this process fell back to its own allowance today (cache unreachable)."""
-    return _fallback.day == timezone.localdate().isoformat() and bool(_fallback.counts)
+    """Whether this process still holds fallback-counted calls today (cache was unreachable).
+
+    Those calls never reached the shared counters, so today's totals undercount. A call that was
+    refunded leaves nothing behind, so it does not raise the flag.
+    """
+    return _fallback.day == timezone.localdate().isoformat() and any(_fallback.counts.values())
 
 
 # -- Daily token caps for the assistant (no database: cache counters only) -----

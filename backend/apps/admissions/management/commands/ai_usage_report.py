@@ -20,7 +20,7 @@ class Command(BaseCommand):
         parser.add_argument('--feature', choices=ai_usage.FEATURES)
         parser.add_argument('--by', choices=('feature', 'school', 'day'), default='feature')
         parser.add_argument('--csv', dest='csv_path')
-        parser.add_argument('--price-input', type=Decimal, help='USD per 1M input tokens')
+        parser.add_argument('--price-input', type=Decimal, help='USD per 1M input tokens (one price for every model; cached input billed as input)')
         parser.add_argument('--price-output', type=Decimal, help='USD per 1M output tokens')
         parser.add_argument('--purge-older-than', type=int, metavar='DAYS', help='delete rows older than DAYS and exit')
 

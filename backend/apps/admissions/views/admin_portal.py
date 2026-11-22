@@ -16,6 +16,7 @@ from core.jobs import SCHEDULED_JOBS
 from ..models import (
     Achievement,
     Activity,
+    AiUsageLog,
     ChannelMessage,
     CounselorRoadmapMission,
     Document,
@@ -115,6 +116,44 @@ class AdminSummaryView(APIView):
 AI_TOKENS_CACHE_SECONDS = 60
 
 
+def _cost_estimate(tokens):
+    """USD estimate from the token sums, or ``None`` when no price is configured.
+
+    It assumes ONE price for every model (AI_COST_PER_MTOK_INPUT/OUTPUT) and bills cached
+    input at the input price, so treat it as an upper-bound ballpark.
+    """
+    price_in, price_out = settings.AI_COST_PER_MTOK_INPUT, settings.AI_COST_PER_MTOK_OUTPUT
+    if not (price_in or price_out):
+        return None
+    per_feature = {
+        name: round((row['input_tokens']['sum'] * price_in + row['output_tokens']['sum'] * price_out) / 1_000_000, 4)
+        for name, row in tokens['features'].items()
+    }
+    return {'assumes': 'one_price_for_all_models', 'features': per_feature, 'total_usd': round(sum(per_feature.values()), 4)}
+
+
+def _today_from_log(school_names):
+    """Today's paid calls from the usage log: used while the shared counters cannot be trusted
+    (cache down, or calls were counted on a per-process fallback). Refunded calls are left out."""
+    from .. import ai_budget
+
+    start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = AiUsageLog.objects.filter(
+        created_at__gte=start, refunded=False,
+        status__in=(AiUsageLog.Status.OK, AiUsageLog.Status.INVALID_OUTPUT, AiUsageLog.Status.PROVIDER_ERROR),
+    )
+    report = {feature: {'used': 0, 'top_schools': []} for feature in ai_budget.FEATURES}
+    for row in today.values('feature').annotate(n=Count('id')):
+        if row['feature'] in report:
+            report[row['feature']]['used'] = row['n']
+    per_school = today.exclude(school=None).values('feature', 'school_id').annotate(n=Count('id')).order_by('-n')
+    for row in per_school:
+        entry = report.get(row['feature'])
+        if entry is not None and len(entry['top_schools']) < ai_budget.TOP_SCHOOLS:
+            entry['top_schools'].append({'id': row['school_id'], 'name': school_names.get(row['school_id'], ''), 'used': row['n']})
+    return report
+
+
 class AdminAiUsageView(APIView):
     """Paid AI calls today against their daily caps, plus token usage over ``?days=`` (default 30,
     optionally one ``?feature=``). Counters only: no student content."""
@@ -146,12 +185,17 @@ class AdminAiUsageView(APIView):
         for feature in (report or {}).values():
             for row in feature['top_schools']:
                 row['name'] = names.get(row['id'], '')
+        fallback = ai_budget.fallback_active()
         return Response({
             'day': timezone.localdate(),
             'cache_available': report is not None,
-            'fallback_active': ai_budget.fallback_active(),
+            'fallback_active': fallback,
+            'feature_names': list(ai_budget.FEATURES),
             'features': report,
+            # Only read when the shared counters are missing or undercount.
+            'today_from_log': _today_from_log(names) if report is None or fallback else None,
             'tokens': tokens,
+            'cost_estimate': _cost_estimate(tokens),
         })
 
 

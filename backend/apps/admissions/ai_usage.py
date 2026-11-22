@@ -16,6 +16,7 @@ from collections import defaultdict
 
 from django.utils import timezone, translation
 
+from .ai_budget import FEATURES  # one list of AI features: the budget's
 from .models import AiUsageLog
 
 logger = logging.getLogger('naseeb.ai_usage')
@@ -26,7 +27,6 @@ PROVIDER_ERROR = AiUsageLog.Status.PROVIDER_ERROR
 BUDGET_REFUSED = AiUsageLog.Status.BUDGET_REFUSED
 FAILED = 'failed'
 PERCENTILES = (50, 90)
-FEATURES = ('assistant', 'essay_coach', 'recommendation_letter', 'recommendation_letter_check', 'education_match', 'college_match_reasons', 'telegram_import')
 _SNAPSHOT_SUFFIX = re.compile(r'-(?:\d{4}-\d{2}-\d{2}|\d{8}|\d{4})$')
 _local = threading.local()
 
@@ -92,18 +92,27 @@ def failure_status(sink):
 def _tokens(sink, output_chars):
     usage = (sink or {}).get('usage')
     if usage:
-        details_in = usage.get('prompt_tokens_details') or {}
+        # OpenAI-style names, or Anthropic-style ones when the gateway passes those through.
+        details_in = usage.get('prompt_tokens_details') or usage.get('input_tokens_details') or {}
         details_out = usage.get('completion_tokens_details') or {}
-        input_tokens = _count(usage.get('prompt_tokens'))
-        output_tokens = _count(usage.get('completion_tokens'))
-        return {
-            'input_tokens': input_tokens,
-            'output_tokens': output_tokens,
-            'cached_input_tokens': _count(details_in.get('cached_tokens')) if isinstance(details_in, dict) else 0,
-            'reasoning_tokens': _count(details_out.get('reasoning_tokens')) if isinstance(details_out, dict) else 0,
-            'total_tokens': _count(usage.get('total_tokens')) or input_tokens + output_tokens,
-            'usage_estimated': False,
-        }
+        input_tokens = _count(usage.get('prompt_tokens', usage.get('input_tokens')))
+        if 'prompt_tokens' not in usage:
+            # Native Anthropic usage: input_tokens leaves out what was read from or written to the cache.
+            input_tokens += _count(usage.get('cache_read_input_tokens')) + _count(usage.get('cache_creation_input_tokens'))
+        output_tokens = _count(usage.get('completion_tokens', usage.get('output_tokens')))
+        total_tokens = _count(usage.get('total_tokens')) or input_tokens + output_tokens
+        if total_tokens:
+            return {
+                'input_tokens': input_tokens,
+                'output_tokens': output_tokens,
+                'cached_input_tokens': (
+                    _count(details_in.get('cached_tokens')) if isinstance(details_in, dict) else 0
+                ) or _count(usage.get('cache_read_input_tokens')),
+                'reasoning_tokens': _count(details_out.get('reasoning_tokens')) if isinstance(details_out, dict) else 0,
+                'total_tokens': total_tokens,
+                'usage_estimated': False,
+            }
+        # A usage block with no recognisable counts is not "zero tokens": estimate instead.
     input_tokens = (sink or {}).get('input_chars', 0) // 4
     output_tokens = (output_chars or (sink or {}).get('output_chars', 0)) // 4
     return {
@@ -118,11 +127,13 @@ def _same_model(used, requested):
     return base(used) == base(requested)
 
 
-def record(feature, user, *, provider, status, sink=None, output_chars=0):
+def record(feature, user, *, provider, status, sink=None, output_chars=0, refunded=False):
     """Store one call. ``status`` may be ``FAILED`` to derive provider_error / invalid_output.
 
     Refusals and local answers carry no tokens. ``fallback_used`` is true when the
     provider reports a different model than the one requested (the gateway's own fallback).
+    ``refunded`` marks a call the provider did not charge and whose budget was given back:
+    it is kept as an attempt but is not counted as a paid call.
     """
     try:
         sink = sink if sink is not None else getattr(_local, 'sink', None)
@@ -148,6 +159,7 @@ def record(feature, user, *, provider, status, sink=None, output_chars=0):
             latency_ms=round((time.monotonic() - started) * 1000) if paid and started else 0,
             language=(translation.get_language() or '')[:10],
             fallback_used=bool(paid and model and requested and not _same_model(model, requested)),
+            refunded=bool(refunded and paid),
             **fields,
         )
     except Exception:
@@ -162,9 +174,12 @@ def _percentile(sorted_values, pct):
 
 
 def _summarize(rows):
-    """Rows are (input, output, cached, reasoning, total, status, fallback_used, estimated)."""
+    """Rows are (input, output, cached, reasoning, total, status, fallback_used, estimated, refunded).
+
+    Refunded calls (not charged by the provider) are attempts, not paid calls.
+    """
     calls = len(rows)
-    paid = [row for row in rows if row[5] in ('ok', 'provider_error', 'invalid_output')]
+    paid = [row for row in rows if row[5] in ('ok', 'provider_error', 'invalid_output') and not row[8]]
     ok = [row for row in rows if row[5] == 'ok']
     result = {
         'calls': calls,
@@ -172,6 +187,7 @@ def _summarize(rows):
         'ok_calls': len(ok),
         'error_rate': round(sum(1 for row in paid if row[5] != 'ok') / len(paid), 4) if paid else 0,
         'fallback_rate': round(sum(1 for row in paid if row[6]) / len(paid), 4) if paid else 0,
+        'refunded_calls': sum(1 for row in rows if row[8]),
         'budget_refused': sum(1 for row in rows if row[5] == 'budget_refused'),
         'local_fallback': sum(1 for row in rows if row[5] == 'local_fallback'),
         'estimated_calls': sum(1 for row in paid if row[7]),
@@ -195,7 +211,7 @@ def summary(since, feature=None):
     by_feature, by_school, by_day = defaultdict(list), defaultdict(list), defaultdict(list)
     rows = queryset.values_list(
         'feature', 'school_id', 'created_at', 'input_tokens', 'output_tokens', 'cached_input_tokens',
-        'reasoning_tokens', 'total_tokens', 'status', 'fallback_used', 'usage_estimated',
+        'reasoning_tokens', 'total_tokens', 'status', 'fallback_used', 'usage_estimated', 'refunded',
     ).iterator(chunk_size=2000)
     for name, school_id, created_at, *rest in rows:
         rest = tuple(rest)
