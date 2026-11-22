@@ -170,9 +170,39 @@ def pending_messages(now=None):
         TelegramOutbox.objects.filter(pk__in=stale).delete()
         rows = [row for row in rows if row.pk not in stale]
         TelegramOutbox.objects.filter(pk__in=[row.pk for row in rows]).update(claimed_at=now)
+    replaces = _previous_meeting_messages(rows)
     return {'messages': [
-        {'id': row.pk, 'chat_id': row.chat_id, 'text': row.text, 'buttons': row.buttons or []} for row in rows
+        {
+            'id': row.pk, 'chat_id': row.chat_id, 'text': row.text, 'buttons': row.buttons or [],
+            'replaces': replaces.get(row.pk),
+        }
+        for row in rows
     ]}
+
+
+def _previous_meeting_messages(rows):
+    """{outbox id: Telegram message id to delete once this one is sent}.
+
+    A meeting's reminders and its follow-up replace one another in a chat: the newest message the bot
+    sent there for the same meeting is deleted, so the chat keeps one message per meeting, not eight.
+    """
+    meeting_rows = [row for row in rows if (row.key or '').startswith('meeting:') and row.booking_id]
+    if not meeting_rows:
+        return {}
+    previous = (
+        TelegramOutbox.objects.filter(
+            booking_id__in={row.booking_id for row in meeting_rows},
+            chat_id__in={row.chat_id for row in meeting_rows},
+            key__startswith='meeting:', sent_at__isnull=False, message_id__isnull=False,
+        )
+        .order_by('sent_at', 'id')
+        .values_list('booking_id', 'chat_id', 'message_id')
+    )
+    latest = {(booking_id, chat_id): message_id for booking_id, chat_id, message_id in previous}
+    return {
+        row.pk: latest[(row.booking_id, row.chat_id)]
+        for row in meeting_rows if (row.booking_id, row.chat_id) in latest
+    }
 
 
 def _revoked_chats(chat_ids):
@@ -200,9 +230,14 @@ def _stale_reminder(row, bookings):
     return row.key.split(':')[2] != str(int(booking.starts_at.timestamp()))
 
 
-def acknowledge(sent_ids, blocked_chats):
+def acknowledge(sent_ids, blocked_chats, message_ids=None):
     now = timezone.now()
     sent = TelegramOutbox.objects.filter(pk__in=sent_ids, sent_at__isnull=True).update(sent_at=now)
+    for outbox_id, message_id in (message_ids or {}).items():
+        # Only a meeting's own rows: they are the ones a later reminder deletes.
+        TelegramOutbox.objects.filter(pk=outbox_id, key__startswith='meeting:', message_id__isnull=True).update(
+            message_id=message_id,
+        )
     if blocked_chats:
         StudentTelegram.objects.filter(chat_id__in=blocked_chats).update(is_active=False, updated_at=now)
         # A counselor's blocked chat stops getting reminders too; linking again creates a fresh link.

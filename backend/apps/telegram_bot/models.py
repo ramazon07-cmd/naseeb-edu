@@ -105,6 +105,9 @@ class TelegramOutbox(models.Model):
     # Lease taken when handed to the bot, so two bot instances never send the same message.
     claimed_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
+    # Telegram's id for the sent message, reported by the bot: a meeting's next reminder in the
+    # same chat deletes this one, so a chat holds one reminder per meeting instead of a stack.
+    message_id = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         indexes = [models.Index(fields=['sent_at', 'created_at'], name='tg_outbox_pending_idx')]

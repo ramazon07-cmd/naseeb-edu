@@ -129,6 +129,42 @@ async def test_outbox_messages_are_sent_and_acknowledged(h):
     assert h.api.names('student_outbox_ack') == [{'sent': [1, 2], 'blocked': []}]
 
 
+async def test_a_newer_meeting_reminder_deletes_the_previous_one_after_it_is_sent(h):
+    h.api.outbox_items = [
+        {'id': 5, 'chat_id': 10, 'text': 'Meeting in 1 hour', 'replaces': 777},
+        {'id': 6, 'chat_id': 11, 'text': 'Unrelated', 'replaces': None},
+    ]
+    await deliver_student_messages(bot=h.bot, api=h.api, limiter=RateLimiter(per_second=1000))
+    kinds = [kind for kind, _ in h.session.calls]
+    assert kinds == ['SendMessage', 'DeleteMessage', 'SendMessage']  # sent first, then the old one deleted
+    assert h.session.of('DeleteMessage')[0][1]['message_id'] == 777
+    assert h.session.of('DeleteMessage')[0][1]['chat_id'] == 10
+    # The new message ids go back to the backend, so the next reminder can replace this one.
+    assert set(h.api.acked_message_ids) == {'5', '6'}
+
+
+async def test_a_reminder_that_cannot_be_deleted_still_counts_as_sent(h):
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import DeleteMessage
+
+    h.session.failures['DeleteMessage'] = [
+        TelegramBadRequest(method=DeleteMessage(chat_id=10, message_id=1), message='message to delete not found'),
+    ]
+    h.api.outbox_items = [{'id': 5, 'chat_id': 10, 'text': 'Meeting starts now', 'replaces': 1}]
+    result = await deliver_student_messages(bot=h.bot, api=h.api, limiter=RateLimiter(per_second=1000))
+    assert result == {'sent': 1, 'blocked': 0}
+    assert h.api.names('student_outbox_ack') == [{'sent': [5], 'blocked': []}]
+
+
+async def test_a_failed_send_keeps_the_previous_reminder(h):
+    from aiogram.exceptions import TelegramNetworkError
+
+    h.session.failures['SendMessage'] = [TelegramNetworkError(method=SendMessage(chat_id=10, text='x'), message='down')]
+    h.api.outbox_items = [{'id': 5, 'chat_id': 10, 'text': 'Meeting in 30 minutes', 'replaces': 1}]
+    await deliver_student_messages(bot=h.bot, api=h.api, limiter=RateLimiter(per_second=1000))
+    assert h.session.of('DeleteMessage') == []
+
+
 async def test_blocked_chat_is_reported_and_skipped(h):
     h.session.failures['SendMessage'] = [TelegramForbiddenError(method=SendMessage(chat_id=10, text='x'), message='blocked')]
     h.api.outbox_items = [
@@ -162,7 +198,7 @@ async def test_a_failed_ack_is_reported_first_next_minute(h):
     h.api.outbox_items = [{'id': 2, 'chat_id': 11, 'text': 'B'}]
     await deliver_student_messages(bot=h.bot, api=h.api, limiter=limiter, unacked=unacked)
     assert h.api.names('student_outbox_ack')[-2:] == [{'sent': [1], 'blocked': []}, {'sent': [2], 'blocked': []}]
-    assert unacked == {'sent': [], 'blocked': set()}
+    assert unacked == {'sent': [], 'blocked': set(), 'message_ids': {}}
     assert [c[1]['text'] for c in h.session.of('SendMessage')] == ['A', 'B']
 
 

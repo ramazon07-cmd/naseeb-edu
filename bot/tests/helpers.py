@@ -164,8 +164,9 @@ class FakeApi:
         items, self.outbox_items = self.outbox_items, []
         return items
 
-    async def student_outbox_ack(self, sent, blocked):
+    async def student_outbox_ack(self, sent, blocked, message_ids=None):
         self._record('student_outbox_ack', sent=sent, blocked=blocked)
+        self.acked_message_ids = dict(getattr(self, 'acked_message_ids', {}), **{str(k): v for k, v in (message_ids or {}).items()})
         return {'sent': len(sent)}
 
     async def find_students(self, chat_id, query):

@@ -121,12 +121,26 @@ async def _acknowledge(api, unacked):
     if not (unacked['sent'] or unacked['blocked']):
         return True
     try:
-        await api.student_outbox_ack(unacked['sent'], sorted(unacked['blocked']))
+        await api.student_outbox_ack(unacked['sent'], sorted(unacked['blocked']), unacked.setdefault('message_ids', {}))
     except (ApiError, ApiUnavailable) as exc:
         log.warning('student messages sent but not acknowledged yet: %s', type(exc).__name__)
         return False
-    unacked['sent'], unacked['blocked'] = [], set()
+    unacked['sent'], unacked['blocked'], unacked['message_ids'] = [], set(), {}
     return True
+
+
+async def _delete_replaced(bot, chat_id, message_id):
+    """Delete the meeting's previous reminder in this chat, now that its newer one is there.
+
+    Sent first, deleted after: a failed send never leaves the chat without a reminder. A message
+    that is already gone or too old to delete is left as it is.
+    """
+    if not message_id:
+        return
+    try:
+        await bot.delete_message(chat_id, message_id)
+    except (TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramServerError, TelegramRetryAfter) as exc:
+        log.info('previous meeting reminder not deleted: %s', type(exc).__name__)
 
 
 async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, unacked=None, **_):
@@ -137,7 +151,8 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, un
     `unacked` lives across minutes: what could not be reported is reported first next time, before
     the backend's lease runs out and hands the same messages out again.
     """
-    unacked = {'sent': [], 'blocked': set()} if unacked is None else unacked
+    unacked = {'sent': [], 'blocked': set(), 'message_ids': {}} if unacked is None else unacked
+    unacked.setdefault('message_ids', {})
     if not await _acknowledge(api, unacked):
         return {'sent': 0, 'blocked': 0}
     try:
@@ -145,7 +160,7 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, un
     except (ApiError, ApiUnavailable) as exc:
         log.warning('could not fetch student messages: %s', type(exc).__name__)
         return {'sent': 0, 'blocked': 0}
-    sent, blocked = [], set()
+    sent, blocked, message_ids = [], set(), {}
     for message in messages:
         chat_id = message['chat_id']
         if chat_id in blocked:
@@ -154,8 +169,13 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, un
         for _ in range(2):
             try:
                 await limiter.wait()
-                await bot.send_message(chat_id, message['text'], disable_web_page_preview=True, reply_markup=markup)
+                result = await bot.send_message(chat_id, message['text'], disable_web_page_preview=True, reply_markup=markup)
                 sent.append(message['id'])
+                if getattr(result, 'message_id', None):
+                    message_ids[message['id']] = result.message_id
+                if message.get("replaces"):
+                    await limiter.wait()
+                    await _delete_replaced(bot, chat_id, message["replaces"])
                 break
             except TelegramRetryAfter as exc:
                 await sleep(exc.retry_after)
@@ -178,6 +198,7 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, un
                 break
     unacked['sent'] += sent
     unacked['blocked'] |= blocked
+    unacked['message_ids'].update(message_ids)
     await _acknowledge(api, unacked)
     return {'sent': len(sent), 'blocked': len(blocked)}
 
