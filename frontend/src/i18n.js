@@ -67,15 +67,15 @@ function urlLanguage() {
 const DOCUMENT_META = {
   uz: {
     title: "Naseeb Edu - Universitetga qabul uchun AI platforma",
-    description: "Naseeb Edu — sun’iy intellektga asoslangan SaaS platforma: psixometrik profil, universitet va grantlar reytingi, insho tahlili va shaxsiy qabul traektoriyasi.",
+    description: "Naseeb Edu — universitetga qabul uchun SaaS platforma: psixometrik profil, universitetlar reytingi, Naseeb AI insho tahlili va shaxsiy qabul rejasi.",
   },
   ru: {
     title: "Naseeb Edu — AI-платформа для поступления в университет",
-    description: "Naseeb Edu — SaaS-платформа на основе искусственного интеллекта: психометрический профиль, рейтинг университетов и грантов, анализ эссе и персональная дорожная карта поступления.",
+    description: "Naseeb Edu — SaaS-платформа для поступления в университет: психометрический профиль, рейтинг университетов, анализ эссе с Naseeb AI и персональный план поступления.",
   },
   en: {
     title: "Naseeb Edu - AI platform for university admission",
-    description: "Naseeb Edu is an AI-powered SaaS platform: psychometric profiling, university and scholarship matching, essay analysis and a personalized admission roadmap.",
+    description: "Naseeb Edu is a SaaS platform for university admission: psychometric profiling, university rankings, Naseeb AI essay feedback and a personal admission plan.",
   },
 };
 
