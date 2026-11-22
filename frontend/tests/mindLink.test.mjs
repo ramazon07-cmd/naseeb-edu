@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  becameLinked, isCodeExpired, latestComparable, majorOffer, mindCardState, mismatchedAttempts, shouldCheckOnFocus, startMindLink,
+  becameLinked, isCodeExpired, latestComparable, majorName, majorOffer, mindCardState, mismatchedAttempts, shouldCheckOnFocus, startMindLink,
 } from '../src/lib/mindLink.js';
 
 test('the card is hidden when the feature is off or the status is unknown', () => {
@@ -65,6 +65,22 @@ test('the Naseeb Mind major is offered only to a student without one', () => {
   assert.equal(majorOffer(status, { target_major: 'Law' }), '');
   assert.equal(majorOffer({ chosen_major: null }, { target_major: '' }), '');
   assert.equal(majorOffer(status, undefined), '');
+});
+
+test('a Naseeb Mind major key is turned into an Edu major name before it is offered or saved', () => {
+  const student = { target_major: '' };
+  // The same key in both products takes Edu's name.
+  assert.equal(majorOffer({ chosen_major: 'major_software_eng' }, student), 'Software Engineering');
+  assert.equal(majorOffer({ chosen_major: ' major_biology ' }, student), 'Biology');
+  // A Mind-only major keeps Mind's English name.
+  assert.equal(majorOffer({ chosen_major: 'major_computer_science' }, student), 'Computer Science');
+  // An unknown key is never shown or saved as an internal id.
+  assert.equal(majorOffer({ chosen_major: 'major_made_up' }, student), '');
+  assert.equal(majorName('major_made_up'), '');
+  assert.equal(majorName(null), '');
+  // A plain name passes through.
+  assert.equal(majorName('Biology'), 'Biology');
+  assert.equal(majorOffer({ chosen_major: 'major_biology' }, { target_major: 'Law' }), '');
 });
 
 test('an expired code returns the waiting card to a restart, never stays waiting', () => {

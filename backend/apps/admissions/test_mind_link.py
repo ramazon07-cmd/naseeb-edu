@@ -268,6 +268,21 @@ class MindLinkTests(AuditBaseMixin, APITestCase):
         self.assertEqual(response.json(), {'imported': 1, 'skipped': 1})
         self.assertFalse(ChallengeAttempt.objects.filter(challenge='astrology').exists())
 
+    def test_minds_school_challenge_is_stored_as_edus_subjects_and_flagged_by_version(self):
+        self.link()
+        response = self.signed('sync', {'mind_user_id': self.mind_id, 'attempts': [
+            attempt(1, 'school', version='1'), attempt(2, 'school', version='2'),
+        ]})
+        self.assertEqual(response.json(), {'imported': 2, 'skipped': 0})
+        self.assertFalse(ChallengeAttempt.objects.filter(challenge='school').exists())
+        older = ChallengeAttempt.objects.get(external_id=str(uuid.UUID(int=1)))
+        current = ChallengeAttempt.objects.get(external_id=str(uuid.UUID(int=2)))
+        self.assertEqual((older.challenge, older.instrument_version, older.source_version_mismatch), ('subjects', '1', True))
+        self.assertEqual((current.challenge, current.source_version_mismatch), ('subjects', False))
+        # Re-sending imports nothing, and the complete flow reads the alias the same way.
+        again = self.signed('sync', {'mind_user_id': self.mind_id, 'attempts': [attempt(1, 'school', version='1')]})
+        self.assertEqual(again.json(), {'imported': 0, 'skipped': 1})
+
     def test_version_mismatch_is_kept_and_flagged(self):
         self.link()
         self.signed('sync', {'mind_user_id': self.mind_id, 'attempts': [attempt(1, version='99'), attempt(2)]})

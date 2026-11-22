@@ -35,6 +35,8 @@ MAX_BODY_BYTES = 2 * 1024 * 1024
 LANGUAGES = ('uz', 'ru', 'en')
 CODE_PATTERN = re.compile(r'^[0-9a-f]{32}$')
 MAJOR_MAX = 160
+# Naseeb Mind names its subjects challenge 'school'; Edu's is 'subjects'. Stored and compared under Edu's name.
+CHALLENGE_ALIASES = {'school': 'subjects'}
 
 
 class MindLinkError(Exception):
@@ -124,6 +126,7 @@ def _clean_attempts(data):
         if not all(isinstance(v, str) and v.strip() for v in (external_id, challenge, version)):
             raise _invalid()
         external_id, challenge, version = external_id.strip(), challenge.strip(), version.strip()
+        challenge = CHALLENGE_ALIASES.get(challenge, challenge)
         if len(external_id) > 64 or len(challenge) > 40 or len(version) > 20:
             raise _invalid()
         answers, scores = item.get('answers'), item.get('scores', {})

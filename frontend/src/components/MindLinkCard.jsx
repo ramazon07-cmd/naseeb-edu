@@ -107,7 +107,7 @@ export function MindLinkCard({ student, notify, reload, onLinked }) {
     setError('')
     try {
       await api.update('students', student.id, { target_major: offered })
-      notify?.(t('{major} saved as your study direction.', { major: offered }))
+      notify?.(t('{major} saved as your study direction.', { major: t(offered) }))
       reload?.()
       refresh()
     } catch {
@@ -124,7 +124,7 @@ export function MindLinkCard({ student, notify, reload, onLinked }) {
         <p>{status.linked_at ? t('Linked on {date}', { date: formatDateLocale(status.linked_at) }) : ''}{status.linked_at ? ' · ' : ''}{status.last_sync_at ? t('Last sync {date}', { date: formatDateLocale(status.last_sync_at) }) : t('No results received yet')}</p>
         <p className="nb-mf-mindlink-note">{t('Results already imported stay in your profile here.')}</p>
         {offered && <div className="nb-mf-mindlink-major">
-          <span>{t('In Naseeb Mind you chose {major}.', { major: offered })}</span>
+          <span>{t('In Naseeb Mind you chose {major}.', { major: t(offered) })}</span>
           <button type="button" className="nb-mf-start" onClick={useMajor} disabled={busy === 'major'}>{t('Use as my major')}</button>
         </div>}
         <button type="button" className="nb-mf-mindlink-quiet" onClick={stop} disabled={busy === 'stop'}>{busy === 'stop' ? t('Stopping…') : t('Stop sharing')}</button>
