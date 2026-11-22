@@ -3,7 +3,7 @@ import { api } from '../api.js'
 import { t } from '../i18n.js'
 import { applyNoteState, inputChangedSince, mergeNoteStates, noteStateUpdates, serverNotice, textFingerprint } from '../essayLab/coachModel.js'
 import { errorCode } from '../essayLab/essayLabApi.js'
-import { conflictError, locateNotes, normalizeLetterCheck } from './letterModel.js'
+import { checkErrorDetails, conflictError, letterExtras, locateNotes, normalizeLetterCheck } from './letterModel.js'
 
 // The Check tab's data: the latest check, its notes placed in the text, note states and one "Check again".
 // Same rules as Essay Coach (coachModel.js): notes whose sentence is gone count as resolved, the
@@ -23,6 +23,9 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, resolv
 
   const model = useMemo(() => normalizeLetterCheck(check), [check])
   const notes = model?.notes
+  const extras = useMemo(() => letterExtras(check), [check])
+  // Reader and sensitive notes are placed in the text like notes, but have no state and are never counted.
+  const anchors = useMemo(() => [...(notes || []), ...extras.readerNotes, ...extras.sensitive], [notes, extras])
 
   // The latest check, once per letter.
   useEffect(() => {
@@ -37,13 +40,16 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, resolv
     return () => { alive = false }
   }, [letterId])
 
-  const located = useMemo(() => locateNotes(body, notes, hints.current), [body, notes])
+  const located = useMemo(() => locateNotes(body, anchors, hints.current), [body, anchors])
   useEffect(() => { hints.current = new Map([...located].map(([id, range]) => [id, range.from])) }, [located])
   const anchored = useMemo(() => new Set(located.keys()), [located])
 
   const marks = useMemo(() => (notes || [])
     .filter((note) => located.has(note.id) && noteStates[note.id] !== 'done' && noteStates[note.id] !== 'dismissed')
     .map((note) => ({ id: note.id, criterion: note.criterion, ...located.get(note.id) })), [notes, located, noteStates])
+  const extraMarks = useMemo(() => [...extras.readerNotes, ...extras.sensitive]
+    .filter((note) => located.has(note.id))
+    .map((note) => ({ id: note.id, criterion: note.criterion, ...located.get(note.id) })), [extras, located])
 
   // "Text changed": the same fingerprint as the server, computed here.
   useEffect(() => {
@@ -144,7 +150,7 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, resolv
           setNoteStates((previous) => mergeNoteStates(latestCheck.note_states, previous, inflight.current))
         }, () => {})
       }
-      setStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message, off: error?.details?.ai_available === false } })
+      setStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message, off: checkErrorDetails(error)?.ai_available === false, details: checkErrorDetails(error) } })
     }
   }, [flush, resolveStale, letterRef])
 
@@ -169,5 +175,7 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, resolv
     })
   }, [letterRef])
 
-  return { check, model, status, noteStates, notice, changed, inputChanged, located, anchored, marks, activeId, setActiveId, clearError, runCheck, setNoteState }
+  const allMarks = useMemo(() => [...marks, ...extraMarks], [marks, extraMarks])
+
+  return { check, model, extras, status, noteStates, notice, changed, inputChanged, located, anchored, marks: allMarks, activeId, setActiveId, clearError, runCheck, setNoteState }
 }

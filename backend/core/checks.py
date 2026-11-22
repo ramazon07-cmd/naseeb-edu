@@ -40,3 +40,18 @@ def email_backend_check(app_configs, **kwargs):
         hint='Set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend and the EMAIL_HOST/PORT/USER/PASSWORD variables.',
         id='naseeb.W003',
     )]
+
+
+@checks.register()
+def ai_provider_check(app_configs, **kwargs):
+    """The Claude CLI provider is for local testing; it must never be selected in production."""
+    provider = getattr(settings, 'AI_PROVIDER', 'gateway')
+    if provider == 'claude_cli' and settings.APP_ENV not in ('development', 'test'):
+        return [checks.Error(
+            'AI_PROVIDER=claude_cli is only allowed when APP_ENV is development or test.',
+            hint='Unset AI_PROVIDER (it defaults to gateway) in production.',
+            id='naseeb.E001',
+        )]
+    if provider not in ('gateway', 'claude_cli'):
+        return [checks.Error('AI_PROVIDER must be gateway or claude_cli.', id='naseeb.E002')]
+    return []

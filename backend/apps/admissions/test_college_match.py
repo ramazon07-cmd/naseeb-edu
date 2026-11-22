@@ -16,6 +16,7 @@ from rest_framework.test import APITestCase
 from apps.admissions import ai_budget, match_reasons
 from apps.admissions.college_search import fit_context, record_chance_snapshot, score_university
 from apps.admissions.essay_lab import coach
+from apps.admissions import ai_providers
 from apps.admissions.models import (
     Activity, AiUsageLog, Application, Essay, EssayDepthCheck, EssayTab, Honor, RecommendationLetter, University, UniversityProgram,
     UniversitySubjectRank,
@@ -124,7 +125,7 @@ class EssaysFactorTests(FitFixture, APITestCase):
     def test_the_essays_score_is_the_checks_overall_out_of_ten_and_needs_no_provider(self):
         self.ready_profile()
         add_check(self.student, 76)
-        with mock.patch.object(coach, '_post') as post, mock.patch('urllib.request.urlopen') as urlopen:
+        with mock.patch.object(ai_providers, 'chat') as post, mock.patch('urllib.request.urlopen') as urlopen:
             rubric = fit_context(self.student)['rubric']
             data = self.client.post(URL).data
         post.assert_not_called()
@@ -209,7 +210,7 @@ class CollegeMatchTests(MatchFixture, APITestCase):
         self.ready_profile()
         add_check(self.student, 70)
         RecommendationLetter.objects.create(student=self.student, recommender_name='Teacher', status='submitted', body=LETTER)
-        with mock.patch.object(coach, '_post') as post, mock.patch('urllib.request.urlopen') as urlopen, \
+        with mock.patch.object(ai_providers, 'chat') as post, mock.patch('urllib.request.urlopen') as urlopen, \
                 mock.patch.object(ai_budget, 'consume') as consume:
             self.match()
             self.match()
@@ -265,7 +266,7 @@ class ReasonsTests(MatchFixture, APITestCase):
             reasons = lines if lines is not None else {str(card['id']): f'Reason for {card["name"]}.' for card in cards}
             return {'choices': [{'message': {'content': json.dumps({'reasons': reasons})}}], 'usage': {'total_tokens': 10}}
 
-        patch = mock.patch.object(coach, '_post', side_effect=post)
+        patch = mock.patch.object(ai_providers, 'chat', side_effect=post)
         patch.bodies = bodies
         return patch
 
@@ -301,7 +302,7 @@ class ReasonsTests(MatchFixture, APITestCase):
         self.assertEqual(post.call_count, 3)
 
     def test_a_failed_call_answers_503_and_gives_the_unit_back(self):
-        with mock.patch.object(coach, '_post', side_effect=urllib.error.URLError('down')):
+        with mock.patch.object(ai_providers, 'chat', side_effect=urllib.error.URLError('down')):
             response = self.client.post(REASONS_URL)
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data['code'], 'coach_unavailable')
@@ -329,7 +330,7 @@ class ReasonsTests(MatchFixture, APITestCase):
 
     @override_settings(OUTBOUND_AI_ENABLED=False)
     def test_without_outbound_ai_it_answers_503_and_spends_nothing(self):
-        with mock.patch.object(coach, '_post') as post:
+        with mock.patch.object(ai_providers, 'chat') as post:
             response = self.client.post(REASONS_URL)
         self.assertEqual(response.status_code, 503)
         post.assert_not_called()

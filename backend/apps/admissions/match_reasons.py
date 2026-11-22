@@ -154,7 +154,8 @@ def generate(profile, user, data, version_key, rubric, language='en'):
         return cached, True
     if not coach.gateway_configured():
         raise ReasonsUnavailable('coach_unavailable')
-    if not ai_budget.consume(FEATURE, user):
+    reservation = ai_budget.consume(FEATURE, user)
+    if not reservation:
         ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
         raise ReasonsUnavailable('coach_resting')
     ai_usage.begin()
@@ -164,7 +165,7 @@ def generate(profile, user, data, version_key, rubric, language='en'):
     except (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError):
         ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED)
         coach.logger.warning('%s_provider_failure user_id=%s', FEATURE, getattr(user, 'pk', None))
-        ai_budget.refund(FEATURE, user)  # a failed call is free
+        ai_budget.refund(reservation)  # a failed call is free
         raise ReasonsUnavailable('coach_unavailable')
     ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.OK)
     cache_set(key, lines, CACHE_SECONDS)

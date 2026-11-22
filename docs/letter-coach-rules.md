@@ -29,13 +29,17 @@ Essay Coach v2 engine (`docs/essay-coach-rules.md`); everything not said here wo
 
 - **Profile facts (free, automatic, no AI):** facts from the student's profile that the letter does
   not mention yet (`rec_letter_ai.profile_facts` + `missing_facts`), each with one "+" icon that
-  inserts a neutral fact line at the cursor. Mentioned facts disappear. Refreshed locally while
-  typing (the request is cheap and has no AI), debounced.
+  inserts a neutral "Title: detail." line at the cursor. A caption says the facts are self-reported,
+  so check them first. Mentioned facts disappear. Refreshed locally while typing (the request is
+  cheap and has no AI), debounced. Class rank and class size are never shown or sent.
 - **AI ideas (on demand only):** one "Get AI ideas" button. Never refreshed automatically. Each
-  idea cites its fact (source chip) and is a single sentence starter with "[Student]" filled with
-  the first name on insert. Counter "AI · n of 20 today" (`REC_LETTER_AI_USER_DAILY_LIMIT`, default
-  lowered to 20). Same validation as today: AI text is kept only when it cites a fact and every
-  number in it appears in that fact.
+  idea is an open question to the author about something only they observed, cites one fact
+  (source chip), has no "+" and is never inserted into the letter (Naseeb AI never writes the
+  letter). Counter "AI · n of 20 today" (`REC_LETTER_AI_USER_DAILY_LIMIT`). An AI item is kept only
+  when it is a question that cites a fact and every number in it appears in that fact. The prompt
+  sees the draft, the personal story and the facts anonymized like the check, without health
+  sentences, and never asks about health, disability, family hardship, religion or rankings.
+  Temperature 0.4 (the scoring rule of temperature 0 does not apply).
 
 ## Check tab
 
@@ -47,14 +51,21 @@ voice 5.
 | --- | --- | --- |
 | Specific evidence | `evidence` | blue |
 | Insight | `insight` | violet |
-| Basis for comparison | `context` | amber |
+| Basis and context | `context` | amber |
 | Structure and length | `structure` | teal |
 | Your voice | `voice` | coral |
 
-- Bands, note caps (one per 25 words), dedup, Priority, re-check rules (all notes resolved and at
-  least 3 words changed, or the inputs changed), same-text reuse at no cost, refunds on failure,
-  90 s deadline and DB-connection release: exactly as the Essay Coach.
-- Inputs for the input hash: letter body, recommender title, relationship, rubric text, model.
+- Bands (the shared table: 0-50 → 2-3 notes, 51-60 → 3-5, 61-80 → 6-8, 81-100 → 3-6), note caps
+  (one per 25 words), dedup, Priority, re-check rules (all notes resolved and at least 3 words
+  changed, or the inputs changed), same-text reuse at no cost, refunds on failure, 90 s deadline and
+  DB-connection release: exactly as the Essay Coach, except that a letter's notes are never locked
+  (the author always gets notes, even at 50 or below).
+- No 0-100 score is shown until `recommendation_letter` is in `ESSAY_COACH_SCORED_RUBRICS`; until
+  then the panel says "Scores for this type are not shown yet." and notes follow the unscored rule.
+- Hidden characters and fence markers are removed from the letter, the recommender title and the
+  relationship before anything else. A criterion whose evidence quote is a health sentence is
+  lowered to 1, and a strength quoting one is dropped.
+- Inputs for the input hash: recommender title, relationship, rubric text, the score gate, model.
   The prompt sees the letter with the student's name replaced by "[Student]" and contact details
   redacted; never the student's profile.
 - Notes show the question (and at most one new context line), not the quoted sentence. Clicking a
@@ -113,3 +124,17 @@ voice 5.
 - A letter check refused because AI is off (master switch or no gateway key) is 503
   `coach_unavailable` with `details.ai_available: false`; a provider or timeout failure is the same
   code with `details.ai_available: true`. Both are free.
+
+### Reader notes, sensitive content, copy check, extra redaction
+
+- The score step also returns `reader_notes` (at most 2 `{quote, question}`, never scored), `safety` and
+  `sensitive` ({health, discipline} sentences). The server stores `result.reader_notes` (ids `r1`, `r2`),
+  `result.sensitive` (`[{kind, quote}]`, one per kind, wording fixed in the frontend in en/ru/uz),
+  `result.safety` and `result.copy` (`{percent, date}`, 30% or more, author only).
+- A sentence with a health keyword (en/ru/uz) or flagged by the model is never quoted by a note, strength
+  or reader note (the quote is dropped). `safety` true, or a current-danger keyword in the letter, gives an
+  unscored check with one sentence pointing to the school's child-protection procedure; the keyword path
+  makes no AI call and uses no budget.
+- Before sending, besides names and school: `[Person]`, `[Place]`, `[ID]`, `[Date of birth]`
+  (`letter_privacy.py`), restored in quotes.
+- Copy check: `letter_copy.py`, same recommender name, word 5-gram shingles, containment; no AI.

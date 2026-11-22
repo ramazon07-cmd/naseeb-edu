@@ -77,7 +77,7 @@ export function createIdeasController({ load, onChange, debounceMs = FACTS_DEBOU
       try {
         const response = await load({ ...context, ai: true })
         if (run !== aiRun) return
-        const items = (response?.suggestions || []).filter((item) => item.kind === 'sentence' || item.kind === 'idea')
+        const items = (response?.suggestions || []).filter((item) => item.kind === 'question')
         const facts = (response?.suggestions || []).filter((item) => item.kind === 'fact')
         if (facts.length) set({ facts })
         setAi({ ...takeMeta(response), loading: false, items, unavailable: response?.source !== 'ai' && !items.length })

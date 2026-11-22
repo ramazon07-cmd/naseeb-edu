@@ -4,7 +4,7 @@ import { applyNoteState, doneNotes, goneNotes, noteStateUpdates, openNotes, rech
 import { buildPath, parsePath, resolveRoute } from '../src/lib/routes.js';
 import { createIdeasController } from '../src/letters/ideasController.js';
 import {
-  LETTER_KEYS, aiIdeasOf, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
+  LETTER_CRITERIA, LETTER_KEYS, SENSITIVE_TEXT, aiIdeasOf, canInsert, checkAvailability, checkErrorDetails, letterExtras, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
 } from '../src/letters/letterModel.js';
 
 const LETTER = 'I have known Ramazon for two years.\n\nHe is a hardworking student. He leads the robotics club.\n\nHe is a hardworking student.';
@@ -78,9 +78,30 @@ test('[Student] is filled with the first name and a fact becomes one neutral lin
   assert.equal(factLine({ title: 'GPA 4.9.', detail: '' }), 'GPA 4.9.');
   assert.equal(factLine({}), '');
   assert.equal(wordCount(' a  b\nc '), 3);
-  const items = [{ kind: 'fact' }, { kind: 'sentence', text: 'x' }, { kind: 'idea', text: 'y' }, { kind: 'idea' }, { kind: 'tip' }];
+  const items = [{ kind: 'fact' }, { kind: 'question', text: 'q' }, { kind: 'sentence', text: 'x' }, { kind: 'idea', text: 'y' }, { kind: 'question' }, { kind: 'tip' }];
   assert.equal(factsOf(items).length, 1);
-  assert.equal(aiIdeasOf(items).length, 2);
+  assert.deepEqual(aiIdeasOf(items), [{ kind: 'question', text: 'q' }], 'AI ideas are questions only');
+});
+
+test('an AI idea has no insert action; only a profile fact has the "+"', () => {
+  assert.equal(canInsert({ kind: 'fact', title: 'Olympiad' }), true);
+  for (const item of [{ kind: 'question', text: 'What did you see?' }, { kind: 'sentence', text: 'x' }, { kind: 'idea', text: 'y' }, null]) {
+    assert.equal(canInsert(item), false);
+  }
+});
+
+test('a 503 coach_unavailable keeps the Check button unless the server says AI is off', () => {
+  assert.deepEqual(checkAvailability({ code: 'coach_unavailable', details: { ai_available: true } }), { unavailable: false, retry: true });
+  assert.deepEqual(checkAvailability({ code: 'coach_unavailable', details: null }), { unavailable: false, retry: true });
+  assert.deepEqual(checkAvailability({ code: 'coach_unavailable', details: { ai_available: false } }), { unavailable: true, retry: false });
+  assert.deepEqual(checkAvailability({ code: 'counselors_only' }), { unavailable: true, retry: false });
+  assert.deepEqual(checkAvailability(null), { unavailable: false, retry: false });
+});
+
+test('the context criterion is the basis and the school context', () => {
+  const context = LETTER_CRITERIA.find((item) => item.key === 'context');
+  assert.equal(context.label, 'Basis and context');
+  assert.equal(context.explain, 'How you know the student, and the school context a foreign reader needs.');
 });
 
 // --- Ideas: facts are free and automatic, AI is a click -------------------------------------
@@ -127,7 +148,7 @@ test('an unchanged draft does not ask again', async () => {
 test('AI ideas are requested only by askAi, once per click', async () => {
   const { controller, calls, fire } = harness({
     facts: { suggestions: [{ kind: 'fact', source: 'honor', title: 'A', detail: '' }], ai_left: 20 },
-    ai: { source: 'ai', ai_left: 19, suggestions: [{ kind: 'fact', source: 'honor', title: 'A', detail: '' }, { kind: 'sentence', text: '[Student] led it.', source: 'honor', title: 'A' }] },
+    ai: { source: 'ai', ai_left: 19, suggestions: [{ kind: 'fact', source: 'honor', title: 'A', detail: '' }, { kind: 'question', text: 'What did [Student] do there?', source: 'honor', title: 'A' }, { kind: 'sentence', text: '[Student] led it.', source: 'honor', title: 'A' }] },
   });
   await controller.start(ctx('x'));
   controller.update(ctx('xy'));
@@ -262,4 +283,42 @@ test('a provider failure (503) on AI ideas keeps the button; 403 turns AI off', 
   await off.controller.start(ctx('a'));
   await off.controller.askAi();
   assert.equal(off.controller.state.ai.available, false);
+});
+
+// --- reader notes, sensitive notes, copy check, safety -----------------------------------
+test('letterExtras reads reader notes, sensitive notes, the copy check and the safety flag', () => {
+  const extras = letterExtras({ result: {
+    reader_notes: [{ id: 'r1', quote: 'He tries hard.', question: 'A US reader may read this as faint praise; is that what you mean?' }, { id: 'r2', quote: '', question: 'no quote' }],
+    sensitive: [{ kind: 'health', quote: 'She was treated for depression.' }, { kind: 'other', quote: 'x' }],
+    copy: { percent: 42, date: '2026-11-02' },
+  } });
+  assert.deepEqual(extras.readerNotes.map((note) => note.id), ['r1'], 'a reader note without a quote is dropped');
+  assert.equal(extras.readerNotes[0].criterion, 'reader');
+  assert.deepEqual(extras.sensitive.map((note) => [note.id, note.question]), [['sx-health', SENSITIVE_TEXT.health]], 'unknown kinds are dropped; the wording is fixed');
+  assert.deepEqual(extras.copy, { percent: 42, date: '2026-11-02' });
+  assert.equal(extras.safety, false);
+});
+
+test('letterExtras: copy under 30% or malformed is ignored, safety is only a literal true, old checks work', () => {
+  assert.equal(letterExtras({ result: { copy: { percent: 29, date: '2026-01-01' } } }).copy, null);
+  assert.equal(letterExtras({ result: { copy: { percent: 'x', date: '2026-01-01' } } }).copy, null);
+  assert.equal(letterExtras({ result: { safety: 'yes' } }).safety, false);
+  assert.equal(letterExtras({ result: { safety: true } }).safety, true);
+  assert.deepEqual(letterExtras(null), { readerNotes: [], sensitive: [], copy: null, safety: false });
+  assert.deepEqual(letterExtras({ result: { version: 2, notes: [] } }).readerNotes, []);
+});
+
+test('reader and sensitive notes are placed in the text like notes', () => {
+  const extras = letterExtras({ result: { reader_notes: [{ id: 'r1', quote: 'He leads the robotics club.', question: 'Q?' }], sensitive: [{ kind: 'discipline', quote: 'He is a hardworking student.' }] } });
+  const located = locateNotes(LETTER, [...extras.readerNotes, ...extras.sensitive]);
+  assert.equal(LETTER.slice(located.get('r1').from, located.get('r1').to), 'He leads the robotics club.');
+  assert.ok(located.has('sx-discipline'));
+});
+
+test('the AI flag is read from the nested details of the API error', () => {
+  const body = { code: 'coach_unavailable', details: { ai_available: false } };
+  assert.deepEqual(checkErrorDetails({ details: body }), { ai_available: false });
+  assert.equal(checkErrorDetails({ details: { code: 'x' } }), null);
+  assert.equal(checkErrorDetails(null), null);
+  assert.deepEqual(checkAvailability({ code: 'coach_unavailable', details: checkErrorDetails({ details: body }) }), { unavailable: true, retry: false });
 });

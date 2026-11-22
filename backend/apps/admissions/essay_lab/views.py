@@ -24,7 +24,7 @@ from rest_framework.settings import api_settings
 from apps.users.audit import audit_product_action
 from apps.users.entitlements import require_feature
 from apps.users.models import User
-from .. import ai_budget, ai_usage
+from .. import ai_budget, ai_providers, ai_usage
 from ..models import (
     ActivityLog, Essay, EssayCheckpoint, EssayDepthCheck, EssayFolder, EssayRevision, EssayTab, EssayTabEdit,
     Notification, StudentProfile,
@@ -66,7 +66,9 @@ from .tabs import (
     tree_order,
 )
 from .streak import build_streak, own_words_delta, parse_month, record_words
-from .throttles import EssayAutosaveThrottle, EssayDepthCheckThrottle, EssayDepthGateThrottle, spend_coach_budget
+from .throttles import (
+    EssayAutosaveThrottle, EssayDepthCheckThrottle, EssayDepthGateThrottle, spend_coach_budget, take_free_safety_check,
+)
 from .writes import CHECKPOINT_CAP, TEXT_FIELDS, make_checkpoint, set_text  # noqa: F401 (CHECKPOINT_CAP: tests)
 
 LIST_LIMIT = 500
@@ -833,20 +835,24 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
 
         # The AI call runs outside any transaction so no row lock is held while waiting on it.
         if coach.gateway_configured():
-            if not spend_coach_budget(request.user):
-                ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
+            reservation = spend_coach_budget(request.user)
+            if not reservation:
+                ai_usage.record('essay_coach', request.user, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
                 raise EssayLabError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting', 503)
             try:
                 # Both calls of the check are recorded in ai_usage inside run_ai_check.
                 # release_db_connection runs before each provider call (the transaction guard is inside it).
                 result, model = coach.run_ai_check(essay, tab.content, request.user, release_db_connection)
             except coach.CoachUnavailable:
-                ai_budget.refund('essay_coach', request.user)  # a failed check is free
+                ai_budget.refund(reservation)  # a failed check is free
                 raise EssayLabError('Naseeb AI is unavailable right now. Please try again soon.',
                                     'coach_unavailable', 503)
+            if result.get('safety') == 'current_danger' and take_free_safety_check(request.user):
+                # Not scored: the first few such checks per day are free (the daily limit is given back).
+                ai_budget.refund(reservation)
         else:
             result, model = coach.run_local_check(essay, tab.content)
-            ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.LOCAL_FALLBACK)
+            ai_usage.record('essay_coach', request.user, provider=ai_providers.provider(), status=ai_usage.LOCAL_FALLBACK)
 
         with transaction.atomic():
             # The tab (or the essay) may have been deleted during the AI call.

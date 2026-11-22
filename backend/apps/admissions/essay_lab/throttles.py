@@ -6,7 +6,9 @@ minimum interval exact.
 """
 
 from django.conf import settings
+from django.utils import timezone
 
+from apps.users.cache_safety import count_hits
 from apps.users.throttles import WindowRateThrottle
 
 from .. import ai_budget
@@ -48,5 +50,19 @@ class EssayDepthGateThrottle(EssayThrottle):
 
 
 def spend_coach_budget(user):
-    """Count one AI depth check against the daily budgets. False when one is spent."""
+    """Count one AI depth check against the daily budgets: a Reservation (to refund), or False when one is spent."""
     return ai_budget.consume('essay_coach', user)
+
+
+SAFETY_FREE_TTL_SECONDS = 26 * 60 * 60
+
+
+def take_free_safety_check(user):
+    """Whether a check that ended in the safety message is free for ``user``: the first
+    ESSAY_SAFETY_FREE_PER_DAY of each day are, later ones count like any check. Fails closed when the
+    cache is down (not free), so this path cannot be used for free checks."""
+    limit = settings.ESSAY_SAFETY_FREE_PER_DAY
+    if limit <= 0:
+        return False
+    counts = count_hits([f'essay-safety-free:{timezone.localdate().isoformat()}:{user.pk}'], SAFETY_FREE_TTL_SECONDS)
+    return counts is not None and counts[0] <= limit

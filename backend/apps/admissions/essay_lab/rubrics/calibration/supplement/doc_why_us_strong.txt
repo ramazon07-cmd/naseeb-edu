@@ -1,0 +1,7 @@
+Last spring I built a water meter for our mahalla in Samarkand. Eleven households shared one pipe, and every month the same argument started over who had used more. My meter was a flow sensor from the bazaar, a battery from an old laptop and a notebook. It counted wrongly whenever the pressure dropped, and I could not explain why.
+
+That is why Eastfield's seminar "Measurement and Society" matters to me. In her paper "Counting What the Meter Misses", Professor Lindqvist shows that cheap meters undercount at low pressure, which is exactly the fault my neighbours and I argued about. I read the paper three times with a dictionary, and it was the first time anyone had named my mistake.
+
+In my first month I would ask to join her seminar's field-data group and bring my notebook of readings from eleven households, with the dates when the pressure dropped. I would also ask whether the seminar's correction method could run on a phone, because our mahalla cannot buy a laboratory logger.
+
+I do not want Eastfield for its name. I want to finish a measurement that began in a courtyard in Samarkand, with people who study why measurements fail.

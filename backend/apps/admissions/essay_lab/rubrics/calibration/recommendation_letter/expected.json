@@ -1,0 +1,336 @@
+{
+  "run": {
+    "recommender_title": "School counselor",
+    "relationship": "Her school counselor for three years",
+    "student": {
+      "first_name": "Malika",
+      "last_name": "Karimova",
+      "gender": "Female"
+    }
+  },
+  "cases": {
+    "L1": {
+      "levels": {
+        "evidence": [
+          1,
+          2
+        ],
+        "insight": [
+          1,
+          2
+        ],
+        "context": [
+          1,
+          2
+        ],
+        "structure": [
+          1,
+          3
+        ],
+        "voice": [
+          1,
+          2
+        ]
+      },
+      "overall": [
+        0,
+        15
+      ],
+      "source": "docs/naseeb-ai-rules/recommendation-letter.md"
+    },
+    "L2": {
+      "student": {
+        "first_name": "Jasur",
+        "last_name": "Tursunov",
+        "gender": "Male"
+      },
+      "relationship": "His school counselor for three years",
+      "levels": {
+        "evidence": [
+          1,
+          2
+        ],
+        "insight": [
+          1,
+          3
+        ],
+        "context": [
+          1,
+          3
+        ],
+        "structure": [
+          1,
+          3
+        ],
+        "voice": [
+          2,
+          4
+        ]
+      },
+      "overall": [
+        15,
+        37
+      ],
+      "expect_sensitive": [
+        "health"
+      ],
+      "min_reader_notes": 1,
+      "source": "docs/naseeb-ai-rules/recommendation-letter.md"
+    },
+    "L3": {
+      "recommender_title": "Physics teacher",
+      "relationship": "Taught her physics for three years",
+      "levels": {
+        "evidence": [
+          2,
+          4
+        ],
+        "insight": [
+          2,
+          4
+        ],
+        "context": [
+          2,
+          4
+        ],
+        "structure": [
+          2,
+          4
+        ],
+        "voice": [
+          2,
+          4
+        ]
+      },
+      "overall": [
+        55,
+        72
+      ],
+      "source": "docs/naseeb-ai-rules/recommendation-letter.md"
+    },
+    "L4": {
+      "levels": {
+        "evidence": [
+          3,
+          4
+        ],
+        "insight": [
+          3,
+          4
+        ],
+        "context": [
+          3,
+          4
+        ],
+        "structure": [
+          2,
+          4
+        ],
+        "voice": [
+          2,
+          4
+        ]
+      },
+      "overall": [
+        78,
+        100
+      ],
+      "source": "docs/naseeb-ai-rules/recommendation-letter.md"
+    },
+    "N1": {
+      "recommender_title": "English teacher",
+      "relationship": "Taught her English since September",
+      "levels": {
+        "evidence": [
+          2,
+          4
+        ],
+        "insight": [
+          2,
+          4
+        ],
+        "context": [
+          3,
+          4
+        ],
+        "structure": [
+          2,
+          4
+        ],
+        "voice": [
+          2,
+          4
+        ]
+      },
+      "overall": [
+        62,
+        82
+      ],
+      "forbid_in_notes": [
+        "\\b(?:rank\\w*|top \\d+|percent|best|strongest|how many (?:students|others))\\b"
+      ],
+      "source": "docs/naseeb-ai-rules/recommendation-letter.md"
+    },
+    "A1": {
+      "recommender_title": "Teacher",
+      "relationship": "",
+      "levels": {
+        "evidence": [
+          1,
+          2
+        ],
+        "insight": [
+          1,
+          2
+        ],
+        "context": [
+          1,
+          2
+        ],
+        "structure": [
+          1,
+          2
+        ],
+        "voice": [
+          1,
+          2
+        ]
+      },
+      "overall": [
+        0,
+        15
+      ],
+      "adversarial": true,
+      "not_safety": true,
+      "forbid_in_notes": [
+        "\\d"
+      ],
+      "source": "docs/naseeb-ai-rules/recommendation-letter.md"
+    },
+    "ru_teacher": {
+      "recommender_title": "Учитель математики",
+      "relationship": "Преподаёт ей математику два года",
+      "levels": {
+        "evidence": [
+          2,
+          4
+        ],
+        "insight": [
+          2,
+          4
+        ],
+        "context": [
+          2,
+          4
+        ],
+        "structure": [
+          2,
+          3
+        ],
+        "voice": [
+          2,
+          4
+        ]
+      },
+      "overall": [
+        45,
+        85
+      ],
+      "source": "calibration (2026-11-22)"
+    },
+    "long_counselor": {
+      "relationship": "Her school counselor for four years",
+      "levels": {
+        "evidence": [
+          2,
+          4
+        ],
+        "insight": [
+          1,
+          3
+        ],
+        "context": [
+          2,
+          4
+        ],
+        "structure": [
+          1,
+          3
+        ],
+        "voice": [
+          1,
+          3
+        ]
+      },
+      "overall": [
+        30,
+        70
+      ],
+      "source": "calibration (2026-11-22)"
+    },
+    "gender_coded": {
+      "recommender_title": "Class teacher",
+      "relationship": "Her class and chemistry teacher for two years",
+      "levels": {
+        "evidence": [
+          1,
+          3
+        ],
+        "insight": [
+          1,
+          2
+        ],
+        "context": [
+          1,
+          3
+        ],
+        "structure": [
+          2,
+          4
+        ],
+        "voice": [
+          1,
+          3
+        ]
+      },
+      "overall": [
+        5,
+        45
+      ],
+      "min_reader_notes": 1,
+      "source": "calibration (2026-11-22)"
+    },
+    "hardship_no_evidence": {
+      "levels": {
+        "evidence": [
+          1,
+          2
+        ],
+        "insight": [
+          1,
+          2
+        ],
+        "context": [
+          1,
+          2
+        ],
+        "structure": [
+          1,
+          3
+        ],
+        "voice": [
+          1,
+          3
+        ]
+      },
+      "overall": [
+        0,
+        30
+      ],
+      "forbid_in_notes": [
+        "\\b(?:income|money|salary|job|divorce|separat\\w*|heating|afford\\w*|hardship|difficult period)\\b"
+      ],
+      "source": "calibration (2026-11-22)"
+    }
+  }
+}

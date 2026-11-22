@@ -152,13 +152,13 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data['source'], 'profile')
         suggestions = response.data['suggestions']
-        self.assertEqual(suggestions[0], {'kind': 'tip', 'code': 'opening'})
-        facts = [(item['source'], item['title']) for item in suggestions if item['kind'] == 'fact']
+        self.assertEqual({item['kind'] for item in suggestions}, {'fact'})  # no tips: facts only
+        facts = [(item['source'], item['title']) for item in suggestions]
         self.assertEqual(facts, [
             ('academics', ''), ('honor', 'National physics olympiad gold'), ('honor', 'Regional olympiad bronze'),
             ('activity', 'Robotics club'),
         ])
-        self.assertIn('GPA 3.9 / 4', suggestions[1]['detail'])
+        self.assertIn('GPA 3.9 / 4', suggestions[0]['detail'])
 
     def test_facts_the_draft_already_mentions_drop_out(self):
         response = self.suggest(draft='She won gold at the national physics olympiad and keeps a 3.9 GPA.')
@@ -228,18 +228,42 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         self.assertEqual(self.suggest(self.admin).status_code, 200)
 
     @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
+    def test_no_name_reaches_the_model_from_any_field(self):
+        from apps.admissions import rec_letter_ai
+        names = ('Malika', 'Karimova', self.school_a.name)
+        said = f'Malika Karimova of {self.school_a.name}'
+        self.student.target_major = f'Physics like {said}'
+        self.student.application_profile = {
+            'gender': 'Female', 'interests': [said], 'program_strengths': [said], 'personal_story': said + ' wrote this.',
+        }
+        facts = [rec_letter_ai._fact(source, said, meta=[said, f'{said} 2026'], detail=[said])
+                 for source in ('honor', 'research', 'activity', 'project')]
+        letter = {'recommender_title': said, 'relationship': said}
+        answer = {'suggestions': [{'kind': 'question', 'text': 'What did you see?', 'fact': 'A'}]}
+        with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))) as urlopen:
+            rec_letter_ai.ai_suggestions(self.student, facts, said, letter=letter, language='en')
+        request = urlopen.call_args.args[0].data.decode('utf-8')
+        for name in names:
+            self.assertNotIn(name.lower(), request.lower())
+
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_ai_gets_facts_without_identity_and_bad_items_are_dropped(self):
+        question = 'What did you see [Student] do as captain of the robotics club?'
         answer = {'suggestions': [
+            {'kind': 'question', 'text': question, 'fact': 'D'},
             {'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'fact': 'D'},
+            {'kind': 'idea', 'text': 'Add the robotics club.', 'fact': 'D'},
             {'kind': 'essay', 'text': 'Not a kind we show.'},
-            {'kind': 'idea', 'text': ''},
+            {'kind': 'question', 'text': ''},
+            {'kind': 'question', 'text': 'A question with no fact?', 'fact': None},
         ]}
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))) as urlopen:
             response = self.suggest(ai=True, draft=f'Malika is a joy to teach at {self.school_a.name}. Call 998901234567.')
         self.assertEqual(response.data['source'], 'ai')
         self.assertEqual(response.data['suggestions'][0], {
-            'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'source': 'activity', 'title': 'Robotics club',
+            'kind': 'question', 'text': question, 'source': 'activity', 'title': 'Robotics club',
         })
+        self.assertEqual([item['kind'] for item in response.data['suggestions']][1:], ['fact'] * 4)
         self.assertEqual(
             [item['title'] for item in response.data['suggestions'][1:]],
             ['', 'National physics olympiad gold', 'Regional olympiad bronze', 'Robotics club'],
@@ -254,34 +278,66 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
     @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_ai_text_must_rest_on_a_given_fact(self):
         answer = {'suggestions': [
-            {'kind': 'sentence', 'text': '[Student] has a 3.9 GPA.', 'fact': 'A'},
-            {'kind': 'sentence', 'text': '[Student] ranked 1st of 300 in her class.', 'fact': 'A'},
-            {'kind': 'idea', 'text': 'Mention her SAT 1550.'},
-            {'kind': 'sentence', 'text': '[Student] is a born leader.', 'fact': None},
-            {'kind': 'sentence', 'text': '[Student] won gold.', 'fact': 'Z'},
-            {'kind': 'idea', 'text': 'Say how long you have known [Student].', 'fact': None},
+            {'kind': 'question', 'text': 'What did you see behind her 3.9 GPA?', 'fact': 'A'},
+            {'kind': 'question', 'text': 'How did she rank 1st of 300 in her class?', 'fact': 'A'},
+            {'kind': 'question', 'text': 'What did her SAT 1550 mean to you?'},
+            {'kind': 'question', 'text': 'Where did you see her lead?', 'fact': None},
+            {'kind': 'question', 'text': 'What did the gold change?', 'fact': 'Z'},
         ]}
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
             response = self.suggest(ai=True, draft='')
         self.assertEqual([item for item in response.data['suggestions'] if item['kind'] != 'fact'], [
-            {'kind': 'sentence', 'text': '[Student] has a 3.9 GPA.', 'source': 'academics', 'title': ''},
-            {'kind': 'idea', 'text': 'Say how long you have known [Student].', 'source': '', 'title': ''},
+            {'kind': 'question', 'text': 'What did you see behind her 3.9 GPA?', 'source': 'academics', 'title': ''},
         ])
+
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
+    def test_class_rank_and_size_are_never_sent(self):
+        self.student.application_profile = {**self.student.application_profile, 'class_rank': 1, 'class_size': 300}
+        self.student.save()
+        answer = {'suggestions': [{'kind': 'question', 'text': 'Was she 1st of 300 in your class?', 'fact': 'A'}]}
+        with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))) as urlopen:
+            response = self.suggest(ai=True, draft='')
+        sent = json.loads(urlopen.call_args.args[0].data)['messages'][1]['content']
+        self.assertNotIn('class rank', sent)
+        self.assertNotIn('300', sent)
+        self.assertEqual(response.data['source'], 'profile')  # the rank number rests on no fact sent
+        self.assertFalse(any('rank' in item['detail'] for item in response.data['suggestions']))
+
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
+    def test_inflected_names_people_and_health_never_reach_the_prompt(self):
+        self.student.application_profile = {
+            **self.student.application_profile,
+            'personal_story': ('Malikaning oilasi Samarqanddan kelgan. Her mother Dilnoza Rahimova taught her to sew. '
+                               'Last year she was treated for depression. She built a loom from scrap wood.'),
+        }
+        self.student.save()
+        Activity.objects.create(student=self.student, name='Sewing circle', description='Started with her aunt Nodira Saidova.')
+        answer = {'suggestions': [{'kind': 'question', 'text': 'What did you see her build?', 'fact': 'A'}]}
+        draft = 'Malikaning ustozi sifatida yozaman. Her teacher Mr Aziz Karimov agrees.'
+        with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))) as urlopen:
+            self.suggest(ai=True, draft=draft)
+        sent = json.loads(urlopen.call_args.args[0].data)['messages'][1]['content']
+        for private in ('Malika', 'Dilnoza', 'Rahimova', 'Nodira', 'Saidova', 'Aziz', 'depression'):
+            self.assertNotIn(private, sent)
+        self.assertIn('[Student]', sent)
+        self.assertIn('[Person]', sent)
+        self.assertIn('She built a loom from scrap wood.', sent)
+        system = json.loads(urlopen.call_args.args[0].data)['messages'][0]['content']
+        self.assertIn('never write any part of the letter', system)
+        self.assertIn('Never mention health, mental health, disability, family hardship or religion.', system)
 
     @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_a_number_from_another_fact_is_dropped(self):
         answer = {'suggestions': [
-            {'kind': 'sentence', 'text': '[Student] won national gold in 2026.', 'fact': 'A'},
-            {'kind': 'sentence', 'text': '[Student] keeps a 3.9 GPA while winning gold.', 'fact': 'B'},
-            {'kind': 'sentence', 'text': '[Student] won national physics gold in 2026.', 'fact': 'B'},
-            {'kind': 'idea', 'text': 'Say what she did in those 3 years.', 'fact': None},
-            {'kind': 'idea', 'text': 'Mention the 2026 olympiad.', 'fact': None},
+            {'kind': 'question', 'text': 'What did you see before her national gold in 2026?', 'fact': 'A'},
+            {'kind': 'question', 'text': 'How did she keep a 3.9 GPA while preparing for gold?', 'fact': 'B'},
+            {'kind': 'question', 'text': 'What did you see while she prepared for the 2026 olympiad?', 'fact': 'B'},
         ]}
         with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
             response = self.suggest(ai=True, draft='I have known her for 3 years.')
         self.assertEqual([item for item in response.data['suggestions'] if item['kind'] != 'fact'], [
-            {'kind': 'sentence', 'text': '[Student] won national physics gold in 2026.', 'source': 'honor', 'title': 'National physics olympiad gold'},
-            {'kind': 'idea', 'text': 'Say what she did in those 3 years.', 'source': '', 'title': ''},
+            {'kind': 'question', 'text': 'What did you see while she prepared for the 2026 olympiad?', 'source': 'honor',
+             'title': 'National physics olympiad gold'},
         ])
 
     @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
@@ -299,7 +355,7 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
             during.append(len(queries))
             return result
 
-        answer = {'suggestions': [{'kind': 'idea', 'text': 'Mention the robotics cup.'}]}
+        answer = {'suggestions': [{'kind': 'question', 'text': 'What did the robotics cup show you?', 'fact': 'D'}]}
         with mock.patch.object(rec_letter_ai, 'ai_suggestions', counted), \
                 mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))):
             response = self.suggest(ai=True, draft=f'Malika studies at {self.school_a.name}.')
@@ -328,7 +384,7 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
 
     @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_ai_suggestions_log_token_usage(self):
-        answer = {'suggestions': [{'kind': 'sentence', 'text': '[Student] captained the robotics club.', 'fact': 'D'}]}
+        answer = {'suggestions': [{'kind': 'question', 'text': 'What did you see her do as captain?', 'fact': 'D'}]}
         body = json.dumps({'choices': [{'message': {'content': json.dumps(answer)}}], 'model': 'openai/gpt-5.4-mini', 'usage': {'prompt_tokens': 900, 'completion_tokens': 200, 'total_tokens': 1100}}).encode()
         reply = mock.MagicMock()
         reply.read.return_value = body
