@@ -388,7 +388,7 @@ const FAQS = [
     id: "faq-what",
     question: "What is Naseeb Edu?",
     answer: [
-      "Naseeb Edu is a fully automated cloud (SaaS) platform built on artificial intelligence (LLM and NLP) and machine learning. It processes your academic results, test scores, psychometric answers and essays in real time and builds a personalized admission roadmap, a ranking of universities and scholarships, and an essay analysis report.",
+      "Naseeb Edu is a cloud (SaaS) platform for university admission. It brings your academic results, test scores, assessment answers and essays into one profile. Rule-based models rank universities, scholarships and majors and build your admission roadmap, and Naseeb AI, our language-model assistant, gives essay feedback and answers questions.",
     ],
   },
   {
@@ -402,7 +402,7 @@ const FAQS = [
     id: "faq-profile",
     question: "How does psychometric profiling work?",
     answer: [
-      "The platform calculates your personality type, interests and cognitive scores with standardised models \u2014 Big Five, RIASEC and ICAR-16. AI Major Match then ranks study majors against your profile, academic results and labour market data.",
+      "The platform calculates your personality type, interests and cognitive scores with standardised models \u2014 Big Five, RIASEC and ICAR-16. Major Match then ranks study majors from your interests, values and subjects, and Naseeb AI explains the fit.",
       "The profile is a starting point for exploring options, not a diagnosis.",
     ],
   },
@@ -418,21 +418,21 @@ const FAQS = [
     id: "faq-essay",
     question: "What does Essay Lab check?",
     answer: [
-      "Essay Lab uses large language models to analyse motivation essays and supplements in Uzbek and English against standard criteria: structure, content relevance, grammatical accuracy and impact. It returns an automatic report and keeps a revision history.",
+      "Naseeb AI reads personal statements, supplements and scholarship essays and gives scores for reflection, specific detail, voice, structure and fit to the prompt, with every note quoting your text. It does not score grammar or rewrite your essay. Counselors also get Naseeb AI ideas for recommendation letters, drawn from the student’s profile. Essay Lab keeps your revision history.",
     ],
   },
   {
     id: "faq-data",
     question: "Where does the university data come from?",
     answer: [
-      "From admission statistics, test requirements, tuition fees and scholarship terms published by universities and international education organisations. An automated data pipeline collects them only from a whitelist of official sources, and each record shows its source link and update time.",
+      "From admission statistics, test requirements, tuition fees and scholarship terms published by universities and international education organisations. They are loaded from official sources, and each record shows its source link and verification date.",
     ],
   },
   {
     id: "faq-ai",
     question: "How does Naseeb Edu reduce AI mistakes?",
     answer: [
-      "Models answer only from verified records in the database (retrieval-augmented generation), show a source for every recommendation and do not show low-confidence results. Values such as deadlines and score thresholds are checked against the database automatically, and accuracy is monitored with evaluation and regression tests.",
+      "Naseeb AI works only from your own profile and essay. Every essay note must quote your text, or it is dropped. It never invents deadlines, requirements or admission chances, and university matching uses fixed rules, not AI. Daily limits apply, and if AI is unavailable you get rule-based feedback instead.",
     ],
   },
   {
@@ -598,7 +598,7 @@ export default function LandingPage({
     {
       title: "Follow the roadmap",
       description:
-        "Step-by-step tasks are generated from your universities’ deadlines, and your completion percentage updates in real time.",
+        "A step-by-step mission path with due dates; your completion percentage updates as tasks are approved.",
     },
   ];
   const capabilities = [
@@ -611,10 +611,10 @@ export default function LandingPage({
     },
     {
       icon: Sparkles,
-      title: "AI Major Match",
+      title: "Major Match",
       description:
-        "Ranks study majors by comparing your psychometric profile, academic results and labour market data.",
-      note: "Machine learning",
+        "Ranks study majors from your interests, values and school subjects; Naseeb AI explains why each one fits and what to explore next.",
+      note: "Naseeb AI explanations",
     },
     {
       icon: GraduationCap,
@@ -625,24 +625,24 @@ export default function LandingPage({
     },
     {
       icon: PenLine,
-      title: "NLP Essay Lab",
+      title: "Essay Lab with Naseeb AI",
       description:
-        "Analyses motivation essays and supplements with large language models for structure, content, grammar and impact. Works in Uzbek and English.",
+        "Naseeb AI reads personal statements and supplements and scores reflection, specific detail, voice, structure and fit to the prompt, quoting your own words for every note. It asks questions and never rewrites your essay.",
       note: "Revision history",
     },
     {
       icon: Compass,
       title: "Personalized Admission Roadmap",
       description:
-        "Builds a step-by-step task plan from your universities’ deadlines and calculates your completion percentage in real time.",
-      note: "Real time",
+        "Guides you through a step-by-step mission path and tracks your completion percentage as tasks are approved.",
+      note: "Step by step",
     },
     {
       icon: Bot,
-      title: "AI Assistant",
+      title: "Naseeb AI assistant",
       description:
-        "Answers questions about the platform and the university database, and shows the source with every answer.",
-      note: "Cites sources",
+        "Answers questions about your tasks, roadmap and applications in Uzbek, Russian or English, using only what your role can see. It suggests steps but never changes your records.",
+      note: "Read-only",
     },
     {
       icon: LayoutDashboard,
@@ -669,16 +669,16 @@ export default function LandingPage({
       icon: Database,
       title: "Data Pipeline",
       description:
-        "Collects university data from a whitelist of official sources, validates it and keeps a version history.",
+        "Loads university data from official sources and stores each record’s source link and verification date.",
       note: "Official sources",
     },
   ];
   const ledger = [
     {
       figure: 4,
-      label: "Core AI modules",
+      label: "Naseeb AI features",
       description:
-        "Psychometric profiling, university matching, Essay Lab and the admission dashboard.",
+        "Essay feedback, recommendation-letter ideas for counselors, major explanations and the assistant chat.",
     },
     {
       figure: 3,
@@ -697,22 +697,22 @@ export default function LandingPage({
     {
       title: "Official sources only",
       description:
-        "Admission statistics, test requirements, tuition and scholarship terms come only from a whitelist of official sources. Every record carries its source link and update time.",
+        "Admission statistics, test requirements, tuition and scholarship terms come from universities and international education organisations, not from AI.",
     },
     {
-      title: "Checked automatically",
+      title: "Every record is traceable",
       description:
-        "New values pass format and logic validation and anomaly detection. A version history is kept, and if an error is found the system rolls back to the last correct version.",
+        "University records are loaded from official sources and stored with their source link and the date they were checked.",
     },
     {
-      title: "AI grounded in data",
+      title: "Naseeb AI stays in bounds",
       description:
-        "Models answer only from verified records (retrieval-augmented generation), show a source for every recommendation and withhold low-confidence results. Deadlines and score thresholds are checked against the database.",
+        "Naseeb AI uses only your own profile and tasks, quotes your essay for every note, and never invents deadlines, requirements or admission chances. Without AI access, rule-based feedback takes over.",
     },
     {
-      title: "Quality is measured",
+      title: "Usage is capped",
       description:
-        "Model accuracy is monitored with automated evaluation and regression test suites and with user feedback signals.",
+        "Every Naseeb AI request counts against daily limits per user and per school, and is logged so schools can see AI usage.",
     },
   ];
   const plans = [
@@ -720,7 +720,7 @@ export default function LandingPage({
       icon: UserRound,
       title: "Individual subscription",
       description:
-        "Monthly or yearly access for individual users to the AI assistant, admission roadmap, university and scholarship matching, and Essay Lab.",
+        "Monthly or yearly access for individual users to the Naseeb AI assistant, Essay Lab with Naseeb AI feedback, admission roadmap, and university and scholarship matching.",
       note: "Monthly · yearly",
     },
     {
@@ -913,16 +913,16 @@ export default function LandingPage({
           <div className="lp-shell landing-hero-grid">
             <div className="landing-hero-copy">
               <p className="lp-eyebrow">
-                {t("AI-powered SaaS platform for university admission")}
+                {t("University admission platform with Naseeb AI")}
               </p>
               <h1>
                 <span>{t("Your path to university,")}</span>{" "}
                 <span>{t("built from your profile.")}</span>{" "}
-                <em>{t("Calculated by AI in real time.")}</em>
+                <em>{t("With Naseeb AI feedback.")}</em>
               </h1>
               <p className="landing-hero-lede">
                 {t(
-                  "Naseeb Edu processes your grades, test scores, psychometric answers and essays, then automatically builds a personalized admission roadmap, a ranking of universities and scholarships, and an essay analysis report.",
+                  "Naseeb Edu brings your grades, test scores, assessment answers and essays into one profile, ranks universities and majors with clear rules, and gives Naseeb AI feedback on your essays.",
                 )}
               </p>
               <div className="landing-hero-actions">
@@ -1183,7 +1183,7 @@ export default function LandingPage({
               <h2>{t("Results built on verified data.")}</h2>
               <p>
                 {t(
-                  "Naseeb Edu is a cloud (SaaS) platform built on artificial intelligence (LLM and NLP) and machine learning. Users get subscription access to its software modules: every analysis, ranking and report is produced by the platform’s algorithms.",
+                  "Naseeb Edu is a cloud (SaaS) platform. Rule-based models rank universities and majors, and Naseeb AI, our language-model assistant, gives essay feedback and answers questions. Users get subscription access to its software modules.",
                 )}
               </p>
             </header>
