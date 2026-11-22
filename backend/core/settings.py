@@ -6,6 +6,8 @@ from pathlib import Path
 from corsheaders.defaults import default_headers
 from decouple import Config, Csv, RepositoryEmpty, config
 from core.environment import (
+    DEVELOPMENT_FRONTEND_URL,
+    PRODUCTION_FRONTEND_URL,
     build_cache_settings,
     build_database_settings,
     direct_database_settings,
@@ -121,8 +123,14 @@ STUDENT_SELF_JOIN_ENABLED = config('STUDENT_SELF_JOIN_ENABLED', default=False, c
 PLACEHOLDER_EMAIL_DOMAIN = config('PLACEHOLDER_EMAIL_DOMAIN', default='students.naseeb.invalid')
 # How long a counselor's assistant invitation stays valid.
 ASSISTANT_INVITE_TTL_DAYS = config('ASSISTANT_INVITE_TTL_DAYS', default=7, cast=int)
-# Where invitation emails link to (the web app, not this API).
-FRONTEND_URL = config('FRONTEND_URL', default='http://127.0.0.1:5173').rstrip('/')
+# The public address of the web app. Every link sent to people (Telegram, email,
+# invitations, meeting links) is built from this, never from the request host.
+# Production defaults to the real site; a wrong value fails the system check
+# naseeb.E001 (see core/checks.py), which the build's migrate step runs.
+FRONTEND_URL = config(
+    'FRONTEND_URL',
+    default=PRODUCTION_FRONTEND_URL if IS_PRODUCTION else DEVELOPMENT_FRONTEND_URL,
+).strip().rstrip('/') or (PRODUCTION_FRONTEND_URL if IS_PRODUCTION else DEVELOPMENT_FRONTEND_URL)
 # Outgoing mail (assistant invitations). The console backend sends nothing: the
 # counselor copies the link instead, and outside DEBUG it is not even printed.
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')

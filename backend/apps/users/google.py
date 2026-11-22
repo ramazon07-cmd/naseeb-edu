@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 from .models import User
 from .services import audit_product_action
 from .throttles import ScopedRateThrottle
+from core.public_urls import public_url
 
 AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -80,7 +81,7 @@ class GoogleConnectCallbackView(APIView):
 
     def get(self, request):
         def back(result):
-            return HttpResponseRedirect(f'{settings.FRONTEND_URL}/meetings?google={result}')
+            return HttpResponseRedirect(public_url(f'/meetings?google={result}'))
 
         if not google_connect_enabled():
             return back('failed')

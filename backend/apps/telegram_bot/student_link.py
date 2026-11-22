@@ -25,6 +25,7 @@ from apps.users.models import User
 
 from .models import StudentLinkToken, StudentTelegram, TelegramLink, TelegramOutbox
 from .services import Refused
+from core.public_urls import public_url
 
 TOKEN_PREFIX = 's_'
 TOKEN_TTL = timedelta(minutes=15)
@@ -86,7 +87,7 @@ def _language(value):
 # --- bot side -------------------------------------------------------------------------------
 
 def meetings_url():
-    return f'{settings.FRONTEND_URL}/meetings'
+    return public_url('/meetings')
 
 
 def _invalid_token():
@@ -303,7 +304,7 @@ def _queue_reminder(booking, step, link, key, other):
     values_key = 'hours' if step >= 60 else 'minutes_left'
     body = text(
         link.language, name, topic=_escape(booking.topic), other=_escape(other),
-        time=_when(booking.starts_at), minutes=booking.duration_minutes, url=f'{settings.FRONTEND_URL}/meetings',
+        time=_when(booking.starts_at), minutes=booking.duration_minutes, url=public_url('/meetings'),
         left=text(link.language, values_key, n=before),
     )
     _, created = TelegramOutbox.objects.get_or_create(

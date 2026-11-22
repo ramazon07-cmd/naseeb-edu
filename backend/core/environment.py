@@ -12,6 +12,9 @@ INSECURE_SECRET_KEYS = {
 # Placeholder fragments copied from example env files must never reach production.
 INSECURE_SECRET_MARKERS = ('replace', 'example', 'change-me', 'changeme', 'change_me', 'dev-only', 'insecure')
 TRUTHY = {'1', 'true', 'yes', 'on'}
+# The public web app: the production default for FRONTEND_URL (docs/deployment-auth.md, layout C).
+PRODUCTION_FRONTEND_URL = 'https://www.naseebedu.com'
+DEVELOPMENT_FRONTEND_URL = 'http://127.0.0.1:5173'
 
 
 def is_insecure_secret_key(secret_key):
