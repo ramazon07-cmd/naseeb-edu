@@ -10,7 +10,7 @@ import { clockText as viewerClockText, dateTimeText as viewerDateTimeText, joinP
 import { inServerZone } from '../lib/serverTime';
 import { usesCounselorLayout } from '../lib/roles';
 import { CxAvatar, CxCard, CxHead, CxTag } from '../components/counselorUi';
-import { isAwaitingStudent, isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, needsRebook, cancelledByStudent, weekCounts, bookedPerDay, bookParam, bookingLink, overviewDays, ownsMeetingHours, studentProfilePath, telegramUrl } from '../lib/meetings';
+import { isAwaitingStudent, isOpenMeeting, meetingStatus, meetingBadgeStatus, studentMeetingsForTab, pendingMeetings, meetingsThisWeek, splitMeetingsByTime, groupMeetingsByDay, needsRebook, cancelledByStudent, weekCounts, bookedPerDay, bookParam, bookingLink, overviewDays, ownsMeetingHours, studentProfilePath, telegramUrl } from '../lib/meetings';
 import { TASHKENT_MINUTES, convertZone, shiftRange, tashkentToZone, zoneToTashkent } from '../lib/weeklyZone';
 import { copyText } from '../lib/clipboard';
 import { withQuery } from '../lib/routes';
@@ -1292,8 +1292,15 @@ function StudentBookingsPage({ data, reload, notify, guard, banner, picker, book
   </div>;
 }
 
+const PAST_STEP = 20;
+// "Today · Friday, 13 November" / "Tomorrow · …" / "Friday, 13 November": the heading over one day's meetings.
+function dayHeading(value, key) {
+  const full = formatDateLocale(zoned(value), { weekday: 'long', day: 'numeric', month: 'long' });
+  const today = meetingDay();
+  const tomorrow = dayKey(new Date(`${today}T00:00`).getTime() + 86400000);
+  return key === today || key === tomorrow ? `${dayLabel(value)} · ${full}` : full;
+}
 const meetingTone = (status) => ({ confirmed: 'ok', pending: 'warn' }[status] || 'quiet');
-const clockAndLength = (item) => joinParts(clockText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`, viewerTimeHint(item.starts_at));
 
 // "Requests, today and this week" in the Counselor Dashboard design: requests
 // waiting for a decision on the left, the week's meetings on the right.
@@ -1333,9 +1340,14 @@ function CounselorMeetingsPage({ user, data, reload, notify, guard, banner, pick
   const [booking, setBooking] = useState(null);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [hoursVersion, setHoursVersion] = useState(0);
+  const [listTab, setListTab] = useState('upcoming');
+  const [pastShown, setPastShown] = useState(PAST_STEP);
   const now = new Date();
   const pending = pendingMeetings(data.bookings, now);
   const week = meetingsThisWeek(data.bookings, now);
+  const { upcoming, past } = splitMeetingsByTime(data.bookings, now);
+  const listed = listTab === 'upcoming' ? upcoming : past.slice(0, pastShown);
+  const groups = groupMeetingsByDay(listed, meetingDay);
 
   async function transition(item, action) {
     if (action === 'reject' && !window.confirm(t("Decline this meeting?"))) return;
@@ -1381,7 +1393,7 @@ function CounselorMeetingsPage({ user, data, reload, notify, guard, banner, pick
     </CxHead>
     {banner}
     {ownsMeetingHours(user) && <BookingOverview user={user} bookings={data.bookings} notify={notify} version={hoursVersion} autoPreview={bookId === user.id} onEditHours={guard(() => setAvailabilityOpen(true))} />}
-    {pending.length || week.length ? <div className={`cx-meet-grid${pending.length && week.length ? '' : ' is-single'}`}>
+    {pending.length || upcoming.length || past.length ? <div className={`cx-meet-grid${pending.length && (upcoming.length || past.length) ? '' : ' is-single'}`}>
       {pending.length > 0 && <CxCard title={tx`Requests waiting for you · ${pending.length}`}>
         <div className="cx-requests">
           {pending.map((item) => <article key={item.id} data-pending-id={item.id} className="cx-request">
@@ -1407,21 +1419,32 @@ function CounselorMeetingsPage({ user, data, reload, notify, guard, banner, pick
           </article>)}
         </div>
       </CxCard>}
-      {week.length > 0 && <CxCard title={t("This week")}>
-        <WeekSummary items={week} />
-        <div className="cx-week">
-          {week.map((item) => {
-            const status = meetingBadgeStatus(meetingStatus(item, now, { student: false }));
-            return <div key={item.id} className={`cx-week-row${item.status === 'cancelled' ? ' is-cancelled' : ''}`}>
-              <span className="cx-week-when"><b>{dayLabel(item.starts_at)}</b><small>{clockAndLength(item)}</small></span>
-              <span className="cx-row-copy"><b><StudentLink item={item} /></b><small>{item.topic} · <TelegramTag item={item} /></small></span>
-              <CxTag tone={meetingTone(status)}>{isAwaitingStudent(item, now) ? t("Waiting for student") : cancelledByStudent(item) ? t("Cancelled by student") : label(status)}</CxTag>
-              <span className="cx-week-actions">{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={15} aria-hidden="true" />{t("Delete")}</button>}</span>
-            </div>;
-          })}
+      {(upcoming.length > 0 || past.length > 0) && <CxCard title={t("Booked times")}>
+        <div className="cx-seg-row">
+          <div className="cx-segmented" role="group" aria-label={t("Show meetings")}>
+            <button type="button" className={listTab === 'upcoming' ? 'active' : ''} aria-pressed={listTab === 'upcoming'} onClick={() => setListTab('upcoming')}>{t("Upcoming")} · {upcoming.length}</button>
+            <button type="button" className={listTab === 'past' ? 'active' : ''} aria-pressed={listTab === 'past'} onClick={() => setListTab('past')}>{t("Past")} · {past.length}</button>
+          </div>
         </div>
+        {listTab === 'upcoming' && <WeekSummary items={week} />}
+        {groups.length ? <div className="cx-week">
+          {groups.map((group) => <section key={group.key} className="cx-day" aria-labelledby={`cx-day-${group.key}`}>
+            <h3 className="cx-day-head" id={`cx-day-${group.key}`}><b>{dayHeading(group.items[0].starts_at, group.key)}</b></h3>
+            {group.items.map((item) => {
+              const status = meetingBadgeStatus(meetingStatus(item, now, { student: false }));
+              const muted = item.status === 'cancelled' || item.status === 'rejected';
+              return <div key={item.id} className={`cx-week-row${item.status === 'cancelled' ? ' is-cancelled' : ''}${muted ? ' is-muted' : ''}`}>
+                <span className="cx-week-when"><b>{clockText(item.starts_at)}</b><small>{joinParts(item.duration_minutes > 0 && tx`${item.duration_minutes} min`, viewerTimeHint(item.starts_at))}</small></span>
+                <span className="cx-row-copy"><b><StudentLink item={item} /></b><small>{item.topic} · <TelegramTag item={item} /></small>{item.staff_note ? <small className="cx-staff-note">📝 {item.staff_note}</small> : null}</span>
+                <CxTag tone={meetingTone(status)}>{isAwaitingStudent(item, now) ? t("Waiting for student") : cancelledByStudent(item) ? t("Cancelled by student") : label(status)}</CxTag>
+                <span className="cx-week-actions">{weekActions(item)}{!isOpenMeeting(item, now) && <button type="button" className="cx-btn" disabled={savingId === item.id} aria-label={tx`Delete ${item.topic}`} onClick={() => deleteMeeting(item, { setSavingId, reload, notify })}><Trash2 size={15} aria-hidden="true" />{t("Delete")}</button>}</span>
+              </div>;
+            })}
+          </section>)}
+          {listTab === 'past' && past.length > pastShown && <button type="button" className="cx-btn cx-more" onClick={() => setPastShown((value) => value + PAST_STEP)}>{t("Show more")}</button>}
+        </div> : <p className="cx-empty">{listTab === 'upcoming' ? t("Nothing scheduled coming up.") : t("No past meetings yet.")}</p>}
       </CxCard>}
-    </div> : <CxCard title={t("This week")}><p className="cx-empty">{t("No requests waiting and nothing scheduled this week.")}</p></CxCard>}
+    </div> : <CxCard title={t("Booked times")}><p className="cx-empty">{t("No requests waiting and nothing scheduled this week.")}</p></CxCard>}
     {rescheduling && <RescheduleForm booking={rescheduling} staff onClose={() => setRescheduling(null)} onSaved={() => {setRescheduling(null);reload();}} notify={notify} />}
     {addingNote && <MeetingNoteForm booking={addingNote} onClose={() => setAddingNote(null)} onSaved={() => setAddingNote(null)} notify={notify} />}
     {booking && <BookingForm staff defaultStudentId={booking.studentId} defaultStudentName={booking.studentName} defaultTopic={booking.topic} onClose={() => setBooking(null)} onSaved={() => {setBooking(null);reload();}} notify={notify} />}

@@ -24,6 +24,7 @@ from apps.users.cache_safety import count_hit
 from apps.users.models import User
 
 from .models import StudentLinkToken, StudentTelegram, TelegramLink, TelegramOutbox
+from .followup import queue_followups
 from .services import Refused
 
 TOKEN_PREFIX = 's_'
@@ -150,6 +151,7 @@ def pending_messages(now=None):
     now = now or timezone.now()
     TelegramOutbox.objects.filter(sent_at__isnull=True, created_at__lt=now - OUTBOX_MAX_AGE).delete()
     queue_reminders(now)
+    queue_followups(now)
     with transaction.atomic():
         rows = list(
             TelegramOutbox.objects.select_for_update(skip_locked=True)

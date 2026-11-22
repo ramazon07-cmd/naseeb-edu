@@ -57,7 +57,7 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
     class Meta:
         model = Booking
         fields = '__all__'
-        read_only_fields = ('student', 'status', 'previous_starts_at', 'staff_requested', 'cancelled_by_role')
+        read_only_fields = ('student', 'status', 'previous_starts_at', 'staff_requested', 'cancelled_by_role', 'staff_note')
 
     def get_participant_name(self, obj):
         if not obj.participant:
@@ -86,6 +86,8 @@ class BookingSerializer(StudentRecordSerializerMixin, serializers.ModelSerialize
         request = self.context.get('request')
         if request and request.user.is_organization:
             data.pop('notes', None)
+        if request and request.user.role == User.Role.STUDENT:
+            data.pop('staff_note', None)
         return data
 
     def get_fields(self):

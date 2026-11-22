@@ -1442,3 +1442,44 @@ a.meet-tg {
   align-content: start;
   gap: 22px;
 }
+
+/* Counselor "Booked times": meetings grouped under one heading per day. */
+.cx-seg-row {
+  padding: 4px 18px 8px;
+}
+
+.cx-day-head {
+  margin: 0;
+  padding: 14px 0 6px;
+  color: var(--cx-muted);
+  font-size: var(--cx-fs-meta);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.cx-day-head b {
+  font-weight: inherit;
+}
+
+.cx-week-row.is-muted {
+  opacity: 0.6;
+}
+
+.cx-more {
+  margin-top: 12px;
+  justify-self: start;
+}
+
+.cx-week .cx-btn:focus-visible,
+.cx-segmented button:focus-visible {
+  outline: 2px solid var(--cx-dark);
+  outline-offset: 2px;
+}
+
+/* The counselor's own note from the Telegram follow-up (why a meeting was cancelled). */
+.cx-row-copy .cx-staff-note {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

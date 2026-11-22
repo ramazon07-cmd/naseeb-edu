@@ -98,6 +98,14 @@ class ApiClient:
             'chat_id': chat_id, 'booking_id': booking_id, 'action': action, 'telegram_username': telegram_username,
         })
 
+    async def meeting_followup(self, chat_id, booking_id, action):
+        return await self._call('POST', 'meeting-followup', json={
+            'chat_id': chat_id, 'booking_id': booking_id, 'action': action,
+        })
+
+    async def meeting_note(self, chat_id, text):
+        return await self._call('POST', 'meeting-note', json={'chat_id': chat_id, 'text': text})
+
     async def student_outbox(self):
         body = await self._call('POST', 'student-outbox', json={})
         messages = body.get('messages') if isinstance(body, dict) else None

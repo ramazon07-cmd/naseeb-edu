@@ -29,6 +29,7 @@ STUDENT_START = r'^/start(@\w+)?\s+s_([A-Za-z0-9_-]{1,62})\s*$'
 STAFF_KINDS = ('staff_linked', 'staff_allowed')
 TIME_PATTERN = re.compile(r'^\s*(\d{1,2})[:.](\d{2})\s*$')
 MEETING_BUTTON = re.compile(r'^mt:(confirm|decline|cancel):(\d{1,12})$')
+FOLLOWUP_BUTTON = re.compile(r'^mf:(done|cancel):(\d{1,12})$')
 LIST_BUTTON = re.compile(r'^l:(\d{1,4}):([az]):([ai])$')
 DETAIL_BUTTON = re.compile(r'^d:(\d{1,12}):(\d{1,4}):([az]):([ai])$')
 RESET_PICK = re.compile(r'^rp:(\d{1,12})$')
@@ -421,6 +422,24 @@ async def meeting_button(callback: CallbackQuery, bot, api):
     alert = result.get('alert')
     await callback.answer(alert or None, show_alert=bool(alert))
     await _edit(bot, chat_id, callback.message.message_id, result['text'], keyboards.from_rows(result.get('buttons')))
+
+
+@router.callback_query(F.data.regexp(FOLLOWUP_BUTTON))
+async def followup_button(callback: CallbackQuery, bot, api):
+    """Done / Canceled under the post-meeting message: the backend applies it (or refuses) and redraws it;
+    after a cancel the counselor is asked for a note, which the next text message in the chat carries."""
+    chat_id = callback.message.chat.id
+    action, booking_id = FOLLOWUP_BUTTON.match(callback.data).groups()
+    try:
+        result = await api.meeting_followup(chat_id, int(booking_id), action)
+    except ApiError:
+        await callback.answer(t(_telegram_language(callback.from_user), 'meeting_forbidden'), show_alert=True)
+        return
+    alert = result.get('alert')
+    await callback.answer(alert or None, show_alert=bool(alert))
+    await _edit(bot, chat_id, callback.message.message_id, result['text'], keyboards.from_rows(result.get('buttons')))
+    if result.get('prompt'):
+        await bot.send_message(chat_id, result['prompt'])
 
 
 @router.callback_query(F.data.regexp(LIST_BUTTON))
@@ -830,6 +849,13 @@ async def blocked(event: ChatMemberUpdated, api, cache):
 
 @router.message(F.text)
 async def stray_text(message: Message, state: FSMContext, api, cache):
+    # The note a counselor was asked for after cancelling a meeting from the follow-up. The backend keeps
+    # the wait (it survives restarts) and says "none" for any text that is not that note.
+    with suppress(ApiError):
+        noted = await api.meeting_note(message.chat.id, message.text)
+        if noted.get('result') == 'saved':
+            await message.answer(noted['text'])
+            return
     # A pasted name + email + phone from a linked counselor is a new student to add.
     details = parse_student(message.text)
     if is_complete(details):
