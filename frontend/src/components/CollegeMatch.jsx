@@ -7,7 +7,7 @@ import { api } from '../api';
 import { formatNumberLocale, getLanguage, t, tx } from '../i18n';
 import { TierBand } from './college';
 import { bandLabel, rankText } from '../lib/college';
-import { addAllBusy, beginReasons, costText, failReasons, finishReasons, idleReasons, individualAddBusy, matchMessage, reasonsKey, reasonsView, satPositionText, subjectRankText } from '../lib/collegeMatch';
+import { academicStanding, addAllBusy, beginReasons, costText, failReasons, finishReasons, idleReasons, individualAddBusy, matchFootnote, matchMessage, reasonsKey, reasonsView, satPositionText, subjectRankText } from '../lib/collegeMatch';
 import { money } from '../lib/format';
 import { fitReasonText } from '../lib/fitReasons';
 import { BlueButton, GlassCard } from '../design/blue/ui';
@@ -17,16 +17,10 @@ const ACADEMICS = 'academics';
 const AID_STATUS_LABELS = {
   yes: "Yes",
   need_aware: "Need-aware",
-  merit: "Merit aid only",
+  merit: "Merit aid (check it is open to international students)",
   none: "None listed",
   unknown: "Unknown",
 };
-
-// Where the student's academics stand against the students this university admits.
-function academicStanding(position) {
-  if (position == null) return null;
-  return position >= 0.5 ? 'Above most admitted students' : position >= -0.25 ? 'In the admitted range' : 'Below the admitted range';
-}
 
 function Scores({ rubric }) {
   const score = rubric[ACADEMICS];
@@ -47,6 +41,7 @@ function MatchCard({ university, application, busy, reason, onAdd, onOpen }) {
   const gap = fit.gaps[0];
   const standing = academicStanding(fit.chance.academic_position);
   const admitRate = fit.chance.admit_rate;
+  const estimated = Boolean(fit.chance.admit_rate_estimated);
   const rank = subjectRankText(university.subject);
   const overall = rankText(university);
   return <article className="nb-match-card">
@@ -56,7 +51,7 @@ function MatchCard({ university, application, busy, reason, onAdd, onOpen }) {
     </header>
     {rank && <p className="nb-match-subject">{rank}</p>}
     <dl className="nb-match-card-facts">
-      {admitRate != null && <div><dt>{t("Admit rate")}</dt><dd>{formatNumberLocale(admitRate, { maximumFractionDigits: 1 })}<small>%</small></dd></div>}
+      {admitRate != null && <div><dt>{t("Admit rate")}</dt><dd title={estimated ? t("estimated from the overall rate") : undefined}>{estimated && '≈'}{formatNumberLocale(admitRate, { maximumFractionDigits: 1 })}<small>%</small>{estimated && <small className="nb-match-estimate">{t("estimated from the overall rate")}</small>}</dd></div>}
       <div><dt>{t("Cost per year")}</dt><dd>{money(university.cost_usd)}</dd></div>
       <div><dt>{t("Aid for international students")}</dt><dd>{t(AID_STATUS_LABELS[university.aid_status])}</dd></div>
     </dl>
@@ -123,6 +118,6 @@ export function CollegeMatchPanel({ state, listed, busyId, addingAll, onAdd, onA
       {group.results.length ? <div className="nb-match-cards">{group.results.map((university) => <MatchCard key={university.id} university={university} application={listed.get(university.id)} busy={individualAddBusy({ busyId, addingAll }, university.id)} reason={reasons.lines[university.id]} onAdd={() => onAdd(university)} onOpen={() => onOpen(university.id)} />)}</div>
         : <p className="nb-match-empty">{tx`No ${bandLabel(group.band)} universities match your profile yet.`}</p>}
     </div>)}
-    <p className="nb-match-foot">{t("Matched with fixed rules from QS subject rankings 2026: the same profile always gets the same list. Bands are estimates, not admission decisions.")}</p>
+    <p className="nb-match-foot">{matchFootnote(data, reasons.status === 'done')}</p>
   </GlassCard>;
 }

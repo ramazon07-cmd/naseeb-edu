@@ -331,8 +331,42 @@ class ReasonsTests(MatchFixture, APITestCase):
         for secret in ('candlelight', 'rarely met a student', 'zarina', 'karimova', 'robotics'):
             self.assertNotIn(secret, sent)
         self.assertNotIn('recommendations', sent)
-        self.assertEqual(set(json.loads(post.call_args[0][0]['messages'][1]['content'])['student']['scores_out_of_10']),
-                         {'academics', 'activities', 'essays'})
+        payload = json.loads(post.call_args[0][0]['messages'][1]['content'])
+        self.assertEqual(set(payload['student']['scores_out_of_10']), {'academics'})
+        self.assertEqual(payload['student']['budget_usd'], 30000)
+        for card in payload['cards']:
+            self.assertNotIn('fit_score', card)
+            self.assertIn('cost_vs_budget', card)
+            self.assertIn('admit_rate_estimated', card)
+            self.assertIn('sat_range_min', card)
+        mit = next(card for card in payload['cards'] if card['id'] == self.mit.pk)
+        self.assertEqual((mit['sat_score'], mit['sat_range_min'], mit['sat_range_max']), (1450, 1520, 1580))
+
+    def test_a_line_with_a_number_not_in_its_facts_is_dropped(self):
+        University.objects.filter(pk=self.mit.pk).update(intl_acceptance_rate='12.00')
+        ids = self.ids()
+        lines = {str(pk): 'A strong fit for your budget.' for pk in ids}
+        self.assertNotIn(99, ids)
+        lines[str(self.mit.pk)] = 'An acceptance 99% makes this easy.'
+        lines[str(self.state.pk)] = 'About 53% of applicants get in.'
+        with self.gateway(lines=lines):
+            response = self.client.post(REASONS_URL)
+        self.assertEqual(response.status_code, 200, response.data)
+        reasons = response.data['reasons']
+        self.assertEqual(reasons[str(self.mit.pk)], '', 'a made-up number empties the line')
+        self.assertEqual(reasons[str(self.state.pk)], 'About 53% of applicants get in.', 'its own admit rate')
+        self.assertEqual(self.used(), 1)
+
+    def test_numbers_in_the_card_or_student_facts_are_kept(self):
+        from apps.admissions.match_reasons import validate
+
+        item = {'id': 7, 'admit_rate': 12.0, 'cost_usd': 25000, 'subject_rank_qs_2026': '201-250'}
+        student = {'budget_usd': 30000, 'scores_out_of_10': {'academics': 8.3}}
+        raw = {'reasons': {'7': 'At 12% admit, #201 in QS 2026, $25,000 a year within $30,000; academics 8.3.'}}
+        self.assertEqual(validate(raw, [item], student)['7'], raw['reasons']['7'])
+        self.assertEqual(validate({'reasons': {'7': 'Ranked #5.'}}, [item], student)['7'], '')
+        with self.assertRaises(ValueError):
+            validate({'reasons': {}}, [item], student)
 
     def test_reasoning_effort_is_dropped_once_when_the_gateway_rejects_it(self):
         calls = []

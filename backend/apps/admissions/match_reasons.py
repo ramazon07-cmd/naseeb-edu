@@ -1,15 +1,20 @@
 """The optional "Why these fit you" lines of the college match: one AI call, one line per card.
 
 The default match makes no AI call. This runs only when the student asks, writes one short line for each
-of the (up to 12) cards, and counts as one unit against the daily limit. The model sees the band, the
-student's factor numbers and university facts only: never essay or letter text, never the student's name
-(free-text fields still go through the same redaction as the letter coach).
+of the (up to 10) cards, and counts as one unit against the daily limit. The model sees the card facts (band,
+subject rank, SAT range and score, admit rate, cost against budget, aid) and the student's stated majors,
+academics score and budget only: never essay or letter text, activities, or the student's name (free-text
+fields still go through the same redaction as the letter coach).
+
+Number check: a line may only use numbers that appear in its own card or in the student facts. A line with
+any other number (a made-up admit rate, a wrong rank) is replaced by an empty line, which the page does not show.
 
 The answer is cached by an input hash of the card list and the profile version, so asking again for the
 same list costs nothing. A failed call gives its unit back and answers 503.
 """
 import hashlib
 import json
+import re
 import time
 import urllib.error
 
@@ -23,16 +28,19 @@ from .essay_lab import coach
 from .letter_coach import anonymize
 
 FEATURE = 'college_match_reasons'
-VERSION = 'reasons-v1'
+VERSION = 'reasons-v2'
 CACHE_SECONDS = 7 * 24 * 60 * 60
 LANGUAGES = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}
 MAX_LINE_CHARS = 240
 MAX_TOKENS = 1400
+NUMBER = re.compile(r'\d[\d,.]*')
 
 SYSTEM = """You write short "why this fits you" lines for a student's list of universities.
 For each university card write exactly one plain sentence of at most 25 words, using only the facts given for
-that card: its band, the student's factor numbers, and the university's facts. Be honest: if the band is far
-reach or reach, say it is ambitious and why it is still worth considering; never promise admission.
+that card: its band, the student's academics score and budget, and the university's facts. Use only numbers that
+appear in that card or the student facts; when admit_rate_estimated is true, call the admit rate an estimate.
+Be honest: if the band is far reach or reach, say it is ambitious and why it is still worth considering; never
+promise admission.
 Never mention essays, recommendation letters, grammar, English fluency or the student's name.
 Write in {language}. Return one JSON object and nothing else:
 {{"reasons": {{"<university id>": "<one sentence>"}}}} with one entry for every card id."""
@@ -56,13 +64,18 @@ def cards(data, profile):
         for row in group['results']:
             fit = row['fit']
             subject = row.get('subject') or {}
+            sat = row['sat']
             out.append({
                 'id': row['id'], 'name': row['name'], 'country': row['country'], 'band': row['band'],
                 'qs_rank': row.get('ranking'), 'subject': subject.get('name'),
                 'subject_rank_qs_2026': None if subject.get('overall') else subject.get('rank_label'),
-                'sat_position': row['sat']['position'], 'aid_for_internationals': row['aid_status'],
+                'sat_position': sat['position'],
+                'act_score' if sat['position'] == 'act_used' else 'sat_score': sat.get('score'),
+                'sat_range_min': sat.get('min'), 'sat_range_max': sat.get('max'),
+                'aid_for_internationals': row['aid_status'],
                 'admit_rate': fit['chance'].get('admit_rate'),
-                'fit_score': fit['match_score'], 'cost_usd': row.get('cost_usd'),
+                'admit_rate_estimated': fit['chance'].get('admit_rate_estimated'),
+                'cost_usd': row.get('cost_usd'), 'cost_vs_budget': row.get('cost_vs_budget'),
                 'offers_international_aid': row.get('offers_international_aid'),
                 'programs': [program['name'] for program in row.get('suggested_programs', [])],
                 'strengths': [clean(item['text']) for item in fit['reasons'][:2]],
@@ -72,9 +85,13 @@ def cards(data, profile):
 
 
 def profile_facts(profile, rubric):
-    """Factor numbers and the stated majors; free text is anonymized and redacted like the letter coach does."""
+    """The stated majors, the academics score and the budget; free text is anonymized and redacted like the
+    letter coach does. Activities and essays are not used by the match, so the model does not see them."""
     majors = redact_pii(anonymize(profile.target_major, profile))[:160]
-    return {'intended_majors': majors, 'scores_out_of_10': {key: value for key, value in rubric.items() if value is not None}}
+    return {
+        'intended_majors': majors, 'scores_out_of_10': {'academics': rubric.get('academics')},
+        'budget_usd': profile.budget_usd,
+    }
 
 
 def input_hash(version_key, items, language):
@@ -86,24 +103,40 @@ def input_hash(version_key, items, language):
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def validate(raw, ids):
+def numbers(text):
+    """The numbers in ``text`` as values: commas removed, trailing dots stripped ("25,000." is 25000, "12" is 12.0)."""
+    found = set()
+    for token in NUMBER.findall(text):
+        token = token.replace(',', '').rstrip('.')
+        try:
+            found.add(float(token))
+        except ValueError:
+            found.add(token)
+    return found
+
+
+def validate(raw, items, student):
+    """``{card id: line}``. A missing or empty line raises; a line naming a number that is in neither its card
+    nor the student facts becomes an empty line (not shown)."""
     reasons = raw.get('reasons') if isinstance(raw, dict) else None
     if not isinstance(reasons, dict):
         raise ValueError('reasons must be an object')
+    known = numbers(json.dumps(student, ensure_ascii=False))
     lines = {}
-    for card_id in ids:
-        line = reasons.get(str(card_id))
+    for item in items:
+        line = reasons.get(str(item['id']))
         if not isinstance(line, str) or not line.strip():
             raise ValueError('a card has no line')
-        lines[str(card_id)] = line.strip()[:MAX_LINE_CHARS]
+        line = line.strip()[:MAX_LINE_CHARS]
+        allowed = known | numbers(json.dumps(item, ensure_ascii=False))
+        lines[str(item['id'])] = line if numbers(line) <= allowed else ''
     return lines
 
 
-def request_lines(profile, rubric, items, language):
+def request_lines(student, items, language):
     messages = [
         {'role': 'system', 'content': SYSTEM.format(language=LANGUAGES[language])},
-        {'role': 'user', 'content': json.dumps(
-            {'student': profile_facts(profile, rubric), 'cards': items}, ensure_ascii=False)},
+        {'role': 'user', 'content': json.dumps({'student': student, 'cards': items}, ensure_ascii=False)},
     ]
     deadline = time.monotonic() + settings.ESSAY_COACH_TOTAL_SECONDS
     return coach._request_gateway(messages, MAX_TOKENS, deadline)
@@ -126,7 +159,8 @@ def generate(profile, user, data, version_key, rubric, language='en'):
         raise ReasonsUnavailable('coach_resting')
     ai_usage.begin()
     try:
-        lines = validate(request_lines(profile, rubric, items, language), [item['id'] for item in items])
+        student = profile_facts(profile, rubric)
+        lines = validate(request_lines(student, items, language), items, student)
     except (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError):
         ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED)
         coach.logger.warning('%s_provider_failure user_id=%s', FEATURE, getattr(user, 'pk', None))

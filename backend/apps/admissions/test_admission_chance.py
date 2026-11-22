@@ -29,7 +29,8 @@ class InternationalRateTests(APITestCase):
     def test_selective_rates_are_estimated_lower_for_students_from_abroad(self):
         self.assertEqual(international_rate(stub_university(acceptance_rate=10)), (5.0, True))
         self.assertEqual(international_rate(stub_university(acceptance_rate=40)), (32.0, True))
-        self.assertEqual(international_rate(stub_university(acceptance_rate=60)), (60.0, False))
+        self.assertEqual(international_rate(stub_university(acceptance_rate=60)), (60.0, True), 'as-is, still an estimate')
+        self.assertEqual(international_rate(stub_university(acceptance_rate=50)), (50.0, True))
         self.assertEqual(international_rate(stub_university()), (None, False))
 
 

@@ -10,10 +10,10 @@ The same profile always gives the same list. Every step is a rule over catalogue
 3. Aid and cost gates (``passes_gate``) drop universities a student who needs money cannot afford.
 4. The chance band comes from admission_chance.chance with the academics score only: activities and
    essays are neutral there, so they never change who is listed or the band.
-5. Within a band: subject rank, then aid for international students, then international admit rate,
-   then overall QS rank, then name.
-6. Three reach (reach, then far reach), four target and three safety universities. A short band is
-   filled from the nearest band and the response says so.
+5. Within a band: subject rank, then aid for international students, then the international admit rate
+   (admission_chance.international_rate, the same rate the band uses), then overall QS rank, then name.
+6. Three reach (reach, then at most one far reach), four target and three safety universities. A short
+   band is filled from the nearest band and the response says so.
 """
 import re
 
@@ -23,7 +23,7 @@ from . import admission_chance
 from .college_search import SCORING_FIELDS, country_match, eligible_programs, fit_context, has_aid_data, serialize_rows
 from .models import University, UniversitySubjectRank
 from .pricing import with_cost
-from .subjects import SUBJECTS, split_majors, subject_name, subjects_for_major
+from .subjects import SUBJECTS, split_majors_whole, subject_name, subjects_for_major
 
 # (group, how many, the bands it takes first-to-last).
 MATCH_GROUPS = (
@@ -33,6 +33,9 @@ MATCH_GROUPS = (
 )
 # Where a short group takes its missing universities from, nearest first.
 FILL_ORDER = {'reach': ('target', 'safety'), 'target': ('reach', 'safety'), 'safety': ('target', 'reach')}
+# The reach group takes at most this many far-reach universities; the rest of a short reach group comes from
+# target, then safety, before a second far reach.
+MAX_FAR_REACH = 1
 MATCH_PROGRAMS = 2
 COST_CAP_FACTOR = 2
 AID_ORDER = {'yes': 0, 'need_aware': 1, 'merit': 2, 'none': 3, 'unknown': 4}
@@ -60,16 +63,23 @@ def gives_international_aid(university):
     return bool(university.offers_international_aid or university.intl_need_policy)
 
 
-def international_cost(university):
-    """What a student from abroad pays per year: the one cost rule (pricing.py), else the tuition outside the US.
+def is_us(university):
+    """A US university, by its market or, when the market is blank, by its country."""
+    us = University.Market.US
+    return university.market == us or University.market_for_country(university.country) == us
 
-    A US row without an international cost stays unpriced: its net price is what US students pay after aid.
+
+def international_cost(university):
+    """What a student from abroad pays per year.
+
+    * US (by market or country): ``intl_cost_usd`` only. A US net price is what US students pay after aid,
+      so a US row without an international cost stays unpriced.
+    * Elsewhere: the net price (``cost`` from pricing.py), then ``tuition_usd``.
     """
-    if university.cost is not None:
-        return university.cost
-    if university.market == University.Market.US:
-        return None
-    return university.tuition_usd
+    if is_us(university):
+        return university.intl_cost_usd
+    cost = getattr(university, 'cost', university.net_price_usd)
+    return cost if cost is not None else university.tuition_usd
 
 
 def passes_gate(university, cost, ctx):
@@ -87,9 +97,14 @@ def passes_gate(university, cost, ctx):
     return not (cost is not None and budget is not None and cost > COST_CAP_FACTOR * budget)
 
 
-def sat_position(university, sat):
-    """The student's SAT against the university's published range: below, inside or above, with the numbers."""
+def sat_position(university, sat, act=None):
+    """The student's SAT against the university's published range: below, inside or above, with the numbers.
+
+    No SAT but an ACT, at a university with a test range: ``act_used`` with the ACT score (the band compared it).
+    """
     low, high = university.sat_min, university.sat_max
+    if sat is None and act is not None and (low or university.act_min):
+        return {'position': 'act_used', 'score': act, 'min': low, 'max': high}
     if not low:
         return {'position': 'no_range', 'score': sat, 'min': None, 'max': None}
     if sat is None:
@@ -137,7 +152,8 @@ def suggested_programs(university, majors):
 
 
 def intended_majors(profile):
-    return split_majors(profile.target_major)
+    """The stated majors, with compound names ("Oil and gas") kept whole."""
+    return split_majors_whole(profile.target_major)
 
 
 def latest_year():
@@ -181,25 +197,36 @@ class _Place:
 
 
 def sort_key(university, pick, status):
-    rate = university.intl_acceptance_rate
+    rate = admission_chance.international_rate(university)[0]
     return (
         pick['rank'] if pick['rank'] is not None else NO_RANK,
         AID_ORDER[status],
-        0 if rate is not None else 1, -float(rate or 0),
+        0 if rate is not None else 1, -(rate or 0),
         university.ranking or NO_RANK,
         university.name.lower(), university.pk,
     )
 
 
+def by_band(entries, band):
+    return sorted((entry for entry in entries if entry['band'] == band), key=lambda entry: entry['key'])
+
+
 def pick_list(entries):
-    """``(groups, notes)``: 3 reach, 4 target, 3 safety; a short group is filled from the nearest group."""
-    pools = {}
-    for group, _, bands in MATCH_GROUPS:
-        pool = [entry for band in bands for entry in sorted(
-            (entry for entry in entries if entry['band'] == band), key=lambda entry: entry['key'])]
-        pools[group] = pool
+    """``(groups, notes)``: 3 reach, 4 target, 3 safety; a short group is filled from the nearest group.
+
+    Reach takes reach entries first and at most MAX_FAR_REACH far-reach ones. Still short, it fills from
+    target, then safety, and only then takes another far reach. Far-reach entries never fill other groups.
+    """
+    reach, far = by_band(entries, admission_chance.REACH), by_band(entries, admission_chance.FAR_REACH)
+    pools = {
+        'reach': reach + far[:MAX_FAR_REACH],
+        'target': by_band(entries, admission_chance.TARGET),
+        'safety': by_band(entries, admission_chance.SAFETY),
+    }
+    extra_far = far[MAX_FAR_REACH:]
     chosen = {group: pools[group][:quota] for group, quota, _ in MATCH_GROUPS}
-    spare = {group: pools[group][quota:] for group, quota, _ in MATCH_GROUPS}
+    spare = {group: [entry for entry in pools[group][quota:] if entry['band'] != admission_chance.FAR_REACH]
+             for group, quota, _ in MATCH_GROUPS}
     notes = []
     for group, quota, _ in MATCH_GROUPS:
         for donor in FILL_ORDER[group]:
@@ -210,12 +237,27 @@ def pick_list(entries):
             chosen[group] += taken
             notes.append({
                 'code': 'filled_from', 'params': {'group': group, 'from': donor, 'count': len(taken)},
-                'text': f'Only {len(chosen[group]) - len(taken)} {group} universities fit your profile, so {len(taken)} from the {donor} group were added',
+                'text': f'Too few universities in the {group} group fit you; {len(taken)} from the {donor} group were added.',
             })
+        if group == 'reach':
+            missing = quota - len(chosen[group])
+            chosen[group] += extra_far[:max(missing, 0)]
     total = sum(len(rows) for rows in chosen.values())
     if total < sum(quota for _, quota, _ in MATCH_GROUPS):
-        notes.append({'code': 'short_list', 'params': {'count': total}, 'text': f'Only {total} universities fit your profile and budget'})
+        notes.append({'code': 'short_list', 'params': {'count': total}, 'text': f'Only {total} universities fit your profile and budget.'})
     return chosen, notes
+
+
+def left_out_notes(counts):
+    """The notes for universities the rules left out, in a fixed order."""
+    texts = {
+        'test_needed': '{n} universities were left out because they expect an SAT or ACT score; add yours to see them',
+        'aid_unknown': '{n} universities were left out: the catalogue has no aid details',
+        'no_intl_aid': '{n} universities were left out: they list no aid for students from abroad',
+        'no_admission_data': '{n} universities were left out because the catalogue has no admission data to place them',
+    }
+    return [{'code': code, 'params': {'count': counts[code]}, 'text': text.format(n=counts[code])}
+            for code, text in texts.items() if counts[code]]
 
 
 def match_with_context(profile):
@@ -228,15 +270,20 @@ def match_with_context(profile):
     majors = intended_majors(profile)
     picks = candidates(subject_codes, majors, ctx)
     universities = with_cost(University.objects.only(*MATCH_FIELDS)).filter(pk__in=list(picks))
-    entries, no_aid_listed, no_band = [], 0, 0
+    entries = []
+    left_out = dict.fromkeys(('test_needed', 'aid_unknown', 'no_intl_aid', 'no_admission_data'), 0)
+    no_test = ctx['sat'] is None and ctx['act'] is None
     for university in universities:
         cost = international_cost(university)
         if not passes_gate(university, cost, ctx):
-            no_aid_listed += aid_status(university) == 'unknown'
+            if ctx['scholarship_needed']:
+                left_out['aid_unknown' if aid_status(university) == 'unknown' else 'no_intl_aid'] += 1
             continue
         band = admission_chance.chance(university, chance_ctx)['band']
         if band not in admission_chance.STEPS:
-            no_band += band is None
+            if band is None:
+                needs_test = no_test and bool(university.sat_min or university.act_min)
+                left_out['test_needed' if needs_test else 'no_admission_data'] += 1
             continue
         status = aid_status(university)
         pick = picks[university.pk]
@@ -245,16 +292,7 @@ def match_with_context(profile):
             'key': sort_key(university, pick, status),
         })
     chosen, notes = pick_list(entries)
-    if no_aid_listed and ctx['scholarship_needed']:
-        notes.append({
-            'code': 'aid_unlisted', 'params': {'count': no_aid_listed},
-            'text': f'{no_aid_listed} universities were left out because the catalogue lists no aid for students from abroad',
-        })
-    if no_band:
-        notes.append({
-            'code': 'no_admission_data', 'params': {'count': no_band},
-            'text': f'{no_band} universities were left out because the catalogue has no admission data to place them',
-        })
+    notes += left_out_notes(left_out)
     ids = [entry['id'] for rows in chosen.values() for entry in rows]
     full = list(with_cost(University.objects.prefetch_related(eligible_programs())).filter(pk__in=ids))
     serialized = {row['id']: row for row in serialize_rows(full, chance_ctx)}
@@ -293,7 +331,7 @@ def card_facts(university, entry, ctx):
             'rank': pick['rank'], 'rank_label': rank_label(pick['rank'], pick['label']) if pick['rank'] is not None else None,
         }
     return {
-        'band': entry['band'], 'subject': subject, 'sat': sat_position(university, ctx['sat']),
+        'band': entry['band'], 'subject': subject, 'sat': sat_position(university, ctx['sat'], ctx.get('act')),
         'aid_status': entry['status'], 'cost_usd': cost, 'budget_usd': ctx['budget'],
         'cost_vs_budget': budget_position(cost, ctx['budget']), 'cost_unknown': cost is None,
     }

@@ -169,7 +169,8 @@ KEYWORDS = {
     'COM02': ('computer', 'software', 'programming', 'programmer', 'informatics', 'information system',
               'information technolog', 'cybersecurity', 'cyber security', 'web development', 'cs$', 'it$', 'cse$',
               'компьютер', 'программ', 'информатик', 'информацион', 'кибербезопасн', 'айти', 'kompyuter', 'dasturlash',
-              'dasturchi', 'dasturiy', 'informatika', 'axborot', 'kiberxavfsizlik'),
+              'dasturchi', 'dasturiy', 'informatika', 'axborot', 'kiberxavfsizlik',
+              'bioinformatic', 'computational biology'),
     'DAT01': ('data science', 'data scien', 'data analy', 'artificial intelligence', 'machine learning', 'big data',
               'ai$', 'ml$', 'deep learning', 'data engineering', 'наука о данных', 'анализ данных', 'данных',
               'искусственный интеллект', 'машинное обучение', "sun'iy intellekt", "ma'lumotlar", 'malumotlar',
@@ -177,7 +178,8 @@ KEYWORDS = {
     'ENG01': ('chemical engineering', 'chemical$', 'process engineering', 'химическая технолог', 'химическая инженер',
               'химическое', 'kimyoviy muhandis', 'kimyo texnolog'),
     'ENG02': ('civil', 'structural', 'construction', 'строительств', 'гражданск', 'qurilish', 'fuqaro muhandis'),
-    'ENG03': ('electrical', 'electronic', 'electric$', 'telecommunication', 'mechatronic', 'robotic', 'automation',
+    'ENG03': ('electrical and electronic', 'electrical & electronic', 'electronic and electrical',
+              'electronic & electrical', 'electrical', 'electronic', 'electric$', 'telecommunication', 'mechatronic', 'robotic', 'automation',
               'электротех', 'электрон', 'электр', 'телекоммуникац', 'робот', 'автоматизац', 'elektr', 'telekommunikats',
               'avtomatlashtirish'),
     'ENG05': ('mechanical', 'aeronautic', 'aerospace', 'aviation', 'automotive', 'manufacturing', 'industrial engineering',
@@ -189,7 +191,8 @@ KEYWORDS = {
               'qishloq', 'agrar', 'o\'rmon', 'oziq-ovqat'),
     'ANA01': ('anatomy', 'physiolog', 'анатом', 'физиолог', 'anatomiya', 'fiziologiya'),
     'BIO01': ('biolog', 'biotech', 'biomedical', 'biochem', 'genetic', 'microbiolog', 'neuroscien', 'molecular',
-              'биолог', 'биотех', 'биохим', 'генетик', 'микробиолог', 'biologiya', 'biotexnolog', 'biokimyo', 'genetika'),
+              'биолог', 'биотех', 'биохим', 'генетик', 'микробиолог', 'biologiya', 'biotexnolog', 'biokimyo', 'genetika',
+              'bioinformatic', 'computational biology'),
     'DEN01': ('dentist', 'dental', 'stomatolog', 'стоматолог', 'зубн', 'stomatologiya', 'tish'),
     'MED01': ('medicine', 'medical', 'premed', 'pre-med', 'surgery', 'surgeon', 'doctor', 'physician', 'public health',
               'health science', 'медицин', 'лечебн', 'врач', 'хирург', 'здравоохран', 'tibbiyot', 'shifokor', 'davolash',
@@ -233,7 +236,7 @@ KEYWORDS = {
     'SOC01': ('social policy', 'social work', 'public administration', 'social administration', 'социальная работа',
               'социальная политика', 'ijtimoiy ish', 'ijtimoiy siyosat'),
     'SOC03': ('sociolog', 'социолог', 'sotsiolog', 'sosiolog'),
-    'SPO01': ('sport', 'physical education', 'kinesiolog', 'coaching', 'спорт', 'физическая культура', 'физкультур',
+    'SPO01': ('sport management', 'sports management', 'sports science', 'sport', 'physical education', 'kinesiolog', 'coaching', 'спорт', 'физическая культура', 'физкультур',
               'jismoniy tarbiya', 'trener'),
     'STA01': ('statistic', 'operational research', 'operations research', 'actuarial science', 'статист',
               'исследование операций', 'statistika', 'operatsiyalarni tadqiq'),
@@ -285,16 +288,21 @@ def subjects_for_part(part):
     return []
 
 
+# Phrases matched whole before anything else, although they hold no separator: "liberal arts" is the broad
+# Arts & Humanities area, not Art & Design (ART01's 'arts$').
+FORCED_PHRASES = {'liberal arts': 'AREA_ART'}
+
+
 def _compile_phrases():
-    """Whole keywords and subject names that contain a separator ("oil and gas", "Hospitality & Leisure Management"):
-    matched as a unit, longest first, before the text is split into majors."""
-    phrases = {}
+    """Whole keywords and subject names that contain a separator ("oil and gas", "Hospitality & Leisure Management"),
+    plus FORCED_PHRASES: matched as a unit, longest first, before the text is split into majors."""
+    phrases = {phrase: {code} for phrase, code in FORCED_PHRASES.items()}
     for code, words in KEYWORDS.items():
         for word in words:
             phrases.setdefault(normalize(word.rstrip('$')), set()).add(code)
     for code, (name, _area) in SUBJECTS.items():
         phrases.setdefault(normalize(name), set()).add(code)
-    phrases = {phrase: codes for phrase, codes in phrases.items() if len(PARTS.split(phrase)) > 1}
+    phrases = {phrase: codes for phrase, codes in phrases.items() if len(PARTS.split(phrase)) > 1 or phrase in FORCED_PHRASES}
     ordered = sorted(phrases, key=len, reverse=True)
     pattern = re.compile('(?<!\\w)(?:' + '|'.join(re.escape(p) for p in ordered) + ')(?!\\w)')
     return pattern, phrases
@@ -304,18 +312,32 @@ _PHRASE_PATTERN, _PHRASES = _compile_phrases()
 _TOKEN = re.compile('\x00(\\d+)\x00')
 
 
+def _protect(text):
+    """``(parts, phrases)``: the text split into majors with every compound phrase replaced by a token first,
+    so "Oil and gas" stays one part. ``phrases`` lists the phrases by token number."""
+    phrases = []
+
+    def protect(match):
+        phrases.append(match.group(0))
+        return ' \x00%d\x00 ' % (len(phrases) - 1)
+
+    return split_majors(_PHRASE_PATTERN.sub(protect, normalize(text))), phrases
+
+
+def split_majors_whole(text):
+    """Like ``split_majors``, but a compound name ("oil and gas", "electrical & electronic engineering") stays one major."""
+    parts, phrases = _protect(text)
+    restored = (' '.join(_TOKEN.sub(lambda m: phrases[int(m.group(1))], part).split()) for part in parts)
+    return [part for part in restored if part]
+
+
 def subjects_for_major(text):
     """QS subject codes for a student's free-text major(s), in the order stated, no repeats; [] when nothing matches.
     A compound subject name ("Oil and Gas") is matched whole before the rest is split on and / & / commas."""
-    found = []
-
-    def protect(match):
-        found.append(sorted(_PHRASES[match.group(0)]))
-        return ' \x00%d\x00 ' % (len(found) - 1)
-
+    parts, phrases = _protect(text)
     codes = []
-    for part in split_majors(_PHRASE_PATTERN.sub(protect, normalize(text))):
-        protected = [c for i in _TOKEN.findall(part) for c in found[int(i)]]
+    for part in parts:
+        protected = [c for i in _TOKEN.findall(part) for c in sorted(_PHRASES[phrases[int(i)]])]
         rest = _TOKEN.sub(' ', part).strip()
         part_codes = protected + [c for c in subjects_for_part(rest) if not (protected and c in AREAS)] if rest else protected
         for code in part_codes:
