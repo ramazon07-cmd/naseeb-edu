@@ -14,10 +14,10 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APITestCase
 
 from apps.admissions import ai_budget, match_reasons
-from apps.admissions.college_search import fit_context
+from apps.admissions.college_search import college_search, fit_context, record_chance_snapshot, score_university
 from apps.admissions.essay_lab import coach
 from apps.admissions.models import (
-    Activity, AiUsageLog, Essay, EssayDepthCheck, EssayTab, Honor, RecommendationLetter, University, UniversityProgram,
+    Activity, AiUsageLog, Application, Essay, EssayDepthCheck, EssayTab, Honor, RecommendationLetter, University, UniversityProgram,
     UniversitySubjectRank,
 )
 from apps.admissions.student_rubric import academics_score, activities_score
@@ -159,6 +159,23 @@ class CollegeMatchTests(MatchFixture, APITestCase):
         self.assertEqual(data['groups'][0]['results'][0]['band'], 'far_reach')
         self.assertEqual(data['rubric']['academics'], 8.3)
         self.assertIsNone(data['rubric']['essays'])
+
+    def test_a_card_band_matches_the_university_page_and_the_saved_snapshot(self):
+        # No activities (rubric 0) is where a soft-factor-free band and College Search used to disagree:
+        # SAT 1300 in a 1200-1400 range is Safety on academics alone but Target once activities count.
+        self.ready_profile(sat_score=1300)
+        self.assertEqual(fit_context(self.student)['rubric']['activities'], 0)
+        cards = [row for group in self.match()['groups'] for row in group['results']]
+        self.assertTrue(cards)
+        ctx = fit_context(self.student)
+        for row in cards:
+            university = University.objects.get(pk=row['id'])
+            self.assertEqual(row['band'], score_university(university, ctx)['admission_band'], row['name'])
+            application = Application.objects.create(student=self.student, university=university, program='CS')
+            snapshot = record_chance_snapshot(application)
+            self.assertEqual(snapshot.band, row['band'], row['name'])
+            found = college_search(self.student, {'ids': [row['id']]})['results'][0]
+            self.assertEqual(found['fit']['admission_band'], row['band'], row['name'])
 
     def test_the_student_response_has_no_recommendations_and_no_language(self):
         self.ready_profile()

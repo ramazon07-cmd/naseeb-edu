@@ -548,7 +548,13 @@ export const api = {
   // The college match: a balanced list of best-fitting universities (rules only, no AI).
   collegeMatch: () => request('/college-match/', { method: 'POST', body: '{}' }),
   // The optional "Why these fit you" lines: one AI call for the whole list, cached by the server.
-  collegeMatchReasons: (language) => request('/college-match/reasons/', { method: 'POST', body: JSON.stringify({ language }) }),
+  collegeMatchReasons: (language) => request('/college-match/reasons/', {
+    method: 'POST',
+    body: JSON.stringify({ language }),
+    // The server may take up to its 90 s AI deadline; aborting sooner would still spend the day's allowance.
+    timeoutMs: 100_000,
+    retries: 0,
+  }),
   updateCollegeResearchProfile: (payload) => request('/college-research/', {
     method: 'POST',
     body: JSON.stringify(payload),
