@@ -14,7 +14,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APITestCase
 
 from apps.admissions import ai_budget, match_reasons
-from apps.admissions.college_search import college_search, fit_context, record_chance_snapshot, score_university
+from apps.admissions.college_search import fit_context, record_chance_snapshot, score_university
 from apps.admissions.essay_lab import coach
 from apps.admissions.models import (
     Activity, AiUsageLog, Application, Essay, EssayDepthCheck, EssayTab, Honor, RecommendationLetter, University, UniversityProgram,
@@ -174,8 +174,7 @@ class CollegeMatchTests(MatchFixture, APITestCase):
             application = Application.objects.create(student=self.student, university=university, program='CS')
             snapshot = record_chance_snapshot(application)
             self.assertEqual(snapshot.band, row['band'], row['name'])
-            found = college_search(self.student, {'ids': [row['id']]})['results'][0]
-            self.assertEqual(found['fit']['admission_band'], row['band'], row['name'])
+            self.assertEqual(self.fit(university)['admission_band'], row['band'], row['name'])
 
     def test_the_student_response_has_no_recommendations_and_no_language(self):
         self.ready_profile()
