@@ -196,18 +196,56 @@ def text_fingerprint(text):
 def changed_words(old_text, new_text, *, limit=None, threshold=None):
     """How many words differ between two texts, ignoring case, punctuation and whitespace.
 
-    Only the first `limit` characters of each text are compared. With a `threshold`, a length
-    difference that alone reaches it answers at once (the count is at least that difference).
+    Only the first `limit` characters of each text are compared. With a `threshold` the answer is
+    exact below it and at least `threshold` otherwise, found in bounded time (see `_bounded_distance`).
     """
     if limit:
         old_text, new_text = str(old_text or '')[:limit], str(new_text or '')[:limit]
     old, new = fold(old_text).split(), fold(new_text).split()
     if threshold and abs(len(old) - len(new)) >= threshold:
         return abs(len(old) - len(new))
+    if threshold:
+        return _bounded_distance(old, new, threshold)
     matcher = difflib.SequenceMatcher(None, old, new, autojunk=False)
     return sum(
         max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in matcher.get_opcodes() if tag != 'equal'
     )
+
+
+def _bounded_distance(old, new, cap):
+    """Word edit distance (insert, delete, replace = 1 each), or `cap` once it reaches `cap`.
+
+    Common head and tail are dropped, then a band of width 2*cap-1 is filled, so the work is
+    at most len * cap steps however repetitive the text is (SequenceMatcher is quadratic there).
+    """
+    head = 0
+    while head < len(old) and head < len(new) and old[head] == new[head]:
+        head += 1
+    old, new = old[head:], new[head:]
+    tail = 0
+    while tail < len(old) and tail < len(new) and old[-1 - tail] == new[-1 - tail]:
+        tail += 1
+    old, new = old[:len(old) - tail], new[:len(new) - tail]
+    if abs(len(old) - len(new)) >= cap:
+        return cap
+    big = cap
+    previous = {j: j for j in range(0, min(len(new), cap - 1) + 1)}
+    for i in range(1, len(old) + 1):
+        current = {}
+        for j in range(max(0, i - cap + 1), min(len(new), i + cap - 1) + 1):
+            if j == 0:
+                best = i
+            else:
+                best = min(
+                    previous.get(j - 1, big) + (old[i - 1] != new[j - 1]),
+                    previous.get(j, big) + 1,
+                    current.get(j - 1, big) + 1,
+                )
+            current[j] = min(best, big)
+        if min(current.values()) >= cap:
+            return cap
+        previous = current
+    return min(previous.get(len(new), big), cap)
 
 
 def _similarity(a, b):

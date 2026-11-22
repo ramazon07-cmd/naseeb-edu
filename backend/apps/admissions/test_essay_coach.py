@@ -724,6 +724,37 @@ class CostGuardTests(CoachApiTestCase):
             coach.changed_words('a ' * 10, 'a ' * 3, threshold=3)
         matcher.assert_not_called()
 
+    def test_word_comparison_is_bounded_on_repetitive_text(self):
+        import time
+        old, new = 'a ' * 11999 + 'b', 'a ' * 11999 + 'c'
+        started = time.monotonic()
+        self.assertEqual(coach.changed_words(old, new, threshold=15), 1)
+        # Interleaved edits: every word of one text differs from the other's, nothing to trim.
+        self.assertEqual(coach.changed_words('a ' * 12000, 'b ' * 12000, threshold=15), 15)
+        self.assertEqual(coach.changed_words('a b ' * 6000, 'c d ' * 6000, threshold=15), 15)
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_bounded_word_comparison_matches_the_exact_edit_distance(self):
+        import random
+        rng = random.Random(7)
+
+        def exact(a, b):
+            row = list(range(len(b) + 1))
+            for i, x in enumerate(a, 1):
+                new_row = [i]
+                for j, y in enumerate(b, 1):
+                    new_row.append(min(row[j - 1] + (x != y), row[j] + 1, new_row[-1] + 1))
+                row = new_row
+            return row[-1]
+
+        for _ in range(300):
+            a = [rng.choice('abc') for _ in range(rng.randint(0, 14))]
+            b = [rng.choice('abc') for _ in range(rng.randint(0, 14))]
+            cap = rng.randint(1, 6)
+            got = coach.changed_words(' '.join(a), ' '.join(b), threshold=cap)
+            # Exact below the threshold; at or above it only "at least the threshold" is promised.
+            self.assertEqual(min(got, cap), min(exact(a, b), cap), (a, b, cap))
+
     def test_reuse_needs_the_same_prompt_type_and_model(self):
         self.check()
         self.assertTrue(self.check()[0].data['reused'])

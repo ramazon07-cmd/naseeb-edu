@@ -570,7 +570,8 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
         if not data['ai']:
             # Typing-time refresh: facts only, no AI call and no budget.
             return answer('profile', rec_letter_ai.missing_facts(facts, data['draft']), ai_available)
-        if ai_available and ai_budget.consume('recommendation_letter', request.user):
+        reservation = ai_budget.consume('recommendation_letter', request.user) if ai_available else False
+        if reservation:
             release_db_connection()  # don't hold a pooled connection during the AI call
             language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
             ai_usage.begin()
@@ -583,7 +584,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
                 ai_usage.record('recommendation_letter', request.user, provider=ai_providers.provider(), status=ai_usage.FAILED)
             finally:
                 if not succeeded:
-                    ai_budget.refund('recommendation_letter', request.user)  # a failed call is free
+                    ai_budget.refund(reservation)  # a failed call is free
             if succeeded:
                 return answer('ai', suggestions + rec_letter_ai.missing_facts(facts, data['draft']), True)
         else:
@@ -642,7 +643,8 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             # The letter has no rule-based reader: without the AI there is nothing to run.
             return Response({'detail': 'The letter check is unavailable right now.', 'code': 'coach_unavailable',
                              'details': {'ai_available': False}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        if not ai_budget.consume('recommendation_letter_check', request.user):
+        reservation = ai_budget.consume('recommendation_letter_check', request.user)
+        if not reservation:
             ai_usage.record(letter_coach.FEATURE, request.user, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
             raise CodedError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting',
                              status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -651,7 +653,7 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
             # Both calls are recorded in ai_usage inside run_check; the connection is released before each.
             result, model = coach.run_check(spec, request.user, release_db_connection)
         except coach.CoachUnavailable:
-            ai_budget.refund('recommendation_letter_check', request.user)  # a failed check is free
+            ai_budget.refund(reservation)  # a failed check is free
             return Response({'detail': 'Naseeb AI is unavailable right now. Please try again soon.',
                              'code': 'coach_unavailable', 'details': {'ai_available': True}},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
