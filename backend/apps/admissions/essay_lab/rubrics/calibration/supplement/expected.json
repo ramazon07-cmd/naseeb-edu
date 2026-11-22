@@ -1,7 +1,8 @@
 {
   "run": {
     "prompt": "Why do you want to study computer science at Eastfield University?",
-    "word_limit": 150
+    "word_limit": 150,
+    "university_name": "Eastfield University"
   },
   "cases": {
     "weak_en": {
@@ -286,20 +287,62 @@
     "doc_community_uz": {
       "prompt": "Siz mansub bo'lgan jamoa haqida yozing.",
       "word_limit": 150,
-      "levels": {},
+      "levels": {
+        "prompt_fit": [
+          3,
+          3
+        ],
+        "reflection": [
+          2,
+          3
+        ],
+        "specificity": [
+          2,
+          3
+        ],
+        "voice": [
+          2,
+          3
+        ],
+        "structure": [
+          2,
+          3
+        ]
+      },
       "overall": [
         50,
-        70
+        67
       ],
       "source": "docs/naseeb-ai-rules/supplemental-essay.md"
     },
     "doc_community_en": {
       "prompt": "Describe a community you belong to.",
       "word_limit": 150,
-      "levels": {},
+      "levels": {
+        "prompt_fit": [
+          3,
+          3
+        ],
+        "reflection": [
+          2,
+          3
+        ],
+        "specificity": [
+          2,
+          3
+        ],
+        "voice": [
+          2,
+          3
+        ],
+        "structure": [
+          2,
+          3
+        ]
+      },
       "overall": [
         50,
-        70
+        67
       ],
       "same_as": "doc_community_uz",
       "source": "docs/naseeb-ai-rules/supplemental-essay.md"
@@ -350,10 +393,108 @@
       },
       "overall": [
         0,
-        25
+        23
       ],
       "adversarial": true,
       "source": "docs/naseeb-ai-rules/supplemental-essay.md"
+    },
+    "short_list": {
+      "prompt": "List three books that changed how you think.",
+      "word_limit": 50,
+      "expect_score_hidden": "short",
+      "source": "calibration (2026-11-22)"
+    },
+    "no_prompt_general": {
+      "prompt": "",
+      "word_limit": 150,
+      "levels": {
+        "prompt_fit": [
+          3,
+          3
+        ],
+        "reflection": [
+          2,
+          4
+        ],
+        "specificity": [
+          2,
+          4
+        ],
+        "voice": [
+          2,
+          4
+        ],
+        "structure": [
+          2,
+          4
+        ]
+      },
+      "overall": [
+        50,
+        85
+      ],
+      "source": "calibration (2026-11-22)"
+    },
+    "over_limit": {
+      "word_limit": 150,
+      "levels": {
+        "prompt_fit": [
+          2,
+          4
+        ],
+        "reflection": [
+          1,
+          3
+        ],
+        "specificity": [
+          2,
+          4
+        ],
+        "voice": [
+          1,
+          3
+        ],
+        "structure": [
+          1,
+          1
+        ]
+      },
+      "overall": [
+        35,
+        75
+      ],
+      "source": "calibration (2026-11-22)"
+    },
+    "wrong_school_plain": {
+      "prompt": "Why Eastfield?",
+      "word_limit": 150,
+      "levels": {
+        "prompt_fit": [
+          1,
+          1
+        ],
+        "reflection": [
+          2,
+          3
+        ],
+        "specificity": [
+          2,
+          4
+        ],
+        "voice": [
+          1,
+          3
+        ],
+        "structure": [
+          2,
+          4
+        ]
+      },
+      "overall": [
+        18,
+        45
+      ],
+      "source": "calibration (2026-11-22)"
     }
   }
 }

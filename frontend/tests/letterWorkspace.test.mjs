@@ -4,7 +4,7 @@ import { applyNoteState, doneNotes, goneNotes, noteStateUpdates, openNotes, rech
 import { buildPath, parsePath, resolveRoute } from '../src/lib/routes.js';
 import { createIdeasController } from '../src/letters/ideasController.js';
 import {
-  LETTER_KEYS, SENSITIVE_TEXT, aiIdeasOf, letterExtras, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
+  LETTER_CRITERIA, LETTER_KEYS, SENSITIVE_TEXT, aiIdeasOf, canInsert, checkAvailability, letterExtras, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
 } from '../src/letters/letterModel.js';
 
 const LETTER = 'I have known Ramazon for two years.\n\nHe is a hardworking student. He leads the robotics club.\n\nHe is a hardworking student.';
@@ -78,9 +78,30 @@ test('[Student] is filled with the first name and a fact becomes one neutral lin
   assert.equal(factLine({ title: 'GPA 4.9.', detail: '' }), 'GPA 4.9.');
   assert.equal(factLine({}), '');
   assert.equal(wordCount(' a  b\nc '), 3);
-  const items = [{ kind: 'fact' }, { kind: 'sentence', text: 'x' }, { kind: 'idea', text: 'y' }, { kind: 'idea' }, { kind: 'tip' }];
+  const items = [{ kind: 'fact' }, { kind: 'question', text: 'q' }, { kind: 'sentence', text: 'x' }, { kind: 'idea', text: 'y' }, { kind: 'question' }, { kind: 'tip' }];
   assert.equal(factsOf(items).length, 1);
-  assert.equal(aiIdeasOf(items).length, 2);
+  assert.deepEqual(aiIdeasOf(items), [{ kind: 'question', text: 'q' }], 'AI ideas are questions only');
+});
+
+test('an AI idea has no insert action; only a profile fact has the "+"', () => {
+  assert.equal(canInsert({ kind: 'fact', title: 'Olympiad' }), true);
+  for (const item of [{ kind: 'question', text: 'What did you see?' }, { kind: 'sentence', text: 'x' }, { kind: 'idea', text: 'y' }, null]) {
+    assert.equal(canInsert(item), false);
+  }
+});
+
+test('a 503 coach_unavailable keeps the Check button unless the server says AI is off', () => {
+  assert.deepEqual(checkAvailability({ code: 'coach_unavailable', details: { ai_available: true } }), { unavailable: false, retry: true });
+  assert.deepEqual(checkAvailability({ code: 'coach_unavailable', details: null }), { unavailable: false, retry: true });
+  assert.deepEqual(checkAvailability({ code: 'coach_unavailable', details: { ai_available: false } }), { unavailable: true, retry: false });
+  assert.deepEqual(checkAvailability({ code: 'counselors_only' }), { unavailable: true, retry: false });
+  assert.deepEqual(checkAvailability(null), { unavailable: false, retry: false });
+});
+
+test('the context criterion is the basis and the school context', () => {
+  const context = LETTER_CRITERIA.find((item) => item.key === 'context');
+  assert.equal(context.label, 'Basis and context');
+  assert.equal(context.explain, 'How you know the student, and the school context a foreign reader needs.');
 });
 
 // --- Ideas: facts are free and automatic, AI is a click -------------------------------------
@@ -127,7 +148,7 @@ test('an unchanged draft does not ask again', async () => {
 test('AI ideas are requested only by askAi, once per click', async () => {
   const { controller, calls, fire } = harness({
     facts: { suggestions: [{ kind: 'fact', source: 'honor', title: 'A', detail: '' }], ai_left: 20 },
-    ai: { source: 'ai', ai_left: 19, suggestions: [{ kind: 'fact', source: 'honor', title: 'A', detail: '' }, { kind: 'sentence', text: '[Student] led it.', source: 'honor', title: 'A' }] },
+    ai: { source: 'ai', ai_left: 19, suggestions: [{ kind: 'fact', source: 'honor', title: 'A', detail: '' }, { kind: 'question', text: 'What did [Student] do there?', source: 'honor', title: 'A' }, { kind: 'sentence', text: '[Student] led it.', source: 'honor', title: 'A' }] },
   });
   await controller.start(ctx('x'));
   controller.update(ctx('xy'));

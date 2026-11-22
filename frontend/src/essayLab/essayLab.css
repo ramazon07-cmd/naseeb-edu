@@ -2736,6 +2736,14 @@
   white-space: nowrap;
 }
 
+.el-co-hidden {
+  display: block;
+  color: var(--el-muted, var(--el-text));
+  font-size: 0.8125rem;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
 .el-co-safety {
   display: flex;
   flex-direction: column;

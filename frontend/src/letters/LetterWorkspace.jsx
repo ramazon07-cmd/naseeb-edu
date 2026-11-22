@@ -8,7 +8,7 @@ import { Field } from '../components/forms.jsx'
 import { StudentReviewNote } from '../components/RecommendationLetters.jsx'
 import { errorCode } from '../essayLab/essayLabApi.js'
 import { createIdeasController, initialIdeasState } from './ideasController.js'
-import { conflictError, factLine, fillStudent, inputKeyOf, insertAtCaret, normalizeNewlines, wordCount } from './letterModel.js'
+import { conflictError, factLine, inputKeyOf, insertAtCaret, normalizeNewlines, wordCount } from './letterModel.js'
 import { LetterSheet } from './LetterSheet.jsx'
 import LetterPanel from './LetterPanel.jsx'
 import { useLetterCheck } from './useLetterCheck.js'
@@ -291,7 +291,7 @@ function LetterEditor({ student, user, initialLetter, onBack, onOpened, onSaved,
       </main>
       <div className="lw-side" ref={panelRef}>
         <LetterPanel tab={tab} onTab={(id) => { setTab(id); checkState.clearError() }} ideas={ideasState.ideas} name={first} onAskAi={ideasState.askAi}
-          onInsertFact={(fact) => insert(factLine(fact))} onInsertIdea={(item) => insert(fillStudent(item.text, first))}
+          onInsertFact={(fact) => insert(factLine(fact))}
           checkState={checkState} onCheck={checkState.runCheck} onJump={jump} onSetState={checkState.setNoteState} words={words} empty={!form.body.trim()} />
       </div>
     </div>

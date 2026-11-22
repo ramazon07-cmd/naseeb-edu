@@ -6,7 +6,7 @@ import { normalizeCheck } from '../essayLab/coachModel.js'
 export const LETTER_CRITERIA = [
   { key: 'evidence', label: 'Specific evidence', explain: 'Real moments, projects and results you saw yourself.' },
   { key: 'insight', label: 'Insight', explain: 'What the student’s actions say about who they are.' },
-  { key: 'context', label: 'Basis for comparison', explain: 'How the student compares with others you have taught or counselled.' },
+  { key: 'context', label: 'Basis and context', explain: 'How you know the student, and the school context a foreign reader needs.' },
   { key: 'structure', label: 'Structure and length', explain: 'A clear opening, a focused middle and a firm recommendation.' },
   { key: 'voice', label: 'Your voice', explain: 'Does it sound like you, not a template?' },
 ]
@@ -174,7 +174,19 @@ export function fillCheckText(model, name) {
 export const fillExtras = (extras, name) => ({ ...extras, readerNotes: extras.readerNotes.map((note) => ({ ...note, question: fillStudent(note.question, name) })) })
 
 export const factsOf = (items) => (items || []).filter((item) => item?.kind === 'fact')
-export const aiIdeasOf = (items) => (items || []).filter((item) => (item?.kind === 'sentence' || item?.kind === 'idea') && item.text)
+// AI ideas are questions to the author (each cites one profile fact); they are never inserted into the letter.
+export const aiIdeasOf = (items) => (items || []).filter((item) => item?.kind === 'question' && item.text)
+// Only a profile fact has a "+" (it inserts the neutral "Title: detail." line).
+export const canInsert = (item) => item?.kind === 'fact'
+
+// The Check button after an error: hidden only when it can never work (not a counselor, or the server says
+// AI is switched off: `details.ai_available` false). A provider failure stays retryable.
+export function checkAvailability(error) {
+  const code = error?.code
+  const unavailable = code === 'counselors_only' || Boolean(error?.off)
+    || (code === 'coach_unavailable' && error?.details?.ai_available === false)
+  return { unavailable, retry: code === 'coach_unavailable' && !unavailable }
+}
 
 // --- Header line ---------------------------------------------------------------------
 export function recommenderSummary(form, { dueText = '', statusText = '' } = {}) {

@@ -23,22 +23,25 @@ the score earns them.
 
 **Step 1: score (every check).** The AI reads the essay with the rubric for its type and returns
 the five criterion scores (1-4), a short overall summary, 1-3 strengths and 2-4 overall
-suggestions. The server, not the AI, turns the criterion scores into 0-100 with the rubric weights
-(`(2*sum(w*(s-1)) + 3) // 6`, all 1s = 0, all 4s = 100). Short output, about 300 tokens.
+suggestions (0-1 under 75 words). The server, not the AI, turns the criterion scores into 0-100 with
+the rubric weights (`(2*sum(w*(s-1)) + 3) // 6`, all 1s = 0, all 4s = 100; a personal statement's
+`prompt_fit` is at most 3, so its maximum is 97). Some levels are set by the server, never by the
+model: fit 3 with no prompt, fit 1 for a personal statement over its limit or under 250 words, and
+concision 3 for a supplement with no limit. Short output, about 300 tokens.
 
-**Step 2: notes (only when the score is above 50).** A second call asks for at most the band's
-number of notes. Each note quotes one sentence exactly as written and asks a question about it.
+**Step 2: notes.** A second call asks for between the band's minimum (or the length cap, if lower)
+and the cap. Each note quotes one sentence exactly as written and asks a question about it.
+Decided (2026-11-22): one table for essays, supplements and letters.
 
-| Score | What the student gets |
+| Score | What the writer gets |
 | --- | --- |
-| 0-50 | Overall feedback and suggestions only, no margin notes. Big-picture help: is the topic too common, is there one specific story, does it answer the prompt; may suggest thinking about other, more personal topics. Step 2 is skipped. |
+| 0-50 | Overall feedback + 2-3 notes on the biggest problems only. For a student's text of 75 words or more the notes are locked: overall feedback and big-picture suggestions only, step 2 is skipped. Letters are never locked. |
 | 51-60 | Overall feedback + 3-5 notes on the biggest problems only |
-| 61-70 | Overall feedback + up to 8 notes |
-| 71-80 | Overall feedback + up to 12 notes |
-| 81-100 | Overall feedback + up to 25 notes |
+| 61-80 | Overall feedback + 6-8 notes |
+| 81-100 | Overall feedback + 3-6 polish notes |
 
-The note count is also capped by length: at most one note per 25 words, so a 150-word supplement
-gets at most 6 notes whatever its score.
+The note count is also capped by length: at most one note per 25 words, and the length cap wins
+over the band minimum, so a 50-word answer gets at most 2 notes whatever its score.
 
 **No repeats.** The server drops repeats before anything is shown:
 - At most one note per sentence. If two notes quote overlapping text, keep the higher-priority one.
@@ -73,23 +76,29 @@ English feedback). The surrounding app text stays in the site language.
 
 ## Essay types
 
-- With a 0-100 score at launch: personal statement (also free writing) and supplements (also
-  scholarship essays), using the drafted rubrics in `backend/apps/admissions/essay_lab/rubrics/`.
-- Other types (activity, honors, recommendation letter): notes and overall feedback without a score
-  until their rubrics and calibration exist. They use the 61-70 band (up to 8 notes).
+- Scored rubrics: personal statement (also free writing) and supplements (also scholarship essays),
+  in `backend/apps/admissions/essay_lab/rubrics/`. Recommendation letters have their own rubric and
+  check (`docs/letter-coach-rules.md`).
+- Scores for any rubric are hidden until it is listed in `ESSAY_COACH_SCORED_RUBRICS` (after
+  `manage.py coach_calibrate --set <name>` passes). A short answer (under 25 words, or a supplement
+  with a limit of 50 words or less) never shows a score.
+- Results without a shown score (types with no rubric, short answers, rubrics still in calibration)
+  get up to 8 notes, one per 25 words, never locked; the panel says "Short answers get questions, not
+  a score." or "Scores for this type are not shown yet." instead of the score ring.
 
 ## Safety (unchanged)
 
 - Only while outbound AI is switched on (`OUTBOUND_AI_ENABLED`); otherwise the built-in rule checks run.
 - Emails and phone numbers are removed before sending; the essay is untrusted data, never instructions.
 - Notes whose quote is not in the essay are dropped. No essay text in logs.
-- Before students see real scores, the calibration set in the rubrics README must pass
-  (sample essays at each level, Uzbek and Russian texts, adversarial texts).
+- Before students see real scores, the calibration set must pass and the rubric must be added to
+  `ESSAY_COACH_SCORED_RUBRICS` (sample essays at each level, Uzbek and Russian texts, adversarial
+  texts; `rubrics/calibration/README.md`).
 
-## Open questions
+## Boundaries
 
-- A 50 vs 51 boundary can flip between checks of nearly the same text. Accept it, or show
-  "close to the next level" near a boundary?
+- A 50 vs 51 boundary can flip between checks of nearly the same text. The panel shows "Close to the
+  next level" within 3 points of where the label or note count changes (50/51, 60/61, 70/71, 80/81).
 
 ## Re-check rules (token saving)
 
@@ -204,5 +213,5 @@ The database connection is released before each provider call.
 
 Backend notes: the supplement rubric's criteria are stored under the API keys
 (`fit_specificity` = `prompt_fit`, `evidence` = `specificity`, `concision` = `structure`).
-`notes_locked` is true when the score is 50 or less (step 2 skipped). Step 1 also returns `score_evidence` (a quote of at least 5 words per level above 1; without a quote that occurs in the essay the server lowers the level to 1; listed in `evidence_lowered`) and `safety`. `safety: current_danger` returns an unscored result (`safety`, `helpline`, empty summary, no notes); the first `ESSAY_SAFETY_FREE_PER_DAY` such checks per user per day give the daily unit back. `past_hardship` is scored normally and the result carries `safety`. Results also carry `rubric` and, for supplements, `subtype` and `fit_default`. Zero-width and format characters are removed from the essay and prompt before they are sent.
+`notes_locked` is true when the score is 50 or less and the text is a student's of 75 words or more (step 2 skipped); a result without a shown score is never locked and carries `score_hidden` (`short` or `calibrating`) with `scored: false`, `overall: null` and no `scores`. A personal statement whose length fails carries `length` (`over_limit` or `under_minimum`). Step 1 also returns `score_evidence` (a quote of at least 5 words per level above 1; without a quote that occurs in the essay the server lowers the level to 1; listed in `evidence_lowered`) and `safety`. `safety: current_danger` returns an unscored result (`safety`, `helpline`, empty summary, no notes); the first `ESSAY_SAFETY_FREE_PER_DAY` such checks per user per day give the daily unit back. `past_hardship` is scored normally and the result carries `safety`. Results also carry `rubric` and, for supplements, `subtype` and `fit_default`. Zero-width and format characters are removed from the essay and prompt before they are sent.
 Error bodies: `notes_open` also carries `open`; `too_small_change` carries `changed` and `min_words`.

@@ -127,9 +127,3 @@ When word_limit is under 100 (the share of the space used does not count):
 3. Another school's name or the wrong major left in (only when `target_school` is given). Flag as a
    clarity question; score `fit_specificity` 1.
 4. Prestige as the reason. Ask for a reason that survives if the school were unknown.
-
-## Calibration
-
-`calibration/supplement/`: texts with expected score ranges (why this school, why major, community,
-scholarship), including Uzbek and Russian texts and adversarial texts. Run `manage.py coach_calibrate`
-after every rubric, prompt or model change.

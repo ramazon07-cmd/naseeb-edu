@@ -109,6 +109,14 @@ export function coachSource(check) {
   return !check.model || check.model === LOCAL_COACH_MODEL ? 'rules' : 'ai'
 }
 
+export const SCORE_HIDDEN = ['short', 'calibrating']
+const LENGTH_FAILURES = ['over_limit', 'under_minimum']
+// The one line shown instead of the score ring when a result has no shown score.
+export const SCORE_HIDDEN_TEXT = {
+  short: 'Short answers get questions, not a score.',
+  calibrating: 'Scores for this type are not shown yet.',
+}
+
 // One shape for the panel, whatever version the stored check has.
 // -> { version2, scored, overall, scores, summary, suggestions, strengths, notesLocked, notes }
 export function normalizeCheck(check, { keys = CRITERION_KEYS, fallback = 'reflection' } = {}) {
@@ -155,8 +163,12 @@ export function normalizeCheck(check, { keys = CRITERION_KEYS, fallback = 'refle
     // 'current_danger' (not scored: a calm message) | 'past_hardship' (scored, one optional support line)
     safety: version2 && (result.safety === 'current_danger' || result.safety === 'past_hardship') ? result.safety : null,
     helpline: version2 && typeof result.helpline === 'string' ? result.helpline.trim() : '',
-    // A supplement without a question: fit to the prompt was set to 3, not judged.
+    // No question was given: fit to the prompt was set to 3 by the server, not judged.
     fitDefault: version2 && Boolean(result.fit_default),
+    // 'short' (a short answer: questions, no score) | 'calibrating' (scores for this type are not shown yet)
+    scoreHidden: version2 && SCORE_HIDDEN.includes(result.score_hidden) ? result.score_hidden : null,
+    // A personal statement whose length failed: 'over_limit' | 'under_minimum' (fit counts as 1).
+    length: version2 && LENGTH_FAILURES.includes(result.length) ? result.length : null,
   }
 }
 

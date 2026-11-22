@@ -150,7 +150,7 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, resolv
           setNoteStates((previous) => mergeNoteStates(latestCheck.note_states, previous, inflight.current))
         }, () => {})
       }
-      setStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message, off: error?.details?.ai_available === false } })
+      setStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message, off: error?.details?.ai_available === false, details: error?.details || null } })
     }
   }, [flush, resolveStale, letterRef])
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { criteriaFor, explainFor, nearBandEdge, normalizeCheck } from '../src/essayLab/coachModel.js';
+import { SCORE_HIDDEN_TEXT, criteriaFor, explainFor, nearBandEdge, normalizeCheck } from '../src/essayLab/coachModel.js';
 import { ESSAY_LAB_TRANSLATIONS } from '../src/translations/essayLab.js';
 
 test('near a band edge (within 3 points of 50, 60, 70 or 80) the panel says so', () => {
@@ -54,4 +54,24 @@ test('the safety flag, helpline and fit default are read from the result', () =>
   assert.equal(normalizeCheck(check({ fit_default: true, rubric: 'supplement' })).fitDefault, true);
   assert.equal(normalizeCheck(check({ rubric: 'supplement' })).rubric, 'supplement');
   assert.equal(normalizeCheck({ result: { scores: { voice: 3 }, notes: [], safety: 'current_danger' } }).safety, null, 'old checks have no safety flag');
+});
+
+test('a hidden score and a length failure are read from the result', () => {
+  const short = normalizeCheck(check({ scored: false, overall: null, scores: {}, score_hidden: 'short' }));
+  assert.equal(short.scored, false);
+  assert.equal(short.scoreHidden, 'short');
+  assert.equal(normalizeCheck(check({ scored: false, overall: null, score_hidden: 'calibrating' })).scoreHidden, 'calibrating');
+  assert.equal(normalizeCheck(check({ score_hidden: 'bogus' })).scoreHidden, null);
+  assert.equal(normalizeCheck(check({})).scoreHidden, null);
+  assert.equal(normalizeCheck(check({ length: 'over_limit' })).length, 'over_limit');
+  assert.equal(normalizeCheck(check({ length: 'ok' })).length, null);
+  assert.deepEqual(Object.keys(SCORE_HIDDEN_TEXT).sort(), ['calibrating', 'short']);
+  for (const key of [
+    ...Object.values(SCORE_HIDDEN_TEXT),
+    'This essay is over its word limit, so “Answers the prompt” counts as 1.',
+    'A Common App essay needs at least 250 words, so “Answers the prompt” counts as 1.',
+  ]) {
+    const value = ESSAY_LAB_TRANSLATIONS[key];
+    assert.ok(Array.isArray(value) && value.length === 2 && value.every((item) => item && item !== key), key);
+  }
 });

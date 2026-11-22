@@ -6,12 +6,19 @@ built-in rules reader says nothing about the model. For each text it makes N ful
 overall score of every run against the expected range and the drift, and checks grammar-fixed or
 translated copies against their original. The exit code is non-zero when a text is out of range.
 Real money is spent: each run is two paid calls.
+
+The command always sees the levels and the overall, even for a rubric whose score students and counselors
+do not see yet (ESSAY_COACH_SCORED_RUBRICS): passing this command is what puts a rubric on that list.
+The letter set builds an unsaved letter and student (nothing is written to the database) and runs the
+letter check's own spec.
 """
 
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
+from apps.admissions import letter_coach
 from apps.admissions.essay_lab import calibration, coach
-from apps.admissions.models import Essay
+from apps.admissions.models import Essay, RecommendationLetter, StudentProfile
 
 
 class Command(BaseCommand):
@@ -37,7 +44,8 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.MIGRATE_HEADING(name))
                 for case_id, case in cases.items():
                     params = calibration.case_params(name, run, case)
-                    self.stdout.write(f"  {case_id}: overall {case['overall']} limit {params['word_limit']}")
+                    limit = params.get('word_limit', '-')
+                    self.stdout.write(f"  {case_id}: overall {case.get('overall', '-')} limit {limit}")
             return
         if not coach.gateway_configured():
             raise CommandError(
@@ -51,7 +59,11 @@ class Command(BaseCommand):
             means = {}
             problems = {}
             for case_id, case in cases.items():
-                results = self.collect(calibration.case_params(name, run, case), case['text'], runs)
+                params = calibration.case_params(name, run, case)
+                if name == calibration.LETTER_SET:
+                    results = self.collect_letter(params, case['text'], runs)
+                else:
+                    results = self.collect(params, case['text'], runs)
                 means[case_id] = calibration.mean_scores(results)
                 problems[case_id] = calibration.judge_case(case, results, runs)
                 self.report(case_id, case, results, problems[case_id])
@@ -68,19 +80,39 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Calibration passed.'))
 
     def collect(self, params, text, runs):
-        essay = Essay(essay_type=params['essay_type'], prompt=params['prompt'], word_limit=params['word_limit'])
+        essay = Essay(essay_type=params['essay_type'], prompt=params['prompt'], word_limit=params['word_limit'],
+                      university_name=params['university_name'])
         results = []
         for _ in range(runs):
             try:
-                results.append(coach.run_ai_check(essay, text, None)[0])
+                results.append(coach.run_ai_check(essay, text, None, show_score=True)[0])
+            except coach.CoachUnavailable:
+                results.append(None)
+        return results
+
+    def collect_letter(self, params, text, runs):
+        """Unsaved letter and student: the letter check's spec with the score shown."""
+        person = params['student']
+        user = get_user_model()(first_name=person.get('first_name', ''), last_name=person.get('last_name', ''))
+        student = StudentProfile(user=user, application_profile={'gender': person.get('gender', '')})
+        letter = RecommendationLetter(recommender_title=params['recommender_title'],
+                                      relationship=params['relationship'], body=text)
+        results = []
+        for _ in range(runs):
+            try:
+                spec = letter_coach.build_spec(letter, student, text, show_score=True)
+                results.append(coach.run_check(spec, None)[0])
             except coach.CoachUnavailable:
                 results.append(None)
         return results
 
     def report(self, case_id, case, results, problems):
         overalls = [item['overall'] if item and item.get('scored') else None for item in results]
-        low, high = case['overall']
-        line = (f"  {case_id}: score {overalls} expected {low}-{high}, drift {calibration.drift(results)}"
+        if 'overall' in case:
+            expected = '{}-{}'.format(*case['overall'])
+        else:
+            expected = 'safety' if case.get('expect_safety') else f"hidden ({case.get('expect_score_hidden')})"
+        line = (f"  {case_id}: score {overalls} expected {expected}, drift {calibration.drift(results)}"
                 + ('  FAIL' if problems else '  ok'))
         self.stdout.write(self.style.ERROR(line) if problems else line)
         for problem in problems:

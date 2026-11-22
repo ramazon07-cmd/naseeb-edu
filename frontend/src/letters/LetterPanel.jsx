@@ -1,8 +1,8 @@
 import { memo, useMemo, useState } from 'react'
-import { Check, ChevronDown, Copy, Info, Lock, MessageCircleQuestion, Plus, RefreshCw, ShieldAlert, Sparkles, Undo2, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, HelpCircle, Info, Lock, MessageCircleQuestion, Plus, RefreshCw, ShieldAlert, Sparkles, Undo2, X } from 'lucide-react'
 import { formatDateLocale, t, tp } from '../i18n.js'
-import { coachSource, deltaSince, doneNotes, goneNotes, headline, levelWord, openNotes, recheckBlock } from '../essayLab/coachModel.js'
-import { LETTER_CRITERIA, aiIdeasOf, fillCheckText, fillExtras, fillStudent, letterCriterionLabel } from './letterModel.js'
+import { SCORE_HIDDEN_TEXT, coachSource, deltaSince, doneNotes, goneNotes, headline, levelWord, openNotes, recheckBlock } from '../essayLab/coachModel.js'
+import { LETTER_CRITERIA, aiIdeasOf, canInsert, checkAvailability, fillCheckText, fillExtras, fillStudent, letterCriterionLabel } from './letterModel.js'
 
 const SOURCE_LABELS = { academics: 'Academics', honor: 'Honor', activity: 'Activity', achievement: 'Achievement', research: 'Research', internship: 'Internship', project: 'Project' }
 const DAILY_CHECKS = 5
@@ -12,7 +12,7 @@ const ERROR_TEXT = {
   coach_resting: 'Check is resting for today. Your letter is saved. Try again tomorrow.',
   coach_unavailable: 'Check depth isn’t available right now.',
   counselors_only: 'Only counselors can use Check.',
-  empty_essay: 'Write a few sentences first, then check.',
+  empty_letter: 'Write a few sentences first, then check.',
   stale: 'Your latest words were still saving. Check again.',
   conflict: 'This letter changed elsewhere. Choose a version above.',
   notes_open: 'Resolve all notes first',
@@ -34,11 +34,14 @@ function ScoreRing({ percent, label }) {
 
 const sourceName = (source) => t(SOURCE_LABELS[source] || 'Profile')
 
-function IdeasTab({ ideas, name, onInsertFact, onInsertIdea }) {
+// Profile facts can be inserted as a neutral "Title: detail." line. AI ideas are questions to the author:
+// they cite one fact and are never inserted (Naseeb AI never writes the letter).
+function IdeasTab({ ideas, name, onInsertFact }) {
   const { facts, factsLoading, factsError, ai } = ideas
   const items = aiIdeasOf(ai.items)
   return <div className="lw-ideas">
     <div className="lw-sec"><h3>{t('Not in the letter yet')}</h3><span>{t('From the profile')}</span></div>
+    {facts.length > 0 && <p className="lw-note lw-fine">{t('From the student’s profile (self-reported). Check before you use them.')}</p>}
     {factsError && <p className="lw-note is-error" role="alert">{factsError}</p>}
     {factsLoading && !facts.length && <p className="lw-note" role="status">{t('Reading the profile…')}</p>}
     <ul className="lw-cards">
@@ -46,21 +49,20 @@ function IdeasTab({ ideas, name, onInsertFact, onInsertIdea }) {
         <span className="lw-kicker">{sourceName(fact.source)}</span>
         {fact.title && <b>{fact.title}</b>}
         {fact.detail && <small>{fact.detail}</small>}
-        <button type="button" className="lw-plus" onClick={() => onInsertFact(fact)} aria-label={t('Add to the letter: {text}', { text: fact.title || sourceName(fact.source) })} title={t('Add to the letter')}><Plus size={16} aria-hidden="true" /></button>
+        {canInsert(fact) && <button type="button" className="lw-plus" onClick={() => onInsertFact(fact)} aria-label={t('Add to the letter: {text}', { text: fact.title || sourceName(fact.source) })} title={t('Add to the letter')}><Plus size={16} aria-hidden="true" /></button>}
       </li>)}
     </ul>
     {!factsLoading && !factsError && !facts.length && <p className="lw-note">{t('Nothing new to suggest from the profile.')}</p>}
 
     {(items.length > 0 || (ai.available !== false && ai.asked)) && <>
-      <div className="lw-sec"><h3>{t('AI ideas')}</h3></div>
+      <div className="lw-sec"><h3>{t('AI ideas')}</h3><span>{t('Questions for you')}</span></div>
       {ai.error && <p className="lw-note is-error" role="alert">{ai.error}</p>}
       {ai.loading && <p className="lw-note" role="status">{t('Thinking…')}</p>}
       {ai.unavailable && !ai.loading && !ai.error && <p className="lw-note">{t('AI ideas aren’t available right now.')}</p>}
       <ul className="lw-cards">
-        {items.map((item, index) => <li key={`${item.kind}-${index}-${item.text}`} className="lw-card lw-idea">
+        {items.map((item, index) => <li key={`${item.kind}-${index}-${item.text}`} className="lw-card lw-idea is-question">
           {item.source && <span className="lw-chip">{item.title || sourceName(item.source)}</span>}
-          <p>{fillStudent(item.text, name)}</p>
-          <button type="button" className="lw-plus" onClick={() => onInsertIdea(item)} aria-label={t('Add to the letter: {text}', { text: fillStudent(item.text, name).slice(0, 40) })} title={t('Add to the letter')}><Plus size={16} aria-hidden="true" /></button>
+          <p><HelpCircle size={15} aria-hidden="true" className="lw-q-icon" />{fillStudent(item.text, name)}</p>
         </li>)}
       </ul>
     </>}
@@ -112,7 +114,7 @@ function CheckTab({ check, model: rawModel, extras: rawExtras, name, status, anc
         {scored ? <ScoreRing percent={model.overall} label={t('Depth score {n} of 100', { n: model.overall })} /> : <span className="lw-score-icon" aria-hidden="true"><Sparkles size={22} /></span>}
         <div>
           <strong>{scored ? t(headline(model.overall)) : t('Quick check')}</strong>
-          <small>{delta !== null ? t('+{n} since last check', { n: delta }) : scored ? t('out of 100') : ''}</small>
+          <small>{delta !== null ? t('+{n} since last check', { n: delta }) : scored ? t('out of 100') : model.scoreHidden ? t(SCORE_HIDDEN_TEXT[model.scoreHidden]) : ''}</small>
         </div>
       </div>
       {Object.keys(model.scores).length > 0 && <ul className="lw-crit">
@@ -133,7 +135,6 @@ function CheckTab({ check, model: rawModel, extras: rawExtras, name, status, anc
       </ul>}
       {scored && model.overall <= 50 && <section className="lw-big">
         <h3>{t('Big picture first')}</h3>
-        <p>{t('Fix these before sentence notes appear.')}</p>
         {model.summary && <p className="lw-big-summary">{model.summary}</p>}
         {model.suggestions.length > 0 && <ol>{model.suggestions.map((text, index) => <li key={index}><span aria-hidden="true">{index + 1}</span>{text}</li>)}</ol>}
       </section>}
@@ -185,7 +186,7 @@ function CheckTab({ check, model: rawModel, extras: rawExtras, name, status, anc
   </>
 }
 
-function CheckFooter({ check, model, status, anchored, states, changed, inputChanged, notice, empty, aiAvailable, onCheck }) {
+function CheckFooter({ check, model, status, anchored, states, changed, inputChanged, notice, empty, onCheck }) {
   const open = useMemo(() => openNotes(model?.notes, states, anchored), [model, states, anchored])
   const block = status.loading ? null : recheckBlock({ hasCheck: Boolean(check), openCount: open.length, changed, inputChanged })
   const errorCode = status.error?.code
@@ -201,10 +202,8 @@ function CheckFooter({ check, model, status, anchored, states, changed, inputCha
   else if (block === 'unchanged') line = t('Change the letter to check again')
   else if (check) line = inputChanged ? t('Details changed') : changed ? t('Letter changed') : t('Up to date')
   else if (empty) line = t('Write the letter first')
-  // Hidden only when it can never work: not a counselor, or the server says AI is switched off.
-  // A provider failure stays retryable.
-  const unavailable = errorCode === 'counselors_only' || Boolean(status.error?.off) || (errorCode === 'coach_unavailable' && aiAvailable === false)
-  const retry = errorCode === 'coach_unavailable' && !unavailable
+  // Only the check's own error says whether AI is on (`details.ai_available`); a provider failure stays retryable.
+  const { unavailable, retry } = checkAvailability(status.error)
   const disabled = status.loading || (Boolean(block) && !retry) || empty
   return <div className="lw-foot-row">
     <div className="lw-foot-info">
@@ -232,7 +231,7 @@ function IdeasFooter({ ai, onAsk }) {
   </div>
 }
 
-function LetterPanel({ tab, onTab, ideas, onInsertFact, onInsertIdea, onAskAi, name, checkState, onCheck, onJump, onSetState, words, empty }) {
+function LetterPanel({ tab, onTab, ideas, onInsertFact, onAskAi, name, checkState, onCheck, onJump, onSetState, words, empty }) {
   const { check, model, extras, status, noteStates, anchored, activeId, changed, inputChanged, notice } = checkState
   const openCount = useMemo(() => openNotes(model?.notes, noteStates, anchored).length, [model, noteStates, anchored])
   const tabs = [{ id: 'ideas', label: t('Ideas'), count: ideas.facts.length }, { id: 'check', label: t('Check'), count: model && !model.notesLocked ? openCount : 0 }]
@@ -250,13 +249,13 @@ function LetterPanel({ tab, onTab, ideas, onInsertFact, onInsertIdea, onAskAi, n
     </div>
     <div className="lw-pbody" id="lw-tabpanel" role="tabpanel" aria-labelledby={`lw-tab-${tab}`}>
       {tab === 'ideas'
-        ? <IdeasTab ideas={ideas} name={name} onInsertFact={onInsertFact} onInsertIdea={onInsertIdea} />
+        ? <IdeasTab ideas={ideas} name={name} onInsertFact={onInsertFact} />
         : <CheckTab {...{ check, model, extras, name, status, anchored, activeId, onJump, onSetState, words }} states={noteStates} />}
     </div>
     <div className="lw-foot">
       {tab === 'ideas'
         ? <IdeasFooter ai={ideas.ai} onAsk={onAskAi} />
-        : <CheckFooter {...{ check, model, status, anchored, changed, inputChanged, notice, empty, onCheck }} aiAvailable={ideas.ai.available} states={noteStates} />}
+        : <CheckFooter {...{ check, model, status, anchored, changed, inputChanged, notice, empty, onCheck }} states={noteStates} />}
     </div>
   </section>
 }

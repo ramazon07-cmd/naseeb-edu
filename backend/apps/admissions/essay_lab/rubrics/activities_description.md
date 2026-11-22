@@ -1,9 +1,11 @@
 # Rubric: activities description
 
+Status: not loaded by the server and not in the product yet (2026-11-22).
+
 rubric_version: 2 · essay_type: `activity` (to be added to `Essay.EssayType`) · loaded with `_core.md`
 
-Common App activity entries are tiny: position title (about 50 characters), organization (about 100)
-and description (about 150). Use the character limit the server passes. Each entry is scored on its own.
+Common App activity entries are tiny: position title, organization and description of at most 50 / 100 /
+150 characters (Common App hard maximums). Use the character limit the server passes. Each entry is scored on its own.
 The text is a line of evidence, not an essay: no reflective questions, no narrative.
 Family responsibility, paid work, tutoring and caring duties are activities and are scored exactly like
 clubs and competitions. Never ask the student to start something new.

@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronUp, Compass, Feather, HeartHandshake, Info, LayoutList, Lightbulb, MessageCircleQuestion, RefreshCw, Lock, Sparkles, Star, Target, Undo2, X } from 'lucide-react'
 import { t, tp } from '../i18n.js'
 import {
-  STRENGTHS, coachSource, criteriaFor, deltaSince, doneNotes, explainFor, goneNotes, headline, levelWord, nearBandEdge, normalizeCheck, openNotes, recheckBlock,
+  SCORE_HIDDEN_TEXT, STRENGTHS, coachSource, criteriaFor, deltaSince, doneNotes, explainFor, goneNotes, headline, levelWord, nearBandEdge, normalizeCheck, openNotes, recheckBlock,
 } from './coachModel.js'
 
 const ERROR_TEXT = {
@@ -13,6 +13,11 @@ const ERROR_TEXT = {
   stale: 'Your latest words were still saving. Check again.',
   notes_open: 'Resolve all notes first',
   too_small_change: 'Change a few more words before checking again',
+}
+
+const LENGTH_TEXT = {
+  over_limit: 'This essay is over its word limit, so “Answers the prompt” counts as 1.',
+  under_minimum: 'A Common App essay needs at least 250 words, so “Answers the prompt” counts as 1.',
 }
 
 const BLOCK_TEXT = {
@@ -151,6 +156,7 @@ function CoachPanel({
         : <span className="el-coach-icon" aria-hidden="true"><Sparkles size={22} /></span>}
       <div className="el-coach-title">
         <strong>{scored ? t(headline(model.overall)) : danger ? t('Take care') : check ? t('Quick check') : t('Naseeb AI')}</strong>
+        {!scored && !danger && model?.scoreHidden && <span className="el-co-hidden">{t(SCORE_HIDDEN_TEXT[model.scoreHidden])}</span>}
         {delta !== null && <span className="el-co-delta">{t('+{n} since last check', { n: delta })}</span>}
         {nearEdge && <span className="el-co-near">{t('Close to the next level')}</span>}
       </div>
@@ -215,6 +221,11 @@ function CoachPanel({
           {model.fitDefault && <p className="el-alert is-info el-co-support" role="note">
             <Info size={15} aria-hidden="true" />
             <span>{t('No question was given, so fit to the question counts as Solid (3). Add the school’s question to have it judged.')}</span>
+          </p>}
+
+          {model.length && <p className="el-alert is-info el-co-support" role="note">
+            <Info size={15} aria-hidden="true" />
+            <span>{t(LENGTH_TEXT[model.length])}</span>
           </p>}
 
           {Object.keys(model.scores).length > 0 && <section className="el-co-card">

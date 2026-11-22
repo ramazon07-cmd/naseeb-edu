@@ -1,5 +1,7 @@
 # Topic guidance
 
+Status: not loaded by the server and not in the product yet (2026-11-22).
+
 rubric_version: 2 · loaded with `_core.md` only when the student asks for ideas (`topics: true` from the server).
 
 The Coach never picks a topic, ranks topics, or says a topic is bad. Any topic can work if the writing is
