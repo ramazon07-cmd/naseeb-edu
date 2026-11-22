@@ -116,8 +116,12 @@ class ApiClient:
             raise ApiUnavailable('outbox answer has no messages list')
         return messages
 
-    async def student_outbox_ack(self, sent, blocked):
-        return await self._call('POST', 'student-outbox/ack', json={'sent': sent, 'blocked': blocked})
+    async def student_outbox_ack(self, sent, blocked, message_ids=None):
+        body = {'sent': sent, 'blocked': blocked}
+        if message_ids:
+            # JSON object keys are strings: {outbox id: Telegram message id}.
+            body['message_ids'] = {str(key): value for key, value in message_ids.items()}
+        return await self._call('POST', 'student-outbox/ack', json=body)
 
     async def get_settings(self, chat_id):
         return await self._call('GET', 'settings', params={'chat_id': chat_id})

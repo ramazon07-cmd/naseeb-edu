@@ -243,7 +243,23 @@ def _int_list(value, limit=500):
 class StudentOutboxAckView(BotView):
     def post(self, request):
         data = self.get_data(request)
-        return Response(student_link.acknowledge(_int_list(data.get('sent', [])), _int_list(data.get('blocked', []))))
+        return Response(student_link.acknowledge(
+            _int_list(data.get('sent', [])), _int_list(data.get('blocked', [])), _message_ids(data.get('message_ids', {})),
+        ))
+
+
+def _message_ids(value, limit=500):
+    """{outbox id: Telegram message id}, as JSON object keys are strings."""
+    if not isinstance(value, dict) or len(value) > limit:
+        raise services.Refused('invalid_request', 400)
+    result = {}
+    for key, message_id in value.items():
+        if not (isinstance(key, str) and key.isdigit() and int(key) < BIGINT):
+            raise services.Refused('invalid_request', 400)
+        if isinstance(message_id, bool) or not isinstance(message_id, int) or not 0 < message_id < BIGINT:
+            raise services.Refused('invalid_request', 400)
+        result[int(key)] = message_id
+    return result
 
 
 class MeetingActionView(BotView):
