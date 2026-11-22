@@ -722,6 +722,11 @@ export const api = {
   // student presses Start there, and telegramStatus → { enabled, linked } turns linked.
   telegramStatus: () => request('/telegram/student/'),
   startTelegramLink: () => request('/telegram/student/link/', { method: 'POST', body: JSON.stringify({}) }),
+  // Naseeb Mind results link. mindLinkStatus → { available, linked, linked_at, last_sync_at, chosen_major };
+  // startMindLink(lang) → { code, expires_at, url } (open the url); stopMindLink keeps results already imported.
+  mindLinkStatus: () => request('/mind-link/'),
+  startMindLink: (lang) => request('/mind-link/start/', { method: 'POST', body: JSON.stringify({ lang }) }),
+  stopMindLink: () => request('/mind-link/', { method: 'DELETE' }),
   // Superadmin: the Telegram @username a counselor or assistant may log in to the bot with.
   // List → [{ user_id, telegram_username, role, ... }]; PUT { telegram_username }; DELETE clears it.
   telegramStaffAccess: () => request('/telegram/staff-access/'),

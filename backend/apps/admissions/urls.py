@@ -20,6 +20,11 @@ from .views import (
     CatalogScholarshipViewSet,
     CatalogUniversityViewSet,
     ChallengeAttemptViewSet,
+    MindLinkCompleteView,
+    MindLinkStartView,
+    MindLinkSyncView,
+    MindLinkUnlinkView,
+    MindLinkView,
     ChannelMessageViewSet,
     CollegeResearchView,
     CollegeSearchView,
@@ -103,6 +108,11 @@ router.register('assistants', AssistantViewSet, basename='assistants')
 router.register('assistant-invites', AssistantInviteViewSet, basename='assistant-invites')
 
 urlpatterns = [
+    path('mind-link/', MindLinkView.as_view(), name='mind-link'),
+    path('mind-link/start/', MindLinkStartView.as_view(), name='mind-link-start'),
+    path('mind-link/complete/', MindLinkCompleteView.as_view(), name='mind-link-complete'),
+    path('mind-link/sync/', MindLinkSyncView.as_view(), name='mind-link-sync'),
+    path('mind-link/unlink/', MindLinkUnlinkView.as_view(), name='mind-link-unlink'),
     path('telegram-feed/', TelegramFeedView.as_view(), name='telegram-feed'),
     path('assistant/chat/', AssistantChatView.as_view(), name='assistant-chat'),
     path('public/reach/', PublicReachView.as_view(), name='public-reach'),
