@@ -44,15 +44,24 @@ test('the counselor chat moves out of the list into its pinned row', () => {
   assert.deepEqual(withoutPinned(channels, pinned).map((item) => item.id), [3, 5]);
 });
 
-test('a chat the counselor opened later is found by name, never Saved Messages or a group', () => {
+test('a chat the counselor opened later is found by the counselor id, never Saved Messages or a group', () => {
   const later = { ...counselor, direct_channel_id: null };
   const channels = [
-    chat(1, { display_name: 'Firdavs Counselor', kind: 'group' }),
-    chat(2, { display_name: 'Firdavs Counselor', is_saved_messages: true }),
-    chat(9, { display_name: 'firdavs counselor' }),
+    chat(1, { direct_peer_id: 7, kind: 'group' }),
+    chat(2, { direct_peer_id: 7, is_saved_messages: true }),
+    chat(9, { direct_peer_id: 7 }),
   ];
   assert.equal(findCounselorChannel(channels, later).id, 9);
   assert.equal(findCounselorChannel(channels, later, 2).id, 2, 'a known channel id wins');
+});
+
+test('another person with the counselor name is never taken for the counselor', () => {
+  const namesake = chat(4, { display_name: 'Firdavs Counselor', direct_peer_id: 99 });
+  const noChat = { ...counselor, direct_channel_id: null };
+  assert.equal(findCounselorChannel([namesake], noChat), null, 'no chat yet: the placeholder stays');
+  assert.equal(findCounselorChannel([namesake], counselor), null, 'the known chat is not on this page: placeholder');
+  const real = chat(12, { display_name: 'Firdavs Counselor', direct_peer_id: 7 });
+  assert.equal(findCounselorChannel([namesake, real], noChat).id, 12);
 });
 
 test('the rest of the list is untouched without a pinned chat', () => {

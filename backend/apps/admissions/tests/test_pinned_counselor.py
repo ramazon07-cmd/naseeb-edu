@@ -57,3 +57,18 @@ class PinnedCounselorTests(RoleIsolationBase):
             school=self.school_a, created_by=self.student_a_user,
         )
         self.assertIsNone(self.me(self.student_a_user)['counselor']['direct_channel_id'])
+
+    def test_a_direct_chat_names_its_other_person_by_id(self):
+        self.client.force_authenticate(self.student_a_user)
+        opened = self.client.post('/api/message-channels/direct/', {'user': self.counselor.id}, format='json')
+        self.assertEqual(opened.data['direct_peer_id'], self.counselor.id)
+        listed = self.client.get('/api/message-channels/')
+        rows = listed.data['results'] if isinstance(listed.data, dict) else listed.data
+        by_id = {row['id']: row for row in rows}
+        self.assertEqual(by_id[opened.data['id']]['direct_peer_id'], self.counselor.id)
+        saved = [row for row in rows if row['is_saved_messages']]
+        self.assertTrue(all(row['direct_peer_id'] is None for row in saved))
+        # The counselor sees the student on the same chat.
+        self.client.force_authenticate(self.counselor)
+        mine = self.client.get(f'/api/message-channels/{opened.data["id"]}/')
+        self.assertEqual(mine.data['direct_peer_id'], self.student_a_user.id)

@@ -4,15 +4,16 @@
 
 const normalize = (value) => String(value || '').trim().toLowerCase();
 
-// The listed chat with the counselor: the known direct channel id, else a direct
-// chat (not Saved Messages) named after them, e.g. one the counselor opened after
-// this page loaded.
+// The listed chat with the counselor: the known direct channel id, else a direct chat (not Saved
+// Messages) whose other person is the counselor, e.g. one the counselor opened after this page
+// loaded. Matched by user id, never by name: two staff members can share a display name. When nothing
+// matches the row stays a placeholder and opening it resolves the right chat from the counselor's id.
 export function findCounselorChannel(channels, counselor, channelId = counselor?.direct_channel_id) {
   if (!counselor) return null;
   const byId = channelId != null ? channels.find((channel) => channel.id === channelId) : null;
   if (byId) return byId;
-  const name = normalize(counselor.full_name);
-  return channels.find((channel) => channel.kind === 'direct' && !channel.is_saved_messages && name && normalize(channel.display_name) === name) || null;
+  if (counselor.id == null) return null;
+  return channels.find((channel) => channel.kind === 'direct' && !channel.is_saved_messages && channel.direct_peer_id === counselor.id) || null;
 }
 
 // Whether a pinned row survives the search box (an empty search keeps it).
