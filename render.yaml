@@ -41,7 +41,9 @@ services:
       - fromGroup: naseeb-backend
 
   # Meeting reminder emails need no cron here: the counselor bot runs them hourly
-  # through /api/bot/meeting-reminders/ (docs/telegram-bot.md).
+  # through /api/bot/meeting-reminders/ (docs/telegram-bot.md). The same call runs the
+  # Telegram program import every hour from 23:00 to 07:00 Tashkent
+  # (apps/telegram_bot/jobs.py NIGHTLY_JOBS).
 
   # Counselor Telegram bot (long polling, no inbound port). It has no database
   # and no passwords: it talks to the backend with BOT_SERVICE_KEY.

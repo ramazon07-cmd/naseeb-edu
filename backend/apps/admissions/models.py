@@ -701,6 +701,27 @@ class SavedOpportunityProgram(TimeStampedModel):
         ]
 
 
+class TelegramImportChannel(TimeStampedModel):
+    """Where the daily Telegram program import stopped in one public channel.
+
+    ``last_message_id`` is the newest post already handled (added or rejected);
+    the next run reads only posts after it. ``failed_message_id`` remembers a post
+    the AI gateway could not format, so it is retried once and then skipped.
+    """
+
+    channel = models.CharField(max_length=64, unique=True)
+    last_message_id = models.PositiveBigIntegerField(default=0)
+    failed_message_id = models.PositiveBigIntegerField(null=True, blank=True)
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['channel']
+
+    def __str__(self):
+        return f'@{self.channel} after {self.last_message_id}'
+
+
 class Application(TimeStampedModel):
     class Status(models.TextChoices):
         RESEARCHING = 'researching', 'Researching'

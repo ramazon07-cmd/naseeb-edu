@@ -45,17 +45,31 @@ class DueJobsTests(BotTestCase):
     def test_daily_jobs_run_once_a_day_from_their_hour(self):
         from apps.telegram_bot.jobs import due_jobs, run_due_jobs
 
-        self.assertEqual(due_jobs(self.at(2)), ['send_meeting_reminders'])
-        self.assertEqual(due_jobs(self.at(4)), ['send_meeting_reminders', 'flush_expired_tokens', 'purge_screen_time'])
-        self.assertEqual(set(due_jobs(self.at(8))), {
+        self.assertEqual(due_jobs(self.at(2)), ['send_meeting_reminders', 'import_telegram_programs'])
+        self.assertEqual(due_jobs(self.at(4)), [
+            'send_meeting_reminders', 'flush_expired_tokens', 'purge_screen_time', 'import_telegram_programs',
+        ])
+        self.assertEqual(set(due_jobs(self.at(8))), {  # 08:00: outside the import's night window
             'send_meeting_reminders', 'flush_expired_tokens', 'purge_screen_time', 'generate_notifications',
         })
         ran = run_due_jobs()
         self.assertTrue(all(result == 'ok' for result in ran.values()), ran)
         # Done today: the next hour only sends reminders.
         later = timezone.localtime() + timedelta(hours=1)
-        if later.date() == timezone.localdate():
+        if later.date() == timezone.localdate() and later.hour < 23:
             self.assertEqual(due_jobs(later), ['send_meeting_reminders'])
+
+    def test_the_telegram_import_runs_every_hour_overnight(self):
+        # Decided (2026-11-22): hourly from 23:00 to 07:00 Asia/Tashkent (not one run at 23:59),
+        # so a failed run is retried within the night and the load is spread out.
+        from apps.telegram_bot.jobs import NIGHTLY_JOBS, due_jobs
+
+        self.assertEqual(NIGHTLY_JOBS['import_telegram_programs'], (23, 7))
+        night = [23, 0, 1, 2, 3, 4, 5, 6]
+        for hour in range(24):
+            self.assertEqual(
+                'import_telegram_programs' in due_jobs(self.at(hour)), hour in night, hour,
+            )
 
     def test_a_failed_daily_job_is_tried_again_next_hour(self):
         from unittest import mock
@@ -67,3 +81,20 @@ class DueJobsTests(BotTestCase):
             ran = run_due_jobs(now)
         self.assertEqual(set(ran.values()), {'failed'})
         self.assertIn('generate_notifications', due_jobs(now))
+
+    @override_settings(TELEGRAM_IMPORT_TIME_BUDGET_SECONDS=55)
+    def test_the_import_gets_only_the_time_left_in_the_request(self):
+        from unittest import mock
+
+        from apps.telegram_bot import jobs
+
+        clock = iter([1000, 1030])  # the jobs before the import took 30 s
+        with mock.patch.object(jobs.time, 'monotonic', lambda: next(clock)), \
+                mock.patch.object(jobs, 'call_command') as call:
+            jobs.run_due_jobs(self.at(2))
+        options = {args[0]: kwargs for args, kwargs in call.call_args_list}
+        self.assertEqual(options['import_telegram_programs']['time_budget'], 25)
+        self.assertNotIn('time_budget', options['send_meeting_reminders'])
+        # Never less than a few seconds, so an hour is never wasted outright.
+        self.assertEqual(jobs.job_options('import_telegram_programs', jobs.time.monotonic() - 500)['time_budget'],
+                         jobs.MIN_IMPORT_SECONDS)

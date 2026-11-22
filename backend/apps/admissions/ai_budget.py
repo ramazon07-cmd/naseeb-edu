@@ -59,6 +59,9 @@ def _limits(feature):
             settings.COLLEGE_MATCH_REASONS_SCHOOL_DAILY_BUDGET or None,
             settings.COLLEGE_MATCH_REASONS_USER_DAILY_LIMIT or None,
         )
+    if feature == 'telegram_import':
+        # A nightly job with no user or school: one platform cap (0 = import off).
+        return (settings.TELEGRAM_IMPORT_DAILY_BUDGET, None, None)
     raise ValueError(f'Unknown AI feature: {feature}')
 
 
@@ -289,3 +292,41 @@ def add_tokens(user, tokens):
     results = [cache_add_amount(key, tokens, TTL_SECONDS) for key in (global_key, user_key)]
     if any(result is None for result in results):
         _token_fallback.add(day, (global_key, user_key), tokens)
+
+
+def consume_job(feature):
+    """Count one paid call made by a scheduled job (no user); ``False`` when the daily cap is reached.
+
+    Like :func:`consume`, a refused call is undone at once. While the cache is down the
+    job may use at most AI_FALLBACK_PROCESS_DAILY_BUDGET calls (and never more than its cap).
+    """
+    day = timezone.localdate().isoformat()
+    cap = _limits(feature)[0]
+    prefix = f'ai-budget:{feature}:{day}'
+    if cap is None or cap <= 0:
+        _note([f'{prefix}:refused'])
+        return False
+    counts = count_hits([prefix], TTL_SECONDS)
+    if counts is None:
+        local_cap = min(cap, settings.AI_FALLBACK_PROCESS_DAILY_BUDGET)
+        allowed = _fallback.consume(day, [(f'{feature}:process', local_cap)])
+        logger.warning('ai_budget_cache_down feature=%s allowed=%s: using the per-process allowance', feature, allowed)
+        return allowed
+    if counts[0] <= cap:
+        return True
+    cache_decrement(prefix)
+    _note([f'{prefix}:refused'])
+    return False
+
+
+def refund_job(feature):
+    """Give back one call counted by :func:`consume_job` whose provider call failed."""
+    day = timezone.localdate().isoformat()
+    prefix = f'ai-budget:{feature}:{day}'
+    if cache_get_many([prefix]) is None:
+        with _fallback.lock:
+            key = f'{feature}:process'
+            if _fallback.day == day and _fallback.counts.get(key):
+                _fallback.counts[key] -= 1
+        return
+    cache_decrement(prefix)

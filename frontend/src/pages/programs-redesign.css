@@ -373,6 +373,11 @@
   color: var(--success);
 }
 
+.program-row-facts .program-row-unverified,
+.program-row-facts .program-row-unverified svg {
+  color: var(--warning);
+}
+
 .program-row-details {
   margin-top: 10px;
   color: var(--program-muted);
