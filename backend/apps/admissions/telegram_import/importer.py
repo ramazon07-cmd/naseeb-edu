@@ -28,6 +28,7 @@ from . import fetch as fetch_module
 from . import formatter, official, rules
 
 logger = logging.getLogger('naseeb.telegram_import')
+OUTAGE_STOPS = {'gateway_unavailable', 'budget_exhausted'}
 FEATURE = 'telegram_import'
 MAX_AI_ATTEMPTS = 2
 MIN_TEXT_CHARS = 40
@@ -111,6 +112,23 @@ def channels():
     return names
 
 
+def _in_turn(names):
+    """Channels never run first, then the one run longest ago; ties keep the configured order.
+
+    A run cut short by its time budget leaves the later channels unrun, so the next run
+    starts with them instead of with the first channel again."""
+    last = dict(TelegramImportChannel.objects.filter(
+        channel__in=[name.lower() for name in names]).values_list('channel', 'last_run_at'))
+
+    def key(item):
+        index, name = item
+        ran = last.get(name.lower())
+        return (ran is not None, ran or timezone.now(), index)
+
+    ranked = sorted(enumerate(names), key=key)
+    return [name for _, name in ranked]
+
+
 def _catalog():
     return rules.Catalog(OpportunityProgram.objects.values_list('pk', 'title', 'provider', 'application_url', 'deadline'))
 
@@ -169,6 +187,13 @@ def _renew(pk, post, result, catalog):
             'problems': result['problems'],
         })
         metadata['telegram_updates'] = updates
+        # Students see a row's origin and source link. Keep where a manual row came from,
+        # then show the Telegram post that wrote the new text and deadline.
+        if metadata.get('origin') != 'telegram':
+            metadata.setdefault('original_origin', metadata.get('origin') or '')
+            metadata.setdefault('original_source_url', program.source_url or '')
+        metadata['origin'] = 'telegram'
+        program.source_url = post.url
         program.title = result['title']
         program.deadline = result['deadline']
         program.deadline_text = result['deadline_text']
@@ -179,7 +204,7 @@ def _renew(pk, post, result, catalog):
         program.source_metadata = metadata
         program.save(update_fields=[
             'title', 'deadline', 'deadline_text', 'application_url', 'description', 'needs_verification',
-            'source_metadata', 'updated_at',
+            'source_url', 'source_metadata', 'updated_at',
         ])
     catalog.add(pk, result['title'], program.provider, result['application_url'], result['deadline'])
     return True
@@ -308,10 +333,14 @@ def run_channel(run, name):
     except FETCH_ERRORS as exc:
         logger.warning('telegram_import_fetch_failed channel=%s error=%s', name, exc.__class__.__name__)
         stats.failed_channels.append(name)
+        # Tried: a channel that keeps failing does not keep the first place in the next run.
+        state.last_run_at = timezone.now()
+        state.save(update_fields=['last_run_at', 'updated_at'])
         return
     posts = posts[:max(1, settings.TELEGRAM_IMPORT_MAX_POSTS_PER_CHANNEL)]
     stats.fetched += len(posts)
     added_before, rejected_before = stats.added, sum(stats.rejected.values())
+    rotate = True
     try:
         for post in posts:
             run.check_time()
@@ -335,8 +364,14 @@ def run_channel(run, name):
                 state.failed_message_id, state.failed_attempts = None, 0
             # Saved after every post: a run cut short never redoes (and pays for) finished posts.
             state.save(update_fields=['last_message_id', 'failed_message_id', 'failed_attempts', 'updated_at'])
+    except StopRun as exc:
+        # An outage keeps this channel first in line (its post waits); a time or page limit
+        # hands the next run to the channels that were not reached.
+        rotate = str(exc) not in OUTAGE_STOPS
+        raise
     finally:
-        state.last_run_at = timezone.now()
+        if rotate:
+            state.last_run_at = timezone.now()
         state.save(update_fields=['last_message_id', 'failed_message_id', 'failed_attempts', 'last_run_at', 'updated_at'])
         logger.info(
             'telegram_import_channel channel=%s fetched=%s added=%s rejected=%s last_message_id=%s',
@@ -370,7 +405,7 @@ def run(fetch=None, pages=None, time_budget=None):
         today=local_today(), catalog=_catalog(), fetch=fetch, pages=pages, stats=stats,
         deadline=started + budget, hard_deadline=started + budget + HARD_EXTRA,
     )
-    for name in channels():
+    for name in _in_turn(channels()):
         try:
             run_channel(current, name)
         except StopRun as exc:

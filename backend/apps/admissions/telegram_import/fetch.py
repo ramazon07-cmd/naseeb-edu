@@ -4,6 +4,7 @@ No Telegram account, bot or API key is used: the preview is the same page anyone
 sees in a browser. Only the channel names in settings are fetched, redirects are
 refused, and pages are size-capped.
 """
+import logging
 import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
@@ -11,7 +12,12 @@ from urllib.request import HTTPSHandler, Request, build_opener
 
 from ..telegram_feed import MAX_PAGE_BYTES, NoRedirects, telegram_ssl_context
 
+logger = logging.getLogger('naseeb.telegram_import')
 FETCH_TIMEOUT = 15
+# Pages read back to the saved cursor in one run (about 20 posts each). The run's time
+# budget stops it earlier; nothing is handled until the whole gap has been read, so a
+# long backlog is never half-skipped.
+MAX_BACKLOG_PAGES = 30
 CHANNEL_NAME = re.compile(r'[A-Za-z][A-Za-z0-9_]{3,31}')
 POST_ID = re.compile(r'[1-9][0-9]{0,11}')
 BLOCK_TAGS = {'p', 'div', 'blockquote', 'li', 'pre'}
@@ -147,11 +153,12 @@ def fetch_html(channel, before=None):
     return content.decode('utf-8', 'replace')
 
 
-def new_posts(channel, last_id, *, max_pages=5, fetch=None):
+def new_posts(channel, last_id, *, max_pages=MAX_BACKLOG_PAGES, fetch=None):
     """Posts newer than ``last_id``, oldest first.
 
     The first run (``last_id`` 0) reads the newest page only. Later runs page back
-    until they reach ``last_id`` or ``max_pages`` pages.
+    until they reach ``last_id``, so no unseen post is skipped. Only a channel with more than
+    ``max_pages`` pages of unseen posts loses its oldest ones (logged).
     """
     fetch = fetch or fetch_html
     found = {}
@@ -168,4 +175,6 @@ def new_posts(channel, last_id, *, max_pages=5, fetch=None):
         if oldest <= last_id + 1 or (before is not None and cursor >= before):
             break
         before = cursor
+    else:
+        logger.warning('telegram_import_backlog_too_long channel=%s pages=%s last_id=%s', channel, max_pages, last_id)
     return [found[key] for key in sorted(found)]

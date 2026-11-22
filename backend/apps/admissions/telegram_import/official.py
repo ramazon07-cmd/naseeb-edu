@@ -12,6 +12,7 @@ import http.client
 import ipaddress
 import re
 import socket
+import threading
 import time
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
@@ -72,30 +73,68 @@ def check_url(url):
     return parts
 
 
+READ_CHUNK = 16384
+
+
+def _remaining(stop_at):
+    left = stop_at - time.monotonic()
+    if left <= 0:
+        raise PageUnavailable('slow')
+    return left
+
+
 def _get(url, stop_at):
+    """One request. The socket timeout only limits silence, so the total time is enforced
+    separately: a watchdog closes the socket at ``stop_at`` (headers included), the body is
+    read in small chunks that return as soon as some bytes are there, and the time left is
+    checked after every chunk. The body never grows past MAX_BYTES + 1."""
     parts = check_url(url)
     address = public_addresses(parts.hostname)[0]
     connection = PinnedHTTPSConnection(parts.hostname, address)
     path = (parts.path or '/') + (f'?{parts.query}' if parts.query else '')
+
+    def cut_off():
+        sock = connection.sock
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            try:
+                sock.close()
+            except OSError:
+                pass
+
+    watchdog = threading.Timer(_remaining(stop_at), cut_off)
+    watchdog.daemon = True
+    watchdog.start()
     try:
-        connection.request('GET', path, headers={
-            'Host': parts.hostname, 'User-Agent': 'Mozilla/5.0 NaseebEdu/1.0 (program check)',
-            'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'en,ru;q=0.8,uz;q=0.6',
-        })
-        response = connection.getresponse()
-        if response.status in (301, 302, 303, 307, 308):
-            return response.status, response.getheader('Location') or '', b'', ''
-        content_type = (response.getheader('Content-Type') or '').lower()
-        body = b''
-        while response.status == 200 and len(body) <= MAX_BYTES:
-            if time.monotonic() > stop_at:
-                raise PageUnavailable('slow')
-            chunk = response.read(65536)
-            if not chunk:
-                break
-            body += chunk
-        return response.status, '', body, content_type
+        try:
+            connection.request('GET', path, headers={
+                'Host': parts.hostname, 'User-Agent': 'Mozilla/5.0 NaseebEdu/1.0 (program check)',
+                'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'en,ru;q=0.8,uz;q=0.6',
+            })
+            response = connection.getresponse()
+            if response.status in (301, 302, 303, 307, 308):
+                return response.status, response.getheader('Location') or '', b'', ''
+            content_type = (response.getheader('Content-Type') or '').lower()
+            body = bytearray()
+            while response.status == 200 and len(body) <= MAX_BYTES:
+                left = _remaining(stop_at)
+                if connection.sock is not None:
+                    connection.sock.settimeout(min(TIMEOUT, left))
+                chunk = response.read1(min(READ_CHUNK, MAX_BYTES + 1 - len(body)))
+                if not chunk:
+                    break
+                body += chunk
+            _remaining(stop_at)
+            return response.status, '', bytes(body), content_type
+        except OSError as exc:
+            if time.monotonic() >= stop_at:  # cut off by the watchdog or timed out at the deadline
+                raise PageUnavailable('slow') from exc
+            raise
     finally:
+        watchdog.cancel()
         connection.close()
 
 

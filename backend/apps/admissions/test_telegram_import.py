@@ -18,7 +18,7 @@ from rest_framework.test import APITestCase
 from apps.users.models import JobRun, User
 
 from .models import AiUsageLog, OpportunityProgram, School, StudentProfile, TelegramImportChannel
-from .serializers import CatalogOpportunityProgramSerializer
+from .serializers import CatalogOpportunityProgramSerializer, OpportunityProgramSerializer
 from .telegram_import import fetch, formatter, importer, official, rules
 
 FIXTURES = Path(__file__).resolve().parent / 'tests' / 'fixtures' / 'telegram'
@@ -363,6 +363,13 @@ class TelegramImportTests(TestCase):
         update = self.existing.source_metadata['telegram_updates'][0]
         self.assertEqual((update['channel'], update['message_id'], update['previous_deadline']),
                          ('opcorners', 7203, '2025-04-15'))
+        # Students see the Telegram origin and post link; the manual row's own origin is kept aside.
+        self.assertEqual(self.existing.source_metadata['origin'], 'telegram')
+        self.assertEqual(self.existing.source_url, 'https://t.me/opcorners/7203')
+        self.assertEqual(self.existing.source_metadata['original_origin'], '')
+        shown = OpportunityProgramSerializer(self.existing).data
+        self.assertEqual(shown['source_metadata'], {'origin': 'telegram'})
+        self.assertNotIn('telegram_updates', json.dumps(dict(shown)))
         # Renewed in place: no second row for the same program.
         self.assertFalse(OpportunityProgram.objects.filter(source_key='telegram:opcorners:7203').exists())
 
@@ -848,3 +855,146 @@ class StudentListTests(APITestCase):
             url = data['next']
         return rows
 
+
+
+class _TrickleResponse:
+    """A response that gives a few bytes per read, each taking ``delay`` seconds of fake time."""
+
+    status = 200
+
+    def __init__(self, clock, delay, chunk=b'x' * 1024):
+        self.clock, self.delay, self.chunk = clock, delay, chunk
+        self.reads = 0
+        self.sizes = []
+
+    def getheader(self, name):
+        return 'text/html; charset=utf-8' if name == 'Content-Type' else None
+
+    def read1(self, size):
+        self.reads += 1
+        self.sizes.append(size)
+        self.clock[0] += self.delay
+        return self.chunk[:size]
+
+    def read(self, *args):  # a blocking read must never be used
+        raise AssertionError('read() blocks until the whole size has arrived')
+
+
+class _TrickleConnection:
+    response = None
+
+    def __init__(self, *args, **kwargs):
+        self.sock = mock.Mock()
+
+    def request(self, *args, **kwargs):
+        pass
+
+    def getresponse(self):
+        return self.response
+
+    def close(self):
+        pass
+
+
+class SlowServerTests(TestCase):
+    def get(self, response, clock):
+        connection = type('Connection', (_TrickleConnection,), {'response': response})
+        with mock.patch.object(official, 'PinnedHTTPSConnection', connection), \
+                mock.patch.object(official, 'check_url', return_value=mock.Mock(
+                    hostname='site.example.org', path='/', query='')), \
+                mock.patch.object(official, 'public_addresses', return_value=['93.184.216.34']), \
+                mock.patch.object(official.time, 'monotonic', lambda: clock[0]):
+            return official._get('https://site.example.org/', clock[0] + official.TOTAL_SECONDS)
+
+    def test_a_server_that_trickles_bytes_is_cut_off_at_the_deadline(self):
+        clock = [1000.0]
+        response = _TrickleResponse(clock, delay=7)  # inside the 8 s socket timeout every time
+        with self.assertRaisesMessage(official.PageUnavailable, 'slow'):
+            self.get(response, clock)
+        # 16 s in total: the third small read ends past it and nothing waits for 64 KB.
+        self.assertLessEqual(response.reads, 3)
+        self.assertLessEqual(clock[0] - 1000.0, official.TOTAL_SECONDS + 7)
+        self.assertTrue(all(size <= official.READ_CHUNK for size in response.sizes))
+
+    def test_the_page_is_capped_in_bytes(self):
+        clock = [1000.0]
+        response = _TrickleResponse(clock, delay=0, chunk=b'y' * official.READ_CHUNK)
+        status, _, body, _ = self.get(response, clock)
+        self.assertEqual(status, 200)
+        self.assertEqual(len(body), official.MAX_BYTES + 1)
+        self.assertLessEqual(response.reads, official.MAX_BYTES // official.READ_CHUNK + 2)
+        with mock.patch.object(official, '_get', return_value=(status, '', body, 'text/html')):
+            with self.assertRaisesMessage(official.PageUnavailable, 'too_large'):
+                official.fetch_page('https://site.example.org/')
+
+    def test_a_fast_page_is_read_in_full(self):
+        clock = [1000.0]
+        response = _TrickleResponse(clock, delay=0)
+        response.read1 = mock.Mock(side_effect=[b'<html>', b'</html>', b''])
+        self.assertEqual(self.get(response, clock)[2], b'<html></html>')
+
+
+def preview_page(channel, ids, before=None):
+    """A preview page holding posts ``ids`` (newest last) and the link to older ones."""
+    more = f'<a class="tme_messages_more js-messages_more" data-before="{ids[0]}" href="/s/{channel}?before={ids[0]}"></a>'
+    posts = ''.join(
+        f'<div class="tgme_widget_message" data-post="{channel}/{i}"><div class="tgme_widget_message_text js-message_text">'
+        f'Post {i}</div><time datetime="2026-11-20T10:00:00+00:00"></time></div>' for i in ids
+    )
+    return f'<html><body>{more}{posts}</body></html>'
+
+
+class BacklogTests(TestCase):
+    def test_a_backlog_longer_than_five_pages_is_read_to_the_cursor(self):
+        newest, size = 220, 20
+
+        def fetch_page(channel, before=None):
+            top = (before - 1) if before else newest
+            low = max(top - size + 1, 1)
+            return preview_page(channel, list(range(low, top + 1)))
+
+        posts = fetch.new_posts('examplechannel', 100, fetch=fetch_page)
+        self.assertEqual([post.id for post in posts], list(range(101, 221)))
+
+
+class ChannelTurnTests(TestCase):
+    def test_a_run_that_stops_early_starts_with_the_channels_it_did_not_reach(self):
+        names = ['chan_a_one', 'chan_b_two', 'chan_c_three']
+        seen = []
+
+        def one_channel_per_run(run, name):
+            # The time budget lets exactly one channel through.
+            seen.append(name)
+            TelegramImportChannel.objects.update_or_create(channel=name.lower(), defaults={'last_run_at': timezone.now()})
+            raise importer.StopRun('time_budget')
+
+        with override_settings(**{**AI_ON, 'TELEGRAM_IMPORT_CHANNELS': names}), \
+                mock.patch.object(importer, 'run_channel', one_channel_per_run):
+            for _ in range(4):
+                importer.run(fetch=lambda *a: '', pages=lambda u: None)
+        self.assertEqual(seen, ['chan_a_one', 'chan_b_two', 'chan_c_three', 'chan_a_one'])
+
+
+class DateYearTests(TestCase):
+    def test_a_named_date_must_carry_its_own_year(self):
+        self.assertFalse(rules.date_in_text(date(2027, 6, 15), 'Camp starts 15 June 2025'))
+        self.assertFalse(rules.date_in_text(date(2027, 6, 15), 'camp starts june 15, 2025'))
+        self.assertTrue(rules.date_in_text(date(2025, 6, 15), 'Camp starts 15 June 2025'))
+        self.assertTrue(rules.date_in_text(date(2027, 6, 15), 'Camp starts June 15'))
+
+    def result(self, **fields):
+        base = {
+            'deadline': None, 'deadline_text': '', 'start_date': None, 'end_date': None, 'fee_usd': None,
+            'eligible_ages': '', 'eligible_grades': '', 'problems': [],
+        }
+        return {**base, **fields}
+
+    def test_a_wrong_start_year_is_cleared(self):
+        result = rules.ground(self.result(start_date=date(2027, 6, 15)), 'Camp starts 15 June 2025')
+        self.assertIsNone(result['start_date'])
+
+    def test_the_day_is_not_taken_for_a_two_digit_year(self):
+        result = rules.ground(self.result(deadline=date(2027, 5, 27), deadline_text='27 May'), 'Apply by 27 May')
+        self.assertIsNone(result['deadline'])
+        kept = rules.ground(self.result(deadline=date(2027, 5, 27), deadline_text='27 May 2027'), 'Apply by 27 May 2027')
+        self.assertEqual(kept['deadline'], date(2027, 5, 27))

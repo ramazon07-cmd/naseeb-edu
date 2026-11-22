@@ -235,8 +235,11 @@ def _number_in(number, text):
     return bool(re.search(rf'(?<!\d)0?{int(number)}(?!\d)', text))
 
 
-def date_in_text(value, text):
-    """Whether ``text`` writes the date ``value``: day with month name, or a numeric date."""
+def date_in_text(value, text, require_year=False):
+    """Whether ``text`` writes the date ``value``: day with month name, or a numeric date.
+
+    A year written next to a day and month name must be the date's year (``15 June 2025`` is
+    not 15 June 2027). A name date with no year is accepted unless ``require_year``."""
     text = _flat(text)
     day, month, year = value.day, value.month, value.year
     numeric = (
@@ -248,9 +251,12 @@ def date_in_text(value, text):
         return True
     names = '|'.join(MONTHS[month])
     day_pattern = rf'(?<!\d)0?{day}(?:st|nd|rd|th|-?(?:go|го))?(?!\d)'
-    return bool(
-        re.search(rf'{day_pattern}[\s.,/-]*(?:of\s+)?(?:{names})', text)
-        or re.search(rf'\b(?:{names})\w*[\s.,/-]*{day_pattern}', text)
+    year_after = r'(?:[\s.,/-]*(\d{4})(?!\d))?'
+    matches = list(re.finditer(rf'{day_pattern}[\s.,/-]*(?:of\s+)?(?:{names})\w*{year_after}', text))
+    matches += re.finditer(rf'\b(?:{names})\w*[\s.,/-]*{day_pattern}{year_after}', text)
+    return any(
+        (match.group(1) is None and not require_year) or match.group(1) == str(year)
+        for match in matches
     )
 
 
@@ -271,8 +277,7 @@ def ground(result, source):
     deadline = result['deadline']
     if deadline:
         written = _flat(result['deadline_text'])
-        year = rf'(?<!\d)(?:{deadline.year}|{deadline.year % 100:02d})(?!\d)'
-        if not (written and written in flat and date_in_text(deadline, written) and re.search(year, written)):
+        if not (written and written in flat and date_in_text(deadline, written, require_year=True)):
             result['deadline'] = None
             problems.append('deadline not confirmed in source')
     if result['deadline_text'] and _flat(result['deadline_text']) not in flat:

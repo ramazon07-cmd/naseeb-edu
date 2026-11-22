@@ -22,12 +22,17 @@ Code: `backend/apps/admissions/telegram_import/` (`fetch.py`, `official.py`,
   (a Telegram page, an official page, an AI call) that could end more than 40 s after that.
   The whole request therefore ends before gunicorn's 120 s timeout.
 - Channels come from `TELEGRAM_IMPORT_CHANNELS` only (default: opportunitiescircleofficial,
-  opcorners, edugrandsuz, grantlar, grantgouz, youthgrants).
+  opcorners, edugrandsuz, grantlar, grantgouz, youthgrants). Each run starts with the channel
+  not run for the longest time (never-run first, configured order on ties), so a run cut short
+  by its time budget never starves the later channels. A gateway outage does not rotate.
+- An official page is read in small chunks with a total deadline per page (the socket timeout
+  alone only limits silence) and a hard cap of 1.5 MB.
 
 ## 2. Reading posts
 - Posts are read from the public preview `https://t.me/s/<channel>`; no Telegram account or key.
 - Each channel stores `last_message_id`; only newer posts are handled, oldest first, and the
-  cursor is saved after every post. A rerun never handles a post twice
+  cursor is saved after every post. Paging back to the cursor goes up to 30 preview pages in
+  a run, and no post is handled until that gap is closed, so none is skipped. A rerun never handles a post twice
   (`source_key = telegram:<channel>:<id>` is unique).
 
 ## 3. Post and page text are data, never instructions
