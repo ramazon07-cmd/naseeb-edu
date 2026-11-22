@@ -26,6 +26,7 @@ from apps.users.credentials import generate_temporary_password, issue_temporary_
 from apps.users.models import TemporaryCredential
 
 from .services import Refused, User
+from core.public_urls import public_url
 
 # Same length as the website's quick-create.
 PASSWORD_LENGTH = 10
@@ -99,7 +100,7 @@ def _payload(student, password, phone=None):
         'username': student.username,
         'temporary_password': password,
         'expires_at': credential.expires_at.isoformat() if credential else None,
-        'login_url': f'{settings.FRONTEND_URL}/login',
+        'login_url': public_url('/login'),
     }
     if phone is not None:
         payload['phone'] = phone

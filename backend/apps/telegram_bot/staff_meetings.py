@@ -13,6 +13,7 @@ from apps.admissions.models import Booking, MeetingSchedule
 
 from .models import StudentTelegram, TelegramLink
 from .services import Refused, resolve_link
+from core.public_urls import public_url
 
 # Upcoming meetings sent to the bot; it shows fewer.
 MAX_LISTED = 60
@@ -30,7 +31,7 @@ def _username(student):
 
 def booking_link(user):
     """The page where a student books this staff member (the Meetings page opens their booking dialog)."""
-    return f'{settings.FRONTEND_URL}/meetings?book={user.pk}'
+    return public_url(f'/meetings?book={user.pk}')
 
 
 def queue_staff_update(booking, action):

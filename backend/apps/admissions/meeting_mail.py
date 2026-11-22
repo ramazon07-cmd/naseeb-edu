@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.users.localization import localized_message
+from core.public_urls import public_url
 
 logger = logging.getLogger(__name__)
 CONSOLE_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -62,7 +63,7 @@ def send_meeting_email(booking, recipient, event, language=None):
             'topic': booking.topic,
             'time': timezone.localtime(booking.starts_at).strftime('%d.%m.%Y %H:%M'),
             'minutes': booking.duration_minutes,
-            'link': f'{settings.FRONTEND_URL}/meetings',
+            'link': public_url('/meetings'),
         }
         send_mail(
             _one_line(localized_message(f'meeting_email_{event}_subject', language=language).format(**values)),

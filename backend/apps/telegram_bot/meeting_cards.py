@@ -28,6 +28,7 @@ from apps.users.models import User
 
 from .models import StudentTelegram, TelegramLink, TelegramOutbox
 from .services import Refused, resolve_link
+from core.public_urls import public_url
 
 CALLBACK_PREFIX = 'mt'
 ACTIONS = ('confirm', 'decline', 'cancel')
@@ -194,7 +195,7 @@ def buttons_for(booking, viewer, language):
     is a link to it.
     """
     if viewer == 'student':
-        site = f'{settings.FRONTEND_URL}/meetings'
+        site = public_url('/meetings')
         return [[{'text': card_text(language, 'b_website'), 'url': site}]] if _url_ok(site) else []
     rows = []
     row = []
@@ -207,7 +208,7 @@ def buttons_for(booking, viewer, language):
             {'text': card_text(language, key), 'callback_data': f'{CALLBACK_PREFIX}:{action}:{booking.pk}'} for action, key in row
         ])
     links = []
-    profile = f'{settings.FRONTEND_URL}/students/{booking.student_id}'
+    profile = public_url(f'/students/{booking.student_id}')
     if _url_ok(profile):
         links.append({'text': card_text(language, 'b_profile'), 'url': profile})
     username = student_username(booking)

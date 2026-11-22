@@ -69,6 +69,7 @@ cross-origin API calls with credentials (`api.js` already does this).
 | Vercel | `VITE_API_URL` | `https://api.naseebedu.com/api` |
 | Render | `CORS_ALLOWED_ORIGINS` | `https://www.naseebedu.com` |
 | Render | `CSRF_TRUSTED_ORIGINS` | `https://www.naseebedu.com` |
+| Render | `FRONTEND_URL` | `https://www.naseebedu.com` (links in Telegram messages and emails; must be https and a public domain, never an IP such as `10.x.x.x`) |
 | Render | `ALLOWED_HOSTS` | `api.naseebedu.com` (plus the Render service host if needed) |
 | Render | `AUTH_REFRESH_COOKIE_SAMESITE` | `Lax` |
 | Render | `AUTH_REFRESH_COOKIE_SECURE` | `True` |

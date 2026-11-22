@@ -391,3 +391,45 @@ class SentryTests(SimpleTestCase):
                                               'Accept': 'application/json'})
         self.assertNotIn('cookies', request)
         self.assertEqual(request['data'], {'username': 'ali', 'password': '[Filtered]', 'refresh': '[Filtered]'})
+
+
+class PublicSiteUrlTests(SimpleTestCase):
+    def problems(self, url):
+        from core.public_urls import frontend_url_problems
+        return frontend_url_problems(url)
+
+    def test_the_real_site_is_accepted(self):
+        for url in ('https://www.naseebedu.com', 'https://naseebedu.com', 'https://app.naseebedu.com/'):
+            self.assertEqual(self.problems(url), [], url)
+
+    def test_internal_and_insecure_addresses_are_rejected(self):
+        for url in (
+            'http://10.200.1.5:5173', 'https://10.200.1.5', 'https://172.16.0.9', 'https://172.31.255.1',
+            'https://192.168.1.10', 'https://127.0.0.1', 'https://localhost', 'https://localhost:5173',
+            'http://www.naseebedu.com', 'www.naseebedu.com', '', 'https://frontend', 'https://web.internal',
+        ):
+            self.assertTrue(self.problems(url), url)
+
+    def test_public_url_joins_the_path_to_the_setting(self):
+        from core.public_urls import public_url
+        with override_settings(FRONTEND_URL='https://www.naseebedu.com'):
+            self.assertEqual(public_url('/login'), 'https://www.naseebedu.com/login')
+            self.assertEqual(public_url('/meetings?book=3'), 'https://www.naseebedu.com/meetings?book=3')
+            self.assertEqual(public_url(), 'https://www.naseebedu.com')
+
+    @override_settings(IS_PRODUCTION=True, FRONTEND_URL='http://10.200.1.5:5173')
+    def test_system_check_rejects_a_private_ip_in_production(self):
+        from core.checks import public_site_url_check
+        errors = public_site_url_check(None)
+        self.assertEqual([e.id for e in errors], ['naseeb.E003'])
+        self.assertIn('10.200.1.5', errors[0].msg)
+
+    @override_settings(IS_PRODUCTION=True, FRONTEND_URL='https://www.naseebedu.com')
+    def test_system_check_passes_for_the_real_site(self):
+        from core.checks import public_site_url_check
+        self.assertEqual(public_site_url_check(None), [])
+
+    @override_settings(IS_PRODUCTION=False, FRONTEND_URL='http://127.0.0.1:5173')
+    def test_system_check_allows_localhost_outside_production(self):
+        from core.checks import public_site_url_check
+        self.assertEqual(public_site_url_check(None), [])

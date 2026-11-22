@@ -55,3 +55,25 @@ def ai_provider_check(app_configs, **kwargs):
     if provider not in ('gateway', 'claude_cli'):
         return [checks.Error('AI_PROVIDER must be gateway or claude_cli.', id='naseeb.E002')]
     return []
+
+
+@checks.register()
+def public_site_url_check(app_configs, **kwargs):
+    """FRONTEND_URL is put into every Telegram message and email, so a wrong one reaches users.
+
+    In production it must be the public https address (a private IP like 10.200.x.x,
+    localhost or plain http makes links that don't open for anyone outside the server).
+    """
+    from core.public_urls import frontend_url_problems
+
+    if not settings.IS_PRODUCTION:
+        return []
+    return [
+        checks.Error(
+            f'FRONTEND_URL={settings.FRONTEND_URL!r} cannot be the public site address: {problem}.',
+            hint='Set FRONTEND_URL=https://www.naseebedu.com (or unset it to use that default). '
+                 'It is the address put into Telegram messages and emails.',
+            id='naseeb.E003',
+        )
+        for problem in frontend_url_problems(settings.FRONTEND_URL)
+    ]

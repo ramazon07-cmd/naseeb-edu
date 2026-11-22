@@ -31,6 +31,7 @@ from .invites import MAX_TOKEN_LENGTH, AcceptSerializer, InviteUnavailable, hash
 from .models import AssistantInvite, StudentProfile
 from .progress_cache import invalidate_progress_summary
 from .scoping import visible_students
+from core.public_urls import public_url
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ def send_assistant_invite_email(invite, raw, request=None):
     counselor = invite.counselor.get_full_name() or invite.counselor.username
     values = {
         'name': invite.first_name, 'counselor': counselor, 'school': invite.school.name,
-        'link': f'{settings.FRONTEND_URL}{accept_path(raw)}', 'days': invite_days(),
+        'link': public_url(accept_path(raw)), 'days': invite_days(),
     }
     try:
         send_mail(

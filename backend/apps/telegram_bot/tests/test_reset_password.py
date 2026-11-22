@@ -1,9 +1,10 @@
 from django.contrib.auth import authenticate
+from django.test import override_settings
 from django.utils import timezone
 
 from apps.users.models import ProductAuditEvent, TemporaryCredential, User
 
-from .base import PASSWORD, BotTestCase
+from .base import KEY, PASSWORD, BotTestCase
 
 
 class FindStudentsTests(BotTestCase):
@@ -66,6 +67,22 @@ class ResetPasswordTests(BotTestCase):
         event = ProductAuditEvent.objects.get(action='credential.issued', target_id=str(student.pk))
         self.assertEqual(event.actor, self.c1)
         self.assertEqual(event.metadata.get('via'), 'bot')
+
+    @override_settings(FRONTEND_URL='https://www.naseebedu.com')
+    def test_login_url_is_the_public_site_address(self):
+        self.link(self.c1)
+        response = self.reset(self.s1.pk)
+        self.assertEqual(response.json()['login_url'], 'https://www.naseebedu.com/login')
+
+    @override_settings(FRONTEND_URL='https://www.naseebedu.com', ALLOWED_HOSTS=['*'])
+    def test_login_url_ignores_the_host_the_request_arrived_on(self):
+        self.link(self.c1)
+        response = self.client.post(
+            '/api/bot/reset-password/', {'chat_id': self.chat, 'student_id': self.s1.pk}, format='json',
+            HTTP_HOST='10.200.1.5:10000', HTTP_X_BOT_SERVICE_KEY=KEY,
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['login_url'], 'https://www.naseebedu.com/login')
 
     def test_a_second_reset_revokes_the_first_password(self):
         self.link(self.c1)
