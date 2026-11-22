@@ -5,7 +5,7 @@ from django.db import connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
-from ..assistant import AssistantRateThrottle, build_role_context, redact_pii
+from ..assistant import AssistantRateThrottle, build_role_context, build_topic_context, redact_pii
 from ..models import Task
 from ..tenancy import set_student_active
 from apps.users.models import PLAN_FEATURES, Plan, User, WorkspaceSubscription
@@ -87,18 +87,92 @@ class AssistantRoleIsolationTests(RoleIsolationBase):
         self.assertIn('[phone removed]', redacted)
 
 
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='')
+class AssistantSchoolAdminTests(RoleIsolationBase):
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='school-admin-a', email='school-admin-a@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, school=self.school_a,
+        )
+
+    def chat(self, user, text='How many students are at risk?'):
+        self.client.force_authenticate(user)
+        return self.client.post('/api/assistant/chat/', {'messages': [{'role': 'user', 'content': text}]}, format='json')
+
+    def test_admin_gets_200_and_only_their_school_aggregates(self):
+        Task.objects.create(student=self.student_a, title='Secret A task', due_date=date(2020, 1, 1))
+        Task.objects.create(student=self.student_b, title='Secret B task', due_date=date(2020, 1, 1))
+        Task.objects.create(student=self.student_b, title='Secret B task 2', due_date=date(2020, 1, 1))
+        response = self.chat(self.admin)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        b''.join(response.streaming_content)
+        context = build_role_context(self.admin)
+        self.assertEqual(context['school'], 'School A')
+        self.assertEqual(context['school_student_count'], 1)
+        self.assertEqual(context['task_status_counts'], {'todo': 1})
+        text = str(context) + build_topic_context(self.admin, {'tasks', 'roadmap', 'applications', 'workload'})
+        for secret in ('Secret', 'School B', self.student_a_user.email, self.student_b_user.email,
+                       self.student_a_user.username, self.student_b_user.username):
+            self.assertNotIn(secret, text)
+        self.assertIn('this school only', text)
+        self.assertIn('tasks by status: todo 1', text)
+
+    def test_admin_never_sees_another_schools_data(self):
+        other_admin = User.objects.create_user(
+            username='school-admin-b', email='school-admin-b@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, school=self.school_b,
+        )
+        Task.objects.create(student=self.student_b, title='B only', due_date=date(2020, 1, 1))
+        self.assertEqual(build_role_context(self.admin)['task_status_counts'], {})
+        self.assertEqual(build_role_context(other_admin)['task_status_counts'], {'todo': 1})
+        self.assertNotIn('todo', build_topic_context(self.admin, {'tasks'}))
+
+    def test_admin_without_the_plan_feature_gets_403(self):
+        plan = Plan.objects.create(
+            code='no-assistant-admin', name='No assistant',
+            features={key: key != 'ai_assistant' for key in PLAN_FEATURES},
+        )
+        WorkspaceSubscription.objects.filter(school=self.school_a).update(plan=plan)
+        response = self.chat(self.admin)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['code'], 'feature_not_in_plan')
+
+    @override_settings(OUTBOUND_AI_ENABLED=False)
+    def test_admin_follows_the_outbound_ai_switch(self):
+        self.assertEqual(self.chat(self.admin).status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_teachers_and_parents_stay_forbidden(self):
+        parent = User.objects.create_user(
+            username='deny-parent', email='deny-parent@example.com', password='StrongPass123!',
+            role=User.Role.PARENT,
+        )
+        for user in (self.teacher, self.organization, parent):
+            self.assertEqual(self.chat(user).status_code, status.HTTP_403_FORBIDDEN, user.role)
+
+
 class AssistantCountsTests(RoleIsolationBase):
-    def test_admin_counts_match_the_dashboard(self):
-        admin = User.objects.create_user(username='assistant-admin', password='StrongPass123!', role=User.Role.ADMIN)
-        Task.objects.create(student=self.student_b, title='Late', due_date=date(2020, 1, 1))
-        set_student_active(self.student_b, False, admin)
+    def test_admin_counts_match_the_school_dashboard(self):
+        admin = User.objects.create_user(
+            username='assistant-admin', email='assistant-admin@example.com', password='StrongPass123!', role=User.Role.ADMIN, school=self.school_a,
+        )
+        Task.objects.create(student=self.student_a, title='Late', due_date=date(2020, 1, 1))
+        Task.objects.create(student=self.student_b, title='Other school late', due_date=date(2020, 1, 1))
         context = build_role_context(admin)
         self.client.force_authenticate(admin)
-        stats = self.client.get('/api/dashboard/stats/').data
-        self.assertEqual(context['assigned_student_count'], stats['students_total'])
-        self.assertEqual(context['assigned_student_count'], 1)
-        self.assertEqual(context['students_at_risk_count'], stats['students_at_risk'])
-        self.assertEqual(context['task_status_counts'], {})
+        self.assertEqual(context['role'], 'admin')
+        self.assertEqual(context['school_student_count'], 1)
+        self.assertEqual(context['students_at_risk_count'], 1)
+        self.assertEqual(context['task_status_counts'], {'todo': 1})
+
+    def test_admin_without_a_school_sees_nobody_even_as_superuser(self):
+        for flags in ({}, {'is_superuser': True}):
+            admin = User.objects.create_user(
+                username=f'assistant-nowhere-{len(flags)}', email=f'nowhere-{len(flags)}@example.com', password='StrongPass123!', role=User.Role.ADMIN, **flags,
+            )
+            context = build_role_context(admin)
+            self.assertEqual(context['school_student_count'], 0)
+            self.assertEqual(context['task_status_counts'], {})
 
 
 class AssistantSwitchTests(RoleIsolationBase):
@@ -131,10 +205,17 @@ class AssistantSwitchTests(RoleIsolationBase):
             role=User.Role.ADMIN,
         )
         self.assertIs(self.me(parent), False)
-        self.assertIs(self.me(admin), False)
+        self.assertIs(self.me(admin), False)  # an admin without a school has no plan to use
+        admin.school = self.school_a
+        admin.save()
+        self.assertIs(self.me(admin), True)
 
     @override_settings(OUTBOUND_AI_ENABLED=True)
     def test_me_follows_the_school_plan(self):
+        admin = User.objects.create_user(
+            username='plan-admin', email='plan-admin@example.com', password='StrongPass123!',
+            role=User.Role.ADMIN, school=self.school_a,
+        )
         plan = Plan.objects.create(
             code='no-assistant', name='No assistant',
             features={key: key != 'ai_assistant' for key in PLAN_FEATURES},
@@ -142,6 +223,7 @@ class AssistantSwitchTests(RoleIsolationBase):
         self.assertEqual(WorkspaceSubscription.objects.filter(school=self.school_a).update(plan=plan), 1)
         self.assertIs(self.me(self.student_a_user), False)
         self.assertIs(self.me(self.counselor), False)
+        self.assertIs(self.me(admin), False)
         self.assertIs(self.me(self.student_b_user), True)
 
     def no_assistant_plan(self):

@@ -61,6 +61,31 @@ the switch is on, the user is a student or counselor and the school plan include
 feature uses its local fallback. `manage.py check` warns (`naseeb.W002`) when a
 provider key is set while the switch is off, since the key is then unused.
 
+### Assistant cost controls
+
+`POST /api/assistant/chat/` takes `{"messages": [...], "language": "uz"|"ru"|"en"}`
+(`language` optional, validated). Order of answers, cheapest first (each sets
+`X-Assistant-Source`): `policy` (blocked request), `local` (database answer to a plain
+question, 0 tokens, `assistant_local.py`), `cache` (shared answer to a short, general
+first-turn question), then the AI `gateway`; otherwise `budget-exhausted`,
+`busy-fallback` (no stream slot within `AI_STREAM_SLOT_WAIT_SECONDS`) or
+`local-fallback`. Local, cache, policy and fallback replies take no stream slot and use no
+AI budget. Local answers need `language`; without it the question goes to the AI. A gateway 400 that blames `reasoning_effort` is retried once without it. Chats are never stored; the answer cache holds only hash-keyed answers to
+questions without personal context or PII.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `AI_ASSISTANT_MODEL` / `AI_ASSISTANT_SIMPLE_MODEL` | gpt-5.4-mini / gpt-5.4-nano | essay, planning and long questions / short plain ones |
+| `AI_ASSISTANT_REASONING_EFFORT` | `minimal` | sent as `reasoning_effort`; empty omits it |
+| `AI_ASSISTANT_HISTORY_MESSAGES` / `_HISTORY_CHARS` | 4 / 3000 | history sent to the model, oldest trimmed first |
+| `AI_ASSISTANT_MAX_OUTPUT_TOKENS` | 350 | output cap |
+| `AI_ASSISTANT_ANSWER_CACHE_SECONDS` | 86400 | shared answer cache TTL, 0 = off. Only questions up to 100 characters without first-person wording; stored on the 2nd identical ask (the 1st leaves a text-free marker) |
+| `AI_ASSISTANT_USER_DAILY_TOKENS` / `AI_ASSISTANT_DAILY_TOKENS` | 20000 / 2000000 | daily token caps, 0 = no cap (Redis counters; per-process fallback if Redis is down) |
+| `AI_STREAM_SLOT_WAIT_SECONDS` | 1 | wait for a free stream slot before `busy-fallback` |
+
+Redis should run with `maxmemory-policy volatile-lru` (or `volatile-ttl`) so the budget and
+token counters, which all carry a TTL, are not evicted before the answer cache and other keys.
+
 Setting `NASEEB_IGNORE_DOTENV=1` makes the settings read only the process
 environment and skip `backend/.env`; the tests that boot settings in a
 subprocess use it, so a local `.env` copied from `.env.example` cannot change

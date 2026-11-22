@@ -14,7 +14,9 @@ Tokens come from the provider's `usage` object. If a reply has none, they are es
 
 Prompts, essay text, student facts, drafts, replies and any other content. Only counts.
 
-Cached education-match answers make no provider call and write no row.
+Cached education-match answers make no provider call and write no row. The same holds for assistant answers with source `local` (answered from the database) and `cache` (shared answer cache): no provider call, no row, no AI budget. An assistant `busy-fallback` (no stream slot) writes a `local_fallback` row with zero tokens and refunds its budget unit.
+
+The assistant also keeps daily token counters (per user and platform-wide, `AI_ASSISTANT_USER_DAILY_TOKENS`, `AI_ASSISTANT_DAILY_TOKENS`) in the cache, fed by the `total_tokens` of each reply; they hold numbers only and are not stored in `AiUsageLog`.
 
 ## Reading it
 

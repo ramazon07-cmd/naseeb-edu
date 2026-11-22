@@ -22,10 +22,13 @@ def fresh_semaphore():
     return mock.patch.multiple(streaming, _semaphore=None, _semaphore_size=None)
 
 
-@override_settings(OUTBOUND_AI_ENABLED=True)
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', AI_STREAM_SLOT_WAIT_SECONDS=0)
 class AssistantStreamLimitTests(APITestCase):
     def setUp(self):
         cache.clear()
+        gateway = mock.patch.object(assistant, '_gateway_stream', side_effect=lambda *a: iter(['Hi ', 'there']))
+        gateway.start()
+        self.addCleanup(gateway.stop)
         self.addCleanup(cache.clear)
         patcher = fresh_semaphore()
         patcher.start()
@@ -41,8 +44,10 @@ class AssistantStreamLimitTests(APITestCase):
     def test_process_cap_refuses_extra_streams_until_one_finishes(self):
         first = self.chat(self.alice)  # not consumed yet: still streaming
         busy = self.chat(self.bob)
-        self.assertEqual(busy.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        self.assertEqual(busy['Retry-After'], '5')
+        # No hard 503: a full process answers locally (and keeps bob's budget).
+        self.assertEqual(busy.status_code, status.HTTP_200_OK)
+        self.assertEqual(busy['X-Assistant-Source'], 'busy-fallback')
+        self.assertIn('very busy', b''.join(busy.streaming_content).decode())
         b''.join(first.streaming_content)
         second = self.chat(self.bob)
         self.assertEqual(second.status_code, status.HTTP_200_OK)
@@ -77,7 +82,7 @@ class AssistantStreamLimitTests(APITestCase):
     @override_settings(AI_MAX_STREAMS_PER_PROCESS=1)
     def test_slot_is_released_when_building_the_stream_fails(self):
         self.client.raise_request_exception = False
-        with mock.patch.object(assistant, 'build_role_context', side_effect=RuntimeError('boom')):
+        with mock.patch.object(assistant, '_system_prompt', side_effect=KeyError('boom')):
             self.assertEqual(self.chat(self.alice).status_code, 500)
         response = self.chat(self.alice)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
