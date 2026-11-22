@@ -42,8 +42,7 @@
 }
 
 /* Softer pointer spotlight on the dashboard cards and the sidebar (light look only). */
-.nb-blue[data-nb-theme='light'] .nb-dash .nb-card,
-.nb-blue[data-nb-theme='light'] .nb-side {
+.nb-blue[data-nb-theme='light'] .nb-dash .nb-card {
   position: relative;
 }
 
@@ -64,8 +63,12 @@
   opacity: 1;
 }
 
-.nb-blue[data-nb-theme='light'] .nb-side {
-  position: sticky;
+/* Desktop only: on phones the menu is a fixed drawer (shell.css), and a sticky
+   menu there stays in the page flow, pushing every page a full screen down. */
+@media (min-width: 821px) {
+  .nb-blue[data-nb-theme='light'] .nb-side {
+    position: sticky;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

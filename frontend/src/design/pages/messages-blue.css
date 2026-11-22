@@ -41,7 +41,9 @@
 
 /* ---- Two cards instead of one panel ----------------------------------------- */
 .nb-blue .messaging-page .messages-shell {
-  height: min(700px, calc(100dvh - 232px));
+  /* Fills the screen below the page header, down to the page's bottom spacing
+     (no 700px cap); the thread scrolls inside it. */
+  height: calc(100dvh - 172px);
   min-height: 480px;
   grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
   gap: var(--nb-gap);
@@ -518,13 +520,14 @@
   }
 }
 
-/* Saved Messages is a pinned row: tinted, with a pin mark. */
-.nb-blue .messaging-page .channel-item.saved-messages:not(.active) {
+/* Pinned rows (the Telegram channel, the student's counselor, Saved Messages):
+   tinted, with a pin mark. */
+.nb-blue .messaging-page .channel-item:is(.saved-messages, .pinned-counselor):not(.active) {
   background: var(--nb-tint);
   box-shadow: inset 3px 0 0 var(--nb-blue);
 }
 
-.nb-blue .messaging-page .channel-item.saved-messages .pinned-mark {
+.nb-blue .messaging-page .channel-item:is(.saved-messages, .pinned-counselor) .pinned-mark {
   flex: none;
   margin-left: auto;
   color: var(--nb-blue);

@@ -36,6 +36,9 @@ class ChannelMembershipSerializer(serializers.ModelSerializer):
 class MessageChannelSerializer(serializers.ModelSerializer):
     is_saved_messages = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
+    # The other person of a direct chat (null for groups and Saved Messages): lets the client match a chat to a
+    # person by id instead of by a name that two people can share.
+    direct_peer_id = serializers.SerializerMethodField()
     school_name = serializers.CharField(source='school.name', read_only=True)
     members_count = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
@@ -51,7 +54,7 @@ class MessageChannelSerializer(serializers.ModelSerializer):
             'id', 'kind', 'name', 'display_name', 'description', 'school', 'school_name',
             'created_by', 'is_public', 'is_global', 'is_archived', 'last_message_at', 'members_count',
             'is_member', 'my_role', 'unread_count', 'last_message', 'created_at', 'updated_at', 'is_saved_messages',
-            'peer_last_read_at',
+            'peer_last_read_at', 'direct_peer_id',
         )
         read_only_fields = ('created_by', 'last_message_at')
 
@@ -82,6 +85,15 @@ class MessageChannelSerializer(serializers.ModelSerializer):
 
     def get_is_saved_messages(self, obj):
         return obj.kind == MessageChannel.Kind.DIRECT and bool(obj.direct_key and obj.direct_key.startswith('saved:'))
+
+    def get_direct_peer_id(self, obj):
+        request = self.context.get('request')
+        if obj.kind != MessageChannel.Kind.DIRECT or self.get_is_saved_messages(obj) or not request or not request.user.is_authenticated:
+            return None
+        prefetched = self._prefetched_memberships(obj)
+        if prefetched is None:
+            return obj.memberships.exclude(user=request.user).values_list('user_id', flat=True).first()
+        return next((membership.user_id for membership in prefetched if membership.user_id != request.user.id), None)
 
     def get_display_name(self, obj):
         request = self.context.get('request')

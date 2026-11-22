@@ -1,6 +1,7 @@
 // Student design parity (Msg): English key -> [Uzbek (Latin), Russian].
 export const PARITY_MSG_TRANSLATIONS = {
   'Channels': ['Kanallar', 'Каналы'],
+  'Start a conversation': ['Suhbatni boshlang', 'Начните переписку'],
   'Select a chat to start messaging': ['Yozishni boshlash uchun chatni tanlang', 'Выберите чат, чтобы начать переписку'],
 };
 
