@@ -127,7 +127,7 @@ export default function NewEssay({ folders, defaultFolder = null, essay = null, 
         <label className="el-label" htmlFor="el-question">{t("The question, in your university's words")}</label>
         <textarea id="el-question" className="el-textarea" placeholder={t('Paste or type the question they ask')} value={question} onChange={(event) => setQuestion(event.target.value)} />
         {looksLikeWhyUs && <div className="el-hint" role="note"><Lightbulb size={16} aria-hidden="true" />
-          <span>{t('Looks like a “Why us?” question. Coach will look for real courses or people you name, why you fit, and details only this university has.')}</span></div>}
+          <span>{t('Looks like a “Why us?” question. Naseeb AI will look for real courses or people you name, why you fit, and details only this university has.')}</span></div>}
       </div>}
 
       {type === 'scholarship' && <div className="el-field">
@@ -138,7 +138,7 @@ export default function NewEssay({ folders, defaultFolder = null, essay = null, 
 
       {type === 'free_writing' && <div className="el-note-box">
         <strong>{t('No question, no limit.')}</strong>
-        <span>{t('Free writing is for brainstorming memories and ideas. Coach stays off unless you ask. You can turn it into an essay later.')}</span>
+        <span>{t('Free writing is for brainstorming memories and ideas. Naseeb AI stays off unless you ask. You can turn it into an essay later.')}</span>
       </div>}
 
       <div className={`el-field-row${type === 'supplement' ? ' has-three' : ''}`}>

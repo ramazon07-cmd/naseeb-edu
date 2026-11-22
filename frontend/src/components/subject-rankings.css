@@ -1,0 +1,56 @@
+/* Subject rankings view of College Search (a lazy chunk). The rows reuse the QS table's row, name and value
+   styles; only the columns differ: rank, university, subject score and as many indicator columns as the
+   subject uses (--subj-cols), then the Add and compare buttons. The table turns into cards in the same
+   container widths as the QS rankings table. */
+
+.college-page .subj-table .subj-row {
+  grid-template-columns: 59px minmax(190px, 2.4fr) repeat(var(--subj-cols, 4), minmax(64px, 0.8fr)) 100px;
+}
+
+.college-page .subj-table .uni-head .uni-facts span small {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.nb-blue .nb-colleges .subj-toolbar .college-subject-row {
+  padding-top: 0;
+}
+
+.nb-blue .nb-colleges .subj-toolbar .uni-meta {
+  padding-top: 14px;
+}
+
+.nb-blue .nb-colleges .subj-rank.is-top b {
+  background: var(--nb-gold);
+  color: var(--nb-gold-fg);
+}
+
+@container college-results (max-width: 1040px) {
+  .college-page .subj-table .subj-row {
+    grid-template-columns: 54px minmax(0, 1fr) auto;
+  }
+
+  .college-page .subj-table .subj-row .uni-action {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .college-page .subj-table .subj-row .uni-facts {
+    grid-column: 2 / -1;
+  }
+}
+
+@container college-results (max-width: 560px) {
+  .college-page .subj-table .subj-row {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .college-page .subj-table .subj-row .uni-action {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: start;
+  }
+}

@@ -5,7 +5,13 @@ from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from rest_framework.views import APIView
 from apps.users.models import User
-from ..college_search import CollegeSearchParams, college_search, evidence_counts, missing_fields
+from .. import match_reasons
+from ..college_match import college_match, match_with_context
+from ..college_search import (
+    CollegeSearchParams, college_search, evidence_counts, fit_key, missing_fields,
+)
+from ..subjects import subjects_for_major
+from ..subject_rankings import SubjectRankingParams, cached_subject_ranking
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
 from ..education_ai import generate_education_guidance, recommendation_ai_available
 
@@ -41,6 +47,8 @@ def build_college_research(profile):
             'scholarship_needed': profile.scholarship_needed,
             'evidence': evidence,
         },
+        # The QS subjects of the target major, in the order stated: College Search presets its Subject picker to the first.
+        'subjects': subjects_for_major(profile.target_major),
         'methodology': 'Academic fit, preferences, aid and verified profile evidence.',
         'generated_at': timezone.now(),
     }
@@ -85,6 +93,17 @@ class CollegeSearchView(APIView):
         return Response(college_search(profile, params.validated_data))
 
 
+class SubjectRankingView(APIView):
+    """One page of the QS subject ranking (``GET /api/subject-rankings/``); read only when the student opens it."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        params = SubjectRankingParams(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        return Response(cached_subject_ranking(params.validated_data))
+
+
 class EducationMatchAIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -103,3 +122,53 @@ class EducationMatchAIView(APIView):
         )
         result['provider_available'] = recommendation_ai_available()
         return Response(result)
+
+
+class CollegeMatchView(APIView):
+    """The college match (``POST /api/college-match/``): ten universities for the student's major.
+
+    Chosen with fixed rules (college_match.py), never by AI: this call makes no AI request.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        profile = student_profile(request)
+        if not profile:
+            return Response({'detail': 'The college match is available to student accounts only.'}, status=403)
+        missing = missing_fields(profile)
+        if missing:
+            return Response({'detail': 'Complete your research profile first.', 'missing_fields': missing}, status=400)
+        data = college_match(profile)
+        data['generated_at'] = timezone.now()
+        return Response(data)
+
+
+class CollegeMatchReasonsView(APIView):
+    """The optional "Why these fit you" lines (``POST /api/college-match/reasons/``).
+
+    One AI call writes one line for each card of the match; it counts as one unit of the daily limit,
+    is cached for the same list and profile, and answers 503 (unit given back) when it fails.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'assistant'
+
+    def post(self, request):
+        profile = student_profile(request)
+        if not profile:
+            return Response({'detail': 'The college match is available to student accounts only.'}, status=403)
+        missing = missing_fields(profile)
+        if missing:
+            return Response({'detail': 'Complete your research profile first.', 'missing_fields': missing}, status=400)
+        data, ctx = match_with_context(profile)
+        language = str(request.data.get('language') or 'en')[:5]
+        try:
+            lines, cached = match_reasons.generate(
+                profile, request.user, data, fit_key(profile, ctx), ctx['rubric'], language)
+        except match_reasons.ReasonsUnavailable as unavailable:
+            detail = ('Naseeb AI is resting for today. Please try again tomorrow.' if unavailable.code == 'coach_resting'
+                      else 'Naseeb AI is unavailable right now. Please try again soon.')
+            return Response({'detail': detail, 'code': unavailable.code}, status=unavailable.status)
+        return Response({'reasons': lines, 'cached': cached})

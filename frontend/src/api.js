@@ -545,6 +545,16 @@ export const api = {
   collegeResearch: () => request('/college-research/'),
   // One College Search page (filters, sort and page size in `query`); never the whole catalogue.
   collegeSearch: (query, signal) => request(`/college-search/?${query}`, { signal }, true, false),
+  // The college match: a balanced list of best-fitting universities (rules only, no AI).
+  collegeMatch: () => request('/college-match/', { method: 'POST', body: '{}' }),
+  // The optional "Why these fit you" lines: one AI call for the whole list, cached by the server.
+  collegeMatchReasons: (language) => request('/college-match/reasons/', {
+    method: 'POST',
+    body: JSON.stringify({ language }),
+    // The server may take up to its 90 s AI deadline; aborting sooner would still spend the day's allowance.
+    timeoutMs: 100_000,
+    retries: 0,
+  }),
   updateCollegeResearchProfile: (payload) => request('/college-research/', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -636,6 +646,24 @@ export const api = {
     body: JSON.stringify(payload),
     signal,
     timeoutMs: 45_000,
+  }),
+  // Saving a letter: the same PATCH as update(), with an optional keepalive so it survives a closing page.
+  saveLetter: (id, payload, { keepalive = false } = {}) => request(`/recommendations/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    ...(keepalive ? { keepalive: true, retries: 0 } : {}),
+  }),
+  // Letter Check (counselors only): the latest check (empty answer when none), one run, and a note's state.
+  latestLetterCheck: (id) => request(`/recommendations/${id}/depth-check/latest/`),
+  letterDepthCheck: (id, baseUpdatedAt) => request(`/recommendations/${id}/depth-check/`, {
+    method: 'POST',
+    body: JSON.stringify({ base_updated_at: baseUpdatedAt }),
+    timeoutMs: 100_000,
+    retries: 0,
+  }),
+  setLetterNoteState: (id, checkId, noteId, state) => request(`/recommendations/${id}/depth-check/${checkId}/notes/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ note_id: noteId, state }),
   }),
   // The student's answer about a shared letter: { decision: 'confirmed' | 'changes_requested', note }.
   reviewLetter: (id, payload) => request(`/recommendations/${id}/student-review/`, {

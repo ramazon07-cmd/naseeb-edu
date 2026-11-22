@@ -522,6 +522,36 @@ class University(TimeStampedModel):
         return f'{self.name}, {self.country}'
 
 
+class UniversitySubjectRank(models.Model):
+    """A university's published QS rank in one subject (or broad area), from qs_subject_rankings_<year>.json."""
+
+    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name='subject_ranks')
+    # A methodology SUBJECT_CODE ('COM02') or a broad area ('AREA_ENG').
+    subject_code = models.CharField(max_length=20)
+    # The lower bound of a published range ('201-250' -> 201).
+    rank = models.PositiveIntegerField()
+    # The rank as published when it is a range or tied ('201-250', '=51'); blank for a plain number.
+    rank_label = models.CharField(max_length=20, blank=True, default='')
+    score = models.FloatField(null=True, blank=True)
+    # The indicator scores behind the subject score (0-100); NULL for an indicator the subject does not use
+    # (subjects.SUBJECT_WEIGHTS) or QS did not publish.
+    academic_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    employer_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    citations_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    h_index_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    irn_score = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    year = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['university', 'subject_code', 'year'], name='unique_university_subject_rank_year'),
+        ]
+        indexes = [models.Index(fields=['subject_code', 'rank'], name='subject_rank_lookup')]
+
+    def __str__(self):
+        return f'{self.university.name}: {self.subject_code} #{self.rank_label or self.rank} ({self.year})'
+
+
 class UniversityProgram(TimeStampedModel):
     class DegreeLevel(models.TextChoices):
         BACHELOR = 'bachelor', "Bachelor's"
@@ -1790,6 +1820,32 @@ class RecommendationLetter(TimeStampedModel):
         return f'{self.student} — {self.recommender_name}'
 
 
+class RecommendationLetterCheck(models.Model):
+    """One depth check of a recommendation letter (the Essay Coach engine). Counselor-only; the last 10 are kept."""
+
+    letter = models.ForeignKey(RecommendationLetter, on_delete=models.CASCADE, related_name='depth_checks')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    result = models.JSONField(default=dict)
+    model = models.CharField(max_length=120)
+    # sha256 of the folded text that was checked (coach.text_fingerprint).
+    text_fingerprint = models.CharField(max_length=64, blank=True)
+    # sha256 of recommender title, relationship, rubric text and model.
+    input_hash = models.CharField(max_length=64, blank=True)
+    overall = models.PositiveSmallIntegerField(null=True, blank=True)
+    # {note_id: "done" | "dismissed" | "gone"}; an open note has no entry.
+    note_states = models.JSONField(default=dict, blank=True)
+    # The checked body, kept to measure changed words on a re-check. Never serialized.
+    letter_text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['letter', '-created_at'], name='rec_letter_check_recent_idx')]
+
+    def __str__(self):
+        return f'{self.letter_id} letter check'
+
+
 class EssayFolder(TimeStampedModel):
     """A student's own folder in the Essay Lab library (at most one level of nesting)."""
 
@@ -2021,6 +2077,14 @@ class EssayDepthCheck(models.Model):
     save_seq = models.PositiveIntegerField()
     result = models.JSONField(default=dict)
     model = models.CharField(max_length=120)
+    # sha256 of the folded text that was checked (see coach.text_fingerprint); blank on checks from before v2.
+    text_fingerprint = models.CharField(max_length=64, blank=True)
+    # sha256 of essay type, prompt, rubric text and model: a saved check is reused only when this matches too.
+    input_hash = models.CharField(max_length=64, blank=True)
+    # 0-100 from the criterion scores; null when unscored and on checks from before v2.
+    overall = models.PositiveSmallIntegerField(null=True, blank=True)
+    # {note_id: "done" | "dismissed"}; an open note has no entry.
+    note_states = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

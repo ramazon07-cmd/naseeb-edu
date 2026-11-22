@@ -2,6 +2,7 @@
 from rest_framework import serializers
 
 from ..pricing import cost_fields, forget_cost
+from ..subject_ranks import university_subjects
 from ..models import (
     OpportunityProgram,
     Scholarship,
@@ -31,7 +32,12 @@ class UniversitySerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
-        return {**super().to_representation(instance), **cost_fields(instance)}
+        data = {**super().to_representation(instance), **cost_fields(instance)}
+        subjects = self.context.get('subjects')
+        if subjects is not None:
+            # Only the detail view asks for them (the viewset prefetches the ranks).
+            data['subjects'] = university_subjects(instance, subjects['year'], subjects['major_codes'])
+        return data
 
     def get_programs(self, obj):
         programs = [

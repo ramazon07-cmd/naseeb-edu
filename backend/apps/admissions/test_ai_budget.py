@@ -1,3 +1,4 @@
+import datetime
 import json
 from unittest import mock
 
@@ -8,10 +9,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.admissions import ai_budget
-from apps.admissions.models import School
+from apps.admissions.models import EssayTab, School
 from apps.users.models import User
 
-from .test_essay_lab import BASE, EssayLabTestCase, gateway_response
+from .test_essay_lab import BASE, EssayLabTestCase, gateway_response, make_doc
 
 
 def fresh_fallback():
@@ -37,7 +38,7 @@ class AiBudgetTests(APITestCase):
                                         school=school)
 
     def spend(self, user, times=1, feature='assistant'):
-        return [ai_budget.consume(feature, user) for _ in range(times)]
+        return [bool(ai_budget.consume(feature, user)) for _ in range(times)]
 
     def global_count(self, feature='assistant'):
         return cache.get(f'ai-budget:{feature}:{timezone.localdate().isoformat()}')
@@ -152,14 +153,75 @@ class AiBudgetTests(APITestCase):
 class EssayCoachBudgetTests(EssayLabTestCase):
     def test_per_user_daily_limit(self):
         essay = self.make_essay()
-        payload = {'summary': 'ok', 'strengths': [], 'scores': {}, 'notes': []}
+        payload = {'summary': 'ok', 'strengths': [], 'suggestions': [],
+                   'scores': {'reflection': 1, 'specificity': 1, 'voice': 1, 'structure': 1, 'prompt_fit': 1}}
 
-        def check():
+        def check(text=None):
+            seq = 0
+            if text:
+                tab = self.tab_of(essay)
+                EssayTab.objects.filter(pk=tab.pk).update(content=text, doc=make_doc(text), save_seq=1)
+                seq = 1
             with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(payload))):
-                return self.client.post(f'{BASE}/essays/{essay.pk}/depth-check/', {'base_seq': 0},
+                return self.client.post(f'{BASE}/essays/{essay.pk}/depth-check/', {'base_seq': seq},
                                         format='json')
 
         self.assertEqual(check().status_code, status.HTTP_200_OK)
-        response = check()
+        response = check('Entirely new words about tea and jam and honey.')
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(response.data['code'], 'coach_resting')
+
+
+@override_settings(
+    OUTBOUND_AI_ENABLED=True, ESSAY_COACH_DAILY_BUDGET=100, ESSAY_COACH_SCHOOL_DAILY_BUDGET=100, ESSAY_COACH_USER_DAILY_LIMIT=100,
+    AI_FALLBACK_PROCESS_DAILY_BUDGET=5,
+)
+class AiBudgetReservationTests(APITestCase):
+    """A refund undoes exactly the counters the call took, even when the local date has moved on."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        school = School.objects.create(name='Reserve S', code='reserve-s')
+        self.user = User.objects.create_user(username='res1', email='res1@example.com', role=User.Role.STUDENT,
+                                             school=school)
+        self.school = school
+        self.today = timezone.localdate()
+        self.tomorrow = self.today + datetime.timedelta(days=1)
+
+    def counters(self, day):
+        prefix = f'ai-budget:essay_coach:{day.isoformat()}'
+        return [cache.get(key) for key in (prefix, f'{prefix}:school:{self.school.pk}', f'{prefix}:user:{self.user.pk}')]
+
+    def test_refund_undoes_its_own_reservation(self):
+        reservation = ai_budget.consume('essay_coach', self.user)
+        self.assertEqual(self.counters(self.today), [1, 1, 1])
+        ai_budget.refund(reservation)
+        self.assertEqual(self.counters(self.today), [0, 0, 0])
+
+    def test_refused_or_empty_reservation_refund_is_a_noop(self):
+        kept = ai_budget.consume('essay_coach', self.user)
+        ai_budget.refund(False)
+        ai_budget.refund(None)
+        self.assertTrue(kept)
+        self.assertEqual(self.counters(self.today), [1, 1, 1])
+
+    def test_a_refund_after_midnight_leaves_the_new_days_counters_alone(self):
+        reservation = ai_budget.consume('essay_coach', self.user)
+        with mock.patch.object(timezone, 'localdate', return_value=self.tomorrow):
+            other = ai_budget.consume('essay_coach', self.user)  # another check that started after midnight
+            ai_budget.refund(reservation)  # the first one fails now
+        self.assertEqual(self.counters(self.today), [0, 0, 0])
+        self.assertEqual(self.counters(self.tomorrow), [1, 1, 1])
+        self.assertTrue(other)
+
+    def test_a_process_fallback_refund_uses_the_reserved_day(self):
+        with fresh_fallback(), mock.patch.object(ai_budget, 'count_hits', return_value=None), \
+                self.assertLogs('naseeb.ai_budget', level='WARNING'):
+            reservation = ai_budget.consume('essay_coach', self.user)
+            self.assertEqual(ai_budget._fallback.counts['essay_coach:process'], 1)
+            with mock.patch.object(timezone, 'localdate', return_value=self.tomorrow):
+                ai_budget.consume('essay_coach', self.user)  # the new day starts its own counters
+                ai_budget.refund(reservation)  # the old day's call fails: today's count must stay
+            self.assertEqual(ai_budget._fallback.counts['essay_coach:process'], 1)
+            self.assertEqual(ai_budget._fallback.day, self.tomorrow.isoformat())

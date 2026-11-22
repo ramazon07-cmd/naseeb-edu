@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Columns3, Clock3, Filter, GraduationCap, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { ArrowRight, Bookmark, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Columns3, Clock3, Compass, Filter, GraduationCap, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import { formatDateLocale, formatNumberLocale, parseDateValue, t, tp, tx } from '../i18n';
 import { Empty, Modal } from '../components/ui';
 import { FilterOption, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { clockText, localDateKey, money } from '../lib/format';
 import { ownStudent } from '../lib/labels';
-import { BAND_TIERS, COLLEGE_AID_FLAGS, bandLabel, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, COLLEGE_SORTS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, daysUntil, dueLabel, dueTone, matchingPrograms, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
+import { BAND_TIERS, COLLEGE_AID_FLAGS, bandLabel, COLLEGE_BANDS, COLLEGE_PAGE_SIZES, COLLEGE_PRICE_CAPS, DEFAULT_COLLEGE_FILTERS, collegeFilterChips, collegeSearchQuery, collegeSorts, daysUntil, dueLabel, dueTone, percentText, priceCapLabel, priceFilterNotes, priceInfo, tierPickerState, afterAidText, rankText, satLabel, shortDate, toggleIn } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 import { SEARCH_DEBOUNCE_MS } from '../lib/pagedList';
 import { useCollegeSearch } from '../hooks/useCollegeSearch';
 import { PageSkeleton } from '../components/states';
+import { SubjectRankingsView } from '../components/SubjectRankingsLoader';
 import { UniversityPage } from './UniversityPage';
 import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
+import { CollegeMatchPanel } from '../components/CollegeMatch';
+import { SubjectRankChip } from '../components/SubjectRank';
+import { SUBJECT_AREAS } from '../lib/subjects';
+import { applicationProgram, bulkAddTier, invalidateMatch } from '../lib/collegeMatch';
 import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
 import { universityLogoSrc } from '../lib/universityLogos';
 import './catalog.css';
@@ -32,12 +37,14 @@ function UniversityLogo({ university }) {
   return <span className="catalog-university-logo" aria-hidden="true">{src && failedSrc !== src ? <img src={src} alt="" loading="lazy" onError={() => setFailedSrc(src)} /> : <b>{initials}</b>}</span>;
 }
 
-function CollegeFilters({ filters, setFilters, facets, showBands, chips }) {
+// `whereOnly`: the Subject rankings view filters by country only; the other groups do not apply to a ranking.
+function CollegeFilters({ filters, setFilters, facets, showBands, chips, whereOnly = false }) {
   const patch = (change) => setFilters((current) => ({ ...current, ...change }));
   const clear = chips.length > 0 && <button type="button" className="link-button" onClick={() => setFilters(DEFAULT_COLLEGE_FILTERS)}>{t("Clear")}</button>;
   const groups = <>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Where")}</legend><select className="filter-country" aria-label={t("Country")} value={filters.country} onChange={(event) => patch({ country: event.target.value })}><option value="">{t("All countries")}</option>{Object.entries(facets.countries).sort(([a], [b]) => a.localeCompare(b)).map(([country, count]) => <option key={country} value={country}>{`${country} (${formatNumberLocale(count)})`}</option>)}</select></fieldset>
-    {showBands && <fieldset className="filter-set"><legend className="college-filter-legend">{t("Admission band")}</legend>{COLLEGE_BANDS.map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={facets.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
+    {!whereOnly && showBands && <fieldset className="filter-set"><legend className="college-filter-legend">{t("Admission band")}</legend>{COLLEGE_BANDS.map((band) => <FilterOption key={band} checked={filters.bands.includes(band)} onChange={() => patch({ bands: toggleIn(filters.bands, band) })} count={facets.bands[band]}><TierBand value={band} /></FilterOption>)}</fieldset>}
+    {!whereOnly && <>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Estimated cost per year")}</legend><small className="college-filter-hint">{t("US universities: cost of attendance for international students, before any aid.")}</small>{COLLEGE_PRICE_CAPS.map((cap) => <FilterOption key={cap} type="radio" name="college-price" checked={filters.price === cap} onChange={() => patch({ price: cap })}>{priceCapLabel(cap)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Financial aid")}</legend>{COLLEGE_AID_FLAGS.map(([flag, title]) => <FilterOption key={flag} checked={filters.aid.includes(flag)} onChange={() => patch({ aid: toggleIn(filters.aid, flag) })} count={facets.aid[flag] || 0}>{t(title)}</FilterOption>)}</fieldset>
     <fieldset className="filter-set"><legend className="college-filter-legend">{t("Testing & type")}</legend>
@@ -45,8 +52,22 @@ function CollegeFilters({ filters, setFilters, facets, showBands, chips }) {
       <FilterOption checked={filters.satFit} onChange={() => patch({ satFit: !filters.satFit })} count={facets.sat_fit}>{t("My SAT is in range")}</FilterOption>
       <FilterOption checked={filters.publicOnly} onChange={() => patch({ publicOnly: !filters.publicOnly })} count={facets.public}>{t("Public only")}</FilterOption>
     </fieldset>
+    </>}
   </>;
   return <div className="college-advanced-filters" id="college-advanced-filters">{clear && <header>{clear}</header>}{groups}</div>;
+}
+
+// The QS subject whose rank every row shows: the 55 subjects under their 5 broad areas. It starts at the
+// student's own major subject; "Only ranked" drops the universities QS does not rank in it.
+function SubjectPicker({ subject, only, onSubject, onOnly }) {
+  return <div className="college-subject-row">
+    <label className="college-subject-field"><span>{t('Study subject')}</span>
+      <select aria-label={t('Study subject')} value={subject} onChange={(event) => onSubject(event.target.value)}>
+        <option value="">{t('Any subject')}</option>
+        {SUBJECT_AREAS.map((area) => <optgroup key={area.code} label={area.name}>{area.subjects.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</optgroup>)}
+      </select></label>
+    {subject && <label className="college-subject-only"><input type="checkbox" checked={only} onChange={(event) => onOnly(event.target.checked)} /><span>{t('Only ranked in this subject')}</span></label>}
+  </div>;
 }
 
 function CollegeSkyline() {
@@ -88,7 +109,7 @@ function CollegeRow({ university, detail, detailError, view, application, expand
   const price = priceInfo(university);
   return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
     <div className="uni-fit" role="cell"><b>{rankText(university)}</b></div>
-    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small></span></div>
+    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small><SubjectRankChip rank={university.subject_rank} /></span></div>
     <div className="uni-facts">
       {view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <div className={`uni-value ${code === 'overall' ? 'qs-score-primary' : ''}`} role="cell" data-label={t(title)} key={code}><span className="v">{qsScoreText(qsScore(university.qs_data, code))}</span></div>) : <>
       <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{fit ? <>{formatNumberLocale(fit.match_score)}<small>/100</small></> : '—'}</span></div>
@@ -132,7 +153,7 @@ function CollegeCard({ university, profile, application, busy, compared, compare
     <header>
       <UniversityLogo university={university} />
       <div className="nb-cc-title"><h3><button type="button" onClick={onOpen}>{university.name}</button></h3><p>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</p>
-        <div className="nb-cc-chips">{fit?.admission_band && <TierBand value={fit.admission_band} />}<span className="nb-cc-chip">{rankText(university)}</span></div></div>
+        <div className="nb-cc-chips">{fit?.admission_band && <TierBand value={fit.admission_band} />}<span className="nb-cc-chip">{rankText(university)}</span><SubjectRankChip rank={university.subject_rank} /></div></div>
       {fit && <span className="nb-cc-ring" style={{ '--v': Math.max(0, Math.min(100, Number(fit.match_score) || 0)) }} role="img" aria-label={`${t('Fit')}: ${formatNumberLocale(fit.match_score)}/100`}><b>{formatNumberLocale(fit.match_score)}</b><small>{t('fit')}</small></span>}
     </header>
     {lo > 0 && <div className="nb-cc-sat"><div><small>{t('SAT middle 50%')}</small><b>{satLabel(university)}</b></div><SatRange min={lo} max={hi} score={me} />{satNote && <p>{satNote}</p>}</div>}
@@ -222,6 +243,11 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [searchTerm, setSearchTerm] = useState(query || '');
   const [filters, setFilters] = useState(DEFAULT_COLLEGE_FILTERS);
   const [sort, setSort] = useState('ranking');
+  // The Subject picker: null until the student touches it, so it follows the preset from their major.
+  const [subjectPick, setSubjectPick] = useState(null);
+  // The Subject rankings view's own subject: null until the student picks one, so it follows their major.
+  const [rankSubjectPick, setRankSubjectPick] = useState(null);
+  const [onlyPick, setOnlyPick] = useState(null);
   // Up to three loaded universities to compare side by side (kept in memory, no requests).
   const [compareMap, setCompareMap] = useState(() => new Map());
   const [compareOpen, setCompareOpen] = useState(false);
@@ -253,17 +279,30 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   const [researchError, setResearchError] = useState('');
   // Bumped when the profile changes: the fit of every row has to be fetched again.
   const [researchVersion, setResearchVersion] = useState(0);
+  // The AI college match: idle until the student asks for it.
+  const [match, setMatch] = useState({ loading: false, data: null, error: '', generation: 0 });
+  const [addingAll, setAddingAll] = useState(false);
+  const matchGeneration = useRef(0);
+  const listedRef = useRef(new Map());
   const previousQuery = useRef(query);
   const [radarOpen, setRadarOpen] = useState(false);
   const openUniversity = useCallback((id) => setPage('college_search', { universityId: id }), [setPage]);
   const closeUniversity = useCallback(() => setPage('college_search'), [setPage]);
   const student = ownStudent(data);
-  const search = useCollegeSearch(collegeSearchQuery({ query: searchTerm, filters, qsFilters, sort, view, pageSize }), researchVersion);
+  // The first page never waits for the research answer: it loads at once without a subject. The subject of the
+  // student's major is used only by the Subject rankings view, once the student opens it.
+  const subject = subjectPick ?? '';
+  const inSubjects = view === 'subjects';
+  // Choosing a subject yourself keeps only the universities ranked in it; the preset from the major only shows ranks.
+  const subjectOnly = Boolean(subject) && (onlyPick ?? (subjectPick != null && subjectPick !== ''));
+  // The Subject rankings view has its own paged request, so College Search asks for nothing while it is open.
+  const search = useCollegeSearch(inSubjects ? null : collegeSearchQuery({ query: searchTerm, filters, qsFilters, sort, view, pageSize, subject, subjectOnly }), researchVersion);
   const rows = search.rows;
   // The open university's fit as its row on screen has it, when that row is for the current profile.
   const rowFit = universityId != null && search.version === researchVersion ? rows.find((item) => item.id === universityId)?.fit : undefined;
   const facets = search.facets || EMPTY_FACETS;
   const listed = useMemo(() => new Map(data.applications.map((item) => [item.university, item])), [data.applications]);
+  listedRef.current = listed;
 
   // Rows carry the QS values the table shows; the QS panel loads the university's full record.
   const loadDetail = useCallback((id) => {
@@ -273,6 +312,27 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     api.retrieve('universities', id).then((item) => setDetails((current) => ({ ...current, [id]: item }))).catch((error) => {requestedDetails.current.delete(id);setDetailError(error.message);});
   }, []);
   useEffect(() => { if (view === 'qs') loadDetail(expandedId); }, [view, expandedId, loadDetail]);
+
+  // The Subject rankings rows are lean (rank and scores); adding or comparing one fetches that university's own row first.
+  async function ownRow(item) {
+    setBusyId(item.id);
+    try {
+      return (await api.collegeSearch(`ids=${item.id}`)).results[0] || null;
+    } catch (error) {
+      notify(error.message, 'error');
+      return null;
+    } finally {setBusyId(null);}
+  }
+  async function compareRankedRow(item) {
+    if (compareMap.has(item.id)) return toggleCompare(item);
+    const row = await ownRow(item);
+    if (row) toggleCompare(row);
+    return undefined;
+  }
+  async function addRankedRow(item) {
+    const row = await ownRow(item);
+    if (row) await addToList(row, row.fit);
+  }
 
   // The header search fills the box; the list follows through the same debounce as typing.
   useEffect(() => { setLocalQuery(query || ''); }, [query]);
@@ -355,10 +415,18 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     return () => {active = false;};
   }, [listOpen, data.applications, researchVersion, listFitsAttempt]);
 
+  // New research makes the stored match, and any match or reasons response still pending, stale.
+  function resetMatch() {
+    const next = invalidateMatch(matchGeneration.current);
+    matchGeneration.current = next.generation;
+    setMatch(next);
+  }
+
   async function refreshResearch() {
     setResearchLoading(true);setResearchError('');
     try {
       setResearch(await api.collegeResearch());
+      resetMatch();
       setResearchVersion((value) => value + 1);
     } catch (error) {setResearchError(error.message);} finally {setResearchLoading(false);}
   }
@@ -368,20 +436,26 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     try {
       const result = await api.updateCollegeResearchProfile(payload);
       setResearch(result);
+      resetMatch();
       setResearchVersion((value) => value + 1);
       notify(t("Profile details saved and college research updated."));
       reload();
     } catch (error) {setResearchError(error.message);} finally {setResearchSaving(false);}
   }
 
+  function createApplication(university, tier) {
+    const program = applicationProgram(university, student?.target_major);
+    return api.create('applications', { student: student?.id, university: university.id, program, tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
+  }
+
   // Without a known band the student picks the tier: an unknown band is never filed as "target".
   async function addToList(university, fit, pickedTier) {
     const tier = pickedTier || BAND_TIERS[fit?.admission_band];
+    if (addingAll) return;
     if (!tier) {setTierFor({ university, fit });return;}
-    const program = matchingPrograms(university, student?.target_major)[0]?.name || student?.target_major || 'Undeclared';
     setBusyId(university.id);
     try {
-      await api.create('applications', { student: student?.id, university: university.id, program, tier, status: 'shortlisted', deadline: university.application_deadline, scholarship_deadline: university.scholarship_deadline });
+      await createApplication(university, tier);
       await reload();
       setTierFor(null);
       notify(tx`${university.name} added to your list.`);
@@ -408,6 +482,37 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
     } catch (err) {notify(err.message, 'error');} finally {setBusyId(null);}
   }
 
+  async function findMatches() {
+    if (!research?.ready) {setProfileFocusRequested(true);return;}
+    const generation = ++matchGeneration.current;
+    setMatch({ loading: true, data: null, error: '', generation });
+    try {
+      const data = await api.collegeMatch();
+      if (generation === matchGeneration.current) setMatch({ loading: false, data, error: '', generation });
+    } catch (error) {if (generation === matchGeneration.current) setMatch({ loading: false, data: null, error: error.message, generation });}
+  }
+
+  // Every match not yet on the list, in one go; the list reloads once at the end.
+  async function addAllMatches(universities) {
+    if (addingAll || busyId != null) return;
+    setAddingAll(true);
+    let added = 0;
+    try {
+      const filed = new Set();
+      for (const university of universities) {
+        const tier = filed.has(university.id) ? null : bulkAddTier(university, listedRef.current, BAND_TIERS);
+        if (!tier) continue;
+        await createApplication(university, tier);
+        filed.add(university.id);
+        added += 1;
+      }
+      notify(tx`${formatNumberLocale(added)} universities added to your list.`);
+    } catch (err) {notify(err.message, 'error');} finally {
+      await reload();
+      setAddingAll(false);
+    }
+  }
+
   function completeProfileFirst() {
     setTierFor(null);
     closeUniversity();
@@ -426,56 +531,64 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
 
   const tierPicker = tierFor && <TierPicker university={tierFor.university} state={tierPickerState({ research, loading: researchLoading, error: researchError })} onRetry={refreshResearch} busy={busyId === tierFor.university.id} onPick={(tier) => addToList(tierFor.university, tierFor.fit, tier)} onCompleteProfile={completeProfileFirst} onClose={() => setTierFor(null)} />;
   const header = <PageHeader title={t('College Search')} subtitle={t('Find, compare, and shortlist universities')} />;
+  const matchHeader = <PageHeader title={t('College Search')} subtitle={t('Find, compare, and shortlist universities')} actions={<BlueButton icon={Compass} onClick={findMatches} disabled={match.loading} aria-busy={match.loading}>{t('Find my best colleges')}</BlueButton>} />;
   if (universityId != null) {
     if (opened?.university) return <div className="nb-bridge nb-colleges">{header}<UniversityPage {...{ data, research, researchLoading, setPage }} university={opened.university} result={fit} fitStatus={fitState.status} onRetryFit={() => setOpenedFitAttempt((value) => value + 1)} application={listed.get(universityId)} busy={busyId === universityId} onAdd={() => addToList(opened.university, fit)} onRemove={() => removeFromList(listed.get(universityId))} onBack={closeUniversity} onCompleteProfile={completeProfileFirst} />{tierPicker}</div>;
     if (opened?.error) return <div className="section-stack student-portal college-page nb-bridge nb-colleges">{header}<div className="college-research-state error"><X size={22} /><div><b>{t("This university could not be opened")}</b><p>{opened.error}</p></div><button className="button quiet small" onClick={closeUniversity}>{t("Back to College Search")}</button></div></div>;
     return <div className="nb-bridge nb-colleges">{header}<PageSkeleton /></div>;
   }
 
-  const chips = collegeFilterChips(filters, setFilters);
+  // Only the country filter applies to a subject ranking.
+  const chips = collegeFilterChips(filters, setFilters).filter((chip) => !inSubjects || chip.key === 'country');
   const ready = Boolean(research?.ready);
-  const filtersPanel = <CollegeFilters {...{ filters, setFilters, facets, chips }} showBands={ready} />;
+  const filtersPanel = <CollegeFilters {...{ filters, setFilters, facets, chips }} showBands={ready} whereOnly={inSubjects} />;
   const remaining = Math.min(pageSize, search.count - rows.length);
+  const chipNodes = <>
+    {chips.map((chip) => <span className="filter-token" key={chip.key}>{chip.text}<button type="button" aria-label={tx`Remove ${chip.text} filter`} onClick={chip.clear}><X size={13} aria-hidden="true" /></button></span>)}
+    {view !== 'admissions' && Object.values(qsFilters).some(Boolean) && <button type="button" className="college-reset-filters" onClick={() => setQsFilters({})}><X size={13} aria-hidden="true" />{t('Clear')}</button>}
+  </>;
   const priceNotes = priceFilterNotes(filters.price, search.unpricedCount);
   const sameBands = (bands) => bands.length === filters.bands.length && bands.every((band) => filters.bands.includes(band));
   const activeTier = Object.keys(TIER_BANDS).find((tier) => sameBands(TIER_BANDS[tier])) || 'all';
   // A tier button narrows the results to that band; the fit only shows in the Admissions & costs view.
   const pickTier = (tier) => {
     setFilters((current) => ({ ...current, bands: tier === 'all' ? COLLEGE_BANDS : TIER_BANDS[tier] }));
-    if (tier !== 'all' && view === 'qs') { setView('admissions'); setExpandedId(null); setSort('fit'); }
+    if (tier !== 'all' && view !== 'admissions') { setView('admissions'); setExpandedId(null); setSort('fit'); }
   };
   const showCards = ready && view === 'admissions';
   return <div className="section-stack student-portal college-page nb-bridge nb-colleges">
-    {header}
+    {matchHeader}
     {ready && <CollegeMatchSummary research={research} applications={data.applications} setPage={setPage} activeTier={activeTier} onTier={pickTier} onRadar={() => setRadarOpen(true)} />}
+    <CollegeMatchPanel state={match} listed={listed} busyId={busyId} addingAll={addingAll} onAdd={(university) => addToList(university, university.fit)} onAddAll={addAllMatches} onOpen={openUniversity} onRetry={findMatches} onClose={resetMatch} />
     <DeadlineRadar open={radarOpen} applications={data.applications} onOpen={(application) => { setRadarOpen(false); openUniversity(application.university); }} onClose={() => setRadarOpen(false)} />
     <div className="catalog-hero catalog-college-hero"><div className="college-hero-content"><form className="catalog-hero-search" role="search" onSubmit={submitSearch}><input ref={searchRef} type="search" value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t('Search by university or location')} aria-label={t('Search universities')} />{localQuery && <button type="button" className="catalog-hero-clear" onClick={() => { setLocalQuery(''); setSearchTerm(''); searchRef.current?.focus(); }} aria-label={t('Clear search')}><X size={16} aria-hidden="true" /></button>}<button type="submit" className="college-search-icon" aria-label={t('Search')}><Search size={20} aria-hidden="true" /></button></form></div><CollegeSkyline /></div>
     {researchLoading && !research && <div className="college-research-state"><RefreshCw className="spin" size={22} /><div><b>{t("Analyzing your profile")}</b><p>{t("Checking SAT, GPA, IELTS, major, and portfolio evidence.")}</p></div></div>}
     {researchError && <div className="college-research-state error"><X size={22} /><div><b>{t("College research could not be loaded")}</b><p>{researchError}</p></div><button className="button quiet small" onClick={refreshResearch}>{t("Retry")}</button></div>}
     {research && !research.ready && <CollegeProfileQuestions sectionRef={profileQuestionsRef} research={research} saving={researchSaving} onComplete={completeResearchProfile} />}
-    {(ready || view === 'qs') && <div className="college-layout">
+    {(ready || view !== 'admissions') && <div className="college-layout">
       <div className="college-main">
       <section className="college-toolbar" aria-label={t('University data view')} ref={resultsRef}>
         <header className="college-toolbar-header">
-          {ready && <MatchTabs filters={filters} sort={sort} onPick={(tab) => { setFilters((current) => ({ ...current, bands: tab === 'matches' ? MATCH_BANDS : COLLEGE_BANDS })); setSort(tab === 'matches' ? 'fit' : 'ranking'); if (tab === 'matches' && view === 'qs') { setView('admissions'); setExpandedId(null); } }} />}
-          <div className="college-data-views" role="group" aria-label={t('University data view')}>{[['qs', 'QS rankings'], ['admissions', 'Admissions & costs']].map(([key, title]) => <button type="button" key={key} aria-pressed={view === key} onClick={() => { setView(key); setExpandedId(null); setSort(key === 'qs' ? 'ranking' : 'fit'); }}>{t(title)}{key === 'qs' && <span className="college-edition">2027</span>}</button>)}</div>
+          {ready && <MatchTabs filters={filters} sort={sort} onPick={(tab) => { setFilters((current) => ({ ...current, bands: tab === 'matches' ? MATCH_BANDS : COLLEGE_BANDS })); setSort(tab === 'matches' ? 'fit' : 'ranking'); if (tab === 'matches' && view !== 'admissions') { setView('admissions'); setExpandedId(null); } }} />}
+          <div className="college-data-views" role="group" aria-label={t('University data view')}>{[['qs', 'QS rankings'], ['subjects', 'Subject rankings'], ['admissions', 'Admissions & costs']].map(([key, title]) => <button type="button" key={key} aria-pressed={view === key} onClick={() => { setView(key); setExpandedId(null); setSort(key === 'admissions' ? 'fit' : 'ranking'); }}>{t(title)}{key === 'qs' && <span className="college-edition">2027</span>}</button>)}</div>
           <button type="button" className="college-saved-button" onClick={() => setListOpen(true)} aria-label={t('My college list')}><Bookmark size={17} aria-hidden="true" /><span>{t('My List')}</span><b>{formatNumberLocale(data.applications.length)}</b></button>
         </header>
+        {!inSubjects && <SubjectPicker subject={subject} only={subjectOnly} onOnly={setOnlyPick} onSubject={(code) => { setSubjectPick(code); setOnlyPick(null); if (code && sort === 'ranking') setSort('subject'); }} />}
         <div className="college-filter-row">
-          {view === 'qs' && <div className="college-qs-filters">{QS_CLASSIFICATIONS.slice(0, 4).map(([key, title, values]) => <CollegeFilterSelect key={key} label={t(title)} value={qsFilters[key] || ''} onChange={(value) => setQsFilters((current) => ({ ...current, [key]: value }))} options={[{ value: '', label: t('All') }, ...Object.keys(values).filter((value) => facets.qs[key]?.[value]).map((value) => ({ value, label: qsClassification(key, value), count: facets.qs[key][value] }))]} />)}</div>}
+          {view !== 'admissions' && <div className="college-qs-filters">{QS_CLASSIFICATIONS.slice(0, 4).map(([key, title, values]) => <CollegeFilterSelect key={key} label={t(title)} value={qsFilters[key] || ''} onChange={(value) => setQsFilters((current) => ({ ...current, [key]: value }))} options={[{ value: '', label: t('All') }, ...Object.keys(values).filter((value) => facets.qs[key]?.[value]).map((value) => ({ value, label: qsClassification(key, value), count: facets.qs[key][value] }))]} />)}</div>}
           <button type="button" className="college-filters-toggle" aria-expanded={filtersOpen} aria-controls="college-advanced-filters" onClick={() => setFiltersOpen(!filtersOpen)}><Filter size={16} aria-hidden="true" />{t('Filters')}{chips.length > 0 && <b>{formatNumberLocale(chips.length)}</b>}<ChevronDown size={14} aria-hidden="true" /></button>
         </div>
         {filtersOpen && filtersPanel}
-        <div className="uni-meta">
+        {!inSubjects && <div className="uni-meta">
           <p className="filter-count" aria-live="polite"><b>{search.query == null ? '…' : formatNumberLocale(search.count)}</b> {t('Universities')}</p>
-          {chips.map((chip) => <span className="filter-token" key={chip.key}>{chip.text}<button type="button" aria-label={tx`Remove ${chip.text} filter`} onClick={chip.clear}><X size={13} aria-hidden="true" /></button></span>)}
-          {view === 'qs' && Object.values(qsFilters).some(Boolean) && <button type="button" className="college-reset-filters" onClick={() => setQsFilters({})}><X size={13} aria-hidden="true" />{t('Clear')}</button>}
-          <div className="sort-control"><span>{t('Sort by')}</span><select aria-label={t('Sort by')} value={sort} onChange={(event) => setSort(event.target.value)}>{COLLEGE_SORTS.map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
+          {chipNodes}
+          <div className="sort-control"><span>{t('Sort by')}</span><select aria-label={t('Sort by')} value={sort === 'subject' && !subject ? 'ranking' : sort} onChange={(event) => setSort(event.target.value)}>{collegeSorts(subject).map(([value, title]) => <option value={value} key={value}>{t(title)}</option>)}</select></div>
           <div className="sort-control"><span>{t('Show')}</span><select aria-label={t('Universities per page')} value={pageSize} onChange={(event) => changePageSize(Number(event.target.value))}>{COLLEGE_PAGE_SIZES.map((size) => <option value={size} key={size}>{formatNumberLocale(size)}</option>)}</select></div>
-        </div>
-        {priceNotes.unpriced && <p className="college-price-notes" role="status">{priceNotes.unpriced}</p>}
+        </div>}
+        {!inSubjects && priceNotes.unpriced && <p className="college-price-notes" role="status">{priceNotes.unpriced}</p>}
         {ready && <CollegeProfileStrip research={research} refreshing={researchLoading} onRefresh={refreshResearch} onEdit={() => setPage('student_center')} />}
       </section>
+      {inSubjects ? <SubjectRankingsView Logo={UniversityLogo} areas={SUBJECT_AREAS} pick={rankSubjectPick} onSubject={setRankSubjectPick} research={research} researchSettled={research != null || researchError !== ''} searchTerm={searchTerm} country={filters.country} qsFilters={qsFilters} pageSize={pageSize} onPageSize={changePageSize} chips={chipNodes} listed={listed} compareMap={compareMap} compareFull={compareMap.size >= 3} busyId={busyId} onCompare={compareRankedRow} onAdd={addRankedRow} onOpen={openUniversity} /> : <>
       {showCards && <div className={`nb-cc-grid ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} aria-label={t("Universities")} aria-busy={search.loading}>
         {rows.map((item) => <CollegeCard key={item.id} university={item} profile={research?.profile_snapshot} application={listed.get(item.id)} busy={busyId === item.id} compared={compareMap.has(item.id)} compareFull={compareMap.size >= 3} onCompare={() => toggleCompare(item)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
         {search.loading && !rows.length && <p className="uni-loading" role="status">{t("Loading universities…")}</p>}
@@ -490,6 +603,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       {search.error && <div className="college-research-state error" role="alert"><X size={22} /><div><b>{t("Universities could not be loaded")}</b><p>{search.error}</p></div><button className="button quiet small" onClick={search.retry}>{t("Retry")}</button></div>}
       {search.next && remaining > 0 && <button type="button" className="button quiet uni-more" onClick={search.loadMore} disabled={search.loadingMore} aria-busy={search.loadingMore}>{search.loadingMore ? t('Loading…') : t('Show {n} more', { n: formatNumberLocale(remaining) })}</button>}
       <p className="uni-note">{t(view === 'qs' ? "Published QS scores out of 100." : "Fit is not an admission probability.")} {t("Rankings: QS World University Rankings 2027.")}</p>
+      </>}
       </div>
     </div>}
     {compareMap.size > 0 && <div className="nb-compare-tray" role="region" aria-label={t("Compare universities")}>

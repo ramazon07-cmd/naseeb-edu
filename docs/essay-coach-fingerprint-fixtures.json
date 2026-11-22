@@ -1,0 +1,72 @@
+[
+  {
+    "name": "plain",
+    "text": "Hello, World!",
+    "sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  },
+  {
+    "name": "case and spacing",
+    "text": "  HELLO   world ",
+    "sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  },
+  {
+    "name": "bom",
+    "text": "\ufeffHello world",
+    "sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  },
+  {
+    "name": "control separators 1c-1f",
+    "text": "hello\u001cworld\u001dagain\u001ethere\u001fnow",
+    "sha256": "76e29ee889373497c04e3574f1e5b069b752640c91cc76135569ecbe87619751"
+  },
+  {
+    "name": "next line x85",
+    "text": "hello\u0085world",
+    "sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+  },
+  {
+    "name": "nbsp and em space",
+    "text": "hello\u00a0world\u2003again",
+    "sha256": "cbb2d50bd9c870e0f098b9230d66d2f74d55544f2e57f1aabe3830443a040eb6"
+  },
+  {
+    "name": "cyrillic",
+    "text": "\u041f\u0440\u0438\u0432\u0435\u0442, \u041c\u0418\u0420! \u042d\u0442\u043e \u0442\u0435\u0441\u0442.",
+    "sha256": "f473961af8f827f83ea1b5e9fdd7fcc7e850ad7889ce57da995e3ce60215b03a"
+  },
+  {
+    "name": "uzbek apostrophes",
+    "text": "O\u02bbzbekiston, g\u2018oya va o\u02bbqish",
+    "sha256": "57a64a5585954f58ad074449ee829a6cd9616509952ff20b315d3699c7ba99cc"
+  },
+  {
+    "name": "curly quotes",
+    "text": "\u201cIt\u2019s\u201d \u2018fine\u2019",
+    "sha256": "6a1aef745b2020b79fdf02d499fbc39ac86ff096c86819898abf296ce3a7f12b"
+  },
+  {
+    "name": "digits and fullwidth",
+    "text": "Room \uff11\uff12 costs 3.5 \u2013 4,5 so\u02bbm",
+    "sha256": "4d7d1194b7b364aff6d49c92a7413a3abc4b4ff462f3a82bb24303d49337ceec"
+  },
+  {
+    "name": "combining marks",
+    "text": "cafe\u0301 nai\u0308ve",
+    "sha256": "13b003cc7a7084e7f2ee5da8baf71a9e0c2191f0ebba72f3fd39f4f3822b3461"
+  },
+  {
+    "name": "emoji",
+    "text": "I love bread \ud83c\udf5e and tea \u2615!",
+    "sha256": "4509e9d31b5080b60ecbe65b9655b61096335a85c722bb14947fa706af5e5b52"
+  },
+  {
+    "name": "only symbols",
+    "text": " \u2014 \u2026 \u203c ",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "combining marks without a precomposed letter are dropped",
+    "text": "x\u20d7y a\u0301\u0301b",
+    "sha256": "f7ed09b6b5a827436ac92f27a925ffaf162214beb584578110ad6f769ff24dd6"
+  }
+]

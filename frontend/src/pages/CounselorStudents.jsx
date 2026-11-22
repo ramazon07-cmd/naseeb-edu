@@ -14,6 +14,7 @@ import { StudentQuickPanel } from '../components/StudentQuickPanel';
 import { DownloadCvButton } from '../components/CvDocument';
 import { mergeSaved } from '../lib/mergeSaved';
 import { RecommendationLetters } from '../components/RecommendationLetters';
+import { LetterWorkspace } from '../letters/LetterWorkspace';
 import { studentRecordEndpoints, useStudentRecords } from '../hooks/useStudentRecords';
 import { invalidatePagedLists, usePagedList } from '../hooks/usePagedList';
 import { activityText } from '../lib/activityText';
@@ -625,8 +626,8 @@ function Student360Header({ student, onBack, children }) {
   </>;
 }
 
-function CounselorStudent360({ student, user, data, onBack, onDirect, notify, reload: reloadWorkspace, setPage, refreshStudent }) {
-  const [tab, setTab] = useState('overview');
+function CounselorStudent360({ student, user, data, onBack, onDirect, notify, reload: reloadWorkspace, setPage, refreshStudent, initialTab = null, savedLetters, onOpenLetter }) {
+  const [tab, setTab] = useState(initialTab || 'overview');
   const [booking, setBooking] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [credential, setCredential] = useState(false);
@@ -648,17 +649,9 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     refreshStudent(patch);
     if (workspace) reloadWorkspace();
   };
-  // Letters saved here show over the loaded list until a refresh brings them (or newer).
-  const [savedLetters, setSavedLetters] = useState({ studentId: null, items: [] });
+  // Letters saved on the workspace page show over the loaded list until a refresh brings them (or newer).
   const ownSaved = savedLetters.studentId === student.id ? savedLetters.items : [];
   const letters = mergeSaved(records.recommendations || [], ownSaved);
-  const letterSaved = (saved) => {
-    setSavedLetters({
-      studentId: student.id,
-      items: [saved, ...ownSaved.filter((item) => item.id !== saved.id)],
-    });
-    reload({ endpoints: ['recommendations'] });
-  };
   const name = fullName(student.user_detail);
   const documentHistory = useDocumentHistory(student.id, historyVersion);
   // The open document is read from the loaded records, so a decision shows its new status.
@@ -720,7 +713,7 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
     {tab === 'applications' && <RecordCard title={t("Applications")} count={records.applications?.length} loading={loaded.loading} empty={t("The student has not added any universities to the college list yet.")}>
       {(records.applications || []).map((item) => <RecordRow key={item.id} title={item.university_detail?.name || t("University")} meta={joinParts(item.program, label(item.tier), item.deadline && tx`Deadline: ${dateText(item.deadline)}`)} status={item.status} />)}
     </RecordCard>}
-    {tab === 'letters' && <RecommendationLetters student={student} user={user} letters={letters} loading={loaded.loading} notify={notify} onSaved={letterSaved} />}
+    {tab === 'letters' && <RecommendationLetters letters={letters} loading={loaded.loading} onOpen={onOpenLetter} />}
     {tab === 'meetings' && <RecordCard title={t("Meetings")} count={studentMeetings.history.loaded ? meetings.length : 1} empty={t("No meetings scheduled.")}>
       {meetings.map((item) => <RecordRow key={item.id} title={item.topic} meta={joinParts(dateTimeText(item.starts_at), item.duration_minutes > 0 && tx`${item.duration_minutes} min`)} status={meetingBadgeStatus(meetingStatus(item, now, { student: false }))}>
         <button type="button" className="cx-btn" onClick={() => setNoteFor(item)}>{t("Notes")}</button>
@@ -744,11 +737,14 @@ function CounselorStudent360({ student, user, data, onBack, onDirect, notify, re
 // (/students/15), so a reload, a bookmark or Back reopens the same profile. The list's
 // filters and page live here, so Back from a profile returns to the same view.
 // `onAddStudent` replaces the header's "Add student" (default: the quick-create form).
-export function CounselorStudentsPage({ user, data, query, setQuery, reload, notify, studentId = null, onStudent, onDirect, setPage, onAddStudent }) {
+export function CounselorStudentsPage({ user, data, query, setQuery, reload, notify, studentId = null, letterId = null, search = '', onStudent, onLetter, onLeaveLetter, onDirect, setPage, onAddStudent }) {
   const [listState, setListState] = useState(() => ({ ...STUDENT_LIST_DEFAULTS, search: query }));
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  // Back from the letter workspace lands on the Recommendations tab (?tab=letters); letters saved there lead the list until it reloads.
+  const returnTab = new URLSearchParams(search).get('tab') === 'letters' ? 'letters' : null;
+  const [savedLetters, setSavedLetters] = useState({ studentId: null, items: [] });
   const listed = useRef([]);
   const onItems = useCallback((items) => { listed.current = items; }, []);
   // Opening student B while A's record is still loading must never show A's.
@@ -780,8 +776,17 @@ export function CounselorStudentsPage({ user, data, query, setQuery, reload, not
     );
   }
 
+  const letterSaved = useCallback((saved) => {
+    setSavedLetters((current) => ({ studentId, items: [saved, ...(current.studentId === studentId ? current.items : []).filter((item) => item.id !== saved.id)] }));
+    reload({ endpoints: ['recommendations'] });
+  }, [studentId, reload]);
+  const openLetter = useCallback((id, options) => onLetter(id, options), [onLetter]);
+  const leaveLetter = useCallback(() => onLeaveLetter(studentId), [onLeaveLetter, studentId]);
+  const openedLetter = useCallback((id) => openLetter(id, { replace: true }), [openLetter]);
+
   if (studentId && error) return <div className="cx-page"><button type="button" className="cx-back" onClick={() => onStudent(null)}><ChevronLeft size={16} aria-hidden="true" /><b>{t("Students")}</b></button><div className="alert error" role="alert">{error} <button type="button" className="cx-btn" onClick={() => setAttempt((n) => n + 1)}>{t("Retry")}</button></div></div>;
   if (studentId && selected?.id !== studentId) return <PageSkeleton />;
-  if (studentId) return <CounselorStudent360 student={selected} {...{ user, data, onDirect, notify, reload, setPage, refreshStudent }} onBack={() => onStudent(null)} />;
+  if (studentId && letterId) return <LetterWorkspace student={selected} user={user} letterId={letterId} notify={notify} onBack={leaveLetter} onOpened={openedLetter} onSaved={letterSaved} />;
+  if (studentId) return <CounselorStudent360 student={selected} {...{ user, data, onDirect, notify, reload, setPage, refreshStudent, savedLetters }} initialTab={returnTab} onOpenLetter={(id) => openLetter(id)} onBack={() => onStudent(null)} />;
   return <CounselorStudentList {...{ user, data, query, setQuery, listState, setListState, onItems, onDirect, onAddStudent, notify, reload }} onOpen={(student) => onStudent(student.id)} />;
 }

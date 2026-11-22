@@ -7,11 +7,14 @@ from apps.admissions.models import AdmissionChanceSnapshot, Application, Univers
 from apps.admissions.test_college_fit import FitFixture, stub_university
 
 
-def context(**values):
+def context(strength=6, essays=None, recommendations=None, **values):
+    """A fit context; ``strength`` is the activities score (0-10)."""
     return {
         'gpa': 3.8, 'gpa_scale': 4, 'sat': None, 'sat_status': 'not_taken', 'act': None,
         'english': {'test': 'IELTS', 'score': 7.0, 'ielts': 7.0}, 'countries': ['us'], 'major': '',
-        'major_name': '', 'scholarship_needed': False, 'strength': 6, **values,
+        'major_name': '', 'scholarship_needed': False,
+        'rubric': {'academics': None, 'activities': strength, 'essays': essays, 'recommendations': recommendations},
+        **values,
     }
 
 
@@ -26,7 +29,8 @@ class InternationalRateTests(APITestCase):
     def test_selective_rates_are_estimated_lower_for_students_from_abroad(self):
         self.assertEqual(international_rate(stub_university(acceptance_rate=10)), (5.0, True))
         self.assertEqual(international_rate(stub_university(acceptance_rate=40)), (32.0, True))
-        self.assertEqual(international_rate(stub_university(acceptance_rate=60)), (60.0, False))
+        self.assertEqual(international_rate(stub_university(acceptance_rate=60)), (60.0, True), 'as-is, still an estimate')
+        self.assertEqual(international_rate(stub_university(acceptance_rate=50)), (50.0, True))
         self.assertEqual(international_rate(stub_university()), (None, False))
 
 

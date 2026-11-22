@@ -38,7 +38,10 @@ export const COLLEGE_PRICE_CAPS = ['all', '25000', '40000'];
 
 export const COLLEGE_AID_FLAGS = [['offers_need_based_aid', 'Need-based'], ['offers_merit_aid', 'Merit'], ['offers_international_aid', 'International aid'], ['meets_full_need', 'Meets full need']];
 
-export const COLLEGE_SORTS = [['fit', 'Best fit'], ['price', 'Lowest cost'], ['deadline', 'Nearest deadline'], ['acceptance', 'Highest acceptance rate'], ['ranking', 'Best ranking']];
+export const COLLEGE_SORTS = [['fit', 'Best fit'], ['price', 'Lowest cost'], ['deadline', 'Nearest deadline'], ['acceptance', 'Highest acceptance rate'], ['ranking', 'Best ranking'], ['subject', 'Best in subject']];
+
+// "Best in subject" needs a subject picked; the sort menu offers it only then.
+export const collegeSorts = (subject) => COLLEGE_SORTS.filter(([value]) => value !== 'subject' || subject);
 
 // How many universities one College Search page holds; the first is the default,
 // so a slow connection gets its first rows quickly.
@@ -49,7 +52,7 @@ const SEARCH_MAX_LENGTH = 100;
 // The College Search query for one set of filters (the page and facets are added
 // per request). Only what differs from the defaults is sent, so equal searches
 // share one cache key.
-export function collegeSearchQuery({ query = '', filters = DEFAULT_COLLEGE_FILTERS, qsFilters = {}, sort = 'ranking', view = 'qs', pageSize = COLLEGE_PAGE_SIZES[0] }) {
+export function collegeSearchQuery({ query = '', filters = DEFAULT_COLLEGE_FILTERS, qsFilters = {}, sort = 'ranking', view = 'qs', pageSize = COLLEGE_PAGE_SIZES[0], subject = '', subjectOnly = false }) {
   const params = new URLSearchParams();
   const term = String(query).trim().slice(0, SEARCH_MAX_LENGTH);
   if (term) params.set('search', term);
@@ -61,7 +64,11 @@ export function collegeSearchQuery({ query = '', filters = DEFAULT_COLLEGE_FILTE
   if (filters.satFit) params.set('sat_fit', 'true');
   if (filters.publicOnly) params.set('public', 'true');
   if (view === 'qs') Object.entries(qsFilters).forEach(([key, value]) => {if (value) params.set(key, value);});
-  params.set('sort', sort);
+  if (subject) {
+    params.set('subject', subject);
+    if (subjectOnly) params.set('subject_only', 'true');
+  }
+  params.set('sort', sort === 'subject' && !subject ? 'ranking' : sort);
   params.set('page_size', String(pageSize));
   return params.toString();
 }

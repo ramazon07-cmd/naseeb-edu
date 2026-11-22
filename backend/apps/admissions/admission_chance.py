@@ -20,7 +20,7 @@ outcomes (AdmissionChanceSnapshot).
 """
 from .models import University
 
-ALGORITHM_VERSION = 'chance-v1'
+ALGORITHM_VERSION = 'chance-v2'
 
 FAR_REACH, REACH, TARGET, SAFETY = 'far_reach', 'reach', 'target', 'safety'
 NOT_ELIGIBLE = 'not_eligible'
@@ -47,9 +47,11 @@ MIN_SPREAD = {'SAT': 100, 'ACT': 3}
 # Without a published range, the GPA share (GPA / scale) expected at the 25th and 75th percentile
 # of admits, by admit rate for students from abroad (upper bounds, ascending).
 GPA_BARS = ((15, 0.95, 1.00), (25, 0.90, 0.97), (50, 0.85, 0.95), (101, 0.75, 0.90))
-# The activities score (0-10) expected at the 25th percentile, by the same admit rate.
-ACTIVITY_BARS = ((10, 8), (25, 7), (50, 6), (75, 5), (101, 3))
-ACTIVITY_SPREAD = 2
+# The rubric score (0-10) for activities, essays and recommendations expected at the 25th
+# percentile of admits, by the same admit rate.
+SOFT_BARS = ((10, 8), (25, 7), (50, 6), (75, 5), (101, 3))
+SOFT_SPREAD = 2
+SOFT_FACTORS = ('activities', 'essays', 'recommendations')
 # Position classes: (lowest position, class), best first.
 POSITION_CLASSES = ((0.5, 'strong'), (-0.25, 'mid'), (-0.75, 'low'))
 # Band by admit rate (lower bound) and position class.
@@ -86,7 +88,8 @@ def international_rate(university):
     """``(rate, estimated)``: the admit rate for students from abroad, or ``(None, False)``.
 
     Students from abroad compete in a tighter pool (MIT: about 2% against 4.5% overall), so an
-    unpublished rate is estimated from the overall one.
+    unpublished rate is estimated from the overall one: x0.5 under 25%, x0.8 under 50%, as-is at 50% and
+    above. Every estimate is flagged ``estimated`` (the card shows it with a ≈), the as-is one too.
     """
     if university.intl_acceptance_rate is not None:
         return float(university.intl_acceptance_rate), False
@@ -97,7 +100,7 @@ def international_rate(university):
         return rate * 0.5, True
     if rate < 50:
         return rate * 0.8, True
-    return rate, False
+    return rate, True
 
 
 def admission_model(university):
@@ -185,10 +188,13 @@ def chance(university, ctx):
         return result
     weights = WEIGHTS[model]
     gate = clamp(1 + academics, 0, 1) if model in GATED_MODELS else 1
-    activity_bar, = by_rate(ACTIVITY_BARS, rate)
-    activities = clamp((ctx['strength'] - activity_bar) / ACTIVITY_SPREAD)
-    # Essays and recommendations are not scored yet: taken as at the bar (0), neither help nor harm.
-    soft = weights['activities'] * (activities if activities < 0 else gate * activities)
+    bar, = by_rate(SOFT_BARS, rate)
+    soft = 0
+    for factor in SOFT_FACTORS:
+        score = ctx['rubric'].get(factor)
+        # Not scored yet (no checked essay; letters are never scored for students): at the bar, neither helps nor harms.
+        standing = 0 if score is None else clamp((score - bar) / SOFT_SPREAD)
+        soft += weights[factor] * (standing if standing < 0 else gate * standing)
     position = weights['academics'] * academics + soft
     band = row[position_class(position)]
     if academics <= FAR_REACH_ACADEMICS:

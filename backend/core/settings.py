@@ -62,6 +62,10 @@ AI_GATEWAY_URL = config(
     'AI_GATEWAY_URL',
     default='https://ai-gateway.vercel.sh/v1/chat/completions',
 ).strip()
+# Where a check's model call goes. `claude_cli` runs the local Claude CLI for testing without an API key and is
+# refused outside APP_ENV development/test (core/environment.py). See apps/admissions/ai_providers.py.
+AI_PROVIDER = config('AI_PROVIDER', default='gateway').strip().lower()
+AI_TEST_CLI_MODEL = config('AI_TEST_CLI_MODEL', default='sonnet').strip() or 'sonnet'
 AI_ASSISTANT_MODEL = config('AI_ASSISTANT_MODEL', default='openai/gpt-5.4-mini').strip()
 AI_ASSISTANT_FALLBACK_MODEL = config('AI_ASSISTANT_FALLBACK_MODEL', default='openai/gpt-5.4-nano').strip()
 AI_ASSISTANT_MAX_MESSAGES = config('AI_ASSISTANT_MAX_MESSAGES', default=12, cast=int)
@@ -88,23 +92,58 @@ AI_RECOMMENDATION_TIMEOUT_SECONDS = config('AI_RECOMMENDATION_TIMEOUT_SECONDS', 
 # Essay Lab. The coach reuses the AI gateway credentials above.
 ESSAY_COACH_MODEL = config('ESSAY_COACH_MODEL', default=AI_ASSISTANT_MODEL).strip()
 ESSAY_COACH_TIMEOUT_SECONDS = config('ESSAY_COACH_TIMEOUT_SECONDS', default=40, cast=int)
-ESSAY_COACH_MAX_OUTPUT_TOKENS = config('ESSAY_COACH_MAX_OUTPUT_TOKENS', default=1800, cast=int)
+# Ceiling for one call; step 1 asks for about 500 and step 2 for about 70 per note + 150.
+# Both calls of one check together; step 2 gets only the time left. Set the client timeout above it.
+ESSAY_COACH_TOTAL_SECONDS = config('ESSAY_COACH_TOTAL_SECONDS', default=90, cast=int)
+ESSAY_COACH_MAX_OUTPUT_TOKENS = config('ESSAY_COACH_MAX_OUTPUT_TOKENS', default=2200, cast=int)
+# Sent as `reasoning_effort` (empty = not sent). Dropped for one retry if the gateway rejects it.
+ESSAY_COACH_REASONING_EFFORT = config('ESSAY_COACH_REASONING_EFFORT', default='minimal').strip()
+# A re-check needs at least this many changed words against the last checked text.
+ESSAY_COACH_MIN_CHANGED_WORDS = config('ESSAY_COACH_MIN_CHANGED_WORDS', default=3, cast=int)
 ESSAY_COACH_MAX_INPUT_CHARS = config('ESSAY_COACH_MAX_INPUT_CHARS', default=24000, cast=int)
 # The platform-wide coach budget is required (0 = AI checks off); school and
 # user caps use 0 = no cap.
 ESSAY_COACH_DAILY_BUDGET = config('ESSAY_COACH_DAILY_BUDGET', default=5000, cast=int)
 ESSAY_COACH_SCHOOL_DAILY_BUDGET = config('ESSAY_COACH_SCHOOL_DAILY_BUDGET', default=1000, cast=int)
-ESSAY_COACH_USER_DAILY_LIMIT = config('ESSAY_COACH_USER_DAILY_LIMIT', default=40, cast=int)
+ESSAY_COACH_USER_DAILY_LIMIT = config('ESSAY_COACH_USER_DAILY_LIMIT', default=5, cast=int)
 ESSAY_COACH_MIN_INTERVAL_SECONDS = config('ESSAY_COACH_MIN_INTERVAL_SECONDS', default=15, cast=int)
 ESSAY_COACH_HOURLY_LIMIT = config('ESSAY_COACH_HOURLY_LIMIT', default=120, cast=int)
+# Cheap guard in front of the re-check rules (reused and refused re-checks never reach the AI): requests per minute per user.
+ESSAY_COACH_RECHECK_PER_MINUTE = config('ESSAY_COACH_RECHECK_PER_MINUTE', default=20, cast=int)
+# A check that finds current danger in a personal statement is not scored. The helpline text is shown to the
+# student as written (empty = no number is shown). The first N such checks per user per day are free.
+ESSAY_SAFETY_HELPLINE = config('ESSAY_SAFETY_HELPLINE', default='').strip()
+ESSAY_SAFETY_FREE_PER_DAY = config('ESSAY_SAFETY_FREE_PER_DAY', default=2, cast=int)
+# Rubrics whose 0-100 score is shown (comma list: personal_statement, supplement, recommendation_letter).
+# A rubric not listed still runs the full check, but its result has no score (score_hidden='calibrating').
+# Add a rubric only after `manage.py coach_calibrate --set <name>` passes.
+ESSAY_COACH_SCORED_RUBRICS = tuple(
+    name.strip() for name in config('ESSAY_COACH_SCORED_RUBRICS', default='', cast=Csv()) if name.strip()
+)
 # Recommendation-letter suggestions for counselors use the assistant's gateway
 # and models. The platform-wide budget is required (0 = AI off; profile-based
 # suggestions remain); school and user caps use 0 = no cap.
 REC_LETTER_AI_DAILY_BUDGET = config('REC_LETTER_AI_DAILY_BUDGET', default=3000, cast=int)
 REC_LETTER_AI_SCHOOL_DAILY_BUDGET = config('REC_LETTER_AI_SCHOOL_DAILY_BUDGET', default=600, cast=int)
-REC_LETTER_AI_USER_DAILY_LIMIT = config('REC_LETTER_AI_USER_DAILY_LIMIT', default=150, cast=int)
+REC_LETTER_AI_USER_DAILY_LIMIT = config('REC_LETTER_AI_USER_DAILY_LIMIT', default=20, cast=int)
 REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS = config('REC_LETTER_SUGGEST_MIN_INTERVAL_SECONDS', default=4, cast=int)
 REC_LETTER_SUGGEST_HOURLY_LIMIT = config('REC_LETTER_SUGGEST_HOURLY_LIMIT', default=180, cast=int)
+# Facts-only suggestions (no AI call, refreshed while the counselor types): a cheap, generous per-user limit per minute.
+REC_LETTER_FACTS_PER_MINUTE = config('REC_LETTER_FACTS_PER_MINUTE', default=120, cast=int)
+# Letter depth check (the Essay Coach engine on a recommendation letter). Same rules as the coach:
+# a platform budget of 0 turns AI checks off; school and user caps use 0 = no cap.
+REC_LETTER_CHECK_DAILY_BUDGET = config('REC_LETTER_CHECK_DAILY_BUDGET', default=2000, cast=int)
+REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET = config('REC_LETTER_CHECK_SCHOOL_DAILY_BUDGET', default=400, cast=int)
+REC_LETTER_CHECK_USER_DAILY_LIMIT = config('REC_LETTER_CHECK_USER_DAILY_LIMIT', default=5, cast=int)
+# Cheap guard in front of the letter re-check rules, and the check's own minimum interval and hourly cap.
+REC_LETTER_CHECK_RECHECK_PER_MINUTE = config('REC_LETTER_CHECK_RECHECK_PER_MINUTE', default=20, cast=int)
+REC_LETTER_CHECK_MIN_INTERVAL_SECONDS = config('REC_LETTER_CHECK_MIN_INTERVAL_SECONDS', default=15, cast=int)
+REC_LETTER_CHECK_HOURLY_LIMIT = config('REC_LETTER_CHECK_HOURLY_LIMIT', default=60, cast=int)
+# "Why these fit you" lines of the college match (one call per list, cached). Same rules as the coach:
+# a platform budget of 0 turns them off; school and user caps use 0 = no cap.
+COLLEGE_MATCH_REASONS_DAILY_BUDGET = config('COLLEGE_MATCH_REASONS_DAILY_BUDGET', default=3000, cast=int)
+COLLEGE_MATCH_REASONS_SCHOOL_DAILY_BUDGET = config('COLLEGE_MATCH_REASONS_SCHOOL_DAILY_BUDGET', default=600, cast=int)
+COLLEGE_MATCH_REASONS_USER_DAILY_LIMIT = config('COLLEGE_MATCH_REASONS_USER_DAILY_LIMIT', default=10, cast=int)
 ESSAY_AUTOSAVE_LIMIT = config('ESSAY_AUTOSAVE_LIMIT', default=1200, cast=int)
 ESSAY_AUTOSAVE_WINDOW_SECONDS = config('ESSAY_AUTOSAVE_WINDOW_SECONDS', default=600, cast=int)
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)
@@ -150,6 +189,7 @@ environment_errors = validate_runtime_environment(
     database_url=DATABASE_URL,
     demo_accounts_enabled=DEMO_ACCOUNTS_ENABLED,
     hosted=HOSTED_RUNTIME,
+    ai_provider=AI_PROVIDER,
 )
 if environment_errors:
     message = 'Invalid runtime environment: ' + ' '.join(environment_errors)

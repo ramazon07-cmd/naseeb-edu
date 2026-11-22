@@ -64,6 +64,58 @@ def gateway_response(content):
     return response
 
 
+LONG_TEXT = ESSAY_TEXT + '\n\n' + ' '.join(['Then the radio crackled and the whole hallway went quiet for a moment.'] * 8)
+SCORE_REPLY = {
+    'scores': {'reflection': 3, 'specificity': 3, 'voice': 3, 'structure': 2, 'prompt_fit': 3},
+    'summary': 'A warm story about patience.',
+    'strengths': [{'criterion': 'voice', 'quote': 'folded the leftover crust', 'text': 'Vivid and concrete.'}],
+    'suggestions': ['What did patience cost you?', 'Which moment would you keep if you cut half?'],
+}  # overall 62
+
+
+class FakeGateway:
+    """urlopen stand-in: answers the score step and the notes step from the TASK line of the request."""
+
+    def __init__(self, score=None, notes=None, usage=None, auto_evidence=True):
+        # Unless a reply brings its own `score_evidence`, every criterion above 1 gets a real quote: the
+        # first six words of the essay's first paragraph (a model that did its job).
+        self.auto_evidence = auto_evidence
+        self.score = SCORE_REPLY if score is None else score
+        self.notes = {'notes': []} if notes is None else notes
+        self.usage = usage
+        self.bodies = []
+
+    def __call__(self, request, timeout=None):
+        body = json.loads(request.data.decode('utf-8'))
+        self.bodies.append(body)
+        reply = self.notes if self.steps[-1] == 'notes' else self.score
+        if isinstance(reply, list):  # successive score answers; the last one repeats
+            reply = reply.pop(0) if len(reply) > 1 else reply[0]
+        if self.auto_evidence and isinstance(reply, dict) and isinstance(reply.get('scores'), dict) \
+                and 'score_evidence' not in reply:
+            reply = {**reply, 'score_evidence': self.evidence_for(body, reply['scores'])}
+        content = reply if isinstance(reply, str) else json.dumps(reply)
+        payload = {'choices': [{'message': {'content': content}}]}
+        if self.usage:
+            payload.update(self.usage)
+        response = mock.MagicMock()
+        response.read.return_value = json.dumps(payload).encode('utf-8')
+        response.__enter__.return_value = response
+        return response
+
+    @staticmethod
+    def evidence_for(body, scores):
+        message = body['messages'][-1]['content']
+        label = 'LETTER_TEXT' if '<<<LETTER_TEXT' in message else 'ESSAY_TEXT'
+        essay = message.split(f'<<<{label} (untrusted data)\n', 1)[1].split(f'\n{label}>>>', 1)[0]
+        quote = ' '.join(essay.split('\n\n')[0].split()[:6])
+        return {key: quote for key, level in scores.items() if isinstance(level, int) and level > 1}
+
+    @property
+    def steps(self):
+        return ['notes' if 'TASK: NOTES' in body['messages'][-1]['content'] else 'score' for body in self.bodies]
+
+
 class EssayLabFixtureMixin:
     def create_people(self):
         self.school = School.objects.create(name='Essay Lab School', code='essay-lab-school')
@@ -907,61 +959,70 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         seq = self.tab_of(self.essay).save_seq if base_seq is None else base_seq
         return self.client.post(f'{BASE}/essays/{self.essay.pk}/depth-check/', {'base_seq': seq}, format='json')
 
-    def ai_payload(self, **overrides):
-        payload = {
-            'summary': 'A warm story about patience.',
-            'strengths': ['"folded the leftover crust" is vivid'],
-            'scores': {'reflection': 2, 'specificity': 3, 'voice': 4, 'structure': 3, 'prompt_fit': 3},
-            'notes': [
-                {'id': 'x', 'kind': 'reflect', 'quote': 'I learned that patience matters.',
-                 'question': 'When did you first notice this?', 'why': 'Shows the moment.',
-                 'rewrite': 'I discovered patience.'},
-                # Curly quotes and extra whitespace still match after normalization.
-                {'id': 'y', 'kind': 'specific', 'quote': 'My grandmother  never wasted bread.',
-                 'question': 'What did the kitchen smell like?', 'why': 'Sensory detail.'},
-                {'id': 'z', 'kind': 'clarity', 'quote': 'This sentence is not in the essay.',
-                 'question': 'Invented?', 'why': 'Hallucinated.'},
-                {'id': 'w', 'kind': 'clarity', 'quote': 'into a cloth. I learned that',
-                 'question': 'Spans paragraphs?', 'why': 'Invalid.'},
-                {'id': 'v', 'kind': 'rewrite', 'quote': 'I learned that patience matters.',
-                 'question': 'Bad kind', 'why': 'Invalid.'},
-            ],
-            'suggestion': 'Rewrite everything.',
-        }
-        payload.update(overrides)
-        return payload
+    def notes_payload(self):
+        return {'notes': [
+            {'criterion': 'reflection', 'quote': 'I learned that patience matters.',
+             'question': 'When did you first notice this?', 'context': 'Shows the moment.',
+             'rewrite': 'I discovered patience.'},
+            # Curly quotes and extra whitespace still match after normalization.
+            {'criterion': 'specificity', 'quote': 'My grandmother  never wasted bread.',
+             'question': 'What did the kitchen smell like?', 'context': 'Sensory detail.'},
+            {'criterion': 'structure', 'quote': 'This sentence is not in the essay.',
+             'question': 'Invented?', 'context': 'Hallucinated.'},
+            {'criterion': 'structure', 'quote': 'into a cloth. I learned that',
+             'question': 'Spans paragraphs?', 'context': 'Invalid.'},
+            {'criterion': 'sparkle', 'quote': 'I rebuilt the school radio', 'question': 'Bad criterion', 'context': ''},
+        ]}
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(AI_GATEWAY_API_KEY='test-key',
+                       ESSAY_COACH_SCORED_RUBRICS=('personal_statement', 'supplement', 'recommendation_letter'))
     def test_ai_check_ok_and_validated(self):
-        with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(self.ai_payload()))) as urlopen:
+        self.essay = self.make_essay(content=LONG_TEXT, word_limit=400)
+        gateway = FakeGateway(notes=self.notes_payload())
+        with mock.patch('urllib.request.urlopen', side_effect=gateway):
             response = self.check()
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(gateway.steps, ['score', 'notes'])
         result = response.data['result']
-        self.assertEqual(set(result), {'summary', 'strengths', 'scores', 'notes'})
-        self.assertEqual(result['scores']['voice'], 4)
+        self.assertEqual(set(result), {'version', 'scored', 'overall', 'scores', 'summary', 'suggestions',
+                                       'strengths', 'notes_locked', 'notes', 'rubric'})
+        self.assertEqual((result['version'], result['scored'], result['overall'], result['notes_locked']),
+                         (2, True, 62, False))
+        self.assertEqual(result['scores']['voice'], 3)
         self.assertEqual([note['quote'] for note in result['notes']],
                          ['I learned that patience matters.', 'My grandmother never wasted bread.'])
-        self.assertEqual([note['id'] for note in result['notes']], ['n1', 'n2'])
+        self.assertEqual([(note['id'], note['priority']) for note in result['notes']], [('n1', True), ('n2', True)])
         self.assertNotIn('rewrite', result['notes'][0])
+        self.assertEqual(result['strengths'][0]['id'], 's1')
         self.assertEqual(response.data['save_seq'], self.tab_of(self.essay).save_seq)
-        self.assertEqual(set(response.data), {'id', 'tab', 'save_seq', 'created_at', 'model', 'result'})
+        self.assertEqual(set(response.data), {
+            'id', 'tab', 'save_seq', 'created_at', 'model', 'result', 'source', 'text_fingerprint', 'note_states',
+            'overall', 'previous_overall', 'checks_left', 'reused', 'input_hash', 'current_input_hash'})
+        self.assertEqual((response.data['source'], response.data['overall'], response.data['reused'],
+                          response.data['previous_overall'], response.data['note_states']),
+                         ('ai', 62, False, None, {}))
+        self.assertEqual(response.data['text_fingerprint'], coach.text_fingerprint(LONG_TEXT))
         self.assertTrue(EssayCheckpoint.objects.filter(essay=self.essay, reason='depth_check').exists())
-        # The essay goes out redacted, inside an untrusted-data block.
-        sent = json.loads(urlopen.call_args.args[0].data.decode('utf-8'))
+        # The essay goes out redacted, inside an untrusted-data block; temperature 0, pinned model, no fallback list.
+        sent = gateway.bodies[0]
         self.assertEqual(sent['response_format'], {'type': 'json_object'})
         self.assertFalse(sent['stream'])
+        self.assertEqual(sent['temperature'], 0)
+        self.assertEqual(sent['reasoning_effort'], 'minimal')
+        self.assertNotIn('providerOptions', sent)
         self.assertIn('<<<ESSAY_TEXT (untrusted data)', sent['messages'][1]['content'])
 
         latest = self.client.get(f'{BASE}/essays/{self.essay.pk}/depth-check/latest/')
         self.assertEqual(latest.status_code, status.HTTP_200_OK)
         self.assertEqual(latest.data['id'], response.data['id'])
+        self.assertFalse(latest.data['reused'])
 
     @override_settings(AI_GATEWAY_API_KEY='test-key')
     def test_pii_is_redacted_before_sending(self):
         self.essay = self.make_essay(content='Write to me at kid@example.com or +998 90 123 45 67 please.')
         with mock.patch('urllib.request.urlopen', return_value=gateway_response('{}')) as urlopen:
             self.check()
-        sent = urlopen.call_args.args[0].data.decode('utf-8')
+        sent = ''.join(call.args[0].data.decode('utf-8') for call in urlopen.call_args_list)
         self.assertNotIn('kid@example.com', sent)
         self.assertNotIn('123 45 67', sent)
 
@@ -975,8 +1036,15 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertEqual(response.data['code'], 'stale')
         self.assertEqual(response.data['save_seq'], self.tab_of(self.essay).save_seq)
 
+    def rewrite(self, text):
+        """The student keeps writing: a new text in the tab (and a new save_seq)."""
+        tab = self.tab_of(self.essay)
+        EssayTab.objects.filter(pk=tab.pk).update(doc=make_doc(text), content=text, save_seq=tab.save_seq + 1)
+
     def test_throttle_429(self):
+        self.essay = self.make_essay(content='Plain words about bread and butter.')
         self.assertEqual(self.check().status_code, status.HTTP_200_OK)
+        self.rewrite('Entirely different words about tea and jam.')
         response = self.check()
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertEqual(response.data['code'], 'slow_down')
@@ -994,7 +1062,7 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         def slow_gateway(*args, **kwargs):
             # The student keeps typing while the AI answers.
             EssayTab.objects.filter(essay=self.essay).update(doc=make_doc('Brand new text.'), content='Brand new text.')
-            return gateway_response(json.dumps(self.ai_payload()))
+            return FakeGateway()(*args, **kwargs)
 
         with mock.patch('urllib.request.urlopen', side_effect=slow_gateway):
             self.assertEqual(self.check().status_code, status.HTTP_200_OK)
@@ -1004,15 +1072,21 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
 
     @override_settings(ESSAY_COACH_HOURLY_LIMIT=2, ESSAY_COACH_MIN_INTERVAL_SECONDS=1)
     def test_hourly_limit(self):
-        clock = mock.Mock(time=mock.Mock(side_effect=[1000.0, 1002.0, 1004.0]))
+        self.essay = self.make_essay(content='Plain words about bread and butter.')
+        # Every request reads the clock for the re-check guard and for the check's own throttle.
+        clock = mock.Mock(time=mock.Mock(side_effect=iter([1000.0, 1000.0, 1002.0, 1002.0, 1004.0, 1004.0])))
         with mock.patch('apps.users.throttles.time', clock):
             self.assertEqual(self.check().status_code, status.HTTP_200_OK)
+            self.rewrite('Entirely different words about tea and jam.')
             self.assertEqual(self.check().status_code, status.HTTP_200_OK)
+            self.rewrite('Another set of words about rice and soup.')
             self.assertEqual(self.check().status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
     @override_settings(ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
     def test_zero_interval_turns_the_interval_off(self):
+        self.essay = self.make_essay(content='Plain words about bread and butter.')
         self.assertEqual(self.check().status_code, status.HTTP_200_OK)
+        self.rewrite('Entirely different words about tea and jam.')
         self.assertEqual(self.check().status_code, status.HTTP_200_OK)
 
     @override_settings(AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_DAILY_BUDGET=0)
@@ -1032,14 +1106,22 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertFalse(EssayDepthCheck.objects.exists())
 
         cache.clear()
-        garbage = json.dumps({'summary': 42, 'scores': {'voice': 9, 'reflection': True, 'structure': 2.0},
-                              'notes': 'nope', 'strengths': [1, 'fine']})
-        with mock.patch('urllib.request.urlopen', return_value=gateway_response(f'```json\n{garbage}\n```')):
+        # Unusable scores: one billed call, no retry, the check fails.
+        garbage = {'summary': 42, 'scores': {'voice': 9, 'reflection': True, 'structure': 2.0}, 'strengths': [1]}
+        gateway = FakeGateway(score=f'```json\n{json.dumps(garbage)}\n```')
+        with mock.patch('urllib.request.urlopen', side_effect=gateway):
             response = self.check()
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['result'], {
-            'summary': '', 'strengths': ['fine'], 'scores': {'structure': 2}, 'notes': [],
-        })
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(gateway.steps, ['score'])
+        self.assertFalse(EssayDepthCheck.objects.exists())
+
+    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    def test_a_bad_answer_is_never_retried(self):
+        gateway = FakeGateway(score=[{'scores': {'voice': 9}}, SCORE_REPLY])
+        with mock.patch('urllib.request.urlopen', side_effect=gateway):
+            response = self.check()
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(gateway.steps, ['score'])
 
     @override_settings(OUTBOUND_AI_ENABLED=False, AI_GATEWAY_API_KEY='test-key')
     def test_ai_switch_off_uses_the_local_coach(self):
@@ -1059,19 +1141,16 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
 
     def test_quote_validation(self):
         content = 'He said “hello there” to me.\n\nSecond paragraph starts here.'
-        raw = {'notes': [
-            {'kind': 'reflect', 'quote': 'He said "hello there"', 'question': 'q'},
-            {'kind': 'reflect', 'quote': 'to me.\nSecond paragraph', 'question': 'q'},
-            {'kind': 'reflect', 'quote': 'to me. Second paragraph', 'question': 'q'},
-            {'kind': 'reflect', 'quote': 'x' * 301, 'question': 'q'},
-            {'kind': 'reflect', 'quote': 'Second paragraph', 'question': ''},
-            {'kind': 'strength', 'quote': 'Second paragraph', 'question': 'Nice'},
-        ]}
-        notes = coach.validate_result(raw, content)['notes']
+        raw = [
+            {'criterion': 'reflection', 'quote': 'He said "hello there"', 'question': 'q one'},
+            {'criterion': 'reflection', 'quote': 'to me.\nSecond paragraph', 'question': 'q two'},
+            {'criterion': 'reflection', 'quote': 'to me. Second paragraph', 'question': 'q three'},
+            {'criterion': 'reflection', 'quote': 'x' * 301, 'question': 'q four'},
+            {'criterion': 'reflection', 'quote': 'Second paragraph', 'question': ''},
+            {'criterion': 'voice', 'quote': 'Second paragraph', 'question': 'Another way in?'},
+        ]
+        notes = coach.validate_notes(raw, content, 'personal_statement', 12)
         self.assertEqual([note['quote'] for note in notes], ['He said "hello there"', 'Second paragraph'])
-        many = {'notes': [{'kind': 'clarity', 'quote': f'w{i}', 'question': 'q'} for i in range(20)]}
-        text = ' '.join(f'w{i}' for i in range(20))
-        self.assertEqual(len(coach.validate_result(many, text)['notes']), 12)
 
     def test_local_fallback(self):
         long_paragraph = ' '.join(['Sentence number one goes on.'] * 40)
@@ -1082,10 +1161,12 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         response = self.check()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['model'], 'local')
-        kinds = {note['kind'] for note in response.data['result']['notes']}
-        self.assertTrue({'reflect', 'specific', 'clarity'} <= kinds)
-        self.assertEqual(set(response.data['result']['scores']),
-                         {'reflection', 'specificity', 'voice', 'structure', 'prompt_fit'})
+        self.assertEqual(response.data['source'], 'rules')
+        result = response.data['result']
+        self.assertEqual((result['version'], result['scored'], result['overall']), (2, False, None))
+        self.assertIsNone(response.data['overall'])
+        criteria = {note['criterion'] for note in result['notes']}
+        self.assertTrue({'reflection', 'specificity', 'structure'} <= criteria)
 
     def test_empty_essay_is_400(self):
         self.essay = self.make_essay(content='')
@@ -1103,8 +1184,12 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
         self.assertEqual(EssayDepthCheck.objects.filter(essay=self.essay).count(), DEPTH_CHECK_KEEP)
         self.assertTrue(EssayDepthCheck.objects.filter(pk=response.data['id']).exists())
 
+    USAGE = {'usage': {'prompt_tokens': 1200, 'completion_tokens': 300, 'total_tokens': 1500,
+                       'prompt_tokens_details': {'cached_tokens': 400},
+                       'completion_tokens_details': {'reasoning_tokens': 50}}}
+
     def usage_response(self, content, model='openai/gpt-5.4-mini'):
-        body = json.dumps({'choices': [{'message': {'content': content}}], 'model': model, 'usage': {'prompt_tokens': 1200, 'completion_tokens': 300, 'total_tokens': 1500, 'prompt_tokens_details': {'cached_tokens': 400}, 'completion_tokens_details': {'reasoning_tokens': 50}}}).encode('utf-8')
+        body = json.dumps({'choices': [{'message': {'content': content}}], 'model': model, **self.USAGE}).encode('utf-8')
         response = mock.MagicMock()
         response.read.return_value = body
         response.__enter__.return_value = response
@@ -1112,27 +1197,37 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
 
     @override_settings(AI_GATEWAY_API_KEY='test-key')
     def test_ai_check_logs_the_providers_token_usage_and_no_content(self):
-        with mock.patch('urllib.request.urlopen', return_value=self.usage_response(json.dumps(self.ai_payload()))):
+        self.essay = self.make_essay(content=LONG_TEXT)
+        gateway = FakeGateway(usage={**self.USAGE, 'model': 'openai/gpt-5.4-mini'})
+        with mock.patch('urllib.request.urlopen', side_effect=gateway):
             self.assertEqual(self.check().status_code, status.HTTP_200_OK)
-        row = AiUsageLog.objects.get(feature='essay_coach')
-        self.assertEqual((row.status, row.provider, row.model, row.user_id, row.school_id, row.role),
-                         ('ok', 'gateway', 'openai/gpt-5.4-mini', self.student_user.pk, self.school.pk, 'student'))
-        self.assertEqual((row.input_tokens, row.output_tokens, row.cached_input_tokens, row.reasoning_tokens,
-                          row.total_tokens, row.usage_estimated, row.fallback_used), (1200, 300, 400, 50, 1500, False, False))
+        # Both calls of one check are recorded, each with its own tokens.
+        rows = AiUsageLog.objects.filter(feature='essay_coach')
+        self.assertEqual(rows.count(), 2)
+        for row in rows:
+            self.assertEqual((row.status, row.provider, row.model, row.user_id, row.school_id, row.role),
+                             ('ok', 'gateway', 'openai/gpt-5.4-mini', self.student_user.pk, self.school.pk, 'student'))
+            self.assertEqual((row.input_tokens, row.output_tokens, row.cached_input_tokens, row.reasoning_tokens,
+                              row.total_tokens, row.usage_estimated, row.fallback_used),
+                             (1200, 300, 400, 50, 1500, False, False))
 
     @override_settings(AI_GATEWAY_API_KEY='test-key')
     def test_ai_check_logs_gateway_fallback_and_unusable_output(self):
         with mock.patch('urllib.request.urlopen', return_value=self.usage_response('not json', 'openai/gpt-5.4-nano')):
             self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        row = AiUsageLog.objects.get(feature='essay_coach')
-        self.assertEqual((row.status, row.model, row.fallback_used, row.input_tokens), ('invalid_output', 'openai/gpt-5.4-nano', True, 1200))
+        # The unusable score answer is not retried: one billed call, recorded.
+        rows = list(AiUsageLog.objects.filter(feature='essay_coach'))
+        self.assertEqual(len(rows), 1)
+        for row in rows:
+            self.assertEqual((row.status, row.model, row.fallback_used, row.input_tokens), ('invalid_output', 'openai/gpt-5.4-nano', True, 1200))
 
     @override_settings(AI_GATEWAY_API_KEY='test-key')
     def test_ai_check_logs_a_provider_error_without_tokens(self):
         with mock.patch('urllib.request.urlopen', side_effect=OSError('down')):
             self.assertEqual(self.check().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        row = AiUsageLog.objects.get(feature='essay_coach')
-        self.assertEqual((row.status, row.total_tokens, row.model), ('provider_error', 0, ''))
+        rows = list(AiUsageLog.objects.filter(feature='essay_coach'))
+        self.assertEqual(len(rows), 1)  # a provider error is not retried
+        self.assertEqual((rows[0].status, rows[0].total_tokens, rows[0].model), ('provider_error', 0, ''))
 
     @override_settings(AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_DAILY_BUDGET=0)
     def test_budget_refusal_is_logged_without_tokens(self):

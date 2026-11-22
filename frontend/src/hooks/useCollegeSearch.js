@@ -9,7 +9,8 @@ const PREFETCH_DELAY_MS = 800;
 const INITIAL = { query: null, version: null, rows: [], count: 0, unpricedCount: 0, next: null, facets: null, loading: true, loadingMore: false, error: '' };
 
 /**
- * College Search, one page at a time. `query` comes from collegeSearchQuery();
+ * College Search, one page at a time. `query` comes from collegeSearchQuery() (null waits: nothing is
+ * requested until the page knows the student's subject preset);
  * `version` changes when the student's profile changes, because fit scores move.
  * The first page shows as soon as it arrives. Only the page after the last one
  * shown is fetched in the background, so "Show more" is usually instant without
@@ -26,6 +27,9 @@ export function useCollegeSearch(query, version = 0) {
   const facets = useRef(new Map());
   const controller = useRef(null);
   const prefetchTimer = useRef(0);
+  // The profile version now in force, read when an uncancelled facet response lands.
+  const currentVersion = useRef(version);
+  currentVersion.current = version;
 
   // A page in flight belongs to the search that asked for it: once that search is
   // cancelled (its signal aborted) the request is never handed out again. A page
@@ -34,14 +38,21 @@ export function useCollegeSearch(query, version = 0) {
     const key = `${version}|${query}|${number}`;
     const cached = pages.current.get(key);
     if (cached && !cached.failed && (cached.done || !cached.signal?.aborted)) return cached.promise;
-    const signal = controller.current?.signal;
     const withFacets = number === 1 && !facets.current.has(version);
+    // The request that carries the facets is the only one that supplies them: it is not tied to the search that
+    // started it, so opening the Subject rankings view (query null) or changing a filter does not cancel it.
+    const signal = withFacets ? undefined : controller.current?.signal;
     const promise = api.collegeSearch(`${query}&page=${number}${withFacets ? '&facets=true' : ''}`, signal);
     pages.current.set(key, { promise, signal });
     const entry = pages.current.get(key);
     promise.then((payload) => {
       entry.done = true;
-      if (payload.facets) facets.current.set(version, payload.facets);
+      if (payload.facets) {
+        facets.current.set(version, payload.facets);
+        // Cached under the version that asked, but shown only if that is still the profile in force:
+        // an older request landing after a newer one must not overwrite its counts.
+        if (version === currentVersion.current) setState((previous) => ({ ...previous, facets: payload.facets }));
+      }
     }, () => {entry.failed = true;});
     return promise;
   }, [query, version]);
@@ -53,6 +64,7 @@ export function useCollegeSearch(query, version = 0) {
 
   useEffect(() => {
     controller.current?.abort();
+    if (query == null) return undefined;
     const own = new AbortController();
     controller.current = own;
     // The rows of the previous search stay on screen (dimmed) until these arrive.

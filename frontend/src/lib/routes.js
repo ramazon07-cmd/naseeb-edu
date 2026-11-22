@@ -94,12 +94,22 @@ function normalizePath(pathname) {
   return path.length > 1 ? path.replace(/\/+$/, '') : path;
 }
 
+// The counselor's letter workspace: /students/15/letters/new and /students/15/letters/8.
+const LETTER_PATH = /^\/students\/([1-9]\d{0,9})\/letters\/(new|[1-9]\d{0,9})$/;
+export function parseLetterPath(path) {
+  const match = LETTER_PATH.exec(path);
+  if (!match) return null;
+  return { page: 'students', params: { studentId: Number(match[1]), letterId: match[2] === 'new' ? 'new' : Number(match[2]) } };
+}
+
 // '/essay-lab/essays/42' -> { page: 'essay_lab', params: { essayId: 42 } };
 // null for anything that is not a workspace page.
 export function parsePath(pathname) {
   const path = normalizePath(pathname);
   if (PATH_PAGES.has(path)) return { page: PATH_PAGES.get(path), params: {} };
   if (PATH_ALIASES.has(path)) return { page: PATH_ALIASES.get(path), params: {} };
+  const letter = parseLetterPath(path);
+  if (letter) return letter;
   const cut = path.lastIndexOf('/');
   const base = path.slice(0, cut);
   const last = path.slice(cut + 1);
@@ -130,6 +140,9 @@ export function buildPath({ page, params = {} } = {}) {
   if (tabs && tabs.includes(params.tab) && params.tab !== DEFAULT_TAB[page]) return `${base}/${params.tab}`;
   const record = RECORD_ROUTES[page];
   const id = record ? params[record.param] : null;
+  if (page === 'students' && ID_PATTERN.test(String(id ?? '')) && (params.letterId === 'new' || ID_PATTERN.test(String(params.letterId ?? '')))) return `${base}/${id}/letters/${params.letterId}`;
+  // Back from the letter workspace: the student's Recommendations tab.
+  if (page === 'students' && params.tab === 'letters' && ID_PATTERN.test(String(id ?? ''))) return `${base}/${id}?tab=letters`;
   if (record && ID_PATTERN.test(String(id ?? ''))) return `${base}${record.segment ? `/${record.segment}` : ''}/${id}`;
   return base;
 }
