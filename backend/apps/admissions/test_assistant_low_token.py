@@ -453,6 +453,33 @@ class EndpointTests(Fixture, APITestCase):
         self.assertIn('Draft an essay', answer)
         self.assertNotIn('Pick a major', answer)
 
+    def test_next_roadmap_step_skips_missions_locked_behind_an_unfinished_prerequisite(self):
+        first = RoadmapMission.objects.get(student=self.student, title='Pick a major')
+        first.status = RoadmapMission.Status.SUBMITTED
+        first.save()
+        RoadmapMission.objects.create(
+            student=self.student, title='Draft an essay', level=1, sequence=2, prerequisite=first)
+        answer = answer_locally(self.student_user, 'What’s my next roadmap step?', 'en')
+        self.assertNotIn('Draft an essay', answer)
+        self.assertNotIn('Pick a major', answer)
+        self.assertIn('waiting for approval', answer)
+        first.status = RoadmapMission.Status.COMPLETED
+        first.save()
+        self.assertIn('Draft an essay', answer_locally(self.student_user, 'What’s my next roadmap step?', 'en'))
+
+    def test_overdue_question_about_other_records_is_not_answered_with_tasks(self):
+        for question in ('How many of my roadmap missions are overdue?', 'Which of my documents are overdue?',
+                         'Do I have overdue messages?'):
+            self.assertIsNone(answer_locally(self.student_user, question, 'en'), question)
+        self.assertIn('Write Harvard resume', answer_locally(self.student_user, 'Which tasks are overdue?', 'en'))
+
+    def test_admin_context_carries_the_overdue_task_count(self):
+        admin = User.objects.create_user(
+            username='ladmin', email='ladmin@example.com', role=User.Role.ADMIN, school=self.school)
+        Task.objects.filter(student=self.student, title='Read SAT guide').update(status=Task.Status.IN_PROGRESS)
+        text = assistant.build_topic_context(admin, {'tasks'})
+        self.assertIn('overdue tasks (open and past due): 1', text)
+
     @override_settings(AI_ASSISTANT_ANSWER_CACHE_SECONDS=0)
     def test_cache_can_be_disabled(self):
         self.ask('Explain the SAT format', 'One', times=3)

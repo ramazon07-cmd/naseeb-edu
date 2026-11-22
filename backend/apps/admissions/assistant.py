@@ -30,7 +30,7 @@ from .assistant_local import answer_locally, assistant_students, detect_language
 from .gateway_errors import is_unbilled
 from .streaming import GuardedStream, acquire_stream_slot, release_db_connection
 from .models import Application, RoadmapMission, StudentProfile, Task
-from .progress import summarize_progress
+from .progress import late_tasks, summarize_progress
 from .scoping import active_visible_students
 
 
@@ -280,7 +280,9 @@ def build_topic_context(user, topics):
     summary = summarize_progress(students)
     lines.append(f'students {summary["students_total"]}; at risk {summary["students_at_risk"]}')
     if 'tasks' in topics:
-        lines.append(_counts_line('tasks by status', _status_counts(Task.objects.filter(student__in=students))))
+        staff_tasks = Task.objects.filter(student__in=students)
+        lines.append(_counts_line('tasks by status', _status_counts(staff_tasks)))
+        lines.append(f'overdue tasks (open and past due): {staff_tasks.filter(late_tasks(timezone.localdate())).count()}')
     if 'roadmap' in topics:
         lines.append(_counts_line('roadmap by status', _status_counts(RoadmapMission.objects.filter(student__in=students))))
     if 'applications' in topics:

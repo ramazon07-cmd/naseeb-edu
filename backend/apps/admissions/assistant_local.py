@@ -10,7 +10,7 @@ goes to the AI instead: a wrong canned answer is worse than a paid one.
 import re
 from datetime import timedelta
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from apps.users.models import User
@@ -128,6 +128,8 @@ _BOOK = r'\bbook|schedule|set up|arrange|band qil|bron|yozil|записа|наз
 _ESSAY_LAB = r'essay[- ]?lab|insho laborator|эссе[- ]?лаб|лаборатори\w* эссе'
 _HOW = r'\bwhere\b|\bhow\b|find|open|\buse\b|qayerda|qaerda|qanday|ochish|foydalan|где|как|открыть|использ'
 _WHERE = r'\bwhere\b|qayerda|qaerda|где'
+# Records other than tasks: an "overdue" question that names one of these is not about tasks.
+_OTHER_RECORDS = '|'.join((_ROADMAP, r'document|hujjat|документ', r'message|xabar|сообщен', _MEETING))
 _PAGES = (
     ('tasks', r'\btasks?\b|vazifa|topshiriq|задач|задани'),
     ('roadmap', _ROADMAP),
@@ -149,7 +151,8 @@ def _detect(text):
 
     if lookup and own:
         if _has(_OVERDUE, text) and not app:
-            found.add('overdue')
+            # Overdue work on another record type is not a task lookup: leave it to the AI.
+            found.add('other_overdue' if _has(_OTHER_RECORDS, text) else 'overdue')
         elif _has(_DEADLINE, text) and _has(_SOON, text):
             found.add('app_deadline' if app else 'deadline')
         if _has(_ROADMAP, text) and _has(_NEXT, text):
@@ -171,7 +174,7 @@ def _detect(text):
             pages.discard('documents')
         if len(pages) == 1:
             found.add('where_' + pages.pop())
-    return found.pop() if len(found) == 1 else None
+    return found.pop() if len(found) == 1 and 'other_overdue' not in found else None
 
 
 # -- wording ---------------------------------------------------------------
@@ -201,6 +204,11 @@ _T = {
         'en': 'You have no open roadmap missions.',
         'uz': 'Yo\'l xaritangizda ochiq missiya yo\'q.',
         'ru': 'Открытых миссий на дорожной карте нет.',
+    },
+    'mission_waiting': {
+        'en': 'Your remaining roadmap missions are waiting for approval or for an earlier mission to be approved.',
+        'uz': 'Yo\'l xaritangizdagi qolgan missiyalar tasdiqlanishini yoki oldingi missiya tasdiqlanishini kutmoqda.',
+        'ru': 'Оставшиеся миссии ждут одобрения либо одобрения предыдущей миссии.',
     },
     'mission': {
         'en': 'Your next roadmap mission:',
@@ -361,14 +369,16 @@ def _student_answer(student, intent, lang):
         lines = [f'- {title} ({_when(due, today, lang)})' for title, due in rows.order_by('due_date').values_list('title', 'due_date')[:3]]
         return head + '\n' + '\n'.join(lines)
     if intent == 'roadmap':
-        # Only missions the student can act on: submitted ones are waiting for approval.
+        # Only missions the student can act on: not submitted (waiting for approval) and not locked
+        # behind a prerequisite that is not completed yet.
+        missions = RoadmapMission.objects.filter(student=student).exclude(status=RoadmapMission.Status.COMPLETED)
         mission = (
-            RoadmapMission.objects.filter(student=student)
-            .exclude(status__in=(RoadmapMission.Status.COMPLETED, RoadmapMission.Status.SUBMITTED))
+            missions.exclude(status=RoadmapMission.Status.SUBMITTED)
+            .filter(Q(prerequisite__isnull=True) | Q(prerequisite__status=RoadmapMission.Status.COMPLETED))
             .order_by('level', 'sequence', 'due_date').values('title', 'due_date').first()
         )
         if not mission:
-            return _t('no_mission', lang)
+            return _t('mission_waiting' if missions.exists() else 'no_mission', lang)
         line = f'- {mission["title"]}'
         if mission['due_date']:
             line += f' ({_when(mission["due_date"], today, lang)})'
