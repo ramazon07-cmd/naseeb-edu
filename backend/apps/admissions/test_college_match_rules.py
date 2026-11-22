@@ -503,9 +503,11 @@ class SampleProfileTests(RulesFixture, APITestCase):
 
     def test_sat_1500_needing_a_scholarship_on_a_10k_budget(self):
         # Merit CS (merit only) and Unknown Aid CS (no aid details) cost more than $10k: left out with a note each.
+        # The student lists no activities, so the bands are the ones College Search shows: the selective
+        # universities are reaches, not targets, so the capped far reach is not needed.
         self.assertEqual(self.summary(sat_score=1500, scholarship_needed=True, budget_usd=10000), (
-            [3, 4, 3], ['aid_unknown', 'filled_from', 'filled_from', 'no_intl_aid'],
-            {'aid_unknown': {'count': 1}, 'no_intl_aid': {'count': 1}}, 1))
+            [3, 4, 3], ['aid_unknown', 'filled_from', 'no_intl_aid'],
+            {'aid_unknown': {'count': 1}, 'no_intl_aid': {'count': 1}}, 0))
 
     def test_engineering(self):
         # A broad area: only the engineering school has a rank in it.

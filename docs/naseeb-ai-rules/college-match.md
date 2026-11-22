@@ -53,8 +53,9 @@ Code: `backend/apps/admissions/college_match.py` (rules), `subjects.py` (major t
    scholarship, stay; an unknown cost is flagged "Cost unknown".
 4. **Band.** The band compares the student's SAT/ACT and GPA with the university's range and the
    international admit rate (published, else estimated from the overall rate: x0.5 under 25%, x0.8 under
-   50%, as-is at 50%+, marked ≈). The Academics x/10 tile is a summary and does not change the band;
-   activities and essays are not used. A university the engine cannot place, or where the student is not
+   50%, as-is at 50%+, marked ≈). The Academics x/10 tile is a summary. The band is the one College Search, the
+   university page and the saved admission snapshot show for the same student (same context, activities and
+   essays included), so it never changes between them. A university the engine cannot place, or where the student is not
    eligible, is left out. **Decided (2026-11-22):** three left-out notes tell the student why:
    - `test_needed`: "{n} universities were left out because they expect an SAT or ACT score; add yours to
      see them" (no band, the university has an SAT or ACT range, the student has neither score);
@@ -119,7 +120,7 @@ one no-aid-details CS college, and one engineering school ranked only in the bro
 | Profile | Reach / target / safety | Notes |
 |---|---|---|
 | No SAT | 3 / 4 / 3 (one far reach) | filled_from x2, test_needed (3) |
-| SAT 1500, needs a scholarship, $10k budget | 3 / 4 / 3 (one far reach) | filled_from x2, aid_unknown (1), no_intl_aid (1) |
+| SAT 1500, needs a scholarship, $10k budget | 3 / 4 / 3 | filled_from, aid_unknown (1), no_intl_aid (1) |
 | "Engineering" | 0 / 0 / 1 | short_list; hint broad_area |
 | "информатика" | 3 / 4 / 3 | filled_from |
 | "Undecided" | 1 / 0 / 1 (overall QS rank) | short_list; hint pick_major |

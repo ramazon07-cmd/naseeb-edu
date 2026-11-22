@@ -265,8 +265,8 @@ def match_with_context(profile):
     ctx = fit_context(profile)
     subject_codes = subjects_for_major(profile.target_major)
     ctx['budget'] = profile.budget_usd
-    # Academics only: activities and essays stay neutral (None) in the chance engine.
-    chance_ctx = {**ctx, 'rubric': {'academics': ctx['rubric']['academics']}}
+    # The same context College Search, the university page and the saved snapshot use, so a band never changes between them.
+    chance_ctx = ctx
     majors = intended_majors(profile)
     picks = candidates(subject_codes, majors, ctx)
     universities = with_cost(University.objects.only(*MATCH_FIELDS)).filter(pk__in=list(picks))
@@ -302,7 +302,6 @@ def match_with_context(profile):
         for entry in rows:
             row = serialized[entry['id']]
             row['suggested_programs'] = programs[entry['id']]
-            row['factors'] = [{'key': 'academics', 'score': ctx['rubric']['academics'], 'share': 100}]
             row.update(card_facts(by_pk[entry['id']], entry, ctx))
     hints = []
     if not subject_codes:

@@ -108,3 +108,14 @@ test('refreshing the research profile invalidates the stored match and pending r
   assert.notEqual(reasonsKey(fresh.generation, 'en'), reasonsKey(stored.generation, 'en'));
   assert.equal(invalidateMatch(fresh.generation).generation, 5);
 });
+
+test('the explanations request waits at least as long as the backend AI deadline and is not retried', async () => {
+  const { readFileSync } = await import('node:fs');
+  const api = readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
+  const settings = readFileSync(new URL('../../backend/core/settings.py', import.meta.url), 'utf8');
+  const deadlineSeconds = Number(settings.match(/ESSAY_COACH_TOTAL_SECONDS', default=(\d+)/)[1]);
+  const call = api.match(/collegeMatchReasons: [\s\S]*?\n {2}\}\),/)[0];
+  const timeoutMs = Number(call.match(/timeoutMs: ([\d_]+)/)[1].replaceAll('_', ''));
+  assert.ok(timeoutMs > deadlineSeconds * 1000, 'the client must not abort before the server deadline');
+  assert.match(call, /retries: 0/);
+});
