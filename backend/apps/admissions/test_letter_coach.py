@@ -278,6 +278,18 @@ class LetterRecheckTests(LetterCheckCase):
         self.assertEqual((response.data['previous_overall'], response.data['reused'], len(gateway.bodies)), (67, False, 2))
         self.assertEqual(RecommendationLetterCheck.objects.count(), 2)
 
+    def test_the_saved_model_is_the_active_providers(self):
+        from . import ai_providers
+        from .models import RecommendationLetterCheck
+        cli = dict(AI_PROVIDER='claude_cli', AI_TEST_CLI_MODEL='sonnet', APP_ENV='development')
+        for reply in (SCORE_REPLY, {**SCORE_REPLY, 'scores': {key: 1 for key in SCORE_REPLY['scores']}}):
+            RecommendationLetterCheck.objects.all().delete()
+            with override_settings(**cli), mock.patch.object(ai_providers, 'cli_available', return_value=True), \
+                    mock.patch.object(ai_providers, '_claude_cli', side_effect=ai_providers._gateway):
+                response, _ = self.check(FakeGateway(score=reply))
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(RecommendationLetterCheck.objects.get().model, 'claude-cli/sonnet')
+
     def test_another_input_runs_a_new_check_for_the_same_text(self):
         first = self.first()
         RecommendationLetter.objects.filter(pk=self.letter.pk).update(relationship='Her form tutor')
@@ -778,6 +790,14 @@ class LetterSensitiveTests(LetterCheckCase):
         self.assertEqual((result['safety'], result['scored'], result['overall'], result['notes']), (True, False, None, []))
         self.assertTrue(result['notes_locked'])
         self.assertEqual(self.left(), before)
+
+    def test_past_or_negated_danger_is_left_to_the_model(self):
+        for text in ('In 2019 she wanted to die, but she has recovered and is safe now.',
+                     'She has never had thoughts of suicide.', 'Her father no longer beats her.',
+                     'He was not abused at home.'):
+            self.assertFalse(letter_sensitive.current_danger(text), text)
+        for text in ('She is not eating well and her father beats her at home.', 'In 2019 she was fine. Now she wants to die.'):
+            self.assertTrue(letter_sensitive.current_danger(text), text)
 
     def test_current_danger_words_in_russian_and_uzbek(self):
         for text in ('Отец бьёт её дома.', "Otasi uni uyda kaltaklaydi.", 'Ona kaltaklanmoqda.'):

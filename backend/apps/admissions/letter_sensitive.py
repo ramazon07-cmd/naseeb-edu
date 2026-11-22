@@ -102,9 +102,31 @@ def keyword_sentences(raw_text, pattern):
     return [sentence for sentence in sentences(raw_text) if pattern.search(_folded(sentence))]
 
 
+_NEGATION = re.compile(r"(?<!\w)(?:never|no|not|nor|neither|without|denies|denied|n't|hech qachon|hech|никогда|нет|не)(?!\w)", re.IGNORECASE)
+_HISTORY = re.compile(
+    r"(?<!\w)(?:(?:in|since|during|by) (?:19|20)\d\d|years? ago|months? ago|last (?:year|summer|winter|spring|autumn)|"
+    r"as a (?:child|kid)|used to|previously|formerly|no longer|in the past|once|recovered|has recovered|"
+    r"is safe now|now safe|now she is safe|now he is safe|safe now|"
+    r"давно|раньше|в прошлом|лет назад|(?:19|20)\d\d году|oldin|ilgari|yil oldin)(?!\w)", re.IGNORECASE)
+_NEGATION_WORDS_BEFORE = 3
+
+
+def _affirmative_danger(sentence):
+    """True when the sentence states danger as happening now: not negated just before the phrase and not
+    placed in the past. Ambiguous wording is left to the model, which reads the whole letter."""
+    text = _folded(sentence)
+    if _HISTORY.search(text):
+        return False
+    for match in DANGER.finditer(text):
+        before = text[:match.start()].split()[-_NEGATION_WORDS_BEFORE:]
+        if not _NEGATION.search(' '.join(before)):
+            return True
+    return False
+
+
 def current_danger(raw_text):
     """True when the letter says, in so many words, that abuse or danger is happening now."""
-    return bool(DANGER.search(_folded(coach.normalize(raw_text))))
+    return any(_affirmative_danger(sentence) for sentence in sentences(raw_text))
 
 
 def safety_result():

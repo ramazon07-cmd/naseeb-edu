@@ -192,9 +192,11 @@ function LetterEditor({ student, user, initialLetter, onBack, onOpened, onSaved,
 
   // Typing is never lost: save when the tab is hidden and when leaving, and ask before closing the page.
   useEffect(() => {
-    const pending = () => isDirty() && !conflictRef.current && (letterRef.current || formRef.current.body.trim())
+    // Unsaved text always warns; a conflict only stops the automatic save (the counselor must choose a version).
+    const unsaved = () => isDirty() && (letterRef.current || formRef.current.body.trim())
+    const pending = () => unsaved() && !conflictRef.current
     const hidden = () => { if (document.visibilityState === 'hidden' && pending()) flush({ keepalive: true }).catch(() => {}) }
-    const beforeUnload = (event) => { if (pending()) { event.preventDefault(); event.returnValue = '' } }
+    const beforeUnload = (event) => { if (unsaved()) { event.preventDefault(); event.returnValue = '' } }
     document.addEventListener('visibilitychange', hidden)
     window.addEventListener('beforeunload', beforeUnload)
     return () => {

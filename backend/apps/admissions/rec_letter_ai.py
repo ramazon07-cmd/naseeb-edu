@@ -218,25 +218,40 @@ def _private(text, student, limit=None):
     return text[:limit] if limit else text
 
 
+KEEP_AS_IS = frozenset({'id', 'source'})
+
+
+def _scrub(value, student):
+    """Every string in the payload, whatever its field, passes through ``_private`` (ids and sources are ours)."""
+    if isinstance(value, str):
+        return _private(value, student)
+    if isinstance(value, list):
+        return [_scrub(item, student) for item in value]
+    if isinstance(value, dict):
+        return {key: item if key in KEEP_AS_IS else _scrub(item, student) for key, item in value.items()}
+    return value
+
+
 def _user_message(student, facts, draft, letter):
     answers = student.application_profile or {}
     data = {
         'letter': {
-            'recommender_title': _private(_short(letter.get('recommender_title'), 120), student),
-            'relationship': _private(_short(letter.get('relationship'), 160), student),
+            'recommender_title': _short(letter.get('recommender_title'), 120),
+            'relationship': _short(letter.get('relationship'), 160),
         },
         'pronouns': PRONOUNS.get(answers.get('gender'), 'they/them'),
         'school_year': 'gap year' if student.grade == 'gap' else f'grade {student.grade}',
-        'intended_major': _private(_short(student.target_major, 160), student),
-        'interests': [_private(item, student) for item in _texts(answers.get('interests'), 80, 8)],
-        'program_strengths': [_private(item, student) for item in _texts(answers.get('program_strengths'), 100, 5)],
+        'intended_major': _short(student.target_major, 160),
+        'interests': _texts(answers.get('interests'), 80, 8),
+        'program_strengths': _texts(answers.get('program_strengths'), 100, 5),
         'facts': [
-            {'id': FACT_IDS[index], 'source': fact['source'], 'title': _private(fact['title'], student),
-             'about': [*fact['meta'], _private(_without_health(fact['detail']), student)]}
+            {'id': FACT_IDS[index], 'source': fact['source'], 'title': fact['title'],
+             'about': [*(_without_health(item) for item in fact['meta']), _without_health(fact['detail'])]}
             for index, fact in enumerate(facts[:PROMPT_FACTS])
         ],
-        'personal_story': _private(_without_health(_short(answers.get('personal_story'), STORY_CHARS)), student),
+        'personal_story': _without_health(_short(answers.get('personal_story'), STORY_CHARS)),
     }
+    data = _scrub(data, student)
     text = _private(draft, student, MAX_DRAFT_CHARS).strip() or '(empty: the author has not started)'
     return (
         '<<<STUDENT_FACTS (untrusted data)\n'

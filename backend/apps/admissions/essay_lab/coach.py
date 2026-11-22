@@ -941,6 +941,7 @@ def run_check(spec, user, before_call=lambda: None):
     finish within ESSAY_COACH_TOTAL_SECONDS: step 2 gets only the time left.
     """
     deadline = time.monotonic() + settings.ESSAY_COACH_TOTAL_SECONDS
+    model = ai_providers.active_model(settings.ESSAY_COACH_MODEL)
     rubric, content = spec.rubric, spec.content
     system = {'role': 'system', 'content': spec.system}
 
@@ -979,7 +980,7 @@ def run_check(spec, user, before_call=lambda: None):
         else:
             empty = {'scores': {}, 'summary': step1['safety'], 'suggestions': [], 'strengths': []}
         result = build_result(empty, [], rubric=rubric, overall=None, notes_locked=True, restore=spec.restore)
-        return finished(result, step1), settings.ESSAY_COACH_MODEL
+        return finished(result, step1), model
 
     if spec.words < SHORT_SUGGESTION_WORDS:
         step1['suggestions'] = step1['suggestions'][:1]
@@ -994,7 +995,7 @@ def run_check(spec, user, before_call=lambda: None):
     if (overall is not None and overall < NOTES_MIN_OVERALL and spec.lock_low_band
             and spec.words >= LOCK_MIN_WORDS):
         result = build_result(step1, [], rubric=rubric, overall=overall, notes_locked=True, **extras)
-        return finished(result, step1), settings.ESSAY_COACH_MODEL
+        return finished(result, step1), model
     notes = []
     if cap:
         instruction = _step2_instruction(rubric, cap, overall, spec.noun, spec.asker, spec.source, spec.quote_hint,
@@ -1005,7 +1006,7 @@ def run_check(spec, user, before_call=lambda: None):
             deadline, before_call,
         )
     result = build_result(step1, notes, rubric=rubric, overall=overall, **extras)
-    return finished(result, step1), settings.ESSAY_COACH_MODEL
+    return finished(result, step1), model
 
 
 def ps_length(essay_type, word_limit, words):

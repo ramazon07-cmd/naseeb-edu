@@ -3,7 +3,7 @@ import { api } from '../api.js'
 import { t } from '../i18n.js'
 import { applyNoteState, inputChangedSince, mergeNoteStates, noteStateUpdates, serverNotice, textFingerprint } from '../essayLab/coachModel.js'
 import { errorCode } from '../essayLab/essayLabApi.js'
-import { conflictError, letterExtras, locateNotes, normalizeLetterCheck } from './letterModel.js'
+import { checkErrorDetails, conflictError, letterExtras, locateNotes, normalizeLetterCheck } from './letterModel.js'
 
 // The Check tab's data: the latest check, its notes placed in the text, note states and one "Check again".
 // Same rules as Essay Coach (coachModel.js): notes whose sentence is gone count as resolved, the
@@ -150,7 +150,7 @@ export function useLetterCheck({ letterId, body, inputKey, synced, flush, resolv
           setNoteStates((previous) => mergeNoteStates(latestCheck.note_states, previous, inflight.current))
         }, () => {})
       }
-      setStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message, off: error?.details?.ai_available === false, details: error?.details || null } })
+      setStatus({ loading: false, error: { code: serverNotice(error) || errorCode(error) || (error?.status === 409 ? 'stale' : null), message: error?.message, off: checkErrorDetails(error)?.ai_available === false, details: checkErrorDetails(error) } })
     }
   }, [flush, resolveStale, letterRef])
 

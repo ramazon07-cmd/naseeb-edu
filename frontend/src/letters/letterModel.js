@@ -181,6 +181,12 @@ export const canInsert = (item) => item?.kind === 'fact'
 
 // The Check button after an error: hidden only when it can never work (not a counselor, or the server says
 // AI is switched off: `details.ai_available` false). A provider failure stays retryable.
+// The API error carries the whole response body; the server's own flags (`ai_available`) sit one level down.
+export const checkErrorDetails = (error) => {
+  const inner = error?.details?.details
+  return inner && typeof inner === 'object' ? inner : null
+}
+
 export function checkAvailability(error) {
   const code = error?.code
   const unavailable = code === 'counselors_only' || Boolean(error?.off)

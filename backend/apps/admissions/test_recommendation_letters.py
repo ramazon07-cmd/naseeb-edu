@@ -228,6 +228,25 @@ class LetterSuggestionTests(LetterFixture, APITestCase):
         self.assertEqual(self.suggest(self.admin).status_code, 200)
 
     @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
+    def test_no_name_reaches_the_model_from_any_field(self):
+        from apps.admissions import rec_letter_ai
+        names = ('Malika', 'Karimova', self.school_a.name)
+        said = f'Malika Karimova of {self.school_a.name}'
+        self.student.target_major = f'Physics like {said}'
+        self.student.application_profile = {
+            'gender': 'Female', 'interests': [said], 'program_strengths': [said], 'personal_story': said + ' wrote this.',
+        }
+        facts = [rec_letter_ai._fact(source, said, meta=[said, f'{said} 2026'], detail=[said])
+                 for source in ('honor', 'research', 'activity', 'project')]
+        letter = {'recommender_title': said, 'relationship': said}
+        answer = {'suggestions': [{'kind': 'question', 'text': 'What did you see?', 'fact': 'A'}]}
+        with mock.patch('urllib.request.urlopen', return_value=gateway_response(json.dumps(answer))) as urlopen:
+            rec_letter_ai.ai_suggestions(self.student, facts, said, letter=letter, language='en')
+        request = urlopen.call_args.args[0].data.decode('utf-8')
+        for name in names:
+            self.assertNotIn(name.lower(), request.lower())
+
+    @override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
     def test_ai_gets_facts_without_identity_and_bad_items_are_dropped(self):
         question = 'What did you see [Student] do as captain of the robotics club?'
         answer = {'suggestions': [

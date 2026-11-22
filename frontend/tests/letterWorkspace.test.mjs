@@ -4,7 +4,7 @@ import { applyNoteState, doneNotes, goneNotes, noteStateUpdates, openNotes, rech
 import { buildPath, parsePath, resolveRoute } from '../src/lib/routes.js';
 import { createIdeasController } from '../src/letters/ideasController.js';
 import {
-  LETTER_CRITERIA, LETTER_KEYS, SENSITIVE_TEXT, aiIdeasOf, canInsert, checkAvailability, letterExtras, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
+  LETTER_CRITERIA, LETTER_KEYS, SENSITIVE_TEXT, aiIdeasOf, canInsert, checkAvailability, checkErrorDetails, letterExtras, conflictError, fillCheckText, normalizeNewlines, sentenceAround, factLine, factsOf, fillStudent, insertAtCaret, locateNotes, mirrorSegments, noteAt, normalizeLetterCheck, wordCount,
 } from '../src/letters/letterModel.js';
 
 const LETTER = 'I have known Ramazon for two years.\n\nHe is a hardworking student. He leads the robotics club.\n\nHe is a hardworking student.';
@@ -313,4 +313,12 @@ test('reader and sensitive notes are placed in the text like notes', () => {
   const located = locateNotes(LETTER, [...extras.readerNotes, ...extras.sensitive]);
   assert.equal(LETTER.slice(located.get('r1').from, located.get('r1').to), 'He leads the robotics club.');
   assert.ok(located.has('sx-discipline'));
+});
+
+test('the AI flag is read from the nested details of the API error', () => {
+  const body = { code: 'coach_unavailable', details: { ai_available: false } };
+  assert.deepEqual(checkErrorDetails({ details: body }), { ai_available: false });
+  assert.equal(checkErrorDetails({ details: { code: 'x' } }), null);
+  assert.equal(checkErrorDetails(null), null);
+  assert.deepEqual(checkAvailability({ code: 'coach_unavailable', details: checkErrorDetails({ details: body }) }), { unavailable: true, retry: false });
 });

@@ -139,6 +139,7 @@ function CheckTab({ check, model: rawModel, extras: rawExtras, name, status, anc
         {model.suggestions.length > 0 && <ol>{model.suggestions.map((text, index) => <li key={index}><span aria-hidden="true">{index + 1}</span>{text}</li>)}</ol>}
       </section>}
       {!(scored && model.overall <= 50) && model.summary && <p className="lw-summary">{model.summary}</p>}
+      {!(scored && model.overall <= 50) && open.length === 0 && model.suggestions.length > 0 && <section className="lw-big"><ol>{model.suggestions.map((text, index) => <li key={index}><span aria-hidden="true">{index + 1}</span>{text}</li>)}</ol></section>}
 
       {extras.copy && <p className="lw-note is-info" role="note"><Copy size={14} aria-hidden="true" />{t('{n}% of this letter matches your letter of {date}. Only you see this.', { n: extras.copy.percent, date: formatDateLocale(extras.copy.date) })}</p>}
       {extras.sensitive.length > 0 && <>
