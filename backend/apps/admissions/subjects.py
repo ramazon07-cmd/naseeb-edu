@@ -285,11 +285,40 @@ def subjects_for_part(part):
     return []
 
 
+def _compile_phrases():
+    """Whole keywords and subject names that contain a separator ("oil and gas", "Hospitality & Leisure Management"):
+    matched as a unit, longest first, before the text is split into majors."""
+    phrases = {}
+    for code, words in KEYWORDS.items():
+        for word in words:
+            phrases.setdefault(normalize(word.rstrip('$')), set()).add(code)
+    for code, (name, _area) in SUBJECTS.items():
+        phrases.setdefault(normalize(name), set()).add(code)
+    phrases = {phrase: codes for phrase, codes in phrases.items() if len(PARTS.split(phrase)) > 1}
+    ordered = sorted(phrases, key=len, reverse=True)
+    pattern = re.compile('(?<!\\w)(?:' + '|'.join(re.escape(p) for p in ordered) + ')(?!\\w)')
+    return pattern, phrases
+
+
+_PHRASE_PATTERN, _PHRASES = _compile_phrases()
+_TOKEN = re.compile('\x00(\\d+)\x00')
+
+
 def subjects_for_major(text):
-    """QS subject codes for a student's free-text major(s), in the order stated, no repeats; [] when nothing matches."""
+    """QS subject codes for a student's free-text major(s), in the order stated, no repeats; [] when nothing matches.
+    A compound subject name ("Oil and Gas") is matched whole before the rest is split on and / & / commas."""
+    found = []
+
+    def protect(match):
+        found.append(sorted(_PHRASES[match.group(0)]))
+        return ' \x00%d\x00 ' % (len(found) - 1)
+
     codes = []
-    for part in split_majors(text):
-        for code in subjects_for_part(part):
+    for part in split_majors(_PHRASE_PATTERN.sub(protect, normalize(text))):
+        protected = [c for i in _TOKEN.findall(part) for c in found[int(i)]]
+        rest = _TOKEN.sub(' ', part).strip()
+        part_codes = protected + [c for c in subjects_for_part(rest) if not (protected and c in AREAS)] if rest else protected
+        for code in part_codes:
             if code not in codes:
                 codes.append(code)
     return codes

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const {
   addAllBusy, applicationProgram, beginReasons, bulkAddTier, costText, failReasons, finishReasons, idleReasons,
-  individualAddBusy, matchMessage, reasonsKey, reasonsView, satPositionText, subjectRankText,
+  idleMatch, individualAddBusy, invalidateMatch, matchMessage, reasonsKey, reasonsView, satPositionText, subjectRankText,
 } = await import('../src/lib/collegeMatch.js');
 
 test('a subject rank reads "#12 in Computer Science, QS 2026" and keeps a published range', () => {
@@ -71,4 +71,14 @@ test('Add and Add all never run together, and Add all skips what is already list
   assert.equal(bulkAddTier({ id: 1, fit: { admission_band: 'reach' } }, listed, tiers), null);
   assert.equal(bulkAddTier({ id: 2, fit: { admission_band: 'safety' } }, listed, tiers), 'safety');
   assert.equal(bulkAddTier({ id: 3, fit: {} }, listed, tiers), null);
+});
+
+test('refreshing the research profile invalidates the stored match and pending responses', () => {
+  const stored = { loading: false, data: { universities: [{ id: 1, fit: 'target' }] }, error: '', generation: 3 };
+  const fresh = invalidateMatch(stored.generation);
+  assert.deepEqual(fresh, idleMatch(4));
+  assert.equal(fresh.data, null);
+  assert.notEqual(fresh.generation, stored.generation);
+  assert.notEqual(reasonsKey(fresh.generation, 'en'), reasonsKey(stored.generation, 'en'));
+  assert.equal(invalidateMatch(fresh.generation).generation, 5);
 });

@@ -49,6 +49,11 @@ export function applicationProgram(university, major) {
   return university.suggested_programs?.[0]?.name || matchingPrograms(university, major)[0]?.name || major || 'Undeclared';
 }
 
+// The stored match belongs to one generation. Closing the panel or refreshing the research profile moves on to a new
+// generation with nothing stored, so the old universities and bands, and any response still in flight, are dropped.
+export const idleMatch = (generation) => ({ loading: false, data: null, error: '', generation });
+export const invalidateMatch = (generation) => idleMatch(generation + 1);
+
 // The "Why these fit you" lines belong to one match list in one language: the key is match generation + language.
 export const reasonsKey = (generation, language) => `${generation}:${language}`;
 export const idleReasons = (key) => ({ key, status: 'idle', lines: {}, error: '' });
