@@ -13,7 +13,10 @@ Code: `backend/apps/admissions/telegram_import/` (`fetch.py`, `official.py`,
   `telegram_import_skipped reason=outbound_ai_off|gateway_not_configured`.
 - `TELEGRAM_IMPORT_DAILY_BUDGET=0` turns the import off (`reason=budget_off`).
 - Scheduled through the counselor bot's hourly `/api/bot/scheduled-jobs/` call, every hour
-  from 23:00 to 07:00 Asia/Tashkent (production has no cron). Each run is incremental and
+  from 23:00 to 07:00 Asia/Tashkent (production has no cron).
+  Decided (2026-11-22): hourly runs from 23:00 to 07:00 Asia/Tashkent, not a single run at
+  23:59. Reason: a failed or cut-short run is retried within the same night, and the load is
+  spread over the night instead of landing in one request. Each run is incremental and
   time-boxed: it starts new work for `TELEGRAM_IMPORT_TIME_BUDGET_SECONDS` (default 55 s)
   minus the time the other jobs in the same request already took, and never starts a step
   (a Telegram page, an official page, an AI call) that could end more than 40 s after that.

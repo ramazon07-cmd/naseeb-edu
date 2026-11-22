@@ -60,12 +60,16 @@ class DueJobsTests(BotTestCase):
             self.assertEqual(due_jobs(later), ['send_meeting_reminders'])
 
     def test_the_telegram_import_runs_every_hour_overnight(self):
-        from apps.telegram_bot.jobs import due_jobs
+        # Decided (2026-11-22): hourly from 23:00 to 07:00 Asia/Tashkent (not one run at 23:59),
+        # so a failed run is retried within the night and the load is spread out.
+        from apps.telegram_bot.jobs import NIGHTLY_JOBS, due_jobs
 
-        for hour in (23, 0, 3, 6):
-            self.assertIn('import_telegram_programs', due_jobs(self.at(hour)), hour)
-        for hour in (7, 12, 22):
-            self.assertNotIn('import_telegram_programs', due_jobs(self.at(hour)), hour)
+        self.assertEqual(NIGHTLY_JOBS['import_telegram_programs'], (23, 7))
+        night = [23, 0, 1, 2, 3, 4, 5, 6]
+        for hour in range(24):
+            self.assertEqual(
+                'import_telegram_programs' in due_jobs(self.at(hour)), hour in night, hour,
+            )
 
     def test_a_failed_daily_job_is_tried_again_next_hour(self):
         from unittest import mock
