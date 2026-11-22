@@ -14,7 +14,9 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.admissions.models import Booking
@@ -181,6 +183,8 @@ def acknowledge(sent_ids, blocked_chats):
     sent = TelegramOutbox.objects.filter(pk__in=sent_ids, sent_at__isnull=True).update(sent_at=now)
     if blocked_chats:
         StudentTelegram.objects.filter(chat_id__in=blocked_chats).update(is_active=False, updated_at=now)
+        # A counselor's blocked chat stops getting reminders too; linking again creates a fresh link.
+        TelegramLink.objects.filter(chat_id__in=blocked_chats, is_active=True).update(is_active=False, updated_at=now)
         TelegramOutbox.objects.filter(chat_id__in=blocked_chats, sent_at__isnull=True).delete()
     # Sent rows are kept two days for reminder de-duplication (a step is never sent twice), then cleared.
     TelegramOutbox.objects.filter(sent_at__lt=now - timedelta(days=2)).delete()
@@ -220,9 +224,13 @@ def _when(moment):
     return timezone.localtime(moment).strftime('%d.%m.%Y %H:%M')
 
 
-def _other(booking):
-    person = booking.participant
+def _name(person):
     return (person.get_full_name().strip() or person.username) if person else '—'
+
+
+def _other(booking):
+    """The counselor, as the student's reminders name them."""
+    return _name(booking.participant)
 
 
 def queue_event(booking, recipient, event):
@@ -252,37 +260,56 @@ def _step(booking, now):
     return step
 
 
+def _active(parent, relation):
+    """The booking person's active Telegram link (`relation` on `parent`), or None."""
+    try:
+        link = getattr(parent, relation)
+    except ObjectDoesNotExist:
+        return None
+    return link if link.is_active else None
+
+
 def queue_reminders(now=None):
+    """Reminders for approved meetings: one row for the student's chat and one for the counselor's, each
+    only if that person is linked (neither depends on the other)."""
     now = now or timezone.now()
     bookings = (
         Booking.objects.filter(
+            Q(student__user__student_telegram__is_active=True) | Q(participant__telegram_link__is_active=True),
             status=Booking.Status.APPROVED,
             starts_at__gt=now - REMINDER_GRACE,
             starts_at__lte=now + timedelta(minutes=REMINDER_STEPS[0]) + REMINDER_GRACE,
-            student__user__student_telegram__is_active=True,
         )
-        .select_related('student__user__student_telegram', 'participant')
+        .select_related('student__user__student_telegram', 'participant__telegram_link')
     )
     queued = 0
     for booking in bookings:
         step = _step(booking, now)
         if step is None:
             continue
-        link = booking.student.user.student_telegram
-        key = f'meeting:{booking.pk}:{int(booking.starts_at.timestamp())}:{step}'
-        name = 'reminder_started' if step == 0 else 'reminder_day' if step == REMINDER_STEPS[0] else 'reminder_before'
-        before = f'{step // 60}' if step >= 60 else f'{step}'
-        values_key = 'hours' if step >= 60 else 'minutes_left'
-        body = text(
-            link.language, name, topic=_escape(booking.topic), other=_escape(_other(booking)),
-            time=_when(booking.starts_at), minutes=booking.duration_minutes, url=f'{settings.FRONTEND_URL}/meetings',
-            left=text(link.language, values_key, n=before),
-        )
-        _, created = TelegramOutbox.objects.get_or_create(
-            key=key, defaults={'chat_id': link.chat_id, 'booking': booking, 'text': body},
-        )
-        queued += created
+        base = f'meeting:{booking.pk}:{int(booking.starts_at.timestamp())}:{step}'
+        student_link = _active(booking.student.user, 'student_telegram')
+        if student_link:
+            queued += _queue_reminder(booking, step, student_link, base, _other(booking))
+        staff_link = _active(booking.participant, 'telegram_link') if booking.participant_id else None
+        if staff_link:
+            queued += _queue_reminder(booking, step, staff_link, f'{base}:staff', _name(booking.student.user))
     return queued
+
+
+def _queue_reminder(booking, step, link, key, other):
+    name = 'reminder_started' if step == 0 else 'reminder_day' if step == REMINDER_STEPS[0] else 'reminder_before'
+    before = f'{step // 60}' if step >= 60 else f'{step}'
+    values_key = 'hours' if step >= 60 else 'minutes_left'
+    body = text(
+        link.language, name, topic=_escape(booking.topic), other=_escape(other),
+        time=_when(booking.starts_at), minutes=booking.duration_minutes, url=f'{settings.FRONTEND_URL}/meetings',
+        left=text(link.language, values_key, n=before),
+    )
+    _, created = TelegramOutbox.objects.get_or_create(
+        key=key, defaults={'chat_id': link.chat_id, 'booking': booking, 'text': body},
+    )
+    return int(created)
 
 
 def _escape(value):
