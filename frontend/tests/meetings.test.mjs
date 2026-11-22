@@ -117,3 +117,12 @@ test('overview days: free times inside the window, open meetings anywhere, in th
   assert.deepEqual(days.get('2026-11-17').booked.map((item) => item.id), [10]);
   assert.deepEqual(days.get('2026-11-30').booked.map((item) => item.id), [12]);
 });
+
+test('counselor list splits at now and groups by day', async () => {
+  const { splitMeetingsByTime, groupMeetingsByDay } = await import('../src/lib/meetings.js');
+  const { upcoming, past } = splitMeetingsByTime(items, now);
+  assert.deepEqual(ids(upcoming), [1, 2, 4, 6]);
+  assert.deepEqual(ids(past), [3, 5, 7]);
+  const groups = groupMeetingsByDay(upcoming);
+  assert.deepEqual(groups.map((group) => [group.key, ids(group.items)]), [['2026-09-26', [1]], ['2026-09-27', [2]], ['2026-09-28', [4]], ['2026-09-29', [6]]]);
+});

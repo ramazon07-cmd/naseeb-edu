@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from apps.admissions.models import Booking
 from apps.telegram_bot import student_link
+from apps.telegram_bot.services import fingerprint
 from apps.telegram_bot.models import StudentTelegram, TelegramLink, TelegramOutbox
 
 from .base import KEY, BotTestCase
@@ -27,7 +28,9 @@ class CounselorReminderTests(BotTestCase):
         )
 
     def link_staff(self, language='en'):
-        return TelegramLink.objects.create(user=self.c1, chat_id=STAFF_CHAT, language=language, auth_fingerprint='x')
+        return TelegramLink.objects.create(
+            user=self.c1, chat_id=STAFF_CHAT, language=language, auth_fingerprint=fingerprint(self.c1),
+        )
 
     def link_student(self):
         return StudentTelegram.objects.create(user=self.s1.user, chat_id=STUDENT_CHAT, language='ru')
@@ -58,7 +61,7 @@ class CounselorReminderTests(BotTestCase):
         self.assertFalse(TelegramOutbox.objects.exists())
 
     def test_inactive_staff_link_gets_nothing(self):
-        TelegramLink.objects.create(user=self.c1, chat_id=STAFF_CHAT, auth_fingerprint='x', is_active=False)
+        TelegramLink.objects.create(user=self.c1, chat_id=STAFF_CHAT, auth_fingerprint=fingerprint(self.c1), is_active=False)
         self.booking()
         self.assertEqual(student_link.queue_reminders(self.start - timedelta(minutes=60)), 0)
 

@@ -52,6 +52,26 @@ export const meetingsThisWeek = (items = [], now = new Date()) => {
   return [...upcoming, ...overdue];
 };
 
+// Counselor Meetings list: everything already loaded, split at "now". Upcoming is soonest first, past newest first.
+export function splitMeetingsByTime(items = [], now = new Date()) {
+  const time = (item) => new Date(item.starts_at).getTime();
+  const upcoming = items.filter((item) => time(item) >= now.getTime()).sort((a, b) => time(a) - time(b));
+  const past = items.filter((item) => time(item) < now.getTime()).sort((a, b) => time(b) - time(a));
+  return { upcoming, past };
+}
+
+// Consecutive meetings on the same calendar day (`dayOf` gives the day key): [{ key, items }, …] in the given order.
+export function groupMeetingsByDay(items = [], dayOf = (value) => String(value).slice(0, 10)) {
+  const groups = [];
+  for (const item of items) {
+    const key = dayOf(item.starts_at);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.items.push(item);
+    else groups.push({ key, items: [item] });
+  }
+  return groups;
+}
+
 // A meeting nobody will ever hold as scheduled: start fresh with "Rebook"
 // rather than try to move it (an expired request can't be rescheduled — see
 // BookingViewSet.reschedule's has_started guard).

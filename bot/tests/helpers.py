@@ -88,6 +88,9 @@ class FakeApi:
         self.outbox_items = []
         self.action_result = {'result': 'done', 'alert': None, 'text': 'card\n\n✅ Confirmed', 'buttons': [
             [{'text': 'Cancel', 'callback_data': 'mt:cancel:5'}]]}
+        self.followup_result = {'result': 'done', 'alert': None, 'text': 'card\n\n🚫 Marked as canceled', 'buttons': [],
+                                'prompt': 'Why was it canceled?'}
+        self.note_result = {'result': 'none'}
         self.found = {'students': [{'id': 7, 'full_name': 'Ali Valiyev', 'username': 'ali-valiyev'}], 'more': False}
 
     def _record(self, name, **args):
@@ -139,6 +142,18 @@ class FakeApi:
     async def meeting_action(self, chat_id, booking_id, action, telegram_username=None):
         self._record('meeting_action', chat_id=chat_id, booking_id=booking_id, action=action, telegram_username=telegram_username)
         return self.action_result
+
+    async def meeting_followup(self, chat_id, booking_id, action):
+        self._record('meeting_followup', chat_id=chat_id, booking_id=booking_id, action=action)
+        return self.followup_result
+
+    async def meeting_note(self, chat_id, text):
+        self._record('meeting_note', chat_id=chat_id, text=text)
+        return self.note_result
+
+    async def dismiss_meeting_note(self, chat_id):
+        self._record('dismiss_meeting_note', chat_id=chat_id)
+        return {'dismissed': True}
 
     async def student_link(self, chat_id, token, language, telegram_username=None):
         self._record('student_link', chat_id=chat_id, token=token, language=language, telegram_username=telegram_username)

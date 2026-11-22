@@ -7,7 +7,7 @@ from . import services
 from .digest import build_digest, grouped_students
 from .jobs import run_due_jobs
 from .permissions import HasServiceKey
-from . import meeting_cards, student_link
+from . import followup, meeting_cards, student_link
 from .staff_meetings import meetings_overview
 from .students import add_student, find_students, reset_password
 
@@ -263,3 +263,30 @@ class MeetingActionView(BotView):
         return Response(meeting_cards.perform_action(
             _chat_id(data), booking_id, action, student_link.clean_username(username),
         ))
+
+
+class MeetingFollowupView(BotView):
+    """A follow-up button ("Done" / "Canceled") under the counselor's post-meeting message."""
+
+    def post(self, request):
+        data = self.get_data(request)
+        booking_id = data.get('booking_id')
+        if isinstance(booking_id, bool) or not isinstance(booking_id, int) or not 0 < booking_id < BIGINT:
+            raise services.Refused('invalid_request', 400)
+        action = data.get('action')
+        if action not in followup.ACTIONS:
+            raise services.Refused('invalid_request', 400)
+        return Response(followup.perform_followup(_chat_id(data), booking_id, action))
+
+
+class MeetingNoteView(BotView):
+    """The counselor's text after pressing "Canceled": saved only when a cancel is waiting for it."""
+
+    def post(self, request):
+        data = self.get_data(request)
+        if data.get('dismiss') is True:
+            return Response(followup.dismiss_note(_chat_id(data)))
+        note = data.get('text')
+        if not isinstance(note, str) or len(note) > 10000:
+            raise services.Refused('invalid_request', 400)
+        return Response(followup.save_note(_chat_id(data), note))

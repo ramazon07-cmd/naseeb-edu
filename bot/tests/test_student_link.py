@@ -211,3 +211,42 @@ async def test_a_stale_press_shows_the_alert_and_a_refused_one_only_an_alert(h):
     await h.tap('mt:cancel:5')
     assert h.session.of('EditMessageText') == [] and h.session.of('SendMessage') == []
     assert h.session.of('AnswerCallbackQuery')[-1][1]['show_alert'] is True
+
+
+async def test_a_followup_cancel_redraws_the_message_and_asks_for_the_note(h):
+    await h.tap('mf:cancel:5')
+    assert h.api.names('meeting_followup') == [{'chat_id': 1, 'booking_id': 5, 'action': 'cancel'}]
+    edit = h.session.of('EditMessageText')[-1][1]
+    assert edit['text'].endswith('Marked as canceled') and edit['reply_markup'] is None
+    assert h.session.of('SendMessage')[-1][1]['text'] == 'Why was it canceled?'
+
+
+async def test_a_followup_done_sends_no_note_prompt_and_a_refused_press_only_alerts(h):
+    h.api.followup_result = {'result': 'done', 'alert': None, 'text': 'card\n\n✅ Marked as done', 'buttons': [], 'prompt': None}
+    await h.tap('mf:done:5')
+    assert h.session.of('SendMessage') == []
+    h.session.calls.clear()
+    h.api.errors['meeting_followup'] = ApiError(404, 'not_found')
+    await h.tap('mf:done:5')
+    assert h.session.of('EditMessageText') == [] and h.session.of('SendMessage') == []
+    assert h.session.of('AnswerCallbackQuery')[-1][1]['show_alert'] is True
+
+
+async def test_a_text_after_cancel_is_saved_as_the_note_and_other_text_falls_through(h):
+    h.api.note_result = {'result': 'saved', 'text': 'Note saved.'}
+    await h.say('Student was ill')
+    assert h.api.names('meeting_note') == [{'chat_id': 1, 'text': 'Student was ill'}]
+    assert h.session.texts()[-1] == 'Note saved.'
+    h.api.note_result = {'result': 'none'}
+    await h.say('hello there')
+    assert h.session.texts()[-1] != 'Note saved.'
+
+
+async def test_the_note_prompt_clears_a_half_finished_flow_and_cancel_dismisses_the_wait(h):
+    from aiogram.fsm.storage.base import StorageKey
+    key = StorageKey(bot_id=h.bot.id, chat_id=1, user_id=1)
+    await h.dp.storage.set_state(key, 'AddStudent:details')
+    await h.tap('mf:cancel:5')
+    assert await h.dp.storage.get_state(key) is None
+    await h.say('/cancel')
+    assert h.api.names('dismiss_meeting_note') == [{'chat_id': 1}]

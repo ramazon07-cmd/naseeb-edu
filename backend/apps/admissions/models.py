@@ -1033,6 +1033,9 @@ class Booking(TimeStampedModel):
     staff_requested = models.BooleanField(default=False)
     # Who cancelled it ('student' or 'staff'); empty unless the meeting is cancelled.
     cancelled_by_role = models.CharField(max_length=10, null=True, blank=True, editable=False)
+    # The staff participant's own note on how the meeting ended (why they cancelled it after the follow-up
+    # in Telegram). Staff only: never shown to the student.
+    staff_note = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['starts_at']

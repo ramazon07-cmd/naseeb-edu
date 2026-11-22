@@ -108,3 +108,16 @@ class TelegramOutbox(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=['sent_at', 'created_at'], name='tg_outbox_pending_idx')]
+
+
+class PendingMeetingNote(models.Model):
+    """A counselor cancelled a meeting from the Telegram follow-up; their next text in this chat is its note.
+
+    One row per chat, kept in the database (not in the bot's memory) so a restart does not lose it, and
+    it lapses after a day so an old prompt never swallows an unrelated message.
+    """
+
+    chat_id = models.BigIntegerField(unique=True)
+    booking = models.ForeignKey('admissions.Booking', on_delete=models.CASCADE, related_name='+')
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)

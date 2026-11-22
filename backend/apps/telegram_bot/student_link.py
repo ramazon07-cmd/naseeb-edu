@@ -24,7 +24,9 @@ from apps.users.cache_safety import count_hit
 from apps.users.models import User
 
 from .models import StudentLinkToken, StudentTelegram, TelegramLink, TelegramOutbox
-from .services import Refused
+from .followup import queue_followups
+from .meeting_cards import staff_in_scope
+from .services import Refused, link_allowed
 from core.public_urls import public_url
 
 TOKEN_PREFIX = 's_'
@@ -151,6 +153,7 @@ def pending_messages(now=None):
     now = now or timezone.now()
     TelegramOutbox.objects.filter(sent_at__isnull=True, created_at__lt=now - OUTBOX_MAX_AGE).delete()
     queue_reminders(now)
+    queue_followups(now)
     with transaction.atomic():
         rows = list(
             TelegramOutbox.objects.select_for_update(skip_locked=True)
@@ -159,8 +162,11 @@ def pending_messages(now=None):
             .order_by('created_at', 'id')[:BATCH]
         )
         # Bookings are read apart: FOR UPDATE cannot lock across the nullable booking join on Postgres.
-        bookings = Booking.objects.in_bulk({row.booking_id for row in rows if row.key and row.booking_id})
-        stale = [row.pk for row in rows if _stale_reminder(row, bookings)]
+        bookings = Booking.objects.select_related('student', 'participant').in_bulk(
+            {row.booking_id for row in rows if row.key and row.booking_id},
+        )
+        revoked = _revoked_chats({row.chat_id for row in rows})
+        stale = [row.pk for row in rows if row.chat_id in revoked or _stale_reminder(row, bookings)]
         TelegramOutbox.objects.filter(pk__in=stale).delete()
         rows = [row for row in rows if row.pk not in stale]
         TelegramOutbox.objects.filter(pk__in=[row.pk for row in rows]).update(claimed_at=now)
@@ -169,12 +175,27 @@ def pending_messages(now=None):
     ]}
 
 
+def _revoked_chats(chat_ids):
+    """Chats of staff links that may no longer be messaged (password changed, account deactivated): what is
+    still unsent for them is dropped. A chat that is also an active student chat is left alone."""
+    links = TelegramLink.objects.filter(chat_id__in=chat_ids).select_related(
+        'user__school', 'user__supervising_counselor',
+    )
+    revoked = {link.chat_id for link in links if not link_allowed(link)}
+    if revoked:
+        revoked -= set(StudentTelegram.objects.filter(chat_id__in=revoked, is_active=True).values_list('chat_id', flat=True))
+    return revoked
+
+
 def _stale_reminder(row, bookings):
     """A reminder still waiting for a meeting that was since cancelled or moved: never sent."""
     if not (row.key or '').startswith('meeting:'):
         return False
     booking = bookings.get(row.booking_id)
     if booking is None or booking.status != Booking.Status.APPROVED:
+        return True
+    if row.key.endswith(':staff') and not staff_in_scope(booking):
+        # The counselor moved schools since this was queued: the old school's meeting is not theirs to see.
         return True
     return row.key.split(':')[2] != str(int(booking.starts_at.timestamp()))
 
@@ -281,7 +302,10 @@ def queue_reminders(now=None):
             starts_at__gt=now - REMINDER_GRACE,
             starts_at__lte=now + timedelta(minutes=REMINDER_STEPS[0]) + REMINDER_GRACE,
         )
-        .select_related('student__user__student_telegram', 'participant__telegram_link')
+        .select_related(
+            'student__user__student_telegram', 'participant__telegram_link', 'participant__school',
+            'participant__supervising_counselor',
+        )
     )
     queued = 0
     for booking in bookings:
@@ -293,7 +317,7 @@ def queue_reminders(now=None):
         if student_link:
             queued += _queue_reminder(booking, step, student_link, base, _other(booking))
         staff_link = _active(booking.participant, 'telegram_link') if booking.participant_id else None
-        if staff_link:
+        if staff_link and link_allowed(staff_link) and staff_in_scope(booking):
             queued += _queue_reminder(booking, step, staff_link, f'{base}:staff', _name(booking.student.user))
     return queued
 
