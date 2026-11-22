@@ -5,8 +5,10 @@ asks for this once an hour. Each job is the same management command a cron
 would run: under its own advisory lock and recorded in JobRun for the health page.
 """
 import logging
+import time
 from io import StringIO
 
+from django.conf import settings
 from django.core.management import call_command
 from django.utils import timezone
 
@@ -47,12 +49,25 @@ def due_jobs(now=None):
     return [*HOURLY_JOBS, *daily, *nightly]
 
 
+# The import is time-boxed; the time the jobs before it took in the same request is
+# taken off its budget, so the whole call still ends well before gunicorn's timeout.
+MIN_IMPORT_SECONDS = 5
+
+
+def job_options(name, started):
+    if name != 'import_telegram_programs':
+        return {}
+    spent = int(time.monotonic() - started)
+    return {'time_budget': max(MIN_IMPORT_SECONDS, settings.TELEGRAM_IMPORT_TIME_BUDGET_SECONDS - spent)}
+
+
 def run_due_jobs(now=None):
     """Run every due job; one failing never stops the others. Returns {name: 'ok' | 'failed'}."""
     results = {}
+    started = time.monotonic()
     for name in due_jobs(now):
         try:
-            call_command(name, stdout=StringIO())
+            call_command(name, stdout=StringIO(), **job_options(name, started))
         except Exception:  # noqa: BLE001 - recorded as failed in JobRun; tried again next hour
             logger.exception('scheduled job %s failed', name)
             results[name] = 'failed'

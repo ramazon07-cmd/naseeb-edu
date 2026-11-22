@@ -77,3 +77,20 @@ class DueJobsTests(BotTestCase):
             ran = run_due_jobs(now)
         self.assertEqual(set(ran.values()), {'failed'})
         self.assertIn('generate_notifications', due_jobs(now))
+
+    @override_settings(TELEGRAM_IMPORT_TIME_BUDGET_SECONDS=55)
+    def test_the_import_gets_only_the_time_left_in_the_request(self):
+        from unittest import mock
+
+        from apps.telegram_bot import jobs
+
+        clock = iter([1000, 1030])  # the jobs before the import took 30 s
+        with mock.patch.object(jobs.time, 'monotonic', lambda: next(clock)), \
+                mock.patch.object(jobs, 'call_command') as call:
+            jobs.run_due_jobs(self.at(2))
+        options = {args[0]: kwargs for args, kwargs in call.call_args_list}
+        self.assertEqual(options['import_telegram_programs']['time_budget'], 25)
+        self.assertNotIn('time_budget', options['send_meeting_reminders'])
+        # Never less than a few seconds, so an hour is never wasted outright.
+        self.assertEqual(jobs.job_options('import_telegram_programs', jobs.time.monotonic() - 500)['time_budget'],
+                         jobs.MIN_IMPORT_SECONDS)

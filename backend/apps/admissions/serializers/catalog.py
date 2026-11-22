@@ -87,9 +87,17 @@ class ScholarshipSerializer(serializers.ModelSerializer):
 
 
 class OpportunityProgramSerializer(serializers.ModelSerializer):
+    # Students see only where a row came from (for the "From Telegram, not yet verified"
+    # label); the importer's notes (model, pages read, AI doubts) stay in the admin catalogue.
+    source_metadata = serializers.SerializerMethodField()
+
     class Meta:
         model = OpportunityProgram
         fields = '__all__'
+
+    def get_source_metadata(self, obj):
+        origin = (obj.source_metadata or {}).get('origin') if isinstance(obj.source_metadata, dict) else None
+        return {'origin': origin} if origin else {}
 
 
 # Plausible bounds for the numbers the admin catalogue edits. DRF's own
@@ -159,6 +167,8 @@ class CatalogScholarshipSerializer(ScholarshipSerializer):
 
 
 class CatalogOpportunityProgramSerializer(OpportunityProgramSerializer):
+    source_metadata = serializers.JSONField(read_only=True)
+
     class Meta(OpportunityProgramSerializer.Meta):
         # The catalogue importer owns these.
         read_only_fields = ('source_key', 'source_metadata')
