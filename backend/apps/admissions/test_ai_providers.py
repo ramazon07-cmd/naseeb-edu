@@ -187,3 +187,109 @@ class ProductionRefusalTests(SimpleTestCase):
             with self.assertRaises(RuntimeError):
                 ai_providers.chat(BODY, 5)
         runner.assert_not_called()
+
+
+PROD_BRIDGE = dict(AI_PROVIDER='claude_cli', APP_ENV='production', AI_CLI_ALLOW_PRODUCTION=True, OUTBOUND_AI_ENABLED=True)
+
+
+class ProductionBridgeTests(SimpleTestCase):
+    """AI_CLI_ALLOW_PRODUCTION: a temporary, explicit way to run the CLI in production until the API key is set."""
+
+    def test_startup_accepts_the_cli_in_production_only_with_the_switch(self):
+        common = dict(app_env='production', debug=False, secret_key='k' * 50, database_url='postgresql://u:p@db/x',
+                      demo_accounts_enabled=False, ai_provider='claude_cli')
+        self.assertEqual(validate_runtime_environment(**common, ai_cli_allow_production=True), [])
+        self.assertTrue(validate_runtime_environment(**common))
+
+    @override_settings(**PROD_BRIDGE)
+    def test_the_system_check_warns_instead_of_failing(self):
+        found = ai_provider_check(None)
+        self.assertEqual([item.id for item in found], ['naseeb.W010'])
+        self.assertIsInstance(found[0], checks.Warning)
+
+    @override_settings(**PROD_BRIDGE, AI_CLI_PATH='/var/data/claude/.local/bin/claude', AI_CLI_HOME='/var/data/claude')
+    def test_the_disk_install_and_its_home_are_used(self):
+        with mock.patch('apps.admissions.ai_providers.os.path.isfile', return_value=True), \
+                mock.patch('apps.admissions.ai_providers.os.access', return_value=True), \
+                mock.patch(RUN, return_value=completed(cli_output())) as runner:
+            self.assertTrue(ai_providers.configured())
+            ai_providers.chat(BODY, 5)
+        self.assertEqual(runner.call_args.args[0][0], '/var/data/claude/.local/bin/claude')
+        env = runner.call_args.kwargs['env']
+        self.assertEqual(env['HOME'], '/var/data/claude')
+        self.assertEqual(env['DISABLE_AUTOUPDATER'], '1')
+
+    @override_settings(**PROD_BRIDGE, AI_CLI_PATH='/nowhere/claude')
+    def test_a_missing_disk_install_is_not_configured(self):
+        self.assertFalse(ai_providers.configured())
+
+
+@override_settings(**CLI, AI_CLI_SLOT_WAIT_SECONDS=0)
+class CliSlotTests(SimpleTestCase):
+    """At most AI_CLI_MAX_CONCURRENT Claude processes at once; the rest wait, then fail like a timeout."""
+
+    def hold_slot(self):
+        import threading
+        held, release = threading.Event(), threading.Event()
+
+        def holder():
+            with ai_providers._cli_slot():
+                held.set()
+                release.wait(5)
+        thread = threading.Thread(target=holder)
+        thread.start()
+        self.assertTrue(held.wait(5))
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(release.set)
+        return release
+
+    @override_settings(AI_CLI_MAX_CONCURRENT=1)
+    def test_a_second_call_waits_and_then_fails_without_starting_a_process(self):
+        self.hold_slot()
+        with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN) as runner:
+            with self.assertRaises(TimeoutError):
+                ai_providers.chat(BODY, 5)
+        runner.assert_not_called()
+
+    @override_settings(AI_CLI_MAX_CONCURRENT=2)
+    def test_two_slots_let_two_calls_run(self):
+        self.hold_slot()
+        with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN, return_value=completed(cli_output())):
+            self.assertIn('choices', ai_providers.chat(BODY, 5))
+
+    @override_settings(AI_CLI_MAX_CONCURRENT=1, AI_CLI_SLOT_WAIT_SECONDS=3)
+    def test_a_waiting_call_runs_once_the_slot_frees(self):
+        import threading
+        release = self.hold_slot()
+        threading.Timer(0.3, release.set).start()
+        with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN, return_value=completed(cli_output())):
+            self.assertIn('choices', ai_providers.chat(BODY, 5))
+
+    @override_settings(AI_CLI_MAX_CONCURRENT=1)
+    def test_a_failed_call_gives_its_slot_back(self):
+        with mock.patch(WHICH, return_value='/bin/claude'), \
+                mock.patch(RUN, side_effect=subprocess.TimeoutExpired('claude', 5)):
+            with self.assertRaises(TimeoutError):
+                ai_providers.chat(BODY, 5)
+        with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN, return_value=completed(cli_output())):
+            self.assertIn('choices', ai_providers.chat(BODY, 5))
+
+
+@override_settings(**CLI, OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='')
+class AssistantCliTests(SimpleTestCase):
+    def test_the_assistant_counts_the_cli_as_ready_without_a_gateway_key(self):
+        from . import assistant
+        with mock.patch(WHICH, return_value='/bin/claude'):
+            self.assertTrue(assistant._provider_ready())
+        with mock.patch(WHICH, return_value=None):
+            self.assertFalse(assistant._provider_ready())
+
+    def test_the_assistant_reply_comes_back_as_one_chunk(self):
+        from . import assistant
+        payload = ai_providers._cli_payload(cli_output('Start with your Common App essay.'), {'model': 'claude-cli/sonnet'})
+        with mock.patch.object(ai_providers, 'chat', return_value=payload) as chat:
+            chunks = list(assistant._gateway_stream([{'role': 'user', 'content': 'What next?'}], 'Be brief.'))
+        self.assertEqual(chunks, ['Start with your Common App essay.'])
+        sent = chat.call_args.args[0]
+        self.assertEqual(sent['messages'][0], {'role': 'system', 'content': 'Be brief.'})
+        self.assertNotIn('stream', sent)
