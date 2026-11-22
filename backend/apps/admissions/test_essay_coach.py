@@ -23,6 +23,8 @@ from .test_essay_lab import (
 
 RUBRICS = Path(__file__).parent / 'essay_lab' / 'rubrics'
 PS_KEYS = ('reflection', 'specificity', 'voice', 'structure', 'prompt_fit')
+# Every rubric's score shown (production starts with none until calibration passes).
+SCORED = ('personal_statement', 'supplement', 'recommendation_letter')
 
 
 def scores(value=None, **overrides):
@@ -61,14 +63,28 @@ class FormulaTests(EssayLabTestCase):
             self.assertEqual(sum(coach.CRITERIA[rubric].values()), 100)
 
     def test_note_cap_by_band_and_words(self):
-        for overall, cap in ((0, 0), (50, 0), (51, 5), (60, 5), (61, 8), (70, 8), (71, 12), (80, 12), (81, 25),
-                             (100, 25)):
-            self.assertEqual(coach.notes_cap(overall, 10000), cap, overall)
+        # one table for every scored type: it peaks in the middle, and the strongest texts get polish notes
+        self.assertEqual(coach.BANDS, ((81, 3, 6), (61, 6, 8), (51, 3, 5), (0, 2, 3)))
+        for overall, band in ((0, (2, 3)), (50, (2, 3)), (51, (3, 5)), (60, (3, 5)), (61, (6, 8)), (70, (6, 8)),
+                              (71, (6, 8)), (80, (6, 8)), (81, (3, 6)), (100, (3, 6))):
+            self.assertEqual(coach.notes_band(overall), band, overall)
+            self.assertEqual(coach.notes_cap(overall, 10000), band[1], overall)
         self.assertEqual(coach.notes_cap(None, 10000), 8)
-        # one note per 25 words: a 150-word supplement gets at most 6 whatever its score
+        # one note per 25 words, and the length cap wins over the band minimum
         self.assertEqual(coach.notes_cap(100, 150), 6)
+        self.assertEqual(coach.notes_cap(70, 150), 6)
         self.assertEqual(coach.notes_cap(75, 60), 2)
         self.assertEqual(coach.notes_cap(75, 24), 0)
+        self.assertEqual(coach.notes_cap(40, 50), 2)
+        self.assertEqual(coach.notes_cap(None, 60), 2)
+
+    def test_the_notes_step_asks_for_the_band_minimum_or_the_length_cap(self):
+        self.assertIn('between 6 and 8 notes', coach._step2_instruction('personal_statement', 8, 70))
+        self.assertIn('between 2 and 2 notes', coach._step2_instruction('personal_statement', 2, 70))
+        low = coach._step2_instruction('personal_statement', 3, 40)
+        self.assertIn('between 2 and 3 notes', low)
+        self.assertIn('Pick the biggest problems only.', low)
+        self.assertNotIn('Pick the biggest problems', coach._step2_instruction('personal_statement', 6, 90))
 
     def test_fingerprint_normalization(self):
         expected = hashlib.sha256(b'hello world').hexdigest()
@@ -155,9 +171,17 @@ class DedupTests(EssayLabTestCase):
 
 
 class CoachApiTestCase(EssayLabTestCase):
+    # The short test essays are given a limit of their own, so the server's Common App length rule
+    # (250-650 words with no limit) does not set prompt_fit to 1. Length tests pass word_limit themselves.
+    TEST_WORD_LIMIT = 400
+
     def setUp(self):
         super().setUp()
         self.essay = self.make_essay(content=LONG_TEXT)
+
+    def make_essay(self, student=None, **fields):
+        fields.setdefault('word_limit', self.TEST_WORD_LIMIT)
+        return super().make_essay(student, **fields)
 
     def check(self, gateway=None):
         gateway = gateway or FakeGateway()
@@ -181,7 +205,8 @@ class CoachApiTestCase(EssayLabTestCase):
         return ' '.join(sentences), {'notes': notes}
 
 
-@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0,
+                   ESSAY_COACH_SCORED_RUBRICS=SCORED)
 class TwoStepTests(CoachApiTestCase):
     def test_step_two_is_skipped_at_50_or_less(self):
         response, gateway = self.check(FakeGateway(score=score_reply()))
@@ -221,16 +246,17 @@ class TwoStepTests(CoachApiTestCase):
     def test_notes_are_capped_by_band_and_words(self):
         text, notes = self.distinct_notes(40)  # 40 sentences of 6 words: 240 words
         self.essay = self.make_essay(content=text)
-        for value, band_cap in ((4, 25), (3, 12)):
+        for value, band_cap in ((4, 6), (3, 8)):
             self.essay = self.make_essay(content=text)
             response, _ = self.check(FakeGateway(score=score_reply(**{k: value for k in PS_KEYS}), notes=notes))
             self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
             words = len(text.split())
             cap = coach.notes_cap(response.data['overall'], words)
-            self.assertLessEqual(cap, min(band_cap, words // 25))
+            self.assertEqual(cap, min(band_cap, words // 25))
             self.assertEqual(len(response.data['result']['notes']), cap)
-        # 240 words allow 9 notes: an all-4s essay is limited by words, not by its 25-note band
-        self.assertEqual(coach.notes_cap(100, 240), 9)
+        # 240 words allow 9 notes, but an all-4s essay gets at most 6 polish notes
+        self.assertEqual(coach.notes_cap(97, 240), 6)
+        self.assertEqual(coach.notes_cap(70, 150), 6)
 
     def test_reasoning_effort_is_dropped_once_when_the_gateway_rejects_it(self):
         gateway = FakeGateway()
@@ -315,11 +341,12 @@ class TwoStepTests(CoachApiTestCase):
         self.set_text(LONG_TEXT.replace('grandmother never wasted', 'aunt always saved'))
         second, _ = self.check(FakeGateway(score=score_reply(**{k: 4 for k in PS_KEYS})))
         self.assertEqual(second.status_code, status.HTTP_200_OK, second.data)
-        self.assertEqual((second.data['overall'], second.data['previous_overall']), (100, 62))
+        self.assertEqual((second.data['overall'], second.data['previous_overall']), (97, 62))
         self.assertEqual(self.client.get(f'{BASE}/essays/{self.essay.pk}/depth-check/latest/').data['previous_overall'], 62)
 
 
-@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0,
+                   ESSAY_COACH_SCORED_RUBRICS=SCORED)
 class RecheckRuleTests(CoachApiTestCase):
     NOTES = {'notes': [
         {'criterion': 'reflection', 'quote': 'I learned that patience matters.',
@@ -458,7 +485,8 @@ class RecheckRuleTests(CoachApiTestCase):
         self.assertEqual(AiUsageLog.objects.filter(status='local_fallback').count(), 1)
 
 
-@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0,
+                   ESSAY_COACH_SCORED_RUBRICS=SCORED)
 class NoteStateTests(CoachApiTestCase):
     def setUp(self):
         super().setUp()
@@ -521,7 +549,8 @@ class NoteStateTests(CoachApiTestCase):
         self.assertEqual(EssayDepthCheck.objects.get().note_states, {})
 
 
-@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0,
+                   ESSAY_COACH_SCORED_RUBRICS=SCORED)
 class ChecksLeftTests(CoachApiTestCase):
     @override_settings(ESSAY_COACH_USER_DAILY_LIMIT=3)
     def test_counts_down_with_ai_checks_only(self):
@@ -628,7 +657,8 @@ class SentenceSplitTests(EssayLabTestCase):
         self.assertEqual([note['quote'] for note in notes], ['Dr. Smith paid', 'Next sentence here.'])
 
 
-@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0,
+                   ESSAY_COACH_SCORED_RUBRICS=SCORED)
 class CostGuardTests(CoachApiTestCase):
     def failing_gateway(self, fail_step):
         good = FakeGateway()
@@ -727,7 +757,8 @@ class CostGuardTests(CoachApiTestCase):
         self.assertNotIn('aunt', joined)
 
 
-@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0)
+@override_settings(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_MIN_INTERVAL_SECONDS=0,
+                   ESSAY_COACH_SCORED_RUBRICS=SCORED)
 class InputHashAndDeadlineTests(CoachApiTestCase):
     def test_word_limit_is_part_of_the_input(self):
         self.check()

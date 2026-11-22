@@ -1,6 +1,6 @@
 # Rubric: recommendation letter
 
-rubric_version: 2 · essay_type: `recommendation_letter` (to be added; a separate feature, `recommendation_letter` in `ai_budget.py`) · loaded with `_core.md`
+rubric_version: 2 · `recommendation_letter` (a separate model and feature, `recommendation_letter_check` in `ai_budget.py`) · loaded with `_core.md`
 
 The author is a counselor or teacher. Only the author may run the Coach on a letter, and only the author
 sees its scores and notes. The server enforces this by role: the student's account can never request or
@@ -11,44 +11,59 @@ The Coach reviews; the author writes. It never drafts or rewrites any part of th
 
 ## Criteria and weights
 
+One table and one length range (250-1,000 words) for every letter, whoever wrote it.
+
 | Key | Criterion | Weight |
 | --- | --- | --- |
 | `evidence` | Specific observed evidence | 40 |
 | `insight` | Insight into the student | 25 |
-| `context` | Basis for any comparison | 20 |
+| `context` | Basis and context | 20 |
 | `structure` | Structure and length | 10 |
 | `voice` | Authentic voice of the author | 5 |
 
 ### evidence (40)
 
-- 1: Adjectives only ("hardworking, kind, bright").
-- 2: One example, told as a summary.
-- 3: One observed moment with a setting, a date or exact words, tied to a quality. One real moment is
-  enough for 3, and a short letter is not a weak letter.
-- 4: Two observed moments of different kinds that together show the student, each with concrete details.
+- 1: Qualities named with no event.
+- 2: An achievement or activity named (prize, grade, club) with no moment the author saw or heard.
+- 3: At least one moment with at least two of: when, where, what the student did or said, what
+  changed. Observed by the author, or attributed to a named role ("her physics teacher told me…").
+- 4: Two such moments of different kinds (for example academic and with peers), at least one seen
+  first-hand.
 
 ### insight (25)
 
-- 1: Praise with no interpretation. 2: Names a trait and asserts it.
+- 1: Praise with no interpretation.
+- 2: Names a trait and asserts it.
 - 3: Explains how the student behaves and why it matters for study.
-- 4: Shows something a transcript cannot: how they treat others, handle being wrong, or change when taught.
+- 4: Shows something a transcript cannot: how they treat others, handle being wrong, or change when
+  taught.
 
 ### context (20)
 
-- 1: No comparison and no basis. 2: A bare superlative ("the best student I have taught").
-- 3: A comparison with a stated basis of any kind: years known, number of students taught, or the setting
-  in which the author saw the student. A new teacher with a short basis can still reach 3.
-- 4: A comparison, its basis, and what the author could not observe.
+- 1: No basis stated, or a superlative or rank ("top 1%", "best in 20 years") with no stated basis.
+- 2: The relationship is stated (role and how long) but not the group compared with or the setting.
+- 3: A stated basis (role, how long, and the class, setting or school context; a fact a foreign reader
+  needs, such as curriculum or grading scale, counts as setting) plus a placement, which may be
+  modest.
+- 4: Level 3 plus what the author could not observe, or a candid limit.
 
 ### structure (10)
 
-- 1: Disorganised. 2: Acceptable but the relationship to the student is unclear.
-- 3: States the relationship, gives the body, and closes plainly. 4: Every paragraph earns its place; one page or less.
+- 1: No recognisable order.
+- 2: The relationship is unstated, or most of the letter repeats the activity list.
+- 3: Relationship, body and close are present.
+- 4: Level 3, and no paragraph repeats the transcript or activity list. 4 needs 250-1,000 words
+  (word_count in Letter details); outside that range structure is at most 3.
 
 ### voice (5)
 
-Never count grammar or fluency. 1: only stock phrases inside the letter; 2: polished but interchangeable;
-3: clearly written by someone who knows the student; 4: unmistakably the author's own judgement.
+Never count grammar or fluency. Formal "kharakteristika" wording ("obedient, disciplined, active in the
+social life of the school") is not marked down in voice; it is raised as a reader note.
+
+- 1: Only stock phrases stand where the author should be.
+- 2: Polished but interchangeable.
+- 3: Clearly written by someone who knows the student.
+- 4: Unmistakably the author's own judgement.
 
 ## Rules for letters
 
@@ -70,10 +85,5 @@ Never count grammar or fluency. 1: only stock phrases inside the letter; 2: poli
 
 - What did the student do that you did not expect?
 - Where did you see them handle being wrong?
-- Compared with how many students, seen over how long?
+- In which class or setting did you see this, and over how long?
 - What can the reader learn here that the transcript cannot show?
-
-## Calibration
-
-`calibration/recommendation_letter/`: at least ten synthetic letters (no real students), including letters
-by second-language writers and short letters, with expected score ranges. Block production use until then.

@@ -974,9 +974,10 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
             {'criterion': 'sparkle', 'quote': 'I rebuilt the school radio', 'question': 'Bad criterion', 'context': ''},
         ]}
 
-    @override_settings(AI_GATEWAY_API_KEY='test-key')
+    @override_settings(AI_GATEWAY_API_KEY='test-key',
+                       ESSAY_COACH_SCORED_RUBRICS=('personal_statement', 'supplement', 'recommendation_letter'))
     def test_ai_check_ok_and_validated(self):
-        self.essay = self.make_essay(content=LONG_TEXT)
+        self.essay = self.make_essay(content=LONG_TEXT, word_limit=400)
         gateway = FakeGateway(notes=self.notes_payload())
         with mock.patch('urllib.request.urlopen', side_effect=gateway):
             response = self.check()

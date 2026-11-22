@@ -10,9 +10,10 @@ from django.test import TestCase, override_settings
 
 from .essay_lab import calibration, coach
 from .models import AiUsageLog
+from .test_essay_coach import SCORED
 from .test_essay_lab import FakeGateway
 
-AI_ON = dict(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key')
+AI_ON = dict(OUTBOUND_AI_ENABLED=True, AI_GATEWAY_API_KEY='test-key', ESSAY_COACH_SCORED_RUBRICS=SCORED)
 RUN_AI = 'apps.admissions.management.commands.coach_calibrate.coach.run_ai_check'
 
 
@@ -258,7 +259,7 @@ class CalibrateCommandTests(TestCase):
         out = io.StringIO()
         with mock.patch('urllib.request.urlopen', side_effect=gateway):
             call_command('coach_calibrate', '--runs', '2', '--set', 'personal_statement', '--text', 'weak_en', stdout=out)
-        self.assertIn('score [3, 3] expected 3-28', out.getvalue())
+        self.assertIn('score [7, 7] expected 3-28', out.getvalue())  # no prompt: fit set to 3
         self.assertEqual(len(gateway.bodies), 2)
         self.assertEqual(AiUsageLog.objects.filter(feature='essay_coach', user__isnull=True).count(), 2)
         self.assertEqual(gateway.bodies[0]['temperature'], 0)

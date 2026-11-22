@@ -4,8 +4,9 @@ The server decides, the model only helps. Three layers:
 - a keyword pre-check (English, Russian, Uzbek) that finds health and disciplinary sentences and current
   abuse or danger in the real letter;
 - the model's `safety` and `sensitive` flags from the score step (merged with the keywords);
-- enforcement: a health sentence is never quoted by a note or a strength (the note is dropped), and a
-  letter with current abuse or danger is not scored at all.
+- enforcement: a health sentence is never quoted by a note or a strength (the note or strength is
+  dropped), a criterion whose evidence quote is a health sentence is lowered to 1 before the overall is
+  computed, and a letter with current abuse or danger is not scored at all.
 
 Health, mental health and disability are never scored, quoted as evidence or asked about; the result carries
 one neutral note per kind (`result['sensitive']`, rendered in three languages by the frontend). The
@@ -16,6 +17,7 @@ import re
 
 from .essay_lab import coach
 
+RUBRIC = 'recommendation_letter'
 MAX_READER_NOTES = 2
 KINDS = ('health', 'discipline')
 
@@ -37,13 +39,15 @@ note, and never asked about.\
 
 _HEALTH_WORDS = (
     r"diagnos\w*|depress\w*|anxiety|panic attacks?|therap(?:y|ist)\w*|psychiatr\w*|mental (?:health|illness)|"
-    r"adhd|autis\w*|dyslex\w*|epilep\w*|diabet\w*|cancer|chemotherap\w*|surgery|hospital(?:s|ized|ised|isation|ization)?(?![a-z])|disabilit\w*|"
+    # Words that only name a place or a procedure ("the city hospital", "операции с дробями") are not
+    # health matters of the student; being hospitalised is.
+    r"adhd|autis\w*|dyslex\w*|epilep\w*|diabet\w*|cancer|chemotherap\w*|hospitali[sz](?:ed|ation)|disabilit\w*|"
     r"disabled|wheelchair|eating disorder|anorexi\w*|bulimi\w*|self[- ]harm\w*|medication|illness\w*|"
-    r"(?:was|is|been|being|fell|became) (?:ill|sick)|chronic\w*|asthma\w*|hiv(?![a-z])|"
+    r"(?:was|is|been|being|fell|became) (?:ill|sick)(?![- ]of|-|\w)|chronic\w*|asthma\w*|hiv(?![a-z])|"
     r"диагноз\w*|депресс\w*|тревожн\w*|психотерап\w*|психиатр\w*|психическ\w*|аутизм\w*|дислекси\w*|эпилепс\w*|"
-    r"диабет\w*|онколог\w*|операци\w*|больниц\w*|инвалид\w*|болезн\w*|болел\w*|заболе\w*|самоповрежд\w*|астм\w*|"
+    r"диабет\w*|онколог\w*|больниц\w*|инвалид\w*|болезн\w*|болел\w*|заболе\w*|самоповрежд\w*|астм\w*|"
     r"сдвг|"
-    r"tashxis\w*|depressiya\w*|kasal\w*|kasalxona\w*|nogiron\w*|operatsiya\w*|davolan\w*|davolash\w*|autizm\w*|"
+    r"tashxis\w*|depressiya\w*|kasal\w*|kasalxona\w*|nogiron\w*|davolan\w*|davolash\w*|autizm\w*|"
     r"disleksiya\w*|epilepsiya\w*|diabet\w*|saraton\w*|ruhiy (?:salomatlik|holat|kasal\w*|muammo\w*)|psixiatr\w*|astma\w*"
 )
 _DISCIPLINE_WORDS = (
@@ -53,10 +57,16 @@ _DISCIPLINE_WORDS = (
 )
 _DANGER_WORDS = (
     r"(?:is|are|keeps|continues to be|being|still being) (?:abused|beaten|molested|assaulted|hit at home)|"
-    r"(?:beats|hits|abuses|molests|assaults|threatens|locks) (?:her|him|them|the student)|"
+    # "beats", "hits", "threatens" and "locks" need a home or adult context ("in debate she beats him" is not danger).
+    r"(?:father|mother|stepfather|stepmother|parent|uncle|brother|someone at home) "
+    r"(?:beats|hits|abuses|threatens|locks) (?:her|him|them)|"
+    r"(?:beats|hits) (?:her|him|them) at home|"
+    r"(?:abuses|molests|assaults) (?:her|him|them|the student)|"
     r"threatens to (?:kill|hurt|harm)|afraid to go home|unsafe at home|not safe at home|"
-    r"(?:wants|wanted|plans?) to (?:die|kill (?:herself|himself|themselves))|suicid\w*|"
-    r"бь[её]т|избива\w+|(?:из)?насили\w+|домогает\w*|боится идти домой|угрожает (?:убить|расправой)|хочет умереть|суицид\w*|"
+    r"(?:wants|wanted|plans?) to (?:die|kill (?:herself|himself|themselves))|"
+    r"(?:thoughts of|tried to commit|attempted) suicide|"
+    r"бь[её]т|избива\w+|(?:из)?насили\w+|домогает\w*|боится идти домой|угрожает (?:убить|расправой)|хочет умереть|"
+    r"(?:мысли о|попытк\w+) суицид\w*|"
     r"kaltakla(?:ydi|nadi|nmoqda|moqda)\w*|zo'ravonlik qil(?:moqda|yapti)|uyga borishdan qo'rqadi|"
     r"o'zini o'ldirmoqchi|o'lmoqchi|tahdid qiladi"
 )
@@ -100,7 +110,7 @@ def current_danger(raw_text):
 def safety_result():
     """The unscored answer for a letter that names current abuse or danger (no AI call, no cost)."""
     empty = {'scores': {}, 'summary': SAFETY_MESSAGE, 'suggestions': [], 'strengths': []}
-    result = coach.build_result(empty, [], rubric='recommendation_letter', overall=None, notes_locked=True)
+    result = coach.build_result(empty, [], rubric=RUBRIC, overall=None, notes_locked=True)
     result.update({'safety': True, 'reader_notes': [], 'sensitive': []})
     return result
 
@@ -144,6 +154,17 @@ def hooks(raw_text, anon_text, restore):
                 flagged[kind] = sentence
         if 'health' in flagged:
             flagged_health.append(coach.normalize(flagged['health']))
+        # A level held up only by a health sentence is lowered to 1, before the overall is computed.
+        evidence = coach._evidence_by_key(raw.get('score_evidence'), RUBRIC)
+        for key, level in (step.get('scores') or {}).items():
+            quote = evidence.get(key)
+            if level > 1 and isinstance(quote, str) and quote.strip():
+                sentence = restore(coach.normalize(quote))
+                if is_health(quote) or (sentence and is_health(sentence)):
+                    step['scores'][key] = 1
+                    step.setdefault('evidence_lowered', [])
+                    if key not in step['evidence_lowered']:
+                        step['evidence_lowered'].append(key)
         return step
 
     def finish(result, step):

@@ -110,6 +110,12 @@ ESSAY_COACH_RECHECK_PER_MINUTE = config('ESSAY_COACH_RECHECK_PER_MINUTE', defaul
 # student as written (empty = no number is shown). The first N such checks per user per day are free.
 ESSAY_SAFETY_HELPLINE = config('ESSAY_SAFETY_HELPLINE', default='').strip()
 ESSAY_SAFETY_FREE_PER_DAY = config('ESSAY_SAFETY_FREE_PER_DAY', default=2, cast=int)
+# Rubrics whose 0-100 score is shown (comma list: personal_statement, supplement, recommendation_letter).
+# A rubric not listed still runs the full check, but its result has no score (score_hidden='calibrating').
+# Add a rubric only after `manage.py coach_calibrate --set <name>` passes.
+ESSAY_COACH_SCORED_RUBRICS = tuple(
+    name.strip() for name in config('ESSAY_COACH_SCORED_RUBRICS', default='', cast=Csv()) if name.strip()
+)
 # Recommendation-letter suggestions for counselors use the assistant's gateway
 # and models. The platform-wide budget is required (0 = AI off; profile-based
 # suggestions remain); school and user caps use 0 = no cap.
