@@ -133,3 +133,12 @@ test('the request that carries the facets is not cancelled when the Subject rank
   // No extra request: the facets still ride on the first page request.
   assert.equal((hook.match(/api\.collegeSearch\(/g) || []).length, 1);
 });
+
+test('facets from a request for an older profile version are cached but never published', () => {
+  const hook = read('../src/hooks/useCollegeSearch.js');
+  assert.match(hook, /const currentVersion = useRef\(version\)/);
+  assert.match(hook, /currentVersion\.current = version/);
+  assert.match(hook, /facets\.current\.set\(version, payload\.facets\)/);
+  assert.match(hook, /if \(version === currentVersion\.current\) setState\(\(previous\) => \(\{ \.\.\.previous, facets: payload\.facets \}\)\)/);
+  assert.equal((hook.match(/api\.collegeSearch\(/g) || []).length, 1);
+});

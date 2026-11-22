@@ -27,6 +27,9 @@ export function useCollegeSearch(query, version = 0) {
   const facets = useRef(new Map());
   const controller = useRef(null);
   const prefetchTimer = useRef(0);
+  // The profile version now in force, read when an uncancelled facet response lands.
+  const currentVersion = useRef(version);
+  currentVersion.current = version;
 
   // A page in flight belongs to the search that asked for it: once that search is
   // cancelled (its signal aborted) the request is never handed out again. A page
@@ -46,7 +49,9 @@ export function useCollegeSearch(query, version = 0) {
       entry.done = true;
       if (payload.facets) {
         facets.current.set(version, payload.facets);
-        setState((previous) => ({ ...previous, facets: payload.facets }));
+        // Cached under the version that asked, but shown only if that is still the profile in force:
+        // an older request landing after a newer one must not overwrite its counts.
+        if (version === currentVersion.current) setState((previous) => ({ ...previous, facets: payload.facets }));
       }
     }, () => {entry.failed = true;});
     return promise;
