@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import re
+import socket
 import urllib.error
 import urllib.request
 
@@ -114,11 +115,50 @@ def build_context(profile, major_candidates, subject_strengths):
     }
 
 
-def _call_gateway(context):
-    """Send the request; returns the decoded provider payload.
+class GatewayFailure(Exception):
+    """Transport failure; `unbilled` is True only when the model provably did not run."""
 
-    Only transport failures (URLError incl. HTTP errors, timeouts, OSError)
-    escape from here before an answer arrives, so they are the uncharged ones.
+    def __init__(self, unbilled):
+        super().__init__('gateway failure')
+        self.unbilled = unbilled
+
+
+# HTTP statuses where the gateway rejected the request without running the model.
+# 5xx returned by the gateway itself (500/502/503) is refunded too; 504 and 408 can
+# arrive after the provider started work, so they keep the charge.
+_UNBILLED_HTTP = frozenset({400, 401, 402, 403, 404, 405, 409, 413, 415, 422, 429, 500, 502, 503})
+
+
+def _in_connect_phase(exc):
+    """True if the exception was raised while establishing the connection."""
+    tb = exc.__traceback__
+    while tb is not None:
+        if tb.tb_frame.f_code.co_name in ('create_connection', 'connect'):
+            return True
+        tb = tb.tb_next
+    return False
+
+
+def _is_unbilled(exc):
+    """Failures known to happen before the request was dispatched / the model ran."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in _UNBILLED_HTTP
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    if isinstance(reason, (ConnectionRefusedError, socket.gaierror)):
+        return True
+    if isinstance(reason, (TimeoutError, socket.timeout)):
+        return _in_connect_phase(exc)
+    if isinstance(exc, urllib.error.URLError):
+        # Other URLErrors (e.g. unreachable network, SSL handshake) come from connect.
+        return isinstance(reason, OSError) and _in_connect_phase(exc)
+    return False
+
+
+def _call_gateway(context):
+    """Send the request; returns (raw bytes, request body).
+
+    Raises GatewayFailure. unbilled=False for read timeouts and resets after the
+    request was dispatched: the provider may already have billed those.
     """
     body = {
         'model': settings.EDUCATION_MATCH_MODEL,
@@ -142,8 +182,16 @@ def _call_gateway(context):
         },
         method='POST',
     )
-    with urllib.request.urlopen(request, timeout=settings.AI_RECOMMENDATION_TIMEOUT_SECONDS) as response:
-        raw = response.read()
+    try:
+        response = urllib.request.urlopen(request, timeout=settings.AI_RECOMMENDATION_TIMEOUT_SECONDS)
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise GatewayFailure(_is_unbilled(exc)) from exc
+    try:
+        with response:
+            raw = response.read()
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        # Request already sent: a read timeout or reset may have been billed.
+        raise GatewayFailure(False) from exc
     return raw, body
 
 
@@ -191,11 +239,11 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
     ai_usage.begin()
     try:
         raw, body = _call_gateway(context)
-    except (urllib.error.URLError, TimeoutError, OSError):
-        # No completion arrived: the provider did not charge, so give the call back.
+    except GatewayFailure as failure:
         logger.warning('education_ai_provider_failure student_id=%s', profile.pk)
         ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED)
-        ai_budget.refund(reservation)
+        if failure.unbilled:
+            ai_budget.refund(reservation)
         raise EducationAIUnavailable()
     try:
         result = _validate_result(_parse_gateway(raw, body), major_candidates, subject_strengths)

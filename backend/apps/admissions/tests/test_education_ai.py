@@ -1,5 +1,6 @@
 """Education-match AI: gateway, daily budget, cache, de-identification, permissions."""
 import json
+import socket
 import urllib.error
 from unittest import mock
 
@@ -80,7 +81,8 @@ class EducationMatchAITests(RoleIsolationBase):
                          ('ok', 'gateway', 'openai/gpt-5.4-nano', 900, 200))
 
     def test_provider_failure_is_503_and_refunds_every_counter(self):
-        with mock.patch('urllib.request.urlopen', side_effect=OSError('down')):
+        error = urllib.error.URLError(ConnectionRefusedError(61, 'refused'))
+        with mock.patch('urllib.request.urlopen', side_effect=error):
             response = self.post()
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(self.used(), 0)
@@ -93,6 +95,46 @@ class EducationMatchAITests(RoleIsolationBase):
         with mock.patch('urllib.request.urlopen', side_effect=error):
             self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(self.used(), 0)
+
+    def test_http_429_is_refunded(self):
+        error = urllib.error.HTTPError('https://gw', 429, 'slow down', {}, None)
+        with mock.patch('urllib.request.urlopen', side_effect=error):
+            self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(self.used(), 0)
+        self.assertEqual(self.used(f':user:{self.student_a_user.pk}'), 0)
+
+    def test_connection_refused_is_refunded(self):
+        error = urllib.error.URLError(ConnectionRefusedError(61, 'refused'))
+        with mock.patch('urllib.request.urlopen', side_effect=error):
+            self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(self.used(), 0)
+
+    def test_dns_failure_is_refunded(self):
+        error = urllib.error.URLError(socket.gaierror(8, 'nodename nor servname'))
+        with mock.patch('urllib.request.urlopen', side_effect=error):
+            self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(self.used(), 0)
+
+    def test_read_timeout_keeps_the_charge(self):
+        reply = mock.MagicMock()
+        reply.read.side_effect = socket.timeout('timed out')
+        reply.__enter__.return_value = reply
+        with mock.patch('urllib.request.urlopen', return_value=reply):
+            self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(self.used(), 1)
+        self.assertEqual(self.used(f':school:{self.school_a.pk}'), 1)
+        self.assertEqual(self.used(f':user:{self.student_a_user.pk}'), 1)
+
+    @override_settings(EDUCATION_MATCH_DAILY_BUDGET=1, EDUCATION_MATCH_SCHOOL_DAILY_BUDGET=1,
+                       EDUCATION_MATCH_USER_DAILY_LIMIT=1)
+    def test_repeated_read_timeouts_cannot_exceed_the_cap(self):
+        reply = mock.MagicMock()
+        reply.read.side_effect = socket.timeout('timed out')
+        reply.__enter__.return_value = reply
+        with mock.patch('urllib.request.urlopen', return_value=reply) as urlopen:
+            self.assertEqual(self.post().status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+            self.assertEqual(self.post().status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(urlopen.call_count, 1)
 
     def test_billed_unusable_answer_is_503_and_stays_charged(self):
         with mock.patch('urllib.request.urlopen', return_value=gateway_reply({'summary': 'x', 'major_guidance': []})):
